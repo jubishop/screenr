@@ -1,0 +1,7 @@
+#!/bin/sh
+# Keep local search current without blocking Git on indexing.
+set -eu
+repo_root=$(git rev-parse --show-toplevel)
+if [ -x "$repo_root/bin/qmd-index" ]; then
+  "$repo_root/bin/qmd-index" --background
+fi

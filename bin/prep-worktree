@@ -1,0 +1,45 @@
+#!/bin/sh
+# Prepare the environment and share models, never the worktree's index.
+set -eu
+
+if [ "$#" -ne 1 ]; then
+  echo "Usage: prep-worktree <worktree-path>" >&2
+  exit 1
+fi
+
+worktree_path=$(cd "$1" && pwd)
+[ "$(git -C "$worktree_path" rev-parse --show-toplevel)" = "$worktree_path" ] || {
+  echo "Expected a Git checkout root: $worktree_path" >&2
+  exit 1
+}
+common_git_dir=$(git -C "$worktree_path" rev-parse --path-format=absolute --git-common-dir)
+main_repo=$(cd "$common_git_dir/.." && pwd)
+
+if command -v direnv >/dev/null 2>&1; then
+  if [ -f "$worktree_path/.envrc" ]; then
+    if [ -f "$main_repo/.envrc" ] && cmp -s "$main_repo/.envrc" "$worktree_path/.envrc"; then
+      direnv allow "$worktree_path/.envrc"
+      echo "Allowed matching .envrc"
+    else
+      echo "The worktree .envrc differs; review it before running direnv allow." >&2
+    fi
+  fi
+else
+  echo "direnv not found; skipping environment approval." >&2
+fi
+
+main_models=$main_repo/.cache/qmd/models
+worktree_models=$worktree_path/.cache/qmd/models
+mkdir -p "$main_models"
+
+if [ "$worktree_path" != "$main_repo" ]; then
+  if [ -L "$worktree_models" ] || [ -e "$worktree_models" ]; then
+    echo "Preserved existing worktree model cache."
+  else
+    mkdir -p "$(dirname "$worktree_models")"
+    ln -s "$main_models" "$worktree_models"
+    echo "Linked QMD models from the primary checkout."
+  fi
+fi
+
+echo "Ready: $worktree_path"
