@@ -10,12 +10,13 @@ currently prepares repository tooling only.
 
 ## First checkout
 
-Run `./bin/setup`. It requires Git and Python 3 and does the following:
+Run `./bin/setup`. It requires Git and Python 3.9 or later and does the following:
 
 1. Sets the repository-local `core.hooksPath` to `bin/hooks`.
 2. Runs `bin/prep-worktree` for this checkout.
-3. Runs `bin/qmd-index` in the foreground to build the search index and
-   embeddings. Embeddings support searches that use meaning as well as words.
+3. Runs `bin/qmd-index` to generate local QMD configuration and build the
+   search index and embeddings. Embeddings support searches that use meaning
+   as well as words.
 
 QMD and direnv are optional. Setup reports when they are missing. Markdown
 files remain usable without them. QMD may download its models on first use.
@@ -53,15 +54,29 @@ uncommitted or unpushed work. Delete its merged branch and check
 
 ## Search collections
 
-`.config/qmd/index.yml` contains:
+The tracked `.config/qmd/collections.json` defines the shared collections:
 
 - `memory`: active repository notes, excluding `archive/**` and `pr_reviews/**`.
 - `docs`: product decisions, architecture, and research.
-- `home-memory`: the user's cross-repository notes at `/Users/jubi/memory`.
 
-The `home-memory` path is specific to this workstation. On another machine,
-change it to that user's memory directory or remove that collection.
-Its contents are indexed locally and are not copied into this repository.
+Home memory is optional. To include your own cross-repository notes, set an
+absolute directory path in this clone's local Git configuration:
+
+```sh
+git config --local screenr.homeMemoryPath "$HOME/memory"
+./bin/qmd-index
+```
+
+The setting is shared by linked worktrees, but is not committed or pushed.
+A fresh clone searches only the two repository collections. To disable home
+memory, run `git config --local --unset screenr.homeMemoryPath`, then refresh
+with `bin/qmd-index`. A missing home directory is reported and skipped.
+
+The helper generates the ignored `.config/qmd/index.yml` from the shared
+collections and this local setting. It uses JSON syntax, which QMD accepts
+as YAML, to avoid an extra configuration parser dependency. Do not edit the
+generated file: the next refresh replaces it. Home notes are indexed locally
+and are not copied into this repository.
 
 `.envrc` scopes QMD configuration and caches to the checkout. The indexing
 helper also sets those paths explicitly, including `INDEX_PATH`, so Git hooks
@@ -98,3 +113,26 @@ commands bypass that lock; use the helper for manual refreshes.
 
 `.cache/` is ignored by Git. Do not share the SQLite database between
 worktrees: their Markdown files can differ.
+
+## Repository checks
+
+Run `./bin/check` before committing or pushing changes. It requires Git,
+Python 3.9 or later, and ShellCheck. Install ShellCheck with
+`brew install shellcheck` on macOS or `sudo apt-get install shellcheck` on
+Ubuntu.
+
+The command checks shell and Python syntax, required document metadata,
+local Markdown file links, and whitespace. Document metadata uses the
+one-line scalar fields shown in the memory and docs indexes. PR review
+records keep their owning skills' schema and are excluded from these checks.
+Remote URLs and heading fragments are not checked.
+
+Tests create disposable Git repositories with paths that contain spaces.
+They verify default collections, home-memory opt-in and removal, index
+isolation, concurrent refreshes, failure handling, and Git hooks. QMD and
+direnv are replaced with local test commands, so tests need no models,
+personal notes, credentials, or network access.
+
+GitHub Actions runs the same command for pull requests and pushes to `main`.
+The workflow uses read-only repository access. Add application checks to this
+command when the application stack is selected.

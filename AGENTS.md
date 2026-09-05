@@ -27,12 +27,18 @@ and rewrite. New worktrees also run `bin/prep-worktree`. Run `bin/setup` once
 after cloning. See [`docs/development-workflow.md`](docs/development-workflow.md)
 for setup, worktree isolation, and index recovery.
 
+Run `bin/check` before delivering repository changes. It is also the GitHub
+Actions check for pull requests and pushes to `main`.
+
 ## Product Context
 
 Screenr is a social app for TV and movies. Read
 [`docs/product-brief.md`](docs/product-brief.md) before product work. The
 platform, stack, and first-release scope are not yet selected. Do not treat
 an interview recommendation as an accepted decision.
+
+Record each accepted interview decision using the process in
+[`docs/README.md`](docs/README.md#recording-decisions).
 
 This is a public repository. Keep credentials, private records, local
 environment files, and generated caches out of Git.

@@ -14,14 +14,28 @@ Run once after cloning:
 ./bin/setup
 ```
 
-Setup requires Git and Python 3. QMD supplies local Markdown search; direnv
-loads the repository's environment when entering the checkout. Setup skips
-these optional tools if they are not installed.
+Setup requires Git and Python 3.9 or later. QMD supplies local Markdown
+search; direnv loads the repository's environment when entering the checkout.
+Setup skips these optional tools if they are not installed.
 
 Setup activates the tracked Git hooks, prepares local caches, and builds the
 QMD index when QMD is available. See the
 [development workflow](docs/development-workflow.md) for details and worktree
 commands.
+
+Home-memory search is optional and uses a local Git setting. Follow the
+[search configuration instructions](docs/development-workflow.md#search-collections)
+to include your own notes.
+
+## Repository checks
+
+```sh
+./bin/check
+```
+
+Install ShellCheck first (`brew install shellcheck` on macOS). The checks
+validate scripts, document metadata, local links, and worktree behavior.
+GitHub Actions runs the same checks on pull requests and pushes to `main`.
 
 ## Project knowledge
 
