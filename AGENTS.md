@@ -34,7 +34,7 @@ Actions check for pull requests and pushes to `main`.
 
 Screenr is a social app for TV and movies. Read
 [`docs/product-brief.md`](docs/product-brief.md) before product work. The
-platform, stack, and first-release scope are not yet selected. Do not treat
+platform, stack, and detailed first-release scope are not yet selected. Do not treat
 an interview recommendation as an accepted decision.
 
 Record each accepted interview decision using the process in

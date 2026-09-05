@@ -1,7 +1,6 @@
 # Screenr
 
-A social app for TV and movies: see what friends are watching, exchange
-recommendations, and explore recommendations shared with everyone.
+A social app for TV and movies, centered on people you know.
 
 The product is being designed. The platform and application stack have not
 been selected. Start with the [product brief](docs/product-brief.md).
