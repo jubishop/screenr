@@ -76,4 +76,5 @@ to ordinary memory pages. Create these records only when a review needs them.
 ## Active memory index
 
 - [Development preferences](development-preferences.md): reference projects
-  and the product decision process requested for Screenr.
+  for repository conventions, the product decision process, and the
+  preference to reduce third-party dependencies.

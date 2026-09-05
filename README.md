@@ -3,8 +3,9 @@
 A social app for TV and movies, centered on people you know.
 
 The first version will be a mobile-friendly web app. Product design is in
-progress, and the application stack has not been selected. Start with the
-[product brief](docs/product-brief.md).
+progress. Start with the [product brief](docs/product-brief.md) and the
+[application stack decision](docs/application-stack.md). Application
+implementation has not started.
 
 ## Repository setup
 

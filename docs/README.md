@@ -57,5 +57,7 @@ both memory and design documents.
 ## Product and development
 
 - [Product brief](product-brief.md): confirmed requirements and open design choices.
+- [Application stack](application-stack.md): selected core stack, alternatives,
+  tradeoffs, and proposed implementation approach.
 - [Development workflow](development-workflow.md): local setup, Git hooks,
   worktree preparation, and QMD search.

@@ -35,8 +35,11 @@ Actions check for pull requests and pushes to `main`.
 ## Product Context
 
 Screenr is a social app for TV and movies. Read
-[`docs/product-brief.md`](docs/product-brief.md) before product work. The
-application stack and detailed first-release scope are not yet selected.
+[`docs/product-brief.md`](docs/product-brief.md) before product work and
+[`docs/application-stack.md`](docs/application-stack.md) for the selected
+core stack. The detailed first-release scope remains open.
+For dependency choices, apply the
+[development preference](memory/development-preferences.md#third-party-dependencies).
 Do not treat an interview recommendation as an accepted decision.
 
 Record each accepted interview decision using the process in

@@ -9,8 +9,16 @@ Screenr is a social app for TV and movies, centered on people you know.
 ## Confirmed requirements
 
 - The first release is a mobile-friendly web app for phone and computer browsers.
+- Use the [selected application stack](application-stack.md).
+- Host Screenr on a Hetzner VPS and operate its core services ourselves.
+  Use an external email relay to deliver login codes and enabled email alerts.
 - Launch is invite-only, starting with the user and a small group of friends.
   Each member can invite people they know.
+- Screenr is a non-commercial experiment for now, with no ads or paid features.
+- After sign-in, setup requires only a display name and username. A profile
+  photo, sending a friend request to the inviter, and adding titles are optional.
+- Support Google sign-in and one-time email codes, with invitation access
+  required for both methods and no separate Screenr password.
 - Friendships require a request and acceptance. One-way following is not
   supported.
 - People can find friends through shareable profile links, exact-username
@@ -24,6 +32,7 @@ Screenr is a social app for TV and movies, centered on people you know.
   hosted by the user or their direct friends shown below the title details.
   People views and title views open the same conversations. Title pages put
   conversations with the most recent visible activity first.
+- Use The Movie Database (TMDB) as the movie and TV catalog source.
 - The friends feed automatically includes watch-status changes and ratings,
   alongside reviews, recommendations, and discussion posts, newest first.
   Changes made together by one person for the same title form one update.
@@ -32,6 +41,9 @@ Screenr is a social app for TV and movies, centered on people you know.
   ratings, and recommendations appear in the feed without alerts.
 - Deliver activity notifications through an in-app inbox and opt-in email
   alerts. Browser push is outside the initial release.
+- Judge initial success through usage telemetry: repeat use, choosing titles
+  through friends' recommendations, and sustained conversations. Do not use
+  user surveys to assess this.
 - TV watch progress is tracked for each show as a whole, using simple statuses.
 - Movies and shows support Want to watch, Watching, Finished, and Stopped
   watching. TV also supports a manually selected Caught up status.
@@ -198,8 +210,8 @@ their phones or computers through a browser.
 link across different devices. Bringing a whole friend group into the app
 is central to its purpose.
 
-The application stack and features such as installation or offline support
-have not been selected.
+The [application stack](application-stack.md) is selected. Features such as
+installation or offline support remain open.
 
 ### Invite-only launch — 2026-09-04
 
@@ -210,6 +222,78 @@ existing request-and-acceptance process.
 
 **Why:** The user accepted starting with overlapping friend circles to test
 the core experience.
+
+### Group-chat invitations — 2026-09-05
+
+**Decision:** Support reusable invitation links so multiple people can join
+Screenr through the same link shared in a group chat. A single-use-only
+invitation model does not meet this requirement. Joining still follows the
+existing sign-in rules and does not automatically create friendships.
+
+**Why:** The user wants to share one invitation in a group chat and have
+everyone who follows it be able to use it.
+
+Link usage, revocation, and expiration follow the controls below.
+
+### Invitation controls — 2026-09-05
+
+**Decision:** When creating an invitation link, its creator can set how
+many times it may be used, from 1 to 12. The default is 1 use, and 12 is the
+application-wide maximum per link. A use means a completed new-account
+signup. Clicks, link previews, and existing members signing in do not
+consume uses.
+
+The creator can see how many uses each of their links has had and how many
+uses remain. For each link, they can also see the display names and
+usernames of members who signed up through it, subject to the existing
+blocking rules. They can revoke any of their links at any time to prevent
+further use. Links expire 30 days after creation, even if uses remain.
+Revoked, expired, or exhausted links cannot authorize new signups.
+
+**Why:** The user proposed this model to support group-chat invitations
+while giving the creator control over each link's use and visibility into
+its remaining capacity.
+
+The user accepted showing who joined so creators can track group
+invitations and find those people to send friend requests afterward.
+
+The user specified the default, maximum, and signup-based counting rule.
+The reason for choosing the exact values 1 and 12 was not stated.
+
+The user accepted the 30-day expiration to give group-chat members time to
+join while preventing old invitation links from remaining active indefinitely.
+
+### First-time setup — 2026-09-04
+
+**Decision:** After sign-in, require only a display name and username before
+entering the app. Adding a profile photo, sending a friend request to the
+inviter, and adding a few titles are optional and can be skipped.
+
+**Why:** The user accepted keeping setup short so people can get started
+quickly.
+
+### Sign-in methods — 2026-09-05
+
+**Decision:** Support Google sign-in and a one-time code sent to the user's
+email address. Both methods follow the existing invite-only access rules.
+Users do not create a separate Screenr password.
+
+**Why:** The user accepted using an existing Google account or an email code
+so people can choose either route without a separate Screenr password.
+
+Use the [selected authentication library](application-stack.md#authentication-library-decision--2026-09-05)
+for this sign-in experience. The email relay provider remains open.
+
+### One account across sign-in methods — 2026-09-05
+
+**Decision:** Google sign-in and email-code sign-in for the same email
+address lead to one Screenr account. Switching methods preserves the
+person's friendships, reviews, and history. Verify ownership before linking
+the identities, with additional verification when needed; a matching email
+address alone is not sufficient proof.
+
+**Why:** The user accepted keeping one social identity and its history
+when a person changes sign-in methods.
 
 ### TV watch tracking — 2026-09-04
 
@@ -367,6 +451,20 @@ addresses.
 **Why:** The user accepted grouped replies that keep conversations easy to
 follow on a phone.
 
+### Incoming replies in an open conversation — 2026-09-05
+
+**Decision:** When other people add comments or replies to an open
+conversation, show a "New replies" button. Load them when the reader selects
+it, preserving their reading position. A person's own reply appears
+immediately after successful posting.
+
+Existing access, blocking, and spoiler rules still apply. Enforcing access
+changes must not depend on the reader selecting "New replies". The update
+transport and timing remain implementation choices.
+
+**Why:** The user accepted this behavior to keep the conversation from
+shifting while someone reads or composes a reply.
+
 ### Comment removal by the conversation's author — 2026-09-04
 
 **Decision:** Let the author of a post or review remove comments from its
@@ -470,9 +568,110 @@ release.
 **Why:** The user accepted email as a way to notice friend requests and
 replies before checking Screenr becomes a habit.
 
+### First-release success and measurement — 2026-09-05
+
+**Decision:** Judge the first release by whether the initial group keeps
+returning, chooses things to watch through friends' recommendations, and
+keeps conversations going. Determine relative success by looking directly
+at usage telemetry. Do not assess this through user surveys.
+
+**Why:** The user agreed with these success criteria but finds surveys
+annoying and prefers observing usage directly. This replaces the proposed
+plan to ask the group about its experience after a few weeks.
+
+Event definitions, recommendation attribution, and reporting tools remain
+open. Measurement must distinguish observed app actions from
+inferences about recommendation influence or viewing outside the app.
+
+### Initial usage measures — 2026-09-05
+
+**Decision:** Start with three usage measures:
+
+- Members who return each week.
+- Titles saved from friends' recommendations and subsequently marked
+  Watching, Caught up, or Finished.
+- Conversations involving at least two people, including repeat
+  participation.
+
+**Why:** The user accepted these measures for the agreed success criteria
+of repeat use, choosing titles through friends, and sustained conversation.
+
+### Movie and TV catalog source — 2026-09-05
+
+**Decision:** Use The Movie Database (TMDB) for the movie and TV catalog,
+including title search, details, images, and season or episode metadata.
+
+**Why:** The user accepted one service covering the movie and TV entities
+Screenr needs. See TMDB's [search and details guide](https://developer.themoviedb.org/docs/search-and-query-for-details)
+and [supported detail entities](https://developer.themoviedb.org/docs/append-to-response).
+
+**Service conditions:** TMDB's developer API is free for non-commercial use
+with attribution. Commercial use requires a commercial license. TMDB defines
+a commercial project by whether its primary purpose is to create revenue
+for its owner. Its attribution rules require an approved logo and notice in
+an About or Credits section. See the [TMDB FAQ](https://developer.themoviedb.org/docs/faq),
+checked on 2026-09-05.
+
+### Non-commercial scope — 2026-09-05
+
+**Decision:** Treat Screenr as a non-commercial experiment for now, focused
+on usefulness to the user's circle, with no ads or paid features. Plan to
+use TMDB's developer API for this scope and meet its attribution requirements.
+Revisit the TMDB license if the project's purpose changes to generating
+revenue.
+
+**Why:** The user accepted establishing whether people keep using Screenr
+before choosing a business model.
+
+### Hetzner and self-hosted services — 2026-09-05
+
+**Decision:** Use a Hetzner VPS and operate Screenr's core application,
+database, authentication, background work, and usage telemetry ourselves.
+Build the required application functionality using suitable software
+components rather than making managed application, database, or
+authentication services the default.
+
+**Why:** The user prefers to provide the software ourselves and use Hetzner
+for the underlying VPS. This replaces the proposed managed-services approach.
+
+The existing TMDB catalog and Google sign-in choices remain in place.
+The [application stack](application-stack.md) and
+[initial single-server layout](application-stack.md#initial-hosting-layout--2026-09-05)
+are selected. The specific VPS, deployment setup, and backup details remain
+open. The outbound email delivery boundary is defined below.
+
+### External email relay — 2026-09-05
+
+**Decision:** Use an external email relay for outbound delivery while
+self-hosting Screenr's core services. Screenr owns the login-code and
+notification logic, including when to send email and what it contains.
+The relay provider remains undecided.
+
+**Why:** The user accepted using a relay to handle email delivery without
+operating our own mail server. This is an explicit exception to the
+self-hosting preference, alongside the existing catalog and Google sign-in
+integrations.
+
+### First development milestone — 2026-09-05
+
+**Decision:** Build the first working milestone around this complete
+experience: two invited people sign in and become accepted friends; one
+finds and recommends a movie or show; the other sees it in the friends feed
+and on the standalone title page, saves it to Want to watch, and replies in
+the shared conversation. Unfriending and blocking enforce the previously
+agreed access rules.
+
+**Why:** The user accepted this milestone so Screenr's core experience can
+be tried early. The remaining agreed features follow in later development
+milestones before the first release; this does not reduce the release scope.
+
+[GitHub issue #1](https://github.com/jubishop/screenr/issues/1) owns the
+implementation work and acceptance criteria.
+
 ## Open decisions
 
-- Application stack.
-- Onboarding.
-- Movie and TV metadata source, authentication, and hosting.
-- The detailed first-release scope and how to judge its success.
+- Email relay provider.
+- VPS selection and deployment; routine backup settings can be chosen during
+  implementation under the [initial backup scope](application-stack.md#initial-backup-scope--2026-09-05).
+- Telemetry event definitions, attribution, and implementation.
+- The detailed first-release delivery scope.
