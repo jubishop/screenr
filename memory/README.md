@@ -30,16 +30,17 @@ Every ordinary memory page starts with YAML frontmatter:
 
 ```yaml
 ---
-name: kebab-case-slug
-description: one-line summary used in search results
-type: user | feedback | project | reference
-status: active | resolved  # project pages only; omit for other types
+name: example-name
+description: A short summary of the guidance and when it applies.
+type: reference
 ---
 ```
 
-The choices above describe the schema. Select one value for each field.
-Use a filename that matches `name`, such as `development-preferences.md`.
-Use relative Markdown links so links also work on GitHub.
+Use a kebab-case filename that matches `name`, such as
+`development-preferences.md`. Only the named fields and one-line string
+values are supported: plain text, JSON-style double quotes, or YAML single
+quotes. Nested or multiline YAML is rejected. Use relative Markdown links
+and ordinary heading anchors so links work on GitHub and can be checked.
 
 Types:
 
@@ -51,6 +52,9 @@ Types:
 For `feedback` and `project`, lead with the rule or fact, then explain
 **Why** it matters and **How to apply** it. Use absolute dates when dates
 matter. Active `project` pages require `status: active`.
+Only project pages have a status. Include evidence and verification dates for
+changing external facts when useful; recheck them when related work depends on
+them. Do not invent verification dates.
 
 This index is plain Markdown and does not need frontmatter.
 
@@ -60,6 +64,8 @@ Move resolved incidents and superseded guidance into `memory/archive/`.
 Set `status: resolved` on archived project pages. Remove their active index
 entries and repair links. Archived pages remain in Git but are excluded from
 QMD search.
+
+Link every active page from the index below or a linked README index.
 
 ## PR review records
 

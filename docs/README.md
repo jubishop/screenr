@@ -8,20 +8,27 @@ Every document except this index starts with:
 
 ```yaml
 ---
-status: planning | in-progress | shipped | blocked | abandoned
+status: current
 ---
 ```
 
-Select one status. The document's status is authoritative; do not repeat it
-in this index. A status does not imply review or user approval. State what is
-confirmed, proposed, and unresolved inside the document.
+Use `draft` for a document being developed and `current` for the current
+reference or plan. Use `superseded` or `archived` only under `docs/archive/`;
+include a replacement link when one exists. This describes the document's
+usefulness, not implementation progress. A status does not imply review or
+user approval. State what is confirmed, proposed, and unresolved in the body.
+
+Frontmatter contains only `status`, with a one-line string value. Plain text,
+JSON-style double quotes, and YAML single quotes are supported. Ordinary
+pages need a clear title and opening summary; README indexes need no metadata.
 
 Keep product and architecture documents at the top level. Use
 `docs/initiatives/` for plans that span several changes and `docs/research/`
 for investigations. Create those directories when they have content.
 
-Update this index whenever a document is added, moved, or removed. Use
-relative Markdown links. Review material design changes with their related
+Link every active page from this index, directly or through a linked README
+index. Remove archived pages from active indexes. Use relative Markdown links
+and ordinary heading anchors; `bin/check` validates both. Review material design changes with their related
 implementation; do not label an unreviewed proposal as approved.
 
 ## Recording decisions

@@ -1,20 +1,5 @@
-#!/bin/sh
-# One-time repository setup after cloning.
-set -eu
-
-repo_root=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
-cd "$repo_root"
-[ "$(git rev-parse --show-toplevel)" = "$repo_root" ] || {
-  echo "Run setup from an initialized Screenr repository." >&2
-  exit 1
-}
-command -v python3 >/dev/null 2>&1 || {
-  echo "Python 3 is required for the QMD indexing helper." >&2
-  exit 1
-}
-
-git config --local core.hooksPath bin/hooks
-echo "Git hooks configured: bin/hooks"
-"$repo_root/bin/prep-worktree" "$repo_root"
-"$repo_root/bin/qmd-index"
-echo "Repository setup complete."
+#!/usr/bin/env python3
+import sys
+sys.dont_write_bytecode = True
+from _knowledge import cli
+sys.exit(cli("setup"))

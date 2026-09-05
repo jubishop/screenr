@@ -2,4 +2,4 @@
 import sys
 sys.dont_write_bytecode = True
 from _knowledge import cli
-sys.exit(cli("prep"))
+sys.exit(cli("hook"))

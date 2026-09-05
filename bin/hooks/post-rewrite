@@ -1,7 +1,3 @@
 #!/bin/sh
-# Refresh local search after a rebase or commit amend.
-set -eu
-repo_root=$(git rev-parse --show-toplevel)
-if [ -x "$repo_root/bin/qmd-index" ]; then
-  "$repo_root/bin/qmd-index" --background
-fi
+repo_root=$(git rev-parse --show-toplevel) || exit 1
+"$repo_root/bin/knowledge-hook" post-rewrite "$@"

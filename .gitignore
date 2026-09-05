@@ -1,6 +1,6 @@
 .DS_Store
 .cache/
-.config/qmd/index.yml
+.config/qmd/
 .env
 .env.*
 !.env.example

@@ -1,138 +1,220 @@
 ---
-status: shipped
+status: current
 ---
 
 # Development workflow
 
-Screenr uses the memory, documentation, and worktree conventions from
-Story Archive and PodHaven. The application stack is still undecided; setup
-currently prepares repository tooling only.
+This repository keeps knowledge as Markdown and uses optional QMD search.
+Each checkout has its own index. Git hooks refresh it in the background.
 
-## First checkout
+## First setup
 
-Run `./bin/setup`. It requires Git and Python 3.9 or later and does the following:
+Run from the repository root:
 
-1. Sets the repository-local `core.hooksPath` to `bin/hooks`.
-2. Runs `bin/prep-worktree` for this checkout.
-3. Runs `bin/qmd-index` to generate local QMD configuration and build the
-   search index and embeddings. Embeddings support searches that use meaning
-   as well as words.
+```sh
+bin/setup
+bin/doctor
+bin/check
+```
 
-QMD and direnv are optional. Setup reports when they are missing. Markdown
-files remain usable without them. QMD may download its models on first use.
+Setup requires Git and Python 3.9 or later. Checks also require ShellCheck,
+available through the operating system's package manager. QMD and direnv are
+optional. Missing optional tools produce clear notices; an installed but
+failing QMD returns an error. Install QMD using its
+[official instructions](https://github.com/tobi/qmd#installation).
+The starter records its tested QMD version in `.project-starter.json`.
 
-The tracked hooks cover `post-checkout`, `post-commit`, `post-merge`, and
-`post-rewrite`. The relative hook path is shared by linked worktrees; each
-worktree runs its own checked-out hook files. New clones must run setup once.
+Setup validates configuration, activates bundled hooks when no existing
+integration would be displaced, prepares caches, and waits for the initial
+index refresh. QMD may download local models on first use. Rerunning setup
+preserves existing choices and skips indexing when inputs are unchanged.
+
+Review `.envrc` before running `direnv allow`. QMD does not need direnv or
+shell-wide environment exports. Add project-specific environment settings
+to `.envrc` deliberately; preserve existing settings when adapting setup.
+
+## Search
+
+From the root, use `bin/knowledge`. Setup also creates a repository-local
+`git knowledge` alias when that name is free, so the command works from any
+subdirectory. An existing alias is preserved.
+
+```sh
+git knowledge search "worktree" -c docs
+git knowledge query "how should decisions be recorded" --no-rerank
+git knowledge get qmd://docs/development-workflow.md -l 80
+git knowledge context list
+```
+
+Choose keyword search for names and known terms. Use a semantic query for
+broader questions. Read a focused source page before relying on a result.
+Source Markdown remains authoritative when search is unavailable or stale.
+
+The command supplies QMD configuration, cache, and database paths only to
+the QMD process. It does not change the shell's cache directory or depend on
+personal shell wrappers. It refuses named indexes to keep checkout isolation.
+If an executable must be selected explicitly, use an absolute local setting:
+
+```sh
+git config --local knowledge.qmdPath /absolute/path/to/qmd
+```
+
+The shared `.config/knowledge.json` defines Markdown collections, exclusions,
+and short descriptions attached to search results. The helper renders an
+ignored `.config/qmd/index.yml` with absolute paths. Change the shared JSON,
+then refresh; direct QMD collection/context edits to the generated file will
+be replaced. The starter supports `**/*.md` collection patterns.
+
+## Optional home memory
+
+Home notes are excluded by default. Opt in through local Git configuration:
+
+```sh
+git config --local knowledge.homeMemoryPath /absolute/path/to/personal/notes
+bin/qmd-index
+```
+
+This setting is shared by linked worktrees but is not committed. Notes are
+indexed locally, not copied into the project. Missing directories produce
+a notice. To remove the collection:
+
+```sh
+git config --local --unset knowledge.homeMemoryPath
+bin/qmd-index
+```
+
+## Refresh and recovery
+
+`post-checkout`, `post-commit`, `post-merge`, and `post-rewrite` hooks request
+background refreshes. The foreground command is:
+
+```sh
+bin/qmd-index
+```
+
+Git hooks do not run on every file save. Run this command after uncommitted
+knowledge edits when current search results matter. It waits for the requested
+refresh and returns its success or failure. Search warns when its recorded
+inputs are stale or unknown.
+
+One worker serves each checkout. It hashes indexed Markdown and configuration,
+including optional home notes, to skip unchanged inputs. Bursts of requests
+share the worker. If inputs change during indexing, the worker runs another
+pass. QMD itself handles incremental index and embedding updates. A failed
+update does not start embedding. Git does not wait for indexing to finish.
+
+Use `bin/qmd-index --force` to rebuild even when recorded inputs match.
+Inspect `.cache/qmd/index.log` after failure. Logs rotate at approximately
+1 MB on worker start, retaining one previous file. A stopped worker releases
+its operating-system lock; rerun the foreground command to recover. Avoid
+direct `qmd update` and `qmd embed`, which bypass this coordination.
 
 ## Worktrees
 
-A worktree is a separate checkout of a branch that shares the repository's
-Git history. Once the repository has a commit, create one with:
+After the repository has a commit:
 
 ```sh
 git worktree add -b feature-name worktrees/feature-name
 ```
 
-The user's `ghcw feature-name` helper also works when `origin/main` exists
-and its normal clean-checkout requirements are met.
+The first checkout prepares the worktree. `bin/prep-worktree` can repeat the
+preparation. It discovers worktrees through Git, supports separate Git metadata,
+and keeps databases under each checkout's `.cache/qmd/index.sqlite`. Preparation
+records the verified primary path in local `knowledge.primaryWorktree` to
+support Git layouts whose worktree listing exposes only the metadata path.
+Rerun preparation in the primary checkout after moving it.
 
-The first checkout automatically runs `bin/prep-worktree`. It:
+New model caches use the common Git directory's `knowledge/models` folder.
+Each checkout links its `.cache/qmd/models` to that shared location. An existing
+primary model cache is preserved and shared with new worktrees. Existing
+worktree model caches are preserved, even if they are independent.
 
-- Allows `.envrc` through direnv only when it matches the primary checkout.
-  A different file remains subject to direnv's normal review step.
-- Links `.cache/qmd/models` to the primary checkout's model directory.
-  Existing local model files are preserved.
-- Leaves the QMD database and other generated caches local to the worktree.
+A linked worktree's `.envrc` is approved automatically only when its bytes
+match a primary checkout file that direnv already reports as allowed.
+Ordinary branch switches do not approve changed environment files. Bare
+repositories have no primary environment file to inherit trust from.
 
-Ordinary branch switches do not automatically approve `.envrc` changes.
-Preparation can be repeated with `bin/prep-worktree <worktree-path>`.
+After moving a checkout, use Git's worktree repair procedure if required,
+then inspect `bin/doctor`. A broken pre-existing model link is preserved for
+inspection. Once you have confirmed it is only a broken link, remove that
+link and rerun `bin/prep-worktree`; do not delete a directory of model files.
 
-Remove a worktree only after its changes are delivered and it has no
-uncommitted or unpushed work. Delete its merged branch and check
-`git worktree list` afterward.
+Remove worktrees only after checking for uncommitted and unpushed work.
+Use `git worktree remove` and verify the resulting `git worktree list`.
 
-## Search collections
+## Existing hooks
 
-The tracked `.config/qmd/collections.json` defines the shared collections:
+Setup does not overwrite a different active `core.hooksPath` or bypass
+executable hooks in the default Git hooks directory. The agent applying this
+foundation must integrate with the existing manager's supported entry points.
 
-- `memory`: active repository notes, excluding `archive/**` and `pr_reviews/**`.
-- `docs`: product decisions, architecture, and research.
-
-Home memory is optional. To include your own cross-repository notes, set an
-absolute directory path in this clone's local Git configuration:
-
-```sh
-git config --local screenr.homeMemoryPath "$HOME/memory"
-./bin/qmd-index
-```
-
-The setting is shared by linked worktrees, but is not committed or pushed.
-A fresh clone searches only the two repository collections. To disable home
-memory, run `git config --local --unset screenr.homeMemoryPath`, then refresh
-with `bin/qmd-index`. A missing home directory is reported and skipped.
-
-The helper generates the ignored `.config/qmd/index.yml` from the shared
-collections and this local setting. It uses JSON syntax, which QMD accepts
-as YAML, to avoid an extra configuration parser dependency. Do not edit the
-generated file: the next refresh replaces it. Home notes are indexed locally
-and are not copied into this repository.
-
-`.envrc` scopes QMD configuration and caches to the checkout. The indexing
-helper also sets those paths explicitly, including `INDEX_PATH`, so Git hooks
-work when a shell has not loaded direnv. The user's project-aware QMD wrapper
-also selects the repository when running commands from a subdirectory.
+Each of the four post-event hooks must call `bin/knowledge-hook`, passing the
+event name and original arguments. For a shell-based post-commit hook, the
+added call is:
 
 ```sh
-qmd search "visibility" -c docs
-qmd query "how should recommendations be shared" --no-rerank -c docs
-qmd get qmd://docs/product-brief.md
+repo_root=$(git rev-parse --show-toplevel) || exit 1
+"$repo_root/bin/knowledge-hook" post-commit "$@"
 ```
 
-Without the user's QMD wrapper, use `direnv exec . qmd ...` from the repository
-root to load the same environment explicitly.
+Use the actual event name in each file. The helper does not read stdin, so
+existing post-rewrite input remains available. Preserve the existing hook's
+exit status, argument handling, order requirements, and normal behavior.
+Place the call before an existing unconditional `exit`, or integrate it through
+the manager's own configuration. Do not append code that can never execute.
 
-## Index refresh and recovery
-
-Hooks use one helper, `bin/qmd-index --background`. It runs `qmd update` and
-then `qmd embed`. Each checkout has an operating-system lock so overlapping
-hook refreshes cannot write to the same database at once. A failed update
-does not start embedding. The lock is released when the process exits.
-
-Background output goes to `.cache/qmd/index.log`. Hooks do not wait for search
-updates to finish. To inspect or repair the index, run:
+After integration:
 
 ```sh
-./bin/qmd-index
-direnv exec . qmd status
+git config --local knowledge.hooks external
+bin/setup
 ```
 
-The foreground helper uses the same lock, waits for earlier refreshes, and
-returns a failure status if indexing fails. Direct `qmd update` or `qmd embed`
-commands bypass that lock; use the helper for manual refreshes.
+Verify each event in a disposable checkout appropriate to the project. Check
+that both the existing hook behavior and knowledge refresh occur, including
+post-rewrite stdin and nonzero existing-hook exit codes. `bin/doctor` reports
+which forwarding events it has observed in this checkout and their timestamps.
+Observations are evidence of past runs, not proof that a later hook edit works.
 
-`.cache/` is ignored by Git. Do not share the SQLite database between
-worktrees: their Markdown files can differ.
+## Diagnostics
 
-## Repository checks
+`bin/doctor` and `bin/doctor --json` inspect setup without approving environment
+files, downloading models, or rebuilding an index. They report the hook path,
+tools, collections, model locations, last refresh result, and whether recorded
+inputs are current, stale, unknown, or unavailable. An unavailable optional
+tool is a notice. Broken required setup or an installed but failing tool makes
+the command return a failure status with recovery instructions.
 
-Run `./bin/check` before committing or pushing changes. It requires Git,
-Python 3.9 or later, and ShellCheck. Install ShellCheck with
-`brew install shellcheck` on macOS or `sudo apt-get install shellcheck` on
-Ubuntu.
+Freshness means the recorded input fingerprint matches and the index exists;
+it is not an integrity scan of the SQLite database. If QMD reports database
+errors despite a current fingerprint, use the foreground refresh and inspect
+its log. Manually replacing the database requires a forced refresh.
 
-The command checks shell and Python syntax, required document metadata,
-local Markdown file links, and whitespace. Document metadata uses the
-one-line scalar fields shown in the memory and docs indexes. PR review
-records keep their owning skills' schema and are excluded from these checks.
-Remote URLs and heading fragments are not checked.
+## Checks and project extensions
 
-Tests create disposable Git repositories with paths that contain spaces.
-They verify default collections, home-memory opt-in and removal, index
-isolation, concurrent refreshes, failure handling, and Git hooks. QMD and
-direnv are replaced with local test commands, so tests need no models,
-personal notes, credentials, or network access.
+`bin/check` validates the documented frontmatter subset, index coverage,
+local file links and ordinary heading anchors, Python syntax for these tools,
+shell syntax (Bash for `.envrc`, POSIX shell for the bundled hooks), and the
+copied foundation's behavior. The tests use disposable
+repositories and simulated QMD/direnv, with no model downloads or network access.
+Remote URLs are not fetched. Use `bin/check --documents-only` for focused edits.
 
-GitHub Actions runs the same command for pull requests and pushes to `main`.
-The workflow uses read-only repository access. Add application checks to this
-command when the application stack is selected.
+Keep the foundation checks when adding application tests, builds, and linters.
+For generated or externally owned docs, add deliberate patterns to
+`checks.exclude` in `.config/knowledge.json`. Avoid broad exclusions that hide
+hand-written project knowledge.
+
+GitHub Actions runs `bin/check` on pull requests and pushes to `main` through
+[the existing workflow](../.github/workflows/check.yml). Add application
+checks when the stack is selected. GitHub issues track implementation work.
+
+For clones created before this foundation upgrade, copy any existing local
+`screenr.homeMemoryPath` value to `knowledge.homeMemoryPath` before rerunning
+setup. Preserve an already configured `knowledge.homeMemoryPath`. After
+verifying search, remove the old key. Review the updated `.envrc` and run
+`direnv allow` again if you use direnv; QMD no longer exports shell settings.
+
+`.project-starter.json` records the copied release and tested QMD version.
+Compare future releases manually and merge relevant improvements. These files
+belong to the project; there is no automatic updater or runtime dependency on
+the starter repository. Retain `LICENSE.project-starter` with copied material.
