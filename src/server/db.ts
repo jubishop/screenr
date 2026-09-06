@@ -1,4 +1,4 @@
-import { Pool, type PoolClient } from "pg";
+import { Pool, types, type PoolClient } from "pg";
 
 const globalDB = globalThis as unknown as { screenrPool?: Pool };
 export const db =
@@ -8,6 +8,22 @@ export const db =
     max: 8,
     idleTimeoutMillis: 30_000,
     connectionTimeoutMillis: 5_000,
+    types: {
+      getTypeParser: (oid, format) => {
+        // Better Auth performs arithmetic on bigint millisecond timestamps.
+        // Keep them numeric; potentially large comment IDs are selected as text.
+        if (oid === types.builtins.INT8 && format !== "binary")
+          return (value: string) => {
+            const number = Number(value);
+            if (!Number.isSafeInteger(number))
+              throw new Error(
+                "Select PostgreSQL integers outside JavaScript's safe range as text.",
+              );
+            return number;
+          };
+        return types.getTypeParser(oid, format);
+      },
+    },
   });
 if (process.env.NODE_ENV !== "production") globalDB.screenrPool = db;
 

@@ -333,6 +333,44 @@ test("Better Auth requires an invite for a new email identity and preserves the 
   );
 });
 
+test("email rate limits return a usable retry delay from PostgreSQL timestamps", async () => {
+  await db.query('TRUNCATE "rateLimit"');
+  const auth = createAuth({
+    sendCode: async () => assert.fail("Uninvited email must not be sent"),
+  });
+  const request = () =>
+    auth.handler(
+      new Request(
+        "http://localhost:3000/api/auth/email-otp/send-verification-otp",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Origin: "http://localhost:3000",
+            "X-Forwarded-For": "192.0.2.10",
+          },
+          body: JSON.stringify({
+            email: "rate-limit@example.test",
+            type: "sign-in",
+          }),
+        },
+      ),
+    );
+  for (let index = 0; index < 10; index++)
+    assert.equal((await request()).status, 200);
+  const limited = await request();
+  assert.equal(limited.status, 429);
+  const retry = Number(limited.headers.get("X-Retry-After"));
+  assert.ok(
+    retry > 0 && retry <= 60,
+    `Expected at most 60 seconds, got ${retry}`,
+  );
+  await db.query('UPDATE "rateLimit" SET "lastRequest"=$1', [
+    Date.now() - 61_000,
+  ]);
+  assert.equal((await request()).status, 200);
+});
+
 test("Google and email retain one account; linking requires the existing account session and a verified matching email", async () => {
   process.env.GOOGLE_CLIENT_ID = "test-google-client";
   process.env.GOOGLE_CLIENT_SECRET = "test-google-secret";
