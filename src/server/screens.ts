@@ -1,7 +1,7 @@
 import { conversations, people, profileFor, thread } from "./social";
 import { getTitle } from "./catalog";
 import { listInvitations } from "./invitations";
-import { AppError } from "./db";
+import { AppError, db } from "./db";
 
 export async function loadScreen(userId: string, path: string) {
   if (path === "/")
@@ -20,7 +20,15 @@ export async function loadScreen(userId: string, path: string) {
   if (path === "/account")
     return {
       kind: "account" as const,
-      googleEnabled: !!process.env.GOOGLE_CLIENT_ID,
+      googleEnabled: !!(
+        process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET
+      ),
+      googleConnected: !!(
+        await db.query(
+          'SELECT 1 FROM account WHERE "userId"=$1 AND "providerId"=$2 LIMIT 1',
+          [userId, "google"],
+        )
+      ).rowCount,
     };
   const parts = path.split("/").filter(Boolean);
   if (parts[0] === "titles" && parts.length === 3) {

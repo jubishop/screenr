@@ -286,3 +286,142 @@ test("server-rendered signup controls wait for their event handlers", async ({
   }
   await expect(page.getByLabel("Email address")).toBeEditable();
 });
+
+async function useTestGoogle(page: Page) {
+  // The harness owns the provider boundary. Never fall through to real Google
+  // when running with test credentials.
+  await page.route("https://accounts.google.com/**", (route) => route.abort());
+}
+
+async function approveGoogle(page: Page, email: string) {
+  await expect(
+    page.getByRole("heading", { name: "Test identity provider" }),
+  ).toBeVisible();
+  await page.getByLabel("Email", { exact: true }).fill(email);
+  await page.getByRole("button", { name: "Continue", exact: true }).click();
+}
+
+async function nextAccountRefresh(page: Page) {
+  await page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      url.pathname === "/api/screenr/screen" &&
+      url.searchParams.get("path") === "/account"
+    );
+  });
+}
+
+test("Google signup shows its connection and an email code returns to the same profile", async ({
+  page,
+}) => {
+  await useTestGoogle(page);
+  const token = (await readFile(".cache/browser-invite.txt", "utf8")).trim();
+  const email = "googlefirst.browser@example.test";
+  await page.goto(`/join/${token}`);
+  await page.getByRole("button", { name: "Continue with Google" }).click();
+  await approveGoogle(page, email);
+  await page.getByLabel("Display name").fill("Google First");
+  await page.getByLabel("Username", { exact: true }).fill("googlefirst");
+  await page.getByRole("button", { name: "Join Screenr", exact: true }).click();
+  await expect(page.getByText("@googlefirst", { exact: true })).toBeVisible();
+  await page.goto("/account");
+  await expect(page.getByRole("status")).toHaveText("Google connected.");
+  await expect(
+    page.getByRole("button", { name: "Connect Google", exact: true }),
+  ).toHaveCount(0);
+  await page.reload();
+  await expect(page.getByRole("status")).toHaveText("Google connected.");
+  await page.getByRole("button", { name: "Sign out", exact: true }).click();
+  await page.getByLabel("Email address").fill(email);
+  await page
+    .getByRole("button", { name: "Send sign-in code", exact: true })
+    .click();
+  const filename = createHash("sha256").update(email).digest("hex");
+  await expect(page.getByLabel("Sign-in code", { exact: true })).toBeVisible();
+  const { otp } = JSON.parse(
+    await readFile(`.cache/mail/${filename}.json`, "utf8"),
+  );
+  const invalid = String((Number(otp) + 1) % 1_000_000).padStart(6, "0");
+  await page.getByLabel("Sign-in code", { exact: true }).fill(invalid);
+  await page.getByRole("button", { name: "Sign in", exact: true }).click();
+  await expect(page.getByRole("main").getByRole("alert")).toContainText(
+    /invalid|incorrect/i,
+  );
+  await page.getByLabel("Sign-in code", { exact: true }).fill(otp);
+  await page.getByRole("button", { name: "Sign in", exact: true }).click();
+  await expect(page.getByText("@googlefirst", { exact: true })).toBeVisible();
+  await page.goto("/account");
+  await expect(page.getByRole("status")).toHaveText("Google connected.");
+});
+
+test("email members can recover from linking failures, connect Google, and sign back into their profile", async ({
+  browser,
+}) => {
+  const page = await join(browser, "linkflow");
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await useTestGoogle(page);
+  await page.goto("/account");
+  const connect = page.getByRole("button", {
+    name: "Connect Google",
+    exact: true,
+  });
+  await expect(connect).toBeEnabled();
+  const failure = async (route: import("@playwright/test").Route) => {
+    await route.fulfill({
+      status: 503,
+      json: {
+        code: "PROVIDER_UNAVAILABLE",
+        message: "Google is temporarily unavailable.",
+      },
+    });
+  };
+  await page.route("**/api/auth/link-social", failure);
+  await connect.click();
+  await expect(page.getByRole("main").getByRole("alert")).toHaveText(
+    "Google is temporarily unavailable.",
+  );
+  await expect(connect).toBeEnabled();
+  await nextAccountRefresh(page);
+  await expect(page.getByRole("main").getByRole("alert")).toHaveText(
+    "Google is temporarily unavailable.",
+  );
+  await page.unroute("**/api/auth/link-social", failure);
+
+  await connect.click();
+  await expect(
+    page.getByRole("heading", { name: "Test identity provider" }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(page.getByRole("main").getByRole("alert")).toHaveText(
+    "Google connection was canceled. You can try again.",
+  );
+  await nextAccountRefresh(page);
+  await expect(page.getByRole("main").getByRole("alert")).toHaveText(
+    "Google connection was canceled. You can try again.",
+  );
+
+  await connect.click();
+  await approveGoogle(page, "different.browser@example.test");
+  await expect(page.getByRole("main").getByRole("alert")).toHaveText(
+    "Choose the Google account with the same email address as your Screenr account.",
+  );
+  await expect(connect).toBeEnabled();
+  await expect(page.getByText("@linkflow", { exact: true })).toBeVisible();
+
+  await connect.click();
+  await approveGoogle(page, "linkflow.browser@example.test");
+  await expect(page.getByRole("status")).toHaveText("Google connected.");
+  await expect(connect).toHaveCount(0);
+  await expect(page.getByRole("main").getByRole("alert")).toHaveCount(0);
+  await page.reload();
+  await expect(page.getByRole("status")).toHaveText("Google connected.");
+
+  await page.getByRole("button", { name: "Sign out", exact: true }).click();
+  await page.getByRole("button", { name: "Continue with Google" }).click();
+  await approveGoogle(page, "linkflow.browser@example.test");
+  await expect(page.getByText("@linkflow", { exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Better with friends." }),
+  ).toBeVisible();
+  await page.context().close();
+});

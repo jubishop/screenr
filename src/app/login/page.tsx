@@ -18,7 +18,9 @@ export default async function Login({
   return (
     <SignIn
       invited={invited}
-      googleEnabled={!!process.env.GOOGLE_CLIENT_ID}
+      googleEnabled={
+        !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET)
+      }
       initialError={initialError}
     />
   );

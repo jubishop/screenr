@@ -86,9 +86,12 @@ appears when configured. An account created through Google can later use an
 email code. An account created through email must sign in first and select
 **Connect Google** in Account. Linking requires a verified matching email and
 an existing Screenr session; a matching provider email alone cannot attach
-an identity. The live Google consent flow still needs verification with the
-actual OAuth client. Automated tests replace Google's external identity
+an identity. Verify Google's consent flow with the actual OAuth client in each
+deployed environment. Automated tests replace Google's external identity
 response while retaining the real auth library, hooks, sessions and database.
+Account shows **Google connected** after signup or linking. A connected account
+can also sign in with an email code. Connection failures and canceled consent
+show a message that remains visible while the account page refreshes.
 
 For production email, use `EMAIL_TRANSPORT=resend`, the existing sending-only
 `RESEND_API_KEY`, and an `EMAIL_FROM` address under a verified Resend domain.
@@ -122,10 +125,15 @@ with `TEST_DATABASE_URL`. The test role must be able to create databases.
 Both test databases are disposable and are reset by the harness; never point
 these commands at a database with records to keep.
 
-The browser harness owns ports 3055 and 3056 and a separate
-`screenr_browser_test` database on the same PostgreSQL server. It supplies a
-fictional TMDB response and captures email locally. It does not use paid
-services or contact real recipients. A full run checks:
+The browser harness owns loopback ports 3055, 3056, 3058, and 3059 and a separate
+`screenr_browser_test` database on the same PostgreSQL server. Port 3055 routes
+application requests to Next and auth requests to the real auth handlers with
+a local identity provider. This keeps OAuth redirects, state cookies, PKCE
+verification, account linking, and sessions in the browser flow. The provider
+supplies test identities; automated tests do not prove Google's availability
+or production credentials. The harness also supplies a fictional TMDB catalog
+and captures email locally. It does not use paid services or contact real
+recipients. A full run checks:
 
 - Four invited members complete email verification and required profiles.
 - Friendship needs acceptance; inviting alone gives no content access.
@@ -140,6 +148,12 @@ services or contact real recipients. A full run checks:
 - A blocked pair cannot see each other in a mutual friend's conversation,
   while the host retains visibility.
 - Invitations can be created and revoked.
+- Google signup shows an existing connection and removes the connect button.
+  A wrong email code is rejected; a valid code returns to the same profile.
+- An email-created account can recover from a provider request failure,
+  canceled consent, and a mismatched Google email. Error messages survive the
+  account refresh. Successful linking persists after reload, and subsequent
+  Google sign-in returns to the existing profile.
 
 Database tests additionally cover concurrent signup limits, rollback after
 username conflicts, expiry, code/account identity, explicit Google linking,

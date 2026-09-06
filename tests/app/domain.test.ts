@@ -12,6 +12,7 @@ process.env.BETTER_AUTH_URL = "http://localhost:3000";
 const { db } = await import("../../src/server/db");
 const { migrate } = await import("../../scripts/migrate");
 const { createAuth } = await import("../../src/server/auth");
+const { loadScreen } = await import("../../src/server/screens");
 const {
   createInvitation,
   completeSignup,
@@ -51,6 +52,11 @@ async function person(name: string) {
   const id = await pending(name, token);
   await completeSignup(id, name, name);
   return id;
+}
+async function accountScreen(userId: string) {
+  const screen = await loadScreen(userId, "/account");
+  assert.ok(screen.kind === "account");
+  return screen;
 }
 async function friend(a: string, b: string) {
   await changeRelationship(a, b, "request");
@@ -429,6 +435,11 @@ test("Google and email retain one account; linking requires the existing account
   assert.equal(googleSignup.status, 200, await googleSignup.clone().text());
   const googleId = (await googleSignup.json()).user.id;
   await completeSignup(googleId, "Google", "google");
+  assert.equal(
+    (await accountScreen(googleId)).googleConnected,
+    true,
+    "Google-created accounts must show their existing connection",
+  );
   await post("email-otp/send-verification-otp", {
     email: identity.email,
     type: "sign-in",
@@ -452,6 +463,7 @@ test("Google and email retain one account; linking requires the existing account
   );
   const emailId = (await emailSignup.json()).user.id;
   await completeSignup(emailId, "Email", "emailfirst");
+  assert.equal((await accountScreen(emailId)).googleConnected, false);
   const sessionCookie = emailSignup.headers
     .getSetCookie()
     .map((value) => value.split(";")[0])
@@ -476,6 +488,7 @@ test("Google and email retain one account; linking requires the existing account
   identity.email = email;
   const linked = await post("link-social", social, sessionCookie);
   assert.equal(linked.status, 200, await linked.clone().text());
+  assert.equal((await accountScreen(emailId)).googleConnected, true);
   const googleLogin = await post("sign-in/social", social);
   assert.equal((await googleLogin.json()).user.id, emailId);
   assert.equal(

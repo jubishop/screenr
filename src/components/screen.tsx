@@ -39,16 +39,20 @@ export function Screen({
   path,
   initialData,
   initialError,
+  initialGoogleError,
 }: {
   user: Person;
   path: string;
   initialData: ScreenData | null;
   initialError: string;
+  initialGoogleError: string;
 }) {
   const interactive = useInteractive();
   const [data, setData] = useState(initialData),
     [error, setError] = useState(initialError),
     [busy, setBusy] = useState(false);
+  const [googleError, setGoogleError] = useState(initialGoogleError),
+    [connectingGoogle, setConnectingGoogle] = useState(false);
   const [query, setQuery] = useState(""),
     [results, setResults] = useState<Title[] | null>(null),
     [inviteLimit, setInviteLimit] = useState(1),
@@ -699,36 +703,61 @@ export function Screen({
             <section className="settings-card">
               <h2>Sign-in methods</h2>
               <p>
-                To connect Google, first sign in with an email code. This
-                verifies ownership of your existing account.
+                Email codes sign you in to this same account. Use the email
+                address you joined with.
               </p>
-              {data.googleEnabled ? (
-                <button
-                  className="secondary"
-                  disabled={busy || !interactive}
-                  onClick={async () => {
-                    setBusy(true);
-                    const result = await authClient.linkSocial({
-                      provider: "google",
-                      callbackURL: "/account",
-                    });
-                    if (result.error) {
-                      setError(
-                        result.error.message ??
-                          "Sign in again with an email code, then retry.",
-                      );
-                      setBusy(false);
-                    }
-                  }}
-                >
-                  Connect Google
-                </button>
+              {googleError && (
+                <p className="error" role="alert">
+                  {googleError}
+                </p>
+              )}
+              {data.googleConnected ? (
+                <p role="status">Google connected.</p>
+              ) : data.googleEnabled ? (
+                <>
+                  <p>
+                    Connect Google to add another way to sign in. Choose the
+                    Google account with the same email address.
+                  </p>
+                  <button
+                    className="secondary"
+                    disabled={busy || connectingGoogle || !interactive}
+                    onClick={async () => {
+                      setConnectingGoogle(true);
+                      setGoogleError("");
+                      try {
+                        const result = await authClient.linkSocial({
+                          provider: "google",
+                          callbackURL: "/account",
+                          errorCallbackURL: "/account",
+                          disableRedirect: true,
+                        });
+                        if (result.error)
+                          throw new Error(
+                            result.error.message ??
+                              "Google could not be connected. Please try again.",
+                          );
+                        if (!result.data?.url)
+                          throw new Error(
+                            "Google sign-in did not start. Please try again.",
+                          );
+                        window.location.assign(result.data.url);
+                      } catch (error) {
+                        setGoogleError((error as Error).message);
+                        setConnectingGoogle(false);
+                      }
+                    }}
+                  >
+                    {connectingGoogle ? "Connecting…" : "Connect Google"}
+                  </button>
+                </>
               ) : (
                 <p className="muted">Google sign-in is not configured yet.</p>
               )}
               <hr />
               <button
                 className="text-button"
+                disabled={!interactive || connectingGoogle}
                 onClick={async () => {
                   await authClient.signOut();
                   window.location.assign("/login");
