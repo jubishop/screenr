@@ -190,6 +190,40 @@ it is not an integrity scan of the SQLite database. If QMD reports database
 errors despite a current fingerprint, use the foreground refresh and inspect
 its log. Manually replacing the database requires a forced refresh.
 
+## Test-driven development
+
+Regression fixes and functional changes require automated tests that cover
+the changed behavior. Use red-green test-driven development (TDD) whenever
+practical:
+
+1. **Red:** Add or update a focused test for the bug or intended behavior.
+   Run it before implementation and confirm it fails for the expected reason.
+   A setup error or a run that executes no tests does not establish this.
+2. **Green:** Make the smallest change that meets the requirement. Run the
+   focused test again and confirm it passes.
+3. **Refactor:** Improve the code if needed, keep the tests passing, and run
+   the relevant checks for affected behavior before delivery.
+
+A test that passes both before and after the change does not demonstrate the
+regression or new behavior. If testing first is not practical,
+explain why, retain automated coverage for the changed behavior, and report
+the verification performed and its limits. Documentation-only edits do not
+require new behavior tests; run the applicable document checks.
+
+Exercise the project's external surfaces: user-visible outcomes, public
+interfaces, and interactions with external systems. Assert the actual behavior
+at these boundaries. Do not call private helpers directly or assert internal
+structure, incidental call sequences, or other implementation details. Internal
+refactoring that preserves behavior should not require test changes.
+
+Put fakes or mocks at boundaries to the operating system, network, storage,
+or other external services. Keep the project's own logic running in the test;
+do not replace it with mocks that only prove those mocks were called. Do not
+expose private functionality or add production accessors or APIs only for tests.
+
+Use focused test commands during this cycle. The check command below provides
+broader validation and does not replace the red and green test runs.
+
 ## Checks and project extensions
 
 `bin/check` validates the documented frontmatter subset, index coverage,
