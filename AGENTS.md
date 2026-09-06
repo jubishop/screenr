@@ -32,6 +32,20 @@ shared models, diagnostics, and recovery.
 Run `bin/check` before delivering repository changes. It is also the GitHub
 Actions check for pull requests and pushes to `main`.
 
+## Testing
+
+Regression fixes and functional changes require automated tests for the
+changed behavior. Use red-green test-driven development (TDD) whenever
+practical: prove a focused test fails before implementation and passes after.
+If testing first is not practical, explain why and how the behavior was
+verified. Follow the [testing workflow](docs/development-workflow.md#test-driven-development).
+
+Test user-visible outcomes, public interfaces, and interactions with external
+systems. Put fakes at external-system boundaries so real project logic runs.
+Do not test private helpers or internal structure, expose private functionality,
+or add production APIs only for tests. Tests should allow internal refactoring
+that preserves behavior.
+
 ## Product Context
 
 Screenr is a social app for TV and movies. Read
