@@ -11,7 +11,7 @@ Screenr is a social app for TV and movies, centered on people you know.
 - The first release is a mobile-friendly web app for phone and computer browsers.
 - Use the [selected application stack](application-stack.md).
 - Host Screenr on a Hetzner VPS and operate its core services ourselves.
-  Use an external email relay to deliver login codes and enabled email alerts.
+  Use Resend to deliver login codes and enabled email alerts.
 - Launch is invite-only, starting with the user and a small group of friends.
   Each member can invite people they know.
 - Screenr is a non-commercial experiment for now, with no ads or paid features.
@@ -282,7 +282,7 @@ Users do not create a separate Screenr password.
 so people can choose either route without a separate Screenr password.
 
 Use the [selected authentication library](application-stack.md#authentication-library-decision--2026-09-05)
-for this sign-in experience. The email relay provider remains open.
+for this sign-in experience. Use the Resend relay selected below.
 
 ### One account across sign-in methods — 2026-09-05
 
@@ -637,20 +637,34 @@ for the underlying VPS. This replaces the proposed managed-services approach.
 The existing TMDB catalog and Google sign-in choices remain in place.
 The [application stack](application-stack.md) and
 [initial single-server layout](application-stack.md#initial-hosting-layout--2026-09-05)
-are selected. The specific VPS, deployment setup, and backup details remain
-open. The outbound email delivery boundary is defined below.
+are selected. Initially use the existing shared VPS; deployment setup and
+backup details remain implementation choices. The outbound email delivery
+boundary is defined below.
 
 ### External email relay — 2026-09-05
 
 **Decision:** Use an external email relay for outbound delivery while
 self-hosting Screenr's core services. Screenr owns the login-code and
 notification logic, including when to send email and what it contains.
-The relay provider remains undecided.
+Use Resend under the relay-provider decision below.
 
 **Why:** The user accepted using a relay to handle email delivery without
 operating our own mail server. This is an explicit exception to the
 self-hosting preference, alongside the existing catalog and Google sign-in
 integrations.
+
+### Email relay provider — 2026-09-05
+
+**Decision:** Reuse the existing Resend account on its free plan for
+Screenr's login codes and, when implemented, enabled email alerts.
+
+**Why:** The user accepted reusing the existing service while avoiding new
+costs. If its limits become a problem, decide how to proceed at that time.
+
+Configure a verified sender domain for Screenr. Keep sending credentials
+private and use only the permissions required to send email. The application
+must handle delivery errors and provider limits without silently upgrading
+the account or losing queued messages.
 
 ### First development milestone — 2026-09-05
 
@@ -668,10 +682,30 @@ milestones before the first release; this does not reduce the release scope.
 [GitHub issue #1](https://github.com/jubishop/screenr/issues/1) owns the
 implementation work and acceptance criteria.
 
+### First milestone includes live deployment — 2026-09-05
+
+**Decision:** Include a live Hetzner deployment in the first development
+milestone, alongside the repeatable local setup and automated checks.
+
+**Why:** The user confirmed that issue #1 should include live deployment.
+No further reason was stated.
+
+Use the existing shared VPS under the revised
+[hosting decision](application-stack.md#initial-hosting-layout--2026-09-05),
+which also records the user's preference to avoid new costs until measured
+limits require a decision. The public hostname is selected below; use the
+Resend relay selected above.
+
+### Public hostname — 2026-09-05
+
+**Decision:** Use `screenr.jubishop.com` for the live application.
+
+**Why:** The user accepted using the existing domain, consistent with the
+preference to avoid additional costs for this milestone.
+
 ## Open decisions
 
-- Email relay provider.
-- VPS selection and deployment; routine backup settings can be chosen during
+- Deployment configuration; routine backup settings can be chosen during
   implementation under the [initial backup scope](application-stack.md#initial-backup-scope--2026-09-05).
 - Telemetry event definitions, attribution, and implementation.
 - The detailed first-release delivery scope.

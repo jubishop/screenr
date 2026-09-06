@@ -8,3 +8,8 @@
 __pycache__/
 *.py[cod]
 worktrees/
+node_modules/
+.next/
+*.tsbuildinfo
+playwright-report/
+test-results/

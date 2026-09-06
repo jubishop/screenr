@@ -1,0 +1,29 @@
+[Unit]
+Description=Screenr isolated PostgreSQL cluster
+After=network.target
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+[Service]
+User=screenr-db
+Group=screenr-db
+RuntimeDirectory=screenr-db
+RuntimeDirectoryMode=0750
+ExecStart=/usr/lib/postgresql/18/bin/postgres -D /var/lib/screenr/postgres
+ExecReload=/bin/kill -HUP $MAINPID
+KillSignal=SIGINT
+TimeoutStopSec=120
+Restart=on-failure
+RestartSec=5
+MemoryHigh=220M
+MemoryMax=256M
+CPUQuota=50%
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/screenr/postgres /run/screenr-db
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

@@ -13,17 +13,19 @@ the choice and its tradeoffs. Product behavior remains defined in the
 **Decision:** Use TypeScript for browser and server code, Next.js for the
 web interface and request handling, and PostgreSQL for persistent data.
 Keep the interface and application backend in one application, hosted under
-the Hetzner decision in the product brief. The specific VPS remains open.
+the Hetzner decision in the product brief. Initially use the existing shared
+VPS under the hosting decision below.
 
 **Why:** The user confirmed this choice after an assessment of alternatives
 based solely on Screenr's requirements. The assessment retained it for the
 mobile web interface, related social data, and self-hosting requirements.
 The technical rationale below is the engineering assessment.
 
-This selects the core stack. The authentication library decision appears
-below; database-access, job, and deployment libraries remain open. No
-application has been built or deployed, and the assessment does not
-establish measured performance.
+The first milestone implements this stack. The authentication library
+decision appears below. Database access uses `pg` and owned SQL; email jobs
+use a small PostgreSQL queue. See [Running Screenr](running-screenr.md) for
+implementation and verification, and [deployment](deployment.md) for the live
+setup requirements. This assessment does not establish measured capacity.
 
 ## What matters for Screenr
 
@@ -119,9 +121,10 @@ dependency choice under the user's preference, not an exemption from it.
 Screenr still owns invitation eligibility and all friendship and content
 access rules. The product brief defines
 [account-linking behavior](product-brief.md#one-account-across-sign-in-methods--2026-09-05).
-Invitation integration and session configuration remain open. Available library features do not add product
-scope, and its automatic-registration defaults do not satisfy invite-only
-access without Screenr's checks.
+Screenr checks invitations before creating identities and consumes a use only
+when a verified member completes the required profile. Database-backed
+sessions expire after 30 days, and email codes expire after 10 minutes.
+Available library features do not add product scope.
 
 The documented capabilities include [Next.js integration](https://better-auth.com/docs/integrations/next),
 [PostgreSQL storage](https://better-auth.com/docs/adapters/postgresql),
@@ -133,17 +136,30 @@ with application-owned login and session logic. Sources checked on 2026-09-05.
 
 ## Initial hosting layout — 2026-09-05
 
-**Decision:** Start with one Hetzner VPS dedicated to Screenr. Run the web
-application, background worker, and PostgreSQL on that server, with backups
-stored outside it.
+**Decision:** Initially use the existing shared Hetzner VPS for Screenr's
+web application, background worker, and PostgreSQL, with backups stored
+outside it. Keep the existing applications running alongside Screenr.
+This supersedes the earlier plan for a VPS dedicated to Screenr.
 
-**Why:** The user accepted keeping initial operations simple for the
-invite-only release.
+**Why:** The user asked to reuse the current VPS and avoid spending money
+for as long as possible. When the server reaches its limits, decide then
+whether to resize it, move Screenr, or change the implementation. Do not
+buy extra capacity in anticipation of growth.
 
-**Tradeoff:** A server failure makes Screenr unavailable while we repair or
-restore it. The initial design does not include redundant servers or
-automatic failover. The server plan, region, deployment method, backup
-schedule, and retention remain implementation choices.
+**Tradeoff:** Screenr shares CPU, memory, disk space, and a failure boundary
+with the other applications. Measure Screenr's resource use and protect
+those applications when deploying. Build release artifacts outside the VPS
+and use conservative application and database settings. The initial design
+does not include redundant servers or automatic failover. Deployment,
+backup schedule, and retention remain implementation choices.
+
+**Engineering assessment — 2026-09-05:** A read-only check found 2 virtual
+CPUs, about 2 GB of RAM, about 1.3 GB of available memory, and 28 GB of free
+disk space. The retained system samples showed average CPU idle time above
+99% and minimum available memory above 1.1 GB. No memory-kill entries were
+found in the retained kernel journal for the last 30 days. This supports
+an initial trial; it does not measure Screenr's resource use or guarantee
+capacity for future traffic. Recheck before deployment.
 
 ### Initial backup scope — 2026-09-05
 
@@ -172,10 +188,11 @@ Screenr stays within it. See [R2 pricing](https://developers.cloudflare.com/r2/p
 and PostgreSQL's [consistent dump guidance](https://www.postgresql.org/docs/current/backup-dump.html),
 checked on 2026-09-05. No backup service or storage resource is configured yet.
 
-## Proposed implementation approach
+## Implementation approach
 
-These are implementation recommendations accompanying the core decision.
-Detailed designs and component choices remain open.
+The first milestone follows these conventions. The
+[application guide](running-screenr.md#data-and-access-rules) describes the
+implemented data boundaries and current refresh behavior.
 
 - Put friendship and content-access rules in shared server modules. Call
   them from every read and write entry point, including background work.
@@ -202,10 +219,10 @@ These recommendations follow Next.js's documented
 [self-hosting behavior](https://nextjs.org/docs/app/guides/self-hosting), and
 [backend scope](https://nextjs.org/docs/app/guides/backend-for-frontend).
 
-[pg-boss](https://github.com/timgit/pg-boss) supports PostgreSQL-backed jobs
-and retries. It remains a feasibility example, not a selected dependency.
-Job retry safety and supported versions still need design and validation
-before adopting a job component.
+The initial email worker uses an owned PostgreSQL table with row locking,
+expiring encrypted payloads, bounded retry delays, and provider idempotency
+keys. This avoids a separate job library for one small queue. `tsx` runs the
+worker and maintenance scripts using the same TypeScript source.
 
 ## What would justify revisiting the choice
 

@@ -14,9 +14,9 @@ Run from the repository root:
 ```sh
 bin/setup
 bin/doctor
-bin/check
 ```
 
+Complete [app setup](running-screenr.md#local-setup) before running `bin/check`.
 Setup requires Git and Python 3.9 or later. Checks also require ShellCheck,
 available through the operating system's package manager. QMD and direnv are
 optional. Missing optional tools produce clear notices; an installed but
@@ -205,8 +205,10 @@ For generated or externally owned docs, add deliberate patterns to
 hand-written project knowledge.
 
 GitHub Actions runs `bin/check` on pull requests and pushes to `main` through
-[the existing workflow](../.github/workflows/check.yml). Add application
-checks when the stack is selected. GitHub issues track implementation work.
+[the existing workflow](../.github/workflows/check.yml). Application formatting,
+types, PostgreSQL tests, browser verification and the production build run after
+the foundation checks. See [application verification](running-screenr.md#verification)
+for requirements. GitHub issues track implementation work.
 
 For clones created before this foundation upgrade, copy any existing local
 `screenr.homeMemoryPath` value to `knowledge.homeMemoryPath` before rerunning

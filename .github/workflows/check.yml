@@ -4,6 +4,7 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -15,12 +16,43 @@ concurrency:
 jobs:
   check:
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: screenr
+          POSTGRES_PASSWORD: screenr-ci-only
+          POSTGRES_DB: screenr_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U screenr -d screenr_test"
+          --health-interval 2s --health-timeout 3s --health-retries 20
+    env:
+      TEST_DATABASE_URL: postgresql://screenr:screenr-ci-only@127.0.0.1:5432/screenr_test
+      NEXT_TELEMETRY_DISABLED: "1"
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: "24"
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
       - name: Install ShellCheck
         run: sudo apt-get update && sudo apt-get install --yes shellcheck
       - name: Check repository
         run: ./bin/check
+      - name: Package Linux release
+        if: github.event_name == 'workflow_dispatch'
+        run: npm run release:package
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        if: github.event_name == 'workflow_dispatch'
+        with:
+          name: screenr-linux-x64-${{ github.sha }}
+          path: .cache/screenr-*.tar.gz
+          retention-days: 1
+          compression-level: 0
+          if-no-files-found: error
