@@ -30,3 +30,16 @@ export function useInteractive() {
   useEffect(() => setReady(true), []);
   return ready;
 }
+
+export function dateLabel(
+  value: string,
+  interactive: boolean,
+  options: Intl.DateTimeFormatOptions = {},
+) {
+  // The server cannot know the browser's time zone. Use a stable first render,
+  // then show the reader's local date once the client is ready.
+  return new Date(value).toLocaleDateString("en-US", {
+    ...options,
+    ...(!interactive ? { timeZone: "UTC" } : {}),
+  });
+}

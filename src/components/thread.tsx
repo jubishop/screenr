@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { useRef, useState } from "react";
 import type { Comment, Person, Thread } from "../shared";
-import { api, useInteractive } from "./client";
+import { api, useInteractive, dateLabel } from "./client";
 
 export function ThreadView({
   snapshot,
@@ -86,8 +86,8 @@ export function ThreadView({
             <strong>{comment.display_name}</strong>{" "}
             <span className="muted">@{comment.username}</span>
           </Link>
-          <time className="small muted">
-            {new Date(comment.created_at).toLocaleDateString(undefined, {
+          <time className="small muted" dateTime={comment.created_at}>
+            {dateLabel(comment.created_at, interactive, {
               month: "short",
               day: "numeric",
             })}

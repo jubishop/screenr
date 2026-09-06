@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ScreenData } from "../server/screens";
 import type { Conversation, Person, Title } from "../shared";
-import { api, authClient, useInteractive } from "./client";
+import { api, authClient, useInteractive, dateLabel } from "./client";
 import { ThreadView } from "./thread";
 
 function titleURL(id: string) {
@@ -667,7 +667,7 @@ export function Screen({
                     )}
                   </div>
                   <p className="small muted">
-                    Expires {new Date(invite.expires_at).toLocaleDateString()}
+                    Expires {dateLabel(invite.expires_at, interactive)}
                   </p>
                   <p>
                     {invite.joined.map((p: Person) => (

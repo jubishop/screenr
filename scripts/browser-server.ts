@@ -21,6 +21,7 @@ try {
 }
 base.pathname = "/screenr_browser_test";
 process.env.DATABASE_URL = base.href;
+process.env.TZ = "UTC";
 process.env.BETTER_AUTH_URL = "http://localhost:3055";
 process.env.BETTER_AUTH_SECRET =
   "screenr-browser-test-only-secret-at-least-32-characters";

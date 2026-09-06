@@ -2,11 +2,22 @@ import { test, expect, type Page, type Browser } from "@playwright/test";
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 
+const browserErrors: string[] = [];
+
 async function join(browser: Browser, name: string) {
   const context = await browser.newContext({
     viewport: { width: 390, height: 844 },
+    timezoneId: "America/Los_Angeles",
   });
   const page = await context.newPage();
+  page.on("pageerror", (error) => browserErrors.push(error.message));
+  page.on("console", (message) => {
+    if (
+      message.type() === "error" &&
+      /hydration|didn.t match/i.test(message.text())
+    )
+      browserErrors.push(message.text());
+  });
   const token = (await readFile(".cache/browser-invite.txt", "utf8")).trim();
   const email = `${name}.browser@example.test`;
   await page.goto(`/join/${token}`);
@@ -249,6 +260,7 @@ test("invited friends discover, save, and share a persistent conversation with l
     path: ".cache/screenr-desktop.png",
     fullPage: true,
   });
+  expect(browserErrors).toEqual([]);
   for (const page of [alice, ben, cam, outsider]) await page.context().close();
 });
 
