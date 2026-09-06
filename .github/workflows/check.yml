@@ -60,6 +60,7 @@ jobs:
         with:
           name: screenr-linux-x64-${{ github.sha }}
           path: .cache/screenr-*.tar.gz
+          include-hidden-files: true
           retention-days: 1
           compression-level: 0
           if-no-files-found: error

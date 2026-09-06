@@ -12,7 +12,11 @@ await cp(".next/standalone", output, {
   filter: (source) =>
     !source
       .split("/")
-      .some((part) => part === "node_modules" || part.startsWith(".env")),
+      .some(
+        (part) =>
+          ["node_modules", ".cache", ".git"].includes(part) ||
+          part.startsWith(".env"),
+      ),
 });
 for (const path of [
   "public",
