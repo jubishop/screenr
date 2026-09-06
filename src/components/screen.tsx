@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ScreenData } from "../server/screens";
 import type { Conversation, Person, Title } from "../shared";
-import { api, authClient, useInteractive, dateLabel } from "./client";
+import { api, authClient, signOut, useInteractive, dateLabel } from "./client";
 import { ThreadView } from "./thread";
 
 function titleURL(id: string) {
@@ -49,7 +49,8 @@ export function Screen({
 }) {
   const interactive = useInteractive();
   const [data, setData] = useState(initialData),
-    [error, setError] = useState(initialError),
+    [loadError, setLoadError] = useState(initialError),
+    [error, setError] = useState(""),
     [busy, setBusy] = useState(false);
   const [googleError, setGoogleError] = useState(initialGoogleError),
     [connectingGoogle, setConnectingGoogle] = useState(false);
@@ -70,12 +71,12 @@ export function Screen({
       );
       if (!controller.signal.aborted) {
         setData(latest);
-        setError("");
+        setLoadError("");
       }
     } catch (error) {
       if (!controller.signal.aborted) {
         setData(null);
-        setError((error as Error).message);
+        setLoadError((error as Error).message);
       }
     }
   }, [path]);
@@ -168,9 +169,7 @@ export function Screen({
                       void activity(c.title_id, "want_to_watch", true)
                     }
                   >
-                    {own.some(
-                      (o) => o.title_id === c.title_id && o.want_to_watch,
-                    )
+                    {c.viewer_want_to_watch
                       ? "✓ Want to watch"
                       : "+ Want to watch"}
                   </button>
@@ -238,11 +237,19 @@ export function Screen({
           <span className="eyebrow">YOUR PEOPLE. YOUR PICKS.</span>
           <span className="small muted">A private circle</span>
         </header>
+        {loadError && (
+          <div className="error" role="alert">
+            {loadError}
+            <button className="text-button" onClick={() => void refresh()}>
+              Try again
+            </button>
+          </div>
+        )}
         {error && (
           <div className="error" role="alert">
             {error}
-            <button className="text-button" onClick={() => void refresh()}>
-              Try again
+            <button className="text-button" onClick={() => setError("")}>
+              Dismiss
             </button>
           </div>
         )}
@@ -338,13 +345,15 @@ export function Screen({
                   : "Something to talk about with friends."}
               </p>
             </div>
-            <ThreadView
-              key={data.conversation.id}
-              snapshot={data}
-              user={user}
-              refresh={refresh}
-            />
           </>
+        )}
+        {path.startsWith("/conversations/") && (
+          <ThreadView
+            key={path}
+            snapshot={data?.kind === "thread" ? data : null}
+            user={user}
+            refresh={refresh}
+          />
         )}
         {data?.kind === "search" && (
           <>
@@ -757,10 +766,17 @@ export function Screen({
               <hr />
               <button
                 className="text-button"
-                disabled={!interactive || connectingGoogle}
+                disabled={busy || !interactive || connectingGoogle}
                 onClick={async () => {
-                  await authClient.signOut();
-                  window.location.assign("/login");
+                  setBusy(true);
+                  setError("");
+                  try {
+                    await signOut();
+                  } catch (error) {
+                    setError((error as Error).message);
+                  } finally {
+                    setBusy(false);
+                  }
                 }}
               >
                 Sign out

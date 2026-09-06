@@ -1,4 +1,4 @@
-import { auth } from "../../../../server/auth";
+import { auth, tokenFromCookie } from "../../../../server/auth";
 import { AppError } from "../../../../server/db";
 import {
   member,
@@ -61,7 +61,12 @@ async function handle(
     const userId = session.user.id;
     if (action === "setup" && request.method === "POST") {
       const data = await body(request);
-      await completeSignup(userId, data.name, data.username);
+      await completeSignup(
+        userId,
+        data.name,
+        data.username,
+        tokenFromCookie(request.headers),
+      );
       return json({ ok: true });
     }
     await member(userId);

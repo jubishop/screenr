@@ -9,29 +9,38 @@ export function ThreadView({
   user,
   refresh,
 }: {
-  snapshot: Thread;
+  snapshot: Thread | null;
   user: Person;
   refresh: () => Promise<void>;
 }) {
   const interactive = useInteractive();
-  const [known, setKnown] = useState(
-    () => new Set(snapshot.comments.map((c) => c.id)),
+  const [known, setKnown] = useState<Set<string> | null>(() =>
+    snapshot ? new Set(snapshot.comments.map((c) => c.id)) : null,
   );
   const [revealed, setRevealed] = useState(new Set<string>());
-  const [body, setBody] = useState(""),
-    [spoiler, setSpoiler] = useState(false),
-    [replyTo, setReplyTo] = useState<Comment | null>(null),
-    [busy, setBusy] = useState(false),
+  const [draft, setDraft] = useState({
+    body: "",
+    spoiler: false,
+    replyTo: null as string | null,
+  });
+  const [busy, setBusy] = useState(false),
     [error, setError] = useState("");
   const area = useRef<HTMLTextAreaElement>(null);
-  const activeReplyTo = snapshot.comments.find(
-    (c) => c.id === replyTo?.id && !c.removed,
+  // Keep local composition state through a failed refresh, but render no
+  // conversation content until a current authorized snapshot is available.
+  if (!snapshot) return null;
+  const currentSnapshot = snapshot;
+  const knownIds = known ?? new Set(currentSnapshot.comments.map((c) => c.id));
+  if (!known) setKnown(knownIds);
+  const { body, spoiler, replyTo } = draft;
+  const activeReplyTo = currentSnapshot.comments.find(
+    (c) => c.id === replyTo && !c.removed,
   );
-  const visible = snapshot.comments.filter(
-    (c) => known.has(c.id) || c.author_id === user.user_id,
+  const visible = currentSnapshot.comments.filter(
+    (c) => knownIds.has(c.id) || c.author_id === user.user_id,
   );
-  const incoming = snapshot.comments.filter(
-    (c) => !known.has(c.id) && c.author_id !== user.user_id,
+  const incoming = currentSnapshot.comments.filter(
+    (c) => !knownIds.has(c.id) && c.author_id !== user.user_id,
   );
   const roots = visible.filter((c) => !c.root_id);
   const missingRoots = [
@@ -46,7 +55,7 @@ export function ThreadView({
       document.querySelectorAll<HTMLElement>("[data-comment-id]"),
     ).find((node) => node.getBoundingClientRect().bottom > 0);
     const top = anchor?.getBoundingClientRect().top;
-    setKnown(new Set(snapshot.comments.map((c) => c.id)));
+    setKnown(new Set(currentSnapshot.comments.map((c) => c.id)));
     requestAnimationFrame(() => {
       if (anchor?.isConnected && top !== undefined)
         window.scrollBy(0, anchor.getBoundingClientRect().top - top);
@@ -58,15 +67,17 @@ export function ThreadView({
     setError("");
     try {
       const result = await api<{ id: string }>("comment", {
-        conversation: snapshot.conversation.id,
+        conversation: currentSnapshot.conversation.id,
         body,
         spoiler,
         replyTo: activeReplyTo?.id,
       });
-      setKnown((ids) => new Set([...ids, result.id]));
-      setBody("");
-      setSpoiler(false);
-      setReplyTo(null);
+      setKnown((ids) => new Set([...(ids ?? []), result.id]));
+      setDraft((current) =>
+        current === draft
+          ? { body: "", spoiler: false, replyTo: null }
+          : current,
+      );
       await refresh();
     } catch (error) {
       setError((error as Error).message);
@@ -116,13 +127,13 @@ export function ThreadView({
               className="text-button"
               disabled={!interactive}
               onClick={() => {
-                setReplyTo(comment);
+                setDraft((current) => ({ ...current, replyTo: comment.id }));
                 area.current?.focus();
               }}
             >
               Reply
             </button>
-            {snapshot.conversation.owner_id === user.user_id && (
+            {currentSnapshot.conversation.owner_id === user.user_id && (
               <button
                 className="text-button muted"
                 disabled={busy || !interactive}
@@ -186,7 +197,9 @@ export function ThreadView({
               type="button"
               className="text-button"
               disabled={!interactive}
-              onClick={() => setReplyTo(null)}
+              onClick={() =>
+                setDraft((current) => ({ ...current, replyTo: null }))
+              }
             >
               Cancel
             </button>
@@ -200,7 +213,9 @@ export function ThreadView({
           required
           maxLength={2000}
           value={body}
-          onChange={(e) => setBody(e.target.value)}
+          onChange={(e) =>
+            setDraft((current) => ({ ...current, body: e.target.value }))
+          }
           placeholder="What do you think?"
         />
         <div className="composer-footer">
@@ -208,7 +223,12 @@ export function ThreadView({
             <input
               type="checkbox"
               checked={spoiler}
-              onChange={(e) => setSpoiler(e.target.checked)}
+              onChange={(e) =>
+                setDraft((current) => ({
+                  ...current,
+                  spoiler: e.target.checked,
+                }))
+              }
             />
             Contains spoilers
           </label>

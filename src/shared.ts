@@ -18,6 +18,7 @@ export type Conversation = {
   title_id: string;
   recommended: boolean;
   want_to_watch: boolean;
+  viewer_want_to_watch: boolean;
   username: string;
   display_name: string;
   title_name: string;

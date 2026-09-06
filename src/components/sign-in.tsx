@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { authClient, api, useInteractive } from "./client";
+import { authClient, api, signOut, useInteractive } from "./client";
 
 export function SignIn({
   invited,
@@ -61,13 +61,26 @@ export function SignIn({
             disabled={busy || !interactive}
             onClick={async () => {
               setBusy(true);
-              const result = await authClient.signIn.social({
-                provider: "google",
-                callbackURL: "/setup",
-                errorCallbackURL: "/login",
-              });
-              if (result.error) {
-                setError(result.error.message ?? "Google sign-in failed.");
+              setError("");
+              try {
+                const result = await authClient.signIn.social({
+                  provider: "google",
+                  callbackURL: "/setup",
+                  errorCallbackURL: "/login",
+                  disableRedirect: true,
+                });
+                if (result.error)
+                  throw new Error(
+                    result.error.message ||
+                      "Google sign-in failed. Please try again.",
+                  );
+                if (!result.data?.url)
+                  throw new Error(
+                    "Google sign-in did not start. Please try again.",
+                  );
+                window.location.assign(result.data.url);
+              } catch (error) {
+                setError((error as Error).message);
                 setBusy(false);
               }
             }}
@@ -255,11 +268,18 @@ export function Setup({
           </button>
         </form>
         <button
-          disabled={!interactive}
+          disabled={busy || !interactive}
           className="text-button"
           onClick={async () => {
-            await authClient.signOut();
-            window.location.assign("/login");
+            setBusy(true);
+            setError("");
+            try {
+              await signOut();
+            } catch (error) {
+              setError((error as Error).message);
+            } finally {
+              setBusy(false);
+            }
           }}
         >
           Sign out

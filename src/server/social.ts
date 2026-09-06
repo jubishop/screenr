@@ -104,7 +104,9 @@ export async function changeRelationship(
   });
 }
 
-const conversationColumns = `c.*,p.username,p.display_name,t.name AS title_name,t.poster_path,t.kind`;
+const conversationColumns = `c.*,p.username,p.display_name,t.name AS title_name,t.poster_path,t.kind,
+  coalesce((SELECT own.want_to_watch FROM conversation own
+    WHERE own.owner_id=$1 AND own.title_id=c.title_id),false) AS viewer_want_to_watch`;
 const visibleActivity = `greatest(c.activity_at, coalesce((SELECT max(cm.created_at) FROM comment cm
   WHERE cm.conversation_id=c.id AND cm.removed_at IS NULL AND screenr_can_read(cm.author_id,c.owner_id)
   AND NOT screenr_blocked($1,cm.author_id)),c.activity_at))`;
@@ -119,6 +121,9 @@ export async function conversations(
     FROM conversation c JOIN profile p ON p.user_id=c.owner_id JOIN title t ON t.id=c.title_id
     WHERE screenr_can_read($1,c.owner_id) AND ($2::text IS NULL OR c.title_id=$2)
     AND ($3::text IS NULL OR c.owner_id=$3)
+    AND (c.recommended OR c.want_to_watch OR EXISTS (
+      SELECT 1 FROM comment cm WHERE cm.conversation_id=c.id AND cm.removed_at IS NULL
+      AND screenr_can_read(cm.author_id,c.owner_id) AND NOT screenr_blocked($1,cm.author_id)))
     ORDER BY ${filter.title ? "visible_activity" : "c.activity_at"} DESC,c.id`,
       [viewer, filter.title ?? null, filter.owner ?? null],
     )

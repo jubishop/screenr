@@ -17,7 +17,8 @@ export async function startGoogleProvider() {
     throw new Error(
       "The identity fixture requires the isolated browser-test environment.",
     );
-  const auth = createAuth();
+  // Rate limiting has PostgreSQL coverage; browser journeys share one loopback IP.
+  const auth = createAuth({ rateLimit: false });
   const provider = (await auth.$context).socialProviders[0];
   if (!provider || provider.id !== "google")
     throw new Error("Browser fixture requires its test Google configuration.");

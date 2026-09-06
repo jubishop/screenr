@@ -187,6 +187,44 @@ test("pending and nonfriends cannot read or write a thread; accepted friends use
   );
   assert.equal(same, conversation);
 });
+test("clearing activity hides empty cards while preserving visible conversations", async () => {
+  const { alice, ben, cam, conversation } = await setup();
+  await friend(alice, ben);
+  await friend(alice, cam);
+  await updateTitleActivity(alice, "movie:1", "recommended", false);
+  for (const filter of [{}, { title: "movie:1" }, { owner: alice }])
+    assert.deepEqual(await conversations(ben, filter), []);
+  assert.equal(
+    (await thread(alice, conversation)).conversation.id,
+    conversation,
+  );
+  await updateTitleActivity(alice, "movie:1", "want_to_watch", true);
+  assert.equal((await conversations(ben))[0].id, conversation);
+  await updateTitleActivity(alice, "movie:1", "want_to_watch", false);
+  const comment = await addComment(
+    cam,
+    conversation,
+    "Keep this discussion",
+    false,
+  );
+  assert.equal((await conversations(ben))[0].id, conversation);
+  await changeRelationship(ben, cam, "block");
+  assert.deepEqual(await conversations(ben), []);
+  assert.equal((await conversations(alice))[0].id, conversation);
+  await changeRelationship(ben, cam, "unblock");
+  assert.equal((await conversations(ben))[0].id, conversation);
+  await changeRelationship(alice, cam, "remove");
+  assert.deepEqual(await conversations(ben), []);
+  await friend(alice, cam);
+  assert.equal((await conversations(ben))[0].id, conversation);
+  await removeComment(alice, comment);
+  assert.deepEqual(await conversations(ben), []);
+  assert.equal(
+    await updateTitleActivity(alice, "movie:1", "recommended", true),
+    conversation,
+  );
+  assert.equal((await conversations(ben))[0].id, conversation);
+});
 test("unfriending revokes historical access, hides comments for remaining readers, and refriending restores them", async () => {
   const { alice, ben, cam, conversation } = await setup();
   await friend(alice, ben);
@@ -494,5 +532,120 @@ test("Google and email retain one account; linking requires the existing account
   assert.equal(
     (await db.query('SELECT count(*)::int AS n FROM "user"')).rows[0].n,
     2,
+  );
+});
+
+test("replacement invitations authorize pending accounts and retain completion idempotency", async () => {
+  const original = await createInvitation(null);
+  const replacement = await createInvitation(null);
+  const user = await pending("replacement", original.token);
+  await db.query("UPDATE invitation SET revoked_at=now() WHERE id=$1", [
+    original.id,
+  ]);
+  await completeSignup(user, "Replacement", "replacement", replacement.token);
+  await completeSignup(user, "Replacement", "replacement", original.token);
+  const uses = (
+    await db.query("SELECT id,uses FROM invitation WHERE id=ANY($1::uuid[])", [
+      [original.id, replacement.id],
+    ])
+  ).rows;
+  assert.equal(uses.find((row) => row.id === original.id).uses, 0);
+  assert.equal(uses.find((row) => row.id === replacement.id).uses, 1);
+  assert.equal(
+    (
+      await db.query(
+        "SELECT invitation_id FROM invitation_signup WHERE user_id=$1",
+        [user],
+      )
+    ).rows[0].invitation_id,
+    replacement.id,
+  );
+});
+
+test("replacement invitations preserve verification, availability, and rollback checks", async () => {
+  for (const condition of [
+    "unverified",
+    "revoked",
+    "expired",
+    "exhausted",
+  ] as const) {
+    const original = await createInvitation(null);
+    const replacement = await createInvitation(null);
+    const user = await pending(
+      condition,
+      original.token,
+      condition !== "unverified",
+    );
+    if (condition === "revoked")
+      await db.query("UPDATE invitation SET revoked_at=now() WHERE id=$1", [
+        replacement.id,
+      ]);
+    if (condition === "expired")
+      await db.query(
+        "UPDATE invitation SET expires_at=now()-interval '1 second' WHERE id=$1",
+        [replacement.id],
+      );
+    if (condition === "exhausted")
+      await db.query("UPDATE invitation SET uses=max_uses WHERE id=$1", [
+        replacement.id,
+      ]);
+    await assert.rejects(
+      completeSignup(user, condition, condition, replacement.token),
+      /Verify|no longer/,
+    );
+    assert.equal(
+      (await db.query("SELECT uses FROM invitation WHERE id=$1", [original.id]))
+        .rows[0].uses,
+      0,
+    );
+    assert.equal(
+      (await db.query("SELECT 1 FROM profile WHERE user_id=$1", [user]))
+        .rowCount,
+      0,
+    );
+  }
+  await person("takenhandle");
+  const original = await createInvitation(null);
+  const replacement = await createInvitation(null);
+  const user = await pending("conflict", original.token);
+  await assert.rejects(
+    completeSignup(user, "Conflict", "takenhandle", replacement.token),
+    /taken/,
+  );
+  assert.equal(
+    (
+      await db.query("SELECT uses FROM invitation WHERE id=$1", [
+        replacement.id,
+      ])
+    ).rows[0].uses,
+    0,
+  );
+});
+
+test("concurrent replacement signups cannot exceed the replacement invitation's capacity", async () => {
+  const original = await createInvitation(null, 2);
+  const replacement = await createInvitation(null, 1);
+  const a = await pending("replacementa", original.token),
+    b = await pending("replacementb", original.token);
+  const results = await Promise.allSettled([
+    completeSignup(a, "A", "replacementa", replacement.token),
+    completeSignup(b, "B", "replacementb", replacement.token),
+  ]);
+  assert.equal(
+    results.filter((result) => result.status === "fulfilled").length,
+    1,
+  );
+  assert.equal(
+    (
+      await db.query("SELECT uses FROM invitation WHERE id=$1", [
+        replacement.id,
+      ])
+    ).rows[0].uses,
+    1,
+  );
+  assert.equal(
+    (await db.query("SELECT uses FROM invitation WHERE id=$1", [original.id]))
+      .rows[0].uses,
+    0,
   );
 });

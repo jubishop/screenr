@@ -21,7 +21,7 @@ mv -Tf /opt/screenr/current.new /opt/screenr/current
 systemctl restart screenr-web screenr-worker || true
 attempt=0
 while test "$attempt" -lt 20; do
-    if curl --fail --silent http://127.0.0.1:3060/api/health >/dev/null && systemctl is-active --quiet screenr-worker; then
+    if curl --fail --silent --connect-timeout 1 --max-time 2 http://127.0.0.1:3060/api/health >/dev/null && systemctl is-active --quiet screenr-worker; then
         echo "Activated $(cat "$release/REVISION")"
         exit 0
     fi

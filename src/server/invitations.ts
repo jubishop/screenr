@@ -42,6 +42,7 @@ export async function completeSignup(
   userId: string,
   name: unknown,
   username: unknown,
+  currentToken?: string,
 ) {
   const displayName = text(name, "Display name", 60);
   const handle = text(username, "Username", 24).toLowerCase();
@@ -63,11 +64,14 @@ export async function completeSignup(
     ).rows[0];
     if (!user?.emailVerified)
       throw new AppError("Verify your email before joining.", 403);
+    const hash = currentToken
+      ? invitationHash(currentToken)
+      : user.invitationHash;
     const invite = (
       await client.query(
         `UPDATE invitation SET uses=uses+1 WHERE token_hash=$1 AND revoked_at IS NULL
        AND expires_at>now() AND uses<max_uses RETURNING id`,
-        [user.invitationHash],
+        [hash],
       )
     ).rows[0];
     if (!invite)
@@ -89,6 +93,10 @@ export async function completeSignup(
       "INSERT INTO invitation_signup(invitation_id,user_id) VALUES($1,$2)",
       [invite.id, userId],
     );
+    await client.query('UPDATE "user" SET "invitationHash"=$1 WHERE id=$2', [
+      hash,
+      userId,
+    ]);
   });
 }
 

@@ -3,6 +3,14 @@ import { useEffect, useState } from "react";
 import { createAuthClient } from "better-auth/react";
 import { emailOTPClient } from "better-auth/client/plugins";
 export const authClient = createAuthClient({ plugins: [emailOTPClient()] });
+export async function signOut() {
+  const result = await authClient.signOut();
+  if (result.error || !result.data?.success)
+    throw new Error(
+      result.error?.message || "Could not sign out. Please try again.",
+    );
+  window.location.assign("/login");
+}
 export async function api<T = Record<string, unknown>>(
   action: string,
   data?: unknown,

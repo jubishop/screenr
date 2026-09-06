@@ -154,10 +154,20 @@ recipients. A full run checks:
   canceled consent, and a mismatched Google email. Error messages survive the
   account refresh. Successful linking persists after reload, and subsequent
   Google sign-in returns to the existing profile.
+- Failed sign-out and Google sign-in requests show an error and allow retry.
+  A pending member can finish signup through a replacement invitation.
+- Reply drafts survive failed refreshes and typing during a pending post.
+  Refresh failures hide server content until access is checked again;
+  unrelated refreshes do not clear action errors.
+- A friend's profile shows the viewer's current saved state. Clearing the last
+  activity flag hides an empty card, while visible comments keep its thread
+  listed.
 
 Database tests additionally cover concurrent signup limits, rollback after
 username conflicts, expiry, code/account identity, explicit Google linking,
 one-level reply grouping, host removal, and encrypted email delivery retries.
+Operational tests check activation rollback after a stalled health request and
+rejection of incorrectly named SQL migrations before schema changes begin.
 The browser test writes mobile and desktop screenshots to `.cache/` and
 keeps failure traces in `test-results/`.
 
@@ -181,6 +191,8 @@ The migration command applies Better Auth's schema and numbered SQL files in
 `db/`. It takes a migration lock and records applied files in
 `screenr_migration`. Future schema changes must use new numbered files;
 changing a previously applied file does not alter an installed database.
+SQL filenames must match `NNN-name.sql`, with lowercase letters and hyphens in
+the name. Invalid SQL filenames fail the release instead of being ignored.
 Back up before deploying schema changes.
 
 TMDB data is cached for 24 hours. `public/tmdb.svg` is the unmodified approved

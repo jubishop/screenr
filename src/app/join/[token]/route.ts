@@ -21,12 +21,8 @@ export async function GET(
   const hash = invitationHash(token);
   if (!/^[a-zA-Z0-9_-]{43}$/.test(token) || !(await activeInvitation(hash)))
     return NextResponse.redirect(new URL("/login?invitation=unavailable", url));
-  // A pending account can replace an expired/exhausted invite by opening a new link.
-  if (session)
-    await db.query('UPDATE "user" SET "invitationHash"=$1 WHERE id=$2', [
-      hash,
-      session.user.id,
-    ]);
+  // Setup validates and consumes this invitation in its signup transaction,
+  // whether the pending account follows the link before or after signing in.
   const response = NextResponse.redirect(
     new URL(session ? "/setup" : "/login", url),
   );

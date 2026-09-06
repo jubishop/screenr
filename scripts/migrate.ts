@@ -4,6 +4,15 @@ import { createAuth } from "../src/server/auth";
 import { db } from "../src/server/db";
 
 export async function migrate() {
+  const directory = new URL("../db/", import.meta.url);
+  const files = (await readdir(directory))
+    .filter((name) => name.endsWith(".sql"))
+    .sort();
+  const invalid = files.filter((name) => !/^\d{3}-[a-z-]+\.sql$/.test(name));
+  if (invalid.length)
+    throw new Error(
+      `Migration files must match NNN-name.sql: ${invalid.join(", ")}`,
+    );
   const client = await db.connect();
   try {
     await client.query("SELECT pg_advisory_lock(713934202)");
@@ -13,10 +22,6 @@ export async function migrate() {
     await client.query(
       "CREATE TABLE IF NOT EXISTS screenr_migration (name text PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now())",
     );
-    const directory = new URL("../db/", import.meta.url);
-    const files = (await readdir(directory))
-      .filter((name) => /^\d{3}-[a-z-]+\.sql$/.test(name))
-      .sort();
     for (const name of files) {
       if (
         (
