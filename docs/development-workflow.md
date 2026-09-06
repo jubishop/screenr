@@ -224,6 +224,30 @@ expose private functionality or add production accessors or APIs only for tests.
 Use focused test commands during this cycle. The check command below provides
 broader validation and does not replace the red and green test runs.
 
+## Review, merge, and deploy
+
+**Decision — 2026-09-06:** Test development changes on localhost and in
+isolated CI. Complete PR review and merge to `main` before deploying them
+to production.
+
+**Why:** The user wants review and merge to happen before changes reach the
+live application.
+
+The normal sequence is:
+
+1. Implement and verify the change locally, including relevant browser flows.
+2. Push the feature branch, pass CI, and complete PR review.
+3. Merge the PR to `main`. Build the release from the selected merged revision
+   and require its checks to pass.
+4. Deploy that revision using the [deployment procedure](deployment.md), then
+   independently verify the live behavior and service health.
+
+The initial live deployment for issue #1 was a bootstrap exception used to
+verify the first production setup. It does not establish the normal release
+process. Any future deployment from an unmerged branch requires the user's
+explicit approval for that exception. Passing tests or creating a release
+artifact does not replace review and merge.
+
 ## Checks and project extensions
 
 `bin/check` validates the documented frontmatter subset, index coverage,

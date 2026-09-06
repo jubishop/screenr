@@ -32,6 +32,13 @@ shared models, diagnostics, and recovery.
 Run `bin/check` before delivering repository changes. It is also the GitHub
 Actions check for pull requests and pushes to `main`.
 
+## Deployment
+
+Test changes on localhost and in isolated CI. Complete PR review and merge
+to `main` before deploying to production. An unmerged branch requires an
+explicit user-approved exception for that deployment. Follow the
+[release workflow](docs/development-workflow.md#review-merge-and-deploy).
+
 ## Testing
 
 Regression fixes and functional changes require automated tests for the

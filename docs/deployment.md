@@ -73,11 +73,15 @@ header so authentication rate limits apply to the actual client.
 
 ## Build and activate a release
 
-The repository check workflow can be dispatched on the issue branch. It checks
-the code and produces a Linux x64 release artifact with one-day retention.
-The public-repository workflow uses no deployment secrets. Download the
-artifact for the exact reviewed commit. Remove the temporary GitHub artifact
-after saving and verifying it locally.
+Follow the [review, merge, and deploy workflow](development-workflow.md#review-merge-and-deploy).
+For production, dispatch the repository check workflow on `main` after the
+PR has been reviewed and merged. It checks the code and produces a Linux x64
+release artifact with one-day retention. Confirm that the successful run and
+downloaded artifact identify the selected merged revision. Do not deploy an
+issue-branch artifact without an explicit user-approved exception.
+
+The public-repository workflow uses no deployment secrets. Remove the temporary
+GitHub artifact after saving and verifying it locally.
 
 To produce the same archive on another Linux x64 build machine:
 
@@ -121,12 +125,17 @@ Do not paste the resulting invitation into a public issue or PR.
 
 ## Independent acceptance
 
-Check the public `/api/health` and `/login` responses, service status and
-restart counts, and logs. Complete an invited signup with a real delivered
-email code, then Google sign-in or explicit linking with the configured client.
-Search the real TMDB catalog. Verify the shared-host applications still respond
-and retain their running services. Inspect memory after these operations.
-Script success alone is not deployment acceptance.
+After deployment, check the public `/api/health` and `/login` responses,
+service status and restart counts, and logs. Verify the relevant changed
+behavior on the live site, using existing accounts where possible. Verify
+that the shared-host applications still respond and retain their running
+services. Inspect memory after these operations. Script success alone is not
+deployment acceptance.
+
+For initial setup or relevant provider configuration changes, also verify
+real email-code delivery and sign-in, Google sign-in or explicit linking,
+and real TMDB search. Run these checks after deployment of the reviewed,
+merged revision; they do not justify deploying an unmerged branch.
 
 Useful read-only commands:
 
