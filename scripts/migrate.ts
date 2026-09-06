@@ -1,5 +1,5 @@
 import { getMigrations } from "better-auth/db/migration";
-import { readFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import { createAuth } from "../src/server/auth";
 import { db } from "../src/server/db";
 
@@ -11,8 +11,26 @@ export async function migrate() {
     await migrations.runMigrations();
     await client.query("BEGIN");
     await client.query(
-      await readFile(new URL("../db/001-domain.sql", import.meta.url), "utf8"),
+      "CREATE TABLE IF NOT EXISTS screenr_migration (name text PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now())",
     );
+    const directory = new URL("../db/", import.meta.url);
+    const files = (await readdir(directory))
+      .filter((name) => /^\d{3}-[a-z-]+\.sql$/.test(name))
+      .sort();
+    for (const name of files) {
+      if (
+        (
+          await client.query("SELECT 1 FROM screenr_migration WHERE name=$1", [
+            name,
+          ])
+        ).rowCount
+      )
+        continue;
+      await client.query(await readFile(new URL(name, directory), "utf8"));
+      await client.query("INSERT INTO screenr_migration(name) VALUES($1)", [
+        name,
+      ]);
+    }
     await client.query("COMMIT");
   } catch (error) {
     await client.query("ROLLBACK");

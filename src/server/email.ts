@@ -43,9 +43,11 @@ function decrypt(payload: string): Mail {
 export async function queueCode({
   email,
   otp,
+  type = "sign-in",
 }: {
   email: string;
   otp: string;
+  type?: string;
 }) {
   const mail = {
     to: email,
@@ -70,8 +72,17 @@ export async function queueCode({
   if (process.env.EMAIL_TRANSPORT !== "resend")
     throw new Error("Configure EMAIL_TRANSPORT.");
   await db.query(
-    "INSERT INTO email_job(id,payload,expires_at) VALUES($1,$2,now()+interval '10 minutes')",
-    [randomUUID(), encrypt(mail)],
+    `INSERT INTO email_job(id,payload,expires_at,recipient_hash) VALUES($1,$2,now()+interval '10 minutes',$3)
+    ON CONFLICT(recipient_hash) WHERE sent_at IS NULL DO UPDATE SET
+    id=excluded.id,payload=excluded.payload,expires_at=excluded.expires_at,
+    available_at=now(),attempts=0,last_error=NULL`,
+    [
+      randomUUID(),
+      encrypt(mail),
+      createHash("sha256")
+        .update(`${type}:${email.toLowerCase()}`)
+        .digest("hex"),
+    ],
   );
 }
 

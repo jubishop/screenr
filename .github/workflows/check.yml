@@ -49,6 +49,13 @@ jobs:
         if: github.event_name == 'workflow_dispatch'
         run: npm run release:package
       - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        if: failure()
+        with:
+          name: browser-failure-${{ github.run_id }}
+          path: test-results/
+          retention-days: 1
+          if-no-files-found: ignore
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         if: github.event_name == 'workflow_dispatch'
         with:
           name: screenr-linux-x64-${{ github.sha }}

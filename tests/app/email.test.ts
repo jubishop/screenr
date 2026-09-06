@@ -84,3 +84,33 @@ test("expired sign-in codes are not delivered", async () => {
   assert.equal(await deliverOne(), false);
   assert.equal(fetchMock.mock.callCount(), 0);
 });
+
+test("requesting a new code replaces an older pending retry for the same recipient", async () => {
+  const texts: string[] = [];
+  const keys: string[] = [];
+  mock.method(
+    globalThis,
+    "fetch",
+    async (_url: string, options: RequestInit) => {
+      texts.push(JSON.parse(String(options.body)).text);
+      keys.push(new Headers(options.headers).get("Idempotency-Key")!);
+      return texts.length === 1
+        ? new Response("unavailable", { status: 503 })
+        : Response.json({ id: "success" });
+    },
+  );
+  await queueCode({ email: "newcode@example.test", otp: "111111" });
+  await deliverOne();
+  await queueCode({ email: "newcode@example.test", otp: "222222" });
+  await db.query("UPDATE email_job SET available_at=now()");
+  while (await deliverOne()) {
+    /* Drain all due jobs. */
+  }
+  assert.equal(texts.length, 2, "The superseded code must not be retried");
+  assert.match(texts[1], /222222/);
+  assert.notEqual(
+    keys[0],
+    keys[1],
+    "New content needs a new provider idempotency key",
+  );
+});

@@ -90,7 +90,9 @@ sender DNS is needed. Verify actual inbox delivery before opening signup. No
 paid-plan upgrade is part of this deployment.
 
 The email worker stores encrypted, expiring jobs in PostgreSQL. Failed sends
-retry with the same Resend idempotency key. Successful sends clear their
+retry with the same Resend idempotency key. Requesting a new code replaces an
+older pending retry for that address and verification type, with a new key.
+Successful sends clear their
 payload. Expired jobs are discarded. Unknown addresses without a valid invite
 do not queue email. Better Auth also limits requests and code attempts. The
 shared Resend free allowance can still be exhausted by other applications;
@@ -120,6 +122,7 @@ services or contact real recipients. A full run checks:
 - A recommendation appears in the friend's feed and title page, with one
   canonical conversation. Saving a title persists.
 - Own replies appear immediately. Incoming replies wait behind **New replies**.
+  The test checks scroll position after inserting an earlier nested reply.
   Spoilers require a reveal; replies survive a reload.
 - A nonfriend cannot read or write through direct API calls or the page.
 - Unfriending removes open-page access and hides historical comments for
@@ -150,10 +153,11 @@ and refresh on focus. Access changes clear content on the next refresh without
 waiting for the New replies button. Previously delivered content cannot be
 retracted from a user's device.
 
-The initial migration applies Better Auth's schema and `db/001-domain.sql`.
-It is repeatable and takes a migration lock. Future schema changes must be
-explicit versioned migrations; changing an existing CREATE TABLE statement
-does not alter an installed table. Back up before deploying schema changes.
+The migration command applies Better Auth's schema and numbered SQL files in
+`db/`. It takes a migration lock and records applied files in
+`screenr_migration`. Future schema changes must use new numbered files;
+changing a previously applied file does not alter an installed database.
+Back up before deploying schema changes.
 
 TMDB data is cached for 24 hours. `public/tmdb.svg` is the unmodified approved
 short logo from the [TMDB logo page](https://www.themoviedb.org/about/logos-attribution).

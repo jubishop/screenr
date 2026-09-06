@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ScreenData } from "../server/screens";
 import type { Conversation, Person, Title } from "../shared";
-import { api, authClient } from "./client";
+import { api, authClient, useInteractive } from "./client";
 import { ThreadView } from "./thread";
 
 function titleURL(id: string) {
@@ -45,6 +45,7 @@ export function Screen({
   initialData: ScreenData | null;
   initialError: string;
 }) {
+  const interactive = useInteractive();
   const [data, setData] = useState(initialData),
     [error, setError] = useState(initialError),
     [busy, setBusy] = useState(false);
@@ -75,6 +76,7 @@ export function Screen({
     }
   }, [path]);
   useEffect(() => {
+    void refresh();
     const timer = setInterval(() => {
       if (document.visibilityState === "visible") void refresh();
     }, 3000);
@@ -157,7 +159,7 @@ export function Screen({
                 {c.owner_id !== user.user_id && (
                   <button
                     className="text-button"
-                    disabled={busy}
+                    disabled={busy || !interactive}
                     onClick={() =>
                       void activity(c.title_id, "want_to_watch", true)
                     }
@@ -273,7 +275,7 @@ export function Screen({
                 <div className="inline-actions">
                   <button
                     className="primary"
-                    disabled={busy}
+                    disabled={busy || !interactive}
                     onClick={() =>
                       void activity(
                         data.title.id,
@@ -288,7 +290,7 @@ export function Screen({
                   </button>
                   <button
                     className="secondary"
-                    disabled={busy}
+                    disabled={busy || !interactive}
                     onClick={() =>
                       void activity(
                         data.title.id,
@@ -369,6 +371,7 @@ export function Screen({
                 Movie or show title
               </label>
               <input
+                disabled={!interactive}
                 id="title-search"
                 placeholder="Search movies and TV shows"
                 value={query}
@@ -377,7 +380,7 @@ export function Screen({
                 required
                 onChange={(e) => setQuery(e.target.value)}
               />
-              <button className="primary" disabled={busy}>
+              <button className="primary" disabled={busy || !interactive}>
                 {busy ? "Searching…" : "Search"}
               </button>
             </form>
@@ -427,6 +430,7 @@ export function Screen({
                 Exact username
               </label>
               <input
+                disabled={!interactive}
                 id="friend-search"
                 placeholder="Find an exact username"
                 value={query}
@@ -449,7 +453,7 @@ export function Screen({
                         <span className="badge">Friends</span>
                         <button
                           className="text-button"
-                          disabled={busy}
+                          disabled={busy || !interactive}
                           onClick={() => void relationship(p.user_id, "remove")}
                         >
                           Unfriend
@@ -460,7 +464,7 @@ export function Screen({
                         <span className="small muted">Request sent</span>
                         <button
                           className="text-button"
-                          disabled={busy}
+                          disabled={busy || !interactive}
                           onClick={() => void relationship(p.user_id, "remove")}
                         >
                           Cancel
@@ -470,14 +474,14 @@ export function Screen({
                       <>
                         <button
                           className="primary"
-                          disabled={busy}
+                          disabled={busy || !interactive}
                           onClick={() => void relationship(p.user_id, "accept")}
                         >
                           Accept
                         </button>
                         <button
                           className="text-button"
-                          disabled={busy}
+                          disabled={busy || !interactive}
                           onClick={() => void relationship(p.user_id, "remove")}
                         >
                           Decline
@@ -502,7 +506,7 @@ export function Screen({
                     <span>{p.display_name}</span>
                     <button
                       className="text-button"
-                      disabled={busy}
+                      disabled={busy || !interactive}
                       onClick={() => void relationship(p.user_id, "unblock")}
                     >
                       Unblock
@@ -523,7 +527,7 @@ export function Screen({
                   {data.profile.accepted_at ? (
                     <button
                       className="secondary"
-                      disabled={busy}
+                      disabled={busy || !interactive}
                       onClick={() =>
                         void relationship(data.profile.user_id, "remove")
                       }
@@ -533,7 +537,7 @@ export function Screen({
                   ) : data.profile.requested_by === user.user_id ? (
                     <button
                       className="secondary"
-                      disabled={busy}
+                      disabled={busy || !interactive}
                       onClick={() =>
                         void relationship(data.profile.user_id, "remove")
                       }
@@ -543,7 +547,7 @@ export function Screen({
                   ) : data.profile.requested_by ? (
                     <button
                       className="primary"
-                      disabled={busy}
+                      disabled={busy || !interactive}
                       onClick={() =>
                         void relationship(data.profile.user_id, "accept")
                       }
@@ -553,7 +557,7 @@ export function Screen({
                   ) : (
                     <button
                       className="primary"
-                      disabled={busy}
+                      disabled={busy || !interactive}
                       onClick={() =>
                         void relationship(data.profile.user_id, "request")
                       }
@@ -563,7 +567,7 @@ export function Screen({
                   )}
                   <button
                     className="text-button muted"
-                    disabled={busy}
+                    disabled={busy || !interactive}
                     onClick={() =>
                       void relationship(data.profile.user_id, "block")
                     }
@@ -606,6 +610,7 @@ export function Screen({
               <label>
                 Maximum signups
                 <select
+                  disabled={!interactive}
                   value={inviteLimit}
                   onChange={(e) => setInviteLimit(Number(e.target.value))}
                 >
@@ -616,7 +621,7 @@ export function Screen({
                   ))}
                 </select>
               </label>
-              <button className="primary" disabled={busy}>
+              <button className="primary" disabled={busy || !interactive}>
                 Create invitation
               </button>
             </form>
@@ -625,6 +630,7 @@ export function Screen({
                 <label>
                   Invitation link
                   <input
+                    disabled={!interactive}
                     readOnly
                     value={inviteURL}
                     onFocus={(e) => e.target.select()}
@@ -651,7 +657,7 @@ export function Screen({
                     ) : (
                       <button
                         className="text-button"
-                        disabled={busy}
+                        disabled={busy || !interactive}
                         onClick={() =>
                           void mutate("revoke-invite", { id: invite.id })
                         }
@@ -699,7 +705,7 @@ export function Screen({
               {data.googleEnabled ? (
                 <button
                   className="secondary"
-                  disabled={busy}
+                  disabled={busy || !interactive}
                   onClick={async () => {
                     setBusy(true);
                     const result = await authClient.linkSocial({

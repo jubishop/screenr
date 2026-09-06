@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { useRef, useState } from "react";
 import type { Comment, Person, Thread } from "../shared";
-import { api } from "./client";
+import { api, useInteractive } from "./client";
 
 export function ThreadView({
   snapshot,
@@ -13,6 +13,7 @@ export function ThreadView({
   user: Person;
   refresh: () => Promise<void>;
 }) {
+  const interactive = useInteractive();
   const [known, setKnown] = useState(
     () => new Set(snapshot.comments.map((c) => c.id)),
   );
@@ -113,6 +114,7 @@ export function ThreadView({
           <div className="inline-actions">
             <button
               className="text-button"
+              disabled={!interactive}
               onClick={() => {
                 setReplyTo(comment);
                 area.current?.focus();
@@ -123,7 +125,7 @@ export function ThreadView({
             {snapshot.conversation.owner_id === user.user_id && (
               <button
                 className="text-button muted"
-                disabled={busy}
+                disabled={busy || !interactive}
                 onClick={async () => {
                   setBusy(true);
                   try {
@@ -183,6 +185,7 @@ export function ThreadView({
             <button
               type="button"
               className="text-button"
+              disabled={!interactive}
               onClick={() => setReplyTo(null)}
             >
               Cancel
@@ -191,6 +194,7 @@ export function ThreadView({
         )}
         <label htmlFor="reply">Add your reply</label>
         <textarea
+          disabled={!interactive}
           ref={area}
           id="reply"
           required
@@ -208,7 +212,10 @@ export function ThreadView({
             />
             Contains spoilers
           </label>
-          <button className="primary" disabled={busy || !body.trim()}>
+          <button
+            className="primary"
+            disabled={busy || !interactive || !body.trim()}
+          >
             {busy ? "Posting…" : "Post reply"}
           </button>
         </div>

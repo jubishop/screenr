@@ -14,8 +14,8 @@ cleanup() {
 trap cleanup EXIT HUP INT TERM
 restic check --read-data
 restic dump --host bishop --tag screenr latest /var/lib/screenr-backup/screenr.dump >"$dump"
-createdb "$database"
+createdb --owner=screenr "$database"
 created=true
-pg_restore --exit-on-error --no-owner --no-acl --dbname="$database" "$dump"
-psql --no-psqlrc --set=ON_ERROR_STOP=1 --dbname="$database" --command='SELECT count(*) AS restored_profiles FROM profile; SELECT count(*) AS restored_comments FROM comment; SELECT screenr_can_read('"'restore-check'"','"'restore-check'"');'
+pg_restore --exit-on-error --no-owner --no-acl --role=screenr --dbname="$database" "$dump"
+psql --no-psqlrc --set=ON_ERROR_STOP=1 --dbname="$database" --command='SET ROLE screenr; SELECT count(*) AS restored_profiles FROM profile; SELECT count(*) AS restored_comments FROM comment; SELECT screenr_can_read('"'restore-check'"','"'restore-check'"');'
 echo 'Encrypted backup read and PostgreSQL restore passed.'

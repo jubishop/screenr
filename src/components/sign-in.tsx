@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { authClient, api } from "./client";
+import { authClient, api, useInteractive } from "./client";
 
 export function SignIn({
   invited,
@@ -11,6 +11,7 @@ export function SignIn({
   googleEnabled: boolean;
   initialError: string;
 }) {
+  const interactive = useInteractive();
   const [email, setEmail] = useState(""),
     [code, setCode] = useState(""),
     [sent, setSent] = useState(false),
@@ -57,7 +58,7 @@ export function SignIn({
         {googleEnabled && (
           <button
             className="secondary wide"
-            disabled={busy}
+            disabled={busy || !interactive}
             onClick={async () => {
               setBusy(true);
               const result = await authClient.signIn.social({
@@ -84,7 +85,7 @@ export function SignIn({
               required
               maxLength={254}
               value={email}
-              disabled={sent}
+              disabled={sent || !interactive}
               onChange={(e) => setEmail(e.target.value)}
             />
           </label>
@@ -92,6 +93,7 @@ export function SignIn({
             <label>
               Sign-in code
               <input
+                disabled={!interactive}
                 inputMode="numeric"
                 autoComplete="one-time-code"
                 pattern="[0-9]{6}"
@@ -107,7 +109,7 @@ export function SignIn({
               {error}
             </p>
           )}
-          <button className="primary wide" disabled={busy}>
+          <button className="primary wide" disabled={busy || !interactive}>
             {busy ? "One moment…" : sent ? "Sign in" : "Send sign-in code"}
           </button>
           {sent && (
@@ -143,6 +145,7 @@ export function Setup({
   name: string;
   verified: boolean;
 }) {
+  const interactive = useInteractive();
   const [displayName, setName] = useState(name),
     [username, setUsername] = useState(""),
     [code, setCode] = useState(""),
@@ -195,6 +198,7 @@ export function Setup({
               <label>
                 Display name
                 <input
+                  disabled={!interactive}
                   required
                   maxLength={60}
                   autoComplete="name"
@@ -205,6 +209,7 @@ export function Setup({
               <label>
                 Username
                 <input
+                  disabled={!interactive}
                   required
                   pattern="[a-zA-Z0-9_]{3,24}"
                   maxLength={24}
@@ -223,6 +228,7 @@ export function Setup({
               <label>
                 Email code
                 <input
+                  disabled={!interactive}
                   required
                   autoComplete="one-time-code"
                   inputMode="numeric"
@@ -238,7 +244,7 @@ export function Setup({
               {error}
             </p>
           )}
-          <button className="primary wide" disabled={busy}>
+          <button className="primary wide" disabled={busy || !interactive}>
             {busy
               ? "One moment…"
               : verified
@@ -249,6 +255,7 @@ export function Setup({
           </button>
         </form>
         <button
+          disabled={!interactive}
           className="text-button"
           onClick={async () => {
             await authClient.signOut();

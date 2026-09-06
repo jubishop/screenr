@@ -37,6 +37,10 @@ Install PostgreSQL 18 binaries from the official PostgreSQL Ubuntu repository,
 an isolated official Node 24 Linux x64 distribution with its published checksum,
 and `restic`. Avoid creating an unused automatically started PostgreSQL cluster.
 Create separate system users `screenr` and `screenr-db`, with no login shells.
+`ops/provision.sh` performs this one-time installation and creates the isolated
+cluster. It refuses existing Screenr targets; inspect a partial installation
+before resuming it. It does not configure provider credentials or start the web
+application.
 
 Initialize only the new Screenr directory with PostgreSQL's `initdb`, as
 `screenr-db`, using local peer authentication and host SCRAM authentication.

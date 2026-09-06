@@ -23,7 +23,16 @@ async function join(browser: Browser, name: string) {
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await page.getByLabel("Display name").fill(name);
   await page.getByLabel("Username", { exact: true }).fill(name);
-  await page.getByRole("button", { name: "Join Screenr", exact: true }).click();
+  const [completed] = await Promise.all([
+    page.waitForResponse(
+      (response) =>
+        response.url().endsWith("/api/screenr/setup") &&
+        response.request().method() === "POST",
+    ),
+    page.getByRole("button", { name: "Join Screenr", exact: true }).click(),
+  ]);
+  if (completed.status() !== 200) throw new Error(await completed.text());
+  expect(completed.status()).toBe(200);
   await expect(
     page.getByRole("heading", { name: "Better with friends." }),
   ).toBeVisible();
@@ -175,6 +184,55 @@ test("invited friends discover, save, and share a persistent conversation with l
   await expect(
     alice.getByText("Cam’s view of the film.", { exact: true }),
   ).toBeVisible();
+  let firstRoot = "";
+  for (let index = 0; index < 12; index++) {
+    const result = await alice.request.post("/api/screenr/comment", {
+      headers: { Origin: "http://localhost:3055" },
+      data: {
+        conversation: conversationId,
+        body: `Reading position marker ${index}`,
+        spoiler: false,
+      },
+    });
+    expect(result.status()).toBe(200);
+    if (index === 0) firstRoot = (await result.json()).id;
+  }
+  await alice.reload();
+  const anchor = alice.getByText("Reading position marker 8", { exact: true });
+  await anchor.evaluate((element) =>
+    element.scrollIntoView({ block: "center" }),
+  );
+  const inserted = await ben.request.post("/api/screenr/comment", {
+    headers: { Origin: "http://localhost:3055" },
+    data: {
+      conversation: conversationId,
+      body: "A new nested reply above the reading position",
+      spoiler: false,
+      replyTo: firstRoot,
+    },
+  });
+  expect(inserted.status()).toBe(200);
+  await expect(
+    alice.getByRole("button", { name: /New replies/ }),
+  ).toBeVisible();
+  const before = await anchor.evaluate(
+    (element) => element.getBoundingClientRect().top,
+  );
+  await alice.getByRole("button", { name: /New replies/ }).click();
+  await expect(
+    alice.getByText("A new nested reply above the reading position", {
+      exact: true,
+    }),
+  ).toBeVisible();
+  await expect
+    .poll(async () =>
+      Math.abs(
+        (await anchor.evaluate(
+          (element) => element.getBoundingClientRect().top,
+        )) - before,
+      ),
+    )
+    .toBeLessThan(3);
   await alice.goto("/invites");
   await alice.getByLabel("Maximum signups").selectOption("2");
   await alice
@@ -192,4 +250,27 @@ test("invited friends discover, save, and share a persistent conversation with l
     fullPage: true,
   });
   for (const page of [alice, ben, cam, outsider]) await page.context().close();
+});
+
+test("server-rendered signup controls wait for their event handlers", async ({
+  page,
+}) => {
+  let releaseScripts!: () => void;
+  const scriptsReady = new Promise<void>((resolve) => {
+    releaseScripts = resolve;
+  });
+  await page.route("**/_next/static/**/*.js", async (route) => {
+    await scriptsReady;
+    await route.continue();
+  });
+  try {
+    await page.goto("/login", { waitUntil: "commit" });
+    await expect(page.getByLabel("Email address")).toBeDisabled();
+    await expect(
+      page.getByRole("button", { name: "Send sign-in code", exact: true }),
+    ).toBeDisabled();
+  } finally {
+    releaseScripts();
+  }
+  await expect(page.getByLabel("Email address")).toBeEditable();
 });

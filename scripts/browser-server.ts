@@ -31,7 +31,9 @@ process.env.SCREENR_TEST_TMDB_URL = "http://127.0.0.1:3056";
 const { migrate } = await import("./migrate");
 const { db } = await import("../src/server/db");
 await migrate();
-await db.query('TRUNCATE "user", verification RESTART IDENTITY CASCADE');
+await db.query(
+  'TRUNCATE "user", verification, "rateLimit", title, email_job RESTART IDENTITY CASCADE',
+);
 const { createInvitation } = await import("../src/server/invitations");
 const { token } = await createInvitation(null, 12);
 await mkdir(".cache", { recursive: true });

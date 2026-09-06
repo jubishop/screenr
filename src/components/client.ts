@@ -1,4 +1,5 @@
 "use client";
+import { useEffect, useState } from "react";
 import { createAuthClient } from "better-auth/react";
 import { emailOTPClient } from "better-auth/client/plugins";
 export const authClient = createAuthClient({ plugins: [emailOTPClient()] });
@@ -22,4 +23,10 @@ export async function api<T = Record<string, unknown>>(
   if (!response.ok)
     throw new Error(result.error ?? "Request failed. Please try again.");
   return result as T;
+}
+
+export function useInteractive() {
+  const [ready, setReady] = useState(false);
+  useEffect(() => setReady(true), []);
+  return ready;
 }

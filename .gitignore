@@ -13,3 +13,4 @@ node_modules/
 *.tsbuildinfo
 playwright-report/
 test-results/
+next-env.d.ts
