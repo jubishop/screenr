@@ -29,7 +29,12 @@ openssl rand -base64 32
 Put the generated random value in `BETTER_AUTH_SECRET` in `.env`. Keep that
 file private. Set `TMDB_READ_TOKEN` to the API Read Access Token from TMDB's
 account API settings. `EMAIL_TRANSPORT=file` captures development codes
-locally and sends no email. Then run:
+locally and sends no email. Keep the tracked `.env.example` complete when
+adding or renaming configuration: include placeholders for authentication,
+Google, TMDB, Resend, and backup settings, with no real secrets. Backup
+placeholders are optional for local development; the VPS backup jobs use the
+separate file described in [deployment](deployment.md#encrypted-backups-and-restore-check).
+Then run:
 
 ```sh
 npm run db:migrate
