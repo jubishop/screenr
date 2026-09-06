@@ -63,6 +63,11 @@ tests use a fictional catalog served only on loopback.
 
 ## Provider configuration
 
+Use Google Cloud project `screenr-69420` for Screenr's Google sign-in
+credentials. The user created this dedicated project on 2026-09-06 to keep
+Screenr's sign-in configuration separate from other projects. Hosting remains
+on the existing Hetzner VPS.
+
 Google's OAuth client must be a **Web application**. Configure these exact
 authorized redirect URIs for the environments used:
 

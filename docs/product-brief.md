@@ -282,7 +282,9 @@ Users do not create a separate Screenr password.
 so people can choose either route without a separate Screenr password.
 
 Use the [selected authentication library](application-stack.md#authentication-library-decision--2026-09-05)
-for this sign-in experience. Use the Resend relay selected below.
+for this sign-in experience. Use the Resend relay selected below. The dedicated
+Google project and callback URLs are recorded in the
+[provider configuration](running-screenr.md#provider-configuration).
 
 ### One account across sign-in methods — 2026-09-05
 
