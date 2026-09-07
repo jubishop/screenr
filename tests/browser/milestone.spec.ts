@@ -205,36 +205,57 @@ test("emoji reactions persist across feeds on entries and replies, with change, 
         .getByRole("button", { name: "Love: 1", exact: true }),
     ).toBeVisible();
   }
-  await entry
-    .getByLabel("Add your reply")
-    .fill("Keep this draft while reacting");
-  await reader.route("**/api/screenr/reaction", (route) =>
-    route.fulfill({
-      status: 503,
-      contentType: "application/json",
-      body: JSON.stringify({ error: "Reaction failed. Please retry." }),
-    }),
-  );
-  await reactions
-    .getByRole("button", { name: "Angry: 1", exact: true })
-    .click();
-  await expect(reactions.getByRole("alert")).toHaveText(
-    "Reaction failed. Please retry.",
-  );
-  await expect(
-    reactions.getByRole("button", { name: "Angry: 1", exact: true }),
-  ).toHaveAttribute("aria-pressed", "true");
-  await reader.unroute("**/api/screenr/reaction");
-  await reactions
-    .getByRole("button", { name: "Angry: 1", exact: true })
-    .focus();
-  await reader.keyboard.press("Enter");
-  await expect(
-    reactions.getByRole("button", { name: "Angry: 1", exact: true }),
-  ).toHaveCount(0);
-  await expect(entry.getByLabel("Add your reply")).toHaveValue(
-    "Keep this draft while reacting",
-  );
+  const draft = entry.getByLabel("Add your reply");
+  await draft.fill("Keep this draft while reacting");
+  for (const succeeds of [false, true]) {
+    let release!: () => void;
+    let started!: () => void;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    const saving = new Promise<void>((resolve) => (started = resolve));
+    await reader.route("**/api/screenr/reaction", async (route) => {
+      started();
+      await gate;
+      if (succeeds) await route.continue();
+      else
+        await route.fulfill({
+          status: 503,
+          contentType: "application/json",
+          body: JSON.stringify({ error: "Reaction failed. Please retry." }),
+        });
+    });
+    try {
+      await reactions
+        .getByRole("button", { name: "Angry: 1", exact: true })
+        .focus();
+      await reader.keyboard.press("Enter");
+      await saving;
+      await draft.fill("Typing while the reaction saves");
+      release();
+      if (succeeds) {
+        await expect(
+          reactions.getByRole("button", { name: "Angry: 1", exact: true }),
+        ).toHaveCount(0);
+      } else {
+        await expect(reactions.getByRole("alert")).toHaveText(
+          "Reaction failed. Please retry.",
+        );
+        await expect(
+          reactions.getByRole("button", { name: "Angry: 1", exact: true }),
+        ).toHaveAttribute("aria-pressed", "true");
+      }
+      await expect(
+        reactions.getByRole("button", { name: "React", exact: true }),
+      ).toHaveAttribute("aria-disabled", "false");
+      await expect(draft).toBeFocused();
+      await reader.keyboard.type(" and keeps typing");
+      await expect(draft).toHaveValue(
+        "Typing while the reaction saves and keeps typing",
+      );
+    } finally {
+      release();
+      await reader.unroute("**/api/screenr/reaction");
+    }
+  }
   await reader.reload();
   await expect(
     reactions.getByRole("button", { name: "Angry: 1", exact: true }),

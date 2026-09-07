@@ -28,6 +28,9 @@ export function Reactions({
   async function react(kind: ReactionKind) {
     if (saving.current) return;
     saving.current = true;
+    // Return focus before saving so completion cannot interrupt someone who
+    // has moved on to another control or started composing a reply.
+    trigger.current?.focus({ preventScroll: true });
     setBusy(true);
     setError("");
     try {
@@ -43,7 +46,6 @@ export function Reactions({
     } finally {
       saving.current = false;
       setBusy(false);
-      trigger.current?.focus();
     }
   }
   return (
