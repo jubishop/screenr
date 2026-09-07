@@ -57,8 +57,7 @@ export function Screen({
     [connectingGoogle, setConnectingGoogle] = useState(false);
   const [query, setQuery] = useState(""),
     [results, setResults] = useState<Title[] | null>(null),
-    [inviteLimit, setInviteLimit] = useState(1),
-    [inviteURL, setInviteURL] = useState("");
+    [inviteLimit, setInviteLimit] = useState(1);
   const pending = useRef<AbortController | null>(null);
   const refresh = useCallback(async () => {
     pending.current?.abort();
@@ -656,11 +655,7 @@ export function Screen({
               className="invite-form"
               onSubmit={async (e) => {
                 e.preventDefault();
-                const result = await mutate("invite", { limit: inviteLimit });
-                if (result?.token)
-                  setInviteURL(
-                    `${window.location.origin}/join/${result.token}`,
-                  );
+                await mutate("invite", { limit: inviteLimit });
               }}
             >
               <label>
@@ -681,35 +676,30 @@ export function Screen({
                 Create invitation
               </button>
             </form>
-            {inviteURL && <InvitationLink key={inviteURL} url={inviteURL} />}
             <div className="invite-list">
+              {!data.invitations.length && (
+                <p className="muted">No active invitations.</p>
+              )}
               {data.invitations.map((invite) => (
                 <article className="invite-card" key={invite.id}>
                   <div className="section-heading">
                     <strong>
                       {invite.uses} of {invite.max_uses} signups
                     </strong>
-                    {invite.revoked_at ? (
-                      <span className="badge">Revoked</span>
-                    ) : new Date(invite.expires_at) < new Date() ? (
-                      <span className="badge">Expired</span>
-                    ) : invite.uses >= invite.max_uses ? (
-                      <span className="badge">Used up</span>
-                    ) : (
-                      <button
-                        className="text-button"
-                        disabled={busy || !interactive}
-                        onClick={() =>
-                          void mutate("revoke-invite", { id: invite.id })
-                        }
-                      >
-                        Revoke
-                      </button>
-                    )}
+                    <button
+                      className="text-button"
+                      disabled={busy || !interactive}
+                      onClick={() =>
+                        void mutate("revoke-invite", { id: invite.id })
+                      }
+                    >
+                      Revoke
+                    </button>
                   </div>
                   <p className="small muted">
                     Expires {dateLabel(invite.expires_at, interactive)}
                   </p>
+                  <InvitationLink key={invite.url} url={invite.url} />
                   <p>
                     {invite.joined.map((p: Person) => (
                       <Link
