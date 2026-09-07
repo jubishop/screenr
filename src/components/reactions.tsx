@@ -53,6 +53,12 @@ export function Reactions({
       className="reactions"
       role="group"
       aria-label={reply ? "Reactions to reply" : "Reactions to entry"}
+      onKeyDown={(event) => {
+        if (open && event.key === "Escape") {
+          setOpen(false);
+          trigger.current?.focus({ preventScroll: true });
+        }
+      }}
     >
       <div className="reaction-summary">
         {reactionOptions.map((option) => {
@@ -92,16 +98,7 @@ export function Reactions({
         </button>
       </div>
       {open && (
-        <div
-          id={pickerId}
-          className="reaction-picker"
-          onKeyDown={(event) => {
-            if (event.key === "Escape") {
-              setOpen(false);
-              trigger.current?.focus();
-            }
-          }}
-        >
+        <div id={pickerId} className="reaction-picker">
           {reactionOptions.map((option) => (
             <button
               key={option.kind}

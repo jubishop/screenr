@@ -171,6 +171,28 @@ test("emoji reactions persist across feeds on entries and replies, with change, 
   await expect(
     reactions.getByRole("button", { name: "React", exact: true }),
   ).toBeVisible();
+  for (const group of [
+    reactions,
+    entry.locator(`[data-comment-id="${reply}"]`).getByRole("group", {
+      name: "Reactions to reply",
+      exact: true,
+    }),
+  ]) {
+    const trigger = group.getByRole("button", { name: "React", exact: true });
+    for (const focusChoice of [false, true]) {
+      await trigger.focus();
+      await reader.keyboard.press("Enter");
+      await expect(trigger).toHaveAttribute("aria-expanded", "true");
+      if (focusChoice)
+        await group.getByRole("button", { name: "Like", exact: true }).focus();
+      await reader.keyboard.press("Escape");
+      await expect(trigger).toHaveAttribute("aria-expanded", "false");
+      await expect(trigger).toBeFocused();
+      await expect(
+        group.getByRole("button", { name: "Like", exact: true }),
+      ).toHaveCount(0);
+    }
+  }
   for (const name of ["Like", "Love", "Care", "Haha", "Wow", "Sad", "Angry"]) {
     await reactions.getByRole("button", { name: "React", exact: true }).click();
     await reactions.getByRole("button", { name, exact: true }).click();
