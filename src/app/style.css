@@ -360,6 +360,63 @@ hr {
 .title-trailer {
   margin-bottom: 42px;
 }
+.title-availability {
+  margin-bottom: 42px;
+}
+.availability-group {
+  display: grid;
+  grid-template-columns: 110px minmax(0, 1fr);
+  align-items: start;
+  gap: 12px;
+  padding: 12px 0;
+  border-top: 1px solid var(--line);
+}
+.availability-group h3 {
+  font-size: 14px;
+  margin: 10px 0 0;
+}
+.availability-group ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.availability-group li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: 100%;
+  padding: 7px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--white);
+}
+.availability-group li span {
+  overflow-wrap: anywhere;
+}
+.availability-group img {
+  flex: none;
+  border-radius: 5px;
+}
+.availability-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+}
+.availability-links a {
+  text-decoration: underline;
+}
+@media (max-width: 560px) {
+  .availability-group {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+  }
+  .availability-group h3 {
+    margin-top: 0;
+  }
+}
 .trailer-player {
   display: block;
   width: 100%;

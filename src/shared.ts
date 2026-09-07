@@ -13,6 +13,26 @@ export type Title = {
   release_date: string;
 };
 export type Trailer = { key: string; name: string };
+export const watchCategories = [
+  "flatrate",
+  "free",
+  "ads",
+  "rent",
+  "buy",
+] as const;
+export type WatchCategory = (typeof watchCategories)[number];
+export type WatchProvider = {
+  provider_id: number;
+  provider_name: string;
+  logo_path: string | null;
+};
+export type WatchAvailability = {
+  country: "US";
+  status: "ok" | "stale" | "unavailable";
+  checked_at: string | null;
+  link: string | null;
+  providers: Partial<Record<WatchCategory, WatchProvider[]>>;
+};
 export type Conversation = {
   id: string;
   owner_id: string;
