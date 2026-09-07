@@ -234,6 +234,9 @@ test("reactions share feed snapshots without changing activity, notifications, o
   const { alice, ben, conversation } = await setup();
   await friend(alice, ben);
   const before = await conversations(ben);
+  const jobsBefore = (
+    await db.query("SELECT count(*)::int AS n FROM email_job")
+  ).rows[0].n;
   await setReaction(ben, conversation, undefined, "care");
   for (const filter of [{}, { title: "movie:1" }, { owner: alice }]) {
     const items = await conversations(ben, filter);
@@ -247,7 +250,7 @@ test("reactions share feed snapshots without changing activity, notifications, o
   }
   assert.equal(
     (await db.query("SELECT count(*)::int AS n FROM email_job")).rows[0].n,
-    0,
+    jobsBefore,
   );
   await updateTitleActivity(alice, "movie:1", "recommended", false);
   assert.deepEqual(await conversations(ben), []);

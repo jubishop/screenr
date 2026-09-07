@@ -15,6 +15,7 @@
     "db:migrate": "tsx --env-file=.env scripts/migrate.ts",
     "bootstrap": "tsx --env-file=.env scripts/bootstrap.ts",
     "test:browser": "playwright test",
+    "test:browser:isolation": "tsx scripts/check-browser-isolation.ts",
     "format:check": "prettier --check src scripts tests/app tests/browser package.json tsconfig.json next.config.ts playwright.config.ts compose.yml",
     "dev:code": "tsx scripts/dev-code.ts",
     "worker": "tsx --env-file=.env scripts/worker.ts",
