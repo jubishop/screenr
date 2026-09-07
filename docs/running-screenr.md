@@ -203,3 +203,35 @@ Back up before deploying schema changes.
 TMDB data is cached for 24 hours. `public/tmdb.svg` is the unmodified approved
 short logo from the [TMDB logo page](https://www.themoviedb.org/about/logos-attribution).
 The Credits page supplies the required attribution notice.
+
+### Title trailers
+
+Title pages use TMDB's [movie videos](https://developer.themoviedb.org/reference/movie-videos)
+and [TV videos](https://developer.themoviedb.org/reference/tv-series-videos)
+endpoints on the server. The first supported official trailer is preferred,
+then the first supported unofficial trailer. Only YouTube videos marked
+`Trailer` with a valid video ID and nonempty name are supported. Clips,
+teasers, other providers, and malformed records are skipped.
+
+Migration `003-title-trailers.sql` adds a separate public metadata cache.
+Successful results, including no supported trailer, last 24 hours. Failed or
+malformed responses are retried after five minutes. Trailer requests time out
+after two seconds. A failure leaves the title details and conversations
+available and shows no player. TMDB credentials stay on the server.
+
+The responsive player starts only after interaction and always includes a
+direct YouTube link for restricted, removed, or otherwise unavailable embeds.
+It uses [YouTube's inline playback parameters](https://developers.google.com/youtube/player_parameters)
+and a minimum height of 200 pixels. Its iframe explicitly uses
+`strict-origin-when-cross-origin` to satisfy
+[YouTube's referrer requirement](https://developers.google.com/youtube/terms/required-minimum-functionality#embedded-youtube-player-and-player-api-clients).
+This sends the site origin without the title path. The site's default
+`no-referrer` policy still applies to other requests.
+
+The catalog tests exercise real HTTP and PostgreSQL boundaries. Browser tests
+replace YouTube at the network boundary and check conditional rendering,
+desktop and mobile dimensions, the actual outgoing referrer, and persistence
+of the iframe during page refresh. Also verify an available real trailer in
+a local browser before release: confirm that it is initially paused, click
+Play, check advancing playback on desktop and mobile, and check the provider
+link. Automated provider fixtures do not establish live YouTube availability.

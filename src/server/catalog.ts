@@ -1,5 +1,5 @@
 import { AppError, db } from "./db";
-import type { Title } from "../shared";
+import type { Title, Trailer } from "../shared";
 
 function catalogConfig() {
   const base =
@@ -17,12 +17,12 @@ function catalogConfig() {
     throw new AppError("The movie catalog is not configured yet.", 503);
   return { base, token: process.env.TMDB_READ_TOKEN ?? "test" };
 }
-async function fetchCatalog(path: string) {
+async function fetchCatalog(path: string, timeout = 8000) {
   const { base, token } = catalogConfig();
   try {
     const response = await fetch(`${base}${path}`, {
       headers: { Authorization: `Bearer ${token}` },
-      signal: AbortSignal.timeout(8000),
+      signal: AbortSignal.timeout(timeout),
       cache: "no-store",
     });
     if (response.status === 404) throw new AppError("Title not found.", 404);
@@ -110,4 +110,60 @@ export async function getTitle(id: string): Promise<Title> {
     ],
   );
   return title;
+}
+
+function selectTrailer(data: unknown): Trailer | null {
+  if (
+    !data ||
+    typeof data !== "object" ||
+    !("results" in data) ||
+    !Array.isArray(data.results)
+  )
+    throw new Error("Invalid trailer metadata");
+  const trailers = data.results.filter(
+    (video) =>
+      video &&
+      video.site === "YouTube" &&
+      video.type === "Trailer" &&
+      typeof video.key === "string" &&
+      /^[a-zA-Z0-9_-]{11}$/.test(video.key) &&
+      typeof video.name === "string" &&
+      video.name.trim(),
+  );
+  const selected =
+    trailers.find((video) => video.official === true) ?? trailers[0];
+  return selected ? { key: selected.key, name: selected.name.trim() } : null;
+}
+
+// Optional public metadata has its own cache and timeout. A failed provider
+// request must not break a title page or repeat on every three-second poll.
+export async function getTitleTrailer(id: string): Promise<Trailer | null> {
+  if (!/^(movie|tv):[1-9][0-9]*$/.test(id)) return null;
+  try {
+    const cached = (
+      await db.query(
+        "SELECT trailer FROM title_trailer WHERE title_id=$1 AND expires_at>now()",
+        [id],
+      )
+    ).rows[0];
+    if (cached) return cached.trailer;
+    let trailer: Trailer | null = null;
+    let lifetime = 86400;
+    try {
+      trailer = selectTrailer(
+        await fetchCatalog(`/${id.replace(":", "/")}/videos`, 2000),
+      );
+    } catch {
+      lifetime = 300;
+    }
+    await db.query(
+      `INSERT INTO title_trailer(title_id,trailer,expires_at)
+       VALUES($1,$2,now()+$3*interval '1 second')
+       ON CONFLICT(title_id) DO UPDATE SET trailer=excluded.trailer,expires_at=excluded.expires_at`,
+      [id, trailer, lifetime],
+    );
+    return trailer;
+  } catch {
+    return null;
+  }
 }
