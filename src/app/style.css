@@ -455,6 +455,30 @@ hr {
   display: block;
   font-size: 13px;
 }
+.invitation-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.invitation-actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+}
+.invitation-actions button[aria-disabled="true"] {
+  opacity: 0.55;
+  cursor: wait;
+}
+.invitation-created input {
+  cursor: pointer;
+  font-size: 16px;
+}
+.invitation-created [role="status"] {
+  margin-bottom: 0;
+}
 .thread {
   background: var(--white);
   border: 1px solid var(--line);

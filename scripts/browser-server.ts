@@ -48,6 +48,10 @@ const feedInvitation = await createInvitation(null, 12);
 await writeFile(".cache/browser-feed-invite.txt", feedInvitation.token, {
   mode: 0o600,
 });
+const sharingInvitation = await createInvitation(null, 3);
+await writeFile(".cache/browser-sharing-invite.txt", sharingInvitation.token, {
+  mode: 0o600,
+});
 const { startGoogleProvider } =
   await import("../tests/browser/google-provider");
 const google = await startGoogleProvider();

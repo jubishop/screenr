@@ -26,11 +26,12 @@ test.afterEach(() => {
 async function join(
   browser: Browser,
   name: string,
-  options: { complete?: boolean; token?: string } = {},
+  options: { complete?: boolean; token?: string; hasTouch?: boolean } = {},
 ) {
   const context = await browser.newContext({
     viewport: { width: 390, height: 844 },
     timezoneId: "America/Los_Angeles",
+    hasTouch: options.hasTouch,
   });
   const page = await context.newPage();
   await page.route("https://www.youtube.com/embed/**", (route) =>
@@ -90,6 +91,236 @@ async function befriend(a: Page, b: Page, bName: string, aName: string) {
     b.getByRole("button", { name: "Unfriend", exact: true }),
   ).toBeVisible();
 }
+
+async function invitationCreator(browser: Browser, name: string) {
+  const page = await join(browser, name, {
+    token: (await readFile(".cache/browser-sharing-invite.txt", "utf8")).trim(),
+    hasTouch: true,
+  });
+  await page.goto("/invites");
+  await page
+    .getByRole("button", { name: "Create invitation", exact: true })
+    .click();
+  await expect(page.getByLabel("Invitation link", { exact: true })).toHaveValue(
+    /\/join\//,
+  );
+  return page;
+}
+
+test("invitation links copy on repeated mobile taps and keyboard activation", async ({
+  browser,
+}) => {
+  const page = await invitationCreator(browser, "copyinvitation");
+  const link = page.getByLabel("Invitation link", { exact: true });
+  const copied: string[] = [];
+  let release!: () => void;
+  let gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.exposeFunction("writeInvitationText", async (text: string) => {
+    copied.push(text);
+    await gate;
+  });
+  await page.evaluate(() => {
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: {
+        writeText: (
+          window as unknown as {
+            writeInvitationText: (text: string) => Promise<void>;
+          }
+        ).writeInvitationText,
+      },
+    });
+  });
+  const url = await link.inputValue();
+  await page.screenshot({
+    path: ".cache/invitation-copy.png",
+    fullPage: true,
+  });
+  await link.tap();
+  try {
+    await expect.poll(() => copied).toEqual([url]);
+    await expect(page.getByRole("status")).not.toHaveText("Link copied.");
+  } finally {
+    release();
+  }
+  await expect(page.getByRole("status")).toHaveText("Link copied.");
+  await link.tap();
+  await expect.poll(() => copied).toEqual([url, url]);
+  const copy = page.getByRole("button", { name: "Copy link", exact: true });
+  await expect(copy).toBeEnabled();
+  gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await copy.focus();
+  await page.keyboard.press("Enter");
+  try {
+    await expect.poll(() => copied).toEqual([url, url, url]);
+    await expect(copy).toBeDisabled();
+    await expect(copy).toBeFocused();
+    await page.keyboard.press("Space");
+    expect(copied).toEqual([url, url, url]);
+  } finally {
+    release();
+  }
+  await expect(page.getByRole("status")).toHaveText("Link copied.");
+  await expect(copy).toBeFocused();
+  await page.keyboard.press("Space");
+  await expect.poll(() => copied).toEqual([url, url, url, url]);
+  await expect(page).toHaveURL(/\/invites$/);
+  await page
+    .getByRole("button", { name: "Create invitation", exact: true })
+    .click();
+  await expect(link).not.toHaveValue(url);
+  await expect(page.getByRole("status")).not.toHaveText("Link copied.");
+  await link.tap();
+  await expect.poll(() => copied.at(-1)).toBe(await link.inputValue());
+  await page.context().close();
+});
+
+test("invitation links remain manually copyable when clipboard access fails or is unavailable", async ({
+  browser,
+}) => {
+  const page = await invitationCreator(browser, "copyfallback");
+  const link = page.getByLabel("Invitation link", { exact: true });
+  const url = await link.inputValue();
+  for (const available of [true, false]) {
+    await page.evaluate((available) => {
+      Object.defineProperty(navigator, "clipboard", {
+        configurable: true,
+        value: available
+          ? {
+              writeText: async () => {
+                throw new DOMException("Clipboard denied", "NotAllowedError");
+              },
+            }
+          : undefined,
+      });
+    }, available);
+    await link.tap();
+    await expect(page.getByRole("status")).toContainText("copy it manually");
+    await expect(link).toHaveValue(url);
+    expect(
+      await link.evaluate((input: HTMLInputElement) =>
+        input.value.slice(input.selectionStart!, input.selectionEnd!),
+      ),
+    ).toBe(url);
+    await expect(
+      page.getByRole("button", { name: "Copy link", exact: true }),
+    ).toBeEnabled();
+  }
+  await page.context().close();
+});
+
+test("invitation links share the exact URL and handle cancellation, failure, and unsupported browsers", async ({
+  browser,
+}) => {
+  const page = await invitationCreator(browser, "shareinvitation");
+  const shared: { data: ShareData; active: boolean }[] = [];
+  const copied: string[] = [];
+  await page.exposeFunction(
+    "captureInvitationShare",
+    (data: ShareData, active: boolean) => {
+      shared.push({ data, active });
+    },
+  );
+  await page.exposeFunction("writeInvitationText", (text: string) => {
+    copied.push(text);
+  });
+  await page.addInitScript(() => {
+    const boundary = window as unknown as {
+      captureInvitationShare: (
+        data: ShareData,
+        active: boolean,
+      ) => Promise<void>;
+      writeInvitationText: (text: string) => Promise<void>;
+    };
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText: boundary.writeInvitationText },
+    });
+    Object.defineProperty(navigator, "share", {
+      configurable: true,
+      value: sessionStorage.getItem("share-unsupported")
+        ? undefined
+        : async (data: ShareData) => {
+            await boundary.captureInvitationShare(
+              data,
+              navigator.userActivation.isActive,
+            );
+            const failure = sessionStorage.getItem("share-failure");
+            if (failure) throw new DOMException("Share failed", failure);
+          },
+    });
+  });
+  await page.reload();
+  await page
+    .getByRole("button", { name: "Create invitation", exact: true })
+    .click();
+  const link = page.getByLabel("Invitation link", { exact: true });
+  const url = await link.inputValue();
+  const share = page.getByRole("button", {
+    name: "Share invitation",
+    exact: true,
+  });
+  await expect(share).toBeVisible();
+  await share.tap();
+  await expect
+    .poll(() => shared)
+    .toEqual([{ data: { title: "Join me on Screenr", url }, active: true }]);
+  for (const failure of ["AbortError", "NotAllowedError"]) {
+    await page.evaluate(
+      (failure) => sessionStorage.setItem("share-failure", failure),
+      failure,
+    );
+    await share.tap();
+    await expect(share).toBeEnabled();
+    if (failure === "AbortError") {
+      await expect(page.getByRole("status")).toBeEmpty();
+      expect(copied).toEqual([]);
+    } else {
+      await expect(page.getByRole("status")).toContainText("Could not share");
+    }
+  }
+  await page.getByRole("button", { name: "Copy link", exact: true }).tap();
+  await expect.poll(() => copied).toEqual([url]);
+  await page.evaluate(() => sessionStorage.removeItem("share-failure"));
+  await share.tap();
+  await expect.poll(() => shared.length).toBe(4);
+  await expect(page.getByRole("status")).toBeEmpty();
+  for (const width of [390, 320, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    for (const control of [
+      link,
+      share,
+      page.getByRole("button", { name: "Copy link", exact: true }),
+    ]) {
+      const bounds = await control.boundingBox();
+      expect(bounds!.height).toBeGreaterThanOrEqual(44);
+      expect(bounds!.x).toBeGreaterThanOrEqual(0);
+      expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(width);
+    }
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth),
+    ).toBe(width);
+    await page.screenshot({
+      path: `.cache/invitation-${width}.png`,
+      fullPage: true,
+    });
+  }
+  await page.evaluate(() =>
+    sessionStorage.setItem("share-unsupported", "true"),
+  );
+  await page.reload();
+  await page
+    .getByRole("button", { name: "Create invitation", exact: true })
+    .click();
+  await expect(share).toHaveCount(0);
+  await link.tap();
+  await expect.poll(() => copied.at(-1)).toBe(await link.inputValue());
+  await page.context().close();
+});
 
 test("title trailers fit desktop and mobile, send an origin referrer, and omit unavailable players", async ({
   browser,
