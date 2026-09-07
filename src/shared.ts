@@ -17,7 +17,9 @@ export type Conversation = {
   id: string;
   owner_id: string;
   title_id: string;
-  item_type: "recommended" | "want_to_watch" | "earlier";
+  item_type: "recommended" | "want_to_watch" | "earlier" | "comment";
+  body: string | null;
+  spoiler: boolean;
   active: boolean;
   recommended: boolean;
   want_to_watch: boolean;

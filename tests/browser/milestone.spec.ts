@@ -630,6 +630,359 @@ test("invited friends discover, save, and share inline discussions with live acc
   for (const page of [alice, ben, cam, outsider]) await page.context().close();
 });
 
+test("standalone title comments persist and share replies across all three mobile feeds", async ({
+  browser,
+}) => {
+  test.setTimeout(120_000);
+  const token = (
+    await readFile(".cache/browser-comment-invite.txt", "utf8")
+  ).trim();
+  const owner = await join(browser, "commentowner", { token });
+  const reader = await join(browser, "commentreader", { token });
+  const outsider = await join(browser, "commentoutsider", { token });
+  await befriend(owner, reader, "commentreader", "commentowner");
+  await owner.goto("/titles/movie/987654");
+  const composer = owner.getByRole("form", { name: "New title comment" });
+  await expect(
+    composer.getByLabel("Your comment", { exact: true }),
+  ).toBeVisible();
+  for (const body of [
+    "First independent thought",
+    "Second independent thought",
+  ]) {
+    await composer.getByLabel("Your comment", { exact: true }).fill(body);
+    await composer
+      .getByRole("button", { name: "Post comment", exact: true })
+      .click();
+    await expect(owner.getByText(body, { exact: true })).toBeVisible();
+    await expect(
+      composer.getByLabel("Your comment", { exact: true }),
+    ).toHaveValue("");
+  }
+  const first = owner
+    .locator("[data-item-id]")
+    .filter({ hasText: "First independent thought" });
+  const id = await first.getAttribute("data-item-id");
+  await owner.reload();
+  await expect(owner.locator("[data-item-id]")).toHaveCount(2);
+  await expect(
+    owner.getByRole("button", { name: "Recommend to friends", exact: true }),
+  ).toBeVisible();
+  await expect(
+    owner
+      .locator(".title-hero")
+      .getByRole("button", { name: "+ Want to watch", exact: true }),
+  ).toBeVisible();
+  for (const [index, path] of [
+    "/titles/movie/987654",
+    "/",
+    "/people/commentowner",
+  ].entries()) {
+    await reader.goto(path);
+    await expect(
+      reader.getByRole("form", { name: "New title comment" }),
+    ).toHaveCount(index === 0 ? 1 : 0);
+    const item = reader.locator(`[data-item-id="${id}"]`);
+    if (index > 0)
+      await item
+        .locator("[data-comment-id]")
+        .last()
+        .getByRole("button", { name: "Reply", exact: true })
+        .click();
+    await item
+      .getByLabel("Add your reply")
+      .fill(`Standalone reply from view ${index}`);
+    await item.getByRole("button", { name: "Post reply", exact: true }).click();
+    await expect(
+      item
+        .locator("[data-comment-id]")
+        .getByText(`Standalone reply from view ${index}`, { exact: true }),
+    ).toBeVisible();
+    await reader.reload();
+    await expect(item.locator("[data-comment-id]")).toHaveCount(index + 1);
+    await expect(
+      reader
+        .locator("[data-item-id]")
+        .filter({ hasText: "Second independent thought" })
+        .locator("[data-comment-id]"),
+    ).toHaveCount(0);
+    if (index > 0)
+      await expect(
+        item.getByText("Replying to @commentreader", { exact: true }),
+      ).toHaveCount(index);
+    expect(
+      await reader.evaluate(() => document.documentElement.scrollWidth),
+    ).toBe(390);
+    await reader.screenshot({
+      path: `.cache/standalone-view-${index}.png`,
+      fullPage: true,
+    });
+  }
+  // The same stored replies appear in every view after reload.
+  for (const path of ["/titles/movie/987654", "/", "/people/commentowner"]) {
+    await reader.goto(path);
+    await expect(
+      reader.locator(`[data-item-id="${id}"] [data-comment-id]`),
+    ).toHaveCount(3);
+  }
+  await owner.goto("/titles/movie/987654");
+  await first.getByLabel("Add your reply").fill("Fourth reply from the host");
+  await first.getByRole("button", { name: "Post reply", exact: true }).click();
+  await expect(
+    first
+      .locator("[data-comment-id]")
+      .getByText("Fourth reply from the host", { exact: true }),
+  ).toBeVisible();
+  for (const path of ["/titles/movie/987654", "/", "/people/commentowner"]) {
+    await reader.goto(path);
+    const item = reader.locator(`[data-item-id="${id}"]`);
+    await expect(item.locator("[data-comment-id]")).toHaveCount(3);
+    await expect(
+      item.getByText("Standalone reply from view 0", { exact: true }),
+    ).toHaveCount(0);
+    await item
+      .getByRole("button", { name: "Show earlier replies (1)", exact: true })
+      .click();
+    await expect(item.locator("[data-comment-id]")).toHaveCount(4);
+    await expect(
+      item.getByText("Standalone reply from view 0", { exact: true }),
+    ).toBeVisible();
+  }
+  await reader.goto("/people/commentreader");
+  await expect(reader.locator("[data-item-id]")).toHaveCount(0);
+  await expect(
+    reader.getByRole("form", { name: "New title comment" }),
+  ).toHaveCount(0);
+  const denied = await outsider.request.post("/api/screenr/comment", {
+    headers: { Origin: "http://localhost:3055" },
+    data: { conversation: id, body: "No access", spoiler: false },
+  });
+  expect(denied.status()).toBe(404);
+  await outsider.goto(`/titles/movie/987654?item=${id}`);
+  await expect(
+    outsider.getByText("First independent thought", { exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    outsider.getByText("This activity is unavailable.", { exact: true }),
+  ).toBeVisible();
+  const signedOut = await browser.newContext();
+  expect(
+    (
+      await signedOut.request.post(
+        "http://localhost:3055/api/screenr/title-comment",
+        {
+          headers: { Origin: "http://localhost:3055" },
+          data: { title: "movie:987654", body: "Anonymous", spoiler: false },
+        },
+      )
+    ).status(),
+  ).toBe(401);
+  await signedOut.close();
+  await owner.goto("/titles/tv/987654");
+  await composer
+    .getByLabel("Your comment", { exact: true })
+    .fill("A show spoiler");
+  await composer.getByLabel("Contains spoilers").check();
+  await composer
+    .getByRole("button", { name: "Post comment", exact: true })
+    .click();
+  await expect(
+    owner.getByRole("button", {
+      name: "Contains spoilers · Reveal discussion",
+      exact: true,
+    }),
+  ).toBeVisible();
+  await owner.reload();
+  await owner
+    .getByRole("button", {
+      name: "Contains spoilers · Reveal discussion",
+      exact: true,
+    })
+    .click();
+  const spoilerItem = owner
+    .locator("[data-item-id]")
+    .filter({ hasText: "A show spoiler" });
+  const spoilerId = await spoilerItem.getAttribute("data-item-id");
+  await spoilerItem
+    .getByLabel("Add your reply")
+    .fill("Thread inherits the spoiler flag");
+  await spoilerItem
+    .getByRole("button", { name: "Post reply", exact: true })
+    .click();
+  await expect(
+    spoilerItem
+      .locator("[data-comment-id]")
+      .getByText("Thread inherits the spoiler flag", { exact: true }),
+  ).toBeVisible();
+  for (const path of [
+    `/titles/tv/987654?item=${spoilerId}`,
+    "/",
+    "/people/commentowner",
+  ]) {
+    await reader.goto(path);
+    const item = reader.locator(`[data-item-id="${spoilerId}"]`);
+    await expect(item.getByText("A show spoiler", { exact: true })).toHaveCount(
+      0,
+    );
+    await expect(
+      item.getByText("Thread inherits the spoiler flag", { exact: true }),
+    ).toHaveCount(0);
+    await item
+      .getByRole("button", {
+        name: "Contains spoilers · Reveal discussion",
+        exact: true,
+      })
+      .click();
+    await expect(
+      item.getByText("A show spoiler", { exact: true }),
+    ).toBeVisible();
+    await expect(
+      item.getByText("Thread inherits the spoiler flag", { exact: true }),
+    ).toBeVisible();
+  }
+  await owner.context().close();
+  await reader.context().close();
+  await outsider.context().close();
+});
+
+test("spoiler reply links reach the hidden discussion before revealing the target", async ({
+  browser,
+}) => {
+  const token = (
+    await readFile(".cache/browser-comment-invite.txt", "utf8")
+  ).trim();
+  const page = await join(browser, "commentlinks", { token });
+  const headers = { Origin: "http://localhost:3055" };
+  const body = "Hidden discussion.\n".repeat(60).trim();
+  const response = await page.request.post("/api/screenr/title-comment", {
+    headers,
+    data: { title: "movie:987655", body, spoiler: true },
+  });
+  expect(response.ok()).toBe(true);
+  const { id } = await response.json();
+  const replyResponse = await page.request.post("/api/screenr/comment", {
+    headers,
+    data: { conversation: id, body: "Linked hidden reply", spoiler: false },
+  });
+  expect(replyResponse.ok()).toBe(true);
+  const { id: replyId } = await replyResponse.json();
+  // Newer entries put the linked discussion below the initial viewport.
+  for (let index = 0; index < 2; index++) {
+    const newer = await page.request.post("/api/screenr/title-comment", {
+      headers,
+      data: {
+        title: "movie:987655",
+        body: `Newer discussion ${index}`,
+        spoiler: false,
+      },
+    });
+    expect(newer.ok()).toBe(true);
+  }
+  await page.goto(`/titles/movie/987655?item=${id}&reply=${replyId}`);
+  const item = page.locator(`[data-item-id="${id}"]`);
+  const reveal = item.getByRole("button", {
+    name: "Contains spoilers · Reveal discussion",
+    exact: true,
+  });
+  await expect(reveal).toBeInViewport();
+  await expect(item.getByText(body, { exact: true })).toHaveCount(0);
+  await expect(
+    item.getByText("Linked hidden reply", { exact: true }),
+  ).toHaveCount(0);
+  await reveal.click();
+  await expect(page.locator(`#comment-${replyId}`)).toBeInViewport();
+  await expect(
+    item.getByText("Linked hidden reply", { exact: true }),
+  ).toBeVisible();
+  await page.context().close();
+});
+
+test("standalone composition retains drafts through posting and refresh failures", async ({
+  browser,
+}) => {
+  const token = (
+    await readFile(".cache/browser-comment-invite.txt", "utf8")
+  ).trim();
+  const page = await join(browser, "commentdrafts", { token });
+  await page.goto("/titles/movie/987655");
+  const composer = page.getByRole("form", { name: "New title comment" });
+  const input = composer.getByLabel("Your comment", { exact: true });
+  const submit = composer.getByRole("button", {
+    name: "Post comment",
+    exact: true,
+  });
+  await input.fill("Keep my standalone draft");
+  await composer.getByLabel("Contains spoilers").check();
+  await page.route("**/api/screenr/title-comment", (route) =>
+    route.fulfill({ status: 503, json: { error: "Posting unavailable" } }),
+  );
+  await submit.click();
+  await expect(composer.getByRole("alert")).toHaveText("Posting unavailable");
+  await expect(input).toHaveValue("Keep my standalone draft");
+  await expect(composer.getByLabel("Contains spoilers")).toBeChecked();
+  await page.route("**/api/screenr/screen?**", (route) =>
+    route.fulfill({ status: 503, json: { error: "Refresh unavailable" } }),
+  );
+  await expect(page.getByRole("main").getByRole("alert")).toContainText(
+    "Refresh unavailable",
+  );
+  await expect(composer).toHaveCount(0);
+  await page.unroute("**/api/screenr/screen?**");
+  await page.getByRole("button", { name: "Try again", exact: true }).click();
+  await expect(input).toHaveValue("Keep my standalone draft");
+  await expect(composer.getByLabel("Contains spoilers")).toBeChecked();
+  await page.unroute("**/api/screenr/title-comment");
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route("**/api/screenr/title-comment", async (route) => {
+    const response = await route.fetch();
+    await gate;
+    await route.fulfill({ response });
+  });
+  await submit.click();
+  await input.fill("A later thought typed while saving");
+  await composer.getByLabel("Contains spoilers").uncheck();
+  release();
+  await expect(submit).toBeEnabled();
+  await expect(input).toHaveValue("A later thought typed while saving");
+  await page.unroute("**/api/screenr/title-comment");
+  await submit.click();
+  await expect(
+    page.getByText("A later thought typed while saving", { exact: true }),
+  ).toBeVisible();
+  await expect(input).toHaveValue("");
+  await page.reload();
+  await expect(page.locator("[data-item-id]")).toHaveCount(2);
+  await page
+    .getByRole("button", {
+      name: "Contains spoilers · Reveal discussion",
+      exact: true,
+    })
+    .click();
+  await expect(
+    page.getByText("Keep my standalone draft", { exact: true }),
+  ).toBeVisible();
+  const wrongOrigin = await page.request.post("/api/screenr/title-comment", {
+    headers: { Origin: "http://untrusted.example.test" },
+    data: { title: "movie:987655", body: "Cross-origin", spoiler: false },
+  });
+  expect(wrongOrigin.status()).toBe(403);
+  for (const [data, status] of [
+    [{ title: "movie:987655", body: " ", spoiler: false }, 400],
+    [{ title: "movie:987655", body: "Valid", spoiler: "false" }, 400],
+    [{ body: "Titleless", spoiler: false }, 404],
+  ] as const) {
+    const response = await page.request.post("/api/screenr/title-comment", {
+      headers: { Origin: "http://localhost:3055" },
+      data,
+    });
+    expect(response.status()).toBe(status);
+  }
+  await page.context().close();
+});
+
 test("watch together opens from a friend profile, filters shared titles, and refreshes choices and access", async ({
   browser,
   page,
@@ -794,7 +1147,14 @@ test("discussion links copy from every feed without navigating or losing drafts 
   await owner
     .getByRole("button", { name: "+ Want to watch", exact: true })
     .click();
-  await expect(owner.locator("[data-item-id]")).toHaveCount(2);
+  const composer = owner.getByRole("form", { name: "New title comment" });
+  await composer
+    .getByLabel("Your comment", { exact: true })
+    .fill("An independent discussion to share");
+  await composer
+    .getByRole("button", { name: "Post comment", exact: true })
+    .click();
+  await expect(owner.locator("[data-item-id]")).toHaveCount(3);
   await reader
     .context()
     .grantPermissions(["clipboard-read", "clipboard-write"]);
@@ -802,7 +1162,7 @@ test("discussion links copy from every feed without navigating or losing drafts 
   for (const path of ["/titles/tv/987657", "/", "/people/copyowner"]) {
     await reader.goto(path);
     const entries = reader.locator("[data-item-id]");
-    await expect(entries).toHaveCount(2);
+    await expect(entries).toHaveCount(3);
     for (const entry of await entries.all()) {
       const id = await entry.getAttribute("data-item-id");
       const expectedURL = `http://localhost:3055/titles/tv/987657?item=${id}`;
@@ -1238,7 +1598,7 @@ test("an unavailable legacy link navigates after friendship restores access", as
     route.fulfill({ contentType: "text/html", body: "Trailer player fixture" }),
   );
   await waiting.goto(`/conversations/${entry.conversation_id}`);
-  await expect(waiting.getByRole("alert")).toContainText(
+  await expect(waiting.getByRole("main").getByRole("alert")).toContainText(
     "Conversation not found.",
   );
   await befriend(owner, reader, "recoveryreader", "recoveryowner");
@@ -1477,8 +1837,11 @@ test("slow and failed refreshes enforce access while preserving reply drafts", a
   });
   await page.goto(`/conversations/${id}`);
   const draft = page.getByLabel("Add your reply");
+  const replySpoiler = page
+    .getByRole("region", { name: "Conversation", exact: true })
+    .getByLabel("Contains spoilers", { exact: true });
   await draft.fill("Keep this unsent reply");
-  await page.getByLabel("Contains spoilers", { exact: true }).check();
+  await replySpoiler.check();
   await page.route("**/api/screenr/screen?**", (route) =>
     route.fulfill({ status: 503, json: { error: "Refresh unavailable." } }),
   );
@@ -1490,9 +1853,7 @@ test("slow and failed refreshes enforce access while preserving reply drafts", a
   ).toHaveCount(0);
   await page.unroute("**/api/screenr/screen?**");
   await expect(draft).toHaveValue("Keep this unsent reply");
-  await expect(
-    page.getByLabel("Contains spoilers", { exact: true }),
-  ).toBeChecked();
+  await expect(replySpoiler).toBeChecked();
   await page.getByRole("button", { name: "Post reply", exact: true }).click();
   await expect(draft).toHaveValue("");
   await page.getByRole("button", { name: /Reveal comment/ }).click();
