@@ -2,6 +2,7 @@ import { test, expect } from "@playwright/test";
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { Pool } from "pg";
+import { browserConfig } from "../../scripts/browser-config";
 
 test("invitation links expose rich previews without cookies or JavaScript", async ({
   browser,
@@ -58,8 +59,8 @@ test("invitation links expose rich previews without cookies or JavaScript", asyn
         .getAttribute("content");
       expect(imageURL).toBeTruthy();
       // Next's file-based image metadata uses its own port in development;
-      // the browser harness proxies the app through 3055 to Next on 3059.
-      expect(new URL(imageURL!).origin).toBe("http://localhost:3059");
+      // the browser harness uses a separate port for Next.
+      expect(new URL(imageURL!).origin).toBe(browserConfig.appURL);
       const image = await fetch(imageURL!);
       expect(image.status).toBe(200);
       expect(image.headers.get("content-type")).toBe("image/png");
@@ -85,12 +86,7 @@ test("preview fetches preserve invitation eligibility and the recipient signup c
   baseURL,
 }) => {
   const token = (await readFile(".cache/browser-invite.txt", "utf8")).trim();
-  const databaseURL = new URL(
-    process.env.TEST_DATABASE_URL ??
-      "postgresql://screenr:screenr-local-only@127.0.0.1:5439/screenr_test",
-  );
-  databaseURL.pathname = "/screenr_browser_test";
-  const database = new Pool({ connectionString: databaseURL.href });
+  const database = new Pool({ connectionString: browserConfig.databaseURL });
   const hash = createHash("sha256").update(token).digest("hex");
   try {
     const before = await database.query(
