@@ -4,11 +4,13 @@ status: current
 
 # Shared VPS deployment
 
-Screenr targets the existing Hetzner VPS and `screenr.jubishop.com`, under the
+Screenr targets the existing Hetzner VPS and `screenr.club`, under the
 [accepted hosting decision](application-stack.md#initial-hosting-layout--2026-09-05).
 The files in `ops/` define the deployment. Their presence does not mean the
-live services or provider accounts have been configured. Live completion is
-tracked in [issue #1](https://github.com/jubishop/screenr/issues/1).
+live services or provider accounts have been configured. The initial deployment
+at `screenr.jubishop.com` is recorded in [issue #1](https://github.com/jubishop/screenr/issues/1).
+The move to `screenr.club` is tracked in [issue #9](https://github.com/jubishop/screenr/issues/9);
+follow the [domain cutover procedure](#domain-cutover) for an existing installation.
 
 ## Layout
 
@@ -58,12 +60,13 @@ Google credentials, and the TMDB read token. The activation command checks all
 required values without printing them. The provider setup and callback URLs
 are in [Running Screenr](running-screenr.md#provider-configuration).
 
-Add only the Screenr block from `ops/Caddyfile` to the existing Caddyfile.
+Add only the Screenr blocks from `ops/Caddyfile` to the existing Caddyfile.
 The template uses a per-host origin certificate, following this server's
 existing Cloudflare setup. Verify the zone's origin TLS mode and certificate
 compatibility; do not weaken a zone-wide setting. Keep the origin key private.
 Validate Caddy before reloading it. Add a **proxied** A record for
-`screenr.jubishop.com` pointing to this VPS. Preserve the existing firewall
+`screenr.club` pointing to this VPS. Keep the old proxied `screenr.jubishop.com`
+record and its certificate for redirects. Preserve the existing firewall
 rules limiting public HTTP(S) access to Cloudflare.
 
 Screenr supplies its own invited-member authentication. Do not put a second
@@ -143,8 +146,64 @@ Useful read-only commands:
 systemctl status screenr-db screenr-web screenr-worker --no-pager
 systemctl show screenr-db screenr-web screenr-worker -p NRestarts -p MemoryCurrent -p MemoryPeak
 journalctl -u screenr-web -u screenr-worker --since '30 minutes ago' --no-pager
-curl --fail https://screenr.jubishop.com/api/health
+curl --fail https://screenr.club/api/health
 ```
+
+## Domain cutover
+
+This procedure applies the [public hostname decision](product-brief.md#public-hostname--2026-09-06)
+after review and merge. Use the existing VPS, database, auth secret, provider
+credentials, and verified `Screenr <screenr@jubishop.com>` sender. Accounts,
+profiles, friendships, and invitation tokens remain in the same database.
+Browser cookies belong to the old host, so members must sign in again on the
+new host. An OAuth flow started before the switch must be restarted there.
+
+1. Save private rollback copies of `/etc/caddy/Caddyfile` and
+   `/etc/screenr/app.env`, preserving their ownership and permissions. Record
+   the active release and current service health. Take and verify an encrypted
+   backup under the procedure below. Retain the old DNS record, certificate,
+   and Google callback throughout the rollback window.
+2. In Google Cloud project `screenr-69420`, add
+   `https://screenr.club/api/auth/callback/google` to the existing Web
+   application client. Keep the localhost callback and old production callback.
+   Update the consent screen's authorized domain and application URLs to
+   `screenr.club` where configured. Verify that the saved client accepts the
+   exact callback before changing the app URL.
+3. In the `screenr.club` Cloudflare zone, verify active nameservers and an issued
+   edge certificate for the apex. Install an origin certificate covering
+   `screenr.club` as `/etc/caddy/certs/screenr-club.pem`, with its private key
+   at `/etc/caddy/certs/screenr-club.key`. Grant Caddy access to the key without
+   making it public. Follow Cloudflare's [Origin CA procedure](https://developers.cloudflare.com/ssl/origin-configuration/origin-ca/).
+   Verify Full (strict) origin TLS and preserve the firewall's
+   Cloudflare-only ingress. Add a proxied apex A record to the existing VPS;
+   do not copy an unrelated AAAA record or alter other zones. The new public
+   host is ready only after origin routing and the next step are complete.
+4. In one maintenance window, set `BETTER_AUTH_URL=https://screenr.club` in
+   `/etc/screenr/app.env`. Replace the old Screenr site block with **both**
+   blocks from the merged `ops/Caddyfile`, preserving unrelated sites. Validate
+   the complete Caddyfile with `caddy validate --config /etc/caddy/Caddyfile`.
+   Activate the checked, merged release as described above, then reload Caddy.
+   Both web and worker processes must read the updated environment. The old
+   hostname now sends a 308 redirect to the new host with the full path and
+   query. Redirect responses use `Cache-Control: no-store` to permit rollback;
+   Caddy's [`redir` directive](https://caddyserver.com/docs/caddyfile/directives/redir)
+   expands `{uri}` without changing the destination host.
+5. Independently check `https://screenr.club/api/health` for HTTP 200 and
+   `{"ok":true}`, and check `/login`. Check the old `/login`, a title URL, and a
+   synthetic invitation URL without following redirects; each must return 308
+   with the same path and query under `https://screenr.club`. Then verify a
+   real active invitation privately, Google sign-in, and delivered email-code
+   sign-in. Confirm both sign-in methods return to the existing profile and
+   that a newly generated invite uses the new hostname. Check service health,
+   logs, and the other shared-host applications as in independent acceptance.
+
+If acceptance fails, restore the saved environment and Caddyfile, validate
+Caddy, and restore the previous release if activation changed it. Restart
+Screenr web and worker, then reload Caddy. Verify the old public login, health,
+and sign-in behavior again. Do not roll back the database or auth secret for
+this hostname-only change. Correct the new-host provider or TLS settings before
+retrying. Remove the old Google callback only after successful acceptance and
+the rollback window; retain old-host DNS and TLS while shared links need redirects.
 
 ## Encrypted backups and restore check
 
