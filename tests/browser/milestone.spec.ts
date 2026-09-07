@@ -1679,6 +1679,38 @@ test("unified feeds show separate actions and support inline replies on title, f
     .locator("[data-item-id]")
     .filter({ hasText: "feedowner recommends" });
   const id = await recommendation.getAttribute("data-item-id");
+  for (const path of ["/titles/movie/987654", "/", "/people/feedowner"]) {
+    await reader.goto(path);
+    const items = reader.locator("[data-item-id]");
+    await expect(items).toHaveCount(2);
+    await expect
+      .soft(items.getByRole("heading", { name: "Conversation", exact: true }))
+      .toHaveCount(0);
+    await expect
+      .soft(items.getByText("Be the first to reply.", { exact: true }))
+      .toHaveCount(0);
+    for (const width of [390, 1440]) {
+      await reader.setViewportSize({ width, height: 900 });
+      for (const reply of await items.getByLabel("Add your reply").all()) {
+        await expect(reply).toBeVisible();
+        const visibleLines = await reply.evaluate((element) => {
+          const style = getComputedStyle(element);
+          const contentHeight =
+            element.clientHeight -
+            parseFloat(style.paddingTop) -
+            parseFloat(style.paddingBottom);
+          return contentHeight / parseFloat(style.lineHeight);
+        });
+        expect.soft(visibleLines).toBeCloseTo(3, 1);
+      }
+      if (path === "/titles/movie/987654")
+        await reader.screenshot({
+          path: `.cache/empty-conversation-${width}.png`,
+          fullPage: true,
+        });
+    }
+  }
+  await reader.setViewportSize({ width: 390, height: 844 });
   for (const [index, path] of [
     "/titles/movie/987654",
     "/",
@@ -1690,6 +1722,12 @@ test("unified feeds show separate actions and support inline replies on title, f
     await item.getByRole("button", { name: "Post reply", exact: true }).click();
     await expect(
       item.getByText(`Reply from surface ${index}`, { exact: true }),
+    ).toBeVisible();
+    await expect(
+      item.getByRole("heading", { name: "Conversation", exact: true }),
+    ).toBeVisible();
+    await expect(
+      item.getByText(`${index + 1} replies`, { exact: true }),
     ).toBeVisible();
     await reader.reload();
     await expect(

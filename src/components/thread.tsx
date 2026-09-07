@@ -163,22 +163,25 @@ export function ThreadView({
   }
   return (
     <section aria-label="Conversation" className="thread">
-      <div className="section-heading">
-        <h2>Conversation</h2>
-        <span className="muted">
-          {comments.filter((c) => !c.removed).length} replies
-        </span>
-      </div>
-      {start > 0 && (
-        <button
-          className="text-button"
-          onClick={() => preservePosition(() => setExpanded(true))}
-        >
-          Show earlier replies ({start})
-        </button>
+      {comments.length > 0 && (
+        <>
+          <div className="section-heading">
+            <h2>Conversation</h2>
+            <span className="muted">
+              {comments.filter((c) => !c.removed).length} replies
+            </span>
+          </div>
+          {start > 0 && (
+            <button
+              className="text-button"
+              onClick={() => preservePosition(() => setExpanded(true))}
+            >
+              Show earlier replies ({start})
+            </button>
+          )}
+          <div className="replies">{visible.map(renderComment)}</div>
+        </>
       )}
-      {visible.length === 0 && <p className="empty">Be the first to reply.</p>}
-      <div className="replies">{visible.map(renderComment)}</div>
       <form
         className="composer"
         data-composer-id={currentSnapshot.conversation.id}
@@ -205,6 +208,7 @@ export function ThreadView({
           Add your reply
         </label>
         <textarea
+          rows={3}
           disabled={!interactive}
           ref={area}
           id={`reply-${currentSnapshot.conversation.id}`}
