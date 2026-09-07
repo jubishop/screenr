@@ -2635,7 +2635,10 @@ test("own nested replies keep their parent when another tab has not accepted new
   const { id } = await response.json();
   await reader.goto(`/titles/movie/987654?item=${id}`);
   const item = reader.locator(`[data-item-id="${id}"]`);
-  await expect(item.getByText("Be the first to reply.")).toBeVisible();
+  await expect(
+    item.getByLabel("Add your reply", { exact: true }),
+  ).toBeVisible();
+  await expect(item.locator("[data-comment-id]")).toHaveCount(0);
   const parentResponse = await owner.request.post("/api/screenr/comment", {
     headers: { Origin: browserConfig.baseURL },
     data: { conversation: id, body: "Pending parent", spoiler: false },
