@@ -1,4 +1,6 @@
 import { createServer } from "node:http";
+import { browserConfig } from "../../scripts/browser-config";
+import { once } from "node:events";
 import { createHash, randomUUID } from "node:crypto";
 import { createAuth } from "../../src/server/auth";
 
@@ -6,10 +8,10 @@ import { createAuth } from "../../src/server/auth";
 // OAuth state/cookies, sessions, invitation policy and database stay real.
 // This file is used only by the disposable browser-test harness.
 export async function startGoogleProvider() {
-  const base = "http://localhost:3055";
-  const fixture = "http://127.0.0.1:3058";
+  const base = browserConfig.baseURL;
+  const fixture = browserConfig.googleURL;
   if (
-    new URL(process.env.DATABASE_URL!).pathname !== "/screenr_browser_test" ||
+    process.env.DATABASE_URL !== browserConfig.databaseURL ||
     process.env.BETTER_AUTH_URL !== base ||
     process.env.EMAIL_TRANSPORT !== "file" ||
     process.env.GOOGLE_CLIENT_ID !== "screenr-browser-test"
@@ -68,7 +70,7 @@ export async function startGoogleProvider() {
       .replaceAll("&", "&amp;")
       .replaceAll('"', "&quot;")
       .replaceAll("<", "&lt;");
-  return createServer(async (request, response) => {
+  const server = createServer(async (request, response) => {
     try {
       const url = new URL(request.url!, fixture);
       if (url.pathname === "/authorize") {
@@ -138,5 +140,8 @@ export async function startGoogleProvider() {
       console.error("Test identity provider failed:", error);
       response.writeHead(500).end("Test identity provider failed");
     }
-  }).listen(3058, "127.0.0.1");
+  });
+  server.listen(browserConfig.googlePort, "127.0.0.1");
+  await once(server, "listening");
+  return server;
 }

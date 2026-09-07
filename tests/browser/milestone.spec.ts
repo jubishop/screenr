@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { setTimeout as delay } from "node:timers/promises";
 import { Pool } from "pg";
+import { browserConfig } from "../../scripts/browser-config";
 
 const browserErrors: string[] = [];
 
@@ -253,14 +254,7 @@ test("active invitation cards retain links across reloads and disappear after us
   const screen = await (
     await owner.request.get("/api/screenr/screen?path=/invites")
   ).json();
-  const databaseURL = new URL(
-    process.env.TEST_DATABASE_URL ??
-      "postgresql://screenr:screenr-local-only@127.0.0.1:5439/screenr_test",
-  );
-  if (!databaseURL.pathname.endsWith("_test"))
-    throw new Error("Use a test database.");
-  databaseURL.pathname = "/screenr_browser_test";
-  const database = new Pool({ connectionString: databaseURL.href });
+  const database = new Pool({ connectionString: browserConfig.databaseURL });
   try {
     await database.query("UPDATE invitation SET expires_at=now() WHERE id=$1", [
       screen.invitations[0].id,
@@ -440,7 +434,7 @@ test("title trailers fit desktop and mobile, send an origin referrer, and omit u
   await expect(
     page.getByRole("link", { name: "Watch on YouTube" }),
   ).toHaveAttribute("href", "https://www.youtube.com/watch?v=Abcdef_1234");
-  await expect.poll(() => embeds).toEqual(["http://localhost:3055/"]);
+  await expect.poll(() => embeds).toEqual([`${browserConfig.baseURL}/`]);
   for (const width of [1440, 390, 320]) {
     await page.setViewportSize({ width, height: 900 });
     const bounds = await player.boundingBox();
@@ -505,9 +499,10 @@ test("invited friends discover, save, and share inline discussions with live acc
   const conversationURL = await alice.evaluate(() =>
     navigator.clipboard.readText(),
   );
-  expect(conversationURL).toMatch(
-    /^http:\/\/localhost:3055\/titles\/movie\/987654\?item=[0-9a-f-]+$/,
-  );
+  expect(new URL(conversationURL).origin).toBe(browserConfig.baseURL);
+  expect(
+    new URL(conversationURL).pathname + new URL(conversationURL).search,
+  ).toMatch(/^\/titles\/movie\/987654\?item=[0-9a-f-]+$/);
   const id = new URL(conversationURL).searchParams.get("item")!;
   const item = (page: Page) => page.locator(`[data-item-id="${id}"]`);
   await ben.goto("/");
@@ -565,7 +560,7 @@ test("invited friends discover, save, and share inline discussions with live acc
   expect(denied.status()).toBe(404);
   const write = (page: Page, body: string, replyTo?: string) =>
     page.request.post("/api/screenr/comment", {
-      headers: { Origin: "http://localhost:3055" },
+      headers: { Origin: browserConfig.baseURL },
       data: { conversation: id, body, spoiler: false, replyTo },
     });
   expect((await write(outsider, "Unauthorized")).status()).toBe(404);
@@ -805,7 +800,7 @@ test("discussion links copy from every feed without navigating or losing drafts 
     await expect(entries).toHaveCount(2);
     for (const entry of await entries.all()) {
       const id = await entry.getAttribute("data-item-id");
-      const expectedURL = `http://localhost:3055/titles/tv/987657?item=${id}`;
+      const expectedURL = `${browserConfig.baseURL}/titles/tv/987657?item=${id}`;
       const draft = entry.getByLabel("Add your reply");
       await draft.fill("Keep this reply draft.");
       const copy = entry.getByRole("button", {
@@ -819,7 +814,7 @@ test("discussion links copy from every feed without navigating or losing drafts 
       expect(await reader.evaluate(() => navigator.clipboard.readText())).toBe(
         expectedURL,
       );
-      await expect(reader).toHaveURL(`http://localhost:3055${path}`);
+      await expect(reader).toHaveURL(`${browserConfig.baseURL}${path}`);
       await expect(draft).toHaveValue("Keep this reply draft.");
       await reader.evaluate(() =>
         navigator.clipboard.writeText("Before keyboard copy"),
@@ -827,7 +822,7 @@ test("discussion links copy from every feed without navigating or losing drafts 
       await copy.focus();
       await reader.keyboard.press("Enter");
       await expect(copy).toBeFocused();
-      await expect(reader).toHaveURL(`http://localhost:3055${path}`);
+      await expect(reader).toHaveURL(`${browserConfig.baseURL}${path}`);
       await expect
         .poll(() => reader.evaluate(() => navigator.clipboard.readText()))
         .toBe(expectedURL);
@@ -856,7 +851,7 @@ test("discussion links copy from every feed without navigating or losing drafts 
     await expect(entry.getByRole("status")).toHaveText(
       "Could not copy the link. Please try again.",
     );
-    await expect(reader).toHaveURL("http://localhost:3055/people/copyowner");
+    await expect(reader).toHaveURL(`${browserConfig.baseURL}/people/copyowner`);
     await expect(entry.getByLabel("Add your reply")).toHaveValue(
       "Keep this reply draft.",
     );
@@ -1030,7 +1025,7 @@ test("every feed holds incoming activity, preserves drafts and position, and exp
   await befriend(owner, reader, "incomingreader", "incomingowner");
   async function action(field: string, value: boolean) {
     const result = await owner.request.post("/api/screenr/activity", {
-      headers: { Origin: "http://localhost:3055" },
+      headers: { Origin: browserConfig.baseURL },
       data: { title: "movie:987654", field, value },
     });
     expect(result.status()).toBe(200);
@@ -1040,7 +1035,7 @@ test("every feed holds incoming activity, preserves drafts and position, and exp
   const replies: string[] = [];
   for (let index = 0; index < 5; index++) {
     const response = await owner.request.post("/api/screenr/comment", {
-      headers: { Origin: "http://localhost:3055" },
+      headers: { Origin: browserConfig.baseURL },
       data: {
         conversation: id,
         body: `Preview reply ${index}`,
@@ -1081,7 +1076,7 @@ test("every feed holds incoming activity, preserves drafts and position, and exp
     await draft.fill(`Draft on surface ${index}`);
     await item.getByLabel("Contains spoilers", { exact: true }).check();
     const added = await owner.request.post("/api/screenr/comment", {
-      headers: { Origin: "http://localhost:3055" },
+      headers: { Origin: browserConfig.baseURL },
       data: {
         conversation: id,
         body: `Incoming on surface ${index}`,
@@ -1161,13 +1156,13 @@ test("loading activity retains the visible three-reply preview and its reading a
   const reader = await join(browser, "previewreader", { token });
   await befriend(owner, reader, "previewreader", "previewowner");
   const activity = await owner.request.post("/api/screenr/activity", {
-    headers: { Origin: "http://localhost:3055" },
+    headers: { Origin: browserConfig.baseURL },
     data: { title: "movie:987654", field: "recommended", value: true },
   });
   const { id } = await activity.json();
   async function reply(body: string) {
     const response = await owner.request.post("/api/screenr/comment", {
-      headers: { Origin: "http://localhost:3055" },
+      headers: { Origin: browserConfig.baseURL },
       data: { conversation: id, body, spoiler: false },
     });
     expect(response.status()).toBe(200);
@@ -1182,7 +1177,7 @@ test("loading activity retains the visible three-reply preview and its reading a
   const beforeArrival = (await anchor.boundingBox())!.y;
   await reply("New reply after the preview");
   const incomingItem = await owner.request.post("/api/screenr/activity", {
-    headers: { Origin: "http://localhost:3055" },
+    headers: { Origin: browserConfig.baseURL },
     data: { title: "movie:987654", field: "want_to_watch", value: true },
   });
   expect(incomingItem.status()).toBe(200);
@@ -1223,7 +1218,7 @@ test("an unavailable legacy link navigates after friendship restores access", as
   const reader = await join(browser, "recoveryreader", { token });
   await owner.goto("/titles/movie/987654");
   const response = await owner.request.post("/api/screenr/activity", {
-    headers: { Origin: "http://localhost:3055" },
+    headers: { Origin: browserConfig.baseURL },
     data: { title: "movie:987654", field: "recommended", value: true },
   });
   expect(response.status()).toBe(200);
@@ -1238,7 +1233,7 @@ test("an unavailable legacy link navigates after friendship restores access", as
     route.fulfill({ contentType: "text/html", body: "Trailer player fixture" }),
   );
   await waiting.goto(`/conversations/${entry.conversation_id}`);
-  await expect(waiting.getByRole("alert")).toContainText(
+  await expect(waiting.getByRole("main").getByRole("alert")).toContainText(
     "Conversation not found.",
   );
   await befriend(owner, reader, "recoveryreader", "recoveryowner");
@@ -1463,12 +1458,12 @@ test("slow and failed refreshes enforce access while preserving reply drafts", a
 }) => {
   const page = await join(browser, "draftrefresh");
   const activity = await page.request.post("/api/screenr/activity", {
-    headers: { Origin: "http://localhost:3055" },
+    headers: { Origin: browserConfig.baseURL },
     data: { title: "movie:987654", field: "recommended", value: true },
   });
   const { id } = await activity.json();
   await page.request.post("/api/screenr/comment", {
-    headers: { Origin: "http://localhost:3055" },
+    headers: { Origin: browserConfig.baseURL },
     data: {
       conversation: id,
       body: "Visible conversation content",
@@ -1500,7 +1495,7 @@ test("slow and failed refreshes enforce access while preserving reply drafts", a
     page.getByText("Keep this unsent reply", { exact: true }),
   ).toBeVisible();
   const invitation = await page.request.post("/api/screenr/invite", {
-    headers: { Origin: "http://localhost:3055" },
+    headers: { Origin: browserConfig.baseURL },
     data: { limit: 1 },
   });
   const viewer = await join(browser, "slowviewer", {
@@ -1516,7 +1511,7 @@ test("slow and failed refreshes enforce access while preserving reply drafts", a
     await route.continue();
   });
   await page.request.post("/api/screenr/comment", {
-    headers: { Origin: "http://localhost:3055" },
+    headers: { Origin: browserConfig.baseURL },
     data: { conversation: id, body: "A slow incoming reply", spoiler: false },
   });
   await expect(
@@ -1570,7 +1565,7 @@ test("posting preserves later typing and background refresh preserves action err
 }) => {
   const page = await join(browser, "draftposting");
   const response = await page.request.post("/api/screenr/activity", {
-    headers: { Origin: "http://localhost:3055" },
+    headers: { Origin: browserConfig.baseURL },
     data: { title: "movie:987654", field: "recommended", value: true },
   });
   const { id } = await response.json();
@@ -1665,7 +1660,7 @@ test("feed actions persist the viewer's independent recommendation and watch sta
   await befriend(owner, viewer, "profileviewer", "profileowner");
   for (const page of [owner, viewer]) {
     await page.request.post("/api/screenr/activity", {
-      headers: { Origin: "http://localhost:3055" },
+      headers: { Origin: browserConfig.baseURL },
       data: { title: "movie:987654", field: "recommended", value: true },
     });
   }
@@ -1793,7 +1788,7 @@ test("a signed-out pending member can finish with one visit to a replacement inv
   const owner = await join(browser, "replacementowner");
   const post = (action: string, data: unknown) =>
     owner.request.post(`/api/screenr/${action}`, {
-      headers: { Origin: "http://localhost:3055" },
+      headers: { Origin: browserConfig.baseURL },
       data,
     });
   const original = await (await post("invite", { limit: 1 })).json();

@@ -162,13 +162,47 @@ bin/check
 TypeScript, PostgreSQL tests, a browser scenario, and a production build.
 The local default test database is `screenr_test` on port 5439. Override it
 with `TEST_DATABASE_URL`. The test role must be able to create databases.
-Both test databases are disposable and are reset by the harness; never point
+All test databases are disposable and are reset by the harness; never point
 these commands at a database with records to keep.
 
-The browser harness owns loopback ports 3055, 3056, 3058, and 3059 and a separate
-`screenr_browser_test` database on the same PostgreSQL server. Port 3055 routes
-application requests to Next and auth requests to the real auth handlers with
-a local identity provider. This keeps OAuth redirects, state cookies, PKCE
+The browser harness derives four loopback ports and a database named
+`screenr_browser_<checkout hash>_test` from the checkout's canonical path.
+Separate worktrees get separate defaults, Next output, invitation files, and
+`.cache/mail` captures. The harness prints its URL and database name at startup.
+`TEST_DATABASE_URL` must name a loopback PostgreSQL test database without URL
+query parameters. The browser harness uses the same server and credentials,
+with its separate database name.
+
+To override a port collision, set `SCREENR_BROWSER_PORT` to the first port in a
+free four-port range (1024 through 65532). The following ports serve the catalog,
+OAuth fixture, and Next, in that order. Set `SCREENR_BROWSER_DATABASE` to override
+the database; it must match `screenr_browser_<name>_test`, contain only lowercase
+letters, digits, and underscores, and be at most 63 characters. It must differ
+from the database in `TEST_DATABASE_URL`. All browser URLs, callbacks, assertions,
+and direct database access use these settings.
+
+Server reuse is disabled. An occupied port fails before fixture reset. Database
+locks also reject concurrent runs with the same browser database or checkout.
+A port hash collision produces a conflict error; it cannot reuse another server.
+Run only one browser suite per checkout at a time.
+
+Run the repeatable concurrent check with:
+
+```sh
+npm run test:browser:isolation
+```
+
+This copies the current non-ignored Git working files and installed dependencies
+into two temporary checkout directories, then runs both complete browser suites
+at the same time. It also checks that active database and checkout conflicts
+fail before reset. It removes its databases and successful temporary copies.
+Failed copies retain browser logs and traces at the printed paths. It does not
+create Git branches or alter another worktree. Ordinary `bin/check` includes
+configuration and port-conflict regression tests and one complete browser suite;
+run the concurrent check after changing browser harness isolation.
+
+The browser-facing port routes application requests to Next and auth requests
+to the real auth handlers with a local identity provider. This keeps OAuth redirects, state cookies, PKCE
 verification, account linking, and sessions in the browser flow. The provider
 supplies test identities; automated tests do not prove Google's availability
 or production credentials. The harness also supplies a fictional TMDB catalog
