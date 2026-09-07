@@ -335,9 +335,6 @@ hr {
   font-size: 12px;
   font-weight: 600;
 }
-.conversation-link span {
-  margin-left: 4px;
-}
 .empty-card {
   border: 1px dashed #bac8b8;
   border-radius: 12px;

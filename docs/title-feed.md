@@ -146,6 +146,13 @@ below requires reading and replying directly from friends and profile
 feeds as well. A title-related permalink can still open its target on
 the title page.
 
+**Updated — 2026-09-07:** Feed entries show **Copy link to discussion**.
+Activating this control copies the full item URL to the clipboard and keeps
+the current page open. Opening the copied URL still follows the permalink
+rules above. In [issue #19](https://github.com/jubishop/screenr/issues/19),
+the user requested this change because the discussion is already available
+inline and the link is useful for sharing it with other people.
+
 ### Withdrawing a recommendation preserves its discussion — 2026-09-06
 
 **Decision:** If a person removes a recommendation that already has
