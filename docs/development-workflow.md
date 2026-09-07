@@ -239,8 +239,15 @@ The normal sequence is:
 2. Push the feature branch, pass CI, and complete PR review.
 3. Merge the PR to `main`. Build the release from the selected merged revision
    and require its checks to pass.
-4. Deploy that revision using the [deployment procedure](deployment.md), then
-   independently verify the live behavior and service health.
+4. GitHub Actions automatically deploys that checked revision using the
+   [deployment procedure](deployment.md). Independently verify the live
+   behavior and service health after the deployment job passes.
+
+**Decision — 2026-09-06:** Couple deployment to pushes and merges into `main`.
+The successful check job gates the production deployment. There is no separate
+local release command or deployment approval step. This keeps review and merge
+as the release action. GitHub's production environment holds the deployment
+credentials and permits only `main`; PR checks have no production credentials.
 
 The initial live deployment for issue #1 was a bootstrap exception used to
 verify the first production setup. It does not establish the normal release
