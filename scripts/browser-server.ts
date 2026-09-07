@@ -129,9 +129,13 @@ try {
     mode: 0o600,
   });
   const commentInvitation = await createInvitation(null, 5);
-  await writeFile(".cache/browser-comment-invite.txt", commentInvitation.token, {
-    mode: 0o600,
-  });
+  await writeFile(
+    ".cache/browser-comment-invite.txt",
+    commentInvitation.token,
+    {
+      mode: 0o600,
+    },
+  );
   const sharingInvitation = await createInvitation(null, 3);
   await writeFile(
     ".cache/browser-sharing-invite.txt",
