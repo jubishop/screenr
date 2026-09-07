@@ -128,7 +128,7 @@ try {
   await writeFile(".cache/browser-feed-invite.txt", feedInvitation.token, {
     mode: 0o600,
   });
-  const commentInvitation = await createInvitation(null, 5);
+  const commentInvitation = await createInvitation(null, 7);
   await writeFile(
     ".cache/browser-comment-invite.txt",
     commentInvitation.token,
