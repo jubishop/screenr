@@ -26,6 +26,7 @@ const {
   updateTitleActivity,
   thread,
   addComment,
+  createTitleComment,
   removeComment,
   conversations,
   profileFor,
@@ -401,6 +402,194 @@ for (const condition of ["revoked", "expired"]) {
     }
   });
 }
+test("standalone comments persist for movies and TV without changing structured activity", async () => {
+  const { alice, ben, conversation: recommendation } = await setup();
+  await friend(alice, ben);
+  await db.query(
+    "INSERT INTO title(id,kind,tmdb_id,name) VALUES('tv:8','tv',8,'Test Show') ON CONFLICT DO NOTHING",
+  );
+  const saved = await updateTitleActivity(
+    alice,
+    "movie:1",
+    "want_to_watch",
+    true,
+  );
+  const before = await conversations(alice);
+  const state = (
+    await db.query(
+      "SELECT * FROM conversation WHERE owner_id=$1 ORDER BY title_id",
+      [alice],
+    )
+  ).rows;
+  const first = await createTitleComment(
+    alice,
+    "movie:1",
+    "  First thought  ",
+    false,
+  );
+  const second = await createTitleComment(
+    alice,
+    "movie:1",
+    "Another thought",
+    true,
+  );
+  const tv = await createTitleComment(
+    alice,
+    "tv:8",
+    "A thought without any title action",
+    false,
+  );
+  assert.notEqual(first, second);
+  assert.deepEqual(
+    (
+      await db.query(
+        "SELECT * FROM conversation WHERE owner_id=$1 AND title_id='movie:1'",
+        [alice],
+      )
+    ).rows,
+    state,
+  );
+  for (const item of before)
+    assert.deepEqual(
+      (await thread(alice, item.id)).conversation,
+      (({ comments, ...c }) => c)(item),
+    );
+  assert.equal((await thread(alice, first)).conversation.body, "First thought");
+  assert.equal((await thread(alice, second)).conversation.spoiler, true);
+  assert.equal((await thread(alice, tv)).conversation.item_type, "comment");
+  assert.equal((await thread(alice, tv)).conversation.recommended, false);
+  assert.equal((await thread(alice, tv)).conversation.want_to_watch, false);
+  const reply = await addComment(ben, first, "Only on the first", false);
+  for (const id of [second, tv, recommendation, saved])
+    assert.deepEqual((await thread(alice, id)).comments, []);
+  for (const path of ["/", "/titles/movie/1", "/people/alice"]) {
+    const screen = await loadScreen(ben, path);
+    assert.ok("conversations" in screen && screen.conversations);
+    const item = screen.conversations.find((c) => c.id === first)!;
+    assert.equal(item.body, "First thought");
+    assert.deepEqual(
+      item.comments.map((c) => c.id),
+      [reply],
+    );
+    assert.equal(screen.conversations.filter((c) => c.id === first).length, 1);
+  }
+  const profile = await loadScreen(ben, "/people/ben");
+  assert.ok(profile.kind === "profile");
+  assert.deepEqual(profile.conversations, []);
+  for (const body of ["", " ", null, 8, "x".repeat(2001)])
+    await assert.rejects(
+      createTitleComment(alice, "movie:1", body, false),
+      /Comment must/,
+    );
+  await assert.rejects(
+    createTitleComment(alice, "movie:1", "Valid", "false"),
+    /spoiler/,
+  );
+  await assert.rejects(
+    createTitleComment(alice, "movie:999999", "Valid", false),
+    /Title not found/,
+  );
+  assert.equal(
+    (await conversations(alice)).filter((c) => c.item_type === "comment")
+      .length,
+    3,
+  );
+});
+
+test("standalone discussions enforce current access, independent replies, removal, and visible ordering", async () => {
+  const { alice, ben, cam, outsider } = await setup();
+  const first = await createTitleComment(
+    alice,
+    "movie:1",
+    "Independent discussion",
+    true,
+  );
+  await changeRelationship(ben, alice, "request");
+  for (const viewer of [ben, outsider]) {
+    await assert.rejects(thread(viewer, first), /not found/);
+    await assert.rejects(
+      addComment(viewer, first, "No access", false),
+      /not found/,
+    );
+    assert.deepEqual(await conversations(viewer), []);
+  }
+  await changeRelationship(alice, ben, "accept");
+  await friend(alice, cam);
+  await friend(ben, outsider);
+  const second = await createTitleComment(
+    alice,
+    "movie:1",
+    "Separate discussion",
+    false,
+  );
+  const parent = await addComment(ben, first, "First reply", false);
+  const child = await addComment(cam, first, "Reply to Ben", false, parent);
+  const grandchild = await addComment(
+    alice,
+    first,
+    "Reply to Cam",
+    false,
+    child,
+  );
+  const discussion = await thread(ben, first);
+  assert.deepEqual(
+    discussion.comments.map((c) => [c.id, c.root_id, c.addressed_username]),
+    [
+      [parent, null, null],
+      [child, parent, "ben"],
+      [grandchild, parent, "cam"],
+    ],
+  );
+  assert.equal((await conversations(ben))[0].id, first);
+  assert.deepEqual(await conversations(outsider), []);
+  await assert.rejects(
+    addComment(outsider, first, "No access through Ben", false),
+    /not found/,
+  );
+  await assert.rejects(
+    addComment(ben, second, "Wrong group", false, child),
+    /not found/,
+  );
+  await assert.rejects(removeComment(ben, child), /not found/);
+  await removeComment(alice, parent);
+  assert.equal((await thread(ben, first)).comments[0].removed, true);
+  assert.equal((await thread(ben, first)).comments.length, 3);
+  await changeRelationship(alice, ben, "remove");
+  await assert.rejects(thread(ben, first), /not found/);
+  await assert.rejects(addComment(ben, first, "Revoked", false), /not found/);
+  assert.deepEqual(
+    (await thread(cam, first)).comments.map((c) => c.id),
+    [child, grandchild],
+  );
+  await friend(alice, ben);
+  assert.equal((await thread(ben, first)).comments.length, 3);
+  await changeRelationship(ben, cam, "block");
+  const beforeHiddenActivity = (await thread(ben, first)).conversation
+    .visible_activity;
+  await db.query(
+    "UPDATE comment SET created_at=now()+interval '1 day' WHERE id::text=$1",
+    [child],
+  );
+  assert.equal(
+    new Date(
+      (await thread(ben, first)).conversation.visible_activity,
+    ).getTime(),
+    new Date(beforeHiddenActivity).getTime(),
+  );
+  assert.deepEqual(
+    (await thread(ben, first)).comments.map((c) => c.id),
+    [parent, grandchild],
+  );
+  await assert.rejects(
+    addComment(ben, first, "Hidden target", false, child),
+    /not found/,
+  );
+  assert.equal((await thread(alice, first)).comments.length, 3);
+  await changeRelationship(ben, alice, "block");
+  await assert.rejects(thread(ben, first), /not found/);
+  await assert.rejects(addComment(ben, first, "Blocked", false), /not found/);
+});
+
 test("pending and nonfriends cannot read or write a thread; accepted friends use the same thread", async () => {
   const { alice, ben, outsider, conversation } = await setup();
   await changeRelationship(ben, alice, "request");

@@ -106,6 +106,11 @@ export async function changeRelationship(
 
 // Access, replies, counts, and activity are read in one PostgreSQL snapshot.
 // All surfaces use this query; reply authors never expand the parent audience.
+const feedEntries = `(SELECT id,conversation_id,owner_id,title_id,item_type,active,created_at,activity_at,
+    NULL::text AS body,false AS spoiler FROM feed_item
+  UNION ALL
+  SELECT id,conversation_id,owner_id,title_id,'comment',true,created_at,created_at,body,spoiler
+    FROM title_comment)`;
 const itemQuery = `SELECT c.*,p.username,p.display_name,t.name AS title_name,t.poster_path,t.kind,
   (c.item_type='recommended' AND c.active) AS recommended,
   (c.item_type='want_to_watch' AND c.active) AS want_to_watch,
@@ -116,7 +121,7 @@ const itemQuery = `SELECT c.*,p.username,p.display_name,t.name AS title_name,t.p
   date_trunc('milliseconds', CASE WHEN c.item_type='earlier' THEN coalesce(replies.activity,replies.placeholder_activity,c.created_at)
     ELSE greatest(c.activity_at,coalesce(replies.activity,c.activity_at)) END) AS visible_activity,
   coalesce(replies.comments,'[]') AS comments
-  FROM feed_item c JOIN profile p ON p.user_id=c.owner_id JOIN title t ON t.id=c.title_id
+  FROM ${feedEntries} c JOIN profile p ON p.user_id=c.owner_id JOIN title t ON t.id=c.title_id
   LEFT JOIN LATERAL (
     SELECT jsonb_agg(jsonb_build_object(
       'id',cm.id::text,'author_id',cm.author_id,'username',author.username,'display_name',author.display_name,
@@ -128,7 +133,7 @@ const itemQuery = `SELECT c.*,p.username,p.display_name,t.name AS title_name,t.p
       max(cm.created_at) AS placeholder_activity
     FROM comment cm JOIN profile author ON author.user_id=cm.author_id
     LEFT JOIN profile addressed ON addressed.user_id=cm.addressed_id
-    WHERE cm.feed_item_id=c.id AND screenr_can_read(cm.author_id,c.owner_id)
+    WHERE (cm.feed_item_id=c.id OR cm.title_comment_id=c.id) AND screenr_can_read(cm.author_id,c.owner_id)
       AND NOT screenr_blocked($1,cm.author_id)
   ) replies ON true
   WHERE screenr_can_read($1,c.owner_id)
@@ -254,7 +259,7 @@ export async function addComment(
       parent = (
         await client.query(
           `SELECT id::text,root_id::text,author_id FROM comment
-        WHERE id::text=$1 AND feed_item_id::text=$2 AND removed_at IS NULL
+        WHERE id::text=$1 AND (feed_item_id::text=$2 OR title_comment_id::text=$2) AND removed_at IS NULL
         AND screenr_can_read(author_id,$3) AND NOT screenr_blocked($4,author_id)`,
           [replyTo, conversationId, conversation.owner_id, viewer],
         )
@@ -262,16 +267,17 @@ export async function addComment(
       if (!parent) throw new AppError("Reply target not found.", 404);
     }
     const result = await client.query(
-      `INSERT INTO comment(feed_item_id,author_id,body,spoiler,root_id,addressed_id,conversation_id)
-      VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING id::text`,
+      `INSERT INTO comment(feed_item_id,author_id,body,spoiler,root_id,addressed_id,conversation_id,title_comment_id)
+      VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id::text`,
       [
-        conversationId,
+        conversation.item_type === "comment" ? null : conversationId,
         viewer,
         content,
         spoiler,
         parent ? (parent.root_id ?? parent.id) : null,
         parent?.author_id ?? null,
         conversation.conversation_id,
+        conversation.item_type === "comment" ? conversationId : null,
       ],
     );
     return result.rows[0].id as string;
@@ -281,11 +287,41 @@ export async function removeComment(viewer: string, id: string) {
   await transaction(async (client) => {
     const result = await client.query(
       `UPDATE comment cm SET removed_at=coalesce(removed_at,now()),body='[removed]'
-      FROM feed_item c WHERE cm.id::text=$1 AND c.id=cm.feed_item_id
+      FROM ${feedEntries} c WHERE cm.id::text=$1 AND (c.id=cm.feed_item_id OR c.id=cm.title_comment_id)
       AND (cm.author_id=$2 OR c.owner_id=$2)
       AND screenr_can_read(cm.author_id,c.owner_id) AND NOT screenr_blocked($2,cm.author_id)`,
       [id, viewer],
     );
     if (!result.rowCount) throw new AppError("Comment not found.", 404);
+  });
+}
+
+export async function createTitleComment(
+  viewer: string,
+  titleId: string,
+  body: unknown,
+  spoiler: unknown,
+) {
+  const content = text(body, "Comment", 2000);
+  if (typeof spoiler !== "boolean") throw new AppError("Invalid spoiler flag.");
+  return transaction(async (client) => {
+    if (
+      !(await client.query("SELECT 1 FROM title WHERE id=$1", [titleId]))
+        .rowCount
+    )
+      throw new AppError("Title not found.", 404);
+    // The compatibility record carries no new structured activity.
+    await client.query(
+      `INSERT INTO conversation(id,owner_id,title_id) VALUES($1,$2,$3)
+       ON CONFLICT(owner_id,title_id) DO NOTHING`,
+      [randomUUID(), viewer, titleId],
+    );
+    const id = randomUUID();
+    await client.query(
+      `INSERT INTO title_comment(id,conversation_id,owner_id,title_id,body,spoiler)
+       SELECT $1,id,owner_id,title_id,$4,$5 FROM conversation WHERE owner_id=$2 AND title_id=$3`,
+      [id, viewer, titleId, content, spoiler],
+    );
+    return id;
   });
 }

@@ -87,7 +87,9 @@ Screenr is a social app for TV and movies, centered on people you know.
   recommendations, and watch activity. A person can write multiple comments
   about a title without changing any structured entry. New top-level
   comments are created on title pages; replies can be added in every feed
-  where the entry is visible. This creation feature is follow-up issue #8.
+  where the entry is visible. The
+  [standalone comment implementation](title-feed.md#standalone-title-comments)
+  covers creation under issue #8.
 - Authors can mark reviews, posts, and comments as containing spoilers.
   Marked text stays hidden until the reader chooses to reveal it and is
   excluded from notification previews. A flag on a post or review covers
