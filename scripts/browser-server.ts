@@ -44,6 +44,10 @@ const trailerInvitation = await createInvitation(null, 1);
 await writeFile(".cache/browser-trailer-invite.txt", trailerInvitation.token, {
   mode: 0o600,
 });
+const feedInvitation = await createInvitation(null, 12);
+await writeFile(".cache/browser-feed-invite.txt", feedInvitation.token, {
+  mode: 0o600,
+});
 const { startGoogleProvider } =
   await import("../tests/browser/google-provider");
 const google = await startGoogleProvider();

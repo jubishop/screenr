@@ -8,7 +8,7 @@ This document owns the confirmed product decisions for the unified movie
 and TV title feed and its shared entries in the friends and profile feeds.
 [Issue #5](https://github.com/jubishop/screenr/issues/5) tracks implementation
 and acceptance criteria. Unanswered choices are listed separately below;
-this document does not imply implementation.
+the implementation details below describe the current storage and interface.
 
 ## Accepted decisions
 
@@ -327,6 +327,58 @@ interview if they preserve these decisions:
 - Keep this change limited to existing Recommend and Want to watch actions,
   existing discussions, and the three interactive feed surfaces. New feature
   types remain separate work as noted above.
+
+## Shared feed implementation
+
+`src/server/social.ts` reads each eligible `feed_item` and its replies in one
+PostgreSQL snapshot. The friends, title, and profile screens use this same
+read path. Items sort by the latest eligible activity at millisecond precision,
+then by item UUID for a stable tie. Removed comments remain placeholders but
+do not add activity or count as live replies. A withdrawn action with only
+removed or inaccessible replies is hidden; its stored item remains reusable.
+
+`src/components/feed.tsx` supplies the shared interface. It initially renders
+the latest three eligible replies, in timestamp and comment-ID order. Earlier
+replies expand inline. Loading incoming replies retains the displayed preview
+so the reply being read stays in place; a fresh page starts with three again.
+All eligible items and replies are currently read in
+one request; there is no loaded-page boundary that can omit a link target.
+This retains the application's small-circle, unpaginated read model.
+
+Open feeds use the existing three-second poll, focus refresh, and ten-second
+refresh deadline. A failed refresh hides server content. Local drafts remain
+in memory. Accepted item dates and reply IDs hold incoming activity until the
+reader selects **New activity**. Current access, removal state, and spoiler
+flags always come from the latest authorized snapshot. Own actions and replies
+appear after saving. Updating the feed or expanding replies preserves the
+visible reading anchor and the draft.
+
+Item links use `/titles/<kind>/<tmdb-id>?item=<item-id>`. A targeted reply adds
+`&reply=<comment-id>`. The server checks the title, item, and reply together;
+the browser expands and scrolls to an eligible target without revealing its
+spoilers. Old `/conversations/<id>` links redirect to the preserved discussion,
+an eligible action, or the title feed. Inaccessible targets reveal no private
+content. Existing notification features are unchanged; these same title links
+are available to future notification work.
+
+### Migration and rollback compatibility
+
+Migration `004-feed-items.sql` adds `feed_item` and `comment.feed_item_id`.
+Existing comments remain on an **Earlier discussion** item with the original
+conversation ID. The migration preserves every existing comment field and
+creates no empty earlier discussion. Active Recommend and Want to watch flags
+create separate items with the old shared activity date. That date is the only
+available historical timestamp; the migration does not infer separate past
+action dates.
+
+The original `conversation` rows remain as the title-state and old-link record.
+New action writes update them in the same transaction. Database triggers also
+synchronize action changes made by the previous app version. Old-version
+comments, which have no action identity, attach to an earlier discussion;
+new-version comments supply their item ID. A composite foreign key prevents a
+reply from crossing between person/title conversations. This additive design
+keeps the preceding release usable during activation or rollback, as required
+by the [deployment procedure](deployment.md#build-and-activate-a-release).
 
 ## Decisions deferred to future features
 

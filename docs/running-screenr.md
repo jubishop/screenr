@@ -6,7 +6,7 @@ status: current
 
 The first milestone implements invited signup, Google or email-code sign-in,
 required profiles, accepted friendships, TMDB discovery, recommendations,
-Want to watch, and shared conversations. The remaining first-release features
+Want to watch, and shared interactive feeds. The remaining first-release features
 in the [product brief](product-brief.md) are outside this milestone.
 
 ## Local setup
@@ -60,8 +60,9 @@ Complete the display name and username. Create another invitation from
 **Invite friends**, and open it in a separate browser profile for a second
 member. Send and accept a friend request from **Friends**. Find a movie or
 show, recommend it, and open its conversation from the other member's feed.
-Save it as Want to watch and post a reply. The title page and feed both link
-to that same conversation.
+Save it as Want to watch and post a reply inline. The title page, friends
+feed, and profile show the same item and its replies. Recommend and Want to
+watch each have a separate discussion.
 
 The code capture files are private, ignored files under `.cache/mail`.
 Production explicitly rejects this transport. Restart Next after changing
@@ -148,10 +149,11 @@ recipients. A full run checks:
 - Four invited members complete email verification and required profiles.
 - Friendship needs acceptance; inviting alone gives no content access.
 - A recommendation appears in the friend's feed and title page, with one
-  canonical conversation. Saving a title persists.
-- Own replies appear immediately. Incoming replies wait behind **New replies**.
-  The test checks scroll position after inserting an earlier nested reply.
-  Spoilers require a reveal; replies survive a reload.
+  canonical item per action. Saving a title persists.
+- Each feed supports replies, the latest-three preview, and inline expansion.
+  Own replies appear immediately. Incoming items and replies wait behind
+  **New activity**. Reordering preserves reading position and drafts.
+  Spoilers require a reveal; replies survive a reload and targeted links.
 - A nonfriend cannot read or write through direct API calls or the page.
 - Unfriending removes open-page access and hides historical comments for
   remaining readers; refriending restores them.
@@ -192,7 +194,9 @@ keeps failure traces in `test-results/`.
 
 ## Data and access rules
 
-`src/server/social.ts` owns shared reads and writes. PostgreSQL functions
+The [shared-feed implementation and migration](title-feed.md#shared-feed-implementation)
+describe item identity, old-link redirects, and compatibility with the previous
+release. `src/server/social.ts` owns shared reads and writes. PostgreSQL functions
 `screenr_can_read` and `screenr_blocked` apply the same current relationship
 rules to threads, cards, and comments. Friendship pairs are ordered by
 PostgreSQL, including mixed-case auth IDs. No private feed or permission
@@ -205,7 +209,7 @@ use one database snapshot. Open pages poll every three seconds while visible,
 waiting for any active refresh to finish, and refresh on focus. Each refresh
 has a ten-second deadline; failure clears server content until a successful
 refresh. Access changes clear content on the next refresh without
-waiting for the New replies button. Previously delivered content cannot be
+waiting for the New activity button. Previously delivered content cannot be
 retracted from a user's device.
 
 The migration command applies Better Auth's schema and numbered SQL files in
