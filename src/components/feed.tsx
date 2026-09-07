@@ -253,11 +253,9 @@ function FeedEntry({
                 </button>
               )}
             </div>
-            {copyMessage && (
-              <p className="small" role="status">
-                {copyMessage}
-              </p>
-            )}
+            <p className="small" role="status">
+              {copyMessage}
+            </p>
           </div>
         </header>
       )}

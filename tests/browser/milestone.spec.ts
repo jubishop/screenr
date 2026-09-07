@@ -665,6 +665,7 @@ test("discussion links copy from every feed without navigating or losing drafts 
         exact: true,
       });
       await expect(copy).toBeVisible();
+      await expect(entry.getByRole("status")).toBeEmpty();
       await copy.tap();
       await expect(entry.getByRole("status")).toHaveText("Link copied.");
       expect(await reader.evaluate(() => navigator.clipboard.readText())).toBe(
