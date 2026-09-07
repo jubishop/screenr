@@ -99,8 +99,10 @@ git config screenr.deployHost root@YOUR_SSH_HOST
 CI checks, downloads the archive, verifies its revision, and removes the
 remote artifact after saving it under `.cache/deploy/`. It checks the transfer
 checksum, takes a backup, activates the release, and checks service and public
-HTTP health. It refuses uncommitted changes, non-main branches, a local main
-that differs from origin/main, and a build that differs from current main.
+HTTP health. The remote deployment script comes from the checked Git revision,
+so edits to the checkout during CI cannot change it. It refuses uncommitted
+changes, non-main branches, a local main that differs from origin/main, and a
+build that differs from current main.
 It does not commit, merge, or push changes.
 
 Use `--host` or `SCREENR_DEPLOY_HOST` to override the configured destination.

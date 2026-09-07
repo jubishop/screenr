@@ -115,7 +115,7 @@ def main():
         raise ValueError('Unexpected remote temporary path.')
     try:
         run('scp', str(archive), f'{args.host}:{remote}')
-        command = (ROOT / 'ops/deploy-release.sh').read_text()
+        command = run('git', 'show', f'{revision}:ops/deploy-release.sh', capture=True)
         current = json.loads(run('gh', 'api', f'repos/{REPO}/commits/main', capture=True))['sha']
         if current != revision:
             raise ValueError('Main changed during packaging. Run bin/shipit again.')

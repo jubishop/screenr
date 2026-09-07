@@ -3,6 +3,7 @@ import io
 import json
 import os
 from pathlib import Path
+import shlex
 import shutil
 import subprocess
 import tarfile
@@ -24,12 +25,17 @@ if name == 'git':
     elif args[0] == 'branch': print(os.environ.get('BRANCH', 'main'))
     elif args[0] == 'rev-parse': print('a'*40)
     elif args[0] == 'config': print('root@example.test')
+    elif args[0] == 'show':
+        if args[1] != 'a'*40 + ':ops/deploy-release.sh': sys.exit(99)
+        print((base / 'checked-deploy.sh').read_text(), end='')
 elif name == 'gh':
     if args[:2] == ['run', 'list']:
         print(json.dumps([dict(databaseId=123, headSha='a'*40)] if (base / 'dispatched').exists() else []))
     elif args[:2] == ['workflow', 'run']:
         (base / 'dispatched').touch()
     elif args[:2] == ['run', 'watch']:
+        if os.environ.get('WORKTREE_DRIFT'):
+            (base / 'ops/deploy-release.sh').write_text('echo unchecked-deployment\n')
         sys.exit(int(os.environ.get('BUILD_EXIT', '0')))
     elif args[:2] == ['run', 'download']:
         shutil.copyfile(base / 'release.tar.gz', Path(args[-1]) / ('screenr-' + 'a'*40 + '.tar.gz'))
@@ -60,6 +66,7 @@ class ShipitTests(unittest.TestCase):
         (self.base / 'ops').mkdir()
         shutil.copy2(ROOT / 'bin/shipit', self.base / 'bin/shipit')
         shutil.copy2(ROOT / 'ops/deploy-release.sh', self.base / 'ops/deploy-release.sh')
+        shutil.copy2(ROOT / 'ops/deploy-release.sh', self.base / 'checked-deploy.sh')
         self.commands = self.base / 'commands'
         self.commands.mkdir()
         fake = self.commands / 'command'
@@ -113,6 +120,13 @@ class ShipitTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('Commit, review, and merge', result.stderr)
         self.assertFalse(any(call[0] in ('gh', 'ssh') for call in self.calls()))
+
+    def test_checkout_changes_during_build_cannot_change_remote_script(self):
+        result = self.execute(WORKTREE_DRIFT='yes')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        remote_commands = [shlex.split(call[-1])[2] for call in self.calls()
+                           if call[0] == 'ssh' and call[-1].startswith('sh -c')]
+        self.assertEqual(remote_commands, [(self.base / 'checked-deploy.sh').read_text()])
 
     def test_feature_branch_stops_before_build(self):
         result = self.execute(BRANCH='feature')
