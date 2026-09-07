@@ -83,6 +83,36 @@ issue-branch artifact without an explicit user-approved exception.
 The public-repository workflow uses no deployment secrets. Remove the temporary
 GitHub artifact after saving and verifying it locally.
 
+After review and merge, switch to clean, up-to-date `main` and run:
+
+```sh
+bin/shipit
+```
+
+Configure the SSH destination once per clone:
+
+```sh
+git config screenr.deployHost root@YOUR_SSH_HOST
+```
+
+[`bin/shipit`](../bin/shipit) starts the GitHub Linux release build, waits for
+CI checks, downloads the archive, verifies its revision, and removes the
+remote artifact after saving it under `.cache/deploy/`. It checks the transfer
+checksum, takes a backup, activates the release, and checks service and public
+HTTP health. It refuses uncommitted changes, non-main branches, a local main
+that differs from origin/main, and a build that differs from current main.
+It does not commit, merge, or push changes.
+
+Use `--host` or `SCREENR_DEPLOY_HOST` to override the configured destination.
+Each invocation creates a fresh checked build. A repeat deployment of the
+active revision verifies health without extracting or restarting it. Failed
+extraction or activation removes only the newly created candidate after a
+successful rollback; the active release is preserved. The command also verifies
+that Caddy, Health, KidsBank, and Trading retain their running service state.
+Root SSH access, Python 3, authenticated `gh`, `scp`, and `curl` are required
+locally.
+Complete the independent acceptance below after it runs.
+
 To produce the same archive on another Linux x64 build machine:
 
 ```sh

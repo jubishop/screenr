@@ -1,0 +1,145 @@
+#!/usr/bin/env python3
+"""Deploy a checked main release using GitHub CLI and SSH."""
+import argparse
+import hashlib
+import json
+import os
+import posixpath
+import shlex
+from pathlib import Path, PurePosixPath
+import re
+import subprocess
+import sys
+import tarfile
+import time
+
+REPO = 'jubishop/screenr'
+ROOT = Path(__file__).resolve().parents[1]
+
+
+def run(*args, capture=False):
+    if args[0] in ('ssh', 'scp'):
+        args = (args[0], '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=10',
+                '-o', 'ServerAliveInterval=15', '-o', 'ServerAliveCountMax=3', *args[1:])
+    return subprocess.run(args, check=True, text=True,
+                          cwd=ROOT, stdout=subprocess.PIPE if capture else None,
+                          stdin=subprocess.DEVNULL).stdout
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__, epilog=(
+        'Requires gh authentication and root SSH access. Set SCREENR_DEPLOY_HOST '
+        'or git config screenr.deployHost. Builds and deploys clean, merged main. '
+        'Requires Python 3, gh, ssh, scp, and curl.'))
+    parser.add_argument('--host', default=os.environ.get('SCREENR_DEPLOY_HOST'),
+                        help='root SSH destination (or configured SSH alias)')
+    args = parser.parse_args()
+    if not args.host:
+        args.host = subprocess.run(['git', 'config', '--get', 'screenr.deployHost'], cwd=ROOT, text=True, capture_output=True).stdout.strip()
+    if not args.host or not re.fullmatch(r'[A-Za-z0-9_][A-Za-z0-9_.@-]*', args.host):
+        parser.error('Set SCREENR_DEPLOY_HOST or --host to a root SSH destination.')
+    if run('git', 'status', '--porcelain', capture=True).strip():
+        raise ValueError('Commit, review, and merge local changes before deploying.')
+    if run('git', 'branch', '--show-current', capture=True).strip() != 'main':
+        raise ValueError('Switch to main after review and merge before deploying.')
+    run('git', 'fetch', 'origin', 'main')
+    revision = run('git', 'rev-parse', 'HEAD', capture=True).strip()
+    if revision != run('git', 'rev-parse', 'origin/main', capture=True).strip():
+        raise ValueError('Local main differs from origin/main. Sync it before deploying.')
+    print('Checking VPS access...', flush=True)
+    run('ssh', args.host, 'test "$(id -u)" = 0 && test -f /opt/screenr/current/REVISION && '
+        'systemctl is-active --quiet screenr-db')
+
+    def recent_runs():
+        return json.loads(run('gh', 'run', 'list', '--repo', REPO, '--workflow', 'check.yml',
+                              '--branch', 'main', '--event', 'workflow_dispatch',
+                              '--limit', '20', '--json', 'databaseId,headSha', capture=True))
+    previous = {item['databaseId'] for item in recent_runs()}
+    print('Starting Linux release build and CI checks...', flush=True)
+    run('gh', 'workflow', 'run', 'check.yml', '--repo', REPO, '--ref', 'main')
+    deadline = time.monotonic() + 120
+    while time.monotonic() < deadline:
+        candidates = [item for item in recent_runs()
+                      if item['databaseId'] not in previous and item['headSha'] == revision]
+        if candidates:
+            run_id = str(candidates[0]['databaseId'])
+            break
+        time.sleep(5)
+    else:
+        raise ValueError('Could not locate the dispatched release build within two minutes.')
+    run('gh', 'run', 'watch', run_id, '--repo', REPO, '--exit-status', '--interval', '10')
+    info = json.loads(run('gh', 'api', f'repos/{REPO}/actions/runs/{run_id}', capture=True))
+    if (info.get('conclusion'), info.get('head_branch'), info.get('event')) != (
+            'success', 'main', 'workflow_dispatch'):
+        raise ValueError('Deployment requires a successful main workflow_dispatch run.')
+    if info.get('path') != '.github/workflows/check.yml':
+        raise ValueError('Run is not the repository check workflow.')
+    if info['head_sha'] != revision:
+        raise ValueError('Build does not match local main.')
+    revision = info['head_sha']
+    if not re.fullmatch(r'[0-9a-f]{40}', revision):
+        raise ValueError('Invalid release revision.')
+    current = json.loads(run('gh', 'api', f'repos/{REPO}/commits/main', capture=True))['sha']
+    if revision != current:
+        raise ValueError('Release is not current main. Build current main before deploying.')
+    artifact_name = f'screenr-linux-x64-{revision}'
+    print(f'Deploying {revision} from run {run_id}', flush=True)
+    directory = ROOT / '.cache' / 'deploy' / run_id
+    directory.mkdir(parents=True, exist_ok=True)
+    archive = directory / f'screenr-{revision}.tar.gz'
+    run('gh', 'run', 'download', run_id, '--repo', REPO, '--name', artifact_name, '--dir', str(directory))
+    with tarfile.open(archive) as release:
+        members = release.getmembers()
+        for member in members:
+            path = PurePosixPath(member.name)
+            if path.is_absolute() or '..' in path.parts or member.isdev() or member.isfifo():
+                raise ValueError('Unsafe archive member.')
+            if member.issym() or member.islnk():
+                target = PurePosixPath(member.linkname)
+                combined = posixpath.normpath(str(path.parent / target) if member.issym() else str(target))
+                if target.is_absolute() or combined == '..' or combined.startswith('../'):
+                    raise ValueError('Escaping archive link.')
+        for required in ('REVISION', 'server.js', 'ops/activate.sh'):
+            if not any(str(PurePosixPath(m.name)) == required and m.isfile() for m in members):
+                raise ValueError(f'Missing release file: {required}')
+        manifest = next(m for m in members if str(PurePosixPath(m.name)) == 'REVISION')
+        if not manifest.isfile() or release.extractfile(manifest).read().decode().strip() != revision:
+            raise ValueError('Archive revision does not match checked revision.')
+    artifacts = json.loads(run('gh', 'api', f'repos/{REPO}/actions/runs/{run_id}/artifacts', capture=True))
+    for artifact in artifacts['artifacts']:
+        if artifact['name'] == artifact_name:
+            run('gh', 'api', '--method', 'DELETE', f"repos/{REPO}/actions/artifacts/{artifact['id']}")
+    checksum = hashlib.sha256(archive.read_bytes()).hexdigest()
+    remote = run('ssh', args.host, 'mktemp /tmp/screenr-release.XXXXXXXX', capture=True).strip()
+    if not re.fullmatch(r'/tmp/screenr-release\.[A-Za-z0-9]+', remote):
+        raise ValueError('Unexpected remote temporary path.')
+    try:
+        run('scp', str(archive), f'{args.host}:{remote}')
+        command = (ROOT / 'ops/deploy-release.sh').read_text()
+        current = json.loads(run('gh', 'api', f'repos/{REPO}/commits/main', capture=True))['sha']
+        if current != revision:
+            raise ValueError('Main changed during packaging. Run bin/shipit again.')
+        run('ssh', args.host, 'sh -c ' + shlex.quote(command) + ' deploy-release ' +
+            ' '.join(shlex.quote(value) for value in (revision, checksum, remote)))
+    finally:
+        try:
+            run('ssh', args.host, f'rm -f {remote}')
+        except subprocess.SubprocessError:
+            print(f'Could not remove temporary upload: {remote}', file=sys.stderr)
+    for path in ('api/health', 'login'):
+        body = run('curl', '--fail', '--silent', '--show-error', '--max-time', '20',
+                   f'https://screenr.jubishop.com/{path}', capture=True)
+        if path == 'api/health' and json.loads(body).get('ok') is not True:
+            raise ValueError('Public health check failed.')
+        if path == 'login' and 'Send sign-in code' not in body:
+            raise ValueError('Public login check failed.')
+    print(f'DEPLOY SUCCEEDED: {revision}\nhttps://screenr.jubishop.com')
+    print('Verify changed user flows and the other shared-host applications before closing the release.')
+
+
+if __name__ == '__main__':
+    try:
+        main()
+    except (OSError, ValueError, KeyError, StopIteration, tarfile.TarError, subprocess.SubprocessError) as error:
+        print(f'DEPLOY FAILED: {error}', file=sys.stderr)
+        sys.exit(1)

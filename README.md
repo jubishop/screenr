@@ -9,6 +9,17 @@ recommendations, Want to watch, and private conversations. Start with
 flow. The [product brief](docs/product-brief.md) defines the larger release;
 its remaining features are outside this milestone.
 
+## Run and deploy
+
+After [local app setup](docs/running-screenr.md#local-setup), run `npm run dev`
+and open <http://localhost:3000>. Changes reload automatically. If the database
+is stopped, start it with `docker compose up -d --wait`.
+
+After PR review and merge, run `bin/shipit` from clean, up-to-date `main`.
+It builds, checks, and deploys the Linux release. See the
+[deployment guide](docs/deployment.md#build-and-activate-a-release) for the
+one-time SSH configuration and release checks.
+
 ## Repository setup
 
 Run once after cloning:
