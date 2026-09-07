@@ -206,18 +206,32 @@ profiles, friendships, and invitation tokens remain in the same database.
 Browser cookies belong to the old host, so members must sign in again on the
 new host. An OAuth flow started before the switch must be restarted there.
 
-1. Save private rollback copies of `/etc/caddy/Caddyfile` and
+**Before merging:** Reserve a maintenance window and hold other pushes to
+`main` until cutover acceptance and the workflow retry below finish. Merge
+starts deployment automatically; it does not install the Caddyfile or change
+the private app environment. Do not edit those files while a deployment runs.
+
+1. After merge, wait for that revision's complete Actions run to finish. With
+   the old host still configured, activation uses the existing environment
+   and the final public check of `screenr.club` is expected to fail. Confirm
+   from the run logs that activation and the remote service checks passed,
+   and read `/opt/screenr/current/REVISION` to verify the exact merged revision.
+   Confirm that the old public login and health endpoint still work. If the
+   run failed earlier, or a different revision is active, stop and recover
+   the deployment before changing domain settings. Do not treat the expected
+   public-check failure as cutover acceptance.
+2. Save private rollback copies of `/etc/caddy/Caddyfile` and
    `/etc/screenr/app.env`, preserving their ownership and permissions. Record
    the active release and current service health. Take and verify an encrypted
    backup under the procedure below. Retain the old DNS record, certificate,
    and Google callback throughout the rollback window.
-2. In Google Cloud project `screenr-69420`, add
+3. In Google Cloud project `screenr-69420`, add
    `https://screenr.club/api/auth/callback/google` to the existing Web
    application client. Keep the localhost callback and old production callback.
    Update the consent screen's authorized domain and application URLs to
    `screenr.club` where configured. Verify that the saved client accepts the
    exact callback before changing the app URL.
-3. In the `screenr.club` Cloudflare zone, verify active nameservers and an issued
+4. In the `screenr.club` Cloudflare zone, verify active nameservers and an issued
    edge certificate for the apex. Install an origin certificate covering
    `screenr.club` as `/etc/caddy/certs/screenr-club.pem`, with its private key
    at `/etc/caddy/certs/screenr-club.key`. Grant Caddy access to the key without
@@ -226,17 +240,20 @@ new host. An OAuth flow started before the switch must be restarted there.
    Cloudflare-only ingress. Add a proxied apex A record to the existing VPS;
    do not copy an unrelated AAAA record or alter other zones. The new public
    host is ready only after origin routing and the next step are complete.
-4. In one maintenance window, set `BETTER_AUTH_URL=https://screenr.club` in
+5. In the same maintenance window, set `BETTER_AUTH_URL=https://screenr.club` in
    `/etc/screenr/app.env`. Replace the old Screenr site block with **both**
    blocks from the merged `ops/Caddyfile`, preserving unrelated sites. Validate
    the complete Caddyfile with `caddy validate --config /etc/caddy/Caddyfile`.
-   Activate the checked, merged release as described above, then reload Caddy.
-   Both web and worker processes must read the updated environment. The old
+   The checked, merged release is already active from step 1. Run
+   `systemctl restart screenr-web screenr-worker` to load the new environment,
+   verify both services and loopback `/api/health`, then reload Caddy. Do not
+   rely on retrying deployment to load this change: `ops/deploy-release.sh`
+   skips activation and restarts when the revision is already active. The old
    hostname now sends a 308 redirect to the new host with the full path and
    query. Redirect responses use `Cache-Control: no-store` to permit rollback;
    Caddy's [`redir` directive](https://caddyserver.com/docs/caddyfile/directives/redir)
    expands `{uri}` without changing the destination host.
-5. Independently check `https://screenr.club/api/health` for HTTP 200 and
+6. Independently check `https://screenr.club/api/health` for HTTP 200 and
    `{"ok":true}`, and check `/login`. Check the old `/login`, a title URL, and a
    synthetic invitation URL without following redirects; each must return 308
    with the same path and query under `https://screenr.club`. Then verify a
@@ -244,6 +261,12 @@ new host. An OAuth flow started before the switch must be restarted there.
    sign-in. Confirm both sign-in methods return to the existing profile and
    that a newly generated invite uses the new hostname. Check service health,
    logs, and the other shared-host applications as in independent acceptance.
+7. Select **Re-run all jobs** for the merged revision's Actions run. It must
+   still be current `main`. This rebuilds the deleted temporary artifact and
+   verifies the active release and new public host without another restart.
+   Require both jobs to pass, record the independent acceptance on issue #9,
+   then allow other pushes to `main`. Merge auto-closes #9; that state alone
+   does not establish that the domain move is complete.
 
 If acceptance fails, restore the saved environment and Caddyfile, validate
 Caddy, and restore the previous release if activation changed it. Restart
