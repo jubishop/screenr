@@ -162,6 +162,33 @@ test("migration preserves old discussions and creates only known active actions"
       feed_item_id: null,
       title_comment_id: "00000000-0000-0000-0000-000000000003",
     });
+    const beforeRemoval = (
+      await client.query("SELECT * FROM title_comment ORDER BY id")
+    ).rows;
+    await client.query(
+      await readFile("db/006-remove-title-comments.sql", "utf8"),
+    );
+    assert.deepEqual(
+      (await client.query("SELECT * FROM title_comment ORDER BY id")).rows.map(
+        ({ removed_at, ...entry }) => {
+          assert.equal(removed_at, null);
+          return entry;
+        },
+      ),
+      beforeRemoval,
+    );
+    // The preceding release can still create standalone entries without a removal field.
+    await client.query(`INSERT INTO title_comment(id,conversation_id,owner_id,title_id,body)
+      VALUES ('00000000-0000-0000-0000-000000000005','00000000-0000-0000-0000-000000000001','alice','movie:1','Old app standalone');
+      UPDATE title_comment SET body='[removed]',removed_at=now() WHERE id='00000000-0000-0000-0000-000000000003'`);
+    assert.equal(
+      (
+        await client.query(
+          "SELECT body FROM comment WHERE title_comment_id='00000000-0000-0000-0000-000000000003'",
+        )
+      ).rows[0].body,
+      "Standalone reply",
+    );
     for (const sql of [
       `INSERT INTO comment(conversation_id,title_comment_id,author_id,body) VALUES('00000000-0000-0000-0000-000000000002','00000000-0000-0000-0000-000000000003','ben','Wrong conversation')`,
       `INSERT INTO comment(conversation_id,feed_item_id,title_comment_id,author_id,body) VALUES('00000000-0000-0000-0000-000000000001','00000000-0000-0000-0000-000000000001','00000000-0000-0000-0000-000000000003','alice','Two groups')`,
