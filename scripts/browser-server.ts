@@ -115,6 +115,13 @@ const catalog = createServer((request, response) => {
         : {
             ...fixture,
             id: Number(request.url?.split("/")[2]) || fixture.id,
+            ...(request.url === "/movie/987658"
+              ? {
+                  title: "The Painted Sky",
+                  name: "The Painted Sky",
+                  poster_path: "/test-poster.png",
+                }
+              : {}),
           },
     ),
   );

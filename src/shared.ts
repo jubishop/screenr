@@ -24,6 +24,7 @@ export type Conversation = {
   recommended: boolean;
   want_to_watch: boolean;
   viewer_want_to_watch: boolean;
+  viewer_recommended: boolean;
   username: string;
   display_name: string;
   title_name: string;
