@@ -70,17 +70,17 @@ export function FeedView({
       const acceptedComments = c.comments.filter(
         (r) => previous?.comments.has(r.id) || r.author_id === user.user_id,
       );
-      // A parent placeholder is context only. Keep it whenever an accepted
-      // child needs it, but never create a group for still-pending activity.
+      // Every accepted child needs its parent, including own replies posted
+      // in another tab. Keep unrelated incoming groups behind New activity.
       const roots = new Set(
         acceptedComments
           .filter((r) => !r.removed && !r.unavailable)
           .map((r) => r.root_id),
       );
-      const comments = c.comments.filter((r) =>
-        r.removed || r.unavailable
-          ? roots.has(r.id)
-          : acceptedComments.includes(r),
+      const comments = c.comments.filter(
+        (r) =>
+          roots.has(r.id) ||
+          (!r.removed && !r.unavailable && acceptedComments.includes(r)),
       );
       if (
         !c.active &&

@@ -2226,6 +2226,74 @@ async function nestedDiscussion(browser: Browser, suffix: string) {
   return { owner, reader, other, id, write, item, comment };
 }
 
+test("own nested replies keep their parent when another tab has not accepted new activity", async ({
+  browser,
+}) => {
+  const token = (
+    await readFile(".cache/browser-nested-invite.txt", "utf8")
+  ).trim();
+  const owner = await join(browser, "pendingparentowner", { token });
+  const reader = await join(browser, "pendingparentreader", { token });
+  await befriend(owner, reader, "pendingparentreader", "pendingparentowner");
+  const response = await owner.request.post("/api/screenr/activity", {
+    headers: { Origin: browserConfig.baseURL },
+    data: { title: "movie:987654", field: "recommended", value: true },
+  });
+  expect(response.status()).toBe(200);
+  const { id } = await response.json();
+  await reader.goto(`/titles/movie/987654?item=${id}`);
+  const item = reader.locator(`[data-item-id="${id}"]`);
+  await expect(item.getByText("Be the first to reply.")).toBeVisible();
+  const parentResponse = await owner.request.post("/api/screenr/comment", {
+    headers: { Origin: browserConfig.baseURL },
+    data: { conversation: id, body: "Pending parent", spoiler: false },
+  });
+  expect(parentResponse.status()).toBe(200);
+  const { id: parent } = await parentResponse.json();
+  const unrelated = await owner.request.post("/api/screenr/comment", {
+    headers: { Origin: browserConfig.baseURL },
+    data: { conversation: id, body: "Still pending", spoiler: false },
+  });
+  expect(unrelated.status()).toBe(200);
+  await expect(
+    reader.getByRole("button", { name: /New activity/ }),
+  ).toBeVisible();
+  await expect(item.getByText("Pending parent", { exact: true })).toHaveCount(
+    0,
+  );
+
+  const otherTab = await reader.context().newPage();
+  monitorErrors(otherTab);
+  await otherTab.goto(`/titles/movie/987654?item=${id}`);
+  await otherTab
+    .locator(`[data-comment-id="${parent}"]`)
+    .getByRole("button", { name: "Reply", exact: true })
+    .click();
+  const composer = otherTab.getByRole("form", {
+    name: "Replying to @pendingparentowner",
+  });
+  await composer.getByRole("textbox").fill("My reply from another tab");
+  await composer
+    .getByRole("button", { name: "Post reply", exact: true })
+    .click();
+  await expect(
+    otherTab.getByText("My reply from another tab", { exact: true }),
+  ).toBeVisible();
+  await reader.bringToFront();
+  await expect(item.getByText("Pending parent", { exact: true })).toBeVisible();
+  await item.getByRole("button", { name: "View 1 reply", exact: true }).click();
+  await expect(
+    item.getByText("My reply from another tab", { exact: true }),
+  ).toBeVisible();
+  await expect(item.getByText("Be the first to reply.")).toHaveCount(0);
+  await expect(item.getByText("Still pending", { exact: true })).toHaveCount(0);
+  await expect(
+    reader.getByRole("button", { name: /New activity/ }),
+  ).toBeVisible();
+  await owner.context().close();
+  await reader.context().close();
+});
+
 test("nested discussions group stored replies, preview direct comments, and keep two composer destinations", async ({
   browser,
 }) => {
