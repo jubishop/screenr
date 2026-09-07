@@ -170,7 +170,26 @@ function FeedEntry({
       navigated.current = id;
     }
   }, [target, item, hiddenSpoiler]);
+  const [copying, setCopying] = useState(false);
+  const [copyMessage, setCopyMessage] = useState("");
   const titleURL = item ? `/titles/${item.title_id.replace(":", "/")}` : "";
+
+  async function copyDiscussion() {
+    if (!item || copying) return;
+    setCopying(true);
+    setCopyMessage("");
+    try {
+      await navigator.clipboard.writeText(
+        new URL(`${titleURL}?item=${item.id}`, window.location.origin).href,
+      );
+      setCopyMessage("Link copied.");
+    } catch {
+      setCopyMessage("Could not copy the link. Please try again.");
+    } finally {
+      setCopying(false);
+    }
+  }
+
   return (
     <article
       hidden={!item}
@@ -226,13 +245,15 @@ function FeedEntry({
               item.body && <p className="comment-body">{item.body}</p>
             )}
             <div className="inline-actions">
-              <Link
-                className="conversation-link"
-                href={`${titleURL}?item=${item.id}`}
-                prefetch={false}
+              <button
+                type="button"
+                className="text-button conversation-link"
+                disabled={!interactive}
+                aria-disabled={copying}
+                onClick={() => void copyDiscussion()}
               >
-                Link to discussion <span aria-hidden="true">↗</span>
-              </Link>
+                Copy link to discussion
+              </button>
               {item.owner_id !== user.user_id && (
                 <>
                   <button
@@ -266,6 +287,9 @@ function FeedEntry({
                 </>
               )}
             </div>
+            <p className="small" role="status">
+              {copyMessage}
+            </p>
           </div>
         </header>
       )}
