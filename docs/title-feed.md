@@ -6,8 +6,11 @@ status: current
 
 This document owns the confirmed product decisions for the unified movie
 and TV title feed and its shared entries in the friends and profile feeds.
-[Issue #5](https://github.com/jubishop/screenr/issues/5) tracks implementation
-and acceptance criteria. Unanswered choices are listed separately below;
+[Issue #5](https://github.com/jubishop/screenr/issues/5) tracks the original
+implementation and acceptance criteria.
+[Issue #32](https://github.com/jubishop/screenr/issues/32) tracks the nested
+reply layout and preview refinement accepted on 2026-09-07.
+Unanswered choices are listed separately below;
 the implementation details below describe the current storage and interface.
 
 ## Accepted decisions
@@ -16,9 +19,12 @@ the implementation details below describe the current storage and interface.
 
 **Decision:** Show one feed beneath the title details. Mix discussion
 comments with inline reviews, recommendations, and other agreed activity
-items that people can reply to. Show replies beneath their top-level item,
-with one level of nesting. Replies to replies remain at that same level,
-with the addressed person shown.
+items that people can reply to. The
+[reply grouping clarification](product-brief.md#replies-to-comments--2026-09-04)
+of 2026-09-07 refines the original flat reply layout: direct comments appear
+beneath the feed item, and replies to individual comments are grouped one
+additional level beneath those comments. Replies within that nested group
+stay at the same depth, with the addressed person shown.
 
 Show the viewer's own top-level items and those of their current accepted
 friends, subject to blocking. People who are not the viewer's friends can
@@ -115,17 +121,24 @@ appear above a newly posted item.
 
 ### Preview three replies and expand inline — 2026-09-06
 
-**Decision:** Initially show the latest three replies that the reader is
-allowed to see beneath each top-level item. If there are fewer, show all
-of them. Display the visible replies oldest to newest. Provide Show
-earlier replies to expand the remaining eligible replies inline on the
-same title page, with the expanded replies also ordered oldest to newest.
-Access and blocking rules apply before selecting the three-reply preview.
-Spoiler rules still apply to the displayed replies.
+**Updated decision — 2026-09-07:** Initially show the latest three direct
+comments that the reader is allowed to see beneath each top-level item.
+If there are fewer, show all of them. Nested replies do not consume those
+three places. Each direct comment has a View N replies control when it has
+eligible nested replies; keep those replies collapsed until expanded.
+
+Display the direct comments oldest to newest. Provide Show earlier comments
+to expand the remaining eligible direct comments inline in the same feed.
+Access and blocking rules apply before selecting the preview or calculating
+each nested reply count. Spoiler rules still apply after expansion.
+
+This replaces the previous preview of the latest three replies of any kind.
 
 **Why:** The user accepted keeping the phone feed easy to scan while
 allowing the full discussion to be read without leaving the title page.
-The tradeoff is an extra tap to see earlier context.
+The tradeoff is an extra tap to see earlier context. The user accepted
+collapsed nested groups to keep the feed compact while preserving each
+reply's parent context.
 
 ### Open title-related links in the unified feed — 2026-09-06
 
@@ -273,7 +286,7 @@ those feeds for the discussion.
 
 Replies by the profile owner on other people's entries stay attached to
 those original entries; they are not promoted into top-level profile
-entries. The same activity ordering, three-reply preview, inline
+entries. The same activity ordering, direct-comment preview, inline
 expansion, and New activity behavior apply in all three views. Reading,
 replying, and viewing updates operate on the same stored discussion.
 
@@ -309,6 +322,9 @@ powers:
   Preserve replies to a removed comment and its placeholder. Access loss
   to a top-level item hides its whole group; it does not expose orphaned
   replies elsewhere in the feed.
+- When blocking hides a parent comment, preserve eligible nested replies
+  under the product brief's
+  [unavailable-parent rule](product-brief.md#nested-replies-beneath-a-blocked-author--2026-09-07).
 - Notifications retain their existing triggers and access restrictions.
   Where a notification already exists, its title-related target opens in
   the unified feed as specified above. This change does not require adding
@@ -325,9 +341,10 @@ interview if they preserve these decisions:
   no old discussion, resolve to its corresponding eligible action item or
   title feed. An unavailable target must not expose inaccessible content.
 - Preserve old comment identities, authors, timestamps, spoiler and removal
-  state, and addressed-person context. Render old comments and their replies
-  at one level beneath the Earlier discussion item. Do not invent action
-  history or create empty Earlier discussion items without old comments.
+  state, and addressed-person context. Keep them under the Earlier discussion
+  item, using their stored reply groups for the clarified nested layout.
+  Do not invent action history or create empty Earlier discussion items
+  without old comments.
 - Pagination, page sizes, stable ordering tie-breakers, and the update
   transport are implementation choices. Loading older items or expanding
   replies must preserve access filtering, the reading position, and drafts.
@@ -336,6 +353,10 @@ interview if they preserve these decisions:
   types remain separate work as noted above.
 
 ## Shared feed implementation
+
+The implementation described here still uses the earlier flat reply preview.
+The accepted nested grouping and direct-comment preview above require a
+follow-up change; they are product requirements, not a claim of delivery.
 
 `src/server/social.ts` reads each eligible `feed_item` and its replies in one
 PostgreSQL snapshot. The friends, title, and profile screens use this same

@@ -68,7 +68,9 @@ Screenr is a social app for TV and movies, centered on people you know.
   Recommend actions always belong to a specific title.
 - Users can add their own reviews and comments.
 - Discussions support replies to individual comments, grouped beneath the
-  original comment with one level of nesting and the addressed person shown.
+  direct comment with one additional level of nesting and the addressed
+  person shown. A direct comment replies to the feed item itself; a nested
+  reply appears indented beneath that comment.
 - Post and review authors can remove comments from conversations they host.
   Replies remain under a Comment removed placeholder when their parent
   comment is removed.
@@ -470,6 +472,44 @@ addresses.
 
 **Why:** The user accepted grouped replies that keep conversations easy to
 follow on a phone.
+
+**Clarified — 2026-09-07:** A feed item, such as a recommendation, has direct
+comments. Each direct comment can have a group of nested replies beneath it.
+Use indentation and a graphical connection to show that the nested replies
+address that comment. The maximum depth is one additional level beneath a
+direct comment. This refines the unified feed's previous flat presentation
+of all replies beneath the feed item.
+
+**Why:** The user wants to distinguish a reply to the recommendation itself
+from a reply to an individual comment in its discussion. The additional
+indentation makes the relationship visible.
+
+[Issue #32](https://github.com/jubishop/screenr/issues/32) tracks this nested
+layout, composer placement, unavailable-parent handling, and the
+[updated feed preview](title-feed.md#preview-three-replies-and-expand-inline--2026-09-06).
+
+### Reply composer placement — 2026-09-07
+
+**Decision:** Selecting Reply on a comment opens the nested reply composer
+directly beneath that comment. Label it Replying to @name and provide a
+Cancel action. Keep a separate general reply composer at the bottom of the
+discussion for direct comments on the feed item itself.
+
+**Why:** The user accepted this placement so that people can see where
+their reply will go while writing it.
+
+### Nested replies beneath a blocked author — 2026-09-07
+
+**Decision:** When blocking hides a direct comment's author, retain nested
+replies that the reader can otherwise access beneath a Comment unavailable
+placeholder. Do not show the blocked author's name or comment text. Apply
+the existing access rules to each remaining reply and its addressed-person
+label. The placeholder preserves grouping; it does not grant access to a
+hidden parent comment or to the feed item itself.
+
+**Why:** The user accepted preserving the readable parts of the conversation
+and their grouping. Hiding the entire nested group would also hide replies
+from people the reader can still see.
 
 ### Incoming replies in an open conversation — 2026-09-05
 
