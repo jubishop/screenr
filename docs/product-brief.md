@@ -50,6 +50,10 @@ Screenr is a social app for TV and movies, centered on people you know.
   watching. TV also supports a manually selected Caught up status.
 - Each tracked title has one current status and an optional last-finished
   date. A diary of separate viewings is outside the initial release.
+- Provide a Watch together link on an accepted friend's profile. It opens
+  a dedicated page comparing the viewer's and friend's Want to watch choices
+  to help them decide what to watch together. Start with a two-person
+  interface and preserve implementation flexibility for more participants.
 - Users can make their own recommendations.
 - A dedicated Friends recommend view shows titles recommended by direct
   friends, who recommends each title, and an Add to Want to watch action.
@@ -347,6 +351,12 @@ initial release.
 
 **Why:** The user accepted this limited watch-history scope for the first
 release, including a way to reflect a rewatch through the current status.
+
+### Watch together — 2026-09-07
+
+The [Watch together decisions](watch-together.md) define the profile entry
+point, shared-title inclusion, newest-shared-first order, title-type filter,
+and use of existing title pages for choice changes.
 
 ### Ratings and written reviews — 2026-09-04
 

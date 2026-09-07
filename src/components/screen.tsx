@@ -8,6 +8,7 @@ import { FeedView } from "./feed";
 import { TitleCommentComposer } from "./title-comment";
 import { Poster } from "./poster";
 import { InvitationLink } from "./invitation-link";
+import { WatchTogether } from "./watch-together";
 
 function titleURL(id: string) {
   return `/titles/${id.replace(":", "/")}`;
@@ -447,6 +448,12 @@ export function Screen({
             )}
           </>
         )}
+        {data?.kind === "watch-together" && (
+          <WatchTogether
+            participants={data.participants}
+            titles={data.titles}
+          />
+        )}
         {data?.kind === "profile" && (
           <>
             <div className="page-heading">
@@ -454,6 +461,15 @@ export function Screen({
               <h1>{data.profile.display_name}</h1>
               {data.profile.user_id !== user.user_id && (
                 <div className="inline-actions">
+                  {data.profile.accepted_at && (
+                    <Link
+                      className="primary button"
+                      href={`/watch-together?with=${encodeURIComponent(data.profile.username)}`}
+                      prefetch={false}
+                    >
+                      Watch together
+                    </Link>
+                  )}
                   {data.profile.accepted_at ? (
                     <button
                       className="secondary"
