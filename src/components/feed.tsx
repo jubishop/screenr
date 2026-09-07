@@ -175,7 +175,12 @@ function FeedEntry({
     >
       {item && (
         <header className="activity-card" data-item-heading={item.id}>
-          <Link className="poster-link" href={titleURL} prefetch={false}>
+          <Link
+            className="poster-link"
+            href={titleURL}
+            prefetch={false}
+            aria-label={item.title_name}
+          >
             <Poster path={item.poster_path} name={item.title_name} />
           </Link>
           <div className="activity-content">
