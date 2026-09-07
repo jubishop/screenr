@@ -1,9 +1,11 @@
-import { conversations, people, profileFor, thread } from "./social";
+import { conversations, people, profileFor, conversationURL } from "./social";
 import { getTitle, getTitleTrailer } from "./catalog";
 import { listInvitations } from "./invitations";
 import { AppError, db } from "./db";
 
-export async function loadScreen(userId: string, path: string) {
+export async function loadScreen(userId: string, requestedPath: string) {
+  const url = new URL(requestedPath, "http://screenr.local");
+  const path = url.pathname;
   if (path === "/")
     return {
       kind: "feed" as const,
@@ -42,6 +44,22 @@ export async function loadScreen(userId: string, path: string) {
       title,
       trailer: await getTitleTrailer(id),
       conversations: threads,
+      target: (() => {
+        const item = threads.find((c) => c.id === url.searchParams.get("item"));
+        if (!item) return null;
+        const reply = item.comments.find(
+          (c) => c.id === url.searchParams.get("reply"),
+        );
+        return { item: item.id, reply: reply?.id };
+      })(),
+      targetUnavailable:
+        !!url.searchParams.get("item") &&
+        !threads.some(
+          (c) =>
+            c.id === url.searchParams.get("item") &&
+            (!url.searchParams.get("reply") ||
+              c.comments.some((r) => r.id === url.searchParams.get("reply"))),
+        ),
     };
   }
   if (parts[0] === "people" && parts.length === 2) {
@@ -55,7 +73,14 @@ export async function loadScreen(userId: string, path: string) {
     };
   }
   if (parts[0] === "conversations" && parts.length === 2)
-    return { kind: "thread" as const, ...(await thread(userId, parts[1])) };
+    return {
+      kind: "redirect" as const,
+      url: await conversationURL(
+        userId,
+        parts[1],
+        url.searchParams.get("reply") ?? undefined,
+      ),
+    };
   throw new AppError("Page not found.", 404);
 }
 export type ScreenData = Awaited<ReturnType<typeof loadScreen>>;

@@ -17,6 +17,8 @@ export type Conversation = {
   id: string;
   owner_id: string;
   title_id: string;
+  item_type: "recommended" | "want_to_watch" | "earlier";
+  active: boolean;
   recommended: boolean;
   want_to_watch: boolean;
   viewer_want_to_watch: boolean;
@@ -41,3 +43,5 @@ export type Comment = {
   created_at: string;
 };
 export type Thread = { conversation: Conversation; comments: Comment[] };
+
+export type FeedItem = Conversation & { comments: Comment[] };

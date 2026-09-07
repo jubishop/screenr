@@ -474,7 +474,7 @@ test("title trailers fit desktop and mobile, send an origin referrer, and omit u
   await page.context().close();
 });
 
-test("invited friends discover, save, and share a persistent conversation with live access enforcement", async ({
+test("invited friends discover, save, and share inline discussions with live access enforcement", async ({
   browser,
 }) => {
   const alice = await join(browser, "alice"),
@@ -495,163 +495,117 @@ test("invited friends discover, save, and share a persistent conversation with l
   await expect(
     alice.getByRole("button", { name: "✓ Recommended", exact: true }),
   ).toBeVisible();
-  await alice.getByRole("link", { name: /Open conversation/ }).click();
-  await expect(alice).toHaveURL(/\/conversations\/[0-9a-f-]+$/);
+  await alice.getByRole("link", { name: /Link to discussion/ }).click();
+  await expect(alice).toHaveURL(/\/titles\/movie\/987654\?item=[0-9a-f-]+$/);
   const conversationURL = alice.url();
-  const conversationId = conversationURL.split("/").at(-1)!;
+  const id = new URL(conversationURL).searchParams.get("item")!;
+  const item = (page: Page) => page.locator(`[data-item-id="${id}"]`);
   await ben.goto("/");
-  await expect(
-    ben.getByText("The Lantern Room", { exact: true }),
-  ).toBeVisible();
-  await ben
+  await item(ben)
     .getByRole("button", { name: "+ Want to watch", exact: true })
     .click();
-  await ben.goto("/titles/movie/987654");
-  await expect(
-    ben
-      .locator(".title-hero")
-      .getByRole("button", { name: "✓ Want to watch", exact: true }),
-  ).toBeVisible();
-  const original = ben.locator(".activity-card").filter({ hasText: "alice" });
-  await original.getByRole("link", { name: /Open conversation/ }).click();
-  await expect(ben).toHaveURL(conversationURL);
-  await ben
+  await expect(ben.locator("[data-item-id]")).toHaveCount(2);
+  await item(ben)
     .getByLabel("Add your reply")
     .fill("This looks like our kind of movie.");
-  await ben.getByRole("button", { name: "Post reply", exact: true }).click();
-  await expect(
-    ben.getByText("This looks like our kind of movie.", { exact: true }),
-  ).toBeVisible();
-  await expect(
-    alice.getByRole("button", { name: /New replies/ }),
-  ).toBeVisible();
-  await expect(
-    alice.getByText("This looks like our kind of movie.", { exact: true }),
-  ).not.toBeVisible();
-  await alice.getByRole("button", { name: /New replies/ }).click();
-  await expect(
-    alice.getByText("This looks like our kind of movie.", { exact: true }),
-  ).toBeVisible();
-  await alice.getByRole("button", { name: "Reply", exact: true }).click();
-  await alice.getByLabel("Add your reply").fill("The ending surprised me.");
-  await alice.getByLabel("Contains spoilers", { exact: true }).check();
-  await alice.getByRole("button", { name: "Post reply", exact: true }).click();
-  await expect(ben.getByRole("button", { name: /New replies/ })).toBeVisible();
-  await ben.getByRole("button", { name: /New replies/ }).click();
-  await expect(
-    ben.getByText("The ending surprised me.", { exact: true }),
-  ).not.toBeVisible();
-  await ben
-    .getByRole("button", {
-      name: "Contains spoilers · Reveal comment",
-      exact: true,
-    })
+  await item(ben)
+    .getByRole("button", { name: "Post reply", exact: true })
     .click();
   await expect(
-    ben.getByText("The ending surprised me.", { exact: true }),
+    item(ben).getByText("This looks like our kind of movie.", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    alice.getByRole("button", { name: /New activity/ }),
+  ).toBeVisible();
+  await expect(
+    item(alice).getByText("This looks like our kind of movie.", {
+      exact: true,
+    }),
+  ).toHaveCount(0);
+  await alice.getByRole("button", { name: /New activity/ }).click();
+  await item(alice).getByRole("button", { name: "Reply", exact: true }).click();
+  await item(alice)
+    .getByLabel("Add your reply")
+    .fill("The ending surprised me.");
+  await item(alice).getByLabel("Contains spoilers", { exact: true }).check();
+  await item(alice)
+    .getByRole("button", { name: "Post reply", exact: true })
+    .click();
+  await expect(ben.getByRole("button", { name: /New activity/ })).toBeVisible();
+  await ben.getByRole("button", { name: /New activity/ }).click();
+  await expect(
+    item(ben).getByText("The ending surprised me.", { exact: true }),
+  ).toHaveCount(0);
+  await item(ben)
+    .getByRole("button", { name: /Reveal comment/ })
+    .click();
+  await expect(
+    item(ben).getByText("The ending surprised me.", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    item(ben).getByText("Replying to @ben", { exact: true }),
   ).toBeVisible();
   await ben.reload();
   await expect(
-    ben.getByText("This looks like our kind of movie.", { exact: true }),
-  ).toBeVisible();
+    item(ben).getByText("The ending surprised me.", { exact: true }),
+  ).toHaveCount(0);
   const denied = await outsider.request.get(
-    `/api/screenr/screen?path=/conversations/${conversationId}`,
+    `/api/screenr/screen?path=/conversations/${id}`,
   );
   expect(denied.status()).toBe(404);
-  const deniedWrite = await outsider.request.post("/api/screenr/comment", {
-    headers: { Origin: "http://localhost:3055" },
-    data: {
-      conversation: conversationId,
-      body: "Unauthorized",
-      spoiler: false,
-    },
-  });
-  expect(deniedWrite.status()).toBe(404);
+  const write = (page: Page, body: string, replyTo?: string) =>
+    page.request.post("/api/screenr/comment", {
+      headers: { Origin: "http://localhost:3055" },
+      data: { conversation: id, body, spoiler: false, replyTo },
+    });
+  expect((await write(outsider, "Unauthorized")).status()).toBe(404);
   await outsider.goto(conversationURL);
-  await expect(
-    outsider.getByText("Conversation not found.", { exact: false }),
-  ).toBeVisible();
-  await expect(
-    outsider.getByText("This looks like our kind of movie.", { exact: true }),
-  ).not.toBeVisible();
+  await expect(outsider.getByRole("status")).toHaveText(
+    "This activity is unavailable.",
+  );
+  await expect(item(outsider)).toHaveCount(0);
   await cam.goto(conversationURL);
   await expect(
-    cam.getByText("This looks like our kind of movie.", { exact: true }),
+    item(cam).getByText("This looks like our kind of movie.", { exact: true }),
   ).toBeVisible();
   await alice.goto("/people/ben");
   await alice.getByRole("button", { name: "Unfriend", exact: true }).click();
+  await expect(item(ben)).toHaveCount(0);
   await expect(
-    ben.getByText("Conversation not found.", { exact: false }),
-  ).toBeVisible({ timeout: 10000 });
-  await expect(
-    cam.getByText("This looks like our kind of movie.", { exact: true }),
-  ).not.toBeVisible({ timeout: 10000 });
+    item(cam).getByText("This looks like our kind of movie.", { exact: true }),
+  ).toHaveCount(0);
   await befriend(alice, ben, "ben", "alice");
   await ben.goto(conversationURL);
   await expect(
-    ben.getByText("This looks like our kind of movie.", { exact: true }),
+    item(ben).getByText("This looks like our kind of movie.", { exact: true }),
   ).toBeVisible();
   await ben.goto("/people/cam");
   await ben.getByRole("button", { name: "Block", exact: true }).click();
-  await cam.getByLabel("Add your reply").fill("Cam’s view of the film.");
-  await cam.getByRole("button", { name: "Post reply", exact: true }).click();
+  await item(cam).getByLabel("Add your reply").fill("Cam’s view of the film.");
+  await item(cam)
+    .getByRole("button", { name: "Post reply", exact: true })
+    .click();
   await ben.goto(conversationURL);
   await expect(
-    ben.getByText("Cam’s view of the film.", { exact: true }),
-  ).not.toBeVisible();
+    item(ben).getByText("Cam’s view of the film.", { exact: true }),
+  ).toHaveCount(0);
   await alice.goto(conversationURL);
-  await expect(
-    alice.getByText("Cam’s view of the film.", { exact: true }),
-  ).toBeVisible();
-  let firstRoot = "";
-  for (let index = 0; index < 12; index++) {
-    const result = await alice.request.post("/api/screenr/comment", {
-      headers: { Origin: "http://localhost:3055" },
-      data: {
-        conversation: conversationId,
-        body: `Reading position marker ${index}`,
-        spoiler: false,
-      },
-    });
-    expect(result.status()).toBe(200);
-    if (index === 0) firstRoot = (await result.json()).id;
-  }
+  const camComment = item(alice)
+    .locator("[data-comment-id]")
+    .filter({ hasText: "Cam’s view of the film." });
+  const camReply = await camComment.getAttribute("data-comment-id");
+  const reply = await write(alice, "The host can reply to Cam", camReply!);
+  expect(reply.status()).toBe(200);
   await alice.reload();
-  const anchor = alice.getByText("Reading position marker 8", { exact: true });
-  await anchor.evaluate((element) =>
-    element.scrollIntoView({ block: "center" }),
-  );
-  const inserted = await ben.request.post("/api/screenr/comment", {
-    headers: { Origin: "http://localhost:3055" },
-    data: {
-      conversation: conversationId,
-      body: "A new nested reply above the reading position",
-      spoiler: false,
-      replyTo: firstRoot,
-    },
-  });
-  expect(inserted.status()).toBe(200);
+  await camComment.getByRole("button", { name: "Remove", exact: true }).click();
   await expect(
-    alice.getByRole("button", { name: /New replies/ }),
+    item(alice)
+      .locator(`[data-comment-id="${camReply}"]`)
+      .getByText("Comment removed", { exact: true }),
   ).toBeVisible();
-  const before = await anchor.evaluate(
-    (element) => element.getBoundingClientRect().top,
-  );
-  await alice.getByRole("button", { name: /New replies/ }).click();
   await expect(
-    alice.getByText("A new nested reply above the reading position", {
-      exact: true,
-    }),
+    item(alice).getByText("Replying to @cam", { exact: true }),
   ).toBeVisible();
-  await expect
-    .poll(async () =>
-      Math.abs(
-        (await anchor.evaluate(
-          (element) => element.getBoundingClientRect().top,
-        )) - before,
-      ),
-    )
-    .toBeLessThan(3);
   await alice.goto("/invites");
   await alice.getByLabel("Maximum signups").selectOption("2");
   await alice
@@ -663,15 +617,304 @@ test("invited friends discover, save, and share a persistent conversation with l
   await expect(
     alice.getByText("No active invitations.", { exact: true }),
   ).toBeVisible();
-  await ben.goto("/");
-  await ben.screenshot({ path: ".cache/screenr-mobile.png", fullPage: true });
-  await alice.setViewportSize({ width: 1400, height: 1000 });
-  await alice.goto("/");
-  await alice.screenshot({
-    path: ".cache/screenr-desktop.png",
-    fullPage: true,
-  });
   for (const page of [alice, ben, cam, outsider]) await page.context().close();
+});
+
+test("unified feeds show separate actions and support inline replies on title, friends, and profile", async ({
+  browser,
+}) => {
+  const token = (
+    await readFile(".cache/browser-feed-invite.txt", "utf8")
+  ).trim();
+  const owner = await join(browser, "feedowner", { token });
+  const reader = await join(browser, "feedreader", { token });
+  await befriend(owner, reader, "feedreader", "feedowner");
+  await owner.goto("/titles/movie/987654");
+  await owner
+    .getByRole("button", { name: "Recommend to friends", exact: true })
+    .click();
+  await owner
+    .locator(".title-hero")
+    .getByRole("button", { name: "+ Want to watch", exact: true })
+    .click();
+  await expect(owner.getByLabel("Add your reply")).toHaveCount(2);
+  const recommendation = owner
+    .locator("[data-item-id]")
+    .filter({ hasText: "feedowner recommends" });
+  const id = await recommendation.getAttribute("data-item-id");
+  for (const [index, path] of [
+    "/titles/movie/987654",
+    "/",
+    "/people/feedowner",
+  ].entries()) {
+    await reader.goto(path);
+    const item = reader.locator(`[data-item-id="${id}"]`);
+    await item.getByLabel("Add your reply").fill(`Reply from surface ${index}`);
+    await item.getByRole("button", { name: "Post reply", exact: true }).click();
+    await expect(
+      item.getByText(`Reply from surface ${index}`, { exact: true }),
+    ).toBeVisible();
+    await reader.reload();
+    await expect(
+      item.getByText(`Reply from surface ${index}`, { exact: true }),
+    ).toBeVisible();
+    await expect(
+      reader
+        .locator("[data-item-id]")
+        .filter({ hasText: "feedowner wants to watch" })
+        .locator("[data-comment-id]"),
+    ).toHaveCount(0);
+  }
+  for (const width of [1440, 390, 320]) {
+    await reader.setViewportSize({ width, height: 900 });
+    expect(
+      await reader.evaluate(() => document.documentElement.scrollWidth),
+    ).toBe(width);
+    await expect(
+      reader.locator(`[data-item-id="${id}"] [data-comment-id]`),
+    ).toHaveCount(3);
+  }
+  await reader.evaluate(() => window.scrollTo(0, 0));
+  await reader.screenshot({ path: ".cache/feed-phone.png", fullPage: true });
+  await reader.setViewportSize({ width: 1440, height: 1000 });
+  await reader.evaluate(() => window.scrollTo(0, 0));
+  await reader.screenshot({ path: ".cache/feed-desktop.png", fullPage: true });
+  await reader.context().close();
+  await owner.context().close();
+});
+
+test("every feed holds incoming activity, preserves drafts and position, and expands reply links safely", async ({
+  browser,
+}) => {
+  const token = (
+    await readFile(".cache/browser-feed-invite.txt", "utf8")
+  ).trim();
+  const owner = await join(browser, "incomingowner", { token });
+  const reader = await join(browser, "incomingreader", { token });
+  await befriend(owner, reader, "incomingreader", "incomingowner");
+  async function action(field: string, value: boolean) {
+    const result = await owner.request.post("/api/screenr/activity", {
+      headers: { Origin: "http://localhost:3055" },
+      data: { title: "movie:987654", field, value },
+    });
+    expect(result.status()).toBe(200);
+    return (await result.json()).id as string;
+  }
+  const id = await action("recommended", true);
+  const replies: string[] = [];
+  for (let index = 0; index < 5; index++) {
+    const response = await owner.request.post("/api/screenr/comment", {
+      headers: { Origin: "http://localhost:3055" },
+      data: {
+        conversation: id,
+        body: `Preview reply ${index}`,
+        spoiler: index === 0,
+      },
+    });
+    expect(response.status()).toBe(200);
+    replies.push((await response.json()).id);
+  }
+  const saved = await action("want_to_watch", true);
+  for (const [index, path] of [
+    "/",
+    "/titles/movie/987654",
+    "/people/incomingowner",
+  ].entries()) {
+    await action("recommended", true);
+    await action("want_to_watch", false);
+    await action("want_to_watch", true);
+    await reader.goto(path);
+    const item = reader.locator(`[data-item-id="${id}"]`);
+    const ids = () =>
+      reader
+        .locator("[data-item-id]")
+        .evaluateAll((nodes) =>
+          nodes.map((n) => n.getAttribute("data-item-id")),
+        );
+    expect(await ids()).toEqual([saved, id]);
+    await expect(item.locator("[data-comment-id]")).toHaveCount(3);
+    await expect(
+      item.getByText("Preview reply 0", { exact: true }),
+    ).toHaveCount(0);
+    await item.getByRole("button", { name: /Show earlier replies/ }).click();
+    await expect(item.locator("[data-comment-id]")).toHaveCount(5 + index);
+    await expect(
+      item.getByText("Preview reply 0", { exact: true }),
+    ).toHaveCount(0);
+    const draft = item.getByLabel("Add your reply");
+    await draft.fill(`Draft on surface ${index}`);
+    await item.getByLabel("Contains spoilers", { exact: true }).check();
+    const added = await owner.request.post("/api/screenr/comment", {
+      headers: { Origin: "http://localhost:3055" },
+      data: {
+        conversation: id,
+        body: `Incoming on surface ${index}`,
+        spoiler: false,
+      },
+    });
+    expect(added.status()).toBe(200);
+    await expect(
+      reader.getByRole("button", { name: /New activity/ }),
+    ).toBeVisible();
+    await expect(
+      item.getByText(`Incoming on surface ${index}`, { exact: true }),
+    ).toHaveCount(0);
+    expect(await ids()).toEqual([saved, id]);
+    await action("recommended", false);
+    await expect(
+      item.getByText("removed their recommendation", { exact: true }),
+    ).toBeVisible();
+    expect(await ids()).toEqual([saved, id]);
+    const anchor = item.getByText("Preview reply 3", { exact: true });
+    await anchor.evaluate((element) =>
+      element.scrollIntoView({ block: "center" }),
+    );
+    const before = (await anchor.boundingBox())!.y;
+    await reader.getByRole("button", { name: /New activity/ }).click();
+    await expect(
+      item.getByText(`Incoming on surface ${index}`, { exact: true }),
+    ).toBeVisible();
+    expect(await ids()).toEqual([id, saved]);
+    await expect
+      .poll(async () => Math.abs((await anchor.boundingBox())!.y - before))
+      .toBeLessThan(3);
+    await expect(draft).toHaveValue(`Draft on surface ${index}`);
+    await expect(
+      item.getByLabel("Contains spoilers", { exact: true }),
+    ).toBeChecked();
+    await expect(
+      item.getByText("Preview reply 0", { exact: true }),
+    ).toHaveCount(0);
+  }
+  await reader.goto(`/titles/movie/987654?item=${id}&reply=${replies[0]}`);
+  const target = reader.locator(`[data-comment-id="${replies[0]}"]`);
+  await expect(target).toBeVisible();
+  await expect(
+    target.getByText("Preview reply 0", { exact: true }),
+  ).toHaveCount(0);
+  const bounds = (await target.boundingBox())!;
+  expect(bounds.y).toBeGreaterThanOrEqual(
+    (await reader.locator(".sidebar").boundingBox())!.height,
+  );
+  expect(bounds.y).toBeLessThan(844);
+  await target.getByRole("button", { name: /Reveal comment/ }).click();
+  await expect(
+    target.getByText("Preview reply 0", { exact: true }),
+  ).toBeVisible();
+  await reader.reload();
+  await expect(
+    target.getByText("Preview reply 0", { exact: true }),
+  ).toHaveCount(0);
+  await reader.goto(`/conversations/${id}?reply=${replies[0]}`);
+  await expect(reader).toHaveURL(new RegExp(`item=${id}&reply=${replies[0]}`));
+  await expect(target).toBeVisible();
+  await expect(
+    target.getByText("Preview reply 0", { exact: true }),
+  ).toHaveCount(0);
+  await reader.context().close();
+  await owner.context().close();
+});
+
+test("loading activity retains the visible three-reply preview and its reading anchor", async ({
+  browser,
+}) => {
+  const token = (
+    await readFile(".cache/browser-feed-invite.txt", "utf8")
+  ).trim();
+  const owner = await join(browser, "previewowner", { token });
+  const reader = await join(browser, "previewreader", { token });
+  await befriend(owner, reader, "previewreader", "previewowner");
+  const activity = await owner.request.post("/api/screenr/activity", {
+    headers: { Origin: "http://localhost:3055" },
+    data: { title: "movie:987654", field: "recommended", value: true },
+  });
+  const { id } = await activity.json();
+  async function reply(body: string) {
+    const response = await owner.request.post("/api/screenr/comment", {
+      headers: { Origin: "http://localhost:3055" },
+      data: { conversation: id, body, spoiler: false },
+    });
+    expect(response.status()).toBe(200);
+  }
+  for (let index = 0; index < 3; index++) await reply(`Reading reply ${index}`);
+  await reader.goto("/");
+  await expect(reader.locator("[data-comment-id]")).toHaveCount(3);
+  const anchor = reader.getByText("Reading reply 0", { exact: true });
+  await anchor.evaluate((element) =>
+    element.scrollIntoView({ block: "center" }),
+  );
+  const beforeArrival = (await anchor.boundingBox())!.y;
+  await reply("New reply after the preview");
+  const incomingItem = await owner.request.post("/api/screenr/activity", {
+    headers: { Origin: "http://localhost:3055" },
+    data: { title: "movie:987654", field: "want_to_watch", value: true },
+  });
+  expect(incomingItem.status()).toBe(200);
+  await expect(
+    reader.getByRole("button", { name: /New activity/ }),
+  ).toBeVisible();
+  await expect(reader.locator("[data-item-id]")).toHaveCount(1);
+  expect(
+    Math.abs((await anchor.boundingBox())!.y - beforeArrival),
+  ).toBeLessThan(3);
+  await anchor.evaluate((element) =>
+    element.scrollIntoView({ block: "center" }),
+  );
+  const before = (await anchor.boundingBox())!.y;
+  await reader.getByRole("button", { name: /New activity/ }).click();
+  await expect(anchor).toBeVisible();
+  await expect(reader.locator("[data-item-id]")).toHaveCount(2);
+  await expect(
+    reader.getByText("New reply after the preview", { exact: true }),
+  ).toBeVisible();
+  await expect
+    .poll(async () => Math.abs((await anchor.boundingBox())!.y - before))
+    .toBeLessThan(3);
+  await reader.reload();
+  await expect(reader.locator("[data-comment-id]")).toHaveCount(3);
+  await expect(anchor).toHaveCount(0);
+  await reader.context().close();
+  await owner.context().close();
+});
+
+test("an unavailable legacy link navigates after friendship restores access", async ({
+  browser,
+}) => {
+  const token = (
+    await readFile(".cache/browser-feed-invite.txt", "utf8")
+  ).trim();
+  const owner = await join(browser, "recoveryowner", { token });
+  const reader = await join(browser, "recoveryreader", { token });
+  await owner.goto("/titles/movie/987654");
+  const response = await owner.request.post("/api/screenr/activity", {
+    headers: { Origin: "http://localhost:3055" },
+    data: { title: "movie:987654", field: "recommended", value: true },
+  });
+  expect(response.status()).toBe(200);
+  const { id } = await response.json();
+  const screen = await owner.request.get("/api/screenr/screen?path=/");
+  const entry = (await screen.json()).conversations.find(
+    (item: { id: string }) => item.id === id,
+  );
+  const waiting = await reader.context().newPage();
+  monitorErrors(waiting);
+  await waiting.route("https://www.youtube.com/embed/**", (route) =>
+    route.fulfill({ contentType: "text/html", body: "Trailer player fixture" }),
+  );
+  await waiting.goto(`/conversations/${entry.conversation_id}`);
+  await expect(waiting.getByRole("alert")).toContainText(
+    "Conversation not found.",
+  );
+  await befriend(owner, reader, "recoveryreader", "recoveryowner");
+  await waiting.bringToFront();
+  await expect(waiting).toHaveURL(
+    new RegExp(`/titles/movie/987654\\?item=${id}$`),
+  );
+  await expect(
+    waiting.locator(`[data-item-id="${id}"]`).getByLabel("Add your reply"),
+  ).toBeVisible();
+  await reader.context().close();
+  await owner.context().close();
 });
 
 test("server-rendered signup controls wait for their event handlers", async ({
@@ -941,15 +1184,15 @@ test("slow and failed refreshes enforce access while preserving reply drafts", a
     data: { conversation: id, body: "A slow incoming reply", spoiler: false },
   });
   await expect(
-    viewer.getByRole("button", { name: /New replies/ }),
+    viewer.getByRole("button", { name: /New activity/ }),
   ).toBeVisible();
-  await viewer.getByRole("button", { name: /New replies/ }).click();
+  await viewer.getByRole("button", { name: /New activity/ }).click();
   await expect(
     viewer.getByText("A slow incoming reply", { exact: true }),
   ).toBeVisible();
   await page.getByRole("button", { name: "Unfriend", exact: true }).click();
-  await expect(viewer.getByRole("main").getByRole("alert")).toContainText(
-    "Conversation not found.",
+  await expect(viewer.getByRole("status")).toContainText(
+    "This activity is unavailable.",
   );
   await expect(
     viewer.getByText("A slow incoming reply", { exact: true }),
@@ -958,13 +1201,22 @@ test("slow and failed refreshes enforce access while preserving reply drafts", a
   await befriend(page, viewer, "slowviewer", "draftrefresh");
   await viewer.goto(`/conversations/${id}`);
   await viewer.getByLabel("Add your reply").fill("Retain this timed-out draft");
+  let requestStarted!: () => void;
+  const delayedRequest = new Promise<void>((resolve) => {
+    requestStarted = resolve;
+  });
   await viewer.route("**/api/screenr/screen?**", async (route) => {
+    requestStarted();
     await delay(15000);
     await route.continue();
   });
+  await viewer.bringToFront();
+  // Measure the refresh deadline from an actual intercepted request, not
+  // from navigation or a background tab's next polling opportunity.
+  await delayedRequest;
   await expect(viewer.getByRole("main").getByRole("alert")).toContainText(
     "Refresh timed out. Please try again.",
-    { timeout: 14000 },
+    { timeout: 12000 },
   );
   await expect(
     viewer.getByText("Visible conversation content", { exact: true }),

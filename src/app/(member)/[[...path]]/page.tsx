@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import { currentMember } from "../../../server/session";
 import { loadScreen } from "../../../server/screens";
 import { AppError } from "../../../server/db";
@@ -21,11 +22,15 @@ export default async function Page({
         : query.error === "email_does_not_match"
           ? "Choose the Google account with the same email address as your Screenr account."
           : "Google could not be connected. Please try again.";
+  const target = new URLSearchParams();
+  for (const key of ["item", "reply"])
+    if (typeof query[key] === "string") target.set(key, query[key]);
+  const requestedPath = path + (target.size ? `?${target}` : "");
   let initialData = null,
     initialError = "";
   try {
     initialData = JSON.parse(
-      JSON.stringify(await loadScreen(user.user_id, path)),
+      JSON.stringify(await loadScreen(user.user_id, requestedPath)),
     );
   } catch (error) {
     initialError =
@@ -33,11 +38,12 @@ export default async function Page({
         ? error.message
         : "This page could not load. Please try again.";
   }
+  if (initialData?.kind === "redirect") redirect(initialData.url);
   return (
     <Screen
-      key={path}
+      key={requestedPath}
       user={user}
-      path={path}
+      path={requestedPath}
       initialData={initialData}
       initialError={initialError}
       initialGoogleError={initialGoogleError}

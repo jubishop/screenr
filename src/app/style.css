@@ -525,10 +525,13 @@ hr {
   margin: 12px 0;
   padding: 14px;
 }
-.new-replies {
+.feed-updates {
   position: sticky;
   top: 12px;
   z-index: 2;
+  height: 0;
+}
+.new-replies {
   background: var(--accent);
   border: 1px solid #b7cc73;
   box-shadow: 0 3px 15px #163c3415;
@@ -744,8 +747,8 @@ hr {
     margin-left: 9px;
     padding-left: 12px;
   }
-  .new-replies {
-    top: 120px;
+  .feed-updates {
+    top: 145px;
   }
   .person-row {
     align-items: flex-start;
@@ -776,5 +779,44 @@ hr {
   }
   .empty-card {
     padding: 28px 18px;
+  }
+}
+
+.feed-entry {
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  min-width: 0;
+  scroll-margin-top: 20px;
+}
+.feed-entry[hidden] {
+  display: none;
+}
+.feed-entry .activity-card {
+  border: 0;
+  border-radius: 12px 12px 0 0;
+}
+.feed-entry .thread {
+  border: 0;
+  padding-top: 0;
+}
+.replies {
+  border-left: 2px solid var(--line);
+  padding-left: 16px;
+}
+.replies .comment + .comment {
+  border-top: 1px solid var(--line);
+}
+.comment {
+  scroll-margin-top: 20px;
+}
+.interactive-feed {
+  overflow-anchor: none;
+}
+
+@media (max-width: 560px) {
+  .feed-entry,
+  .comment {
+    scroll-margin-top: 150px;
   }
 }

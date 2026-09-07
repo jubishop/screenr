@@ -290,28 +290,149 @@ test("pending and nonfriends cannot read or write a thread; accepted friends use
     "want_to_watch",
     true,
   );
-  assert.equal(same, conversation);
+  assert.notEqual(same, conversation, "Each action needs its own discussion");
 });
-test("clearing activity hides empty cards while preserving visible conversations", async () => {
+test("action items persist independently, removal does not bump activity, and reactivation reuses replies", async () => {
+  const { alice, ben, cam, conversation: recommendation } = await setup();
+  await friend(alice, ben);
+  await friend(alice, cam);
+  const saved = await updateTitleActivity(
+    alice,
+    "movie:1",
+    "want_to_watch",
+    true,
+  );
+  assert.notEqual(saved, recommendation);
+  const reply = await addComment(
+    ben,
+    recommendation,
+    "About the recommendation",
+    false,
+  );
+  assert.equal((await thread(alice, saved)).comments.length, 0);
+  const original = (await thread(ben, recommendation)).conversation.activity_at;
+  await updateTitleActivity(alice, "movie:1", "recommended", false);
+  const removed = await thread(ben, recommendation);
+  assert.equal(
+    new Date(removed.conversation.activity_at).getTime(),
+    new Date(original).getTime(),
+  );
+  assert.equal(removed.conversation.recommended, false);
+  assert.equal(removed.comments[0].id, reply);
+  assert.equal((await thread(ben, saved)).conversation.want_to_watch, true);
+  await updateTitleActivity(alice, "movie:1", "want_to_watch", false);
+  assert.deepEqual(
+    (await conversations(ben)).map((c) => c.id),
+    [recommendation],
+  );
+  await changeRelationship(cam, ben, "block");
+  assert.deepEqual(await conversations(cam), []);
+  await assert.rejects(thread(cam, recommendation), /not found/);
+  await assert.rejects(
+    addComment(cam, recommendation, "Invisible item", false),
+    /not found/,
+  );
+  assert.equal(
+    await updateTitleActivity(alice, "movie:1", "recommended", true),
+    recommendation,
+  );
+  const restored = await thread(ben, recommendation);
+  assert.ok(new Date(restored.conversation.activity_at) > new Date(original));
+  assert.equal(restored.comments[0].id, reply);
+  const activation = restored.conversation.activity_at;
+  await Promise.all(
+    Array.from({ length: 4 }, () =>
+      updateTitleActivity(alice, "movie:1", "recommended", true),
+    ),
+  );
+  assert.equal(
+    new Date(
+      (await thread(ben, recommendation)).conversation.activity_at,
+    ).getTime(),
+    new Date(activation).getTime(),
+  );
+  assert.equal((await conversations(ben)).length, 1);
+});
+
+test("all feeds share entries and order by only visible replies without promoting reply authors", async () => {
+  const { alice, ben, cam, outsider, conversation: first } = await setup();
+  await friend(alice, ben);
+  await friend(alice, cam);
+  await friend(ben, outsider);
+  const second = await updateTitleActivity(
+    alice,
+    "movie:1",
+    "want_to_watch",
+    true,
+  );
+  const reply = await addComment(cam, first, "Mutual friend's reply", true);
+  const ownCam = await updateTitleActivity(cam, "movie:1", "recommended", true);
+  for (const filter of [{}, { title: "movie:1" }, { owner: alice }]) {
+    const entries = await conversations(ben, filter);
+    assert.deepEqual(
+      entries.map((c) => c.id),
+      [first, second],
+    );
+    assert.equal((await thread(ben, entries[0].id)).comments[0].id, reply);
+    assert.ok(!entries.some((c) => c.id === ownCam));
+  }
+  await addComment(ben, first, "My reply does not expand access", false);
+  assert.deepEqual(await conversations(outsider), []);
+  await assert.rejects(
+    addComment(outsider, first, "No access", false),
+    /not found/,
+  );
+  await assert.rejects(
+    addComment(ben, second, "Wrong item", false, reply),
+    /not found/,
+  );
+  await changeRelationship(ben, cam, "block");
+  await assert.rejects(
+    addComment(ben, first, "Blocked target", false, reply),
+    /not found/,
+  );
+  await db.query(
+    "UPDATE comment SET created_at=now()+interval '1 day' WHERE id::text=$1",
+    [reply],
+  );
+  const ordered = (await conversations(ben)).map((c) => [
+    c.id,
+    c.visible_activity,
+  ]);
+  await db.query(
+    "UPDATE comment SET created_at=now()+interval '2 days' WHERE id::text=$1",
+    [reply],
+  );
+  assert.deepEqual(
+    (await conversations(ben)).map((c) => [c.id, c.visible_activity]),
+    ordered,
+  );
+});
+
+test("clearing activity hides empty items while preserving eligible discussions", async () => {
   const { alice, ben, cam, conversation } = await setup();
   await friend(alice, ben);
   await friend(alice, cam);
   await updateTitleActivity(alice, "movie:1", "recommended", false);
   for (const filter of [{}, { title: "movie:1" }, { owner: alice }])
     assert.deepEqual(await conversations(ben, filter), []);
-  assert.equal(
-    (await thread(alice, conversation)).conversation.id,
-    conversation,
+  await assert.rejects(thread(alice, conversation), /not found/);
+  const saved = await updateTitleActivity(
+    alice,
+    "movie:1",
+    "want_to_watch",
+    true,
   );
-  await updateTitleActivity(alice, "movie:1", "want_to_watch", true);
-  assert.equal((await conversations(ben))[0].id, conversation);
+  assert.equal((await conversations(ben))[0].id, saved);
   await updateTitleActivity(alice, "movie:1", "want_to_watch", false);
+  await updateTitleActivity(alice, "movie:1", "recommended", true);
   const comment = await addComment(
     cam,
     conversation,
     "Keep this discussion",
     false,
   );
+  await updateTitleActivity(alice, "movie:1", "recommended", false);
   assert.equal((await conversations(ben))[0].id, conversation);
   await changeRelationship(ben, cam, "block");
   assert.deepEqual(await conversations(ben), []);
@@ -399,6 +520,90 @@ test("nested replies stay in one group; only the host removes comments and prese
   assert.equal(after.comments[0].removed, true);
   assert.equal(after.comments.length, 3);
 });
+test("screen reads and legacy links preserve item identity and filter reply targets before navigation", async () => {
+  const { alice, ben, cam, outsider, conversation: id } = await setup();
+  await friend(alice, ben);
+  await friend(alice, cam);
+  await db.query(
+    "INSERT INTO title_trailer(title_id,trailer,expires_at) VALUES('movie:1',NULL,now()+interval '1 day') ON CONFLICT(title_id) DO UPDATE SET expires_at=excluded.expires_at",
+  );
+  const replies: string[] = [];
+  for (let index = 0; index < 5; index++)
+    replies.push(await addComment(alice, id, `Eligible ${index}`, index === 0));
+  const hidden = await addComment(cam, id, "Blocked reply", false, replies[0]);
+  await changeRelationship(ben, cam, "block");
+  for (const path of ["/", "/titles/movie/1", "/people/alice"]) {
+    const data = await loadScreen(ben, path);
+    assert.ok("conversations" in data && data.conversations);
+    assert.deepEqual(
+      data.conversations.map((c) => c.id),
+      [id],
+    );
+    assert.deepEqual(
+      data.conversations[0].comments.map((c) => c.id),
+      replies,
+    );
+    assert.deepEqual(
+      data.conversations[0].comments.slice(-3).map((c) => c.body),
+      ["Eligible 2", "Eligible 3", "Eligible 4"],
+    );
+  }
+  const targeted = await loadScreen(
+    ben,
+    `/titles/movie/1?item=${id}&reply=${replies[0]}`,
+  );
+  assert.ok(targeted.kind === "title");
+  assert.deepEqual(targeted.target, { item: id, reply: replies[0] });
+  assert.equal(targeted.conversations[0].comments[0].spoiler, true);
+  const blocked = await loadScreen(
+    ben,
+    `/titles/movie/1?item=${id}&reply=${hidden}`,
+  );
+  assert.ok(blocked.kind === "title");
+  assert.equal(blocked.targetUnavailable, true);
+  assert.equal(blocked.target?.reply, undefined);
+  const outside = await loadScreen(
+    outsider,
+    `/titles/movie/1?item=${id}&reply=${replies[0]}`,
+  );
+  assert.ok(outside.kind === "title");
+  assert.equal(outside.target, null);
+  assert.equal(outside.targetUnavailable, true);
+  assert.deepEqual(outside.conversations, []);
+  const legacy = (
+    await db.query("SELECT conversation_id FROM feed_item WHERE id=$1", [id])
+  ).rows[0].conversation_id;
+  assert.deepEqual(await loadScreen(ben, `/conversations/${legacy}`), {
+    kind: "redirect",
+    url: `/titles/movie/1?item=${id}`,
+  });
+  const oldReply = (
+    await db.query(
+      "INSERT INTO comment(conversation_id,author_id,body,spoiler) VALUES($1,$2,'An earlier discussion',true) RETURNING id::text",
+      [legacy, alice],
+    )
+  ).rows[0].id;
+  assert.deepEqual(
+    await loadScreen(ben, `/conversations/${legacy}?reply=${oldReply}`),
+    {
+      kind: "redirect",
+      url: `/titles/movie/1?item=${legacy}&reply=${oldReply}`,
+    },
+  );
+  await assert.rejects(
+    loadScreen(outsider, `/conversations/${legacy}`),
+    /not found/,
+  );
+  await changeRelationship(alice, ben, "remove");
+  for (const path of ["/", "/titles/movie/1", "/people/alice"]) {
+    const data = await loadScreen(ben, path);
+    assert.ok("conversations" in data);
+    assert.deepEqual(data.conversations, []);
+  }
+  await friend(alice, ben);
+  assert.equal((await conversations(ben)).length, 2);
+});
+
 test("Better Auth requires an invite for a new email identity and preserves the account on later sign-ins", async () => {
   const codes = new Map<string, string>();
   const auth = createAuth({

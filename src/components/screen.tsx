@@ -1,39 +1,15 @@
 "use client";
-import Image from "next/image";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ScreenData } from "../server/screens";
-import type { Conversation, Person, Title } from "../shared";
+import type { Person, Title } from "../shared";
 import { api, authClient, signOut, useInteractive, dateLabel } from "./client";
-import { ThreadView } from "./thread";
+import { FeedView } from "./feed";
+import { Poster } from "./poster";
 import { InvitationLink } from "./invitation-link";
 
 function titleURL(id: string) {
   return `/titles/${id.replace(":", "/")}`;
-}
-function Poster({
-  path,
-  name,
-  large = false,
-}: {
-  path: string | null;
-  name: string;
-  large?: boolean;
-}) {
-  return (
-    <div className={`poster ${large ? "large" : ""}`}>
-      {path ? (
-        <Image
-          src={`https://image.tmdb.org/t/p/w342${path}`}
-          alt={`${name} poster`}
-          fill
-          sizes={large ? "180px" : "72px"}
-        />
-      ) : (
-        <span aria-hidden="true">{name.slice(0, 1)}</span>
-      )}
-    </div>
-  );
 }
 export function Screen({
   user,
@@ -71,6 +47,10 @@ export function Screen({
         AbortSignal.any([controller.signal, timeout]),
       );
       if (!controller.signal.aborted) {
+        if (latest.kind === "redirect") {
+          window.location.replace(latest.url);
+          return;
+        }
         setData(latest);
         setLoadError("");
       }
@@ -129,79 +109,6 @@ export function Screen({
   ).filter((c) => c.owner_id === user.user_id);
   function activity(title: string, field: string, value: boolean) {
     return mutate("activity", { title, field, value });
-  }
-  function cards(items: Conversation[]) {
-    return items.length ? (
-      <div className="feed-list">
-        {items.map((c) => (
-          <article className="activity-card" key={c.id}>
-            <Link
-              className="poster-link"
-              href={titleURL(c.title_id)}
-              prefetch={false}
-            >
-              <Poster path={c.poster_path} name={c.title_name} />
-            </Link>
-            <div className="activity-content">
-              <p className="activity-by">
-                <Link href={`/people/${c.username}`} prefetch={false}>
-                  {c.display_name}
-                </Link>
-                <span className="muted">
-                  {c.recommended
-                    ? " recommends"
-                    : c.want_to_watch
-                      ? " wants to watch"
-                      : " shared"}
-                </span>
-              </p>
-              <h2>
-                <Link href={titleURL(c.title_id)} prefetch={false}>
-                  {c.title_name}
-                </Link>
-              </h2>
-              <p className="small muted">
-                {c.kind === "tv" ? "TV show" : "Movie"}
-              </p>
-              <div className="inline-actions">
-                <Link
-                  className="conversation-link"
-                  href={`/conversations/${c.id}`}
-                  prefetch={false}
-                >
-                  Open conversation <span aria-hidden="true">↗</span>
-                </Link>
-                {c.owner_id !== user.user_id && (
-                  <button
-                    className="text-button"
-                    disabled={busy || !interactive}
-                    onClick={() =>
-                      void activity(
-                        c.title_id,
-                        "want_to_watch",
-                        !c.viewer_want_to_watch,
-                      )
-                    }
-                  >
-                    {c.viewer_want_to_watch
-                      ? "✓ Want to watch"
-                      : "+ Want to watch"}
-                  </button>
-                )}
-              </div>
-            </div>
-          </article>
-        ))}
-      </div>
-    ) : (
-      <div className="empty-card">
-        <h2>A little quiet, for now.</h2>
-        <p>Your conversations and friends’ recommendations will appear here.</p>
-        <Link className="text-button" href="/people">
-          Find a friend →
-        </Link>
-      </div>
-    );
   }
   return (
     <div className="app-shell">
@@ -277,7 +184,6 @@ export function Screen({
                 watch.
               </p>
             </div>
-            {cards(data.conversations)}
           </>
         )}
         {data?.kind === "title" && (
@@ -363,39 +269,7 @@ export function Screen({
               <h2>Around this title</h2>
               <span className="muted">Your circle’s conversations</span>
             </div>
-            {cards(data.conversations)}
           </>
-        )}
-        {data?.kind === "thread" && (
-          <>
-            <div className="page-heading compact">
-              <p className="eyebrow">
-                A CONVERSATION WITH{" "}
-                {data.conversation.display_name.toUpperCase()}
-              </p>
-              <h1>
-                <Link
-                  href={titleURL(data.conversation.title_id)}
-                  prefetch={false}
-                >
-                  {data.conversation.title_name}
-                </Link>
-              </h1>
-              <p>
-                {data.conversation.recommended
-                  ? `${data.conversation.display_name} recommends this ${data.conversation.kind === "tv" ? "show" : "movie"}.`
-                  : "Something to talk about with friends."}
-              </p>
-            </div>
-          </>
-        )}
-        {path.startsWith("/conversations/") && (
-          <ThreadView
-            key={path}
-            snapshot={data?.kind === "thread" ? data : null}
-            user={user}
-            refresh={refresh}
-          />
         )}
         {data?.kind === "search" && (
           <>
@@ -632,14 +506,30 @@ export function Screen({
                 </div>
               )}
             </div>
-            {data.profile.can_read ? (
-              cards(data.conversations)
-            ) : (
+            {!data.profile.can_read && (
               <p className="empty">
                 You’ll see their activity after you become friends.
               </p>
             )}
           </>
+        )}
+        {(path === "/" ||
+          path.startsWith("/titles/") ||
+          /^\/people\/[^/?]+/.test(path)) && (
+          <FeedView
+            snapshot={
+              data && "conversations" in data
+                ? (data.conversations ?? null)
+                : null
+            }
+            user={user}
+            refresh={refresh}
+            activity={activity}
+            busy={busy}
+            target={data?.kind === "title" ? data.target : null}
+            unavailable={data?.kind === "title" && data.targetUnavailable}
+            showEmpty={data?.kind !== "profile" || data.profile.can_read}
+          />
         )}
         {data?.kind === "invites" && (
           <>
