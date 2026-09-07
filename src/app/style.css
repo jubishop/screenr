@@ -431,6 +431,7 @@ hr {
 }
 .profile-friends {
   margin-bottom: 28px;
+  overflow-wrap: anywhere;
 }
 .profile-friends summary {
   cursor: pointer;

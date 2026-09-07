@@ -28,7 +28,12 @@ test.afterEach(() => {
 async function join(
   browser: Browser,
   name: string,
-  options: { complete?: boolean; token?: string; hasTouch?: boolean } = {},
+  options: {
+    complete?: boolean;
+    token?: string;
+    hasTouch?: boolean;
+    displayName?: string;
+  } = {},
 ) {
   const context = await browser.newContext({
     viewport: { width: 390, height: 844 },
@@ -60,7 +65,7 @@ async function join(
     await expect(page.getByLabel("Username", { exact: true })).toBeVisible();
     return page;
   }
-  await page.getByLabel("Display name").fill(name);
+  await page.getByLabel("Display name").fill(options.displayName ?? name);
   await page.getByLabel("Username", { exact: true }).fill(name);
   const [completed] = await Promise.all([
     page.waitForResponse(
@@ -1235,7 +1240,8 @@ test("profile friends support discovery and refresh accepted friendships and blo
     await readFile(".cache/browser-friends-invite.txt", "utf8")
   ).trim();
   const owner = await join(browser, "circleowner", { token });
-  const friend = await join(browser, "circlefriend", { token });
+  const displayName = "W".repeat(60);
+  const friend = await join(browser, "circlefriend", { token, displayName });
   const viewer = await join(browser, "circleviewer", { token });
   await befriend(owner, friend, "circlefriend", "circleowner");
 
@@ -1252,13 +1258,13 @@ test("profile friends support discovery and refresh accepted friendships and blo
     owner
       .getByRole("region", { name: "Friends", exact: true })
       .getByRole("link"),
-  ).toHaveText("circlefriend @circlefriend");
+  ).toHaveText(`${displayName} @circlefriend`);
 
   await viewer.goto("/people/circleowner");
   await viewer.getByText("Friends (1)", { exact: true }).click();
   const list = viewer.getByRole("region", { name: "Friends", exact: true });
   await expect(list.getByRole("link")).toHaveCount(1);
-  for (const width of [1440, 390, 320]) {
+  for (const width of [1440, 1024, 768, 390, 320]) {
     await viewer.setViewportSize({ width, height: 900 });
     expect(
       await viewer.evaluate(() => document.documentElement.scrollWidth),
@@ -1274,7 +1280,9 @@ test("profile friends support discovery and refresh accepted friendships and blo
   await expect(list).toBeHidden();
   await toggle.press("Enter");
   await expect(list).toBeVisible();
-  await list.getByRole("link", { name: "circlefriend @circlefriend" }).click();
+  await list
+    .getByRole("link", { name: `${displayName} @circlefriend` })
+    .click();
   await expect(viewer).toHaveURL(/\/people\/circlefriend$/);
   await viewer
     .getByRole("button", { name: "Send friend request", exact: true })
