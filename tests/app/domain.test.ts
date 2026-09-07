@@ -82,6 +82,65 @@ async function setup() {
   return { alice, ben, cam, outsider, conversation };
 }
 
+test("profiles list accepted friends for owners, friends, and nonfriends without exposing private activity or requests", async () => {
+  const { alice, ben, cam, outsider } = await setup();
+  await friend(alice, cam);
+  await friend(alice, ben);
+  const incoming = await person("incoming");
+  const outgoing = await person("outgoing");
+  await changeRelationship(incoming, alice, "request");
+  await changeRelationship(alice, outgoing, "request");
+
+  for (const viewer of [alice, ben, outsider]) {
+    const screen = await loadScreen(viewer, "/people/ALICE");
+    assert.ok(screen.kind === "profile");
+    assert.deepEqual(screen.profile.friends, [
+      { user_id: ben, username: "ben", display_name: "ben" },
+      { user_id: cam, username: "cam", display_name: "cam" },
+    ]);
+    assert.equal(screen.conversations.length, viewer === outsider ? 0 : 1);
+  }
+  const empty = await loadScreen(alice, "/people/outsider");
+  assert.ok(empty.kind === "profile");
+  assert.deepEqual(empty.profile.friends, []);
+});
+
+test("profile friends hide blocked people in both directions and reject blocked profiles", async () => {
+  const { alice, ben, cam, outsider } = await setup();
+  await friend(alice, ben);
+  await friend(alice, cam);
+  await changeRelationship(outsider, ben, "block");
+  await changeRelationship(cam, outsider, "block");
+  const filtered = await loadScreen(outsider, "/people/alice");
+  assert.ok(filtered.kind === "profile");
+  assert.deepEqual(filtered.profile.friends, []);
+  const owner = await loadScreen(alice, "/people/alice");
+  assert.ok(owner.kind === "profile");
+  assert.equal(owner.profile.friends.length, 2);
+  await changeRelationship(outsider, alice, "block");
+  await assert.rejects(loadScreen(outsider, "/people/alice"), /not found/i);
+  await assert.rejects(loadScreen(alice, "/people/outsider"), /not found/i);
+});
+
+test("profile friends follow acceptance, removal, and blocking on each read", async () => {
+  const { alice, ben, outsider } = await setup();
+  const friends = async () => {
+    const screen = await loadScreen(outsider, "/people/alice");
+    assert.ok(screen.kind === "profile");
+    return screen.profile.friends.map((p) => p.username);
+  };
+  await changeRelationship(alice, ben, "request");
+  assert.deepEqual(await friends(), []);
+  await changeRelationship(ben, alice, "accept");
+  assert.deepEqual(await friends(), ["ben"]);
+  await changeRelationship(ben, alice, "remove");
+  assert.deepEqual(await friends(), []);
+  await friend(alice, ben);
+  assert.deepEqual(await friends(), ["ben"]);
+  await changeRelationship(alice, ben, "block");
+  assert.deepEqual(await friends(), []);
+});
+
 test("watch together lists every current shared choice, newest shared first", async () => {
   const { alice, ben, cam } = await setup();
   await friend(alice, ben);

@@ -28,7 +28,12 @@ test.afterEach(() => {
 async function join(
   browser: Browser,
   name: string,
-  options: { complete?: boolean; token?: string; hasTouch?: boolean } = {},
+  options: {
+    complete?: boolean;
+    token?: string;
+    hasTouch?: boolean;
+    displayName?: string;
+  } = {},
 ) {
   const context = await browser.newContext({
     viewport: { width: 390, height: 844 },
@@ -60,7 +65,7 @@ async function join(
     await expect(page.getByLabel("Username", { exact: true })).toBeVisible();
     return page;
   }
-  await page.getByLabel("Display name").fill(name);
+  await page.getByLabel("Display name").fill(options.displayName ?? name);
   await page.getByLabel("Username", { exact: true }).fill(name);
   const [completed] = await Promise.all([
     page.waitForResponse(
@@ -1242,6 +1247,98 @@ test("standalone composition retains drafts through posting and refresh failures
     expect(response.status()).toBe(status);
   }
   await page.context().close();
+});
+
+test("profile friends support discovery and refresh accepted friendships and blocks", async ({
+  browser,
+  page,
+}) => {
+  const token = (
+    await readFile(".cache/browser-friends-invite.txt", "utf8")
+  ).trim();
+  const owner = await join(browser, "circleowner", { token });
+  const displayName = "W".repeat(60);
+  const friend = await join(browser, "circlefriend", { token, displayName });
+  const viewer = await join(browser, "circleviewer", { token });
+  await befriend(owner, friend, "circlefriend", "circleowner");
+
+  const anonymous = await page.request.get(
+    "/api/screenr/screen?path=/people/circleowner",
+  );
+  expect(anonymous.status()).toBe(401);
+  await page.goto("/people/circleowner");
+  await expect(page).toHaveURL(/\/login/);
+
+  await owner.goto("/people/circleowner");
+  await owner.getByText("Friends (1)", { exact: true }).click();
+  await expect(
+    owner
+      .getByRole("region", { name: "Friends", exact: true })
+      .getByRole("link"),
+  ).toHaveText(`${displayName} @circlefriend`);
+
+  await viewer.goto("/people/circleowner");
+  await viewer.getByText("Friends (1)", { exact: true }).click();
+  const list = viewer.getByRole("region", { name: "Friends", exact: true });
+  await expect(list.getByRole("link")).toHaveCount(1);
+  for (const width of [1440, 1024, 768, 390, 320]) {
+    await viewer.setViewportSize({ width, height: 900 });
+    expect(
+      await viewer.evaluate(() => document.documentElement.scrollWidth),
+    ).toBe(width);
+    await viewer.screenshot({
+      path: `.cache/profile-friends-${width}.png`,
+      fullPage: true,
+    });
+  }
+  const toggle = viewer.getByText("Friends (1)", { exact: true });
+  await toggle.focus();
+  await toggle.press("Enter");
+  await expect(list).toBeHidden();
+  await toggle.press("Enter");
+  await expect(list).toBeVisible();
+  await list
+    .getByRole("link", { name: `${displayName} @circlefriend` })
+    .click();
+  await expect(viewer).toHaveURL(/\/people\/circlefriend$/);
+  await viewer
+    .getByRole("button", { name: "Send friend request", exact: true })
+    .click();
+  await expect(
+    viewer.getByRole("button", { name: "Cancel friend request", exact: true }),
+  ).toBeVisible();
+
+  await viewer.goto("/people/circleowner");
+  await viewer
+    .getByRole("button", { name: "Send friend request", exact: true })
+    .click();
+  await viewer.getByText("Friends (1)", { exact: true }).click();
+  await expect(list.getByRole("link")).toHaveCount(1);
+  await expect(
+    viewer.getByText("You’ll see their activity after you become friends."),
+  ).toBeVisible();
+
+  await friend.goto("/people/circleowner");
+  await friend.getByRole("button", { name: "Unfriend", exact: true }).click();
+  await expect(viewer.getByText("Friends (0)", { exact: true })).toBeVisible();
+  await expect(list.getByRole("link")).toHaveCount(0);
+  await expect(list.getByText("No friends to show yet.")).toBeVisible();
+
+  await befriend(owner, friend, "circlefriend", "circleowner");
+  await expect(list.getByRole("link")).toHaveCount(1);
+  await friend.goto("/people/circleviewer");
+  await friend.getByRole("button", { name: "Block", exact: true }).click();
+  await expect(list.getByRole("link")).toHaveCount(0);
+
+  await owner.goto("/people/circleviewer");
+  await owner.getByRole("button", { name: "Block", exact: true }).click();
+  await expect(
+    viewer.getByRole("alert").filter({ hasText: "Person not found." }),
+  ).toBeVisible();
+  await expect(viewer.getByText("Friends (0)", { exact: true })).toHaveCount(0);
+  await owner.context().close();
+  await friend.context().close();
+  await viewer.context().close();
 });
 
 test("watch together opens from a friend profile, filters shared titles, and refreshes choices and access", async ({

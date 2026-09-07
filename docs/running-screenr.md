@@ -284,6 +284,13 @@ rules to threads, cards, and comments. Friendship pairs are ordered by
 PostgreSQL, including mixed-case auth IDs. No private feed or permission
 result is persistently cached.
 
+Profiles include an expandable Friends list for signed-in members, including
+when the viewer is not a friend of the profile owner. Each entry links to its
+profile. The list contains accepted friends only, filters blocks in either
+direction, and counts only the visible people. Profile visibility and the
+friend list use one database snapshot. The list refreshes with the profile;
+viewing it does not grant access to private activity or pending requests.
+
 All domain writes take one transaction advisory lock. This makes invitation
 capacity and permission changes ordered with content writes. It is a deliberate
 small-app simplification; measure lock waits before replacing it. Signup commits
