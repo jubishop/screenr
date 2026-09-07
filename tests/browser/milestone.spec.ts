@@ -28,7 +28,12 @@ test.afterEach(() => {
 async function join(
   browser: Browser,
   name: string,
-  options: { complete?: boolean; token?: string; hasTouch?: boolean } = {},
+  options: {
+    complete?: boolean;
+    token?: string;
+    hasTouch?: boolean;
+    displayName?: string;
+  } = {},
 ) {
   const context = await browser.newContext({
     viewport: { width: 390, height: 844 },
@@ -60,7 +65,7 @@ async function join(
     await expect(page.getByLabel("Username", { exact: true })).toBeVisible();
     return page;
   }
-  await page.getByLabel("Display name").fill(name);
+  await page.getByLabel("Display name").fill(options.displayName ?? name);
   await page.getByLabel("Username", { exact: true }).fill(name);
   const [completed] = await Promise.all([
     page.waitForResponse(
@@ -135,6 +140,7 @@ test("profile display name editing preserves drafts, saves, and updates existing
     exact: true,
   });
   await expect(edit).toBeVisible();
+  await expect(owner.getByText("Friends (1)", { exact: true })).toBeVisible();
   const otherTab = await owner.context().newPage();
   await otherTab.goto("/account");
   await owner.bringToFront();
@@ -728,6 +734,9 @@ test("invited friends discover, save, and share inline discussions with live acc
   await expect(
     item(cam).getByText("This looks like our kind of movie.", { exact: true }),
   ).toBeVisible();
+  await expect(
+    item(cam).getByRole("button", { name: /^(Delete|Remove)$/ }),
+  ).toHaveCount(0);
   await alice.goto("/people/ben");
   await alice.getByRole("button", { name: "Unfriend", exact: true }).click();
   await expect(item(ben)).toHaveCount(0);
@@ -766,6 +775,73 @@ test("invited friends discover, save, and share inline discussions with live acc
   await expect(
     item(alice).getByText("Replying to @cam", { exact: true }),
   ).toBeVisible();
+  const ownComment = (page: Page) =>
+    item(page).locator("[data-comment-id]").filter({
+      hasText: "This looks like our kind of movie.",
+    });
+  for (const path of ["/", "/people/alice", conversationURL]) {
+    await ben.goto(path);
+    await expect(
+      ownComment(ben).getByRole("button", { name: "Delete", exact: true }),
+    ).toBeVisible();
+    await expect(
+      item(ben).getByRole("button", { name: "Remove", exact: true }),
+    ).toHaveCount(0);
+  }
+  const ownId = await ownComment(ben).getAttribute("data-comment-id");
+  for (const page of [cam, outsider]) {
+    const deniedRemoval = await page.request.post(
+      "/api/screenr/remove-comment",
+      {
+        headers: { Origin: browserConfig.baseURL },
+        data: { id: ownId },
+      },
+    );
+    expect(deniedRemoval.status()).toBe(404);
+  }
+  await ben.route(
+    "**/api/screenr/remove-comment",
+    (route) =>
+      route.fulfill({
+        status: 503,
+        json: { error: "Deletion failed. Please try again." },
+      }),
+    { times: 1 },
+  );
+  await ownComment(ben)
+    .getByRole("button", { name: "Delete", exact: true })
+    .click();
+  await expect(item(ben).getByRole("alert")).toHaveText(
+    "Deletion failed. Please try again.",
+  );
+  await expect(ownComment(ben)).toBeVisible();
+  await item(alice)
+    .getByRole("button", { name: /Show earlier replies/ })
+    .click();
+  await ownComment(ben)
+    .getByRole("button", { name: "Delete", exact: true })
+    .click();
+  await expect(item(ben).getByRole("alert")).toHaveCount(0);
+  for (const page of [ben, alice]) {
+    await expect(
+      item(page).locator(`[data-comment-id="${ownId}"]`),
+    ).toContainText("Comment removed");
+    await expect(
+      item(page).getByText("This looks like our kind of movie.", {
+        exact: true,
+      }),
+    ).toHaveCount(0);
+    await expect(
+      item(page).getByText("Replying to @ben", { exact: true }),
+    ).toBeVisible();
+  }
+  await ben.reload();
+  await expect(item(ben).locator(`[data-comment-id="${ownId}"]`)).toContainText(
+    "Comment removed",
+  );
+  await expect(
+    item(ben).getByRole("button", { name: "Delete", exact: true }),
+  ).toHaveCount(0);
   await alice.goto("/invites");
   await alice.getByLabel("Maximum signups").selectOption("2");
   await alice
@@ -995,6 +1071,185 @@ test("standalone title comments persist and share replies across all three mobil
   await outsider.context().close();
 });
 
+test("standalone deletion preserves discussions across feeds, keeps spoilers hidden, and removes empty entries", async ({
+  browser,
+}) => {
+  test.setTimeout(150_000);
+  const token = (
+    await readFile(".cache/browser-comment-invite.txt", "utf8")
+  ).trim();
+  const owner = await join(browser, "deleteowner", { token });
+  const reader = await join(browser, "deletereader", { token });
+  await befriend(owner, reader, "deletereader", "deleteowner");
+  const headers = { Origin: browserConfig.baseURL };
+  const create = async (body: string, spoiler = false) => {
+    const response = await owner.request.post("/api/screenr/title-comment", {
+      headers,
+      data: { title: "tv:987654", body, spoiler },
+    });
+    expect(response.status()).toBe(200);
+    return (await response.json()).id as string;
+  };
+  const reply = async (id: string, body: string) => {
+    const response = await reader.request.post("/api/screenr/comment", {
+      headers,
+      data: { conversation: id, body, spoiler: false },
+    });
+    expect(response.status()).toBe(200);
+    return (await response.json()).id as string;
+  };
+  const item = (page: Page, id: string) =>
+    page.locator(`[data-item-id="${id}"]`);
+  const heading = (page: Page, id: string) =>
+    page.locator(`[data-item-heading="${id}"]`);
+  for (const [index, path] of [
+    "/titles/tv/987654",
+    "/",
+    "/people/deleteowner",
+  ].entries()) {
+    const body = `Starting comment from view ${index}`;
+    const id = await create(body);
+    const replyId = await reply(id, `Retained reply ${index}`);
+    await owner.goto(path);
+    await reader.goto(`/titles/tv/987654?item=${id}`);
+    await expect(
+      heading(reader, id).getByRole("button", { name: "Delete", exact: true }),
+    ).toHaveCount(0);
+    expect(
+      (
+        await reader.request.post("/api/screenr/remove-comment", {
+          headers,
+          data: { id },
+        })
+      ).status(),
+    ).toBe(404);
+    const button = heading(owner, id).getByRole("button", {
+      name: "Delete",
+      exact: true,
+    });
+    await expect(button).toBeVisible();
+    if (index === 0) {
+      await owner.route(
+        "**/api/screenr/remove-comment",
+        (route) =>
+          route.fulfill({
+            status: 503,
+            json: { error: "Deletion failed. Please try again." },
+          }),
+        { times: 1 },
+      );
+      await button.click();
+      await expect(heading(owner, id).getByRole("alert")).toHaveText(
+        "Deletion failed. Please try again.",
+      );
+      await expect(
+        heading(owner, id).getByText(body, { exact: true }),
+      ).toBeVisible();
+    }
+    await button.click();
+    for (const page of [owner, reader]) {
+      await expect(
+        heading(page, id).getByText("Comment removed", { exact: true }),
+      ).toBeVisible();
+      await expect(item(page, id).getByText(body, { exact: true })).toHaveCount(
+        0,
+      );
+      await expect(
+        item(page, id).getByText(`Retained reply ${index}`, { exact: true }),
+      ).toBeVisible();
+    }
+    await expect(heading(owner, id).getByRole("alert")).toHaveCount(0);
+    await expect(button).toHaveCount(0);
+    await owner.reload();
+    await expect(
+      heading(owner, id).getByText("Comment removed", { exact: true }),
+    ).toBeVisible();
+    if (index === 0) {
+      await item(reader, id)
+        .getByLabel("Add your reply")
+        .fill("Continue after deletion");
+      await item(reader, id)
+        .getByRole("button", { name: "Post reply", exact: true })
+        .click();
+      await expect(
+        item(reader, id).getByText("Continue after deletion", { exact: true }),
+      ).toBeVisible();
+      await owner.screenshot({
+        path: ".cache/deleted-standalone-mobile.png",
+        fullPage: true,
+      });
+      expect(
+        await owner.evaluate(() => document.documentElement.scrollWidth),
+      ).toBe(390);
+    } else {
+      await item(reader, id)
+        .locator(`[data-comment-id="${replyId}"]`)
+        .getByRole("button", { name: "Delete", exact: true })
+        .click();
+      await expect(item(reader, id)).toHaveCount(0);
+      await expect(item(owner, id)).toHaveCount(0);
+    }
+  }
+  const spoilerId = await create("Remove this hidden spoiler", true);
+  await reply(spoilerId, "Still protected by the discussion spoiler");
+  for (const page of [owner, reader])
+    await page.goto(`/titles/tv/987654?item=${spoilerId}`);
+  await heading(owner, spoilerId)
+    .getByRole("button", { name: "Delete", exact: true })
+    .click();
+  await expect(
+    heading(reader, spoilerId).getByText("Comment removed", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    item(reader, spoilerId).getByText(
+      "Still protected by the discussion spoiler",
+      { exact: true },
+    ),
+  ).toHaveCount(0);
+  await item(reader, spoilerId)
+    .getByRole("button", {
+      name: "Contains spoilers · Reveal discussion",
+      exact: true,
+    })
+    .click();
+  await expect(
+    item(reader, spoilerId).getByText(
+      "Still protected by the discussion spoiler",
+      { exact: true },
+    ),
+  ).toBeVisible();
+  await reader.reload();
+  await expect(
+    item(reader, spoilerId).getByText(
+      "Still protected by the discussion spoiler",
+      { exact: true },
+    ),
+  ).toHaveCount(0);
+
+  const emptyId = await create("Remove this empty entry");
+  for (const page of [owner, reader])
+    await page.goto(`/titles/tv/987654?item=${emptyId}`);
+  await heading(owner, emptyId)
+    .getByRole("button", { name: "Delete", exact: true })
+    .click();
+  for (const page of [owner, reader]) {
+    await expect(item(page, emptyId)).toHaveCount(0);
+    await expect(
+      page.getByText("This activity is unavailable.", { exact: true }),
+    ).toBeVisible();
+  }
+  for (const path of [
+    "/",
+    "/people/deleteowner",
+    `/titles/tv/987654?item=${emptyId}`,
+  ]) {
+    await owner.goto(path);
+    await expect(item(owner, emptyId)).toHaveCount(0);
+  }
+  await owner.context().close();
+  await reader.context().close();
+});
+
 test("spoiler reply links reach the hidden discussion before revealing the target", async ({
   browser,
 }) => {
@@ -1131,6 +1386,98 @@ test("standalone composition retains drafts through posting and refresh failures
     expect(response.status()).toBe(status);
   }
   await page.context().close();
+});
+
+test("profile friends support discovery and refresh accepted friendships and blocks", async ({
+  browser,
+  page,
+}) => {
+  const token = (
+    await readFile(".cache/browser-friends-invite.txt", "utf8")
+  ).trim();
+  const owner = await join(browser, "circleowner", { token });
+  const displayName = "W".repeat(60);
+  const friend = await join(browser, "circlefriend", { token, displayName });
+  const viewer = await join(browser, "circleviewer", { token });
+  await befriend(owner, friend, "circlefriend", "circleowner");
+
+  const anonymous = await page.request.get(
+    "/api/screenr/screen?path=/people/circleowner",
+  );
+  expect(anonymous.status()).toBe(401);
+  await page.goto("/people/circleowner");
+  await expect(page).toHaveURL(/\/login/);
+
+  await owner.goto("/people/circleowner");
+  await owner.getByText("Friends (1)", { exact: true }).click();
+  await expect(
+    owner
+      .getByRole("region", { name: "Friends", exact: true })
+      .getByRole("link"),
+  ).toHaveText(`${displayName} @circlefriend`);
+
+  await viewer.goto("/people/circleowner");
+  await viewer.getByText("Friends (1)", { exact: true }).click();
+  const list = viewer.getByRole("region", { name: "Friends", exact: true });
+  await expect(list.getByRole("link")).toHaveCount(1);
+  for (const width of [1440, 1024, 768, 390, 320]) {
+    await viewer.setViewportSize({ width, height: 900 });
+    expect(
+      await viewer.evaluate(() => document.documentElement.scrollWidth),
+    ).toBe(width);
+    await viewer.screenshot({
+      path: `.cache/profile-friends-${width}.png`,
+      fullPage: true,
+    });
+  }
+  const toggle = viewer.getByText("Friends (1)", { exact: true });
+  await toggle.focus();
+  await toggle.press("Enter");
+  await expect(list).toBeHidden();
+  await toggle.press("Enter");
+  await expect(list).toBeVisible();
+  await list
+    .getByRole("link", { name: `${displayName} @circlefriend` })
+    .click();
+  await expect(viewer).toHaveURL(/\/people\/circlefriend$/);
+  await viewer
+    .getByRole("button", { name: "Send friend request", exact: true })
+    .click();
+  await expect(
+    viewer.getByRole("button", { name: "Cancel friend request", exact: true }),
+  ).toBeVisible();
+
+  await viewer.goto("/people/circleowner");
+  await viewer
+    .getByRole("button", { name: "Send friend request", exact: true })
+    .click();
+  await viewer.getByText("Friends (1)", { exact: true }).click();
+  await expect(list.getByRole("link")).toHaveCount(1);
+  await expect(
+    viewer.getByText("You’ll see their activity after you become friends."),
+  ).toBeVisible();
+
+  await friend.goto("/people/circleowner");
+  await friend.getByRole("button", { name: "Unfriend", exact: true }).click();
+  await expect(viewer.getByText("Friends (0)", { exact: true })).toBeVisible();
+  await expect(list.getByRole("link")).toHaveCount(0);
+  await expect(list.getByText("No friends to show yet.")).toBeVisible();
+
+  await befriend(owner, friend, "circlefriend", "circleowner");
+  await expect(list.getByRole("link")).toHaveCount(1);
+  await friend.goto("/people/circleviewer");
+  await friend.getByRole("button", { name: "Block", exact: true }).click();
+  await expect(list.getByRole("link")).toHaveCount(0);
+
+  await owner.goto("/people/circleviewer");
+  await owner.getByRole("button", { name: "Block", exact: true }).click();
+  await expect(
+    viewer.getByRole("alert").filter({ hasText: "Person not found." }),
+  ).toBeVisible();
+  await expect(viewer.getByText("Friends (0)", { exact: true })).toHaveCount(0);
+  await owner.context().close();
+  await friend.context().close();
+  await viewer.context().close();
 });
 
 test("watch together opens from a friend profile, filters shared titles, and refreshes choices and access", async ({

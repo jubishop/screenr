@@ -277,6 +277,13 @@ rules to threads, cards, and comments. Friendship pairs are ordered by
 PostgreSQL, including mixed-case auth IDs. No private feed or permission
 result is persistently cached.
 
+Profiles include an expandable Friends list for signed-in members, including
+when the viewer is not a friend of the profile owner. Each entry links to its
+profile. The list contains accepted friends only, filters blocks in either
+direction, and counts only the visible people. Profile visibility and the
+friend list use one database snapshot. The list refreshes with the profile;
+viewing it does not grant access to private activity or pending requests.
+
 All domain writes take one transaction advisory lock. This makes invitation
 capacity and permission changes ordered with content writes. It is a deliberate
 small-app simplification; measure lock waits before replacing it. Thread reads
@@ -286,6 +293,17 @@ has a ten-second deadline; failure clears server content until a successful
 refresh. Access changes clear content on the next refresh without
 waiting for the New activity button. Previously delivered content cannot be
 retracted from a user's device.
+
+Members can **Delete** their own comments in any feed where the conversation
+is accessible. Conversation hosts can also **Remove** other participants'
+comments. Both actions erase the stored text and show a **Comment removed**
+placeholder, preserving replies and their addressed-person context. The server
+checks ownership and current conversation access on every removal request.
+Standalone comment authors can also **Delete** the top-level entry. Its text
+becomes **Comment removed** while eligible replies remain open for discussion.
+Entries without visible, nonremoved replies disappear. The original spoiler
+flag still protects the remaining discussion. This behavior is shared across
+title, friends, and author-profile feeds, including open-page refreshes.
 
 The migration command applies Better Auth's schema and numbered SQL files in
 `db/`. It takes a migration lock and records applied files in

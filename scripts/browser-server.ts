@@ -128,7 +128,7 @@ try {
   await writeFile(".cache/browser-feed-invite.txt", feedInvitation.token, {
     mode: 0o600,
   });
-  const commentInvitation = await createInvitation(null, 5);
+  const commentInvitation = await createInvitation(null, 7);
   await writeFile(
     ".cache/browser-comment-invite.txt",
     commentInvitation.token,
@@ -156,9 +156,13 @@ try {
   await writeFile(
     ".cache/browser-profile-invite.txt",
     profileInvitation.token,
-    {
-      mode: 0o600,
-    },
+    { mode: 0o600 },
+  );
+  const friendsInvitation = await createInvitation(null, 3);
+  await writeFile(
+    ".cache/browser-friends-invite.txt",
+    friendsInvitation.token,
+    { mode: 0o600 },
   );
   const { startGoogleProvider } =
     await import("../tests/browser/google-provider");

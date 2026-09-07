@@ -94,6 +94,24 @@ about a show independently of their structured activity. The user noted
 that this capability is not implemented yet. It is deferred from issue #5
 under the delivery-scope decision below.
 
+### Deleting standalone comments preserves replies — 2026-09-07
+
+**Decision:** Authors can delete their own standalone top-level comments.
+Erase the starting text and retain eligible replies under **Comment removed**.
+Hide the entry from a reader when it has no remaining visible, nonremoved
+replies. Apply this rule in the title, friends, and author-profile feeds.
+Current access, blocking, and spoiler rules continue to apply.
+Discussions that remain visible stay open for new replies. An entry with
+no visible replies stays unavailable and cannot be revived by posting to it.
+
+**Why:** The user accepted preserving other people's contributions while
+following the existing comment-removal behavior.
+
+**Tradeoff:** A discussion with visible replies remains available after its
+starting text is deleted. Deleting the whole discussion was rejected.
+The user also accepted keeping visible discussions open so participants can
+continue talking; closing them to new replies was rejected.
+
 ### Review edits update and move the existing item — 2026-09-06
 
 **Decision:** Editing a review updates its existing feed item in place
@@ -439,6 +457,14 @@ entries or their replies. Those records remain stored and become visible
 again with this release. Take
 the normal pre-upgrade backup; no separate backfill or manual migration step
 is needed.
+
+Migration `006-remove-title-comments.sql` adds removal state to standalone
+comments. Deletion erases the stored starting text, retains the original
+spoiler flag and activity date, and preserves the reply group. The shared
+feed hides a deleted entry when no live reply is visible to that reader.
+The preceding release can still create and read entries after migration;
+on rollback, it shows the stored **[removed]** marker and may display empty
+deleted entries. Deleted text is not restored.
 
 ## Decisions deferred to future features
 

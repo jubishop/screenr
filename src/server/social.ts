@@ -28,9 +28,25 @@ export async function updateDisplayName(
 }
 export async function profileFor(viewer: string, username: string) {
   const profile = (
-    await db.query(
+    await db.query<
+      Person & {
+        can_read: boolean;
+        requested_by: string | null;
+        accepted_at: Date | null;
+        friends: Person[];
+      }
+    >(
       `SELECT p.user_id,p.username,p.display_name,screenr_can_read($1,p.user_id) AS can_read,
-    f.requested_by,f.accepted_at FROM profile p LEFT JOIN friendship f
+    f.requested_by,f.accepted_at,
+    coalesce((SELECT jsonb_agg(jsonb_build_object(
+      'user_id',friend.user_id,'username',friend.username,'display_name',friend.display_name
+    ) ORDER BY friend.username)
+      FROM friendship accepted JOIN profile friend
+        ON friend.user_id=CASE WHEN accepted.low_id=p.user_id THEN accepted.high_id ELSE accepted.low_id END
+      WHERE p.user_id IN (accepted.low_id,accepted.high_id) AND accepted.accepted_at IS NOT NULL
+        AND NOT screenr_blocked($1,friend.user_id)
+        AND NOT screenr_blocked(p.user_id,friend.user_id)), '[]'::jsonb) AS friends
+    FROM profile p LEFT JOIN friendship f
     ON f.low_id=least($1,p.user_id) AND f.high_id=greatest($1,p.user_id)
     WHERE p.username=$2 AND NOT screenr_blocked($1,p.user_id)`,
       [viewer, username.toLowerCase()],
@@ -123,7 +139,8 @@ export async function changeRelationship(
 const feedEntries = `(SELECT id,conversation_id,owner_id,title_id,item_type,active,created_at,activity_at,
     NULL::text AS body,false AS spoiler FROM feed_item
   UNION ALL
-  SELECT id,conversation_id,owner_id,title_id,'comment',true,created_at,created_at,body,spoiler
+  SELECT id,conversation_id,owner_id,title_id,'comment',removed_at IS NULL,created_at,created_at,
+    CASE WHEN removed_at IS NULL THEN body ELSE '' END,spoiler
     FROM title_comment)`;
 const itemQuery = `SELECT c.*,p.username,p.display_name,t.name AS title_name,t.poster_path,t.kind,
   (c.item_type='recommended' AND c.active) AS recommended,
@@ -301,11 +318,18 @@ export async function removeComment(viewer: string, id: string) {
   await transaction(async (client) => {
     const result = await client.query(
       `UPDATE comment cm SET removed_at=coalesce(removed_at,now()),body='[removed]'
-      FROM ${feedEntries} c WHERE cm.id::text=$1 AND (c.id=cm.feed_item_id OR c.id=cm.title_comment_id) AND c.owner_id=$2
+      FROM ${feedEntries} c WHERE cm.id::text=$1 AND (c.id=cm.feed_item_id OR c.id=cm.title_comment_id)
+      AND (cm.author_id=$2 OR c.owner_id=$2)
       AND screenr_can_read(cm.author_id,c.owner_id) AND NOT screenr_blocked($2,cm.author_id)`,
       [id, viewer],
     );
-    if (!result.rowCount) throw new AppError("Comment not found.", 404);
+    if (result.rowCount) return;
+    const standalone = await client.query(
+      `UPDATE title_comment SET removed_at=coalesce(removed_at,now()),body='[removed]'
+       WHERE id::text=$1 AND owner_id=$2`,
+      [id, viewer],
+    );
+    if (!standalone.rowCount) throw new AppError("Comment not found.", 404);
   });
 }
 

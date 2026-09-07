@@ -22,9 +22,11 @@ Screenr is a social app for TV and movies, centered on people you know.
 - Friendships require a request and acceptance. One-way following is not
   supported.
 - People can find friends through shareable profile links, exact-username
-  search, and a friend-request action on commenters in mutual friends' threads.
-- Profiles require sign-in. People who are not accepted friends see only a
-  display name, username, photo, and friend-request button, subject to blocking.
+  search, accepted friend lists on profiles, and a friend-request action on
+  commenters in mutual friends' threads.
+- Profiles require sign-in. People who are not accepted friends see a
+  display name, username, photo, friend-request button, and the person's
+  accepted friends, subject to blocking.
 - Watch activity, ratings, reviews, and recommendations are visible to their
   owner and the owner's current accepted friends.
 - Users can see what their friends are watching or recommend.
@@ -90,6 +92,9 @@ Screenr is a social app for TV and movies, centered on people you know.
   where the entry is visible. The
   [standalone comment implementation](title-feed.md#standalone-title-comments)
   covers creation under issue #8.
+- Authors can [delete standalone comments](title-feed.md#deleting-standalone-comments-preserves-replies--2026-09-07).
+  Preserve eligible replies under Comment removed and hide entries with no
+  visible replies.
 - Authors can mark reviews, posts, and comments as containing spoilers.
   Marked text stays hidden until the reader chooses to reveal it and is
   excluded from notification previews. A flag on a post or review covers
@@ -610,12 +615,20 @@ respects blocking. Opening a profile link does not establish a friendship.
 people they encounter in mutual friends' conversations, within the agreed
 mutual-friendship model.
 
+**Update — 2026-09-07:** [Issue #36](https://github.com/jubishop/screenr/issues/36)
+adds access to any user's accepted friends from their profile to help with
+friend discovery. Friend lists require sign-in and link to each person's
+profile. Pending requests stay private. Blocking hides the blocked profile
+and filters blocked people from other profiles' lists in either direction.
+The list and its count include only people visible to the viewer.
+
 ### Profile visibility before friendship — 2026-09-04
 
 **Decision:** Require sign-in before showing a profile, including through
-shared profile links. Signed-in users who are not accepted friends see only
+shared profile links. Signed-in users who are not accepted friends see
 the person's display name, username, photo, and friend-request button,
-subject to the existing blocking rules.
+subject to the existing blocking rules. The 2026-09-07 friend-discovery
+update above adds accepted friend lists to this profile information.
 
 Watch activity, ratings, reviews, and recommendations are visible to their
 owner and the owner's current accepted friends. Viewing a profile or having
