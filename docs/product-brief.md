@@ -28,14 +28,15 @@ Screenr is a social app for TV and movies, centered on people you know.
 - Watch activity, ratings, reviews, and recommendations are visible to their
   owner and the owner's current accepted friends.
 - Users can see what their friends are watching or recommend.
-- Each movie or show has a standalone page, with all eligible conversations
-  hosted by the user or their direct friends shown below the title details.
-  People views and title views open the same conversations. Title pages put
-  conversations with the most recent visible activity first.
+- Each movie or show has a standalone page with one unified feed below
+  the title details. The [title-feed decisions](title-feed.md) define its
+  presentation and audience. Friends, profile, and title feeds show the
+  same underlying entries and support viewing and replying inline.
 - Use The Movie Database (TMDB) as the movie and TV catalog source.
 - The friends feed automatically includes watch-status changes and ratings,
-  alongside reviews, recommendations, and discussion posts, newest first.
-  Changes made together by one person for the same title form one update.
+  alongside reviews, recommendations, and discussion posts. The
+  [shared feed rules](title-feed.md) define item identity, visibility,
+  and ordering by recent visible activity.
 - Notifications cover friend requests and acceptances, comments on the
   user's posts or reviews, and replies to their comments. Watch updates,
   ratings, and recommendations appear in the feed without alerts.
@@ -73,8 +74,14 @@ Screenr is a social app for TV and movies, centered on people you know.
   independently optional: users can provide either or both.
 - Each person has one editable review and rating per movie or show. Separate
   discussion posts can start new conversations about the same title.
-- Each person's watch status, rating, review, and recommendation for a title
-  share one comment thread. Separate discussion posts have their own threads.
+- Distinct contributions to a title have their own top-level items and
+  replies in the [unified title feed](title-feed.md). A later review does
+  not share the earlier recommendation's replies.
+- Freeform title comments are independent entries, separate from reviews,
+  recommendations, and watch activity. A person can write multiple comments
+  about a title without changing any structured entry. New top-level
+  comments are created on title pages; replies can be added in every feed
+  where the entry is visible. This creation feature is follow-up issue #8.
 - Authors can mark reviews, posts, and comments as containing spoilers.
   Marked text stays hidden until the reader chooses to reveal it and is
   excluded from notification previews. A flag on a post or review covers
@@ -381,46 +388,37 @@ to start new conversations about the same title.
 **Why:** The user accepted one review that can evolve over time, with
 separate discussion posts for new thoughts and conversations.
 
+**Updated — 2026-09-06:** The
+[review edit decision](title-feed.md#review-edits-update-and-move-the-existing-item--2026-09-06)
+defines how edits update and reorder that review's existing feed item.
+
 ### Shared conversation per person and title — 2026-09-04
 
-**Decision:** Use one shared comment thread for a person's watch status,
-rating, review, and recommendation for a title. Adding or updating those
-fields continues the same conversation. For example, recommending a show
-and later adding a review keeps friends' comments together.
-
-Each separate discussion post retains its own thread. The shared thread
-follows the existing audience, blocking, spoiler, author comment-removal,
-and notification rules for conversations.
-
-**Why:** The user accepted keeping the conversation together as someone
-adds or updates their activity and opinions about a title.
+**Superseded — 2026-09-06:** The
+[separate contribution decision](title-feed.md#separate-items-for-later-contributions--2026-09-06)
+replaces the rule that all of one person's activity on a title shares one
+conversation. See that decision for the reason and tradeoff.
 
 ### Standalone movie and show pages — 2026-09-04
 
 **Decision:** Give each movie or show its own standalone page. Show the
-title details first, with all eligible conversations about that title below.
-Include shared person-and-title threads and separate discussion posts
-attached to the title. A show's page also includes discussions labelled for
-its seasons or episodes.
+title details first. A show's page also includes discussions labelled for
+its seasons or episodes. People views and title views use the same content.
 
-People views and title views open the same conversations. Each viewer's
-conversation list includes their own threads and threads hosted by their
-current direct friends, subject to the existing access, blocking, and
-spoiler rules. A friend's comment on an otherwise inaccessible thread does
-not grant access to that thread.
+**Updated — 2026-09-06:** The [unified title feed](title-feed.md) replaces
+the presentation as separate conversations below a title. That document
+owns the new layout and top-level item audience rules. A friend's reply
+on an otherwise inaccessible item does not grant access to that item.
 
 **Why:** The user wants to browse content through both people and movies or
 shows, with all friends' conversations about a title available together.
 
 ### Conversation ordering on title pages — 2026-09-04
 
-**Decision:** Order conversations on movie and show pages by recent visible
-activity, newest first. New threads and new visible comments or replies
-bring a conversation to the top. Activity hidden by the existing access or
-blocking rules does not affect this ordering.
-
-**Why:** The user accepted bringing recently active conversations to the
-top of a title's page.
+**Updated — 2026-09-06:** The
+[title-feed ordering decision](title-feed.md#order-items-by-recent-visible-activity--2026-09-06)
+carries forward ordering by recent visible activity for individual
+top-level items. It owns the current rule and its tradeoff.
 
 ### Spoiler flags — 2026-09-04
 
@@ -466,6 +464,11 @@ transport and timing remain implementation choices.
 
 **Why:** The user accepted this behavior to keep the conversation from
 shifting while someone reads or composes a reply.
+
+**Updated — 2026-09-06:** The
+[title-feed update rule](title-feed.md#load-incoming-activity-without-moving-the-reader--2026-09-06)
+extends this behavior to incoming activity and item reordering in the
+unified title feed.
 
 ### Comment removal by the conversation's author — 2026-09-04
 
@@ -539,15 +542,19 @@ keeping viewing activity and opinions within accepted friendships.
 
 **Decision:** Automatically include watch-status changes and ratings in the
 friends feed, alongside reviews, recommendations, and discussion posts.
-Order the feed newest first and apply the existing content audience and
-blocking rules.
+Apply the existing content audience and blocking rules.
 
-Combine changes made together by the same person for the same title into
-one update. For example, finishing and rating a movie together produces one
-feed item.
+**Updated — 2026-09-06:** The [shared feed decisions](title-feed.md) define
+interactive entries, recent-visible-activity ordering, and inline replies
+across the friends, title, and profile feeds. Recommend and Want to watch
+have separate entries and reply groups, replacing aggregation of all of a
+person's title activity. This does not change the earlier grouping rule
+for other future features: changes saved together by one person for a
+title form one update, such as finishing and rating a movie together.
+Implementing those features is outside issue #5.
 
-**Why:** The user accepted automatic activity updates with related changes
-grouped together to avoid flooding the feed.
+**Why:** The user initially accepted automatic activity updates. The newer
+decisions make each contribution independently discussable in every feed.
 
 ### Notification triggers — 2026-09-04
 

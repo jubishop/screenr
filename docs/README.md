@@ -57,6 +57,8 @@ both memory and design documents.
 ## Product and development
 
 - [Product brief](product-brief.md): confirmed requirements and open design choices.
+- [Unified title feed](title-feed.md): confirmed shared feed decisions for
+  issue #5 and standalone comment scope for follow-up issue #8.
 - [Application stack](application-stack.md): selected core stack, alternatives,
   tradeoffs, and proposed implementation approach.
 - [Development workflow](development-workflow.md): local setup, Git hooks,
