@@ -111,6 +111,8 @@ const itemQuery = `SELECT c.*,p.username,p.display_name,t.name AS title_name,t.p
   (c.item_type='want_to_watch' AND c.active) AS want_to_watch,
   EXISTS (SELECT 1 FROM feed_item own WHERE own.owner_id=$1 AND own.title_id=c.title_id
     AND own.item_type='want_to_watch' AND own.active) AS viewer_want_to_watch,
+  EXISTS (SELECT 1 FROM feed_item own WHERE own.owner_id=$1 AND own.title_id=c.title_id
+    AND own.item_type='recommended' AND own.active) AS viewer_recommended,
   date_trunc('milliseconds', CASE WHEN c.item_type='earlier' THEN coalesce(replies.activity,replies.placeholder_activity,c.created_at)
     ELSE greatest(c.activity_at,coalesce(replies.activity,c.activity_at)) END) AS visible_activity,
   coalesce(replies.comments,'[]') AS comments

@@ -191,8 +191,10 @@ recipients. A full run checks:
   unrelated refreshes do not clear action errors.
 - Slow refreshes still deliver new replies and revoke access. A refresh that
   exceeds ten seconds hides server content; later recovery retains the draft.
-- Feed and friend-profile cards can save and unsave the viewer's title state.
-  A friend's profile shows the viewer's current saved state. Clearing the last
+- Circle, profile, and title feed cards can toggle the viewer's Want to watch
+  and Recommend states independently. The inline Recommend action follows
+  Want to watch on other people's entries. Both controls show the viewer's
+  current state, including after reload. Clearing the last
   activity flag hides an empty card, while visible comments keep its thread
   listed.
 
