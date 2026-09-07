@@ -56,6 +56,10 @@ const listInvitation = await createInvitation(null, 1);
 await writeFile(".cache/browser-invite-list.txt", listInvitation.token, {
   mode: 0o600,
 });
+const watchInvitation = await createInvitation(null, 2);
+await writeFile(".cache/browser-watch-invite.txt", watchInvitation.token, {
+  mode: 0o600,
+});
 const { startGoogleProvider } =
   await import("../tests/browser/google-provider");
 const google = await startGoogleProvider();
@@ -111,6 +115,9 @@ const catalog = createServer((request, response) => {
         : {
             ...fixture,
             id: Number(request.url?.split("/")[2]) || fixture.id,
+            ...(request.url === "/tv/998001"
+              ? { name: "The Harbor Signal", first_air_date: "2025-09-01" }
+              : {}),
             ...(request.url === "/movie/987658"
               ? {
                   title: "The Painted Sky",

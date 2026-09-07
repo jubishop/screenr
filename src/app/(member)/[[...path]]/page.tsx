@@ -25,6 +25,13 @@ export default async function Page({
   const target = new URLSearchParams();
   for (const key of ["item", "reply"])
     if (typeof query[key] === "string") target.set(key, query[key]);
+  if (path === "/watch-together") {
+    const usernames = query.with;
+    for (const username of typeof usernames === "string"
+      ? [usernames]
+      : (usernames ?? []))
+      target.append("with", username);
+  }
   const requestedPath = path + (target.size ? `?${target}` : "");
   let initialData = null,
     initialError = "";

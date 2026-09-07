@@ -2,6 +2,7 @@ import { conversations, people, profileFor, conversationURL } from "./social";
 import { getTitle, getTitleTrailer } from "./catalog";
 import { listInvitations } from "./invitations";
 import { AppError, db } from "./db";
+import { watchTogether } from "./watch-together";
 
 export async function loadScreen(userId: string, requestedPath: string) {
   const url = new URL(requestedPath, "http://screenr.local");
@@ -14,6 +15,15 @@ export async function loadScreen(userId: string, requestedPath: string) {
   if (path === "/search") return { kind: "search" as const };
   if (path === "/people")
     return { kind: "people" as const, ...(await people(userId)) };
+  if (path === "/watch-together") {
+    const usernames = url.searchParams.getAll("with");
+    if (usernames.length !== 1 || !usernames[0])
+      throw new AppError("Choose one friend from their profile.");
+    return {
+      kind: "watch-together" as const,
+      ...(await watchTogether(userId, usernames)),
+    };
+  }
   if (path === "/invites")
     return {
       kind: "invites" as const,
