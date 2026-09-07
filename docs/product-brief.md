@@ -709,12 +709,17 @@ The [release workflow](development-workflow.md#review-merge-and-deploy)
 records the initial bootstrap exception and the normal requirement to review
 and merge changes before production deployment.
 
-### Public hostname — 2026-09-05
+### Public hostname — 2026-09-06
 
-**Decision:** Use `screenr.jubishop.com` for the live application.
+**Decision:** Move the live application to `screenr.club`.
 
-**Why:** The user accepted using the existing domain, consistent with the
-preference to avoid additional costs for this milestone.
+**Why:** In [issue #9](https://github.com/jubishop/screenr/issues/9), the user
+requested the move and confirmed that they had registered the domain with
+Cloudflare. This supersedes the 2026-09-05 choice of `screenr.jubishop.com`.
+
+The [domain cutover procedure](deployment.md#domain-cutover) keeps the existing
+VPS and preserves old shared links through redirects. The decision does not
+mean that DNS, provider settings, or production have already changed.
 
 ## Open decisions
 

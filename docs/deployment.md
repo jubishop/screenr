@@ -4,11 +4,13 @@ status: current
 
 # Shared VPS deployment
 
-Screenr targets the existing Hetzner VPS and `screenr.jubishop.com`, under the
+Screenr targets the existing Hetzner VPS and `screenr.club`, under the
 [accepted hosting decision](application-stack.md#initial-hosting-layout--2026-09-05).
 The files in `ops/` define the deployment. Their presence does not mean the
-live services or provider accounts have been configured. Live completion is
-tracked in [issue #1](https://github.com/jubishop/screenr/issues/1).
+live services or provider accounts have been configured. The initial deployment
+at `screenr.jubishop.com` is recorded in [issue #1](https://github.com/jubishop/screenr/issues/1).
+The move to `screenr.club` is tracked in [issue #9](https://github.com/jubishop/screenr/issues/9);
+follow the [domain cutover procedure](#domain-cutover) for an existing installation.
 
 ## Layout
 
@@ -58,12 +60,13 @@ Google credentials, and the TMDB read token. The activation command checks all
 required values without printing them. The provider setup and callback URLs
 are in [Running Screenr](running-screenr.md#provider-configuration).
 
-Add only the Screenr block from `ops/Caddyfile` to the existing Caddyfile.
+Add only the Screenr blocks from `ops/Caddyfile` to the existing Caddyfile.
 The template uses a per-host origin certificate, following this server's
 existing Cloudflare setup. Verify the zone's origin TLS mode and certificate
 compatibility; do not weaken a zone-wide setting. Keep the origin key private.
 Validate Caddy before reloading it. Add a **proxied** A record for
-`screenr.jubishop.com` pointing to this VPS. Preserve the existing firewall
+`screenr.club` pointing to this VPS. Keep the old proxied `screenr.jubishop.com`
+record and its certificate for redirects. Preserve the existing firewall
 rules limiting public HTTP(S) access to Cloudflare.
 
 Screenr supplies its own invited-member authentication. Do not put a second
@@ -94,7 +97,7 @@ locks deployment so two activations cannot run together.
 
 The workflow stores release artifacts with one-day retention. After downloading
 and verifying an archive, the deployment job deletes its GitHub artifact. Build
-jobs have no production secrets. A failed deploy job must be retried using
+jobs have no production secrets. To retry a failed deploy job, use
 **Re-run all jobs** in GitHub Actions, so checks and packaging produce a fresh
 artifact. If `main` has advanced, use the newer push's run instead. A repeat
 deployment of the active revision verifies health without extracting or
@@ -173,6 +176,10 @@ Do not paste the resulting invitation into a public issue or PR.
 
 ## Independent acceptance
 
+For the one-time hostname change, use only the focused checks in
+[Domain cutover](#domain-cutover). The broader checks below apply to other
+releases when the affected behavior requires them.
+
 After deployment, check the public `/api/health` and `/login` responses,
 service status and restart counts, and logs. Verify the relevant changed
 behavior on the live site, using existing accounts where possible. Verify
@@ -191,8 +198,57 @@ Useful read-only commands:
 systemctl status screenr-db screenr-web screenr-worker --no-pager
 systemctl show screenr-db screenr-web screenr-worker -p NRestarts -p MemoryCurrent -p MemoryPeak
 journalctl -u screenr-web -u screenr-worker --since '30 minutes ago' --no-pager
-curl --fail https://screenr.jubishop.com/api/health
+curl --fail https://screenr.club/api/health
 ```
+
+## Domain cutover
+
+**Decision — 2026-09-06:** The owner is the only user. Apply the
+[hostname change](product-brief.md#public-hostname--2026-09-06) as a small
+configuration update after review and merge. This replaces the previous
+maintenance window, extra backup verification, full sign-in and invitation
+checklist, and mandatory CI rerun. The normal deployment already takes a
+backup and checks the services.
+
+1. **Let deployment finish.** Merge normally; no extra before-merge task is
+   required. Wait for the automatic run to end before editing server settings.
+   The final `screenr.club` check can fail because the domain is not configured
+   yet. If activation and remote service checks passed, continue below;
+   otherwise resolve the deployment failure first.
+2. **Switch the settings.** Add Google's
+   `https://screenr.club/api/auth/callback/google` callback in project
+   `screenr-69420`, and update its consent-screen domain and URLs where needed.
+   In Cloudflare, point the proxied apex A record to the existing VPS and use
+   Full (strict) TLS with an active edge certificate. Install the origin
+   certificate and private key at `/etc/caddy/certs/screenr-club.pem` and
+   `/etc/caddy/certs/screenr-club.key`, readable by Caddy with the key private.
+   Save private copies of `/etc/screenr/app.env` and `/etc/caddy/Caddyfile`,
+   preserving permissions. Set `BETTER_AUTH_URL=https://screenr.club` and
+   install both Screenr blocks from the merged `ops/Caddyfile`, preserving
+   unrelated sites and the existing firewall. Run
+   `caddy validate --config /etc/caddy/Caddyfile`, then
+   `systemctl restart screenr-web screenr-worker` and `systemctl reload caddy`.
+   Restart explicitly: deploying an already-active revision skips restarts.
+3. **Check that it works.** Confirm `https://screenr.club/api/health` returns
+   HTTP 200 with `{"ok":true}`. Open `/login` and sign in to the existing owner
+   profile using the usual method. Prefer Google if the account uses it,
+   because its callback changed. Check that one old URL redirects to the same
+   path and query on the new host. These checks complete the domain change;
+   no second sign-in method, new invitation, or separate acceptance report is
+   required. Inspect logs or other services only if a check fails.
+
+Keep the existing database, auth secret, provider credentials, and verified
+`Screenr <screenr@jubishop.com>` sender. Expect to sign in again on the new
+host. Leave the old DNS, certificate, and Google callback in place; there is
+no scheduled cleanup or rollback window.
+
+If the switch fails, restore the two saved configuration files, validate
+Caddy, restart Screenr web and worker, and reload Caddy. Check the old login
+again. No database or release rollback is needed for these domain settings.
+
+If the first Actions run failed only at the new-host check, the direct checks
+above are sufficient. That run stays failed; the next normal deployment checks
+the new host. A full workflow rerun is optional, not a completion requirement.
 
 ## Encrypted backups and restore check
 

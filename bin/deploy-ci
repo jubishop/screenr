@@ -100,12 +100,12 @@ def main():
             print(f'Could not remove temporary upload: {remote}', file=sys.stderr)
     for path in ('api/health', 'login'):
         body = run('curl', '--fail', '--silent', '--show-error', '--max-time', '20',
-                   f'https://screenr.jubishop.com/{path}', capture=True)
+                   f'https://screenr.club/{path}', capture=True)
         if path == 'api/health' and json.loads(body).get('ok') is not True:
             raise ValueError('Public health check failed.')
         if path == 'login' and 'Send sign-in code' not in body:
             raise ValueError('Public login check failed.')
-    print(f'DEPLOY SUCCEEDED: {revision}\nhttps://screenr.jubishop.com')
+    print(f'DEPLOY SUCCEEDED: {revision}\nhttps://screenr.club')
     print('Verify changed user flows and the other shared-host applications before closing the release.')
 
 

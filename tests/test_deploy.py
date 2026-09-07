@@ -117,7 +117,9 @@ class CIDeploymentTests(DeploymentFixture):
         self.assertFalse(any(call[:3] == ['gh', 'workflow', 'run'] for call in calls))
         self.assertTrue(any(call[0] == 'scp' for call in calls))
         self.assertTrue(any(call[0] == 'ssh' and call[-1].startswith('sh -c') for call in calls))
-        self.assertEqual(len([call for call in calls if call[0] == 'curl']), 2)
+        self.assertEqual([call[-1] for call in calls if call[0] == 'curl'],
+                         ['https://screenr.club/api/health', 'https://screenr.club/login'])
+        self.assertIn('https://screenr.club', result.stdout)
         for call in calls:
             if call[0] in ('ssh', 'scp'):
                 self.assertIn('StrictHostKeyChecking=yes', call)

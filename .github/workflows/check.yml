@@ -41,8 +41,8 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npx playwright install --with-deps chromium
-      - name: Install ShellCheck
-        run: sudo apt-get update && sudo apt-get install --yes shellcheck
+      - name: Install check tools
+        run: sudo apt-get update && sudo apt-get install --yes shellcheck caddy
       - name: Check repository
         run: ./bin/check
       - name: Package Linux release
@@ -73,7 +73,7 @@ jobs:
     timeout-minutes: 20
     environment:
       name: production
-      url: https://screenr.jubishop.com
+      url: https://screenr.club
     permissions:
       contents: read
       actions: write # Download and remove this run's temporary release artifact.

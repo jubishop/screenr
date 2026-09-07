@@ -249,6 +249,11 @@ local release command or deployment approval step. This keeps review and merge
 as the release action. GitHub's production environment holds the deployment
 credentials and permits only `main`; PR checks have no production credentials.
 
+For the one-time move to `screenr.club`, use the short
+[domain cutover procedure](deployment.md#domain-cutover). It defines the
+complete post-merge work for this owner-only service; do not add a separate
+maintenance window or repeat checks already performed by deployment.
+
 The initial live deployment for issue #1 was a bootstrap exception used to
 verify the first production setup. It does not establish the normal release
 process. Any future deployment from an unmerged branch requires the user's
