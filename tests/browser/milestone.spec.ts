@@ -1060,13 +1060,22 @@ test("slow and failed refreshes enforce access while preserving reply drafts", a
   await befriend(page, viewer, "slowviewer", "draftrefresh");
   await viewer.goto(`/conversations/${id}`);
   await viewer.getByLabel("Add your reply").fill("Retain this timed-out draft");
+  let requestStarted!: () => void;
+  const delayedRequest = new Promise<void>((resolve) => {
+    requestStarted = resolve;
+  });
   await viewer.route("**/api/screenr/screen?**", async (route) => {
+    requestStarted();
     await delay(15000);
     await route.continue();
   });
+  await viewer.bringToFront();
+  // Measure the refresh deadline from an actual intercepted request, not
+  // from navigation or a background tab's next polling opportunity.
+  await delayedRequest;
   await expect(viewer.getByRole("main").getByRole("alert")).toContainText(
     "Refresh timed out. Please try again.",
-    { timeout: 14000 },
+    { timeout: 12000 },
   );
   await expect(
     viewer.getByText("Visible conversation content", { exact: true }),
