@@ -159,7 +159,10 @@ recipients. A full run checks:
 - Reply drafts survive failed refreshes and typing during a pending post.
   Refresh failures hide server content until access is checked again;
   unrelated refreshes do not clear action errors.
-- A friend's profile shows the viewer's current saved state. Clearing the last
+- Slow refreshes still deliver new replies and revoke access. A refresh that
+  exceeds ten seconds hides server content; later recovery retains the draft.
+- Feed and friend-profile cards can save and unsave the viewer's title state.
+  A friend's profile shows the viewer's current saved state. Clearing the last
   activity flag hides an empty card, while visible comments keep its thread
   listed.
 
@@ -182,8 +185,10 @@ result is persistently cached.
 All domain writes take one transaction advisory lock. This makes invitation
 capacity and permission changes ordered with content writes. It is a deliberate
 small-app simplification; measure lock waits before replacing it. Thread reads
-use one database snapshot. Open pages poll every three seconds while visible
-and refresh on focus. Access changes clear content on the next refresh without
+use one database snapshot. Open pages poll every three seconds while visible,
+waiting for any active refresh to finish, and refresh on focus. Each refresh
+has a ten-second deadline; failure clears server content until a successful
+refresh. Access changes clear content on the next refresh without
 waiting for the New replies button. Previously delivered content cannot be
 retracted from a user's device.
 

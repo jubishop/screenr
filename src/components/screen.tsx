@@ -62,12 +62,13 @@ export function Screen({
   const refresh = useCallback(async () => {
     pending.current?.abort();
     const controller = new AbortController();
+    const timeout = AbortSignal.timeout(10_000);
     pending.current = controller;
     try {
       const latest = await api<ScreenData>(
         `screen?path=${encodeURIComponent(path)}`,
         undefined,
-        controller.signal,
+        AbortSignal.any([controller.signal, timeout]),
       );
       if (!controller.signal.aborted) {
         setData(latest);
@@ -76,14 +77,23 @@ export function Screen({
     } catch (error) {
       if (!controller.signal.aborted) {
         setData(null);
-        setLoadError((error as Error).message);
+        setLoadError(
+          timeout.aborted
+            ? "Refresh timed out. Please try again."
+            : (error as Error).message,
+        );
       }
+    } finally {
+      if (pending.current === controller) pending.current = null;
     }
   }, [path]);
   useEffect(() => {
     void refresh();
     const timer = setInterval(() => {
-      if (document.visibilityState === "visible") void refresh();
+      // A slow request must finish before the next poll starts. Explicit
+      // refreshes still supersede old reads after mutations or focus changes.
+      if (document.visibilityState === "visible" && !pending.current)
+        void refresh();
     }, 3000);
     const focus = () => {
       void refresh();
@@ -166,7 +176,11 @@ export function Screen({
                     className="text-button"
                     disabled={busy || !interactive}
                     onClick={() =>
-                      void activity(c.title_id, "want_to_watch", true)
+                      void activity(
+                        c.title_id,
+                        "want_to_watch",
+                        !c.viewer_want_to_watch,
+                      )
                     }
                   >
                     {c.viewer_want_to_watch

@@ -1,6 +1,7 @@
 import { test, expect, type Page, type Browser } from "@playwright/test";
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
+import { setTimeout as delay } from "node:timers/promises";
 
 const browserErrors: string[] = [];
 
@@ -489,7 +490,7 @@ for (const complete of [true, false]) {
   });
 }
 
-test("reply drafts survive failed refreshes without retaining conversation content", async ({
+test("slow and failed refreshes enforce access while preserving reply drafts", async ({
   browser,
 }) => {
   const page = await join(browser, "draftrefresh");
@@ -530,6 +531,60 @@ test("reply drafts survive failed refreshes without retaining conversation conte
   await expect(
     page.getByText("Keep this unsent reply", { exact: true }),
   ).toBeVisible();
+  const invitation = await page.request.post("/api/screenr/invite", {
+    headers: { Origin: "http://localhost:3055" },
+    data: { limit: 1 },
+  });
+  const viewer = await join(browser, "slowviewer", {
+    token: (await invitation.json()).token,
+  });
+  await befriend(page, viewer, "slowviewer", "draftrefresh");
+  await viewer.goto(`/conversations/${id}`);
+  await viewer.getByLabel("Add your reply").fill("Keep my slow-network draft");
+  await viewer.route("**/api/screenr/screen?**", async (route) => {
+    // Delay the real HTTP boundary beyond the polling interval. Application
+    // authorization and database reads still determine the returned content.
+    await delay(4000);
+    await route.continue();
+  });
+  await page.request.post("/api/screenr/comment", {
+    headers: { Origin: "http://localhost:3055" },
+    data: { conversation: id, body: "A slow incoming reply", spoiler: false },
+  });
+  await expect(
+    viewer.getByRole("button", { name: /New replies/ }),
+  ).toBeVisible();
+  await viewer.getByRole("button", { name: /New replies/ }).click();
+  await expect(
+    viewer.getByText("A slow incoming reply", { exact: true }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Unfriend", exact: true }).click();
+  await expect(viewer.getByRole("main").getByRole("alert")).toContainText(
+    "Conversation not found.",
+  );
+  await expect(
+    viewer.getByText("A slow incoming reply", { exact: true }),
+  ).toHaveCount(0);
+  await viewer.unrouteAll({ behavior: "wait" });
+  await befriend(page, viewer, "slowviewer", "draftrefresh");
+  await viewer.goto(`/conversations/${id}`);
+  await viewer.getByLabel("Add your reply").fill("Retain this timed-out draft");
+  await viewer.route("**/api/screenr/screen?**", async (route) => {
+    await delay(15000);
+    await route.continue();
+  });
+  await expect(viewer.getByRole("main").getByRole("alert")).toContainText(
+    "Refresh timed out. Please try again.",
+    { timeout: 14000 },
+  );
+  await expect(
+    viewer.getByText("Visible conversation content", { exact: true }),
+  ).toHaveCount(0);
+  await viewer.unrouteAll({ behavior: "wait" });
+  await expect(viewer.getByLabel("Add your reply")).toHaveValue(
+    "Retain this timed-out draft",
+  );
+  await viewer.context().close();
   await page.context().close();
 });
 
@@ -647,6 +702,30 @@ test("friend profile saves display the viewer's current saved state", async ({
   await viewer.reload();
   await expect(
     viewer.getByRole("button", { name: "✓ Want to watch", exact: true }),
+  ).toBeVisible();
+  await viewer
+    .getByRole("button", { name: "✓ Want to watch", exact: true })
+    .click();
+  await expect(
+    viewer.getByRole("button", { name: "+ Want to watch", exact: true }),
+  ).toBeVisible();
+  await viewer.reload();
+  await expect(
+    viewer.getByRole("button", { name: "+ Want to watch", exact: true }),
+  ).toBeVisible();
+  await viewer.goto("/");
+  await viewer
+    .getByRole("button", { name: "+ Want to watch", exact: true })
+    .click();
+  await viewer
+    .getByRole("button", { name: "✓ Want to watch", exact: true })
+    .click();
+  await expect(
+    viewer.getByRole("button", { name: "+ Want to watch", exact: true }),
+  ).toBeVisible();
+  await viewer.reload();
+  await expect(
+    viewer.getByRole("button", { name: "+ Want to watch", exact: true }),
   ).toBeVisible();
   await owner.goto("/people/profileviewer");
   await expect(
