@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-"""Deploy a checked main release using GitHub CLI and SSH."""
-import argparse
+"""Deploy the checked push from the GitHub Actions production job."""
 import hashlib
 import json
 import os
@@ -11,7 +10,6 @@ import re
 import subprocess
 import sys
 import tarfile
-import time
 
 REPO = 'jubishop/screenr'
 ROOT = Path(__file__).resolve().parents[1]
@@ -19,7 +17,10 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def run(*args, capture=False):
     if args[0] in ('ssh', 'scp'):
-        args = (args[0], '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=10',
+        args = (args[0], '-i', os.environ['SCREENR_DEPLOY_KEY_FILE'],
+                '-o', 'UserKnownHostsFile=' + os.environ['SCREENR_DEPLOY_KNOWN_HOSTS_FILE'],
+                '-o', 'StrictHostKeyChecking=yes', '-o', 'IdentitiesOnly=yes',
+                '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=10',
                 '-o', 'ServerAliveInterval=15', '-o', 'ServerAliveCountMax=3', *args[1:])
     return subprocess.run(args, check=True, text=True,
                           cwd=ROOT, stdout=subprocess.PIPE if capture else None,
@@ -27,58 +28,29 @@ def run(*args, capture=False):
 
 
 def main():
-    parser = argparse.ArgumentParser(description=__doc__, epilog=(
-        'Requires gh authentication and root SSH access. Set SCREENR_DEPLOY_HOST '
-        'or git config screenr.deployHost. Builds and deploys clean, merged main. '
-        'Requires Python 3, gh, ssh, scp, and curl.'))
-    parser.add_argument('--host', default=os.environ.get('SCREENR_DEPLOY_HOST'),
-                        help='root SSH destination (or configured SSH alias)')
-    args = parser.parse_args()
-    if not args.host:
-        args.host = subprocess.run(['git', 'config', '--get', 'screenr.deployHost'], cwd=ROOT, text=True, capture_output=True).stdout.strip()
-    if not args.host or not re.fullmatch(r'[A-Za-z0-9_][A-Za-z0-9_.@-]*', args.host):
-        parser.error('Set SCREENR_DEPLOY_HOST or --host to a root SSH destination.')
-    if run('git', 'status', '--porcelain', capture=True).strip():
-        raise ValueError('Commit, review, and merge local changes before deploying.')
-    if run('git', 'branch', '--show-current', capture=True).strip() != 'main':
-        raise ValueError('Switch to main after review and merge before deploying.')
-    run('git', 'fetch', 'origin', 'main')
-    revision = run('git', 'rev-parse', 'HEAD', capture=True).strip()
-    if revision != run('git', 'rev-parse', 'origin/main', capture=True).strip():
-        raise ValueError('Local main differs from origin/main. Sync it before deploying.')
-    print('Checking VPS access...', flush=True)
-    run('ssh', args.host, 'test "$(id -u)" = 0 && test -f /opt/screenr/current/REVISION && '
-        'systemctl is-active --quiet screenr-db')
-
-    def recent_runs():
-        return json.loads(run('gh', 'run', 'list', '--repo', REPO, '--workflow', 'check.yml',
-                              '--branch', 'main', '--event', 'workflow_dispatch',
-                              '--limit', '20', '--json', 'databaseId,headSha', capture=True))
-    previous = {item['databaseId'] for item in recent_runs()}
-    print('Starting Linux release build and CI checks...', flush=True)
-    run('gh', 'workflow', 'run', 'check.yml', '--repo', REPO, '--ref', 'main')
-    deadline = time.monotonic() + 120
-    while time.monotonic() < deadline:
-        candidates = [item for item in recent_runs()
-                      if item['databaseId'] not in previous and item['headSha'] == revision]
-        if candidates:
-            run_id = str(candidates[0]['databaseId'])
-            break
-        time.sleep(5)
-    else:
-        raise ValueError('Could not locate the dispatched release build within two minutes.')
-    run('gh', 'run', 'watch', run_id, '--repo', REPO, '--exit-status', '--interval', '10')
+    if (os.environ.get('GITHUB_REPOSITORY') != REPO or
+            os.environ.get('GITHUB_EVENT_NAME') != 'push' or
+            os.environ.get('GITHUB_REF') != 'refs/heads/main'):
+        raise ValueError('Production deployment requires a push to jubishop/screenr main.')
+    run_id = os.environ.get('GITHUB_RUN_ID', '')
+    revision = os.environ.get('GITHUB_SHA', '')
+    host = os.environ.get('SCREENR_DEPLOY_HOST', '')
+    if not run_id.isdecimal() or not re.fullmatch(r'[0-9a-f]{40}', revision):
+        raise ValueError('Invalid GitHub run or revision.')
+    if not re.fullmatch(r'root@[A-Za-z0-9][A-Za-z0-9.-]*', host):
+        raise ValueError('Set SCREENR_DEPLOY_HOST to the root SSH destination in the production environment.')
+    for name in ('SCREENR_DEPLOY_KEY_FILE', 'SCREENR_DEPLOY_KNOWN_HOSTS_FILE'):
+        if not os.environ.get(name) or not Path(os.environ[name]).is_file():
+            raise ValueError(f'Missing SSH configuration: {name}')
     info = json.loads(run('gh', 'api', f'repos/{REPO}/actions/runs/{run_id}', capture=True))
-    if (info.get('conclusion'), info.get('head_branch'), info.get('event')) != (
-            'success', 'main', 'workflow_dispatch'):
-        raise ValueError('Deployment requires a successful main workflow_dispatch run.')
-    if info.get('path') != '.github/workflows/check.yml':
-        raise ValueError('Run is not the repository check workflow.')
-    if info['head_sha'] != revision:
-        raise ValueError('Build does not match local main.')
-    revision = info['head_sha']
-    if not re.fullmatch(r'[0-9a-f]{40}', revision):
-        raise ValueError('Invalid release revision.')
+    if (info.get('head_branch'), info.get('event'), info.get('path'), info.get('head_sha')) != (
+            'main', 'push', '.github/workflows/check.yml', revision):
+        raise ValueError('Deployment requires the matching main push workflow.')
+    jobs = json.loads(run('gh', 'api', f'repos/{REPO}/actions/runs/{run_id}/jobs', capture=True))['jobs']
+    if not any(job['name'] == 'check' and job.get('conclusion') == 'success' for job in jobs):
+        raise ValueError('The release checks must pass before deployment.')
+    if run('git', 'rev-parse', 'HEAD', capture=True).strip() != revision:
+        raise ValueError('Checkout does not match the checked revision.')
     current = json.loads(run('gh', 'api', f'repos/{REPO}/commits/main', capture=True))['sha']
     if revision != current:
         raise ValueError('Release is not current main. Build current main before deploying.')
@@ -110,20 +82,20 @@ def main():
         if artifact['name'] == artifact_name:
             run('gh', 'api', '--method', 'DELETE', f"repos/{REPO}/actions/artifacts/{artifact['id']}")
     checksum = hashlib.sha256(archive.read_bytes()).hexdigest()
-    remote = run('ssh', args.host, 'mktemp /tmp/screenr-release.XXXXXXXX', capture=True).strip()
+    remote = run('ssh', host, 'mktemp /tmp/screenr-release.XXXXXXXX', capture=True).strip()
     if not re.fullmatch(r'/tmp/screenr-release\.[A-Za-z0-9]+', remote):
         raise ValueError('Unexpected remote temporary path.')
     try:
-        run('scp', str(archive), f'{args.host}:{remote}')
+        run('scp', str(archive), f'{host}:{remote}')
         command = run('git', 'show', f'{revision}:ops/deploy-release.sh', capture=True)
         current = json.loads(run('gh', 'api', f'repos/{REPO}/commits/main', capture=True))['sha']
         if current != revision:
-            raise ValueError('Main changed during packaging. Run bin/shipit again.')
-        run('ssh', args.host, 'sh -c ' + shlex.quote(command) + ' deploy-release ' +
+            raise ValueError('Main changed during packaging. The newer push will deploy its release.')
+        run('ssh', host, 'sh -c ' + shlex.quote(command) + ' deploy-release ' +
             ' '.join(shlex.quote(value) for value in (revision, checksum, remote)))
     finally:
         try:
-            run('ssh', args.host, f'rm -f {remote}')
+            run('ssh', host, f'rm -f {remote}')
         except subprocess.SubprocessError:
             print(f'Could not remove temporary upload: {remote}', file=sys.stderr)
     for path in ('api/health', 'login'):

@@ -1,5 +1,5 @@
 #!/bin/sh
-# Executed remotely by bin/shipit, with a verified Linux release archive.
+# Executed remotely by the CI deployment job with a verified release archive.
 set -eu
 revision=${1:?Missing revision}
 checksum=${2:?Missing archive checksum}

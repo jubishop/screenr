@@ -21,32 +21,29 @@ base = Path(os.environ['FIXTURE'])
 with (base / 'calls').open('a') as log:
     log.write(json.dumps([name, *args]) + '\n')
 if name == 'git':
-    if args[0] == 'status': print(os.environ.get('DIRTY', ''))
-    elif args[0] == 'branch': print(os.environ.get('BRANCH', 'main'))
-    elif args[0] == 'rev-parse': print('a'*40)
-    elif args[0] == 'config': print('root@example.test')
+    if args[0] == 'rev-parse': print(os.environ.get('CHECKOUT_SHA', 'a'*40))
     elif args[0] == 'show':
         if args[1] != 'a'*40 + ':ops/deploy-release.sh': sys.exit(99)
         print((base / 'checked-deploy.sh').read_text(), end='')
 elif name == 'gh':
-    if args[:2] == ['run', 'list']:
-        print(json.dumps([dict(databaseId=123, headSha='a'*40)] if (base / 'dispatched').exists() else []))
-    elif args[:2] == ['workflow', 'run']:
-        (base / 'dispatched').touch()
-    elif args[:2] == ['run', 'watch']:
+    if args[:2] == ['run', 'download']:
         if os.environ.get('WORKTREE_DRIFT'):
             (base / 'ops/deploy-release.sh').write_text('echo unchecked-deployment\n')
-        sys.exit(int(os.environ.get('BUILD_EXIT', '0')))
-    elif args[:2] == ['run', 'download']:
         shutil.copyfile(base / 'release.tar.gz', Path(args[-1]) / ('screenr-' + 'a'*40 + '.tar.gz'))
     elif args[-1].endswith('/artifacts'):
         print(json.dumps(dict(artifacts=[dict(name='screenr-linux-x64-'+'a'*40, id=456)])))
     elif args[:3] == ['api', '--method', 'DELETE']:
         pass
+    elif args[-1].endswith('/jobs'):
+        print(json.dumps(dict(jobs=[dict(name='check', conclusion=os.environ.get('CHECK_RESULT', 'success'))])))
     elif 'actions/runs/123' in args[-1]:
-        print(json.dumps(dict(conclusion='success', head_branch='main', event='workflow_dispatch', path='.github/workflows/check.yml', head_sha='a'*40)))
+        print(json.dumps(dict(conclusion='success', head_branch=os.environ.get('RUN_BRANCH', 'main'),
+                             event=os.environ.get('RUN_EVENT', 'push'), path='.github/workflows/check.yml',
+                             head_sha=os.environ.get('RUN_SHA', 'a'*40))))
     elif 'commits/main' in args[-1]:
-        print(json.dumps(dict(sha=os.environ.get('REMOTE_SHA', 'a'*40))))
+        count = sum('commits/main' in line for line in (base / 'calls').read_text().splitlines())
+        revision = 'b'*40 if os.environ.get('LATE_PUSH') and count > 1 else os.environ.get('REMOTE_SHA', 'a'*40)
+        print(json.dumps(dict(sha=revision)))
     else: sys.exit(99)
 elif name == 'ssh':
     if args[-1].startswith('mktemp'): print('/tmp/screenr-release.ABC123')
@@ -57,14 +54,14 @@ elif name == 'curl':
 '''
 
 
-class ShipitTests(unittest.TestCase):
+class DeploymentFixture(unittest.TestCase):
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)
         self.base = Path(self.temporary.name)
         (self.base / 'bin').mkdir()
         (self.base / 'ops').mkdir()
-        shutil.copy2(ROOT / 'bin/shipit', self.base / 'bin/shipit')
+        shutil.copy2(ROOT / 'bin/deploy-ci', self.base / 'bin/deploy-ci')
         shutil.copy2(ROOT / 'ops/deploy-release.sh', self.base / 'ops/deploy-release.sh')
         shutil.copy2(ROOT / 'ops/deploy-release.sh', self.base / 'checked-deploy.sh')
         self.commands = self.base / 'commands'
@@ -75,7 +72,15 @@ class ShipitTests(unittest.TestCase):
         for name in ('git', 'gh', 'ssh', 'scp', 'curl'):
             (self.commands / name).symlink_to(fake)
         self.environment = {**os.environ, 'FIXTURE': str(self.base),
+                            'SCREENR_DEPLOY_HOST': 'root@example.test',
+                            'GITHUB_REPOSITORY': 'jubishop/screenr', 'GITHUB_RUN_ID': '123',
+                            'GITHUB_SHA': REVISION, 'GITHUB_REF': 'refs/heads/main',
+                            'GITHUB_EVENT_NAME': 'push',
                             'PATH': str(self.commands) + os.pathsep + os.environ['PATH']}
+        for name in ('deploy-key', 'known-hosts'):
+            (self.base / name).write_text('fixture')
+        self.environment['SCREENR_DEPLOY_KEY_FILE'] = str(self.base / 'deploy-key')
+        self.environment['SCREENR_DEPLOY_KNOWN_HOSTS_FILE'] = str(self.base / 'known-hosts')
         self.make_archive()
 
     def make_archive(self, revision=REVISION, extra=None):
@@ -90,7 +95,7 @@ class ShipitTests(unittest.TestCase):
                 archive.addfile(extra)
 
     def execute(self, *args, **environment):
-        return subprocess.run([str(self.base / 'bin/shipit'), *args], cwd=self.base,
+        return subprocess.run([str(self.base / 'bin' / self.command), *args], cwd=self.base,
                               env={**self.environment, **environment}, text=True,
                               capture_output=True, timeout=15)
 
@@ -98,52 +103,61 @@ class ShipitTests(unittest.TestCase):
         path = self.base / 'calls'
         return [json.loads(line) for line in path.read_text().splitlines()] if path.exists() else []
 
-    def test_help_requires_no_network(self):
-        result = self.execute('--help')
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(self.calls(), [])
 
-    def test_build_download_activate_and_check_public_health(self):
-        result = self.execute()
+class CIDeploymentTests(DeploymentFixture):
+    command = 'deploy-ci'
+
+    def test_checked_push_downloads_and_deploys_without_dispatching_again(self):
+        result = self.execute(RUN_EVENT='push')
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn('DEPLOY SUCCEEDED', result.stdout)
         calls = self.calls()
-        for command in (['gh', 'workflow', 'run'], ['gh', 'run', 'watch'],
-                        ['gh', 'run', 'download'], ['gh', 'api', '--method', 'DELETE']):
+        for command in (['gh', 'run', 'download'], ['gh', 'api', '--method', 'DELETE']):
             self.assertTrue(any(call[:len(command)] == command for call in calls), command)
+        self.assertFalse(any(call[:3] == ['gh', 'workflow', 'run'] for call in calls))
         self.assertTrue(any(call[0] == 'scp' for call in calls))
         self.assertTrue(any(call[0] == 'ssh' and call[-1].startswith('sh -c') for call in calls))
         self.assertEqual(len([call for call in calls if call[0] == 'curl']), 2)
+        for call in calls:
+            if call[0] in ('ssh', 'scp'):
+                self.assertIn('StrictHostKeyChecking=yes', call)
+                self.assertIn('IdentitiesOnly=yes', call)
+                self.assertIn(str(self.base / 'deploy-key'), call)
 
-    def test_uncommitted_changes_stop_before_build(self):
-        result = self.execute(DIRTY=' M src/app.ts')
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn('Commit, review, and merge', result.stderr)
-        self.assertFalse(any(call[0] in ('gh', 'ssh') for call in self.calls()))
+    def test_pull_request_feature_branch_and_failed_checks_never_contact_host(self):
+        for environment in ({'GITHUB_EVENT_NAME': 'pull_request'},
+                            {'GITHUB_EVENT_NAME': 'workflow_dispatch'},
+                            {'GITHUB_REF': 'refs/heads/feature'},
+                            {'RUN_EVENT': 'pull_request'}, {'RUN_EVENT': 'workflow_dispatch'}, {'RUN_BRANCH': 'feature'},
+                            {'CHECK_RESULT': 'failure'}, {'CHECK_RESULT': 'skipped'},
+                            {'RUN_SHA': 'b' * 40}, {'GITHUB_REPOSITORY': 'fork/screenr'},
+                            {'CHECKOUT_SHA': 'b' * 40}, {'SCREENR_DEPLOY_KEY_FILE': ''},
+                            {'SCREENR_DEPLOY_KNOWN_HOSTS_FILE': ''}):
+            with self.subTest(environment=environment):
+                result = self.execute(**environment)
+                self.assertNotEqual(result.returncode, 0, result.stdout)
+                self.assertFalse(any(call[0] in ('ssh', 'scp') for call in self.calls()))
 
-    def test_checkout_changes_during_build_cannot_change_remote_script(self):
+    def test_checkout_changes_cannot_change_remote_script(self):
         result = self.execute(WORKTREE_DRIFT='yes')
         self.assertEqual(result.returncode, 0, result.stderr)
         remote_commands = [shlex.split(call[-1])[2] for call in self.calls()
                            if call[0] == 'ssh' and call[-1].startswith('sh -c')]
         self.assertEqual(remote_commands, [(self.base / 'checked-deploy.sh').read_text()])
 
-    def test_feature_branch_stops_before_build(self):
-        result = self.execute(BRANCH='feature')
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn('Switch to main', result.stderr)
-        self.assertFalse(any(call[0] in ('gh', 'ssh') for call in self.calls()))
-
-    def test_failed_build_never_contacts_host(self):
-        result = self.execute(BUILD_EXIT='1')
-        self.assertNotEqual(result.returncode, 0)
-        self.assertFalse(any(call[0] == 'scp' or (call[0] == 'ssh' and call[-1].startswith(('mktemp', 'sh -c'))) for call in self.calls()))
-
     def test_changed_main_never_contacts_host(self):
         result = self.execute(REMOTE_SHA='b' * 40)
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('current main', result.stderr)
         self.assertFalse(any(call[0] == 'scp' or (call[0] == 'ssh' and call[-1].startswith(('mktemp', 'sh -c'))) for call in self.calls()))
+
+    def test_push_during_upload_stops_activation_and_cleans_upload(self):
+        result = self.execute(LATE_PUSH='yes')
+        self.assertNotEqual(result.returncode, 0)
+        calls = self.calls()
+        self.assertTrue(any(call[0] == 'scp' for call in calls))
+        self.assertFalse(any(call[0] == 'ssh' and call[-1].startswith('sh -c') for call in calls))
+        self.assertTrue(any(call[0] == 'ssh' and call[-1].startswith('rm -f') for call in calls))
 
     def test_mismatched_archive_never_contacts_host(self):
         self.make_archive(revision='b' * 40)
