@@ -684,7 +684,9 @@ test("standalone title comments persist and share replies across all three mobil
       .fill(`Standalone reply from view ${index}`);
     await item.getByRole("button", { name: "Post reply", exact: true }).click();
     await expect(
-      item.getByText(`Standalone reply from view ${index}`, { exact: true }),
+      item
+        .locator("[data-comment-id]")
+        .getByText(`Standalone reply from view ${index}`, { exact: true }),
     ).toBeVisible();
     await reader.reload();
     await expect(item.locator("[data-comment-id]")).toHaveCount(index + 1);
@@ -717,7 +719,9 @@ test("standalone title comments persist and share replies across all three mobil
   await first.getByLabel("Add your reply").fill("Fourth reply from the host");
   await first.getByRole("button", { name: "Post reply", exact: true }).click();
   await expect(
-    first.getByText("Fourth reply from the host", { exact: true }),
+    first
+      .locator("[data-comment-id]")
+      .getByText("Fourth reply from the host", { exact: true }),
   ).toBeVisible();
   for (const path of ["/titles/movie/987654", "/", "/people/commentowner"]) {
     await reader.goto(path);
@@ -796,7 +800,9 @@ test("standalone title comments persist and share replies across all three mobil
     .getByRole("button", { name: "Post reply", exact: true })
     .click();
   await expect(
-    spoilerItem.getByText("Thread inherits the spoiler flag", { exact: true }),
+    spoilerItem
+      .locator("[data-comment-id]")
+      .getByText("Thread inherits the spoiler flag", { exact: true }),
   ).toBeVisible();
   for (const path of [
     `/titles/tv/987654?item=${spoilerId}`,
@@ -827,6 +833,58 @@ test("standalone title comments persist and share replies across all three mobil
   await owner.context().close();
   await reader.context().close();
   await outsider.context().close();
+});
+
+test("spoiler reply links reach the hidden discussion before revealing the target", async ({
+  browser,
+}) => {
+  const token = (
+    await readFile(".cache/browser-comment-invite.txt", "utf8")
+  ).trim();
+  const page = await join(browser, "commentlinks", { token });
+  const headers = { Origin: "http://localhost:3055" };
+  const body = "Hidden discussion.\n".repeat(60).trim();
+  const response = await page.request.post("/api/screenr/title-comment", {
+    headers,
+    data: { title: "movie:987655", body, spoiler: true },
+  });
+  expect(response.ok()).toBe(true);
+  const { id } = await response.json();
+  const replyResponse = await page.request.post("/api/screenr/comment", {
+    headers,
+    data: { conversation: id, body: "Linked hidden reply", spoiler: false },
+  });
+  expect(replyResponse.ok()).toBe(true);
+  const { id: replyId } = await replyResponse.json();
+  // Newer entries put the linked discussion below the initial viewport.
+  for (let index = 0; index < 2; index++) {
+    const newer = await page.request.post("/api/screenr/title-comment", {
+      headers,
+      data: {
+        title: "movie:987655",
+        body: `Newer discussion ${index}`,
+        spoiler: false,
+      },
+    });
+    expect(newer.ok()).toBe(true);
+  }
+  await page.goto(`/titles/movie/987655?item=${id}&reply=${replyId}`);
+  const item = page.locator(`[data-item-id="${id}"]`);
+  const reveal = item.getByRole("button", {
+    name: "Contains spoilers · Reveal discussion",
+    exact: true,
+  });
+  await expect(reveal).toBeInViewport();
+  await expect(item.getByText(body, { exact: true })).toHaveCount(0);
+  await expect(
+    item.getByText("Linked hidden reply", { exact: true }),
+  ).toHaveCount(0);
+  await reveal.click();
+  await expect(page.locator(`#comment-${replyId}`)).toBeInViewport();
+  await expect(
+    item.getByText("Linked hidden reply", { exact: true }),
+  ).toBeVisible();
+  await page.context().close();
 });
 
 test("standalone composition retains drafts through posting and refresh failures", async ({
@@ -1197,7 +1255,7 @@ test("an unavailable legacy link navigates after friendship restores access", as
     route.fulfill({ contentType: "text/html", body: "Trailer player fixture" }),
   );
   await waiting.goto(`/conversations/${entry.conversation_id}`);
-  await expect(waiting.getByRole("alert")).toContainText(
+  await expect(waiting.getByRole("main").getByRole("alert")).toContainText(
     "Conversation not found.",
   );
   await befriend(owner, reader, "recoveryreader", "recoveryowner");
