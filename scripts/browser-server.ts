@@ -118,6 +118,13 @@ const catalog = createServer((request, response) => {
             ...(request.url === "/tv/998001"
               ? { name: "The Harbor Signal", first_air_date: "2025-09-01" }
               : {}),
+            ...(request.url === "/movie/987658"
+              ? {
+                  title: "The Painted Sky",
+                  name: "The Painted Sky",
+                  poster_path: "/test-poster.png",
+                }
+              : {}),
           },
     ),
   );

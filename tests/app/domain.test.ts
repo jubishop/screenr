@@ -429,6 +429,38 @@ test("pending and nonfriends cannot read or write a thread; accepted friends use
   );
   assert.notEqual(same, conversation, "Each action needs its own discussion");
 });
+test("feed action states belong to the viewer across circle, title, and profile reads", async () => {
+  const { alice, ben, conversation } = await setup();
+  await friend(alice, ben);
+  await updateTitleActivity(alice, "movie:1", "want_to_watch", true);
+  await addComment(ben, conversation, "Keep this discussion", false);
+  for (const recommended of [false, true, false]) {
+    await updateTitleActivity(ben, "movie:1", "recommended", recommended);
+    for (const wantToWatch of [false, true, false]) {
+      await updateTitleActivity(ben, "movie:1", "want_to_watch", wantToWatch);
+      for (const filter of [{}, { title: "movie:1" }, { owner: alice }]) {
+        const entries = (await conversations(ben, filter)).filter(
+          (item) => item.owner_id === alice,
+        );
+        assert.equal(entries.length, 2);
+        for (const item of entries) {
+          assert.equal(item.viewer_recommended, recommended);
+          assert.equal(item.viewer_want_to_watch, wantToWatch);
+        }
+      }
+      assert.equal(
+        (await thread(ben, conversation)).conversation.viewer_recommended,
+        recommended,
+      );
+    }
+  }
+  await updateTitleActivity(alice, "movie:1", "recommended", false);
+  await updateTitleActivity(ben, "movie:1", "recommended", true);
+  const withdrawn = (await thread(ben, conversation)).conversation;
+  assert.equal(withdrawn.recommended, false);
+  assert.equal(withdrawn.viewer_recommended, true);
+});
+
 test("action items persist independently, removal does not bump activity, and reactivation reuses replies", async () => {
   const { alice, ben, cam, conversation: recommendation } = await setup();
   await friend(alice, ben);

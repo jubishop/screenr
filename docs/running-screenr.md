@@ -54,6 +54,17 @@ The invitation page shows active links with copy and share controls. Links
 remain available after reload; revoked, expired, and fully used invitations
 disappear on the next refresh. Their database records remain intact.
 
+Shared invitation URLs redirect to the login page, which provides a generic
+Screenr title, description, and public PNG through Open Graph and Twitter card
+metadata. Preview clients can read these tags in the initial HTML without
+JavaScript or cookies. In production, the image URL uses `BETTER_AUTH_URL`.
+The preview does not include invitation tokens or member details. Fetching a
+preview does not consume an invitation. This follows Apple's
+[Messages preview guidance](https://developer.apple.com/documentation/technotes/tn3156-create-rich-previews-for-messages),
+including support for server redirects. After deployment, share a fresh invite
+in Messages to check its presentation; an existing message may retain an older
+preview.
+
 Migration `004-invitation-links.sql` adds an optional second token hash. Old
 invitations stored only a one-way hash, so their original URLs cannot be
 recovered. When the creator views an active old invitation, Screenr adds a
@@ -178,6 +189,10 @@ recipients. A full run checks:
 - A blocked pair cannot see each other in a mutual friend's conversation,
   while the host retains visibility.
 - Invitations can be created and revoked.
+- Cookie-free preview requests follow invitation redirects and receive metadata
+  in the HTML head for mobile, desktop, and social crawler user agents. The
+  public PNG is reachable and has the declared dimensions. Preview requests
+  preserve invitation usage and the recipient's signup cookie.
 - Google signup shows an existing connection and removes the connect button.
   A wrong email code is rejected; a valid code returns to the same profile.
 - An email-created account can recover from a provider request failure,
@@ -191,8 +206,10 @@ recipients. A full run checks:
   unrelated refreshes do not clear action errors.
 - Slow refreshes still deliver new replies and revoke access. A refresh that
   exceeds ten seconds hides server content; later recovery retains the draft.
-- Feed and friend-profile cards can save and unsave the viewer's title state.
-  A friend's profile shows the viewer's current saved state. Clearing the last
+- Circle, profile, and title feed cards can toggle the viewer's Want to watch
+  and Recommend states independently. The inline Recommend action follows
+  Want to watch on other people's entries. Both controls show the viewer's
+  current state, including after reload. Clearing the last
   activity flag hides an empty card, while visible comments keep its thread
   listed.
 

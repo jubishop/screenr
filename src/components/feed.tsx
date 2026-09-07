@@ -175,7 +175,12 @@ function FeedEntry({
     >
       {item && (
         <header className="activity-card" data-item-heading={item.id}>
-          <Link className="poster-link" href={titleURL} prefetch={false}>
+          <Link
+            className="poster-link"
+            href={titleURL}
+            prefetch={false}
+            aria-label={item.title_name}
+          >
             <Poster path={item.poster_path} name={item.title_name} />
           </Link>
           <div className="activity-content">
@@ -215,21 +220,36 @@ function FeedEntry({
                 Link to discussion <span aria-hidden="true">↗</span>
               </Link>
               {item.owner_id !== user.user_id && (
-                <button
-                  className="text-button"
-                  disabled={busy || !interactive}
-                  onClick={() =>
-                    void activity(
-                      item.title_id,
-                      "want_to_watch",
-                      !item.viewer_want_to_watch,
-                    )
-                  }
-                >
-                  {item.viewer_want_to_watch
-                    ? "✓ Want to watch"
-                    : "+ Want to watch"}
-                </button>
+                <>
+                  <button
+                    className="text-button"
+                    disabled={busy || !interactive}
+                    onClick={() =>
+                      void activity(
+                        item.title_id,
+                        "want_to_watch",
+                        !item.viewer_want_to_watch,
+                      )
+                    }
+                  >
+                    {item.viewer_want_to_watch
+                      ? "✓ Want to watch"
+                      : "+ Want to watch"}
+                  </button>
+                  <button
+                    className="text-button"
+                    disabled={busy || !interactive}
+                    onClick={() =>
+                      void activity(
+                        item.title_id,
+                        "recommended",
+                        !item.viewer_recommended,
+                      )
+                    }
+                  >
+                    {item.viewer_recommended ? "✓ Recommended" : "+ Recommend"}
+                  </button>
+                </>
               )}
             </div>
           </div>
