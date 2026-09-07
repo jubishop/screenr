@@ -495,9 +495,19 @@ test("invited friends discover, save, and share inline discussions with live acc
   await expect(
     alice.getByRole("button", { name: "✓ Recommended", exact: true }),
   ).toBeVisible();
-  await alice.getByRole("link", { name: /Link to discussion/ }).click();
-  await expect(alice).toHaveURL(/\/titles\/movie\/987654\?item=[0-9a-f-]+$/);
-  const conversationURL = alice.url();
+  await alice.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+  const titleURL = alice.url();
+  await alice
+    .getByRole("button", { name: "Copy link to discussion", exact: true })
+    .click();
+  await expect(alice.getByRole("status")).toHaveText("Link copied.");
+  await expect(alice).toHaveURL(titleURL);
+  const conversationURL = await alice.evaluate(() =>
+    navigator.clipboard.readText(),
+  );
+  expect(conversationURL).toMatch(
+    /^http:\/\/localhost:3055\/titles\/movie\/987654\?item=[0-9a-f-]+$/,
+  );
   const id = new URL(conversationURL).searchParams.get("item")!;
   const item = (page: Page) => page.locator(`[data-item-id="${id}"]`);
   await ben.goto("/");
@@ -618,6 +628,113 @@ test("invited friends discover, save, and share inline discussions with live acc
     alice.getByText("No active invitations.", { exact: true }),
   ).toBeVisible();
   for (const page of [alice, ben, cam, outsider]) await page.context().close();
+});
+
+test("discussion links copy from every feed without navigating or losing drafts and recover from clipboard failures", async ({
+  browser,
+}) => {
+  const token = (
+    await readFile(".cache/browser-feed-invite.txt", "utf8")
+  ).trim();
+  const owner = await join(browser, "copyowner", { token });
+  const reader = await join(browser, "copyreader", { token, hasTouch: true });
+  await befriend(owner, reader, "copyreader", "copyowner");
+  await owner.goto("/titles/tv/987657");
+  await owner
+    .getByRole("button", { name: "Recommend to friends", exact: true })
+    .click();
+  await owner
+    .getByRole("button", { name: "+ Want to watch", exact: true })
+    .click();
+  await expect(owner.locator("[data-item-id]")).toHaveCount(2);
+  await reader
+    .context()
+    .grantPermissions(["clipboard-read", "clipboard-write"]);
+
+  for (const path of ["/titles/tv/987657", "/", "/people/copyowner"]) {
+    await reader.goto(path);
+    const entries = reader.locator("[data-item-id]");
+    await expect(entries).toHaveCount(2);
+    for (const entry of await entries.all()) {
+      const id = await entry.getAttribute("data-item-id");
+      const expectedURL = `http://localhost:3055/titles/tv/987657?item=${id}`;
+      const draft = entry.getByLabel("Add your reply");
+      await draft.fill("Keep this reply draft.");
+      const copy = entry.getByRole("button", {
+        name: "Copy link to discussion",
+        exact: true,
+      });
+      await expect(copy).toBeVisible();
+      await expect(entry.getByRole("status")).toBeEmpty();
+      await copy.tap();
+      await expect(entry.getByRole("status")).toHaveText("Link copied.");
+      expect(await reader.evaluate(() => navigator.clipboard.readText())).toBe(
+        expectedURL,
+      );
+      await expect(reader).toHaveURL(`http://localhost:3055${path}`);
+      await expect(draft).toHaveValue("Keep this reply draft.");
+      await reader.evaluate(() =>
+        navigator.clipboard.writeText("Before keyboard copy"),
+      );
+      await copy.focus();
+      await reader.keyboard.press("Enter");
+      await expect(copy).toBeFocused();
+      await expect(reader).toHaveURL(`http://localhost:3055${path}`);
+      await expect
+        .poll(() => reader.evaluate(() => navigator.clipboard.readText()))
+        .toBe(expectedURL);
+    }
+  }
+
+  const entry = reader.locator("[data-item-id]").first();
+  const copy = entry.getByRole("button", {
+    name: "Copy link to discussion",
+    exact: true,
+  });
+  for (const unavailable of [false, true]) {
+    await reader.evaluate((unavailable) => {
+      Object.defineProperty(navigator, "clipboard", {
+        configurable: true,
+        value: unavailable
+          ? undefined
+          : {
+              writeText: async () => {
+                throw new DOMException("Clipboard denied", "NotAllowedError");
+              },
+            },
+      });
+    }, unavailable);
+    await copy.tap();
+    await expect(entry.getByRole("status")).toHaveText(
+      "Could not copy the link. Please try again.",
+    );
+    await expect(reader).toHaveURL("http://localhost:3055/people/copyowner");
+    await expect(entry.getByLabel("Add your reply")).toHaveValue(
+      "Keep this reply draft.",
+    );
+  }
+  await reader.evaluate(() => {
+    Reflect.deleteProperty(navigator, "clipboard");
+  });
+  await copy.tap();
+  await expect(entry.getByRole("status")).toHaveText("Link copied.");
+  const sharedURL = await reader.evaluate(() => navigator.clipboard.readText());
+  await owner.goto(sharedURL);
+  await expect(
+    owner.locator(
+      `[data-item-id="${new URL(sharedURL).searchParams.get("item")}"]`,
+    ),
+  ).toBeInViewport();
+  await reader.setViewportSize({ width: 320, height: 844 });
+  expect(
+    await reader.evaluate(() => document.documentElement.scrollWidth),
+  ).toBe(320);
+  await reader.screenshot({
+    path: ".cache/discussion-copy-mobile.png",
+    fullPage: true,
+  });
+  await owner.context().close();
+  await reader.context().close();
 });
 
 test("feed poster links name their titles and support keyboard navigation with and without artwork", async ({
