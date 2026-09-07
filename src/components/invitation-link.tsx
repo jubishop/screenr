@@ -95,7 +95,7 @@ export function InvitationLink({ url }: { url: string }) {
         )}
       </div>
       <p id={hint} className="small muted">
-        Tap the link or use Copy link. Keep it now to share with your friends.
+        Tap the link or use Copy link to share it with your friends.
       </p>
       <p className="small" role="status">
         {message}

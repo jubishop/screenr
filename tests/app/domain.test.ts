@@ -1,6 +1,6 @@
 import { test, before, beforeEach, after } from "node:test";
 import assert from "node:assert/strict";
-import { randomBytes } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 
 process.env.DATABASE_URL =
   process.env.TEST_DATABASE_URL ??
@@ -19,6 +19,7 @@ const {
   invitationHash,
   revokeInvitation,
   listInvitations,
+  activeInvitation,
 } = await import("../../src/server/invitations");
 const {
   changeRelationship,
@@ -147,7 +148,7 @@ test("invitation lifetime, revocation, ownership, limits, and email verification
 });
 test("joining does not create friendship; invitation creator sees signups subject to blocking", async () => {
   const owner = await person("owner");
-  const { token } = await createInvitation(owner);
+  const { token } = await createInvitation(owner, 2);
   const a = await pending("alice", token);
   await completeSignup(a, "Alice", "alice");
   assert.equal(
@@ -159,6 +160,110 @@ test("joining does not create friendship; invitation creator sees signups subjec
   assert.deepEqual((await listInvitations(owner))[0].joined, []);
   assert.equal((await listInvitations(owner))[0].uses, 1);
 });
+test("active invitations expose stable working links only to their creator", async () => {
+  const owner = await person("owner"),
+    other = await person("other");
+  const invitation = await createInvitation(owner, 2);
+  const first = (await listInvitations(owner))[0];
+  assert.equal(first.url, `http://localhost:3000/join/${invitation.token}`);
+  assert.equal((await listInvitations(owner))[0].url, first.url);
+  assert.deepEqual(await listInvitations(other), []);
+  assert.deepEqual(await activeInvitation(invitationHash(invitation.token)), {
+    id: invitation.id,
+  });
+  const member = await pending("newmember", invitation.token);
+  await completeSignup(member, "New member", "newmember", invitation.token);
+  const remaining = (await listInvitations(owner))[0];
+  assert.equal(remaining.url, first.url);
+  assert.equal(remaining.uses, 1);
+  assert.equal(remaining.max_uses, 2);
+  assert.equal(remaining.joined[0].username, "newmember");
+});
+test("old invitations gain a working share link without breaking the original or resetting capacity", async () => {
+  const owner = await person("owner");
+  const original = randomBytes(32).toString("base64url"),
+    id = randomUUID();
+  // Model a pre-upgrade row: only the original one-way hash exists.
+  await db.query(
+    "INSERT INTO invitation(id,token_hash,creator_id,max_uses) VALUES($1,$2,$3,2)",
+    [id, invitationHash(original), owner],
+  );
+  const listed = (await listInvitations(owner))[0];
+  assert.equal(typeof listed.url, "string");
+  const shared = new URL(listed.url).pathname.split("/").at(-1)!;
+  assert.match(shared, /^[a-zA-Z0-9_-]{43}$/);
+  assert.notEqual(shared, original);
+  assert.equal((await listInvitations(owner))[0].url, listed.url);
+  for (const token of [original, shared])
+    assert.deepEqual(await activeInvitation(invitationHash(token)), { id });
+  const first = await pending("originalguest", original);
+  await completeSignup(first, "Original guest", "originalguest");
+  assert.equal((await listInvitations(owner))[0].uses, 1);
+  const second = await pending("sharedguest", shared);
+  await completeSignup(second, "Shared guest", "sharedguest", shared);
+  assert.deepEqual(await listInvitations(owner), []);
+  for (const token of [original, shared])
+    assert.equal(await activeInvitation(invitationHash(token)), undefined);
+  assert.equal(
+    (await db.query("SELECT uses FROM invitation WHERE id=$1", [id])).rows[0]
+      .uses,
+    2,
+  );
+});
+test("revoked, expired, and exhausted invitations disappear while their records remain", async () => {
+  const owner = await person("owner");
+  const active = await createInvitation(owner);
+  const revoked = await createInvitation(owner);
+  const expired = await createInvitation(owner);
+  const exhausted = await createInvitation(owner);
+  await revokeInvitation(owner, revoked.id);
+  await db.query("UPDATE invitation SET expires_at=now() WHERE id=$1", [
+    expired.id,
+  ]);
+  const guest = await pending("guest", exhausted.token);
+  await completeSignup(guest, "Guest", "guest");
+  assert.deepEqual(
+    (await listInvitations(owner)).map((item) => item.id),
+    [active.id],
+  );
+  assert.equal(
+    (
+      await db.query(
+        "SELECT count(*)::int AS n FROM invitation WHERE creator_id=$1",
+        [owner],
+      )
+    ).rows[0].n,
+    4,
+  );
+});
+for (const condition of ["revoked", "expired"]) {
+  test(`both URLs of an old ${condition} invitation reject new signups`, async () => {
+    const owner = await person("owner");
+    const original = randomBytes(32).toString("base64url"),
+      id = randomUUID();
+    await db.query(
+      "INSERT INTO invitation(id,token_hash,creator_id,max_uses) VALUES($1,$2,$3,2)",
+      [id, invitationHash(original), owner],
+    );
+    const listed = (await listInvitations(owner))[0];
+    assert.equal(typeof listed.url, "string");
+    const shared = new URL(listed.url).pathname.split("/").at(-1)!;
+    const guest = await pending("guest", shared);
+    if (condition === "revoked") await revokeInvitation(owner, id);
+    else
+      await db.query("UPDATE invitation SET expires_at=now() WHERE id=$1", [
+        id,
+      ]);
+    assert.deepEqual(await listInvitations(owner), []);
+    for (const token of [original, shared]) {
+      assert.equal(await activeInvitation(invitationHash(token)), undefined);
+      await assert.rejects(
+        completeSignup(guest, "Guest", "guest", token),
+        /no longer/,
+      );
+    }
+  });
+}
 test("pending and nonfriends cannot read or write a thread; accepted friends use the same thread", async () => {
   const { alice, ben, outsider, conversation } = await setup();
   await changeRelationship(ben, alice, "request");

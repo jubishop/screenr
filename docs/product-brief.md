@@ -267,6 +267,16 @@ invitations and find those people to send friend requests afterward.
 The user specified the default, maximum, and signup-based counting rule.
 The reason for choosing the exact values 1 and 12 was not stated.
 
+### Active invitation list — 2026-09-07
+
+**Decision:** Show a shareable link on every active invitation, including
+after returning to the invitation page. Remove revoked, expired, and fully
+used invitations from this view. Keep their stored signup records.
+
+**Why:** In issue #4, the user requested access to still-active links without
+an ever-growing list of old links. Active cards retain signup counts and the
+existing visibility rules for members who joined.
+
 The user accepted the 30-day expiration to give group-chat members time to
 join while preventing old invitation links from remaining active indefinitely.
 
