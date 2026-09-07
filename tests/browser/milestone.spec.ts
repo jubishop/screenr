@@ -267,6 +267,23 @@ test("active invitation cards retain links across reloads and disappear after us
   await expect(
     owner.getByText("No active invitations.", { exact: true }),
   ).toBeVisible();
+  for (const [guestPage, username] of [
+    [guest, "invitationguest"],
+    [finalGuest, "invitationlast"],
+  ] as const) {
+    await guestPage.goto("/people/invitationowner");
+    await expect(
+      guestPage.getByRole("button", { name: "Unfriend", exact: true }),
+    ).toBeVisible();
+    await owner.goto(`/people/${username}`);
+    await expect(
+      owner.getByRole("button", { name: "Unfriend", exact: true }),
+    ).toBeVisible();
+  }
+  await guest.goto("/people/invitationlast");
+  await expect(
+    guest.getByRole("button", { name: "Send friend request", exact: true }),
+  ).toBeVisible();
   for (const page of [owner, guest, finalGuest]) await page.context().close();
 });
 
@@ -2111,7 +2128,10 @@ test("slow and failed refreshes enforce access while preserving reply drafts", a
   const viewer = await join(browser, "slowviewer", {
     token: (await invitation.json()).token,
   });
-  await befriend(page, viewer, "slowviewer", "draftrefresh");
+  await page.goto("/people/slowviewer");
+  await expect(
+    page.getByRole("button", { name: "Unfriend", exact: true }),
+  ).toBeVisible();
   await viewer.goto(`/conversations/${id}`);
   await viewer.getByLabel("Add your reply").fill("Keep my slow-network draft");
   await viewer.route("**/api/screenr/screen?**", async (route) => {
@@ -2439,6 +2459,14 @@ test("a signed-out pending member can finish with one visit to a replacement inv
     await owner.request.get("/api/screenr/screen?path=/invites")
   ).json();
   expect(screen.invitations).toEqual([]);
+  await pending.goto("/people/replacementowner");
+  await expect(
+    pending.getByRole("button", { name: "Unfriend", exact: true }),
+  ).toBeVisible();
+  await owner.goto("/people/replacementpending");
+  await expect(
+    owner.getByRole("button", { name: "Unfriend", exact: true }),
+  ).toBeVisible();
   await owner.context().close();
   await pending.context().close();
 });

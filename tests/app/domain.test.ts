@@ -30,6 +30,7 @@ const {
   removeComment,
   conversations,
   profileFor,
+  people,
 } = await import("../../src/server/social");
 
 before(migrate);
@@ -219,7 +220,8 @@ test("watch together returns all shared titles without a feed-sized cutoff", asy
 });
 
 test("concurrent completed signups cannot exceed invitation capacity", async () => {
-  const { token, id } = await createInvitation(null, 1);
+  const owner = await person("owner");
+  const { token, id } = await createInvitation(owner, 1);
   const a = await pending("alice", token),
     b = await pending("ben", token);
   const results = await Promise.allSettled([
@@ -234,12 +236,19 @@ test("concurrent completed signups cannot exceed invitation capacity", async () 
   );
   assert.equal(
     (await db.query("SELECT count(*)::int AS n FROM profile")).rows[0].n,
-    1,
+    2,
+  );
+  const connections = (await people(owner)).connections;
+  assert.equal(connections.length, 1);
+  assert.ok(connections[0].accepted_at);
+  assert.equal(
+    connections[0].user_id,
+    results[0].status === "fulfilled" ? a : b,
   );
 });
 test("profile failure rolls back invitation use; repeated completion consumes no extra use", async () => {
-  await person("alice");
-  const { token, id } = await createInvitation(null, 2);
+  const owner = await person("alice");
+  const { token, id } = await createInvitation(owner, 2);
   const b = await pending("ben", token);
   await assert.rejects(completeSignup(b, "Ben", "alice"), /taken/);
   assert.equal(
@@ -247,6 +256,7 @@ test("profile failure rolls back invitation use; repeated completion consumes no
       .uses,
     0,
   );
+  assert.deepEqual((await people(owner)).connections, []);
   await completeSignup(b, "Ben", "ben");
   await completeSignup(b, "Ben", "ben");
   assert.equal(
@@ -254,6 +264,8 @@ test("profile failure rolls back invitation use; repeated completion consumes no
       .uses,
     1,
   );
+  assert.equal((await people(owner)).connections.length, 1);
+  assert.ok((await profileFor(b, "alice")).accepted_at);
 });
 test("invitation lifetime, revocation, ownership, limits, and email verification are enforced", async () => {
   const owner = await person("owner"),
@@ -283,20 +295,71 @@ test("invitation lifetime, revocation, ownership, limits, and email verification
   );
   await revokeInvitation(owner, id);
   await assert.rejects(completeSignup(a, "Alice", "alice"), /no longer/);
+  assert.deepEqual((await people(owner)).connections, []);
 });
-test("joining does not create friendship; invitation creator sees signups subject to blocking", async () => {
-  const owner = await person("owner");
-  const { token } = await createInvitation(owner, 2);
-  const a = await pending("alice", token);
-  await completeSignup(a, "Alice", "alice");
-  assert.equal(
-    (await db.query("SELECT count(*)::int AS n FROM friendship")).rows[0].n,
-    0,
+test("completed signups become accepted friends with only their inviter and retain normal access controls", async () => {
+  const { alice: owner, conversation } = await setup();
+  assert.deepEqual(
+    (await people(owner)).connections,
+    [],
+    "Bootstrap has no inviter",
   );
-  assert.equal((await listInvitations(owner))[0].joined[0].username, "alice");
+  const { token } = await createInvitation(owner, 3);
+  const a = await pending("guesta", token);
+  assert.deepEqual(
+    (await people(owner)).connections,
+    [],
+    "Pending signup is not a friend",
+  );
+  await Promise.all([
+    completeSignup(a, "Guest A", "guesta"),
+    completeSignup(a, "Guest A", "guesta"),
+  ]);
+  const b = await pending("guestb", token);
+  await completeSignup(b, "Guest B", "guestb");
+  for (const [guest, username] of [
+    [a, "guesta"],
+    [b, "guestb"],
+  ]) {
+    const inviter = await profileFor(guest, "alice");
+    assert.equal(inviter.can_read, true);
+    assert.ok(inviter.accepted_at);
+    assert.equal((await profileFor(owner, username)).can_read, true);
+    assert.deepEqual(
+      (await people(guest)).connections.map((p) => p.user_id),
+      [owner],
+    );
+    assert.equal(
+      (await thread(guest, conversation)).conversation.id,
+      conversation,
+    );
+  }
+  assert.equal((await people(owner)).connections.length, 2);
+  assert.equal((await profileFor(a, "guestb")).can_read, false);
+  assert.equal((await listInvitations(owner))[0].uses, 2);
+  assert.deepEqual(
+    (await listInvitations(owner))[0].joined
+      .map((p: { username: string }) => p.username)
+      .sort(),
+    ["guesta", "guestb"],
+  );
+  await changeRelationship(a, owner, "remove");
+  await completeSignup(a, "Guest A", "guesta", token);
+  assert.equal((await profileFor(a, "alice")).can_read, false);
+  await assert.rejects(thread(a, conversation), /not found/i);
+  await friend(a, owner);
   await changeRelationship(a, owner, "block");
-  assert.deepEqual((await listInvitations(owner))[0].joined, []);
-  assert.equal((await listInvitations(owner))[0].uses, 1);
+  await completeSignup(a, "Guest A", "guesta", token);
+  await assert.rejects(profileFor(a, "alice"), /not found/i);
+  await assert.rejects(thread(a, conversation), /not found/i);
+  assert.deepEqual((await people(a)).connections, []);
+  assert.deepEqual(
+    (await listInvitations(owner))[0].joined.map(
+      (p: { username: string }) => p.username,
+    ),
+    ["guestb"],
+  );
+  assert.equal((await listInvitations(owner))[0].uses, 2);
 });
 test("active invitations expose stable working links only to their creator", async () => {
   const owner = await person("owner"),
@@ -339,6 +402,10 @@ test("old invitations gain a working share link without breaking the original or
   assert.equal((await listInvitations(owner))[0].uses, 1);
   const second = await pending("sharedguest", shared);
   await completeSignup(second, "Shared guest", "sharedguest", shared);
+  for (const guest of [first, second]) {
+    assert.equal((await profileFor(guest, "owner")).can_read, true);
+    assert.ok((await profileFor(guest, "owner")).accepted_at);
+  }
   assert.deepEqual(await listInvitations(owner), []);
   for (const token of [original, shared])
     assert.equal(await activeInvitation(invitationHash(token)), undefined);
@@ -1376,12 +1443,15 @@ test("Google and email retain one account; linking requires the existing account
     idToken: { token: "test-verified-token" },
   };
   assert.equal((await post("sign-in/social", social)).status, 403);
-  const { token } = await createInvitation(null, 2);
+  const inviter = await person("inviter");
+  const { token } = await createInvitation(inviter, 2);
   const inviteCookie = `screenr-invite=${token}`;
   const googleSignup = await post("sign-in/social", social, inviteCookie);
   assert.equal(googleSignup.status, 200, await googleSignup.clone().text());
   const googleId = (await googleSignup.json()).user.id;
   await completeSignup(googleId, "Google", "google");
+  assert.ok((await profileFor(googleId, "inviter")).accepted_at);
+  assert.equal((await profileFor(inviter, "google")).can_read, true);
   assert.equal(
     (await accountScreen(googleId)).googleConnected,
     true,
@@ -1410,6 +1480,8 @@ test("Google and email retain one account; linking requires the existing account
   );
   const emailId = (await emailSignup.json()).user.id;
   await completeSignup(emailId, "Email", "emailfirst");
+  assert.ok((await profileFor(emailId, "inviter")).accepted_at);
+  assert.equal((await profileFor(inviter, "emailfirst")).can_read, true);
   assert.equal((await accountScreen(emailId)).googleConnected, false);
   const sessionCookie = emailSignup.headers
     .getSetCookie()
@@ -1440,19 +1512,28 @@ test("Google and email retain one account; linking requires the existing account
   assert.equal((await googleLogin.json()).user.id, emailId);
   assert.equal(
     (await db.query('SELECT count(*)::int AS n FROM "user"')).rows[0].n,
-    2,
+    3,
   );
 });
 
 test("replacement invitations authorize pending accounts and retain completion idempotency", async () => {
-  const original = await createInvitation(null);
-  const replacement = await createInvitation(null);
+  const originalOwner = await person("originalowner");
+  const replacementOwner = await person("replacementowner");
+  const original = await createInvitation(originalOwner);
+  const replacement = await createInvitation(replacementOwner);
   const user = await pending("replacement", original.token);
   await db.query("UPDATE invitation SET revoked_at=now() WHERE id=$1", [
     original.id,
   ]);
   await completeSignup(user, "Replacement", "replacement", replacement.token);
   await completeSignup(user, "Replacement", "replacement", original.token);
+  assert.deepEqual((await people(originalOwner)).connections, []);
+  assert.deepEqual(
+    (await people(user)).connections.map((p) => p.user_id),
+    [replacementOwner],
+  );
+  assert.equal((await profileFor(user, "replacementowner")).can_read, true);
+  assert.ok((await profileFor(replacementOwner, "replacement")).accepted_at);
   const uses = (
     await db.query("SELECT id,uses FROM invitation WHERE id=ANY($1::uuid[])", [
       [original.id, replacement.id],
