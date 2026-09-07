@@ -152,6 +152,14 @@ try {
   await writeFile(".cache/browser-watch-invite.txt", watchInvitation.token, {
     mode: 0o600,
   });
+  const profileInvitation = await createInvitation(null, 2);
+  await writeFile(
+    ".cache/browser-profile-invite.txt",
+    profileInvitation.token,
+    {
+      mode: 0o600,
+    },
+  );
   const { startGoogleProvider } =
     await import("../tests/browser/google-provider");
   await releasePort(browserConfig.googlePort);

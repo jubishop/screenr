@@ -109,6 +109,161 @@ async function invitationCreator(browser: Browser, name: string) {
   return page;
 }
 
+test("profile display name editing preserves drafts, saves, and updates existing authors", async ({
+  browser,
+}) => {
+  const token = (
+    await readFile(".cache/browser-profile-invite.txt", "utf8")
+  ).trim();
+  const owner = await join(browser, "renameowner", { token });
+  const friend = await join(browser, "renamefriend", { token });
+  await befriend(owner, friend, "renamefriend", "renameowner");
+  await owner.goto("/titles/movie/987654");
+  await owner
+    .getByRole("button", { name: "Recommend to friends", exact: true })
+    .click();
+  await owner
+    .getByLabel("Add your reply", { exact: true })
+    .fill("An earlier reply");
+  await owner.getByRole("button", { name: "Post reply", exact: true }).click();
+  await owner.goto("/account");
+  await owner
+    .getByRole("link", { name: "View your profile", exact: true })
+    .click();
+  const edit = owner.getByRole("button", {
+    name: "Edit display name",
+    exact: true,
+  });
+  await expect(edit).toBeVisible();
+  const otherTab = await owner.context().newPage();
+  await otherTab.goto("/account");
+  await owner.bringToFront();
+  let writes = 0;
+  owner.on("request", (request) => {
+    if (
+      request.url().endsWith("/api/screenr/display-name") &&
+      request.method() === "POST"
+    )
+      writes++;
+  });
+  await edit.click();
+  const input = owner.getByLabel("Display name", { exact: true });
+  const save = owner.getByRole("button", { name: "Save", exact: true });
+  const cancel = owner.getByRole("button", { name: "Cancel", exact: true });
+  await expect(input).toHaveValue("renameowner");
+  await expect(input).toBeFocused();
+  await input.fill("Unsaved name");
+  await owner.waitForResponse(
+    (response) =>
+      response.url().includes("/api/screenr/screen?") && response.ok(),
+  );
+  await expect(input).toHaveValue("Unsaved name");
+  await owner.route(
+    "**/api/screenr/screen?**",
+    (route) =>
+      route.fulfill({
+        status: 503,
+        json: { error: "Temporary refresh failure" },
+      }),
+    { times: 1 },
+  );
+  await owner.waitForResponse(
+    (response) =>
+      response.url().includes("/api/screenr/screen?") &&
+      response.status() === 503,
+  );
+  await expect(input).toHaveValue("Unsaved name");
+  await cancel.click();
+  await expect(input).toHaveCount(0);
+  await expect(edit).toBeFocused();
+  expect(writes).toBe(0);
+  await edit.click();
+  await expect(input).toHaveValue("renameowner");
+  await input.fill("   ");
+  await expect(save).toBeDisabled();
+  await expect(input).toHaveAttribute("maxlength", "60");
+  await input.fill("  Renée Movie Fan 🎬  ");
+  await owner.route(
+    "**/api/screenr/display-name",
+    (route) =>
+      route.fulfill({
+        status: 503,
+        json: { error: "Could not save. Try again." },
+      }),
+    { times: 1 },
+  );
+  await save.click();
+  await expect(
+    owner.getByRole("alert").filter({ hasText: "Could not save" }),
+  ).toBeVisible();
+  await expect(input).toHaveValue("  Renée Movie Fan 🎬  ");
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await owner.route(
+    "**/api/screenr/display-name",
+    async (route) => {
+      await gate;
+      await route.continue();
+    },
+    { times: 1 },
+  );
+  await save.click();
+  try {
+    await expect(
+      owner.getByRole("button", { name: "Saving…", exact: true }),
+    ).toBeDisabled();
+    await expect(input).toBeDisabled();
+    await expect(cancel).toBeDisabled();
+  } finally {
+    release();
+  }
+  await expect(input).toHaveCount(0);
+  await expect(
+    owner.getByRole("heading", { name: "Renée Movie Fan 🎬", exact: true }),
+  ).toBeVisible();
+  await expect(owner.locator(".sidebar-bottom")).toContainText(
+    "Renée Movie Fan 🎬",
+  );
+  await expect(owner.locator(".avatar")).toHaveText("R");
+  await expect(owner.locator(".activity-by")).toContainText(
+    "Renée Movie Fan 🎬",
+  );
+  await expect(
+    owner.getByRole("region", { name: "Conversation", exact: true }),
+  ).toContainText("Renée Movie Fan 🎬");
+  await expect(owner).toHaveURL(/\/people\/renameowner$/);
+  expect(writes).toBe(2);
+  await otherTab.bringToFront();
+  await expect(otherTab.locator(".sidebar-bottom")).toContainText(
+    "Renée Movie Fan 🎬",
+  );
+  await otherTab.close();
+  await owner.reload();
+  await expect(
+    owner.getByRole("heading", { name: "Renée Movie Fan 🎬", exact: true }),
+  ).toBeVisible();
+  await friend.goto("/people/renameowner");
+  await expect(
+    friend.getByRole("button", { name: "Edit display name", exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    friend.getByRole("heading", { name: "Renée Movie Fan 🎬", exact: true }),
+  ).toBeVisible();
+  await expect(
+    friend.getByRole("button", { name: "Unfriend", exact: true }),
+  ).toBeVisible();
+  await expect(friend.locator(".activity-by")).toContainText(
+    "Renée Movie Fan 🎬",
+  );
+  await expect(
+    friend.getByRole("region", { name: "Conversation", exact: true }),
+  ).toContainText("Renée Movie Fan 🎬");
+  await owner.context().close();
+  await friend.context().close();
+});
+
 test("invitation links copy on repeated mobile taps and keyboard activation", async ({
   browser,
 }) => {
@@ -1655,7 +1810,7 @@ async function nextAccountRefresh(page: Page) {
   });
 }
 
-test("Google signup shows its connection and an email code returns to the same profile", async ({
+test("Google signup preserves edited display names across email and Google sign-ins", async ({
   page,
 }) => {
   await useTestGoogle(page);
@@ -1668,6 +1823,17 @@ test("Google signup shows its connection and an email code returns to the same p
   await page.getByLabel("Username", { exact: true }).fill("googlefirst");
   await page.getByRole("button", { name: "Join Screenr", exact: true }).click();
   await expect(page.getByText("@googlefirst", { exact: true })).toBeVisible();
+  await page.goto("/people/googlefirst");
+  await page
+    .getByRole("button", { name: "Edit display name", exact: true })
+    .click();
+  await page
+    .getByLabel("Display name", { exact: true })
+    .fill("Chosen Google Name");
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "Chosen Google Name", exact: true }),
+  ).toBeVisible();
   await page.goto("/account");
   await expect(page.getByRole("status")).toHaveText("Google connected.");
   await expect(
@@ -1694,8 +1860,22 @@ test("Google signup shows its connection and an email code returns to the same p
   await page.getByLabel("Sign-in code", { exact: true }).fill(otp);
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await expect(page.getByText("@googlefirst", { exact: true })).toBeVisible();
+  await page.goto("/people/googlefirst");
+  await expect(
+    page.getByRole("heading", { name: "Chosen Google Name", exact: true }),
+  ).toBeVisible();
   await page.goto("/account");
   await expect(page.getByRole("status")).toHaveText("Google connected.");
+  await page.getByRole("button", { name: "Sign out", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Continue with Google", exact: true })
+    .click();
+  await approveGoogle(page, email);
+  await expect(page.getByText("@googlefirst", { exact: true })).toBeVisible();
+  await page.goto("/people/googlefirst");
+  await expect(
+    page.getByRole("heading", { name: "Chosen Google Name", exact: true }),
+  ).toBeVisible();
 });
 
 test("email members can recover from linking failures, connect Google, and sign back into their profile", async ({

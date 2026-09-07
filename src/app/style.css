@@ -271,6 +271,24 @@ hr {
 .page-heading.compact {
   margin-bottom: 25px;
 }
+.profile-name {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px 16px;
+  margin-bottom: 17px;
+}
+.profile-name h1 {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.display-name-editor {
+  max-width: 460px;
+}
+.display-name-editor .error {
+  margin-top: 16px;
+}
 .feed-list {
   display: grid;
   gap: 16px;
