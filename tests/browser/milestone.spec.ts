@@ -1527,7 +1527,9 @@ test("discussion links copy from every feed without navigating or losing drafts 
     .getByRole("button", { name: "Post reply", exact: true })
     .click();
   await expect(
-    discussion.locator("[data-comment-id]").getByText("A reply to that comment"),
+    discussion
+      .locator("[data-comment-id]")
+      .getByText("A reply to that comment"),
   ).toBeVisible();
   await reader
     .context()
