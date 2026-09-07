@@ -60,6 +60,10 @@ top-level feed and preserve the existing content privacy rules. The
 tradeoff is that each person sees a different selection of the title's
 conversation.
 
+The [privacy and known-people boundary](product-brief.md#privacy-and-the-known-people-circle--2026-09-07)
+also governs discovery outside this feed. Seeing someone in a shared
+friend's discussion does not grant access to that person's other activity.
+
 ### Separate items for later contributions — 2026-09-06
 
 **Decision:** A later, distinct contribution creates its own top-level
