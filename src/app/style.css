@@ -468,6 +468,10 @@ hr {
   gap: 8px;
   min-height: 44px;
 }
+.invitation-actions button[aria-disabled="true"] {
+  opacity: 0.55;
+  cursor: wait;
+}
 .invitation-created input {
   cursor: pointer;
   font-size: 16px;

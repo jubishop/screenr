@@ -114,7 +114,7 @@ test("invitation links copy on repeated mobile taps and keyboard activation", as
   const link = page.getByLabel("Invitation link", { exact: true });
   const copied: string[] = [];
   let release!: () => void;
-  const gate = new Promise<void>((resolve) => {
+  let gate = new Promise<void>((resolve) => {
     release = resolve;
   });
   await page.exposeFunction("writeInvitationText", async (text: string) => {
@@ -150,10 +150,22 @@ test("invitation links copy on repeated mobile taps and keyboard activation", as
   await expect.poll(() => copied).toEqual([url, url]);
   const copy = page.getByRole("button", { name: "Copy link", exact: true });
   await expect(copy).toBeEnabled();
+  gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
   await copy.focus();
   await page.keyboard.press("Enter");
-  await expect.poll(() => copied).toEqual([url, url, url]);
-  await expect(copy).toBeEnabled();
+  try {
+    await expect.poll(() => copied).toEqual([url, url, url]);
+    await expect(copy).toBeDisabled();
+    await expect(copy).toBeFocused();
+    await page.keyboard.press("Space");
+    expect(copied).toEqual([url, url, url]);
+  } finally {
+    release();
+  }
+  await expect(page.getByRole("status")).toHaveText("Link copied.");
+  await expect(copy).toBeFocused();
   await page.keyboard.press("Space");
   await expect.poll(() => copied).toEqual([url, url, url, url]);
   await expect(page).toHaveURL(/\/invites$/);

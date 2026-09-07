@@ -6,6 +6,7 @@ export function InvitationLink({ url }: { url: string }) {
   const interactive = useInteractive();
   const input = useRef<HTMLInputElement>(null);
   const hint = useId();
+  // Use aria-disabled while pending to retain keyboard focus; ignore repeat actions.
   const [pending, setPending] = useState(false);
   const [message, setMessage] = useState("");
 
@@ -62,7 +63,8 @@ export function InvitationLink({ url }: { url: string }) {
         <button
           type="button"
           className="secondary"
-          disabled={!interactive || pending}
+          disabled={!interactive}
+          aria-disabled={pending}
           onClick={() => void copy()}
         >
           Copy link
@@ -72,7 +74,7 @@ export function InvitationLink({ url }: { url: string }) {
             type="button"
             className="secondary"
             aria-label="Share invitation"
-            disabled={pending}
+            aria-disabled={pending}
             onClick={() => void share()}
           >
             <svg
