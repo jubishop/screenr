@@ -281,7 +281,8 @@ export async function removeComment(viewer: string, id: string) {
   await transaction(async (client) => {
     const result = await client.query(
       `UPDATE comment cm SET removed_at=coalesce(removed_at,now()),body='[removed]'
-      FROM feed_item c WHERE cm.id::text=$1 AND c.id=cm.feed_item_id AND c.owner_id=$2
+      FROM feed_item c WHERE cm.id::text=$1 AND c.id=cm.feed_item_id
+      AND (cm.author_id=$2 OR c.owner_id=$2)
       AND screenr_can_read(cm.author_id,c.owner_id) AND NOT screenr_blocked($2,cm.author_id)`,
       [id, viewer],
     );

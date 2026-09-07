@@ -532,7 +532,84 @@ test("blocking hides the pair on mutual threads, prevents requests, and excludes
   await changeRelationship(ben, cam, "unblock");
   assert.equal((await thread(ben, conversation)).comments.length, 2);
 });
-test("nested replies stay in one group; only the host removes comments and preserves replies", async () => {
+test("comment authors can delete their own comments in a friend's conversation and preserve replies", async () => {
+  const { alice, ben, cam, outsider, conversation } = await setup();
+  await friend(alice, ben);
+  await friend(alice, cam);
+  const parent = await addComment(ben, conversation, "My comment", true);
+  const reply = await addComment(
+    cam,
+    conversation,
+    "Keep this reply",
+    false,
+    parent,
+  );
+  for (const viewer of [cam, outsider])
+    await assert.rejects(removeComment(viewer, parent), /not found/);
+  assert.equal(
+    (await thread(ben, conversation)).comments[0].body,
+    "My comment",
+  );
+
+  await removeComment(ben, parent);
+  await removeComment(ben, parent);
+  for (const viewer of [alice, ben, cam]) {
+    const comments = (await thread(viewer, conversation)).comments;
+    assert.equal(comments[0].removed, true);
+    assert.equal(comments[0].body, "");
+    assert.equal(comments[1].id, reply);
+    assert.equal(comments[1].root_id, parent);
+    assert.equal(comments[1].addressed_username, "ben");
+    assert.equal(comments[1].body, "Keep this reply");
+  }
+  assert.equal(
+    (await db.query("SELECT body FROM comment WHERE id::text=$1", [parent]))
+      .rows[0].body,
+    "[removed]",
+  );
+  await removeComment(cam, reply);
+  assert.equal((await thread(alice, conversation)).comments[1].removed, true);
+  await assert.rejects(
+    addComment(ben, conversation, "Reply to removed", false, parent),
+    /not found/,
+  );
+});
+
+test("comment deletion rechecks current conversation access", async () => {
+  const { alice, ben, conversation } = await setup();
+  await friend(alice, ben);
+  const comment = await addComment(
+    ben,
+    conversation,
+    "Existing comment",
+    false,
+  );
+  await changeRelationship(alice, ben, "remove");
+  await assert.rejects(removeComment(ben, comment), /not found/);
+  await assert.rejects(removeComment(alice, comment), /not found/);
+  await friend(alice, ben);
+  await changeRelationship(alice, ben, "block");
+  await assert.rejects(removeComment(ben, comment), /not found/);
+  await changeRelationship(alice, ben, "unblock");
+  await friend(alice, ben);
+  assert.equal(
+    (await thread(ben, conversation)).comments[0].body,
+    "Existing comment",
+  );
+  await removeComment(ben, comment);
+  const own = await addComment(
+    alice,
+    conversation,
+    "Host's own comment",
+    false,
+  );
+  await removeComment(alice, own);
+  assert.ok(
+    (await thread(alice, conversation)).comments.every((c) => c.removed),
+  );
+});
+
+test("nested replies stay in one group; the host can remove others' comments and preserve replies", async () => {
   const { alice, ben, cam, conversation } = await setup();
   await friend(alice, ben);
   await friend(alice, cam);

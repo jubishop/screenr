@@ -578,6 +578,9 @@ test("invited friends discover, save, and share inline discussions with live acc
   await expect(
     item(cam).getByText("This looks like our kind of movie.", { exact: true }),
   ).toBeVisible();
+  await expect(
+    item(cam).getByRole("button", { name: /^(Delete|Remove)$/ }),
+  ).toHaveCount(0);
   await alice.goto("/people/ben");
   await alice.getByRole("button", { name: "Unfriend", exact: true }).click();
   await expect(item(ben)).toHaveCount(0);
@@ -616,6 +619,73 @@ test("invited friends discover, save, and share inline discussions with live acc
   await expect(
     item(alice).getByText("Replying to @cam", { exact: true }),
   ).toBeVisible();
+  const ownComment = (page: Page) =>
+    item(page).locator("[data-comment-id]").filter({
+      hasText: "This looks like our kind of movie.",
+    });
+  for (const path of ["/", "/people/alice", conversationURL]) {
+    await ben.goto(path);
+    await expect(
+      ownComment(ben).getByRole("button", { name: "Delete", exact: true }),
+    ).toBeVisible();
+    await expect(
+      item(ben).getByRole("button", { name: "Remove", exact: true }),
+    ).toHaveCount(0);
+  }
+  const ownId = await ownComment(ben).getAttribute("data-comment-id");
+  for (const page of [cam, outsider]) {
+    const deniedRemoval = await page.request.post(
+      "/api/screenr/remove-comment",
+      {
+        headers: { Origin: "http://localhost:3055" },
+        data: { id: ownId },
+      },
+    );
+    expect(deniedRemoval.status()).toBe(404);
+  }
+  await ben.route(
+    "**/api/screenr/remove-comment",
+    (route) =>
+      route.fulfill({
+        status: 503,
+        json: { error: "Deletion failed. Please try again." },
+      }),
+    { times: 1 },
+  );
+  await ownComment(ben)
+    .getByRole("button", { name: "Delete", exact: true })
+    .click();
+  await expect(item(ben).getByRole("alert")).toHaveText(
+    "Deletion failed. Please try again.",
+  );
+  await expect(ownComment(ben)).toBeVisible();
+  await item(alice)
+    .getByRole("button", { name: /Show earlier replies/ })
+    .click();
+  await ownComment(ben)
+    .getByRole("button", { name: "Delete", exact: true })
+    .click();
+  await expect(item(ben).getByRole("alert")).toHaveCount(0);
+  for (const page of [ben, alice]) {
+    await expect(
+      item(page).locator(`[data-comment-id="${ownId}"]`),
+    ).toContainText("Comment removed");
+    await expect(
+      item(page).getByText("This looks like our kind of movie.", {
+        exact: true,
+      }),
+    ).toHaveCount(0);
+    await expect(
+      item(page).getByText("Replying to @ben", { exact: true }),
+    ).toBeVisible();
+  }
+  await ben.reload();
+  await expect(item(ben).locator(`[data-comment-id="${ownId}"]`)).toContainText(
+    "Comment removed",
+  );
+  await expect(
+    item(ben).getByRole("button", { name: "Delete", exact: true }),
+  ).toHaveCount(0);
   await alice.goto("/invites");
   await alice.getByLabel("Maximum signups").selectOption("2");
   await alice
