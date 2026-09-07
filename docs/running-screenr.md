@@ -287,6 +287,17 @@ refresh. Access changes clear content on the next refresh without
 waiting for the New activity button. Previously delivered content cannot be
 retracted from a user's device.
 
+Members can **Delete** their own comments in any feed where the conversation
+is accessible. Conversation hosts can also **Remove** other participants'
+comments. Both actions erase the stored text and show a **Comment removed**
+placeholder, preserving replies and their addressed-person context. The server
+checks ownership and current conversation access on every removal request.
+Standalone comment authors can also **Delete** the top-level entry. Its text
+becomes **Comment removed** while eligible replies remain open for discussion.
+Entries without visible, nonremoved replies disappear. The original spoiler
+flag still protects the remaining discussion. This behavior is shared across
+title, friends, and author-profile feeds, including open-page refreshes.
+
 The migration command applies Better Auth's schema and numbered SQL files in
 `db/`. It takes a migration lock and records applied files in
 `screenr_migration`. Future schema changes must use new numbered files;

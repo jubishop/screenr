@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import type { FeedItem, Person } from "../shared";
-import { dateLabel, useInteractive } from "./client";
+import { api, dateLabel, useInteractive } from "./client";
 import { Poster } from "./poster";
 import { ThreadView } from "./thread";
 import { preservePosition } from "./position";
@@ -173,7 +173,23 @@ function FeedEntry({
   }, [target, item, hiddenSpoiler]);
   const [copying, setCopying] = useState(false);
   const [copyMessage, setCopyMessage] = useState("");
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
   const titleURL = item ? `/titles/${item.title_id.replace(":", "/")}` : "";
+
+  async function deleteComment() {
+    if (!item || deleting) return;
+    setDeleting(true);
+    setDeleteError("");
+    try {
+      await api("remove-comment", { id: item.id });
+      await refresh();
+    } catch (error) {
+      setDeleteError((error as Error).message);
+    } finally {
+      setDeleting(false);
+    }
+  }
 
   async function copyDiscussion() {
     if (!item || copying) return;
@@ -238,6 +254,9 @@ function FeedEntry({
                 {dateLabel(item.visible_activity, interactive)}
               </time>
             </p>
+            {item.item_type === "comment" && !item.active && (
+              <p className="muted">Comment removed</p>
+            )}
             {hiddenSpoiler ? (
               <button className="spoiler" onClick={() => setRevealed(true)}>
                 Contains spoilers · Reveal discussion
@@ -246,6 +265,18 @@ function FeedEntry({
               item.body && <p className="comment-body">{item.body}</p>
             )}
             <div className="inline-actions">
+              {item.item_type === "comment" &&
+                item.active &&
+                item.owner_id === user.user_id && (
+                  <button
+                    type="button"
+                    className="text-button muted"
+                    disabled={busy || deleting || !interactive}
+                    onClick={() => void deleteComment()}
+                  >
+                    {deleting ? "Deleting…" : "Delete"}
+                  </button>
+                )}
               <button
                 type="button"
                 className="text-button conversation-link"
@@ -288,16 +319,22 @@ function FeedEntry({
                 </>
               )}
             </div>
-            {!hiddenSpoiler && (
-              <Reactions
-                item={item.id}
-                summary={item.reactions}
-                refresh={refresh}
-              />
-            )}
+            {!hiddenSpoiler &&
+              (item.item_type !== "comment" || item.active) && (
+                <Reactions
+                  item={item.id}
+                  summary={item.reactions}
+                  refresh={refresh}
+                />
+              )}
             <p className="small" role="status">
               {copyMessage}
             </p>
+            {deleteError && (
+              <p className="error" role="alert">
+                {deleteError}
+              </p>
+            )}
           </div>
         </header>
       )}

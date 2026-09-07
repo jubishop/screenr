@@ -136,12 +136,14 @@ export function ThreadView({
             >
               Reply
             </button>
-            {currentSnapshot.conversation.owner_id === user.user_id && (
+            {(comment.author_id === user.user_id ||
+              currentSnapshot.conversation.owner_id === user.user_id) && (
               <button
                 className="text-button muted"
                 disabled={busy || !interactive}
                 onClick={async () => {
                   setBusy(true);
+                  setError("");
                   try {
                     await api("remove-comment", { id: comment.id });
                     await refresh();
@@ -152,7 +154,7 @@ export function ThreadView({
                   }
                 }}
               >
-                Remove
+                {comment.author_id === user.user_id ? "Delete" : "Remove"}
               </button>
             )}
           </div>

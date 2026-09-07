@@ -110,7 +110,8 @@ export async function changeRelationship(
 const feedEntries = `(SELECT id,conversation_id,owner_id,title_id,item_type,active,created_at,activity_at,
     NULL::text AS body,false AS spoiler FROM feed_item
   UNION ALL
-  SELECT id,conversation_id,owner_id,title_id,'comment',true,created_at,created_at,body,spoiler
+  SELECT id,conversation_id,owner_id,title_id,'comment',removed_at IS NULL,created_at,created_at,
+    CASE WHEN removed_at IS NULL THEN body ELSE '' END,spoiler
     FROM title_comment)`;
 // Counts include only current participants visible to this reader. A reaction
 // to a reply also requires that its author can still see the reply's author.
@@ -118,7 +119,7 @@ const reactionSummary = (
   reply: boolean,
 ) => `(SELECT coalesce(jsonb_agg(summary ORDER BY kind),'[]') FROM (
   SELECT r.kind,count(*)::int AS count,bool_or(r.user_id=$1) AS reacted FROM reaction r
-  WHERE ${reply ? "r.comment_id=cm.id AND cm.removed_at IS NULL AND NOT screenr_blocked(r.user_id,cm.author_id)" : "(r.feed_item_id=c.id OR r.title_comment_id=c.id)"}
+  WHERE ${reply ? "r.comment_id=cm.id AND cm.removed_at IS NULL AND NOT screenr_blocked(r.user_id,cm.author_id)" : "(r.feed_item_id=c.id OR r.title_comment_id=c.id) AND (c.item_type<>'comment' OR c.active)"}
     AND screenr_can_read(r.user_id,c.owner_id) AND NOT screenr_blocked($1,r.user_id)
   GROUP BY r.kind
 ) summary)`;
@@ -300,11 +301,18 @@ export async function removeComment(viewer: string, id: string) {
   await transaction(async (client) => {
     const result = await client.query(
       `UPDATE comment cm SET removed_at=coalesce(removed_at,now()),body='[removed]'
-      FROM ${feedEntries} c WHERE cm.id::text=$1 AND (c.id=cm.feed_item_id OR c.id=cm.title_comment_id) AND c.owner_id=$2
+      FROM ${feedEntries} c WHERE cm.id::text=$1 AND (c.id=cm.feed_item_id OR c.id=cm.title_comment_id)
+      AND (cm.author_id=$2 OR c.owner_id=$2)
       AND screenr_can_read(cm.author_id,c.owner_id) AND NOT screenr_blocked($2,cm.author_id)`,
       [id, viewer],
     );
-    if (!result.rowCount) throw new AppError("Comment not found.", 404);
+    if (result.rowCount) return;
+    const standalone = await client.query(
+      `UPDATE title_comment SET removed_at=coalesce(removed_at,now()),body='[removed]'
+       WHERE id::text=$1 AND owner_id=$2`,
+      [id, viewer],
+    );
+    if (!standalone.rowCount) throw new AppError("Comment not found.", 404);
   });
 }
 
@@ -325,7 +333,11 @@ export async function setReaction(
     const item: FeedItem | undefined = (
       await client.query(`${itemQuery} AND c.id::text=$2`, [viewer, itemId])
     ).rows[0];
-    if (!item) throw new AppError("Conversation not found.", 404);
+    if (
+      !item ||
+      (replyId == null && item.item_type === "comment" && !item.active)
+    )
+      throw new AppError("Conversation not found.", 404);
     if (
       replyId != null &&
       !item.comments.some(
