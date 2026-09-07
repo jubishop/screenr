@@ -116,6 +116,12 @@ try {
   const { token } = await createInvitation(null, 12);
   await mkdir(".cache", { recursive: true });
   await writeFile(".cache/browser-invite.txt", token, { mode: 0o600 });
+  const profileInvitation = await createInvitation(null, 2);
+  await writeFile(
+    ".cache/browser-profile-invite.txt",
+    profileInvitation.token,
+    { mode: 0o600 },
+  );
   const trailerInvitation = await createInvitation(null, 1);
   await writeFile(
     ".cache/browser-trailer-invite.txt",
@@ -152,12 +158,6 @@ try {
   await writeFile(".cache/browser-watch-invite.txt", watchInvitation.token, {
     mode: 0o600,
   });
-  const profileInvitation = await createInvitation(null, 2);
-  await writeFile(
-    ".cache/browser-profile-invite.txt",
-    profileInvitation.token,
-    { mode: 0o600 },
-  );
   const nestedInvitation = await createInvitation(null, 8);
   await writeFile(".cache/browser-nested-invite.txt", nestedInvitation.token, {
     mode: 0o600,
