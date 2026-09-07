@@ -152,6 +152,14 @@ try {
   await writeFile(".cache/browser-watch-invite.txt", watchInvitation.token, {
     mode: 0o600,
   });
+  const friendsInvitation = await createInvitation(null, 3);
+  await writeFile(
+    ".cache/browser-friends-invite.txt",
+    friendsInvitation.token,
+    {
+      mode: 0o600,
+    },
+  );
   const { startGoogleProvider } =
     await import("../tests/browser/google-provider");
   const reactionInvitation = await createInvitation(null, 2);

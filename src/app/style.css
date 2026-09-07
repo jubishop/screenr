@@ -468,6 +468,15 @@ hr {
 .people-list {
   margin-bottom: 40px;
 }
+.profile-friends {
+  margin-bottom: 28px;
+  overflow-wrap: anywhere;
+}
+.profile-friends summary {
+  cursor: pointer;
+  padding: 12px 0;
+  font-weight: 600;
+}
 .badge {
   font-size: 11px;
   background: #e8efdc;
