@@ -6,6 +6,7 @@ import type { ScreenData } from "../server/screens";
 import type { Conversation, Person, Title } from "../shared";
 import { api, authClient, signOut, useInteractive, dateLabel } from "./client";
 import { ThreadView } from "./thread";
+import { InvitationLink } from "./invitation-link";
 
 function titleURL(id: string) {
   return `/titles/${id.replace(":", "/")}`;
@@ -680,22 +681,7 @@ export function Screen({
                 Create invitation
               </button>
             </form>
-            {inviteURL && (
-              <div className="invitation-created">
-                <label>
-                  Invitation link
-                  <input
-                    disabled={!interactive}
-                    readOnly
-                    value={inviteURL}
-                    onFocus={(e) => e.target.select()}
-                  />
-                </label>
-                <p className="small muted">
-                  Copy this link now and share it with your friends.
-                </p>
-              </div>
-            )}
+            {inviteURL && <InvitationLink key={inviteURL} url={inviteURL} />}
             <div className="invite-list">
               {data.invitations.map((invite) => (
                 <article className="invite-card" key={invite.id}>
