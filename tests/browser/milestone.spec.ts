@@ -620,6 +620,77 @@ test("invited friends discover, save, and share inline discussions with live acc
   for (const page of [alice, ben, cam, outsider]) await page.context().close();
 });
 
+test("feed poster links name their titles and support keyboard navigation with and without artwork", async ({
+  browser,
+}) => {
+  const token = (
+    await readFile(".cache/browser-feed-invite.txt", "utf8")
+  ).trim();
+  const owner = await join(browser, "posterowner", { token });
+  const reader = await join(browser, "posterreader", { token });
+  await befriend(owner, reader, "posterreader", "posterowner");
+  for (const page of [owner, reader]) {
+    await page.route("**/_next/image?**", (route) =>
+      route.fulfill({
+        contentType: "image/png",
+        body: Buffer.from(
+          "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+afoIAAAAASUVORK5CYII=",
+          "base64",
+        ),
+      }),
+    );
+  }
+  await owner.goto("/search");
+  await owner.getByLabel("Movie or show title").fill("Lantern");
+  await owner.getByRole("button", { name: "Search", exact: true }).click();
+  const result = owner.locator(".search-result");
+  await expect(result).toHaveAccessibleName("The Lantern Room Movie · 2026");
+  await result.click();
+  await expect(owner).toHaveURL(/\/titles\/movie\/987654$/);
+
+  for (const [id, name, hasArtwork] of [
+    [987654, "The Lantern Room", false],
+    [987658, "The Painted Sky", true],
+  ] as const) {
+    const titlePath = `/titles/movie/${id}`;
+    await owner.goto(titlePath);
+    await owner
+      .getByRole("button", { name: "Recommend to friends", exact: true })
+      .click();
+    await expect(
+      owner.getByRole("button", { name: "✓ Recommended", exact: true }),
+    ).toBeVisible();
+    for (const path of ["/", "/people/posterowner", titlePath]) {
+      await reader.goto(path);
+      const entry = reader.locator(".feed-entry").filter({
+        has: reader.getByRole("heading", { name, exact: true }),
+      });
+      const poster = entry.locator(".poster-link");
+      await expect(poster.getByRole("img")).toHaveCount(hasArtwork ? 1 : 0);
+      await expect(poster).toHaveAccessibleName(name);
+      await poster.focus();
+      await expect(poster).toBeFocused();
+      await reader.keyboard.press("Enter");
+      await expect(reader).toHaveURL(new RegExp(`${titlePath}$`));
+      await expect(
+        reader.getByRole("heading", { name, level: 1, exact: true }),
+      ).toBeVisible();
+
+      await reader.goto(path);
+      const titleLink = entry
+        .getByRole("heading", { name, exact: true })
+        .getByRole("link", { name, exact: true });
+      await titleLink.click();
+      await expect(reader).toHaveURL(new RegExp(`${titlePath}$`));
+      await expect(
+        reader.getByRole("heading", { name, level: 1, exact: true }),
+      ).toBeVisible();
+    }
+  }
+  await reader.context().close();
+  await owner.context().close();
+});
+
 test("unified feeds show separate actions and support inline replies on title, friends, and profile", async ({
   browser,
 }) => {
