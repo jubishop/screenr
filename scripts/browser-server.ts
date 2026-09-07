@@ -152,6 +152,10 @@ try {
   await writeFile(".cache/browser-watch-invite.txt", watchInvitation.token, {
     mode: 0o600,
   });
+  const nestedInvitation = await createInvitation(null, 8);
+  await writeFile(".cache/browser-nested-invite.txt", nestedInvitation.token, {
+    mode: 0o600,
+  });
   const friendsInvitation = await createInvitation(null, 3);
   await writeFile(
     ".cache/browser-friends-invite.txt",

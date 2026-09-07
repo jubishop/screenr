@@ -35,14 +35,15 @@ export type Conversation = {
 };
 export type Comment = {
   id: string;
-  author_id: string;
-  username: string;
-  display_name: string;
+  author_id: string | null;
+  username: string | null;
+  display_name: string | null;
   body: string;
   spoiler: boolean;
   root_id: string | null;
   addressed_username: string | null;
   removed: boolean;
+  unavailable: boolean;
   created_at: string;
 };
 export type Thread = { conversation: Conversation; comments: Comment[] };
