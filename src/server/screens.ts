@@ -1,5 +1,5 @@
 import { conversations, people, profileFor, thread } from "./social";
-import { getTitle } from "./catalog";
+import { getTitle, getTitleTrailer } from "./catalog";
 import { listInvitations } from "./invitations";
 import { AppError, db } from "./db";
 
@@ -37,7 +37,12 @@ export async function loadScreen(userId: string, path: string) {
       getTitle(id),
       conversations(userId, { title: id }),
     ]);
-    return { kind: "title" as const, title, conversations: threads };
+    return {
+      kind: "title" as const,
+      title,
+      trailer: await getTitleTrailer(id),
+      conversations: threads,
+    };
   }
   if (parts[0] === "people" && parts.length === 2) {
     const profile = await profileFor(userId, parts[1]);

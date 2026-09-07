@@ -33,6 +33,9 @@ async function join(
     timezoneId: "America/Los_Angeles",
   });
   const page = await context.newPage();
+  await page.route("https://www.youtube.com/embed/**", (route) =>
+    route.fulfill({ contentType: "text/html", body: "Trailer player fixture" }),
+  );
   monitorErrors(page);
   const token =
     options.token ??
@@ -87,6 +90,67 @@ async function befriend(a: Page, b: Page, bName: string, aName: string) {
     b.getByRole("button", { name: "Unfriend", exact: true }),
   ).toBeVisible();
 }
+
+test("title trailers fit desktop and mobile, send an origin referrer, and omit unavailable players", async ({
+  browser,
+}) => {
+  const page = await join(browser, "trailerviewer", {
+    token: (await readFile(".cache/browser-trailer-invite.txt", "utf8")).trim(),
+  });
+  const embeds: string[] = [];
+  await page.route("https://www.youtube.com/embed/**", async (route) => {
+    embeds.push((await route.request().allHeaders()).referer);
+    await route.fulfill({
+      contentType: "text/html",
+      body: "Trailer player fixture",
+    });
+  });
+  const response = await page.goto("/titles/movie/987654");
+  expect(response?.headers()["referrer-policy"]).toBe("no-referrer");
+  const player = page.getByTitle("The Lantern Room trailer: Official trailer", {
+    exact: true,
+  });
+  await expect(player).toBeVisible();
+  await expect(player).toHaveAttribute(
+    "src",
+    "https://www.youtube.com/embed/Abcdef_1234?autoplay=0&playsinline=1",
+  );
+  await expect(
+    page.getByRole("link", { name: "Watch on YouTube" }),
+  ).toHaveAttribute("href", "https://www.youtube.com/watch?v=Abcdef_1234");
+  await expect.poll(() => embeds).toEqual(["http://localhost:3055/"]);
+  for (const width of [1440, 390, 320]) {
+    await page.setViewportSize({ width, height: 900 });
+    const bounds = await player.boundingBox();
+    expect(bounds!.width).toBeGreaterThanOrEqual(200);
+    expect(bounds!.height).toBeGreaterThanOrEqual(200);
+    expect(bounds!.x).toBeGreaterThanOrEqual(0);
+    expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(width);
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth),
+    ).toBe(width);
+  }
+  await page.waitForResponse(
+    (response) =>
+      response.url().includes("/api/screenr/screen?") &&
+      response.status() === 200,
+  );
+  expect(embeds).toHaveLength(1); // Background refresh must not reload playback.
+  for (const path of ["/movie/987655", "/movie/987656", "/tv/987657"]) {
+    await page.goto(`/titles${path}`);
+    await expect(
+      page.getByRole("heading", { name: "The Lantern Room", exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Around this title" }),
+    ).toBeVisible();
+    await expect(page.locator("iframe")).toHaveCount(0);
+    await expect(
+      page.getByRole("link", { name: "Watch on YouTube" }),
+    ).toHaveCount(0);
+  }
+  await page.context().close();
+});
 
 test("invited friends discover, save, and share a persistent conversation with live access enforcement", async ({
   browser,

@@ -359,6 +359,17 @@ hr {
 .title-hero h1 {
   font-size: 36px;
 }
+.title-trailer {
+  margin-bottom: 42px;
+}
+.trailer-player {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  min-height: 200px;
+  border: 0;
+  background: #000;
+}
 .overview {
   color: var(--muted);
   line-height: 1.7;

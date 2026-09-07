@@ -40,6 +40,10 @@ const { createInvitation } = await import("../src/server/invitations");
 const { token } = await createInvitation(null, 12);
 await mkdir(".cache", { recursive: true });
 await writeFile(".cache/browser-invite.txt", token, { mode: 0o600 });
+const trailerInvitation = await createInvitation(null, 1);
+await writeFile(".cache/browser-trailer-invite.txt", trailerInvitation.token, {
+  mode: 0o600,
+});
 const { startGoogleProvider } =
   await import("../tests/browser/google-provider");
 const google = await startGoogleProvider();
@@ -55,9 +59,47 @@ const fixture = {
 };
 const catalog = createServer((request, response) => {
   response.setHeader("Content-Type", "application/json");
+  if (request.url?.endsWith("/videos")) {
+    if (request.url === "/movie/987655/videos") {
+      response.writeHead(503).end();
+      return;
+    }
+    response.end(
+      JSON.stringify({
+        results:
+          request.url === "/movie/987654/videos"
+            ? [
+                {
+                  site: "YouTube",
+                  type: "Trailer",
+                  key: "Abcdef_1234",
+                  name: "Official trailer",
+                  official: true,
+                },
+              ]
+            : request.url === "/movie/987656/videos"
+              ? [
+                  {
+                    site: "YouTube",
+                    type: "Trailer",
+                    key: "invalid?autoplay=1",
+                    name: "Invalid trailer",
+                    official: true,
+                  },
+                ]
+              : [],
+      }),
+    );
+    return;
+  }
   response.end(
     JSON.stringify(
-      request.url?.startsWith("/search/") ? { results: [fixture] } : fixture,
+      request.url?.startsWith("/search/")
+        ? { results: [fixture] }
+        : {
+            ...fixture,
+            id: Number(request.url?.split("/")[2]) || fixture.id,
+          },
     ),
   );
 }).listen(3056, "127.0.0.1");

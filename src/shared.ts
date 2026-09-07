@@ -12,6 +12,7 @@ export type Title = {
   poster_path: string | null;
   release_date: string;
 };
+export type Trailer = { key: string; name: string };
 export type Conversation = {
   id: string;
   owner_id: string;
