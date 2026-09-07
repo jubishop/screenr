@@ -85,8 +85,8 @@ https://screenr.club/api/auth/callback/google
 
 For production, set `BETTER_AUTH_URL=https://screenr.club` in the private
 server environment. Register the new callback before changing this value.
-Keep the old `https://screenr.jubishop.com/api/auth/callback/google` registration
-during the rollback window. Follow the [domain cutover procedure](deployment.md#domain-cutover)
+Leave the old `https://screenr.jubishop.com/api/auth/callback/google` registration
+in place. Follow the [domain cutover procedure](deployment.md#domain-cutover)
 to coordinate Google, DNS, TLS, and the server. Google's callback must match
 the registered URL exactly; see its [redirect URI requirements](https://developers.google.com/identity/protocols/oauth2/web-server#creatingcred).
 
