@@ -1,0 +1,10 @@
+[Unit]
+Description=Weekly Screenr restore check
+
+[Timer]
+OnCalendar=Sat *-*-* 14:00:00 UTC
+RandomizedDelaySec=10m
+Persistent=true
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,27 @@
+[Unit]
+Description=Screenr transactional email worker
+After=network-online.target screenr-db.service
+Requires=screenr-db.service
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+[Service]
+User=screenr
+Group=screenr
+WorkingDirectory=/opt/screenr/current
+EnvironmentFile=/etc/screenr/app.env
+Environment=NODE_ENV=production
+Environment=NODE_OPTIONS=--max-old-space-size=96
+ExecStart=/opt/screenr/node/bin/node --import tsx scripts/worker.ts
+Restart=on-failure
+RestartSec=5
+MemoryMax=128M
+CPUQuota=15%
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

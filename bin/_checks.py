@@ -268,7 +268,7 @@ def main():
         for path in tracked_files(root):
             if path == root / ".envrc":
                 subprocess.run(["shellcheck", "--shell=bash", str(path)], cwd=root, check=True)
-            elif path.is_relative_to(root / "bin") and path.read_bytes().startswith(b"#!/bin/sh"):
+            elif (path.is_relative_to(root / "bin") or path.is_relative_to(root / "ops")) and path.read_bytes().startswith(b"#!/bin/sh"):
                 shell_files.append(path)
             elif path.is_relative_to(root / "bin") and (path.suffix == ".py" or path.read_bytes().startswith(b"#!/usr/bin/env python3")):
                 ast.parse(path.read_text(), filename=str(path))
@@ -281,6 +281,9 @@ def main():
         subprocess.run(["git", "diff", "--check"], cwd=root, check=True)
         subprocess.run(["git", "diff", "--cached", "--check"], cwd=root, check=True)
         print("Repository foundation checks passed.")
+        for script in ("format:check", "typecheck", "test", "test:browser", "build"):
+            subprocess.run(["npm", "run", script], cwd=root, check=True)
+        print("Application checks passed.")
         return 0
     except (OSError, ValueError, RuntimeError, SyntaxError, subprocess.SubprocessError) as error:
         print(error, file=sys.stderr)

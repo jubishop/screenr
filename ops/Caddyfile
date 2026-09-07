@@ -1,0 +1,20 @@
+# Add this site to the existing Caddyfile; preserve other sites.
+screenr.jubishop.com {
+    tls /etc/caddy/certs/screenr.pem /etc/caddy/certs/screenr.key
+    encode zstd gzip
+    request_body {
+        max_size 64KB
+    }
+    header {
+        Referrer-Policy "no-referrer"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "DENY"
+        X-Robots-Tag "noindex, nofollow, noarchive"
+    }
+    reverse_proxy 127.0.0.1:3060 {
+        # The existing firewall accepts HTTP(S) only from Cloudflare.
+        # Overwrite the address used by Better Auth's rate limiter.
+        header_up X-Forwarded-For {http.request.header.CF-Connecting-IP}
+        header_up X-Real-IP {http.request.header.CF-Connecting-IP}
+    }
+}

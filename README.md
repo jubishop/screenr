@@ -2,10 +2,12 @@
 
 A social app for TV and movies, centered on people you know.
 
-The first version will be a mobile-friendly web app. Product design is in
-progress. Start with the [product brief](docs/product-brief.md) and the
-[application stack decision](docs/application-stack.md). Application
-implementation has not started.
+The first milestone is a mobile-friendly Next.js app with invited signup,
+Google or email-code sign-in, friendships, movie and show discovery,
+recommendations, Want to watch, and private conversations. Start with
+[Running Screenr](docs/running-screenr.md) for app setup and a repeatable test
+flow. The [product brief](docs/product-brief.md) defines the larger release;
+its remaining features are outside this milestone.
 
 ## Repository setup
 
@@ -35,9 +37,11 @@ to include your own notes.
 ./bin/check
 ```
 
-Install ShellCheck first (`brew install shellcheck` on macOS). The checks
+Complete the [app setup](docs/running-screenr.md#local-setup) and install
+Playwright Chromium first. Install ShellCheck (`brew install shellcheck` on macOS). The checks
 validate scripts, document metadata, index coverage, local links and heading
-anchors, hook behavior, concurrent refreshes, and worktree isolation.
+anchors, hook behavior, concurrent refreshes, and worktree isolation. They also
+run app formatting, TypeScript, PostgreSQL and browser tests, and a production build.
 GitHub Actions runs the same checks on pull requests and pushes to `main`.
 
 Use `git knowledge search "term"` from any subdirectory. Run `bin/qmd-index`
