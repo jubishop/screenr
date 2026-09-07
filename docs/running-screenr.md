@@ -50,6 +50,24 @@ friendship. Keep the link private. Repeat bootstrap only when another
 administrative invitation is needed; members can create ordinary invitations
 in the app.
 
+The invitation page shows active links with copy and share controls. Links
+remain available after reload; revoked, expired, and fully used invitations
+disappear on the next refresh. Their database records remain intact.
+
+Migration `004-invitation-links.sql` adds an optional second token hash. Old
+invitations stored only a one-way hash, so their original URLs cannot be
+recovered. When the creator views an active old invitation, Screenr adds a
+stable share URL for that same invitation. Both URLs use the same signup limit,
+expiry, and revocation state; previously shared URLs and pending signups keep
+working. New invitations use their original URL in the list.
+
+Share tokens use HMAC-SHA-256 with `BETTER_AUTH_SECRET` and an
+invitation-specific input. The database stores hashes, not reusable tokens.
+Keep this secret stable across releases. Rotating it changes the displayed
+URLs on the next invitation-page refresh and replaces any previous secondary
+URL; the original creation URLs retain their normal lifetime. No additional
+secret or manual backfill is required.
+
 After requesting an email code in the browser, read it with:
 
 ```sh

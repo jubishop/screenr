@@ -1,12 +1,22 @@
-import { createHash, randomBytes, randomUUID } from "node:crypto";
+import { createHash, createHmac, randomUUID } from "node:crypto";
 import { db, transaction, AppError, text } from "./db";
 
 export const invitationHash = (token: string) =>
   createHash("sha256").update(token).digest("hex");
 
+function shareToken(id: string) {
+  const secret = process.env.BETTER_AUTH_SECRET;
+  if (!secret || secret.length < 32)
+    throw new Error("Set BETTER_AUTH_SECRET to at least 32 random characters.");
+  // Reproduce the creator's link without storing a bearer token in the database.
+  return createHmac("sha256", secret)
+    .update(`screenr-invitation:${id}`)
+    .digest("base64url");
+}
+
 export async function activeInvitation(hash: string) {
   const { rows } = await db.query(
-    `SELECT id FROM invitation WHERE token_hash = $1 AND revoked_at IS NULL
+    `SELECT id FROM invitation WHERE (token_hash = $1 OR share_token_hash = $1) AND revoked_at IS NULL
      AND expires_at > now() AND uses < max_uses`,
     [hash],
   );
@@ -20,8 +30,8 @@ export async function createInvitation(
   if (!Number.isInteger(limit) || Number(limit) < 1 || Number(limit) > 12) {
     throw new AppError("Choose between 1 and 12 signups.");
   }
-  const token = randomBytes(32).toString("base64url");
   const id = randomUUID();
+  const token = shareToken(id);
   await transaction(async (client) => {
     if (
       creator &&
@@ -69,7 +79,7 @@ export async function completeSignup(
       : user.invitationHash;
     const invite = (
       await client.query(
-        `UPDATE invitation SET uses=uses+1 WHERE token_hash=$1 AND revoked_at IS NULL
+        `UPDATE invitation SET uses=uses+1 WHERE (token_hash=$1 OR share_token_hash=$1) AND revoked_at IS NULL
        AND expires_at>now() AND uses<max_uses RETURNING id`,
         [hash],
       )
@@ -101,16 +111,34 @@ export async function completeSignup(
 }
 
 export async function listInvitations(userId: string) {
-  return (
-    await db.query(
-      `SELECT i.id,i.max_uses,i.uses,i.expires_at,i.revoked_at,
+  return transaction(async (client) => {
+    const { rows } = await client.query(
+      `SELECT i.id,i.max_uses,i.uses,i.expires_at,i.token_hash,i.share_token_hash,
       coalesce((SELECT jsonb_agg(jsonb_build_object('username',p.username,'display_name',p.display_name))
         FROM invitation_signup s JOIN profile p ON p.user_id=s.user_id
         WHERE s.invitation_id=i.id AND NOT screenr_blocked($1,p.user_id)), '[]') AS joined
-     FROM invitation i WHERE creator_id=$1 ORDER BY created_at DESC`,
+     FROM invitation i WHERE creator_id=$1 AND revoked_at IS NULL
+     AND expires_at>now() AND uses<max_uses ORDER BY created_at DESC, id DESC`,
       [userId],
-    )
-  ).rows;
+    );
+    const invitations = [];
+    for (const { token_hash, share_token_hash, ...invitation } of rows) {
+      const token = shareToken(invitation.id);
+      const hash = invitationHash(token);
+      // Legacy tokens cannot be recovered. Add a second URL for the same row,
+      // preserving the original URL, pending signups, usage, and expiry.
+      if (hash !== token_hash && hash !== share_token_hash)
+        await client.query(
+          "UPDATE invitation SET share_token_hash=$1 WHERE id=$2",
+          [hash, invitation.id],
+        );
+      invitations.push({
+        ...invitation,
+        url: new URL(`/join/${token}`, process.env.BETTER_AUTH_URL!).href,
+      });
+    }
+    return invitations;
+  });
 }
 
 export async function revokeInvitation(userId: string, id: string) {

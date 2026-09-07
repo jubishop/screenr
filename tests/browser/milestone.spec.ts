@@ -2,6 +2,7 @@ import { test, expect, type Page, type Browser } from "@playwright/test";
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { setTimeout as delay } from "node:timers/promises";
+import { Pool } from "pg";
 
 const browserErrors: string[] = [];
 
@@ -172,11 +173,107 @@ test("invitation links copy on repeated mobile taps and keyboard activation", as
   await page
     .getByRole("button", { name: "Create invitation", exact: true })
     .click();
-  await expect(link).not.toHaveValue(url);
-  await expect(page.getByRole("status")).not.toHaveText("Link copied.");
-  await link.tap();
-  await expect.poll(() => copied.at(-1)).toBe(await link.inputValue());
+  const links = page.getByLabel("Invitation link", { exact: true });
+  await expect(links).toHaveCount(2);
+  const newest = links.first();
+  await expect(newest).not.toHaveValue(url);
+  await expect(page.getByRole("status").first()).not.toHaveText("Link copied.");
+  await newest.tap();
+  await expect.poll(() => copied.at(-1)).toBe(await newest.inputValue());
   await page.context().close();
+});
+
+test("active invitation cards retain links across reloads and disappear after use, revocation, or expiry", async ({
+  browser,
+}) => {
+  const owner = await join(browser, "invitationowner", {
+    token: (await readFile(".cache/browser-invite-list.txt", "utf8")).trim(),
+  });
+  await owner.goto("/invites");
+  await owner.getByLabel("Maximum signups").selectOption("2");
+  const create = owner.getByRole("button", {
+    name: "Create invitation",
+    exact: true,
+  });
+  await create.click();
+  const links = owner.getByLabel("Invitation link", { exact: true });
+  await expect(links).toHaveCount(1);
+  const url = await links.inputValue();
+  await owner.reload();
+  await expect(links).toHaveValue(url);
+  await create.click();
+  await expect(links).toHaveCount(2);
+  const newerURL = await links.first().inputValue();
+  expect(newerURL).not.toBe(url);
+  const guest = await join(browser, "invitationguest", {
+    token: new URL(url).pathname.split("/").at(-1),
+  });
+  await expect(
+    owner.getByText("1 of 2 signups", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    owner.getByRole("link", {
+      name: "invitationguest (@invitationguest)",
+      exact: true,
+    }),
+  ).toBeVisible();
+  expect(
+    (
+      await (
+        await guest.request.get("/api/screenr/screen?path=/invites")
+      ).json()
+    ).invitations,
+  ).toEqual([]);
+  await owner.screenshot({
+    path: ".cache/invitations-mobile.png",
+    fullPage: true,
+  });
+  expect(
+    await owner.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth,
+    ),
+  ).toBe(true);
+  await owner.setViewportSize({ width: 1400, height: 1000 });
+  await owner.screenshot({
+    path: ".cache/invitations-desktop.png",
+    fullPage: true,
+  });
+  const finalGuest = await join(browser, "invitationlast", {
+    token: new URL(url).pathname.split("/").at(-1),
+  });
+  await expect(links).toHaveCount(1);
+  await expect(links).toHaveValue(newerURL);
+  await owner.getByRole("button", { name: "Revoke", exact: true }).click();
+  await expect(links).toHaveCount(0);
+  await expect(
+    owner.getByText("No active invitations.", { exact: true }),
+  ).toBeVisible();
+  await create.click();
+  await expect(links).toHaveCount(1);
+  const screen = await (
+    await owner.request.get("/api/screenr/screen?path=/invites")
+  ).json();
+  const databaseURL = new URL(
+    process.env.TEST_DATABASE_URL ??
+      "postgresql://screenr:screenr-local-only@127.0.0.1:5439/screenr_test",
+  );
+  if (!databaseURL.pathname.endsWith("_test"))
+    throw new Error("Use a test database.");
+  databaseURL.pathname = "/screenr_browser_test";
+  const database = new Pool({ connectionString: databaseURL.href });
+  try {
+    await database.query("UPDATE invitation SET expires_at=now() WHERE id=$1", [
+      screen.invitations[0].id,
+    ]);
+  } finally {
+    await database.end();
+  }
+  await expect(links).toHaveCount(0);
+  await owner.reload();
+  await expect(
+    owner.getByText("No active invitations.", { exact: true }),
+  ).toBeVisible();
+  for (const page of [owner, guest, finalGuest]) await page.context().close();
 });
 
 test("invitation links remain manually copyable when clipboard access fails or is unavailable", async ({
@@ -255,9 +352,6 @@ test("invitation links share the exact URL and handle cancellation, failure, and
     });
   });
   await page.reload();
-  await page
-    .getByRole("button", { name: "Create invitation", exact: true })
-    .click();
   const link = page.getByLabel("Invitation link", { exact: true });
   const url = await link.inputValue();
   const share = page.getByRole("button", {
@@ -313,9 +407,6 @@ test("invitation links share the exact URL and handle cancellation, failure, and
     sessionStorage.setItem("share-unsupported", "true"),
   );
   await page.reload();
-  await page
-    .getByRole("button", { name: "Create invitation", exact: true })
-    .click();
   await expect(share).toHaveCount(0);
   await link.tap();
   await expect.poll(() => copied.at(-1)).toBe(await link.inputValue());
@@ -522,7 +613,10 @@ test("invited friends discover, save, and share inline discussions with live acc
     .click();
   await expect(alice.getByLabel("Invitation link")).toHaveValue(/\/join\//);
   await alice.getByRole("button", { name: "Revoke", exact: true }).click();
-  await expect(alice.getByText("Revoked", { exact: true })).toBeVisible();
+  await expect(alice.getByLabel("Invitation link")).toHaveCount(0);
+  await expect(
+    alice.getByText("No active invitations.", { exact: true }),
+  ).toBeVisible();
   for (const page of [alice, ben, cam, outsider]) await page.context().close();
 });
 
@@ -1328,16 +1422,7 @@ test("a signed-out pending member can finish with one visit to a replacement inv
   const screen = await (
     await owner.request.get("/api/screenr/screen?path=/invites")
   ).json();
-  expect(
-    screen.invitations.find(
-      (invite: { id: string }) => invite.id === original.id,
-    ).uses,
-  ).toBe(0);
-  expect(
-    screen.invitations.find(
-      (invite: { id: string }) => invite.id === replacement.id,
-    ).uses,
-  ).toBe(1);
+  expect(screen.invitations).toEqual([]);
   await owner.context().close();
   await pending.context().close();
 });
