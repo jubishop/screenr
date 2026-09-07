@@ -73,7 +73,7 @@ jobs:
     timeout-minutes: 20
     environment:
       name: production
-      url: https://screenr.jubishop.com
+      url: https://screenr.club
     permissions:
       contents: read
       actions: write # Download and remove this run's temporary release artifact.
