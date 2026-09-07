@@ -117,14 +117,16 @@ export function FeedView({
   return (
     <section className="interactive-feed" aria-label="Activity feed">
       {unavailable && <p role="status">This activity is unavailable.</p>}
-      {snapshot && incoming.length > 0 && (
-        <button
-          className="new-replies"
-          onClick={() => preservePosition(() => setKnown(capture(snapshot)))}
-        >
-          New activity ({incoming.length})
-        </button>
-      )}
+      <div className="feed-updates">
+        {snapshot && incoming.length > 0 && (
+          <button
+            className="new-replies"
+            onClick={() => preservePosition(() => setKnown(capture(snapshot)))}
+          >
+            New activity ({incoming.length})
+          </button>
+        )}
+      </div>
       <div className="feed-list">
         {order.map((id) => (
           <FeedEntry

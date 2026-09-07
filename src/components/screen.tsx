@@ -48,6 +48,10 @@ export function Screen({
         AbortSignal.any([controller.signal, timeout]),
       );
       if (!controller.signal.aborted) {
+        if (latest.kind === "redirect") {
+          window.location.replace(latest.url);
+          return;
+        }
         setData(latest);
         setLoadError("");
       }

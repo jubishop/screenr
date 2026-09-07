@@ -746,6 +746,10 @@ test("loading activity retains the visible three-reply preview and its reading a
   await reader.goto("/");
   await expect(reader.locator("[data-comment-id]")).toHaveCount(3);
   const anchor = reader.getByText("Reading reply 0", { exact: true });
+  await anchor.evaluate((element) =>
+    element.scrollIntoView({ block: "center" }),
+  );
+  const beforeArrival = (await anchor.boundingBox())!.y;
   await reply("New reply after the preview");
   const incomingItem = await owner.request.post("/api/screenr/activity", {
     headers: { Origin: "http://localhost:3055" },
@@ -756,6 +760,9 @@ test("loading activity retains the visible three-reply preview and its reading a
     reader.getByRole("button", { name: /New activity/ }),
   ).toBeVisible();
   await expect(reader.locator("[data-item-id]")).toHaveCount(1);
+  expect(
+    Math.abs((await anchor.boundingBox())!.y - beforeArrival),
+  ).toBeLessThan(3);
   await anchor.evaluate((element) =>
     element.scrollIntoView({ block: "center" }),
   );
@@ -772,6 +779,46 @@ test("loading activity retains the visible three-reply preview and its reading a
   await reader.reload();
   await expect(reader.locator("[data-comment-id]")).toHaveCount(3);
   await expect(anchor).toHaveCount(0);
+  await reader.context().close();
+  await owner.context().close();
+});
+
+test("an unavailable legacy link navigates after friendship restores access", async ({
+  browser,
+}) => {
+  const token = (
+    await readFile(".cache/browser-feed-invite.txt", "utf8")
+  ).trim();
+  const owner = await join(browser, "recoveryowner", { token });
+  const reader = await join(browser, "recoveryreader", { token });
+  await owner.goto("/titles/movie/987654");
+  const response = await owner.request.post("/api/screenr/activity", {
+    headers: { Origin: "http://localhost:3055" },
+    data: { title: "movie:987654", field: "recommended", value: true },
+  });
+  expect(response.status()).toBe(200);
+  const { id } = await response.json();
+  const screen = await owner.request.get("/api/screenr/screen?path=/");
+  const entry = (await screen.json()).conversations.find(
+    (item: { id: string }) => item.id === id,
+  );
+  const waiting = await reader.context().newPage();
+  monitorErrors(waiting);
+  await waiting.route("https://www.youtube.com/embed/**", (route) =>
+    route.fulfill({ contentType: "text/html", body: "Trailer player fixture" }),
+  );
+  await waiting.goto(`/conversations/${entry.conversation_id}`);
+  await expect(waiting.getByRole("alert")).toContainText(
+    "Conversation not found.",
+  );
+  await befriend(owner, reader, "recoveryreader", "recoveryowner");
+  await waiting.bringToFront();
+  await expect(waiting).toHaveURL(
+    new RegExp(`/titles/movie/987654\\?item=${id}$`),
+  );
+  await expect(
+    waiting.locator(`[data-item-id="${id}"]`).getByLabel("Add your reply"),
+  ).toBeVisible();
   await reader.context().close();
   await owner.context().close();
 });
