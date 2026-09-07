@@ -3,6 +3,7 @@ import { AppError } from "../../../../server/db";
 import {
   member,
   addComment,
+  createTitleComment,
   removeComment,
   changeRelationship,
   updateTitleActivity,
@@ -98,6 +99,16 @@ async function handle(
             title.id,
             String(data.field),
             data.value,
+          ),
+        });
+      } else if (action === "title-comment") {
+        const title = await getTitle(String(data.title));
+        return json({
+          id: await createTitleComment(
+            userId,
+            title.id,
+            data.body,
+            data.spoiler,
           ),
         });
       } else if (action === "comment")
