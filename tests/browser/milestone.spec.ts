@@ -196,6 +196,9 @@ test("active invitation cards retain links across reloads and disappear after us
     token: (await readFile(".cache/browser-invite-list.txt", "utf8")).trim(),
   });
   await owner.goto("/invites");
+  await expect
+    .soft(owner.getByText(/completes signup.*automatically become friends/))
+    .toBeVisible();
   await owner.getByLabel("Maximum signups").selectOption("2");
   const create = owner.getByRole("button", {
     name: "Create invitation",
@@ -213,7 +216,21 @@ test("active invitation cards retain links across reloads and disappear after us
   expect(newerURL).not.toBe(url);
   const guest = await join(browser, "invitationguest", {
     token: new URL(url).pathname.split("/").at(-1),
+    complete: false,
   });
+  await expect
+    .soft(
+      guest.getByText(/member’s invitation automatically makes you friends/),
+    )
+    .toBeVisible();
+  await guest.getByLabel("Display name").fill("invitationguest");
+  await guest.getByLabel("Username", { exact: true }).fill("invitationguest");
+  await guest
+    .getByRole("button", { name: "Join Screenr", exact: true })
+    .click();
+  await expect(
+    guest.getByRole("heading", { name: "Better with friends." }),
+  ).toBeVisible();
   await expect(
     owner.getByText("1 of 2 signups", { exact: true }),
   ).toBeVisible();
