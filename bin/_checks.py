@@ -277,7 +277,7 @@ def main():
         tests = root / "tests/test_knowledge.py"
         if not tests.exists():
             raise RuntimeError("Missing tests/test_knowledge.py; preserve the foundation tests when adapting bin/check")
-        subprocess.run([sys.executable, "-B", "-m", "unittest", "discover", "-s", "tests", "-p", "test_knowledge.py", "-v"], cwd=root, check=True)
+        subprocess.run([sys.executable, "-B", "-m", "unittest", "discover", "-s", "tests", "-p", "test_*.py", "-v"], cwd=root, check=True)
         subprocess.run(["git", "diff", "--check"], cwd=root, check=True)
         subprocess.run(["git", "diff", "--cached", "--check"], cwd=root, check=True)
         print("Repository foundation checks passed.")

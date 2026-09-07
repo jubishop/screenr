@@ -77,14 +77,62 @@ header so authentication rate limits apply to the actual client.
 ## Build and activate a release
 
 Follow the [review, merge, and deploy workflow](development-workflow.md#review-merge-and-deploy).
-For production, dispatch the repository check workflow on `main` after the
-PR has been reviewed and merged. It checks the code and produces a Linux x64
-release artifact with one-day retention. Confirm that the successful run and
-downloaded artifact identify the selected merged revision. Do not deploy an
-issue-branch artifact without an explicit user-approved exception.
+Each push to `main`, including a PR merge, runs the repository checks and packages
+a Linux x64 release. A separate `deploy` job starts only after the check job
+passes. PR workflows only run checks. There is no local deployment command.
 
-The public-repository workflow uses no deployment secrets. Remove the temporary
-GitHub artifact after saving and verifying it locally.
+The deployment job downloads the archive from its own run, checks its revision
+and paths, and verifies the transfer checksum. It takes a backup, activates the
+release, and checks Screenr services, the public health endpoint, and the login
+page. It also checks that Caddy, Health, KidsBank, and Trading retain their running
+service state. [`bin/deploy-ci`](../bin/deploy-ci) is the internal Actions helper;
+[`ops/deploy-release.sh`](../ops/deploy-release.sh) runs the remote steps. The
+remote script comes from the checked Git revision, not a mutable local file.
+
+A new push does not cancel a running main workflow or interrupt activation.
+GitHub keeps the latest pending run when pushes arrive quickly. Before uploading
+and again before activation, the helper rejects a revision that is no longer
+current `main`; the newer push supplies the replacement release. The host also
+locks deployment so two activations cannot run together.
+
+The workflow stores release artifacts with one-day retention. After downloading
+and verifying an archive, the deployment job deletes its GitHub artifact. Build
+jobs have no production secrets. A failed deploy job must be retried using
+**Re-run all jobs** in GitHub Actions, so checks and packaging produce a fresh
+artifact. If `main` has advanced, use the newer push's run instead. A repeat
+deployment of the active revision verifies health without extracting or
+restarting it. A failed extraction or startup removes only a new candidate after
+successful rollback. Failures in later verification require inspection and,
+when necessary, manual recovery. Database migrations are not reversed.
+
+### Production environment setup
+
+Create a GitHub Actions environment named `production` in `jubishop/screenr`.
+Allow only the **branch** `main` through its deployment branch policy. Do not
+add required deployment reviewers; PR review happens before merge. Protect
+`main` with the repository's normal PR review and required-check rules.
+
+Add these environment secrets:
+
+| Secret | Value |
+| --- | --- |
+| `SCREENR_DEPLOY_HOST` | `root@YOUR_SSH_HOST`, reachable from GitHub-hosted runners |
+| `SCREENR_DEPLOY_KEY` | A dedicated Ed25519 private key for this repository's deployments |
+| `SCREENR_DEPLOY_KNOWN_HOSTS` | The verified SSH host-key entry for that exact host |
+
+Install the matching public key in the VPS root account's `authorized_keys`.
+Use the `restrict` key option to disable forwarding, PTY allocation, and user
+startup files. The deployment needs root access for backups, release ownership,
+and service activation. This grants trusted `main` workflows deployment access
+to the shared VPS. Use a new deployment key; do not upload an existing personal
+SSH key. Obtain the host key through the existing trusted SSH connection and
+verify it before saving the known-hosts entry. The workflow requires strict
+host-key checking and deletes its temporary SSH files when the job finishes.
+
+Application and backup credentials stay in `/etc/screenr/` on the host.
+For GitHub's environment and concurrency behavior, see
+[deployment controls](https://docs.github.com/en/actions/how-tos/deploy/configure-and-manage-deployments/control-deployments).
+Complete the independent acceptance below after the deployment job passes.
 
 To produce the same archive on another Linux x64 build machine:
 
