@@ -1,0 +1,125 @@
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { execFile } from "node:child_process";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
+import { promisify } from "node:util";
+
+const execute = promisify(execFile);
+const root = process.cwd();
+async function playwrightConfig(cwd: string, env = {}) {
+  const result = await execute(
+    process.execPath,
+    [
+      "--import",
+      resolve("node_modules/tsx/dist/loader.mjs"),
+      "--input-type=module",
+      "-e",
+      `import config from ${JSON.stringify(resolve("playwright.config.ts"))}; console.log(JSON.stringify(config));`,
+    ],
+    {
+      cwd,
+      env: {
+        ...process.env,
+        SCREENR_BROWSER_PORT: undefined,
+        SCREENR_BROWSER_DATABASE: undefined,
+        ...env,
+      },
+    },
+  );
+  return JSON.parse(result.stdout);
+}
+
+test("browser runs refuse to reuse an unrelated server", async () => {
+  const config = await playwrightConfig(root, { CI: "" });
+  assert.equal(config.webServer.reuseExistingServer, false);
+});
+
+test("separate checkout directories select separate browser URLs", async (t) => {
+  const other = await mkdtemp(join(tmpdir(), "screenr-browser-config-"));
+  t.after(() => rm(other, { recursive: true, force: true }));
+  const first = await playwrightConfig(root);
+  const second = await playwrightConfig(other);
+  assert.notEqual(first.use.baseURL, second.use.baseURL);
+  assert.equal(first.webServer.url, `${first.use.baseURL}/login`);
+  assert.equal(second.webServer.url, `${second.use.baseURL}/login`);
+});
+
+test("browser configuration honors a port override", async () => {
+  const config = await playwrightConfig(root, {
+    SCREENR_BROWSER_PORT: "32100",
+  });
+  assert.equal(config.use.baseURL, "http://localhost:32100");
+  assert.equal(config.webServer.url, "http://localhost:32100/login");
+});
+
+test("browser configuration rejects unsafe database and port settings", async () => {
+  for (const [env, message] of [
+    [
+      {
+        TEST_DATABASE_URL:
+          "postgresql://localhost/screenr_test?host=example.com",
+      },
+      /loopback PostgreSQL test database/,
+    ],
+    [{ SCREENR_BROWSER_PORT: "65533" }, /SCREENR_BROWSER_PORT/],
+    [{ SCREENR_BROWSER_PORT: "1234.5" }, /SCREENR_BROWSER_PORT/],
+    [{ SCREENR_BROWSER_PORT: "0" }, /SCREENR_BROWSER_PORT/],
+    [
+      { TEST_DATABASE_URL: "postgresql://localhost/screenr" },
+      /loopback PostgreSQL test database/,
+    ],
+    [
+      { TEST_DATABASE_URL: "postgresql://example.com/screenr_test" },
+      /loopback PostgreSQL test database/,
+    ],
+    [{ SCREENR_BROWSER_DATABASE: "screenr" }, /separate database/],
+    [
+      { SCREENR_BROWSER_DATABASE: `screenr_browser_${"a".repeat(50)}_test` },
+      /separate database/,
+    ],
+    [
+      {
+        TEST_DATABASE_URL: "postgresql://localhost/screenr_browser_same_test",
+        SCREENR_BROWSER_DATABASE: "screenr_browser_same_test",
+      },
+      /separate database/,
+    ],
+  ] as const) {
+    await assert.rejects(playwrightConfig(root, env), message);
+  }
+});
+
+test("an occupied fixture port fails before contacting PostgreSQL", async (t) => {
+  const { createServer } = await import("node:net");
+  const { once } = await import("node:events");
+  const occupied = createServer();
+  occupied.listen(0, "127.0.0.1");
+  await once(occupied, "listening");
+  t.after(() => new Promise<void>((done) => occupied.close(() => done())));
+  const address = occupied.address();
+  assert.ok(address && typeof address !== "string");
+  // Each of the four ports must be checked before a database can be reset.
+  for (const offset of [0, 1, 2, 3]) {
+    await assert.rejects(
+      execute(
+        process.execPath,
+        ["--import", "tsx", "scripts/browser-server.ts"],
+        {
+          env: {
+            ...process.env,
+            TEST_DATABASE_URL: "postgresql://127.0.0.1:1/unreachable_test",
+            SCREENR_BROWSER_PORT: String(address.port - offset),
+          },
+          timeout: 5000,
+        },
+      ),
+      (error: Error) => {
+        assert.match(error.message, /Browser fixture port .* is in use/);
+        assert.doesNotMatch(error.message, /ECONNREFUSED/);
+        return true;
+      },
+    );
+  }
+});
