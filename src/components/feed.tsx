@@ -165,6 +165,8 @@ function FeedEntry({
   targetReply?: string;
 }) {
   const interactive = useInteractive();
+  const [revealed, setRevealed] = useState(false);
+  const hiddenSpoiler = !!item?.spoiler && !revealed;
   const titleURL = item ? `/titles/${item.title_id.replace(":", "/")}` : "";
   return (
     <article
@@ -184,15 +186,17 @@ function FeedEntry({
                 {item.display_name}
               </Link>{" "}
               <span className="muted">
-                {item.item_type === "earlier"
-                  ? "· Earlier discussion"
-                  : item.item_type === "recommended"
-                    ? item.active
-                      ? "recommends"
-                      : "removed their recommendation"
-                    : item.active
-                      ? "wants to watch"
-                      : "removed Want to watch"}
+                {item.item_type === "comment"
+                  ? "commented on"
+                  : item.item_type === "earlier"
+                    ? "· Earlier discussion"
+                    : item.item_type === "recommended"
+                      ? item.active
+                        ? "recommends"
+                        : "removed their recommendation"
+                      : item.active
+                        ? "wants to watch"
+                        : "removed Want to watch"}
               </span>
             </p>
             <h2>
@@ -206,6 +210,13 @@ function FeedEntry({
                 {dateLabel(item.visible_activity, interactive)}
               </time>
             </p>
+            {hiddenSpoiler ? (
+              <button className="spoiler" onClick={() => setRevealed(true)}>
+                Contains spoilers · Reveal discussion
+              </button>
+            ) : (
+              item.body && <p className="comment-body">{item.body}</p>
+            )}
             <div className="inline-actions">
               <Link
                 className="conversation-link"
@@ -236,7 +247,11 @@ function FeedEntry({
         </header>
       )}
       <ThreadView
-        snapshot={item ? { conversation: item, comments: item.comments } : null}
+        snapshot={
+          item && !hiddenSpoiler
+            ? { conversation: item, comments: item.comments }
+            : null
+        }
         user={user}
         refresh={refresh}
         targetReply={targetReply}

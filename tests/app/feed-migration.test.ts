@@ -75,6 +75,27 @@ test("migration preserves old discussions and creates only known active actions"
     );
     // Exercise the preceding release's SQL after migration: no new columns
     // are supplied. Its writes must remain visible in the new item model.
+    const beforeStandalone = (
+      await client.query("SELECT * FROM comment ORDER BY id")
+    ).rows;
+    await client.query(await readFile("db/005-title-comments.sql", "utf8"));
+    assert.deepEqual(
+      (
+        await client.query(
+          "SELECT * FROM feed_item ORDER BY owner_id,item_type",
+        )
+      ).rows,
+      items,
+    );
+    assert.deepEqual(
+      (await client.query("SELECT * FROM comment ORDER BY id")).rows.map(
+        ({ title_comment_id, ...comment }) => {
+          assert.equal(title_comment_id, null);
+          return comment;
+        },
+      ),
+      beforeStandalone,
+    );
     await client.query(
       `UPDATE conversation SET recommended=false,activity_at='2020-05-01' WHERE owner_id='alice'`,
     );
@@ -120,6 +141,35 @@ test("migration preserves old discussions and creates only known active actions"
       ).rows[0].body,
       "New action reply",
     );
+    // The immediate predecessor upserts the canonical action directly too.
+    const upsert = await client.query(
+      `INSERT INTO feed_item(id,conversation_id,owner_id,title_id,item_type,active)
+       VALUES(gen_random_uuid(),'00000000-0000-0000-0000-000000000001','alice','movie:1','recommended',true)
+       ON CONFLICT(owner_id,title_id,item_type) DO UPDATE SET active=excluded.active RETURNING id`,
+    );
+    assert.equal(upsert.rows[0].id, items[1].id);
+    await client.query(`INSERT INTO title_comment(id,conversation_id,owner_id,title_id,body)
+      VALUES ('00000000-0000-0000-0000-000000000003','00000000-0000-0000-0000-000000000001','alice','movie:1','First'),
+             ('00000000-0000-0000-0000-000000000004','00000000-0000-0000-0000-000000000001','alice','movie:1','Second');
+      INSERT INTO comment(conversation_id,title_comment_id,author_id,body)
+      VALUES ('00000000-0000-0000-0000-000000000001','00000000-0000-0000-0000-000000000003','alice','Standalone reply');`);
+    const standaloneReply = (
+      await client.query(
+        "SELECT feed_item_id,title_comment_id FROM comment WHERE body='Standalone reply'",
+      )
+    ).rows[0];
+    assert.deepEqual(standaloneReply, {
+      feed_item_id: null,
+      title_comment_id: "00000000-0000-0000-0000-000000000003",
+    });
+    for (const sql of [
+      `INSERT INTO comment(conversation_id,title_comment_id,author_id,body) VALUES('00000000-0000-0000-0000-000000000002','00000000-0000-0000-0000-000000000003','ben','Wrong conversation')`,
+      `INSERT INTO comment(conversation_id,feed_item_id,title_comment_id,author_id,body) VALUES('00000000-0000-0000-0000-000000000001','00000000-0000-0000-0000-000000000001','00000000-0000-0000-0000-000000000003','alice','Two groups')`,
+    ]) {
+      await client.query("SAVEPOINT invalid_reply");
+      await assert.rejects(client.query(sql), /constraint/);
+      await client.query("ROLLBACK TO SAVEPOINT invalid_reply");
+    }
   } finally {
     await client.query("ROLLBACK");
     client.release();

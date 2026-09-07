@@ -542,6 +542,16 @@ hr {
   padding-top: 20px;
   border-top: 1px solid var(--line);
 }
+.title-comment-composer {
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 24px;
+  margin-bottom: 24px;
+}
+.title-comment-composer > label {
+  margin-bottom: 8px;
+}
 .composer > label {
   margin-bottom: 8px;
 }

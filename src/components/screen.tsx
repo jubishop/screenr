@@ -5,6 +5,7 @@ import type { ScreenData } from "../server/screens";
 import type { Person, Title } from "../shared";
 import { api, authClient, signOut, useInteractive, dateLabel } from "./client";
 import { FeedView } from "./feed";
+import { TitleCommentComposer } from "./title-comment";
 import { Poster } from "./poster";
 import { InvitationLink } from "./invitation-link";
 
@@ -512,6 +513,12 @@ export function Screen({
               </p>
             )}
           </>
+        )}
+        {path.startsWith("/titles/") && (
+          <TitleCommentComposer
+            titleId={data?.kind === "title" ? data.title.id : null}
+            refresh={refresh}
+          />
         )}
         {(path === "/" ||
           path.startsWith("/titles/") ||

@@ -6,8 +6,9 @@ status: current
 
 The first milestone implements invited signup, Google or email-code sign-in,
 required profiles, accepted friendships, TMDB discovery, recommendations,
-Want to watch, and shared interactive feeds. The remaining first-release features
-in the [product brief](product-brief.md) are outside this milestone.
+Want to watch, standalone title comments, and shared interactive feeds. The
+remaining first-release features in the [product brief](product-brief.md) are
+outside this milestone.
 
 ## Local setup
 
@@ -172,6 +173,11 @@ recipients. A full run checks:
   Own replies appear immediately. Incoming items and replies wait behind
   **New activity**. Reordering preserves reading position and drafts.
   Spoilers require a reveal; replies survive a reload and targeted links.
+- A movie or TV title can receive multiple standalone comments without an
+  existing recommendation or watch action. Only title pages have their
+  composer. The same entries and replies persist in all three feeds, with
+  spoiler protection for the whole discussion and independent reply groups.
+  Posting and refresh failures preserve comment drafts.
 - A nonfriend cannot read or write through direct API calls or the page.
 - Unfriending removes open-page access and hides historical comments for
   remaining readers; refriending restores them.

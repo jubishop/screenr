@@ -330,8 +330,8 @@ interview if they preserve these decisions:
 
 ## Shared feed implementation
 
-`src/server/social.ts` reads each eligible `feed_item` and its replies in one
-PostgreSQL snapshot. The friends, title, and profile screens use this same
+`src/server/social.ts` reads each eligible action or standalone comment and
+its replies in one PostgreSQL snapshot. The friends, title, and profile screens use this same
 read path. Items sort by the latest eligible activity at millisecond precision,
 then by item UUID for a stable tie. Removed comments remain placeholders but
 do not add activity or count as live replies. A withdrawn action with only
@@ -361,6 +361,23 @@ an eligible action, or the title feed. Inaccessible targets reveal no private
 content. Existing notification features are unchanged; these same title links
 are available to future notification work.
 
+### Standalone title comments
+
+Issue #8 adds **Start a discussion** on movie and TV title pages. Each saved
+comment has its own item ID and reply group. It uses the same shared feed,
+access checks, ordering, preview, expansion, and removal controls as other
+entries. Friends and profile pages show eligible comments and inline replies;
+they do not have a top-level composer. A profile includes only its owner's
+entries, not their replies on someone else's entries.
+
+Comments accept 1–2,000 characters after trimming outer whitespace. The
+optional spoiler flag hides the comment and its discussion until the reader
+reveals them. Reply-level spoiler flags still apply after that reveal. Failed
+posting and refreshes preserve the local draft; text entered while a post is
+saving remains available for the next comment. Creation does not change
+Recommend or Want to watch. Editing standalone comments, reviews, ratings,
+additional watch statuses, and titleless posts remain outside this feature.
+
 ### Migration and rollback compatibility
 
 Migration `004-feed-items.sql` adds `feed_item` and `comment.feed_item_id`.
@@ -379,6 +396,21 @@ new-version comments supply their item ID. A composite foreign key prevents a
 reply from crossing between person/title conversations. This additive design
 keeps the preceding release usable during activation or rollback, as required
 by the [deployment procedure](deployment.md#build-and-activate-a-release).
+
+Migration `005-title-comments.sql` adds `title_comment` without changing the
+unique action keys or existing item IDs. The shared read path combines both
+entry types before applying access checks. A reply references exactly one
+action/legacy item or standalone comment; a composite foreign key keeps it
+inside the correct person/title conversation. The title-state compatibility
+record is created with inactive flags only when absent. Existing state and
+activity dates are left intact.
+
+The preceding unified-feed release can still read and write its existing
+action discussions after this migration. It does not display standalone
+entries or their replies. Those records remain stored and become visible
+again with this release. Take
+the normal pre-upgrade backup; no separate backfill or manual migration step
+is needed.
 
 ## Decisions deferred to future features
 
