@@ -406,6 +406,31 @@ saving remains available for the next comment. Creation does not change
 Recommend or Want to watch. Editing standalone comments, reviews, ratings,
 additional watch statuses, and titleless posts remain outside this feature.
 
+### Emoji reactions
+
+Issue [#18](https://github.com/jubishop/screenr/issues/18) adds Like, Love,
+Care, Haha, Wow, Sad, and Angry to existing feed entries and replies.
+The same controls and counts appear in title, friends, and profile feeds.
+Native emoji represent the seven named reactions.
+
+The implementation uses one reaction per person per entry or reply. Choosing
+another reaction replaces it; choosing the selected reaction removes it.
+The React button opens a labeled picker that supports touch and keyboard
+input. Count buttons show the reader's selected reaction and also permit
+changing or removing it. A failed save shows an error and allows retry.
+
+Reaction reads and writes use the existing conversation audience. Counts
+exclude people who are no longer friends with the entry owner and people
+blocked by the reader. Reactions to a reply also require access between
+the reacting person and the reply author. Restoring access restores stored
+reactions. Removed replies show no reactions and reject new ones. Spoiler
+reactions stay behind the corresponding reveal control.
+
+These implementation defaults preserve the existing feed and notification
+rules: reactions update through the current refresh path, do not change item
+ordering, and do not send alerts. Reactions alone do not keep a withdrawn
+action visible; reactivation restores its stored reactions.
+
 ### Migration and rollback compatibility
 
 Migration `004-feed-items.sql` adds `feed_item` and `comment.feed_item_id`.
@@ -439,6 +464,12 @@ entries or their replies. Those records remain stored and become visible
 again with this release. Take
 the normal pre-upgrade backup; no separate backfill or manual migration step
 is needed.
+
+Migration `006-reactions.sql` adds reaction storage with foreign keys to
+existing items and replies and uniqueness constraints for each person and
+target. It changes no existing content or identities. The preceding release
+can still read and write its entries and replies; it ignores the reaction
+table. The normal deployment migration and backup procedure applies.
 
 ## Decisions deferred to future features
 

@@ -64,6 +64,14 @@ const watchInvitation = await createInvitation(null, 2);
 await writeFile(".cache/browser-watch-invite.txt", watchInvitation.token, {
   mode: 0o600,
 });
+const reactionInvitation = await createInvitation(null, 2);
+await writeFile(
+  ".cache/browser-reaction-invite.txt",
+  reactionInvitation.token,
+  {
+    mode: 0o600,
+  },
+);
 const { startGoogleProvider } =
   await import("../tests/browser/google-provider");
 const google = await startGoogleProvider();
