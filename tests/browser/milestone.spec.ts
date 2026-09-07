@@ -915,6 +915,185 @@ test("standalone title comments persist and share replies across all three mobil
   await outsider.context().close();
 });
 
+test("standalone deletion preserves discussions across feeds, keeps spoilers hidden, and removes empty entries", async ({
+  browser,
+}) => {
+  test.setTimeout(150_000);
+  const token = (
+    await readFile(".cache/browser-comment-invite.txt", "utf8")
+  ).trim();
+  const owner = await join(browser, "deleteowner", { token });
+  const reader = await join(browser, "deletereader", { token });
+  await befriend(owner, reader, "deletereader", "deleteowner");
+  const headers = { Origin: "http://localhost:3055" };
+  const create = async (body: string, spoiler = false) => {
+    const response = await owner.request.post("/api/screenr/title-comment", {
+      headers,
+      data: { title: "tv:987654", body, spoiler },
+    });
+    expect(response.status()).toBe(200);
+    return (await response.json()).id as string;
+  };
+  const reply = async (id: string, body: string) => {
+    const response = await reader.request.post("/api/screenr/comment", {
+      headers,
+      data: { conversation: id, body, spoiler: false },
+    });
+    expect(response.status()).toBe(200);
+    return (await response.json()).id as string;
+  };
+  const item = (page: Page, id: string) =>
+    page.locator(`[data-item-id="${id}"]`);
+  const heading = (page: Page, id: string) =>
+    page.locator(`[data-item-heading="${id}"]`);
+  for (const [index, path] of [
+    "/titles/tv/987654",
+    "/",
+    "/people/deleteowner",
+  ].entries()) {
+    const body = `Starting comment from view ${index}`;
+    const id = await create(body);
+    const replyId = await reply(id, `Retained reply ${index}`);
+    await owner.goto(path);
+    await reader.goto(`/titles/tv/987654?item=${id}`);
+    await expect(
+      heading(reader, id).getByRole("button", { name: "Delete", exact: true }),
+    ).toHaveCount(0);
+    expect(
+      (
+        await reader.request.post("/api/screenr/remove-comment", {
+          headers,
+          data: { id },
+        })
+      ).status(),
+    ).toBe(404);
+    const button = heading(owner, id).getByRole("button", {
+      name: "Delete",
+      exact: true,
+    });
+    await expect(button).toBeVisible();
+    if (index === 0) {
+      await owner.route(
+        "**/api/screenr/remove-comment",
+        (route) =>
+          route.fulfill({
+            status: 503,
+            json: { error: "Deletion failed. Please try again." },
+          }),
+        { times: 1 },
+      );
+      await button.click();
+      await expect(heading(owner, id).getByRole("alert")).toHaveText(
+        "Deletion failed. Please try again.",
+      );
+      await expect(
+        heading(owner, id).getByText(body, { exact: true }),
+      ).toBeVisible();
+    }
+    await button.click();
+    for (const page of [owner, reader]) {
+      await expect(
+        heading(page, id).getByText("Comment removed", { exact: true }),
+      ).toBeVisible();
+      await expect(item(page, id).getByText(body, { exact: true })).toHaveCount(
+        0,
+      );
+      await expect(
+        item(page, id).getByText(`Retained reply ${index}`, { exact: true }),
+      ).toBeVisible();
+    }
+    await expect(heading(owner, id).getByRole("alert")).toHaveCount(0);
+    await expect(button).toHaveCount(0);
+    await owner.reload();
+    await expect(
+      heading(owner, id).getByText("Comment removed", { exact: true }),
+    ).toBeVisible();
+    if (index === 0) {
+      await item(reader, id)
+        .getByLabel("Add your reply")
+        .fill("Continue after deletion");
+      await item(reader, id)
+        .getByRole("button", { name: "Post reply", exact: true })
+        .click();
+      await expect(
+        item(reader, id).getByText("Continue after deletion", { exact: true }),
+      ).toBeVisible();
+      await owner.screenshot({
+        path: ".cache/deleted-standalone-mobile.png",
+        fullPage: true,
+      });
+      expect(
+        await owner.evaluate(() => document.documentElement.scrollWidth),
+      ).toBe(390);
+    } else {
+      await item(reader, id)
+        .locator(`[data-comment-id="${replyId}"]`)
+        .getByRole("button", { name: "Delete", exact: true })
+        .click();
+      await expect(item(reader, id)).toHaveCount(0);
+      await expect(item(owner, id)).toHaveCount(0);
+    }
+  }
+  const spoilerId = await create("Remove this hidden spoiler", true);
+  await reply(spoilerId, "Still protected by the discussion spoiler");
+  for (const page of [owner, reader])
+    await page.goto(`/titles/tv/987654?item=${spoilerId}`);
+  await heading(owner, spoilerId)
+    .getByRole("button", { name: "Delete", exact: true })
+    .click();
+  await expect(
+    heading(reader, spoilerId).getByText("Comment removed", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    item(reader, spoilerId).getByText(
+      "Still protected by the discussion spoiler",
+      { exact: true },
+    ),
+  ).toHaveCount(0);
+  await item(reader, spoilerId)
+    .getByRole("button", {
+      name: "Contains spoilers · Reveal discussion",
+      exact: true,
+    })
+    .click();
+  await expect(
+    item(reader, spoilerId).getByText(
+      "Still protected by the discussion spoiler",
+      { exact: true },
+    ),
+  ).toBeVisible();
+  await reader.reload();
+  await expect(
+    item(reader, spoilerId).getByText(
+      "Still protected by the discussion spoiler",
+      { exact: true },
+    ),
+  ).toHaveCount(0);
+
+  const emptyId = await create("Remove this empty entry");
+  for (const page of [owner, reader])
+    await page.goto(`/titles/tv/987654?item=${emptyId}`);
+  await heading(owner, emptyId)
+    .getByRole("button", { name: "Delete", exact: true })
+    .click();
+  for (const page of [owner, reader]) {
+    await expect(item(page, emptyId)).toHaveCount(0);
+    await expect(
+      page.getByText("This activity is unavailable.", { exact: true }),
+    ).toBeVisible();
+  }
+  for (const path of [
+    "/",
+    "/people/deleteowner",
+    `/titles/tv/987654?item=${emptyId}`,
+  ]) {
+    await owner.goto(path);
+    await expect(item(owner, emptyId)).toHaveCount(0);
+  }
+  await owner.context().close();
+  await reader.context().close();
+});
+
 test("spoiler reply links reach the hidden discussion before revealing the target", async ({
   browser,
 }) => {
