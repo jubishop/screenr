@@ -92,6 +92,9 @@ Screenr is a social app for TV and movies, centered on people you know.
   where the entry is visible. The
   [standalone comment implementation](title-feed.md#standalone-title-comments)
   covers creation under issue #8.
+- Authors can [delete standalone comments](title-feed.md#deleting-standalone-comments-preserves-replies--2026-09-07).
+  Preserve eligible replies under Comment removed and hide entries with no
+  visible replies.
 - Authors can mark reviews, posts, and comments as containing spoilers.
   Marked text stays hidden until the reader chooses to reveal it and is
   excluded from notification previews. A flag on a post or review covers
