@@ -354,24 +354,45 @@ interview if they preserve these decisions:
 
 ## Shared feed implementation
 
-The implementation described here still uses the earlier flat reply preview.
-The accepted nested grouping and direct-comment preview above require a
-follow-up change; they are product requirements, not a claim of delivery.
-
 `src/server/social.ts` reads each eligible action or standalone comment and
 its replies in one PostgreSQL snapshot. The friends, title, and profile screens use this same
 read path. Items sort by the latest eligible activity at millisecond precision,
-then by item UUID for a stable tie. Removed comments remain placeholders but
-do not add activity or count as live replies. A withdrawn action with only
-removed or inaccessible replies is hidden; its stored item remains reusable.
+then by item UUID for a stable tie. A removed or inaccessible direct comment
+remains as parent context only while it has eligible nested replies. It does
+not add activity or count as a live reply. Removed nested replies and empty
+parent placeholders are omitted. A withdrawn action with only removed or
+inaccessible replies is hidden; its stored item remains reusable.
 
-`src/components/feed.tsx` supplies the shared interface. It initially renders
-the latest three eligible replies, in timestamp and comment-ID order. Earlier
-replies expand inline. Loading incoming replies retains the displayed preview
-so the reply being read stays in place; a fresh page starts with three again.
-All eligible items and replies are currently read in
-one request; there is no loaded-page boundary that can omit a link target.
-This retains the application's small-circle, unpaginated read model.
+An inaccessible parent returns no author ID, username, display name, text,
+spoiler flag, or addressed-person label. Its ID and date preserve the group's
+identity and chronological position. The browser shows **Comment unavailable**.
+A removed accessible parent shows **Comment removed**. Each descendant and
+addressed-person label still passes the current access checks. A placeholder
+cannot be a reply target, and it never grants access to the feed item.
+
+`src/components/feed.tsx` and `src/components/thread.tsx` supply the shared
+interface. The initial preview contains the latest three eligible direct
+comments. Nested replies do not consume preview places. Parent placeholders
+supply context without counting as live comments. **Show earlier comments**
+expands earlier groups inline. Each group's **View N replies** control expands
+or collapses one indented level with a connecting border. Direct comments and
+nested replies each retain timestamp and comment-ID order; nested activity
+does not move the direct parent within the discussion.
+
+Selecting **Reply** focuses a composer immediately below that comment.
+**Replying to @name** identifies its destination. The bottom **Add your reply**
+composer always posts directly to the feed item. Each destination keeps its
+own local draft and spoiler flag. Cancel or switching targets retains that
+destination's draft for later use on the same page. A target that becomes
+unavailable loses its identity label and cannot accept a post; its unsent draft
+remains available. A successful nested post expands its parent group.
+
+Loading incoming replies retains the displayed preview, expanded groups, and
+drafts so the reply being read stays in place. A fresh visit starts with the
+three-comment preview and collapsed groups. All eligible items and replies are
+currently read in one request; there is no loaded-page boundary that can omit
+a link target. This retains the application's small-circle, unpaginated read
+model.
 
 Open feeds use the existing three-second poll, focus refresh, and ten-second
 refresh deadline. A failed refresh hides server content. Local drafts remain
@@ -383,8 +404,8 @@ visible reading anchor and the draft.
 
 Item links use `/titles/<kind>/<tmdb-id>?item=<item-id>`. A targeted reply adds
 `&reply=<comment-id>`. The server checks the title, item, and reply together;
-the browser expands and scrolls to an eligible target without revealing its
-spoilers. Old `/conversations/<id>` links redirect to the preserved discussion,
+the browser exposes earlier direct comments, expands the target's parent
+group, and scrolls to an eligible target without revealing its spoilers. Old `/conversations/<id>` links redirect to the preserved discussion,
 an eligible action, or the title feed. Inaccessible targets reveal no private
 content. Existing notification features are unchanged; these same title links
 are available to future notification work.
@@ -407,6 +428,13 @@ Recommend or Want to watch. Editing standalone comments, reviews, ratings,
 additional watch statuses, and titleless posts remain outside this feature.
 
 ### Migration and rollback compatibility
+
+The nested layout uses the existing `comment.root_id` and `addressed_id`
+relationships. Direct comments have no root; replying to a nested reply reuses
+its direct root and records the addressed author. The server rejects targets
+from another item and inaccessible or removed targets. No schema change or
+relationship backfill is needed for the nested layout. Existing comment IDs,
+content, dates, authors, and stored grouping remain intact.
 
 Migration `004-feed-items.sql` adds `feed_item` and `comment.feed_item_id`.
 Existing comments remain on an **Earlier discussion** item with the original
