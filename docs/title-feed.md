@@ -184,6 +184,12 @@ rules above. In [issue #19](https://github.com/jubishop/screenr/issues/19),
 the user requested this change because the discussion is already available
 inline and the link is useful for sharing it with other people.
 
+**Comment links — 2026-09-07:** Remove the upper-right arrow link from each
+comment. Keep **Copy link to discussion** on the parent feed entry. In
+[issue #41](https://github.com/jubishop/screenr/issues/41), the user said the
+discussion-level copy control is sufficient. Existing reply URLs and
+notification destinations still follow the permalink rules above.
+
 ### Withdrawing a recommendation preserves its discussion — 2026-09-06
 
 **Decision:** If a person removes a recommendation that already has
