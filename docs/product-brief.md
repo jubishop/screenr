@@ -26,8 +26,9 @@ applies to every feature.
 - Friendships require a request and acceptance, except for the automatic
   friendship created by invited signup. One-way following is not supported.
 - People can find friends through shareable profile links, exact-username
-  search, accepted friend lists on profiles, and a friend-request action on
-  commenters in mutual friends' threads.
+  search, accepted friend lists on profiles, People suggestions with named
+  mutual friends, and a friend-request action on commenters in mutual friends'
+  threads.
 - Profiles require sign-in. People who are not accepted friends see a
   display name, username, photo, friend-request button, and the person's
   accepted friends, subject to blocking.
@@ -157,20 +158,28 @@ They are not planned future features.
 
 **Decision:** Screenr is oriented around privacy and a close circle of
 people the user knows. Knowing someone through a mutual friend does not
-grant access to that person's activity or make them a discovery result.
-Friends of friends appear as people and interact with the viewer only in
+grant access to that person's activity. Friends of friends can interact in
 comments on content owned by a friend they share, subject to the existing
 audience and blocking rules. Their presence in that discussion does not
 expose their own recommendations, watch choices, reviews, posts, or threads.
 
-Do not surface identifiable second-degree people or attribute activity to
-them elsewhere merely because a mutual friendship exists. Do not use
+Outside the explicit connection routes below, do not surface identifiable
+second-degree people or attribute activity to them merely because a mutual
+friendship exists. Do not use
 shared participation, counts, rankings, previews, or links to bypass the
 content audience. Existing deliberate connection routes, such as exact
 username search and shared profile links, expose only the already agreed
 minimal profile; they do not grant access to activity.
 
-**Explicit limited exception:** Find a title can use the
+**People discovery update — 2026-09-08:** The accepted profile friend lists
+and [People suggestions](#finding-and-adding-friends--2026-09-04) are explicit
+connection routes. People suggestions may identify friends of friends and
+name their mutual friends, using accepted friendships and respecting blocks.
+This supersedes the earlier prohibition on named second-degree discovery
+for these routes only. It does not expose private activity or change title
+suggestion explanations.
+
+**Explicit activity exception:** Find a title can use the
 [anonymous second-degree counts and ranking signals](title-suggestions.md)
 agreed for issue #39. These signals cannot identify the people, show their
 mutual-friend connections, or link to their activity. This exception does
@@ -183,9 +192,10 @@ and limited encounters with friends of friends to comments on a shared
 friend's content. The user retained anonymous suggestion signals and
 selected a 3:1 weighting after this boundary was raised.
 
-**Tradeoff:** Broader social discovery and named second-degree suggestion
-explanations are excluded. Anonymous suggestion signals are the specific
-exception; do not infer further audience expansion from them.
+**Tradeoff:** Broader social discovery and named second-degree explanations
+of title activity are excluded. People discovery and anonymous title
+suggestion signals have separate, limited scopes; neither expands the
+audience for private activity.
 
 ### Mutual friendships — 2026-09-04
 
@@ -697,6 +707,19 @@ friend discovery. Friend lists require sign-in and link to each person's
 profile. Pending requests stay private. Blocking hides the blocked profile
 and filters blocked people from other profiles' lists in either direction.
 The list and its count include only people visible to the viewer.
+
+**Update — 2026-09-08:** [Issue #63](https://github.com/jubishop/screenr/issues/63)
+adds **People you may know** to `/people`, with each suggested person's
+display name, username, profile link, named mutual friends, and a friend-request
+action. This makes it easier to find people the viewer may want to add.
+It is an explicit exception to the earlier restriction on named
+second-degree discovery; it does not grant access to their private activity.
+
+Suggestions require two current accepted friendships. Exclude the viewer,
+existing friends, and pending requests in either direction. Blocks in either
+direction exclude a candidate or a mutual-friend path. List each candidate
+once with all eligible mutual friends. Use the existing request-and-acceptance
+process; no friendship is created by viewing a suggestion.
 
 ### Profile visibility before friendship — 2026-09-04
 

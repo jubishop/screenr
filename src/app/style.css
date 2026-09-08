@@ -585,6 +585,15 @@ hr {
 .people-list {
   margin-bottom: 40px;
 }
+.people-list .person-row > a,
+.people-suggestions .person-row > div {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+.people-suggestions .person-row > button {
+  flex-shrink: 0;
+}
 .profile-friends {
   margin-bottom: 28px;
   overflow-wrap: anywhere;
