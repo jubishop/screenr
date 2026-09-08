@@ -4,7 +4,8 @@ status: current
 
 # Title availability
 
-Accepted decisions for [issue #7](https://github.com/jubishop/screenr/issues/7).
+Accepted decisions for [issue #7](https://github.com/jubishop/screenr/issues/7)
+and the [viewing-scope change](https://github.com/jubishop/screenr/issues/62).
 Screenr obtains US at-home viewing options and shows them on movie and TV
 title pages. The accepted decisions and implementation are described below.
 
@@ -12,7 +13,11 @@ title pages. The accepted decisions and implementation are described below.
 
 **Decision:** Use TMDB's JustWatch-backed watch-provider data through the
 existing server-side catalog client. Identify services and preserve their
-subscription, free, ad-supported, rental, and purchase categories. Store
+original subscription, free, and ad-supported categories in the source data.
+Display subscription offers under Subs and both free offer types under
+Free. The
+[2026-09-08 scope decision](#subscription-and-free-viewing-only--2026-09-08)
+supersedes the original inclusion of rental and purchase offers. Store
 provider IDs, names, logos, and the supplied TMDB watch-page link. Credit
 JustWatch when displaying this data.
 
@@ -39,6 +44,102 @@ required JustWatch attribution. These endpoints do not supply prices or
 direct playback links. Its [discovery reference](https://developer.themoviedb.org/reference/discover-movie)
 lists the category values `flatrate`, `free`, `ads`, `rent`, and `buy`.
 Sources checked on 2026-09-07.
+
+## Subscription and free viewing only — 2026-09-08
+
+**Decision:** Exclude rental and purchase offers from Screenr's title
+availability display. Use exactly two main sections: Subs and Free.
+Subs contains subscription (`flatrate`) offers. Free combines `free` and
+free ad-supported (`ads`) offers, with no separate Free with ads category.
+This supersedes both the rental and purchase scope and the separate free
+and ad-supported display categories accepted on 2026-09-07.
+
+Exclude offers by category, not whole providers. A service with rental or
+purchase offers can still have eligible subscription or free offers for a
+title. Apply this rule to existing cached results as well as new responses,
+before any grouping of duplicate services. Paid subscriptions with ads
+remain subscription offers. When the same provider appears in both `free`
+and `ads`, show it once under Free.
+
+**Why:** The user wants only subscription and free viewing categories. No
+further reason was stated for excluding rental and purchase offers.
+
+**Tradeoff:** Titles with only rental or purchase offers will have no listed
+subscription or free options. The empty state must describe that limited
+scope without claiming the title is unavailable everywhere. The supplied
+external TMDB watch page may still list rental and purchase offers. Free
+means no payment is required for the offer; it does not promise ad-free
+viewing.
+
+Implementation is tracked in [issue #62](https://github.com/jubishop/screenr/issues/62).
+The section structure and duplicate-service behavior are defined below.
+
+## Group services within each viewing category — 2026-09-08
+
+**Decision:** Make Subs and Free the first division in the source list.
+Group duplicate variants of a service within each section. For example,
+Netflix and Netflix with ads share one entry under Subs; Apple TV and its
+Amazon channel share one Apple TV entry in the applicable section.
+
+If a service has both subscription and free offers for the same title,
+show it once under Subs and once under Free. Deduplicate by service within
+each section, never across the entire title's source list. A single list
+with category labels beside each service was rejected.
+
+**Why:** The user wants payment category to be the first distinction while
+removing duplicate service variants within each category.
+
+**Tradeoff:** A service can appear twice when it has offers in both
+categories. Those entries convey different viewing options.
+
+Issue #62 covers both the category changes and duplicate-service grouping.
+Use the service identity boundary below when preparing the provider map.
+
+## Alphabetical service order — 2026-09-08
+
+**Decision:** Sort services alphabetically by their display names within
+both Subs and Free. Apply sorting after grouping duplicate variants.
+
+**Why:** The user accepted predictable ordering that makes services easy
+to find.
+
+**Tradeoff:** The display does not prioritize popular services or preserve
+TMDB's provider order.
+
+## Service identity boundary — 2026-09-08
+
+**Decision:** Merge plans and reseller versions of the same service. Keep
+distinct products separate even when they share a brand or owner. YouTube
+and YouTube TV remain separate entries, as do AMC and AMC+.
+
+**Why:** The user confirmed that YouTube and YouTube TV are very different
+products. A shared brand does not make their viewing options equivalent.
+
+**Tradeoff:** Some related names remain in the list because they identify
+different services. Reducing the entry count must not erase that distinction.
+
+The provider map must follow this boundary across the full supported US
+catalog. Its exact records are implementation work, not permission to merge
+products solely because their names are similar.
+
+## Channel-only availability notes — 2026-09-08
+
+**Decision:** When only a reseller's channel is listed for a service, keep
+one entry under the service's name and add a small route note, such as
+Apple TV with "via Amazon". Omit that note when the standalone service is
+also listed in the same section for the title.
+
+Apply the rule independently within Subs and Free. A standalone offer
+under Free does not remove a required route note under Subs. If several
+resellers are listed without a standalone offer, combine their distinct
+names in the same note rather than adding service entries. Only mention
+routes actually reported for that title and section.
+
+**Why:** The user accepted retaining useful access information without
+adding duplicate service entries.
+
+**Tradeoff:** Channel-only entries need a little more text. A grouped name
+alone must not imply that a standalone offer was reported.
 
 ## US availability — 2026-09-07
 
@@ -91,7 +192,45 @@ Do not add service preferences, country settings, discovery filters,
 availability on other pages, recommendation changes, or Watch together
 changes in this issue. Further product uses need separate issues.
 
-## Implementation
+## Implementation guidance for issue #62
+
+The product decisions above are settled. Use a small checked-in mapping
+from TMDB provider IDs to stable service identities, with a display name,
+preferred logo, and each member's standalone or reseller route. Prepare
+the map from both US movie and TV provider catalogs. Include singleton
+services and verify that each known provider ID belongs to one service.
+Do not infer equivalence from similar names at runtime.
+
+Preserve the original cached offers and derive the two display sections
+when presenting a title. This lets current, older, and newly fetched cache
+entries use the same mapping without a data migration or forced refresh.
+The registry's existence does not establish an offer: only the title's
+reported eligible providers can put a service in a section or suppress a
+channel-only note.
+
+Retain existing behavior for unmatched providers and missing logos:
+unmapped IDs remain visible with their reported names, and missing images
+do not remove entries. Give unmatched IDs separate identities until their
+mapping is known. Choose each grouped logo deterministically, preferring
+the service's catalog logo and then a valid reported member logo. Render
+the name without an image when none is usable.
+
+Retain the current omission of empty categories. If neither section has
+eligible offers, show "No subscription or free options are listed for the
+US." For an older successful result, use "No subscription or free options
+were listed when last checked." Preserve the separate request-failure
+state, last-checked time, and TV season caveat.
+
+Sort by the service display name with consistent English alphabetical
+comparison on the server and client, ignoring case. Use the stable service
+identity to break ties. Route notes do not affect service ordering.
+Acceptance criteria and mapping examples are in issue #62.
+
+## Current implementation
+
+This section describes the implementation delivered for issue #7, which
+still includes rental and purchase offers and separates free and
+ad-supported offers. Issue #62 tracks applying the two-category display.
 
 `src/server/catalog.ts` fetches and validates the US watch-provider response.
 `db/007-title-availability.sql` adds a separate cache keyed by title and

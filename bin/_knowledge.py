@@ -6,6 +6,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import sys
@@ -113,7 +114,7 @@ def config():
 
 
 def environment():
-    return dict(os.environ, QMD_CONFIG_DIR=str(ROOT / ".config/qmd"),
+    return dict(git_environment(), QMD_CONFIG_DIR=str(ROOT / ".config/qmd"),
                 XDG_CACHE_HOME=str(ROOT / ".cache"), INDEX_PATH=str(cache() / "index.sqlite"))
 
 
@@ -132,6 +133,9 @@ def qmd_tool():
 
 
 def snapshot(rendered, version):
+    # QMD's Git suffix can come from a surrounding repository, not its own build.
+    # Keep the release (including prerelease/build metadata) as the stable input.
+    version = re.sub(r" \([0-9a-fA-F]{4,64}\)$", "", version)
     digest = hashlib.sha256(json.dumps([rendered, version], sort_keys=True).encode())
     counts = {}
     for name, collection in sorted(rendered["collections"].items()):

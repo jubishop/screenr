@@ -42,8 +42,9 @@ applies to every feature.
   presentation and audience. Friends, profile, and title feeds show the
   same underlying entries and support viewing and replying inline.
 - Use The Movie Database (TMDB) as the movie and TV catalog source.
-- Show US at-home viewing options on movie and TV title pages, following
-  the [title availability decisions](title-availability.md).
+- Show US viewing options on movie and TV title pages under Subs and Free.
+  Group duplicate service variants within each section, following the
+  [title availability decisions](title-availability.md).
 - The friends feed automatically includes watch-status changes and ratings,
   alongside reviews, recommendations, and discussion posts. The
   [shared feed rules](title-feed.md) define item identity, visibility,
@@ -823,7 +824,13 @@ checked on 2026-09-05.
 
 The [title availability decisions](title-availability.md) define the
 accepted US scope, TMDB data source, cache behavior, and title-page display
-for [issue #7](https://github.com/jubishop/screenr/issues/7).
+for [issue #7](https://github.com/jubishop/screenr/issues/7). The
+[2026-09-08 scope decision](title-availability.md#subscription-and-free-viewing-only--2026-09-08)
+defines Subs and Free as the two sections, combines both free offer types,
+and excludes rental and purchase offers. The
+[service grouping decision](title-availability.md#group-services-within-each-viewing-category--2026-09-08)
+deduplicates services within each section. Implementation is tracked in
+[issue #62](https://github.com/jubishop/screenr/issues/62).
 
 ### Non-commercial scope — 2026-09-05
 
