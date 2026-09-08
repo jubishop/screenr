@@ -1,12 +1,9 @@
 import { Client, type Pool } from "pg";
 import { browserConfig } from "./browser-config";
 import { once } from "node:events";
-import {
-  createServer,
-  request as proxyRequest,
-  type Server as HTTPServer,
-} from "node:http";
-import { connect, createServer as reservePort, type Server } from "node:net";
+import { createServer, type Server as HTTPServer } from "node:http";
+import { createBrowserProxy } from "./browser-proxy";
+import { createServer as reservePort, type Server } from "node:net";
 import { spawn, type ChildProcess } from "node:child_process";
 import { mkdir, writeFile } from "node:fs/promises";
 
@@ -122,6 +119,12 @@ try {
     profileInvitation.token,
     { mode: 0o600 },
   );
+  const availabilityInvitation = await createInvitation(null, 1);
+  await writeFile(
+    ".cache/browser-availability-invite.txt",
+    availabilityInvitation.token,
+    { mode: 0o600 },
+  );
   const trailerInvitation = await createInvitation(null, 1);
   await writeFile(
     ".cache/browser-trailer-invite.txt",
@@ -188,8 +191,47 @@ try {
     release_date: "2026-06-12",
     poster_path: null,
   };
+  let availabilityFailure = false;
   catalog = createServer((request, response) => {
     response.setHeader("Content-Type", "application/json");
+    if (request.url === "/availability-failure") {
+      availabilityFailure = request.method === "POST";
+      response.end("{}");
+      return;
+    }
+    if (request.url?.endsWith("/watch/providers")) {
+      const [, kind, id] = request.url.split("/");
+      if (id === "987662" || (id === "987660" && availabilityFailure)) {
+        response.writeHead(503).end();
+        return;
+      }
+      const provider = (provider_id: number, provider_name: string) => ({
+        provider_id,
+        provider_name,
+        logo_path: "/test-provider.png",
+      });
+      response.end(
+        JSON.stringify({
+          id: Number(id),
+          results: {
+            CA: { flatrate: [provider(600, "Canada only")] },
+            ...(id === "987660"
+              ? {
+                  US: {
+                    link: `https://www.themoviedb.org/${kind}/${id}/watch?locale=US`,
+                    flatrate: [provider(101, "Harbor Stream")],
+                    free: [provider(102, "Lantern Free")],
+                    ads: [provider(103, "Coast TV")],
+                    rent: [provider(104, "Harbor Store")],
+                    buy: [provider(104, "Harbor Store")],
+                  },
+                }
+              : {}),
+          },
+        }),
+      );
+      return;
+    }
     if (request.url?.endsWith("/videos")) {
       if (request.url === "/movie/987655/videos") {
         response.writeHead(503).end();
@@ -285,45 +327,7 @@ try {
   app.on("exit", (code) => void stop(code ?? 1));
   // Route OAuth at the HTTP server, including redirects back from the provider.
   // Browser request interception does not reliably cover redirected requests.
-  proxy = createServer((request, response) => {
-    const upstream = proxyRequest(
-      {
-        hostname: "127.0.0.1",
-        port: request.url?.startsWith("/api/auth/")
-          ? browserConfig.googlePort
-          : browserConfig.appPort,
-        path: request.url,
-        method: request.method,
-        headers: request.headers,
-      },
-      (result) => {
-        response.writeHead(result.statusCode!, result.headers);
-        result.pipe(response);
-      },
-    );
-    upstream.on("error", () =>
-      response.writeHead(503).end("Test server starting"),
-    );
-    request.pipe(upstream);
-  });
-  proxy.on("upgrade", (request, socket, head) => {
-    const upstream = connect(browserConfig.appPort, "127.0.0.1", () => {
-      upstream.write(
-        `${request.method} ${request.url} HTTP/${request.httpVersion}\r\n` +
-          request.rawHeaders.reduce(
-            (lines, value, index, all) =>
-              index % 2 ? lines : lines + `${value}: ${all[index + 1]}\r\n`,
-            "",
-          ) +
-          "\r\n",
-      );
-      if (head.length) upstream.write(head);
-      socket.pipe(upstream).pipe(socket);
-    });
-    upstream.on("error", () => socket.destroy());
-    socket.on("error", () => upstream.destroy());
-    socket.on("close", () => upstream.destroy());
-  });
+  proxy = createBrowserProxy(browserConfig);
   await releasePort(browserConfig.port);
   proxy.listen(browserConfig.port, "127.0.0.1");
   await once(proxy, "listening");

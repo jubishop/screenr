@@ -336,6 +336,7 @@ test("emoji reactions persist across feeds on entries and replies, with change, 
   ]) {
     const trigger = group.getByRole("button", { name: "React", exact: true });
     for (const focusChoice of [false, true]) {
+      await expect(trigger).toBeEnabled();
       await trigger.focus();
       await reader.keyboard.press("Enter");
       await expect(trigger).toHaveAttribute("aria-expanded", "true");
@@ -919,6 +920,141 @@ test("invitation links share the exact URL and handle cancellation, failure, and
   await expect(share).toHaveCount(0);
   await link.tap();
   await expect.poll(() => copied.at(-1)).toBe(await link.inputValue());
+  await page.context().close();
+});
+
+test("title watch availability shows US categories, empty results, failures, and older data on mobile and desktop", async ({
+  browser,
+}) => {
+  const page = await join(browser, "availabilityviewer", {
+    token: (
+      await readFile(".cache/browser-availability-invite.txt", "utf8")
+    ).trim(),
+  });
+  await page.route("https://image.tmdb.org/t/p/w92/**", (route) =>
+    route.fulfill({
+      contentType: "image/svg+xml",
+      body: '<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32"><rect width="32" height="32" fill="#667765"/></svg>',
+    }),
+  );
+  const availability = page.getByRole("region", { name: "Where to watch" });
+  for (const kind of ["movie", "tv"]) {
+    await page.goto(`/titles/${kind}/987660`);
+    await expect(availability).toBeVisible();
+    await expect(
+      availability.getByText("United States", { exact: true }),
+    ).toBeVisible();
+    for (const [label, name] of [
+      ["Subscription", "Harbor Stream"],
+      ["Free", "Lantern Free"],
+      ["With ads", "Coast TV"],
+      ["Rent", "Harbor Store"],
+      ["Buy", "Harbor Store"],
+    ]) {
+      const group = availability.getByRole("group", {
+        name: label,
+        exact: true,
+      });
+      await expect(group.getByText(name, { exact: true })).toBeVisible();
+      await expect(group.locator("img")).toHaveAttribute(
+        "src",
+        "https://image.tmdb.org/t/p/w92/test-provider.png",
+      );
+    }
+    await expect(availability.getByText("Canada only")).toHaveCount(0);
+    await expect(
+      availability.getByRole("link", { name: "Viewing options on TMDB" }),
+    ).toHaveAttribute(
+      "href",
+      `https://www.themoviedb.org/${kind}/987660/watch?locale=US`,
+    );
+    await expect(
+      availability.getByRole("link", { name: "JustWatch" }),
+    ).toHaveAttribute("href", "https://www.justwatch.com/");
+    await expect(
+      availability.getByText("Availability may vary by season."),
+    ).toHaveCount(kind === "tv" ? 1 : 0);
+    for (const width of [1440, 390, 320]) {
+      await page.setViewportSize({ width, height: 1000 });
+      await availability.scrollIntoViewIfNeeded();
+      const bounds = await availability.boundingBox();
+      expect(bounds!.x).toBeGreaterThanOrEqual(0);
+      expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(width);
+      expect(
+        await page.evaluate(() => document.documentElement.scrollWidth),
+      ).toBe(width);
+      if (kind === "movie" && width !== 320) {
+        await page.evaluate(() => window.scrollTo(0, 0));
+        await page.screenshot({
+          path: `.cache/watch-availability-${width}.png`,
+          fullPage: true,
+        });
+      }
+    }
+  }
+  await page.goto("/titles/movie/987661");
+  await expect(
+    availability.getByText("No viewing options are listed for the US."),
+  ).toBeVisible();
+  await expect(availability.getByText("Canada only")).toHaveCount(0);
+  await page.goto("/titles/movie/987662");
+  await expect(
+    availability.getByText(
+      "Viewing options could not be loaded. Please check again later.",
+    ),
+  ).toBeVisible();
+  await expect(
+    availability.getByText("No viewing options are listed for the US."),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("heading", { name: "The Lantern Room", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Around this title" }),
+  ).toBeVisible();
+  const pool = new Pool({ connectionString: browserConfig.databaseURL });
+  try {
+    await page.request.post(`${browserConfig.catalogURL}/availability-failure`);
+    await pool.query(
+      "UPDATE title_availability SET fetched_at='2020-01-02T12:00:00Z', refresh_after=now()-interval '1 second' WHERE title_id='movie:987660'",
+    );
+    await page.goto("/titles/movie/987660");
+    await expect(
+      availability.getByText("Could not refresh viewing options."),
+    ).toBeVisible();
+    await expect(
+      availability.getByText("Harbor Stream", { exact: true }),
+    ).toBeVisible();
+    await expect(availability.locator("time")).toHaveAttribute(
+      "datetime",
+      "2020-01-02T12:00:00.000Z",
+    );
+    await expect(availability.locator("time")).toContainText("2020");
+    // Exercise the real HTTP failure on an older successful empty result too.
+    await pool.query(
+      "UPDATE title_availability SET availability=$1, fetched_at='2020-01-02T12:00:00Z', refresh_after=now()-interval '1 second' WHERE title_id='movie:987660'",
+      [{ link: null, providers: {} }],
+    );
+    await page.reload();
+    await expect(
+      availability.getByText("Could not refresh viewing options."),
+    ).toBeVisible();
+    await expect(
+      availability.getByText(
+        "No viewing options were listed when last checked.",
+      ),
+    ).toBeVisible();
+    await expect(
+      availability.getByText("Harbor Stream", { exact: true }),
+    ).toHaveCount(0);
+  } finally {
+    await page.request.delete(
+      `${browserConfig.catalogURL}/availability-failure`,
+    );
+    await pool.end();
+  }
+  await page.goto("/");
+  await expect(availability).toHaveCount(0);
   await page.context().close();
 });
 

@@ -42,6 +42,8 @@ applies to every feature.
   presentation and audience. Friends, profile, and title feeds show the
   same underlying entries and support viewing and replying inline.
 - Use The Movie Database (TMDB) as the movie and TV catalog source.
+- Show US at-home viewing options on movie and TV title pages, following
+  the [title availability decisions](title-availability.md).
 - The friends feed automatically includes watch-status changes and ratings,
   alongside reviews, recommendations, and discussion posts. The
   [shared feed rules](title-feed.md) define item identity, visibility,
@@ -794,6 +796,12 @@ a commercial project by whether its primary purpose is to create revenue
 for its owner. Its attribution rules require an approved logo and notice in
 an About or Credits section. See the [TMDB FAQ](https://developer.themoviedb.org/docs/faq),
 checked on 2026-09-05.
+
+### At-home title availability — 2026-09-07
+
+The [title availability decisions](title-availability.md) define the
+accepted US scope, TMDB data source, cache behavior, and title-page display
+for [issue #7](https://github.com/jubishop/screenr/issues/7).
 
 ### Non-commercial scope — 2026-09-05
 

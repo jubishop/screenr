@@ -62,6 +62,8 @@ both memory and design documents.
   for follow-up issue #8.
 - [Watch together](watch-together.md): accepted shared-choice behavior and
   implementation for issue #26.
+- [Title availability](title-availability.md): accepted US viewing options,
+  data acquisition, cache behavior, and title-page scope for issue #7.
 - [Find a title suggestions](title-suggestions.md): accepted discovery
   decisions, anonymous second-degree counts, and 3:1 social weighting for
   issue #39.
