@@ -113,6 +113,12 @@ try {
   const { token } = await createInvitation(null, 12);
   await mkdir(".cache", { recursive: true });
   await writeFile(".cache/browser-invite.txt", token, { mode: 0o600 });
+  const availabilityInvitation = await createInvitation(null, 1);
+  await writeFile(
+    ".cache/browser-availability-invite.txt",
+    availabilityInvitation.token,
+    { mode: 0o600 },
+  );
   const trailerInvitation = await createInvitation(null, 1);
   await writeFile(
     ".cache/browser-trailer-invite.txt",
@@ -181,8 +187,47 @@ try {
     release_date: "2026-06-12",
     poster_path: null,
   };
+  let availabilityFailure = false;
   catalog = createServer((request, response) => {
     response.setHeader("Content-Type", "application/json");
+    if (request.url === "/availability-failure") {
+      availabilityFailure = request.method === "POST";
+      response.end("{}");
+      return;
+    }
+    if (request.url?.endsWith("/watch/providers")) {
+      const [, kind, id] = request.url.split("/");
+      if (id === "987662" || (id === "987660" && availabilityFailure)) {
+        response.writeHead(503).end();
+        return;
+      }
+      const provider = (provider_id: number, provider_name: string) => ({
+        provider_id,
+        provider_name,
+        logo_path: "/test-provider.png",
+      });
+      response.end(
+        JSON.stringify({
+          id: Number(id),
+          results: {
+            CA: { flatrate: [provider(600, "Canada only")] },
+            ...(id === "987660"
+              ? {
+                  US: {
+                    link: `https://www.themoviedb.org/${kind}/${id}/watch?locale=US`,
+                    flatrate: [provider(101, "Harbor Stream")],
+                    free: [provider(102, "Lantern Free")],
+                    ads: [provider(103, "Coast TV")],
+                    rent: [provider(104, "Harbor Store")],
+                    buy: [provider(104, "Harbor Store")],
+                  },
+                }
+              : {}),
+          },
+        }),
+      );
+      return;
+    }
     if (request.url?.endsWith("/videos")) {
       if (request.url === "/movie/987655/videos") {
         response.writeHead(503).end();

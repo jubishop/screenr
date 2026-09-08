@@ -328,6 +328,16 @@ TMDB data is cached for 24 hours. `public/tmdb.svg` is the unmodified approved
 short logo from the [TMDB logo page](https://www.themoviedb.org/about/logos-attribution).
 The Credits page supplies the required attribution notice.
 
+### Title availability
+
+Movie and TV title pages show [US viewing options](title-availability.md)
+from TMDB's JustWatch-backed watch-provider endpoints. They use the existing
+server-side `TMDB_READ_TOKEN`; no additional provider account is needed.
+Migration `007-title-availability.sql` adds the separate availability cache.
+Results refresh on demand after 24 hours, with a two-second request timeout
+and five-minute retry delay. Failed refreshes preserve the last successful
+data and its timestamp. The title-page section supplies JustWatch attribution.
+
 ### Title trailers
 
 Title pages use TMDB's [movie videos](https://developer.themoviedb.org/reference/movie-videos)
