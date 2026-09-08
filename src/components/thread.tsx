@@ -5,8 +5,11 @@ import type { Comment, Person, Thread } from "../shared";
 import { api, useInteractive, dateLabel } from "./client";
 import { preservePosition } from "./position";
 import { Reactions } from "./reactions";
+import {
+  CommentComposer,
+  type CommentDraft as Draft,
+} from "./comment-composer";
 
-type Draft = { body: string; spoiler: boolean };
 const emptyDraft: Draft = { body: "", spoiler: false };
 const live = (comment: Comment) => !comment.removed && !comment.unavailable;
 
@@ -29,13 +32,20 @@ export function ThreadView({
   // Each destination owns its draft. Switching or cancelling never retargets
   // unsent text, and temporarily losing access never copies server identities.
   const [drafts, setDrafts] = useState<Record<string, Draft>>({});
+  const [directOpen, setDirectOpen] = useState(false);
   const [replyTo, setReplyTo] = useState<string | null>(null);
   const [busy, setBusy] = useState(new Set<string>());
   const [errors, setErrors] = useState<Record<string, string>>({});
   const area = useRef<HTMLTextAreaElement>(null);
+  const directArea = useRef<HTMLTextAreaElement>(null);
+  // Focus only when a reader opens a destination, not when a failed refresh
+  // restores the same open forms.
   useEffect(() => {
     area.current?.focus();
   }, [replyTo]);
+  useEffect(() => {
+    if (directOpen) directArea.current?.focus();
+  }, [directOpen]);
   // Keep local composition state through failed refreshes. Only the current
   // authorized snapshot supplies rendered conversation content.
   if (!snapshot) return null;
@@ -126,69 +136,34 @@ export function ThreadView({
         [destination]: { ...(current[destination] ?? emptyDraft), ...change },
       }));
     return (
-      <form
-        className={`composer${nested ? " nested-composer" : ""}`}
-        aria-label={label}
-        data-composer-id={`${currentSnapshot.conversation.id}-${destination}`}
+      <CommentComposer
+        id={id}
+        inputRef={nested ? area : directArea}
+        interactive={interactive}
+        label={label}
+        fieldLabel={nested ? "Your nested reply" : "Add your reply"}
+        submitLabel="Post reply"
+        draft={draft}
+        onChange={update}
         onSubmit={(event) => post(event, destination)}
+        onCancel={() => {
+          if (nested) setReplyTo(null);
+          else setDirectOpen(false);
+          document
+            .getElementById(
+              nested
+                ? `reply-action-${destination}`
+                : `comment-action-${currentSnapshot.conversation.id}`,
+            )
+            ?.focus();
+        }}
+        busy={busy.has(destination)}
+        error={errors[destination] ?? ""}
+        disabled={nested && !activeReply}
+        nested={nested}
       >
-        {nested && (
-          <p className="small">
-            {label}{" "}
-            <button
-              type="button"
-              className="text-button"
-              disabled={!interactive}
-              onClick={() => {
-                setReplyTo(null);
-                document.getElementById(`reply-action-${destination}`)?.focus();
-              }}
-            >
-              Cancel
-            </button>
-          </p>
-        )}
-        <label htmlFor={id}>
-          {nested ? "Your nested reply" : "Add your reply"}
-        </label>
-        <textarea
-          rows={3}
-          disabled={!interactive}
-          ref={nested ? area : undefined}
-          id={id}
-          required
-          maxLength={2000}
-          value={draft.body}
-          onChange={(e) => update({ body: e.target.value })}
-          placeholder="What do you think?"
-        />
-        <div className="composer-footer">
-          <label className="checkbox">
-            <input
-              type="checkbox"
-              checked={draft.spoiler}
-              onChange={(e) => update({ spoiler: e.target.checked })}
-            />
-            Contains spoilers
-          </label>
-          <button
-            className="primary"
-            disabled={
-              busy.has(destination) ||
-              !interactive ||
-              !draft.body.trim() ||
-              (nested && !activeReply)
-            }
-          >
-            {busy.has(destination) ? "Posting…" : "Post reply"}
-          </button>
-        </div>
-        {errors[destination] && (
-          <p className="error" role="alert">
-            {errors[destination]}
-          </p>
-        )}
-      </form>
+        {nested && <p className="small">{label}</p>}
+      </CommentComposer>
     );
   }
   function renderComment(comment: Comment) {
@@ -236,6 +211,8 @@ export function ThreadView({
             <button
               className="text-button"
               id={`reply-action-${comment.id}`}
+              aria-expanded={replyTo === comment.id}
+              aria-controls={`reply-${currentSnapshot.conversation.id}-${comment.id}-form`}
               disabled={!interactive}
               onClick={() => {
                 setReplyTo(comment.id);
@@ -252,14 +229,14 @@ export function ThreadView({
                 onClick={async () => {
                   const key = `remove-${comment.id}`;
                   setBusy((current) => new Set([...current, key]));
-                  setErrors((current) => ({ ...current, direct: "" }));
+                  setErrors((current) => ({ ...current, remove: "" }));
                   try {
                     await api("remove-comment", { id: comment.id });
                     await refresh();
                   } catch (error) {
                     setErrors((current) => ({
                       ...current,
-                      direct: (error as Error).message,
+                      remove: (error as Error).message,
                     }));
                   } finally {
                     setBusy((current) => {
@@ -360,7 +337,26 @@ export function ThreadView({
             children.get(c.id)?.some((r) => r.id === replyTo),
         ) &&
         composer(replyTo)}
-      {composer("direct")}
+      <button
+        type="button"
+        id={`comment-action-${currentSnapshot.conversation.id}`}
+        className="text-button comment-action"
+        disabled={!interactive}
+        aria-expanded={directOpen}
+        aria-controls={`reply-${currentSnapshot.conversation.id}-direct-form`}
+        onClick={() => {
+          setDirectOpen(true);
+          if (directOpen) directArea.current?.focus();
+        }}
+      >
+        Comment
+      </button>
+      {directOpen && composer("direct")}
+      {errors.remove && (
+        <p className="error" role="alert">
+          {errors.remove}
+        </p>
+      )}
     </section>
   );
 }

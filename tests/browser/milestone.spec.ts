@@ -128,6 +128,7 @@ test("profile display name editing preserves drafts, saves, and updates existing
   await owner
     .getByRole("button", { name: "Recommend to friends", exact: true })
     .click();
+  await owner.getByRole("button", { name: "Comment", exact: true }).click();
   await owner
     .getByLabel("Add your reply", { exact: true })
     .fill("An earlier reply");
@@ -396,6 +397,7 @@ test("emoji reactions persist across feeds on entries and replies, with change, 
         .getByRole("button", { name: "Love: 1", exact: true }),
     ).toBeVisible();
   }
+  await entry.getByRole("button", { name: "Comment", exact: true }).click();
   const draft = entry.getByLabel("Add your reply");
   await draft.fill("Keep this draft while reacting");
   for (const succeeds of [false, true]) {
@@ -1166,6 +1168,7 @@ test("invited friends discover, save, and share inline discussions with live acc
     .getByRole("button", { name: "+ Want to watch", exact: true })
     .click();
   await expect(ben.locator("[data-item-id]")).toHaveCount(2);
+  await item(ben).getByRole("button", { name: "Comment", exact: true }).click();
   await item(ben)
     .getByLabel("Add your reply")
     .fill("This looks like our kind of movie.");
@@ -1250,6 +1253,7 @@ test("invited friends discover, save, and share inline discussions with live acc
   ).toBeVisible();
   await ben.goto("/people/cam");
   await ben.getByRole("button", { name: "Block", exact: true }).click();
+  await item(cam).getByRole("button", { name: "Comment", exact: true }).click();
   await item(cam).getByLabel("Add your reply").fill("Cam’s view of the film.");
   await item(cam)
     .getByRole("button", { name: "Post reply", exact: true })
@@ -1381,9 +1385,37 @@ test("standalone title comments persist and share replies across all three mobil
   await befriend(owner, reader, "commentreader", "commentowner");
   await owner.goto("/titles/movie/987654");
   const composer = owner.getByRole("form", { name: "New title comment" });
+  const start = owner.getByRole("button", {
+    name: "Start a conversation",
+    exact: true,
+  });
+  await expect(composer).toHaveCount(0);
+  await expect(start).toHaveAttribute("aria-expanded", "false");
+  await start.focus();
+  await owner.keyboard.press("Enter");
+  await expect(start).toHaveAttribute("aria-expanded", "true");
+  await expect(composer.getByRole("textbox")).toBeFocused();
   await expect(
-    composer.getByLabel("Your comment", { exact: true }),
-  ).toBeVisible();
+    composer.getByRole("button", { name: "Post comment", exact: true }),
+  ).toBeDisabled();
+  await composer.getByRole("textbox").fill("Saved for later");
+  await composer.getByLabel("Contains spoilers").check();
+  await composer.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(composer).toHaveCount(0);
+  await expect(start).toBeFocused();
+  await start.click();
+  await expect(composer.getByRole("textbox")).toHaveValue("Saved for later");
+  await expect(composer.getByLabel("Contains spoilers")).toBeChecked();
+  await owner.setViewportSize({ width: 320, height: 844 });
+  expect(await owner.evaluate(() => document.documentElement.scrollWidth)).toBe(
+    320,
+  );
+  await owner.screenshot({
+    path: ".cache/title-composer-mobile.png",
+    fullPage: true,
+  });
+  await owner.setViewportSize({ width: 390, height: 844 });
+  await composer.getByLabel("Contains spoilers").uncheck();
   for (const body of [
     "First independent thought",
     "Second independent thought",
@@ -1418,9 +1450,13 @@ test("standalone title comments persist and share replies across all three mobil
   ].entries()) {
     await reader.goto(path);
     await expect(
-      reader.getByRole("form", { name: "New title comment" }),
+      reader.getByRole("button", { name: "Start a conversation", exact: true }),
     ).toHaveCount(index === 0 ? 1 : 0);
+    await expect(
+      reader.getByRole("form", { name: "New title comment" }),
+    ).toHaveCount(0);
     const item = reader.locator(`[data-item-id="${id}"]`);
+    await item.getByRole("button", { name: "Comment", exact: true }).click();
     await item
       .getByLabel("Add your reply")
       .fill(`Standalone reply from view ${index}`);
@@ -1454,6 +1490,7 @@ test("standalone title comments persist and share replies across all three mobil
     ).toHaveCount(3);
   }
   await owner.goto("/titles/movie/987654");
+  await first.getByRole("button", { name: "Comment", exact: true }).click();
   await first.getByLabel("Add your reply").fill("Fourth reply from the host");
   await first.getByRole("button", { name: "Post reply", exact: true }).click();
   await expect(
@@ -1507,6 +1544,9 @@ test("standalone title comments persist and share replies across all three mobil
   ).toBe(401);
   await signedOut.close();
   await owner.goto("/titles/tv/987654");
+  await owner
+    .getByRole("button", { name: "Start a conversation", exact: true })
+    .click();
   await composer
     .getByLabel("Your comment", { exact: true })
     .fill("A show spoiler");
@@ -1531,6 +1571,9 @@ test("standalone title comments persist and share replies across all three mobil
     .locator("[data-item-id]")
     .filter({ hasText: "A show spoiler" });
   const spoilerId = await spoilerItem.getAttribute("data-item-id");
+  await spoilerItem
+    .getByRole("button", { name: "Comment", exact: true })
+    .click();
   await spoilerItem
     .getByLabel("Add your reply")
     .fill("Thread inherits the spoiler flag");
@@ -1667,6 +1710,9 @@ test("standalone deletion preserves discussions across feeds, keeps spoilers hid
       heading(owner, id).getByText("Comment removed", { exact: true }),
     ).toBeVisible();
     if (index === 0) {
+      await item(reader, id)
+        .getByRole("button", { name: "Comment", exact: true })
+        .click();
       await item(reader, id)
         .getByLabel("Add your reply")
         .fill("Continue after deletion");
@@ -1812,6 +1858,9 @@ test("standalone composition retains drafts through posting and refresh failures
   ).trim();
   const page = await join(browser, "commentdrafts", { token });
   await page.goto("/titles/movie/987655");
+  await page
+    .getByRole("button", { name: "Start a conversation", exact: true })
+    .click();
   const composer = page.getByRole("form", { name: "New title comment" });
   const input = composer.getByLabel("Your comment", { exact: true });
   const submit = composer.getByRole("button", {
@@ -2146,6 +2195,9 @@ test("discussion links copy from every feed without navigating or losing drafts 
   await owner
     .getByRole("button", { name: "+ Want to watch", exact: true })
     .click();
+  await owner
+    .getByRole("button", { name: "Start a conversation", exact: true })
+    .click();
   const composer = owner.getByRole("form", { name: "New title comment" });
   await composer
     .getByLabel("Your comment", { exact: true })
@@ -2157,6 +2209,9 @@ test("discussion links copy from every feed without navigating or losing drafts 
   const discussion = owner.locator("[data-item-id]").filter({
     hasText: "An independent discussion to share",
   });
+  await discussion
+    .getByRole("button", { name: "Comment", exact: true })
+    .click();
   await discussion.getByLabel("Add your reply").fill("A direct comment");
   await discussion
     .getByRole("button", { name: "Post reply", exact: true })
@@ -2212,6 +2267,7 @@ test("discussion links copy from every feed without navigating or losing drafts 
     for (const entry of await entries.all()) {
       const id = await entry.getAttribute("data-item-id");
       const expectedURL = `${browserConfig.baseURL}/titles/tv/987657?item=${id}`;
+      await entry.getByRole("button", { name: "Comment", exact: true }).click();
       const draft = entry.getByLabel("Add your reply");
       await draft.fill("Keep this reply draft.");
       const copy = entry.getByRole("button", {
@@ -2379,7 +2435,12 @@ test("unified feeds show separate actions and support inline replies on title, f
     .locator(".title-hero")
     .getByRole("button", { name: "+ Want to watch", exact: true })
     .click();
-  await expect(owner.getByLabel("Add your reply")).toHaveCount(2);
+  await expect(owner.getByLabel("Add your reply")).toHaveCount(0);
+  await expect(
+    owner
+      .locator("[data-item-id]")
+      .getByRole("button", { name: "Comment", exact: true }),
+  ).toHaveCount(2);
   const recommendation = owner
     .locator("[data-item-id]")
     .filter({ hasText: "feedowner recommends" });
@@ -2398,8 +2459,18 @@ test("unified feeds show separate actions and support inline replies on title, f
       await reader.setViewportSize({ width, height: 900 });
       await expectTextContrast(items.getByText("recommends", { exact: true }));
       await expectTextContrast(items.first().locator(".activity-content time"));
-      for (const reply of await items.getByLabel("Add your reply").all()) {
-        await expect(reply).toBeVisible();
+      await expect(items.getByRole("textbox")).toHaveCount(0);
+      for (const item of await items.all()) {
+        const trigger = item.getByRole("button", {
+          name: "Comment",
+          exact: true,
+        });
+        await expect(trigger).toHaveAttribute("aria-expanded", "false");
+        await trigger.focus();
+        await reader.keyboard.press("Enter");
+        await expect(trigger).toHaveAttribute("aria-expanded", "true");
+        const reply = item.getByLabel("Add your reply");
+        await expect(reply).toBeFocused();
         const visibleLines = await reply.evaluate((element) => {
           const style = getComputedStyle(element);
           const contentHeight =
@@ -2409,6 +2480,19 @@ test("unified feeds show separate actions and support inline replies on title, f
           return contentHeight / parseFloat(style.lineHeight);
         });
         expect.soft(visibleLines).toBeCloseTo(3, 1);
+        await reply.fill("Draft to keep after cancelling");
+        await item.getByLabel("Contains spoilers").check();
+        const cancel = item.getByRole("button", {
+          name: "Cancel",
+          exact: true,
+        });
+        await cancel.click();
+        await expect(reply).toHaveCount(0);
+        await expect(trigger).toBeFocused();
+        await trigger.click();
+        await expect(reply).toHaveValue("Draft to keep after cancelling");
+        await expect(item.getByLabel("Contains spoilers")).toBeChecked();
+        await cancel.click();
       }
       if (path === "/titles/movie/987654")
         await reader.screenshot({
@@ -2425,6 +2509,7 @@ test("unified feeds show separate actions and support inline replies on title, f
   ].entries()) {
     await reader.goto(path);
     const item = reader.locator(`[data-item-id="${id}"]`);
+    await item.getByRole("button", { name: "Comment", exact: true }).click();
     await item.getByLabel("Add your reply").fill(`Reply from surface ${index}`);
     await item.getByRole("button", { name: "Post reply", exact: true }).click();
     await expect(
@@ -2528,6 +2613,7 @@ test("every feed holds incoming activity, preserves drafts and position, and exp
     await expect(
       item.getByText("Preview reply 0", { exact: true }),
     ).toHaveCount(0);
+    await item.getByRole("button", { name: "Comment", exact: true }).click();
     const draft = item.getByLabel("Add your reply");
     await draft.fill(`Draft on surface ${index}`);
     await item.getByLabel("Contains spoilers", { exact: true }).check();
@@ -2698,7 +2784,9 @@ test("an unavailable legacy link navigates after friendship restores access", as
     new RegExp(`/titles/movie/987654\\?item=${id}$`),
   );
   await expect(
-    waiting.locator(`[data-item-id="${id}"]`).getByLabel("Add your reply"),
+    waiting
+      .locator(`[data-item-id="${id}"]`)
+      .getByRole("button", { name: "Comment", exact: true }),
   ).toBeVisible();
   await reader.context().close();
   await owner.context().close();
@@ -2952,6 +3040,7 @@ test("slow and failed refreshes enforce access while preserving reply drafts", a
     },
   });
   await page.goto(`/conversations/${id}`);
+  await page.getByRole("button", { name: "Comment", exact: true }).click();
   const draft = page.getByLabel("Add your reply");
   const replySpoiler = page
     .getByRole("region", { name: "Conversation", exact: true })
@@ -2988,6 +3077,7 @@ test("slow and failed refreshes enforce access while preserving reply drafts", a
     page.getByRole("button", { name: "Unfriend", exact: true }),
   ).toBeVisible();
   await viewer.goto(`/conversations/${id}`);
+  await viewer.getByRole("button", { name: "Comment", exact: true }).click();
   await viewer.getByLabel("Add your reply").fill("Keep my slow-network draft");
   await viewer.route("**/api/screenr/screen?**", async (route) => {
     // Delay the real HTTP boundary beyond the polling interval. Application
@@ -3016,6 +3106,7 @@ test("slow and failed refreshes enforce access while preserving reply drafts", a
   await viewer.unrouteAll({ behavior: "wait" });
   await befriend(page, viewer, "slowviewer", "draftrefresh");
   await viewer.goto(`/conversations/${id}`);
+  await viewer.getByRole("button", { name: "Comment", exact: true }).click();
   await viewer.getByLabel("Add your reply").fill("Retain this timed-out draft");
   let requestStarted!: () => void;
   const delayedRequest = new Promise<void>((resolve) => {
@@ -3055,6 +3146,7 @@ test("posting preserves later typing and background refresh preserves action err
   });
   const { id } = await response.json();
   await page.goto(`/conversations/${id}`);
+  await page.getByRole("button", { name: "Comment", exact: true }).click();
   const draft = page.getByLabel("Add your reply");
   await draft.fill("First submitted reply");
   let release!: () => void;
@@ -3377,7 +3469,7 @@ test("own nested replies keep their parent when another tab has not accepted new
   await reader.goto(`/titles/movie/987654?item=${id}`);
   const item = reader.locator(`[data-item-id="${id}"]`);
   await expect(
-    item.getByLabel("Add your reply", { exact: true }),
+    item.getByRole("button", { name: "Comment", exact: true }),
   ).toBeVisible();
   await expect(item.locator("[data-comment-id]")).toHaveCount(0);
   const parentResponse = await owner.request.post("/api/screenr/comment", {
@@ -3497,6 +3589,7 @@ test("nested discussions group stored replies, preview direct comments, and keep
       fullPage: true,
     });
   }
+  await item.getByRole("button", { name: "Comment", exact: true }).click();
   const direct = item.getByRole("form", {
     name: "Reply to feed item",
     exact: true,
@@ -3544,6 +3637,21 @@ test("nested discussions group stored replies, preview direct comments, and keep
       .getByText("Direct draft", { exact: true }),
   ).toBeVisible();
   await expect(nested().getByRole("textbox")).toHaveValue("Draft for parent");
+  // Removing a comment must still report errors with its composer closed.
+  await direct.getByRole("button", { name: "Cancel", exact: true }).click();
+  await reader.route("**/api/screenr/remove-comment", (route) =>
+    route.fulfill({ status: 503, json: { error: "Removal unavailable" } }),
+  );
+  await item
+    .locator("[data-comment-id]")
+    .filter({ hasText: "Direct draft" })
+    .getByRole("button", { name: "Delete", exact: true })
+    .click();
+  await expect(direct).toHaveCount(0);
+  await expect(
+    item.getByRole("alert").filter({ hasText: "Removal unavailable" }),
+  ).toBeVisible();
+  await reader.unroute("**/api/screenr/remove-comment");
   const groupToggle = item.getByRole("button", {
     name: "View 2 replies",
     exact: true,
@@ -3599,6 +3707,10 @@ test("nested discussions group stored replies, preview direct comments, and keep
   await expect(nested().getByRole("textbox")).toHaveValue(
     "Later typing for child",
   );
+  await reader.setViewportSize({ width: 320, height: 844 });
+  expect(
+    await reader.evaluate(() => document.documentElement.scrollWidth),
+  ).toBe(320);
   await reader.screenshot({
     path: ".cache/nested-composer-mobile.png",
     fullPage: true,
@@ -3661,6 +3773,7 @@ test("nested updates preserve drafts, expansion, and position while parent acces
     exact: true,
   });
   await nested.getByRole("textbox").fill("Keep this nested draft");
+  await item.getByRole("button", { name: "Comment", exact: true }).click();
   await item
     .getByRole("form", { name: "Reply to feed item", exact: true })
     .getByRole("textbox")
