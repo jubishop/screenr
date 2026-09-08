@@ -1,18 +1,10 @@
-import { test, expect, type Page } from "@playwright/test";
+import { expect, type Page } from "@playwright/test";
+import { test, db } from "./database-fixture";
 import { createHash, randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
-import { browserConfig } from "../../scripts/browser-config";
-
-process.env.DATABASE_URL = browserConfig.databaseURL;
-process.env.BETTER_AUTH_URL = browserConfig.baseURL;
-process.env.BETTER_AUTH_SECRET =
-  "screenr-browser-test-only-secret-at-least-32-characters";
-const { db } = await import("../../src/server/db");
 const { createInvitation } = await import("../../src/server/invitations");
 const { changeRelationship, updateTitleActivity } =
   await import("../../src/server/social");
-
-test.afterAll(() => db.end());
 
 async function signup(page: Page) {
   const username = "suggestedviewer";
