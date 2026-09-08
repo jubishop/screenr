@@ -95,6 +95,17 @@ categories. Those entries convey different viewing options.
 Issue #62 covers both the category changes and duplicate-service grouping.
 Use the service identity boundary below when preparing the provider map.
 
+## Alphabetical service order — 2026-09-08
+
+**Decision:** Sort services alphabetically by their display names within
+both Subs and Free. Apply sorting after grouping duplicate variants.
+
+**Why:** The user accepted predictable ordering that makes services easy
+to find.
+
+**Tradeoff:** The display does not prioritize popular services or preserve
+TMDB's provider order.
+
 ## Service identity boundary — 2026-09-08
 
 **Decision:** Merge plans and reseller versions of the same service. Keep
@@ -181,7 +192,41 @@ Do not add service preferences, country settings, discovery filters,
 availability on other pages, recommendation changes, or Watch together
 changes in this issue. Further product uses need separate issues.
 
-## Implementation
+## Implementation guidance for issue #62
+
+The product decisions above are settled. Use a small checked-in mapping
+from TMDB provider IDs to stable service identities, with a display name,
+preferred logo, and each member's standalone or reseller route. Prepare
+the map from both US movie and TV provider catalogs. Include singleton
+services and verify that each known provider ID belongs to one service.
+Do not infer equivalence from similar names at runtime.
+
+Preserve the original cached offers and derive the two display sections
+when presenting a title. This lets current, older, and newly fetched cache
+entries use the same mapping without a data migration or forced refresh.
+The registry's existence does not establish an offer: only the title's
+reported eligible providers can put a service in a section or suppress a
+channel-only note.
+
+Retain existing behavior for unmatched providers and missing logos:
+unmapped IDs remain visible with their reported names, and missing images
+do not remove entries. Give unmatched IDs separate identities until their
+mapping is known. Choose each grouped logo deterministically, preferring
+the service's catalog logo and then a valid reported member logo. Render
+the name without an image when none is usable.
+
+Retain the current omission of empty categories. If neither section has
+eligible offers, show "No subscription or free options are listed for the
+US." For an older successful result, use "No subscription or free options
+were listed when last checked." Preserve the separate request-failure
+state, last-checked time, and TV season caveat.
+
+Sort by the service display name with consistent English alphabetical
+comparison on the server and client, ignoring case. Use the stable service
+identity to break ties. Route notes do not affect service ordering.
+Acceptance criteria and mapping examples are in issue #62.
+
+## Current implementation
 
 This section describes the implementation delivered for issue #7, which
 still includes rental and purchase offers and separates free and
