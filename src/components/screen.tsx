@@ -386,6 +386,49 @@ export function Screen({
                 </p>
               )}
             </div>
+            <section
+              className="people-suggestions people-list"
+              aria-labelledby="people-suggestions-heading"
+            >
+              <h2 id="people-suggestions-heading">People you may know</h2>
+              <p className="muted">Meet people through your mutual friends.</p>
+              {data.suggestions.map((person) => (
+                <article className="person-row" key={person.user_id}>
+                  <div>
+                    <Link href={`/people/${person.username}`} prefetch={false}>
+                      <strong>{person.display_name}</strong>
+                      <span className="muted"> @{person.username}</span>
+                    </Link>
+                    <p className="small muted">
+                      {person.mutual_friends.length === 1
+                        ? "Mutual friend: "
+                        : "Mutual friends: "}
+                      {person.mutual_friends.map((mutual, index) => (
+                        <span key={mutual.user_id}>
+                          {index > 0 && ", "}
+                          <Link
+                            href={`/people/${mutual.username}`}
+                            prefetch={false}
+                          >
+                            {mutual.display_name} (@{mutual.username})
+                          </Link>
+                        </span>
+                      ))}
+                    </p>
+                  </div>
+                  <button
+                    className="primary"
+                    disabled={busy || !interactive}
+                    onClick={() => void relationship(person.user_id, "request")}
+                  >
+                    Send friend request
+                  </button>
+                </article>
+              ))}
+              {!data.suggestions.length && (
+                <p className="empty">No friend suggestions yet.</p>
+              )}
+            </section>
             {data.blocked.length > 0 && (
               <>
                 <h2>Blocked people</h2>

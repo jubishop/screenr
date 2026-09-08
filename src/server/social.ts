@@ -94,7 +94,37 @@ export async function people(viewer: string) {
       [viewer],
     )
   ).rows;
-  return { connections, blocked };
+  const suggestions = (
+    await db.query<Person & { mutual_friends: Person[] }>(
+      `WITH direct AS (
+        SELECT p.user_id,p.username,p.display_name
+        FROM friendship f JOIN profile p
+          ON p.user_id=CASE WHEN f.low_id=$1 THEN f.high_id ELSE f.low_id END
+        WHERE $1 IN (f.low_id,f.high_id) AND f.accepted_at IS NOT NULL
+          AND NOT screenr_blocked($1,p.user_id)
+      )
+      SELECT candidate.user_id,candidate.username,candidate.display_name,
+        jsonb_agg(jsonb_build_object(
+          'user_id',mutual.user_id,'username',mutual.username,'display_name',mutual.display_name
+        ) ORDER BY mutual.username) AS mutual_friends
+      FROM direct mutual JOIN friendship f
+        ON mutual.user_id IN (f.low_id,f.high_id) AND f.accepted_at IS NOT NULL
+      JOIN profile candidate
+        ON candidate.user_id=CASE WHEN f.low_id=mutual.user_id THEN f.high_id ELSE f.low_id END
+      WHERE candidate.user_id<>$1
+        AND NOT screenr_blocked($1,candidate.user_id)
+        AND NOT screenr_blocked(mutual.user_id,candidate.user_id)
+        AND NOT EXISTS (
+          SELECT 1 FROM friendship existing
+          WHERE existing.low_id=least($1,candidate.user_id)
+            AND existing.high_id=greatest($1,candidate.user_id)
+        )
+      GROUP BY candidate.user_id,candidate.username,candidate.display_name
+      ORDER BY count(*) DESC,candidate.username`,
+      [viewer],
+    )
+  ).rows;
+  return { connections, blocked, suggestions };
 }
 export async function changeRelationship(
   viewer: string,
