@@ -1093,23 +1093,43 @@ test("title watch availability shows US categories, empty results, failures, and
     await expect(
       availability.getByText("United States", { exact: true }),
     ).toBeVisible();
-    for (const [label, name] of [
-      ["Subscription", "Harbor Stream"],
-      ["Free", "Lantern Free"],
-      ["With ads", "Coast TV"],
-      ["Rent", "Harbor Store"],
-      ["Buy", "Harbor Store"],
-    ]) {
-      const group = availability.getByRole("group", {
-        name: label,
-        exact: true,
-      });
-      await expect(group.getByText(name, { exact: true })).toBeVisible();
-      await expect(group.locator("img")).toHaveAttribute(
-        "src",
-        "https://image.tmdb.org/t/p/w92/test-provider.png",
-      );
-    }
+    await expect(availability.getByRole("heading", { level: 3 })).toHaveText([
+      "Subs",
+      "Free",
+    ]);
+    const subs = availability.getByRole("group", { name: "Subs", exact: true });
+    const free = availability.getByRole("group", { name: "Free", exact: true });
+    await expect(subs.getByRole("listitem")).toHaveText([
+      "AMC+ via Amazon, Apple TV, Roku",
+      "An exceptionally long service name with aVeryLongUnbrokenPartForNarrowScreens",
+      "Apple TV",
+      "Harbor Stream",
+      "Netflix",
+      "Qello Concerts by Stingray via Amazon",
+    ]);
+    await expect(free.getByRole("listitem")).toHaveText([
+      "Apple TV",
+      "Coast TV",
+      "Lantern Free",
+      "YouTube",
+    ]);
+    await expect(subs.getByText("Apple TV", { exact: true })).toHaveCount(1);
+    await expect(availability.getByText("Harbor Store")).toHaveCount(0);
+    await expect(
+      subs
+        .getByRole("listitem")
+        .filter({ hasText: "Harbor Stream" })
+        .locator("img"),
+    ).toHaveAttribute(
+      "src",
+      "https://image.tmdb.org/t/p/w92/test-provider.png",
+    );
+    await expect(
+      subs
+        .getByRole("listitem")
+        .filter({ hasText: "An exceptionally long" })
+        .locator("img"),
+    ).toHaveCount(0);
     await expect(availability.getByText("Canada only")).toHaveCount(0);
     await expect(
       availability.getByRole("link", { name: "Viewing options on TMDB" }),
@@ -1132,7 +1152,7 @@ test("title watch availability shows US categories, empty results, failures, and
       expect(
         await page.evaluate(() => document.documentElement.scrollWidth),
       ).toBe(width);
-      if (kind === "movie" && width !== 320) {
+      if (kind === "movie") {
         await page.evaluate(() => window.scrollTo(0, 0));
         await page.screenshot({
           path: `.cache/watch-availability-${width}.png`,
@@ -1143,7 +1163,9 @@ test("title watch availability shows US categories, empty results, failures, and
   }
   await page.goto("/titles/movie/987661");
   await expect(
-    availability.getByText("No viewing options are listed for the US."),
+    availability.getByText(
+      "No subscription or free options are listed for the US.",
+    ),
   ).toBeVisible();
   await expect(availability.getByText("Canada only")).toHaveCount(0);
   await page.goto("/titles/movie/987662");
@@ -1153,7 +1175,9 @@ test("title watch availability shows US categories, empty results, failures, and
     ),
   ).toBeVisible();
   await expect(
-    availability.getByText("No viewing options are listed for the US."),
+    availability.getByText(
+      "No subscription or free options are listed for the US.",
+    ),
   ).toHaveCount(0);
   await expect(
     page.getByRole("heading", { name: "The Lantern Room", exact: true }),
@@ -1179,10 +1203,69 @@ test("title watch availability shows US categories, empty results, failures, and
       "2020-01-02T12:00:00.000Z",
     );
     await expect(availability.locator("time")).toContainText("2020");
+    await pool.query(
+      "UPDATE title_availability SET availability=$1, fetched_at=now(), refresh_after=now()+interval '1 day' WHERE title_id='movie:987660'",
+      [
+        {
+          link: null,
+          providers: {
+            rent: [
+              { provider_id: 8, provider_name: "Netflix", logo_path: null },
+            ],
+            buy: [
+              { provider_id: 350, provider_name: "Apple TV", logo_path: null },
+            ],
+          },
+        },
+      ],
+    );
+    await page.reload();
+    await expect(
+      availability.getByText(
+        "No subscription or free options are listed for the US.",
+      ),
+    ).toBeVisible();
+    await expect(availability.getByRole("group")).toHaveCount(0);
+    await pool.query(
+      "UPDATE title_availability SET availability=$1 WHERE title_id='movie:987660'",
+      [
+        {
+          link: null,
+          providers: {
+            ads: [
+              {
+                provider_id: 2243,
+                provider_name: "Apple TV Amazon Channel",
+                logo_path: null,
+              },
+            ],
+          },
+        },
+      ],
+    );
+    await page.reload();
+    await expect(availability.getByRole("heading", { level: 3 })).toHaveText([
+      "Free",
+    ]);
+    await expect(availability.getByRole("listitem")).toHaveText([
+      "Apple TV via Amazon",
+    ]);
     // Exercise the real HTTP failure on an older successful empty result too.
     await pool.query(
       "UPDATE title_availability SET availability=$1, fetched_at='2020-01-02T12:00:00Z', refresh_after=now()-interval '1 second' WHERE title_id='movie:987660'",
-      [{ link: null, providers: {} }],
+      [
+        {
+          link: null,
+          providers: {
+            rent: [
+              { provider_id: 8, provider_name: "Netflix", logo_path: null },
+            ],
+            buy: [
+              { provider_id: 350, provider_name: "Apple TV", logo_path: null },
+            ],
+          },
+        },
+      ],
     );
     await page.reload();
     await expect(
@@ -1190,7 +1273,7 @@ test("title watch availability shows US categories, empty results, failures, and
     ).toBeVisible();
     await expect(
       availability.getByText(
-        "No viewing options were listed when last checked.",
+        "No subscription or free options were listed when last checked.",
       ),
     ).toBeVisible();
     await expect(

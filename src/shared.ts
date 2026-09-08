@@ -26,12 +26,23 @@ export type WatchProvider = {
   provider_name: string;
   logo_path: string | null;
 };
+export type WatchSection = {
+  key: "subs" | "free";
+  label: "Subs" | "Free";
+  services: {
+    id: string;
+    name: string;
+    logo_path: string | null;
+    route_note: string | null;
+  }[];
+};
 export type WatchAvailability = {
   country: "US";
   status: "ok" | "stale" | "unavailable";
   checked_at: string | null;
   link: string | null;
   providers: Partial<Record<WatchCategory, WatchProvider[]>>;
+  sections: WatchSection[];
 };
 export type TitleSuggestion = Title & {
   recommended_by: Pick<Person, "username" | "display_name">[];

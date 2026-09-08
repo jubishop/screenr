@@ -337,6 +337,12 @@ Migration `007-title-availability.sql` adds the separate availability cache.
 Results refresh on demand after 24 hours, with a two-second request timeout
 and five-minute retry delay. Failed refreshes preserve the last successful
 data and its timestamp. The title-page section supplies JustWatch attribution.
+Subs lists subscriptions; Free combines free and ad-supported offers. Plans
+and reseller channels share one entry per service in each section, ordered
+alphabetically. Rental and purchase offers stay in the cache but are omitted
+from the display. Existing cache rows use these rules without a refresh.
+See [provider registry maintenance](title-availability.md#provider-registry-and-maintenance)
+for snapshot coverage, source identity decisions, and update checks.
 
 ### Title trailers
 
