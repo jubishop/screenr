@@ -60,6 +60,10 @@ top-level feed and preserve the existing content privacy rules. The
 tradeoff is that each person sees a different selection of the title's
 conversation.
 
+The [privacy and known-people boundary](product-brief.md#privacy-and-the-known-people-circle--2026-09-07)
+also governs discovery outside this feed. Seeing someone in a shared
+friend's discussion does not grant access to that person's other activity.
+
 ### Separate items for later contributions — 2026-09-06
 
 **Decision:** A later, distinct contribution creates its own top-level
@@ -183,6 +187,12 @@ the current page open. Opening the copied URL still follows the permalink
 rules above. In [issue #19](https://github.com/jubishop/screenr/issues/19),
 the user requested this change because the discussion is already available
 inline and the link is useful for sharing it with other people.
+
+**Comment links — 2026-09-07:** Remove the upper-right arrow link from each
+comment. Keep **Copy link to discussion** on the parent feed entry. In
+[issue #41](https://github.com/jubishop/screenr/issues/41), the user said the
+discussion-level copy control is sufficient. Existing reply URLs and
+notification destinations still follow the permalink rules above.
 
 ### Withdrawing a recommendation preserves its discussion — 2026-09-06
 

@@ -202,7 +202,7 @@ export function Setup({
         </h1>
         <p className="muted">
           {verified
-            ? "Two details, and you’re in. Joining does not automatically add any friends."
+            ? "Two details, and you’re in. Joining through a member’s invitation automatically makes you friends with them."
             : `Confirm ownership of ${email} to finish joining.`}
         </p>
         <form onSubmit={submit}>

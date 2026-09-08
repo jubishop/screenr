@@ -80,7 +80,7 @@ export async function completeSignup(
     const invite = (
       await client.query(
         `UPDATE invitation SET uses=uses+1 WHERE (token_hash=$1 OR share_token_hash=$1) AND revoked_at IS NULL
-       AND expires_at>now() AND uses<max_uses RETURNING id`,
+       AND expires_at>now() AND uses<max_uses RETURNING id,creator_id`,
         [hash],
       )
     ).rows[0];
@@ -103,6 +103,13 @@ export async function completeSignup(
       "INSERT INTO invitation_signup(invitation_id,user_id) VALUES($1,$2)",
       [invite.id, userId],
     );
+    if (invite.creator_id) {
+      await client.query(
+        `INSERT INTO friendship(low_id,high_id,requested_by,accepted_at)
+         VALUES(least($1,$2),greatest($1,$2),$1,now())`,
+        [userId, invite.creator_id],
+      );
+    }
     await client.query('UPDATE "user" SET "invitationHash"=$1 WHERE id=$2', [
       hash,
       userId,
