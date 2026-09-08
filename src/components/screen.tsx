@@ -581,8 +581,9 @@ export function Screen({
               <p className="eyebrow">MAKE ROOM FOR FRIENDS</p>
               <h1>Good things are shared.</h1>
               <p>
-                Invite someone to Screenr. They can join for 30 days, then send
-                a friend request.
+                Invite someone to Screenr. Your link works for 30 days. When
+                someone completes signup through it, you automatically become
+                friends.
               </p>
             </div>
             <form

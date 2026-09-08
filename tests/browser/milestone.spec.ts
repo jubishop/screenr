@@ -516,6 +516,9 @@ test("active invitation cards retain links across reloads and disappear after us
     token: (await readFile(".cache/browser-invite-list.txt", "utf8")).trim(),
   });
   await owner.goto("/invites");
+  await expect
+    .soft(owner.getByText(/completes signup.*automatically become friends/))
+    .toBeVisible();
   await owner.getByLabel("Maximum signups").selectOption("2");
   const create = owner.getByRole("button", {
     name: "Create invitation",
@@ -533,7 +536,21 @@ test("active invitation cards retain links across reloads and disappear after us
   expect(newerURL).not.toBe(url);
   const guest = await join(browser, "invitationguest", {
     token: new URL(url).pathname.split("/").at(-1),
+    complete: false,
   });
+  await expect
+    .soft(
+      guest.getByText(/member’s invitation automatically makes you friends/),
+    )
+    .toBeVisible();
+  await guest.getByLabel("Display name").fill("invitationguest");
+  await guest.getByLabel("Username", { exact: true }).fill("invitationguest");
+  await guest
+    .getByRole("button", { name: "Join Screenr", exact: true })
+    .click();
+  await expect(
+    guest.getByRole("heading", { name: "Better with friends." }),
+  ).toBeVisible();
   await expect(
     owner.getByText("1 of 2 signups", { exact: true }),
   ).toBeVisible();
@@ -591,6 +608,23 @@ test("active invitation cards retain links across reloads and disappear after us
   await owner.reload();
   await expect(
     owner.getByText("No active invitations.", { exact: true }),
+  ).toBeVisible();
+  for (const [guestPage, username] of [
+    [guest, "invitationguest"],
+    [finalGuest, "invitationlast"],
+  ] as const) {
+    await guestPage.goto("/people/invitationowner");
+    await expect(
+      guestPage.getByRole("button", { name: "Unfriend", exact: true }),
+    ).toBeVisible();
+    await owner.goto(`/people/${username}`);
+    await expect(
+      owner.getByRole("button", { name: "Unfriend", exact: true }),
+    ).toBeVisible();
+  }
+  await guest.goto("/people/invitationlast");
+  await expect(
+    guest.getByRole("button", { name: "Send friend request", exact: true }),
   ).toBeVisible();
   for (const page of [owner, guest, finalGuest]) await page.context().close();
 });
@@ -2141,6 +2175,38 @@ test("unified feeds show separate actions and support inline replies on title, f
     .locator("[data-item-id]")
     .filter({ hasText: "feedowner recommends" });
   const id = await recommendation.getAttribute("data-item-id");
+  for (const path of ["/titles/movie/987654", "/", "/people/feedowner"]) {
+    await reader.goto(path);
+    const items = reader.locator("[data-item-id]");
+    await expect(items).toHaveCount(2);
+    await expect
+      .soft(items.getByRole("heading", { name: "Conversation", exact: true }))
+      .toHaveCount(0);
+    await expect
+      .soft(items.getByText("Be the first to reply.", { exact: true }))
+      .toHaveCount(0);
+    for (const width of [390, 1440]) {
+      await reader.setViewportSize({ width, height: 900 });
+      for (const reply of await items.getByLabel("Add your reply").all()) {
+        await expect(reply).toBeVisible();
+        const visibleLines = await reply.evaluate((element) => {
+          const style = getComputedStyle(element);
+          const contentHeight =
+            element.clientHeight -
+            parseFloat(style.paddingTop) -
+            parseFloat(style.paddingBottom);
+          return contentHeight / parseFloat(style.lineHeight);
+        });
+        expect.soft(visibleLines).toBeCloseTo(3, 1);
+      }
+      if (path === "/titles/movie/987654")
+        await reader.screenshot({
+          path: `.cache/empty-conversation-${width}.png`,
+          fullPage: true,
+        });
+    }
+  }
+  await reader.setViewportSize({ width: 390, height: 844 });
   for (const [index, path] of [
     "/titles/movie/987654",
     "/",
@@ -2152,6 +2218,12 @@ test("unified feeds show separate actions and support inline replies on title, f
     await item.getByRole("button", { name: "Post reply", exact: true }).click();
     await expect(
       item.getByText(`Reply from surface ${index}`, { exact: true }),
+    ).toBeVisible();
+    await expect(
+      item.getByRole("heading", { name: "Conversation", exact: true }),
+    ).toBeVisible();
+    await expect(
+      item.getByText(`${index + 1} replies`, { exact: true }),
     ).toBeVisible();
     await reader.reload();
     await expect(
@@ -2670,7 +2742,10 @@ test("slow and failed refreshes enforce access while preserving reply drafts", a
   const viewer = await join(browser, "slowviewer", {
     token: (await invitation.json()).token,
   });
-  await befriend(page, viewer, "slowviewer", "draftrefresh");
+  await page.goto("/people/slowviewer");
+  await expect(
+    page.getByRole("button", { name: "Unfriend", exact: true }),
+  ).toBeVisible();
   await viewer.goto(`/conversations/${id}`);
   await viewer.getByLabel("Add your reply").fill("Keep my slow-network draft");
   await viewer.route("**/api/screenr/screen?**", async (route) => {
@@ -2998,6 +3073,14 @@ test("a signed-out pending member can finish with one visit to a replacement inv
     await owner.request.get("/api/screenr/screen?path=/invites")
   ).json();
   expect(screen.invitations).toEqual([]);
+  await pending.goto("/people/replacementowner");
+  await expect(
+    pending.getByRole("button", { name: "Unfriend", exact: true }),
+  ).toBeVisible();
+  await owner.goto("/people/replacementpending");
+  await expect(
+    owner.getByRole("button", { name: "Unfriend", exact: true }),
+  ).toBeVisible();
   await owner.context().close();
   await pending.context().close();
 });
@@ -3052,7 +3135,10 @@ test("own nested replies keep their parent when another tab has not accepted new
   const { id } = await response.json();
   await reader.goto(`/titles/movie/987654?item=${id}`);
   const item = reader.locator(`[data-item-id="${id}"]`);
-  await expect(item.getByText("Be the first to reply.")).toBeVisible();
+  await expect(
+    item.getByLabel("Add your reply", { exact: true }),
+  ).toBeVisible();
+  await expect(item.locator("[data-comment-id]")).toHaveCount(0);
   const parentResponse = await owner.request.post("/api/screenr/comment", {
     headers: { Origin: browserConfig.baseURL },
     data: { conversation: id, body: "Pending parent", spoiler: false },
