@@ -58,6 +58,45 @@ button:disabled {
   opacity: 0.55;
   cursor: wait;
 }
+.reactions {
+  margin-top: 8px;
+}
+.reaction-summary,
+.reaction-picker {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.reaction-summary button {
+  min-height: 44px;
+  min-width: 44px;
+  padding: 8px 10px;
+}
+.reaction-count {
+  border: 1px solid #d5ddd3;
+}
+.reactions button[aria-pressed="true"] {
+  background: #e7efdd;
+  box-shadow: inset 0 0 0 2px #55753a;
+}
+.reaction-picker {
+  margin-top: 8px;
+  padding: 8px;
+  border: 1px solid #d5ddd3;
+  border-radius: 12px;
+  background: var(--white);
+}
+.reaction-picker button {
+  display: grid;
+  gap: 3px;
+  padding: 6px;
+  min-width: 44px;
+  font-size: 12px;
+}
+.reaction-picker button span:first-child {
+  font-size: 24px;
+}
 :focus-visible {
   outline: 3px solid #759e4a;
   outline-offset: 4px;

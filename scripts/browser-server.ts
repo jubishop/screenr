@@ -170,6 +170,12 @@ try {
   );
   const { startGoogleProvider } =
     await import("../tests/browser/google-provider");
+  const reactionInvitation = await createInvitation(null, 2);
+  await writeFile(
+    ".cache/browser-reaction-invite.txt",
+    reactionInvitation.token,
+    { mode: 0o600 },
+  );
   await releasePort(browserConfig.googlePort);
   google = await startGoogleProvider();
   const fixture = {
