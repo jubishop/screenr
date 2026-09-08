@@ -88,8 +88,9 @@ npm run dev:code -- you@example.test
 
 Complete the display name and username. Create another invitation from
 **Invite friends**, and open it in a separate browser profile for a second
-member. Send and accept a friend request from **Friends**. Find a movie or
-show, recommend it, and open its conversation from the other member's feed.
+member. Completing signup automatically makes the new member and inviter
+accepted friends. Find a movie or show, recommend it, and open its conversation
+from the other member's feed.
 Save it as Want to watch and post a reply inline. The title page, friends
 feed, and profile show the same item and its replies. Recommend and Want to
 watch each have a separate discussion.
@@ -211,7 +212,10 @@ and captures email locally. It does not use paid services or contact real
 recipients. A full run checks:
 
 - Four invited members complete email verification and required profiles.
-- Friendship needs acceptance; inviting alone gives no content access.
+- Completed invited signups create an accepted friendship with the creator.
+  Pending signup gives no content access. Members using the same link do not
+  automatically become friends with each other. Other friendships need an
+  explicit request and acceptance.
 - A recommendation appears in the friend's feed and title page, with one
   canonical item per action. Saving a title persists.
 - Each feed supports replies, the latest-three preview, and inline expansion.
@@ -256,6 +260,9 @@ recipients. A full run checks:
 Database tests additionally cover concurrent signup limits, rollback after
 username conflicts, expiry, code/account identity, explicit Google linking,
 one-level reply grouping, host removal, and encrypted email delivery retries.
+They verify automatic inviter friendships for email and Google signup, legacy
+links, and replacement invitations. Retrying setup does not consume another
+use or restore a friendship after unfriending or blocking.
 Operational tests check activation rollback after a stalled health request and
 rejection of incorrectly named SQL migrations before schema changes begin.
 The proxy test runs the production Caddy routes on loopback with a temporary
@@ -286,8 +293,12 @@ viewing it does not grant access to private activity or pending requests.
 
 All domain writes take one transaction advisory lock. This makes invitation
 capacity and permission changes ordered with content writes. It is a deliberate
-small-app simplification; measure lock waits before replacing it. Thread reads
-use one database snapshot. Open pages poll every three seconds while visible,
+small-app simplification; measure lock waits before replacing it. Signup commits
+the profile, invitation use, signup record, and accepted inviter friendship in
+one transaction. A replacement link connects the new member to the creator of
+the invitation actually used to finish signup. Existing accounts are not
+backfilled. Thread reads use one database snapshot. Open pages poll every three
+seconds while visible,
 waiting for any active refresh to finish, and refresh on focus. Each refresh
 has a ten-second deadline; failure clears server content until a successful
 refresh. Access changes clear content on the next refresh without
