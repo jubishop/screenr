@@ -105,6 +105,23 @@ restarting it. A failed extraction or startup removes only a new candidate after
 successful rollback. Failures in later verification require inspection and,
 when necessary, manual recovery. Database migrations are not reversed.
 
+After the public health and login checks pass, deployment runs
+`ops/prune-releases.py` with the verified release path. Cleanup takes the same
+host lock as activation and confirms that this release is still active. It
+keeps the active release and the two most recent successful releases, then
+removes other recognized, inactive release directories. Each complete bundle
+currently takes about 418 MB, so three copies use about 1.25 GB.
+
+New candidates have a `.deployment-pending` marker until public verification
+finishes. Cleanup replaces it with `.deployment-success`; that marker's
+timestamp determines rollback order. A failed candidate cannot displace a
+successful rollback copy. The first cleanup also handles existing releases:
+complete bundles without either marker use their directory modification times
+as the legacy deployment order. Symlinks and directories without a matching
+`REVISION` and `server.js` are preserved for inspection. Cleanup failures fail
+the deploy job without stopping the active application; retrying verification
+and cleanup is safe. Database files and backups are outside the release tree.
+
 ### Production environment setup
 
 Create a GitHub Actions environment named `production` in `jubishop/screenr`.
