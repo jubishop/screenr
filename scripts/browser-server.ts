@@ -185,6 +185,12 @@ try {
     reactionInvitation.token,
     { mode: 0o600 },
   );
+  const spoilerInvitation = await createInvitation(null, 2);
+  await writeFile(
+    ".cache/browser-spoiler-invite.txt",
+    spoilerInvitation.token,
+    { mode: 0o600 },
+  );
   await releasePort(browserConfig.googlePort);
   google = await startGoogleProvider();
   const fixture = {
