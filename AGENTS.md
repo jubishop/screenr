@@ -32,6 +32,15 @@ shared models, diagnostics, and recovery.
 Run `bin/check` before delivering repository changes. It is also the GitHub
 Actions check for pull requests and pushes to `main`.
 
+## File Organization
+
+Keep files focused on one coherent responsibility or feature area. Use
+approximately 1,000 lines as a review threshold for hand-written source,
+tests, and styles, not a hard cap or CI failure. When extending a large file,
+consider extracting a cohesive area. Larger files are acceptable when
+splitting would reduce clarity. Do not compress formatting or create
+arbitrary fragments to meet a line count.
+
 ## Deployment
 
 Test changes on localhost and in isolated CI. Complete PR review and merge
