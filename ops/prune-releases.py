@@ -36,6 +36,10 @@ def main():
                 marker = path / name
                 if marker.is_symlink() or (marker.exists() and not marker.is_file()):
                     raise ValueError(f'Unexpected deployment marker in {path.name}.')
+        retired = root / 'retired-releases'
+        if retired.is_symlink():
+            raise ValueError('Expected a real retired-releases directory.')
+        retired.mkdir(mode=0o700, exist_ok=True)
         (release / '.deployment-success').touch()
         (release / '.deployment-pending').unlink(missing_ok=True)
 
@@ -50,9 +54,17 @@ def main():
         verified = [path for path in candidates if path != release
                     and not (path / '.deployment-pending').exists()]
         keep = {release, *sorted(verified, key=lambda path: (success_time(path), path.name), reverse=True)[:2]}
+        # A deletion can fail after removing REVISION or server.js. Resume from
+        # this dedicated namespace without relying on those deleted files.
+        for path in sorted(retired.iterdir()):
+            if not path.is_symlink() and path.is_dir() and re.fullmatch(r'[0-9a-f]{40}', path.name):
+                shutil.rmtree(path)
+                print(f'Removed retired release {path.name}', flush=True)
         for path in sorted(candidates):
             if path not in keep:
-                shutil.rmtree(path)
+                destination = retired / path.name
+                path.rename(destination)
+                shutil.rmtree(destination)
                 print(f'Removed inactive release {path.name}', flush=True)
         print('Retained releases: ' + ', '.join(sorted(path.name for path in keep)))
 

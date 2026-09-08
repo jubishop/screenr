@@ -118,9 +118,14 @@ timestamp determines rollback order. A failed candidate cannot displace a
 successful rollback copy. The first cleanup also handles existing releases:
 complete bundles without either marker use their directory modification times
 as the legacy deployment order. Symlinks and directories without a matching
-`REVISION` and `server.js` are preserved for inspection. Cleanup failures fail
-the deploy job without stopping the active application; retrying verification
-and cleanup is safe. Database files and backups are outside the release tree.
+`REVISION` and `server.js` are preserved for inspection. Before deletion, expired
+releases are atomically moved under `/opt/screenr/retired-releases/`.
+This directory is reserved for cleanup: retries remove its real, revision-named
+directories even when an interrupted deletion already removed their identity
+files. Other entries and symlinks are preserved for inspection. Cleanup failures
+fail the deploy job without stopping the active application; retrying
+verification and cleanup is safe. Database files and backups are outside the
+release tree.
 
 ### Production environment setup
 
