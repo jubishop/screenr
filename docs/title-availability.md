@@ -4,7 +4,8 @@ status: current
 
 # Title availability
 
-Accepted decisions for [issue #7](https://github.com/jubishop/screenr/issues/7).
+Accepted decisions for [issue #7](https://github.com/jubishop/screenr/issues/7)
+and the [viewing-scope change](https://github.com/jubishop/screenr/issues/62).
 Screenr obtains US at-home viewing options and shows them on movie and TV
 title pages. The accepted decisions and implementation are described below.
 
@@ -12,7 +13,11 @@ title pages. The accepted decisions and implementation are described below.
 
 **Decision:** Use TMDB's JustWatch-backed watch-provider data through the
 existing server-side catalog client. Identify services and preserve their
-subscription, free, ad-supported, rental, and purchase categories. Store
+original subscription, free, and ad-supported categories in the source data.
+Display subscription offers under Subs and both free offer types under
+Free. The
+[2026-09-08 scope decision](#subscription-and-free-viewing-only--2026-09-08)
+supersedes the original inclusion of rental and purchase offers. Store
 provider IDs, names, logos, and the supplied TMDB watch-page link. Credit
 JustWatch when displaying this data.
 
@@ -39,6 +44,58 @@ required JustWatch attribution. These endpoints do not supply prices or
 direct playback links. Its [discovery reference](https://developer.themoviedb.org/reference/discover-movie)
 lists the category values `flatrate`, `free`, `ads`, `rent`, and `buy`.
 Sources checked on 2026-09-07.
+
+## Subscription and free viewing only — 2026-09-08
+
+**Decision:** Exclude rental and purchase offers from Screenr's title
+availability display. Use exactly two main sections: Subs and Free.
+Subs contains subscription (`flatrate`) offers. Free combines `free` and
+free ad-supported (`ads`) offers, with no separate Free with ads category.
+This supersedes both the rental and purchase scope and the separate free
+and ad-supported display categories accepted on 2026-09-07.
+
+Exclude offers by category, not whole providers. A service with rental or
+purchase offers can still have eligible subscription or free offers for a
+title. Apply this rule to existing cached results as well as new responses,
+before any grouping of duplicate services. Paid subscriptions with ads
+remain subscription offers. When the same provider appears in both `free`
+and `ads`, show it once under Free.
+
+**Why:** The user wants only subscription and free viewing categories. No
+further reason was stated for excluding rental and purchase offers.
+
+**Tradeoff:** Titles with only rental or purchase offers will have no listed
+subscription or free options. The empty state must describe that limited
+scope without claiming the title is unavailable everywhere. The supplied
+external TMDB watch page may still list rental and purchase offers. Free
+means no payment is required for the offer; it does not promise ad-free
+viewing.
+
+Implementation is tracked in [issue #62](https://github.com/jubishop/screenr/issues/62).
+The section structure and duplicate-service behavior are defined below.
+
+## Group services within each viewing category — 2026-09-08
+
+**Decision:** Make Subs and Free the first division in the source list.
+Group duplicate variants of a service within each section. For example,
+Netflix and Netflix with ads share one entry under Subs; Apple TV and its
+Amazon channel share one Apple TV entry in the applicable section.
+
+If a service has both subscription and free offers for the same title,
+show it once under Subs and once under Free. Deduplicate by service within
+each section, never across the entire title's source list. A single list
+with category labels beside each service was rejected.
+
+**Why:** The user wants payment category to be the first distinction while
+removing duplicate service variants within each category.
+
+**Tradeoff:** A service can appear twice when it has offers in both
+categories. Those entries convey different viewing options.
+
+Issue #62 covers both the category changes and duplicate-service grouping.
+The exact identity mapping and treatment of channel-only availability
+remain open design details; do not treat earlier recommendations about
+them as accepted decisions.
 
 ## US availability — 2026-09-07
 
@@ -92,6 +149,10 @@ availability on other pages, recommendation changes, or Watch together
 changes in this issue. Further product uses need separate issues.
 
 ## Implementation
+
+This section describes the implementation delivered for issue #7, which
+still includes rental and purchase offers and separates free and
+ad-supported offers. Issue #62 tracks applying the two-category display.
 
 `src/server/catalog.ts` fetches and validates the US watch-provider response.
 `db/007-title-availability.sql` adds a separate cache keyed by title and

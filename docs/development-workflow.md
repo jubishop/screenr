@@ -95,13 +95,20 @@ bin/qmd-index
 Git hooks do not run on every file save. Run this command after uncommitted
 knowledge edits when current search results matter. It waits for the requested
 refresh and returns its success or failure. Search warns when its recorded
-inputs are stale or unknown.
+inputs are stale or unknown; it does not start a refresh.
 
 One worker serves each checkout. It hashes indexed Markdown and configuration,
 including optional home notes, to skip unchanged inputs. Bursts of requests
 share the worker. If inputs change during indexing, the worker runs another
 pass. QMD itself handles incremental index and embedding updates. A failed
 update does not start embedding. Git does not wait for indexing to finish.
+
+Freshness includes the QMD release version, including prerelease and build
+metadata. It excludes the optional Git commit suffix in `qmd --version`, which
+can identify an unrelated surrounding repository. QMD subprocesses do not
+inherit Git repository selectors from hooks. Diagnostics retain the full
+reported version. After replacing a custom QMD build without changing its
+release version, run `bin/qmd-index --force`.
 
 Use `bin/qmd-index --force` to rebuild even when recorded inputs match.
 Inspect `.cache/qmd/index.log` after failure. Logs rotate at approximately
