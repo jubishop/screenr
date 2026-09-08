@@ -113,6 +113,12 @@ try {
   const { token } = await createInvitation(null, 12);
   await mkdir(".cache", { recursive: true });
   await writeFile(".cache/browser-invite.txt", token, { mode: 0o600 });
+  const profileInvitation = await createInvitation(null, 2);
+  await writeFile(
+    ".cache/browser-profile-invite.txt",
+    profileInvitation.token,
+    { mode: 0o600 },
+  );
   const availabilityInvitation = await createInvitation(null, 1);
   await writeFile(
     ".cache/browser-availability-invite.txt",
@@ -163,9 +169,7 @@ try {
   await writeFile(
     ".cache/browser-friends-invite.txt",
     friendsInvitation.token,
-    {
-      mode: 0o600,
-    },
+    { mode: 0o600 },
   );
   const { startGoogleProvider } =
     await import("../tests/browser/google-provider");

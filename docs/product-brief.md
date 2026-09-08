@@ -354,6 +354,30 @@ be skipped. The optional friend request to the inviter is superseded by the
 **Why:** The user accepted keeping setup short so people can get started
 quickly.
 
+### Display name editing — 2026-09-07
+
+**Decision:** Members can change their display name on their own profile
+page (`/people/<username>`). An owner-only **Edit display name** button beside
+the name opens an inline field with **Save** and **Cancel**. Start the field
+with the current name; Cancel discards the edit without saving.
+The current display name appears throughout Screenr, including on older
+posts and comments. Do not show a name-change history. This change only
+supports editing the display name; it leaves the @username and profile link
+unchanged. Username editing remains a possible future feature. Do not add
+a permanent-username warning or make permanent usernames a product rule.
+Implementation is tracked in [issue #38](https://github.com/jubishop/screenr/issues/38).
+
+**Why:** The user wants to edit their display name from their profile while
+keeping the option to support username changes later. Inline editing keeps
+the control beside the name and avoids a separate settings page.
+
+**Tradeoff:** Older contributions show the current display name instead of
+preserving the name used when they were created.
+
+This supersedes the earlier account-page placement and permanent-username
+warning requested in issue #38. Signup already lets members choose both
+names and requires no change for this issue.
+
 ### Automatic inviter friendship — 2026-09-07
 
 **Decision:** When a new member completes signup through a member's invitation,

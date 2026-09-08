@@ -8,6 +8,7 @@ import {
   setReaction,
   changeRelationship,
   updateTitleActivity,
+  updateDisplayName,
 } from "../../../../server/social";
 import {
   completeSignup,
@@ -71,17 +72,20 @@ async function handle(
       );
       return json({ ok: true });
     }
-    await member(userId);
+    const user = await member(userId);
     if (request.method === "GET") {
       const url = new URL(request.url);
       if (action === "screen")
-        return json(
-          await loadScreen(userId, url.searchParams.get("path") ?? "/"),
-        );
+        return json({
+          ...(await loadScreen(userId, url.searchParams.get("path") ?? "/")),
+          user,
+        });
       if (action === "search")
         return json(await searchTitles(url.searchParams.get("q") ?? ""));
     } else {
       const data = await body(request);
+      if (action === "display-name")
+        return json(await updateDisplayName(userId, data.name));
       if (action === "invite")
         return json(await createInvitation(userId, data.limit ?? 1));
       if (action === "revoke-invite")
