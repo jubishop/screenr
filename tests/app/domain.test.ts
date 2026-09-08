@@ -57,6 +57,164 @@ async function person(name: string) {
   await completeSignup(id, name, name);
   return id;
 }
+async function sessionCookie(userId: string) {
+  const email = (
+    await db.query('SELECT email FROM "user" WHERE id=$1', [userId])
+  ).rows[0].email;
+  let code = "";
+  const auth = createAuth({
+    rateLimit: false,
+    sendCode: async ({ otp }) => {
+      code = otp;
+    },
+  });
+  const post = (path: string, body: unknown) =>
+    auth.handler(
+      new Request(`http://localhost:3000/api/auth/${path}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Origin: "http://localhost:3000",
+        },
+        body: JSON.stringify(body),
+      }),
+    );
+  assert.equal(
+    (await post("email-otp/send-verification-otp", { email, type: "sign-in" }))
+      .status,
+    200,
+  );
+  const response = await post("sign-in/email-otp", { email, otp: code });
+  assert.equal(response.status, 200);
+  return response.headers
+    .getSetCookie()
+    .map((value) => value.split(";")[0])
+    .join("; ");
+}
+async function rename(
+  cookie: string,
+  data: unknown,
+  origin = "http://localhost:3000",
+) {
+  const { POST } = await import("../../src/app/api/screenr/[action]/route");
+  return POST(
+    new Request("http://localhost:3000/api/screenr/display-name", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Origin: origin,
+        Cookie: cookie,
+      },
+      body: JSON.stringify(data),
+    }),
+    { params: Promise.resolve({ action: "display-name" }) },
+  );
+}
+
+test("display name edits update existing social views without changing identity", async () => {
+  const ben = await person("ben");
+  const invite = await createInvitation(ben, 2);
+  const alice = await pending("alice", invite.token);
+  await completeSignup(alice, "Alice", "alice");
+  assert.ok((await profileFor(alice, "ben")).accepted_at);
+  await db.query(
+    "INSERT INTO title(id,kind,tmdb_id,name) VALUES('movie:1','movie',1,'Test Movie') ON CONFLICT DO NOTHING",
+  );
+  const item = await updateTitleActivity(alice, "movie:1", "recommended", true);
+  const comment = await addComment(alice, item, "An existing reply", false);
+  await updateTitleActivity(alice, "movie:1", "want_to_watch", true);
+  await updateTitleActivity(ben, "movie:1", "want_to_watch", true);
+  const response = await rename(await sessionCookie(alice), {
+    name: "  Renée Movie Fan 🎬  ",
+  });
+  assert.equal(response.status, 200, await response.clone().text());
+  assert.deepEqual(await response.json(), {
+    user_id: alice,
+    username: "alice",
+    display_name: "Renée Movie Fan 🎬",
+  });
+  const profile = await profileFor(ben, "alice");
+  assert.equal(profile.user_id, alice);
+  assert.equal(profile.display_name, "Renée Movie Fan 🎬");
+  assert.ok(profile.accepted_at);
+  for (const path of ["/", "/titles/movie/1", "/people/alice"]) {
+    const data = await loadScreen(ben, path);
+    assert.ok("conversations" in data);
+    assert.ok(data.conversations);
+    const existing = data.conversations.find((entry) => entry.id === item)!;
+    assert.equal(existing.owner_id, alice);
+    assert.equal(existing.display_name, "Renée Movie Fan 🎬");
+    assert.equal(
+      existing.comments.find((entry) => entry.id === comment)?.display_name,
+      "Renée Movie Fan 🎬",
+    );
+  }
+  const friends = await loadScreen(ben, "/people");
+  assert.ok(friends.kind === "people");
+  assert.equal(friends.connections[0].display_name, "Renée Movie Fan 🎬");
+  assert.equal(
+    (await listInvitations(ben))[0].joined[0].display_name,
+    "Renée Movie Fan 🎬",
+  );
+  const together = await loadScreen(ben, "/watch-together?with=alice");
+  assert.ok(together.kind === "watch-together");
+  assert.equal(
+    together.participants.find((p) => p.user_id === alice)?.display_name,
+    "Renée Movie Fan 🎬",
+  );
+  await sessionCookie(alice);
+  assert.equal(
+    (await profileFor(alice, "alice")).display_name,
+    "Renée Movie Fan 🎬",
+  );
+});
+
+test("display name edits validate input and allow duplicate names", async () => {
+  const alice = await person("alice"),
+    ben = await person("ben");
+  const cookie = await sessionCookie(alice);
+  for (const name of ["", " \n ", "x".repeat(61), null, 42, {}]) {
+    const response = await rename(cookie, { name });
+    assert.equal(response.status, 400);
+    assert.match(
+      (await response.json()).error,
+      /Display name must contain 1–60 characters/,
+    );
+    assert.equal((await profileFor(alice, "alice")).display_name, "alice");
+  }
+  for (const name of ["x", "x".repeat(60), " ben "]) {
+    assert.equal((await rename(cookie, { name })).status, 200);
+    assert.equal((await profileFor(alice, "alice")).display_name, name.trim());
+  }
+  assert.equal((await profileFor(alice, "ben")).display_name, "ben");
+  assert.notEqual(alice, ben);
+});
+
+test("display name edits require membership and only update the signed-in member", async () => {
+  const alice = await person("alice"),
+    ben = await person("ben");
+  const cookie = await sessionCookie(alice);
+  assert.equal((await rename("", { name: "Changed" })).status, 401);
+  assert.equal(
+    (await rename(cookie, { name: "Changed" }, "https://other.example")).status,
+    403,
+  );
+  const invite = await createInvitation(null);
+  const incomplete = await pending("incomplete", invite.token);
+  assert.equal(
+    (await rename(await sessionCookie(incomplete), { name: "Changed" })).status,
+    403,
+  );
+  const response = await rename(cookie, {
+    name: "Changed",
+    user_id: ben,
+    target: ben,
+    username: "stolen",
+  });
+  assert.equal(response.status, 200);
+  assert.equal((await profileFor(alice, "alice")).display_name, "Changed");
+  assert.equal((await profileFor(alice, "ben")).display_name, "ben");
+});
 async function accountScreen(userId: string) {
   const screen = await loadScreen(userId, "/account");
   assert.ok(screen.kind === "account");

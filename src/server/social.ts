@@ -13,6 +13,20 @@ export async function member(userId: string): Promise<Person> {
   if (!profile) throw new AppError("Complete your profile first.", 403);
   return profile;
 }
+export async function updateDisplayName(
+  userId: string,
+  name: unknown,
+): Promise<Person> {
+  const displayName = text(name, "Display name", 60);
+  return transaction(async (client) => {
+    const { rows } = await client.query<Person>(
+      "UPDATE profile SET display_name=$2 WHERE user_id=$1 RETURNING user_id,username,display_name",
+      [userId, displayName],
+    );
+    if (!rows[0]) throw new AppError("Complete your profile first.", 403);
+    return rows[0];
+  });
+}
 export async function profileFor(viewer: string, username: string) {
   const profile = (
     await db.query<
