@@ -460,7 +460,11 @@ hr {
   background: var(--white);
 }
 .availability-group li span {
+  min-width: 0;
   overflow-wrap: anywhere;
+}
+.availability-route {
+  display: block;
 }
 .availability-group img {
   flex: none;

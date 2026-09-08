@@ -1,18 +1,6 @@
 import Image from "next/image";
-import {
-  watchCategories,
-  type WatchAvailability,
-  type WatchCategory,
-} from "../shared";
+import type { WatchAvailability } from "../shared";
 import { dateLabel, useInteractive } from "./client";
-
-const labels: Record<WatchCategory, string> = {
-  flatrate: "Subscription",
-  free: "Free",
-  ads: "With ads",
-  rent: "Rent",
-  buy: "Buy",
-};
 
 export function TitleAvailability({
   availability,
@@ -22,9 +10,7 @@ export function TitleAvailability({
   kind: "movie" | "tv";
 }) {
   const interactive = useInteractive();
-  const categories = watchCategories.filter(
-    (category) => availability.providers[category]?.length,
-  );
+  const { sections } = availability;
   return (
     <section
       className="title-availability"
@@ -43,24 +29,24 @@ export function TitleAvailability({
           {availability.status === "stale" && (
             <p className="muted">Could not refresh viewing options.</p>
           )}
-          {categories.length === 0 ? (
+          {sections.length === 0 ? (
             <p className="muted">
               {availability.status === "stale"
-                ? "No viewing options were listed when last checked."
-                : "No viewing options are listed for the US."}
+                ? "No subscription or free options were listed when last checked."
+                : "No subscription or free options are listed for the US."}
             </p>
           ) : (
-            categories.map((category) => (
+            sections.map((section) => (
               <div
                 className="availability-group"
                 role="group"
-                aria-labelledby={`availability-${category}`}
-                key={category}
+                aria-labelledby={`availability-${section.key}`}
+                key={section.key}
               >
-                <h3 id={`availability-${category}`}>{labels[category]}</h3>
+                <h3 id={`availability-${section.key}`}>{section.label}</h3>
                 <ul>
-                  {availability.providers[category]!.map((provider) => (
-                    <li key={provider.provider_id}>
+                  {section.services.map((provider) => (
+                    <li key={provider.id}>
                       {provider.logo_path && (
                         <Image
                           src={`https://image.tmdb.org/t/p/w92${provider.logo_path}`}
@@ -70,7 +56,15 @@ export function TitleAvailability({
                           unoptimized
                         />
                       )}
-                      <span>{provider.provider_name}</span>
+                      <span>
+                        {provider.name}
+                        {provider.route_note && (
+                          <small className="availability-route muted">
+                            {" "}
+                            {provider.route_note}
+                          </small>
+                        )}
+                      </span>
                     </li>
                   ))}
                 </ul>

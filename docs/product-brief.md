@@ -852,7 +852,10 @@ for [issue #7](https://github.com/jubishop/screenr/issues/7). The
 defines Subs and Free as the two sections, combines both free offer types,
 and excludes rental and purchase offers. The
 [service grouping decision](title-availability.md#group-services-within-each-viewing-category--2026-09-08)
-deduplicates services within each section. Implementation is tracked in
+deduplicates services within each section. The
+[current implementation](title-availability.md#current-implementation) uses
+a complete US provider registry and section-specific reseller notes, with
+no cache migration. Implementation is tracked in
 [issue #62](https://github.com/jubishop/screenr/issues/62).
 
 ### Non-commercial scope — 2026-09-05
