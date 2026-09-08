@@ -80,6 +80,9 @@ applies to every feature.
   direct comment with one additional level of nesting and the addressed
   person shown. A direct comment replies to the feed item itself; a nested
   reply appears indented beneath that comment.
+- [Open comment fields on demand](title-feed.md#open-comment-fields-on-demand--2026-09-07)
+  through Comment, Reply, or Start a conversation. Use a consistent text-entry
+  form for new comments and replies across feeds.
 - Post and review authors can remove comments from conversations they host.
   Replies remain under a Comment removed placeholder when their parent
   comment is removed.

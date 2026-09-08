@@ -1,6 +1,7 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api, useInteractive } from "./client";
+import { CommentComposer } from "./comment-composer";
 
 export function TitleCommentComposer({
   titleId,
@@ -11,12 +12,18 @@ export function TitleCommentComposer({
 }) {
   const interactive = useInteractive();
   const [draft, setDraft] = useState({ body: "", spoiler: false });
+  const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const area = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    if (open) area.current?.focus();
+  }, [open]);
   // Keep drafts through refresh failures, while hiding unavailable content.
   if (!titleId) return null;
   async function post(event: React.SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (busy) return;
     setBusy(true);
     setError("");
     try {
@@ -32,51 +39,50 @@ export function TitleCommentComposer({
     }
   }
   return (
-    <form
+    <section
       className="title-comment-composer"
-      aria-label="New title comment"
-      onSubmit={post}
+      aria-label="Start a conversation"
     >
-      <h2>Start a discussion</h2>
-      <p className="small muted">
-        Post a comment about this title. Only you and your friends can see it.
-      </p>
-      <label htmlFor="title-comment">Your comment</label>
-      <textarea
-        id="title-comment"
-        required
-        maxLength={2000}
+      <button
+        type="button"
+        id="title-comment-action"
+        className="text-button"
         disabled={!interactive}
-        value={draft.body}
-        placeholder="What do you think?"
-        onChange={(e) =>
-          setDraft((current) => ({ ...current, body: e.target.value }))
-        }
-      />
-      <div className="composer-footer">
-        <label className="checkbox">
-          <input
-            type="checkbox"
-            checked={draft.spoiler}
-            disabled={!interactive}
-            onChange={(e) =>
-              setDraft((current) => ({ ...current, spoiler: e.target.checked }))
-            }
-          />
-          Contains spoilers
-        </label>
-        <button
-          className="primary"
-          disabled={busy || !interactive || !draft.body.trim()}
+        aria-expanded={open}
+        aria-controls="title-comment-form"
+        onClick={() => {
+          setOpen(true);
+          if (open) area.current?.focus();
+        }}
+      >
+        Start a conversation
+      </button>
+      {open && (
+        <CommentComposer
+          id="title-comment"
+          inputRef={area}
+          interactive={interactive}
+          label="New title comment"
+          fieldLabel="Your comment"
+          submitLabel="Post comment"
+          draft={draft}
+          onChange={(change) =>
+            setDraft((current) => ({ ...current, ...change }))
+          }
+          onSubmit={post}
+          onCancel={() => {
+            setOpen(false);
+            document.getElementById("title-comment-action")?.focus();
+          }}
+          busy={busy}
+          error={error}
         >
-          {busy ? "Posting…" : "Post comment"}
-        </button>
-      </div>
-      {error && (
-        <p className="error" role="alert">
-          {error}
-        </p>
+          <p className="small muted">
+            Post a comment about this title. Only you and your friends can see
+            it.
+          </p>
+        </CommentComposer>
       )}
-    </form>
+    </section>
   );
 }
