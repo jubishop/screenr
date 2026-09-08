@@ -6,8 +6,7 @@ status: current
 
 Show relevant titles before the viewer searches on Find a title.
 [Issue #39](https://github.com/jubishop/screenr/issues/39) tracks implementation.
-This document records accepted decisions and implementation guidance.
-It does not claim that the feature has been implemented.
+This document records accepted decisions and their implementation.
 All decisions follow Screenr's
 [privacy and known-people boundary](product-brief.md#privacy-and-the-known-people-circle--2026-09-07).
 
@@ -189,9 +188,9 @@ behavior. It describes engineering choices, not additional interview answers.
   direct friend can contribute anonymously only if an eligible two-edge
   connection remains; a blocked person cannot contribute through another
   mutual friend. Removing the final eligible connection removes that signal.
-- Read existing stored title metadata for suggestions. No live TMDB request
-  per tile or new catalog recommendation service is needed. A new table or
-  dependency is not expected; verify this during implementation.
+- Read existing stored title metadata for suggestions. The implementation
+  needs no live TMDB request per tile, new catalog recommendation service,
+  schema migration, or new dependency.
 
 ### Ordering and presentation
 
@@ -219,21 +218,32 @@ behavior. It describes engineering choices, not additional interview answers.
   private social data as current or prevent catalog search. Provide a clear
   retry path and preserve search text.
 
-### Existing implementation entry points
+### Implementation
 
-- `src/server/screens.ts` currently returns only `{ kind: "search" }` for
-  `/search`. Extend this screen with viewer-specific suggestion data from
-  an owned server query; keep domain rules outside the UI.
-- `src/components/screen.tsx` owns the search form and results. It currently
-  retains results when input is cleared, so implement the accepted reset
-  behavior and protect against late search responses.
-- `src/server/social.ts` and `db/004-feed-items.sql` define independent
-  Recommend and Want to watch actions and their active/activation state.
-  `src/server/watch-together.ts` demonstrates an all-results database read
-  with current access and stored title metadata.
-- Extend the PostgreSQL-backed public behavior tests in `tests/app/` and
-  the browser coverage in `tests/browser/`. The issue owns the implementation
-  checklist and required acceptance cases.
+`src/server/title-suggestions.ts` implements the single-snapshot query.
+It separates current direct friends from unique eligible second-degree
+people, then filters and aggregates active actions. It reads names only
+for direct-friend attribution. Its explicit response fields contain public
+title metadata, direct-friend names/usernames, and anonymous second-degree
+counts. Ranking scores, second-degree identities, and connecting paths are
+not returned. `src/server/screens.ts` includes these suggestions for `/search`.
+
+`src/components/title-search.tsx` owns the search input, results, and tiled
+suggestions. `src/components/screen.tsx` keeps it mounted when suggestion
+reads fail, clearing social data through the existing screen refresh logic
+while preserving search text and submitted results. Search requests have a
+timeout and an abort controller. Clearing, submitting a newer query, or
+leaving the page cancels the old request; only the current request can
+publish results or errors. The existing Poster component accepts responsive
+image sizes for the grid.
+
+`tests/app/title-suggestions.test.ts` exercises the public screen loader
+against PostgreSQL, including weighting, unique connections, current choices,
+blocking, preserved discussions, and 205 eligible titles. Browser coverage
+in `tests/browser/title-suggestions.spec.ts` uses the real app and the local
+catalog fixture to check identity privacy in initial page data and API
+responses, tile layout/navigation, search transitions, delayed responses,
+and recovery from network failures. The issue owns the acceptance checklist.
 
 ## Scope boundary
 

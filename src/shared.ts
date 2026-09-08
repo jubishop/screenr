@@ -13,6 +13,12 @@ export type Title = {
   release_date: string;
 };
 export type Trailer = { key: string; name: string };
+export type TitleSuggestion = Title & {
+  recommended_by: Pick<Person, "username" | "display_name">[];
+  wanted_by: Pick<Person, "username" | "display_name">[];
+  second_degree_recommended: number;
+  second_degree_wanted: number;
+};
 export type Conversation = {
   id: string;
   owner_id: string;
