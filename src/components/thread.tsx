@@ -152,6 +152,7 @@ export function ThreadView({
           {nested ? "Your nested reply" : "Add your reply"}
         </label>
         <textarea
+          rows={3}
           disabled={!interactive}
           ref={nested ? area : undefined}
           id={id}
@@ -209,14 +210,6 @@ export function ThreadView({
                 day: "numeric",
               })}
             </time>
-            <Link
-              className="small muted"
-              aria-label="Link to reply"
-              href={`/titles/${currentSnapshot.conversation.title_id.replace(":", "/")}?item=${currentSnapshot.conversation.id}&reply=${comment.id}`}
-              prefetch={false}
-            >
-              ↗
-            </Link>
           </div>
         )}
         {!comment.unavailable && comment.addressed_username && (
@@ -295,66 +288,71 @@ export function ThreadView({
   }
   return (
     <section aria-label="Conversation" className="thread">
-      <div className="section-heading">
-        <h2>Conversation</h2>
-        <span className="muted">{comments.filter(live).length} replies</span>
-      </div>
-      {start > 0 && (
-        <button
-          className="text-button"
-          onClick={() => preservePosition(() => setExpanded(true))}
-        >
-          Show earlier comments
-          {direct.slice(0, start).filter(live).length > 0
-            ? ` (${direct.slice(0, start).filter(live).length})`
-            : ""}
-        </button>
+      {comments.length > 0 && (
+        <>
+          <div className="section-heading">
+            <h2>Conversation</h2>
+            <span className="muted">
+              {comments.filter(live).length} replies
+            </span>
+          </div>
+          {start > 0 && (
+            <button
+              className="text-button"
+              onClick={() => preservePosition(() => setExpanded(true))}
+            >
+              Show earlier comments
+              {direct.slice(0, start).filter(live).length > 0
+                ? ` (${direct.slice(0, start).filter(live).length})`
+                : ""}
+            </button>
+          )}
+          <div className="replies">
+            {visible.map((parent) => {
+              const replies = children.get(parent.id) ?? [];
+              const open =
+                (groups.get(parent.id) ?? targetRoot === parent.id) ||
+                replies.some((c) => c.id === replyTo);
+              return (
+                <div className="comment-group" key={parent.id}>
+                  {renderComment(parent)}
+                  {replyTo === parent.id && composer(parent.id)}
+                  {replies.length > 0 && (
+                    <>
+                      <button
+                        className="text-button reply-expansion"
+                        aria-expanded={open}
+                        aria-controls={`replies-${parent.id}`}
+                        onClick={() =>
+                          preservePosition(() => {
+                            setGroups((current) =>
+                              new Map(current).set(parent.id, !open),
+                            );
+                            if (open && replies.some((c) => c.id === replyTo))
+                              setReplyTo(null);
+                          })
+                        }
+                      >
+                        View {replies.length}{" "}
+                        {replies.length === 1 ? "reply" : "replies"}
+                      </button>
+                      <div id={`replies-${parent.id}`} className="nested">
+                        {open &&
+                          replies.map((reply) => (
+                            <div key={reply.id}>
+                              {renderComment(reply)}
+                              {replyTo === reply.id && composer(reply.id)}
+                            </div>
+                          ))}
+                      </div>
+                    </>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </>
       )}
-      {visible.length === 0 && <p className="empty">Be the first to reply.</p>}
-      <div className="replies">
-        {visible.map((parent) => {
-          const replies = children.get(parent.id) ?? [];
-          const open =
-            (groups.get(parent.id) ?? targetRoot === parent.id) ||
-            replies.some((c) => c.id === replyTo);
-          return (
-            <div className="comment-group" key={parent.id}>
-              {renderComment(parent)}
-              {replyTo === parent.id && composer(parent.id)}
-              {replies.length > 0 && (
-                <>
-                  <button
-                    className="text-button reply-expansion"
-                    aria-expanded={open}
-                    aria-controls={`replies-${parent.id}`}
-                    onClick={() =>
-                      preservePosition(() => {
-                        setGroups((current) =>
-                          new Map(current).set(parent.id, !open),
-                        );
-                        if (open && replies.some((c) => c.id === replyTo))
-                          setReplyTo(null);
-                      })
-                    }
-                  >
-                    View {replies.length}{" "}
-                    {replies.length === 1 ? "reply" : "replies"}
-                  </button>
-                  <div id={`replies-${parent.id}`} className="nested">
-                    {open &&
-                      replies.map((reply) => (
-                        <div key={reply.id}>
-                          {renderComment(reply)}
-                          {replyTo === reply.id && composer(reply.id)}
-                        </div>
-                      ))}
-                  </div>
-                </>
-              )}
-            </div>
-          );
-        })}
-      </div>
       {replyTo &&
         !visible.some(
           (c) =>

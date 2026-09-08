@@ -62,6 +62,9 @@ both memory and design documents.
   for follow-up issue #8.
 - [Watch together](watch-together.md): accepted shared-choice behavior and
   implementation for issue #26.
+- [Find a title suggestions](title-suggestions.md): accepted discovery
+  decisions, anonymous second-degree counts, and 3:1 social weighting for
+  issue #39.
 - [Application stack](application-stack.md): selected core stack, alternatives,
   tradeoffs, and proposed implementation approach.
 - [Development workflow](development-workflow.md): local setup, Git hooks,

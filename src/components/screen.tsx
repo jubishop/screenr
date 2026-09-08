@@ -2,17 +2,15 @@
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ScreenData } from "../server/screens";
-import type { Person, Title } from "../shared";
+import type { Person } from "../shared";
 import { api, authClient, signOut, useInteractive, dateLabel } from "./client";
 import { FeedView } from "./feed";
 import { TitleCommentComposer } from "./title-comment";
 import { Poster } from "./poster";
 import { InvitationLink } from "./invitation-link";
 import { WatchTogether } from "./watch-together";
+import { TitleSearch } from "./title-search";
 
-function titleURL(id: string) {
-  return `/titles/${id.replace(":", "/")}`;
-}
 export function Screen({
   user,
   path,
@@ -33,9 +31,8 @@ export function Screen({
     [busy, setBusy] = useState(false);
   const [googleError, setGoogleError] = useState(initialGoogleError),
     [connectingGoogle, setConnectingGoogle] = useState(false);
-  const [query, setQuery] = useState(""),
-    [results, setResults] = useState<Title[] | null>(null),
-    [inviteLimit, setInviteLimit] = useState(1);
+  const [query, setQuery] = useState("");
+  const [inviteLimit, setInviteLimit] = useState(1);
   const pending = useRef<AbortController | null>(null);
   const refresh = useCallback(async () => {
     pending.current?.abort();
@@ -273,73 +270,10 @@ export function Screen({
             </div>
           </>
         )}
-        {data?.kind === "search" && (
-          <>
-            <div className="page-heading">
-              <p className="eyebrow">FIND SOMETHING GOOD</p>
-              <h1>What’s on your mind?</h1>
-              <p>Search movies and shows, then see what your friends think.</p>
-            </div>
-            <form
-              className="search-form"
-              role="search"
-              onSubmit={async (e) => {
-                e.preventDefault();
-                setBusy(true);
-                setError("");
-                try {
-                  setResults(
-                    await api<Title[]>(`search?q=${encodeURIComponent(query)}`),
-                  );
-                } catch (error) {
-                  setError((error as Error).message);
-                } finally {
-                  setBusy(false);
-                }
-              }}
-            >
-              <label className="sr-only" htmlFor="title-search">
-                Movie or show title
-              </label>
-              <input
-                disabled={!interactive}
-                id="title-search"
-                placeholder="Search movies and TV shows"
-                value={query}
-                minLength={2}
-                maxLength={120}
-                required
-                onChange={(e) => setQuery(e.target.value)}
-              />
-              <button className="primary" disabled={busy || !interactive}>
-                {busy ? "Searching…" : "Search"}
-              </button>
-            </form>
-            <div className="search-results">
-              {results?.map((t) => (
-                <Link
-                  className="search-result"
-                  key={t.id}
-                  href={titleURL(t.id)}
-                  prefetch={false}
-                >
-                  <Poster path={t.poster_path} name={t.name} />
-                  <div>
-                    <h2>{t.name}</h2>
-                    <p className="muted">
-                      {t.kind === "movie" ? "Movie" : "TV show"} ·{" "}
-                      {t.release_date.slice(0, 4)}
-                    </p>
-                    <p className="small overview">{t.overview.slice(0, 150)}</p>
-                  </div>
-                  <span aria-hidden="true">↗</span>
-                </Link>
-              ))}
-              {results?.length === 0 && (
-                <p className="empty">No matches. Try a different title.</p>
-              )}
-            </div>
-          </>
+        {path.split("?")[0] === "/search" && (
+          <TitleSearch
+            suggestions={data?.kind === "search" ? data.suggestions : null}
+          />
         )}
         {data?.kind === "people" && (
           <>
@@ -576,8 +510,9 @@ export function Screen({
               <p className="eyebrow">MAKE ROOM FOR FRIENDS</p>
               <h1>Good things are shared.</h1>
               <p>
-                Invite someone to Screenr. They can join for 30 days, then send
-                a friend request.
+                Invite someone to Screenr. Your link works for 30 days. When
+                someone completes signup through it, you automatically become
+                friends.
               </p>
             </div>
             <form

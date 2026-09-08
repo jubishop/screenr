@@ -5,6 +5,9 @@ status: current
 # Product brief
 
 Screenr is a social app for TV and movies, centered on people you know.
+Privacy and a close circle of known people are core product constraints.
+The [privacy boundary](#privacy-and-the-known-people-circle--2026-09-07)
+applies to every feature.
 
 ## Confirmed requirements
 
@@ -16,11 +19,12 @@ Screenr is a social app for TV and movies, centered on people you know.
   Each member can invite people they know.
 - Screenr is a non-commercial experiment for now, with no ads or paid features.
 - After sign-in, setup requires only a display name and username. A profile
-  photo, sending a friend request to the inviter, and adding titles are optional.
+  photo and adding titles are optional. Completing signup automatically makes
+  the new member and the invitation creator accepted friends.
 - Support Google sign-in and one-time email codes, with invitation access
   required for both methods and no separate Screenr password.
-- Friendships require a request and acceptance. One-way following is not
-  supported.
+- Friendships require a request and acceptance, except for the automatic
+  friendship created by invited signup. One-way following is not supported.
 - People can find friends through shareable profile links, exact-username
   search, accepted friend lists on profiles, and a friend-request action on
   commenters in mutual friends' threads.
@@ -28,7 +32,10 @@ Screenr is a social app for TV and movies, centered on people you know.
   display name, username, photo, friend-request button, and the person's
   accepted friends, subject to blocking.
 - Watch activity, ratings, reviews, and recommendations are visible to their
-  owner and the owner's current accepted friends.
+  owner and the owner's current accepted friends. Title suggestions can
+  use only the explicitly allowed
+  [anonymous second-degree signals](title-suggestions.md#anonymous-friends-of-friends-explanations--2026-09-07)
+  outside that audience.
 - Users can see what their friends are watching or recommend.
 - Each movie or show has a standalone page with one unified feed below
   the title details. The [title-feed decisions](title-feed.md) define its
@@ -140,11 +147,46 @@ This supersedes the initial proposal for optional global discovery and
 global visibility controls, including the later suggestion to defer them.
 They are not planned future features.
 
+### Privacy and the known-people circle — 2026-09-07
+
+**Decision:** Screenr is oriented around privacy and a close circle of
+people the user knows. Knowing someone through a mutual friend does not
+grant access to that person's activity or make them a discovery result.
+Friends of friends appear as people and interact with the viewer only in
+comments on content owned by a friend they share, subject to the existing
+audience and blocking rules. Their presence in that discussion does not
+expose their own recommendations, watch choices, reviews, posts, or threads.
+
+Do not surface identifiable second-degree people or attribute activity to
+them elsewhere merely because a mutual friendship exists. Do not use
+shared participation, counts, rankings, previews, or links to bypass the
+content audience. Existing deliberate connection routes, such as exact
+username search and shared profile links, expose only the already agreed
+minimal profile; they do not grant access to activity.
+
+**Explicit limited exception:** Find a title can use the
+[anonymous second-degree counts and ranking signals](title-suggestions.md)
+agreed for issue #39. These signals cannot identify the people, show their
+mutual-friend connections, or link to their activity. This exception does
+not permit named second-degree discovery or establish an exception for
+other features. Aggregation is a limited disclosure, not evidence that
+private activity is public.
+
+**Why:** The user explicitly emphasized privacy and known personal circles,
+and limited encounters with friends of friends to comments on a shared
+friend's content. The user retained anonymous suggestion signals and
+selected a 3:1 weighting after this boundary was raised.
+
+**Tradeoff:** Broader social discovery and named second-degree suggestion
+explanations are excluded. Anonymous suggestion signals are the specific
+exception; do not infer further audience expansion from them.
+
 ### Mutual friendships — 2026-09-04
 
 **Decision:** A friendship exists only after one user requests it and the
-other accepts. Pending requests do not establish friendships. Screenr does
-not support one-way following.
+other accepts. Pending requests do not establish friendships. The
+[automatic inviter friendship](#automatic-inviter-friendship--2026-09-07)
+is the signup exception. Screenr does not support one-way following.
 
 Friends of friends are reached through two accepted friendships. The direct
 friend and friend-of-friend groups exclude the user themselves.
@@ -238,7 +280,8 @@ installation or offline support remain open.
 **Decision:** Make the first release invite-only, starting with the user
 and a small group of friends. Each member can invite people they know.
 Invitations provide access to join the app; friendships still require the
-existing request-and-acceptance process.
+existing request-and-acceptance process except for the
+[automatic inviter friendship](#automatic-inviter-friendship--2026-09-07).
 
 **Why:** The user accepted starting with overlapping friend circles to test
 the core experience.
@@ -248,7 +291,9 @@ the core experience.
 **Decision:** Support reusable invitation links so multiple people can join
 Screenr through the same link shared in a group chat. A single-use-only
 invitation model does not meet this requirement. Joining still follows the
-existing sign-in rules and does not automatically create friendships.
+existing sign-in rules. The later
+[automatic inviter friendship decision](#automatic-inviter-friendship--2026-09-07)
+replaces the original rule that joining created no friendships.
 
 **Why:** The user wants to share one invitation in a group chat and have
 everyone who follows it be able to use it.
@@ -275,7 +320,8 @@ while giving the creator control over each link's use and visibility into
 its remaining capacity.
 
 The user accepted showing who joined so creators can track group
-invitations and find those people to send friend requests afterward.
+invitations. The original reason also included finding those people to send
+friend requests afterward; invited signup now creates that friendship.
 
 The user specified the default, maximum, and signup-based counting rule.
 The reason for choosing the exact values 1 and 12 was not stated.
@@ -296,11 +342,28 @@ join while preventing old invitation links from remaining active indefinitely.
 ### First-time setup — 2026-09-04
 
 **Decision:** After sign-in, require only a display name and username before
-entering the app. Adding a profile photo, sending a friend request to the
-inviter, and adding a few titles are optional and can be skipped.
+entering the app. Adding a profile photo and a few titles are optional and can
+be skipped. The optional friend request to the inviter is superseded by the
+[automatic inviter friendship](#automatic-inviter-friendship--2026-09-07).
 
 **Why:** The user accepted keeping setup short so people can get started
 quickly.
+
+### Automatic inviter friendship — 2026-09-07
+
+**Decision:** When a new member completes signup through a member's invitation,
+automatically create an accepted friendship with that invitation's creator.
+Neither person needs to send or accept a separate request. This applies to
+each completed signup through a reusable link. Administrative invitations
+without a creator cannot add an inviter friendship.
+
+**Why:** In [issue #40](https://github.com/jubishop/screenr/issues/40), the user
+requested that each invited new member automatically have their first friend.
+
+This supersedes the earlier invitation and setup rules that required an
+optional, separate request to the inviter. Other friendships still require
+request and acceptance. Existing members signing in or revisiting setup do
+not create or restore friendships; normal unfriending and blocking still apply.
 
 ### Sign-in methods — 2026-09-05
 
@@ -382,6 +445,13 @@ writing a review. Ratings do not automatically become recommendations.
 
 **Why:** The user accepted this approach so that recommending a title is a
 deliberate choice, independent of a rating or written opinion.
+
+### Find a title suggestion scope — 2026-09-07
+
+The [Find a title suggestion decisions](title-suggestions.md) define the
+initial actions, recommendation priority, lower weight for friends of
+friends, and explanations beneath title images for issue #39. Second-degree
+explanations use anonymous counts, with a 3:1 direct-friend weighting.
 
 ### Friends recommend view — 2026-09-04
 
@@ -609,6 +679,11 @@ update above adds accepted friend lists to this profile information.
 Watch activity, ratings, reviews, and recommendations are visible to their
 owner and the owner's current accepted friends. Viewing a profile or having
 a pending friend request does not grant access to that content.
+
+**Clarified — 2026-09-07:** The
+[anonymous suggestion-count decision](title-suggestions.md#anonymous-friends-of-friends-explanations--2026-09-07)
+defines a limited exception for aggregate second-degree activity in Find a
+title. It does not expand profile or activity-entry access.
 
 **Why:** The user accepted a minimal profile for finding friends while
 keeping viewing activity and opinions within accepted friendships.

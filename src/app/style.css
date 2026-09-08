@@ -436,6 +436,48 @@ hr {
 .search-results {
   display: grid;
 }
+.suggestion-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 28px 20px;
+}
+.suggestion-tile {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.suggestion-tile:hover {
+  text-decoration: none;
+}
+.suggestion-tile:hover h3 {
+  text-decoration: underline;
+}
+.suggestion-tile .poster {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 2 / 3;
+  margin-bottom: 12px;
+}
+.suggestion-tile h3 {
+  font-size: 19px;
+  line-height: 1.3;
+  margin-bottom: 7px;
+}
+.suggestion-reasons {
+  font-size: 13px;
+  color: var(--muted);
+}
+.suggestion-reasons p {
+  margin-bottom: 6px;
+}
+@media (max-width: 560px) {
+  .suggestion-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 24px 16px;
+  }
+  .suggestion-tile h3 {
+    font-size: 17px;
+  }
+}
 .watch-together-count {
   margin-top: 18px;
 }
@@ -590,6 +632,14 @@ hr {
   margin-top: 24px;
   padding-top: 20px;
   border-top: 1px solid var(--line);
+}
+.composer:first-child {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}
+.composer textarea {
+  min-height: 0;
 }
 .title-comment-composer {
   background: var(--white);
