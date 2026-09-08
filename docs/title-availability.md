@@ -93,9 +93,42 @@ removing duplicate service variants within each category.
 categories. Those entries convey different viewing options.
 
 Issue #62 covers both the category changes and duplicate-service grouping.
-The exact identity mapping and treatment of channel-only availability
-remain open design details; do not treat earlier recommendations about
-them as accepted decisions.
+Use the service identity boundary below when preparing the provider map.
+
+## Service identity boundary — 2026-09-08
+
+**Decision:** Merge plans and reseller versions of the same service. Keep
+distinct products separate even when they share a brand or owner. YouTube
+and YouTube TV remain separate entries, as do AMC and AMC+.
+
+**Why:** The user confirmed that YouTube and YouTube TV are very different
+products. A shared brand does not make their viewing options equivalent.
+
+**Tradeoff:** Some related names remain in the list because they identify
+different services. Reducing the entry count must not erase that distinction.
+
+The provider map must follow this boundary across the full supported US
+catalog. Its exact records are implementation work, not permission to merge
+products solely because their names are similar.
+
+## Channel-only availability notes — 2026-09-08
+
+**Decision:** When only a reseller's channel is listed for a service, keep
+one entry under the service's name and add a small route note, such as
+Apple TV with "via Amazon". Omit that note when the standalone service is
+also listed in the same section for the title.
+
+Apply the rule independently within Subs and Free. A standalone offer
+under Free does not remove a required route note under Subs. If several
+resellers are listed without a standalone offer, combine their distinct
+names in the same note rather than adding service entries. Only mention
+routes actually reported for that title and section.
+
+**Why:** The user accepted retaining useful access information without
+adding duplicate service entries.
+
+**Tradeoff:** Channel-only entries need a little more text. A grouped name
+alone must not imply that a standalone offer was reported.
 
 ## US availability — 2026-09-07
 
