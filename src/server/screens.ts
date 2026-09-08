@@ -3,6 +3,7 @@ import { getTitle, getTitleTrailer } from "./catalog";
 import { listInvitations } from "./invitations";
 import { AppError, db } from "./db";
 import { watchTogether } from "./watch-together";
+import { titleSuggestions } from "./title-suggestions";
 
 export async function loadScreen(userId: string, requestedPath: string) {
   const url = new URL(requestedPath, "http://screenr.local");
@@ -12,7 +13,11 @@ export async function loadScreen(userId: string, requestedPath: string) {
       kind: "feed" as const,
       conversations: await conversations(userId),
     };
-  if (path === "/search") return { kind: "search" as const };
+  if (path === "/search")
+    return {
+      kind: "search" as const,
+      suggestions: await titleSuggestions(userId),
+    };
   if (path === "/people")
     return { kind: "people" as const, ...(await people(userId)) };
   if (path === "/watch-together") {

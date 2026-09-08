@@ -75,6 +75,9 @@ to ordinary memory pages. Create these records only when a review needs them.
 
 ## Active memory index
 
+- [Privacy preferences](privacy-preferences.md): preserve privacy and close
+  personal circles when designing discovery and social features; follow
+  the product boundary and its explicit exceptions.
 - [Development preferences](development-preferences.md): reference projects
   for repository conventions, the product decision process, and the
   preference to reduce third-party dependencies.
