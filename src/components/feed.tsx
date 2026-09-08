@@ -58,6 +58,8 @@ export function FeedView({
             accepted.get(c.id)!.activity !== c.activity_at)) ||
         c.comments.some(
           (r) =>
+            !r.removed &&
+            !r.unavailable &&
             r.author_id !== user.user_id &&
             !accepted.get(c.id)?.comments.has(r.id),
         ),
@@ -66,19 +68,31 @@ export function FeedView({
     .flatMap((c) => {
       const previous = accepted.get(c.id);
       if (!previous && c.owner_id !== user.user_id) return [];
-      const comments = c.comments.filter(
+      const acceptedComments = c.comments.filter(
         (r) => previous?.comments.has(r.id) || r.author_id === user.user_id,
+      );
+      // Every accepted child needs its parent, including own replies posted
+      // in another tab. Keep unrelated incoming groups behind New activity.
+      const roots = new Set(
+        acceptedComments
+          .filter((r) => !r.removed && !r.unavailable)
+          .map((r) => r.root_id),
+      );
+      const comments = c.comments.filter(
+        (r) =>
+          roots.has(r.id) ||
+          (!r.removed && !r.unavailable && acceptedComments.includes(r)),
       );
       if (
         !c.active &&
-        !comments.some((r) => !r.removed) &&
+        !comments.some((r) => !r.removed && !r.unavailable) &&
         !(c.item_type === "earlier" && comments.length)
       )
         return [];
       const activation =
         c.owner_id === user.user_id ? c.activity_at : previous!.activity;
       const times = comments
-        .filter((r) => !r.removed)
+        .filter((r) => !r.removed && !r.unavailable)
         .map((r) => Date.parse(r.created_at));
       const visibleTime =
         c.item_type === "earlier"
