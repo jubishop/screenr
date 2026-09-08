@@ -38,6 +38,7 @@ else
     mkdir "$release"
     created=true
     tar -xzf "$archive" -C "$release" --no-same-owner
+    touch "$release/.deployment-pending"
     test "$(cat "$release/REVISION")" = "$revision"
     sh "$release/ops/activate.sh" "$release"
 fi
