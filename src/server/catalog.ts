@@ -1,4 +1,5 @@
 import { AppError, db } from "./db";
+import { watchSections } from "./watch-sources";
 import {
   watchCategories,
   type Title,
@@ -227,15 +228,13 @@ function parseAvailability(data: unknown, id: string): AvailabilityData {
             : null,
       };
     });
-    if (providers.length)
-      result.providers[category] = [
-        ...new Map(providers.map((p) => [p.provider_id, p])).values(),
-      ];
+    if (providers.length) result.providers[category] = providers;
   }
   return result;
 }
 
 function availabilityResult(cached?: CachedAvailability): WatchAvailability {
+  const providers = cached?.availability?.providers ?? {};
   return {
     country: "US",
     status: !cached?.fetched_at
@@ -245,7 +244,8 @@ function availabilityResult(cached?: CachedAvailability): WatchAvailability {
         : "stale",
     checked_at: cached?.fetched_at?.toISOString() ?? null,
     link: cached?.availability?.link ?? null,
-    providers: cached?.availability?.providers ?? {},
+    providers,
+    sections: watchSections(providers),
   };
 }
 

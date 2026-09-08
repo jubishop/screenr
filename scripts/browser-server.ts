@@ -231,9 +231,37 @@ try {
               ? {
                   US: {
                     link: `https://www.themoviedb.org/${kind}/${id}/watch?locale=US`,
-                    flatrate: [provider(101, "Harbor Stream")],
-                    free: [provider(102, "Lantern Free")],
-                    ads: [provider(103, "Coast TV")],
+                    flatrate: [
+                      provider(1796, "Netflix with ads"),
+                      provider(8, "Netflix"),
+                      provider(2243, "Apple TV Amazon Channel"),
+                      provider(350, "Apple TV"),
+                      provider(635, "AMC+ Roku Premium Channel"),
+                      provider(528, "AMC+ Amazon Channel"),
+                      provider(1854, "AMC Plus Apple TV channel"),
+                      provider(990001, "Harbor Stream"),
+                      {
+                        ...provider(
+                          990002,
+                          "An exceptionally long service name with aVeryLongUnbrokenPartForNarrowScreens",
+                        ),
+                        logo_path: null,
+                      },
+                      provider(
+                        2266,
+                        "Qello Concerts by Stingray Amazon Channel",
+                      ),
+                    ],
+                    free: [
+                      provider(990003, "Lantern Free"),
+                      provider(350, "Apple TV"),
+                      provider(235, "YouTube Free"),
+                    ],
+                    ads: [
+                      provider(990004, "Coast TV"),
+                      provider(192, "YouTube"),
+                      provider(235, "YouTube Free"),
+                    ],
                     rent: [provider(104, "Harbor Store")],
                     buy: [provider(104, "Harbor Store")],
                   },

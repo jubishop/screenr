@@ -302,3 +302,329 @@ test("unsafe or absent logos do not remove otherwise usable providers", async ()
   assert.equal(result.providers.rent?.[0].logo_path, null);
   assert.equal(result.providers.buy?.[0].logo_path, null);
 });
+
+// These assertions exercise the public title-screen response, with only TMDB
+// replaced by an HTTP fixture. Raw offers remain available in the cache.
+const offer = (
+  id: number,
+  name = `Reported ${id}`,
+  logo: string | null = null,
+) => ({
+  provider_id: id,
+  provider_name: name,
+  logo_path: logo,
+});
+function reported(providers: Record<string, ReturnType<typeof offer>[]>) {
+  payload = {
+    id: 42,
+    results: { US: { ...providers, link: options().results.US.link } },
+  };
+}
+function displayed(result: Awaited<ReturnType<typeof screen>>) {
+  return result.sections.map((section) => ({
+    label: section.label,
+    services: section.services.map(({ name, route_note }) => [
+      name,
+      route_note,
+    ]),
+  }));
+}
+
+for (const kind of ["movie", "tv"]) {
+  test(`${kind} groups eligible offers into alphabetical Subs and Free services`, async () => {
+    reported({
+      flatrate: [
+        offer(1796),
+        offer(2243),
+        offer(8),
+        offer(350),
+        offer(175),
+        offer(43),
+      ],
+      free: [offer(235), offer(43), offer(235)],
+      ads: [offer(192), offer(188), offer(43)],
+      rent: [offer(15)],
+      buy: [offer(9)],
+    });
+    // Keep the title-specific link valid for either title kind.
+    if (kind === "tv")
+      (payload as ReturnType<typeof options>).results.US.link =
+        options(kind).results.US.link;
+    const result = await screen(kind);
+    assert.deepEqual(displayed(result), [
+      {
+        label: "Subs",
+        services: [
+          ["Apple TV", null],
+          ["Netflix", null],
+          ["Starz", null],
+        ],
+      },
+      {
+        label: "Free",
+        services: [
+          ["Starz", null],
+          ["YouTube", null],
+        ],
+      },
+    ]);
+    const { rows } = await db.query(
+      "SELECT availability FROM title_availability WHERE title_id=$1",
+      [`${kind}:42`],
+    );
+    assert.deepEqual(rows[0].availability.providers, result.providers);
+    assert.equal(rows[0].availability.providers.rent[0].provider_id, 15);
+    assert.equal(rows[0].availability.providers.flatrate.length, 6);
+  });
+}
+
+test("route notes use only eligible reported routes in each section", async () => {
+  reported({
+    flatrate: [
+      offer(2243),
+      offer(635),
+      offer(528),
+      offer(1854),
+      offer(528),
+      offer(197),
+      offer(199),
+      offer(2406),
+      offer(2056),
+    ],
+    free: [offer(350), offer(526), offer(1852)],
+    ads: [offer(1852), offer(151)],
+    rent: [offer(25), offer(417)],
+    buy: [offer(350)],
+  });
+  const result = await screen();
+  assert.deepEqual(displayed(result), [
+    {
+      label: "Subs",
+      services: [
+        ["AMC+", "via Amazon, Apple TV, Roku"],
+        ["Apple TV", "via Amazon"],
+        ["BritBox", "via Amazon"],
+        ["Fandor", "via Amazon"],
+        ["Here TV", "via Amazon"],
+        ["IFC Films Unlimited", "via Apple TV"],
+      ],
+    },
+    {
+      label: "Free",
+      services: [
+        ["AMC+", null],
+        ["Apple TV", null],
+        ["BritBox", null],
+      ],
+    },
+  ]);
+  // The canonical icon is metadata, not a reported standalone offer.
+  assert.ok(
+    result.sections[0].services.find((s) => s.name === "Apple TV")?.logo_path,
+  );
+});
+
+test("distinct products and unknown IDs retain independent identities and safe logos", async () => {
+  reported({
+    flatrate: [
+      offer(2528),
+      offer(192),
+      offer(80),
+      offer(526),
+      offer(990001, "zebra", "/z.jpg"),
+      offer(990002, "alpha", "https://bad.example/logo"),
+      offer(990003, "ALPHA"),
+      offer(990004, "Netflix", "/unknown.jpg"),
+      offer(990005, "beta", "/beta.jpg"),
+      offer(990005, "beta", "/beta.jpg"),
+    ],
+  });
+  const result = await screen();
+  assert.deepEqual(
+    result.sections.map((s) => s.label),
+    ["Subs"],
+  );
+  assert.deepEqual(
+    result.sections[0].services.map((s) => s.name),
+    [
+      "alpha",
+      "ALPHA",
+      "AMC",
+      "AMC+",
+      "beta",
+      "Netflix",
+      "YouTube",
+      "YouTube TV",
+      "zebra",
+    ],
+  );
+  assert.equal(result.sections[0].services[0].logo_path, null);
+  assert.equal(result.sections[0].services[1].logo_path, null);
+  assert.equal(result.sections[0].services.at(-1)?.logo_path, "/z.jpg");
+  assert.equal(result.sections[0].services[5].logo_path, "/unknown.jpg");
+  assert.equal(result.sections[0].services[5].route_note, null);
+});
+
+test("reported logo fallback and unknown duplicate identity are deterministic across free and ads", async () => {
+  // Cinemax has only reseller members in the US catalogs and no canonical logo.
+  const providers = {
+    free: [
+      offer(289, "Cinemax Amazon Channel", "/amazon.jpg"),
+      offer(990001, "Unknown", "/z.jpg"),
+    ],
+    ads: [
+      offer(2061, "Cinemax Apple TV channel", "/apple.jpg"),
+      offer(990001, "Unknown", "/a.jpg"),
+    ],
+  };
+  reported(providers);
+  const first = await screen();
+  assert.deepEqual(displayed(first), [
+    {
+      label: "Free",
+      services: [
+        ["Cinemax", "via Amazon, Apple TV"],
+        ["Unknown", null],
+      ],
+    },
+  ]);
+  assert.deepEqual(
+    first.sections[0].services.map((s) => s.logo_path),
+    ["/amazon.jpg", "/a.jpg"],
+  );
+  await db.query("DELETE FROM title_availability");
+  reported({
+    free: providers.ads.toReversed(),
+    ads: providers.free.toReversed(),
+  });
+  assert.deepEqual((await screen()).sections, first.sections);
+});
+
+for (const stale of [false, true]) {
+  test(`existing ${stale ? "stale" : "fresh"} five-category cache uses the same display rules without rewriting raw data`, async () => {
+    const cached = {
+      link: options().results.US.link,
+      providers: {
+        flatrate: [offer(2243)],
+        free: [offer(350)],
+        ads: [offer(2243)],
+        rent: [offer(350)],
+        buy: [offer(8)],
+      },
+    };
+    const age = stale ? "2020-01-01T00:00:00.000Z" : new Date().toISOString();
+    await db.query(
+      `INSERT INTO title_availability(title_id,country,availability,fetched_at,refresh_after)
+      VALUES('movie:42','US',$1,$2,now()+interval '5 minutes')`,
+      [cached, age],
+    );
+    const result = await screen();
+    assert.equal(result.status, stale ? "stale" : "ok");
+    assert.equal(result.checked_at, age);
+    assert.equal(requests.length, 0);
+    assert.deepEqual(displayed(result), [
+      { label: "Subs", services: [["Apple TV", "via Amazon"]] },
+      { label: "Free", services: [["Apple TV", null]] },
+    ]);
+    status = 503;
+    await db.query(
+      "UPDATE title_availability SET refresh_after=now()-interval '1 second'",
+    );
+    assert.deepEqual((await screen()).sections, result.sections);
+    const stored = (
+      await db.query("SELECT availability,fetched_at FROM title_availability")
+    ).rows[0];
+    assert.deepEqual(stored.availability, cached);
+    assert.equal(stored.fetched_at.toISOString(), age);
+    assert.equal(requests.length, 1);
+  });
+}
+
+test("rental and purchase only offers yield no display sections", async () => {
+  reported({ rent: [offer(8)], buy: [offer(350)] });
+  assert.deepEqual((await screen()).sections, []);
+});
+
+test("a repeated unknown provider keeps a usable logo regardless of input order", async () => {
+  const offers = [
+    offer(990001, "Unknown", "/good.jpg"),
+    offer(990001, "Unknown", null),
+  ];
+  reported({ free: offers });
+  const first = await screen();
+  assert.equal(first.sections[0].services[0].logo_path, "/good.jpg");
+  await db.query("DELETE FROM title_availability");
+  reported({ free: offers.toReversed() });
+  assert.deepEqual((await screen()).sections, first.sections);
+});
+
+test("the registry groups plans and smaller services beyond the initial examples", async () => {
+  reported({
+    flatrate: [
+      offer(299),
+      offer(1809),
+      offer(457),
+      offer(1866),
+      offer(11),
+      offer(201),
+      offer(291),
+      offer(427),
+      offer(264),
+      offer(2423),
+      offer(554),
+      offer(2326),
+      offer(1957),
+      offer(2704),
+      offer(2042),
+      offer(2071),
+      offer(2545),
+      offer(2554),
+      offer(79),
+      offer(2039),
+    ],
+  });
+  assert.deepEqual(displayed(await screen()), [
+    {
+      label: "Subs",
+      services: [
+        ["BBC Select", "via Apple TV"],
+        ["BroadwayHD", null],
+        ["Carnegie Hall+", "via Amazon, Apple TV"],
+        ["Cineverse", null],
+        ["FOX One", null],
+        ["MHz Choice", null],
+        ["MUBI", null],
+        ["MyOutdoorTV", null],
+        ["NBC", null],
+        ["Sling TV", null],
+        ["ViX", null],
+      ],
+    },
+  ]);
+});
+
+test("subscription plans including ad-supported brands keep the reported category", async () => {
+  reported({
+    flatrate: [
+      ...[
+        9, 613, 2100, 1899, 1825, 1853, 2616, 2303, 582, 633, 386, 387, 2553,
+        34, 583, 636, 87, 196, 2034, 283, 1968, 99, 204, 2049,
+      ].map((id) => offer(id)),
+    ],
+  });
+  assert.deepEqual(displayed(await screen()), [
+    {
+      label: "Subs",
+      services: [
+        ["Acorn TV", null],
+        ["Amazon Prime Video", null],
+        ["Crunchyroll", null],
+        ["HBO Max", null],
+        ["MGM+", null],
+        ["Paramount+", null],
+        ["Peacock", null],
+        ["Shudder", null],
+      ],
+    },
+  ]);
+});

@@ -192,7 +192,7 @@ Do not add service preferences, country settings, discovery filters,
 availability on other pages, recommendation changes, or Watch together
 changes in this issue. Further product uses need separate issues.
 
-## Implementation guidance for issue #62
+## Display transformation
 
 The product decisions above are settled. Use a small checked-in mapping
 from TMDB provider IDs to stable service identities, with a display name,
@@ -228,13 +228,14 @@ Acceptance criteria and mapping examples are in issue #62.
 
 ## Current implementation
 
-This section describes the implementation delivered for issue #7, which
-still includes rental and purchase offers and separates free and
-ad-supported offers. Issue #62 tracks applying the two-category display.
+This implementation includes the Subs and Free display from issue #62.
 
 `src/server/catalog.ts` fetches and validates the US watch-provider response.
 `db/007-title-availability.sql` adds a separate cache keyed by title and
-country. Provider names, IDs, and categories remain distinct. Missing or
+country. The cache retains original provider names, IDs, logos, categories,
+and the watch-page link. Repeated offers stay in new cache payloads so that
+a later occurrence with a missing logo cannot discard a usable earlier logo.
+Deduplication happens in the display transformation. Missing or
 invalid logos do not remove otherwise valid provider entries. Invalid
 responses follow the failure path; links must point to the same title's
 HTTPS watch page on TMDB.
@@ -245,10 +246,74 @@ minutes after failure. Requests time out after two seconds. Failed refreshes
 update only retry timing and preserve the previous payload and successful
 fetch time.
 
+`src/server/watch-sources.ts` derives display sections in the common cache
+result path. The provider-ID lookup is built once from the checked-in
+registry. No catalog request or name inference runs during grouping. The
+server sorts services with an English, case-insensitive comparison and a
+stable identity tie-breaker; the client renders that same ordered result.
+Unknown providers use separate `provider:<id>` identities. Reseller notes
+use only that section's reported members. Canonical logos take precedence;
+fallbacks use eligible member ID, reported name, then safe logo path in
+deterministic order.
+
 Title screens load availability and trailers concurrently after loading the
-title. `src/components/title-availability.tsx` shows the viewing categories,
+title. `src/components/title-availability.tsx` shows Subs and Free,
 US region, last-checked time, attribution, and watch-page link. It distinguishes
 empty, failed, and older cached data, including older empty results.
+
+## Provider registry and maintenance
+
+[`src/server/watch-provider-registry.json`](../src/server/watch-provider-registry.json)
+contains 265 service identities covering all 332 distinct IDs in the US
+catalogs fetched on 2026-09-08: 292 movie IDs and 272 TV IDs. These counts
+describe that snapshot, not a permanent completeness target. The
+[checked-in snapshot](../tests/fixtures/watch-provider-catalogs-us.json)
+retains each catalog's IDs and the original provider names and logos.
+Catalog data comes from TMDB and its JustWatch-backed provider source.
+
+Each service has a stable key, display name, preferred logo path, and member
+IDs. `via: null` means a direct service or plan; a reseller name identifies
+a channel. Channel-only services without a canonical logo use a reported
+eligible logo instead. A preferred logo does not establish availability.
+
+The map covers small services and singleton channels as well as the issue's
+examples. For example, BroadwayHD, MyOutdoorTV, MHz Choice, Cineverse, and
+FOX One include their Amazon channels. Carnegie Hall+ combines its Amazon
+and Apple TV routes even though neither US catalog lists a direct member.
+Sling TV groups Orange and Orange and Blue as plans of one service, following
+[Sling's plan comparison](https://www.sling.com/service/compare-plans).
+ViX groups its free service and Premium channel; ViX presents free and
+Premium as [account options for the same service](https://vix.com/es-es/registro).
+These sources were checked on 2026-09-08.
+
+Keep ambiguous catalog identities separate pending evidence. In this
+snapshot these include Plex and Plex Channel, FilmBox+ and FilmBox Live,
+and Fandango and Fandango At Home. Related but distinct products also retain
+separate entries: YouTube and YouTube TV, AMC and AMC+, Hallmark TV and
+Hallmark+, and IndieFlix and IndieFlix Shorts. A shared brand or a channel's
+logo alone does not justify merging products.
+
+To maintain the registry:
+
+1. Fetch both complete catalogs with the existing server-side TMDB token:
+   `GET /3/watch/providers/movie?watch_region=US&language=en-US` and
+   `GET /3/watch/providers/tv?watch_region=US&language=en-US`. See the
+   [movie list](https://developer.themoviedb.org/reference/watch-providers-movie-list)
+   and [TV list](https://developer.themoviedb.org/reference/watch-provider-tv-list).
+   This is maintenance work; automated tests use the saved snapshot.
+2. Update the snapshot's fetch time, movie/TV ID lists, and combined provider
+   records. Preserve each original ID, name, and logo. Review additions,
+   removals, name changes, and logo changes before updating service records.
+3. Assign every ID in the union to exactly one service. Explicit channel
+   labels supply reseller evidence; review spelling variants and plans
+   before merging them. Keep stable keys when display names change. Record
+   uncertain identities separately; never guess their routes at runtime.
+4. Run `npx tsx --test tests/app/watch-provider-registry.test.ts` for coverage,
+   unique membership, and data validation. Update public title-screen tests
+   for changed identity decisions, then run `bin/check`.
+
+No migration, cache reset, token change, or extra deployment action is
+required for a registry update. Unknown IDs remain visible until reviewed.
 
 ## Verification
 
@@ -256,6 +321,12 @@ Exercise the public catalog or title-screen interface with a fake TMDB HTTP
 service and the real database, following the existing catalog tests. Cover
 movies and TV, all viewing categories, missing US data, empty results,
 fresh and expired caches, and failed or malformed provider responses.
-Verify that successful data survives a failed refresh and that failure does
-not break the title or its conversations. Browser coverage should verify
-the title-page presentation, categories, attribution, link, and data states.
+Cover both display sections, same-service plans and channels, distinct
+products, unknown IDs, eligible logo fallback, section-local route notes,
+and deterministic sorting. Include fresh and stale pre-existing cache rows
+with all five original categories. Verify that successful data survives a
+failed refresh and that failure does not break the title or its conversations.
+Browser coverage should verify
+the title-page presentation, sections, attribution, link, and data states.
+Check desktop, mobile, and 320px width with long names and route notes.
+The registry test checks the full union rather than a fixed provider count.
