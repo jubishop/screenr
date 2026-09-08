@@ -14,11 +14,11 @@ export function DisplayNameEditor({
   const [draft, setDraft] = useState(name);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const editButton = useRef<HTMLButtonElement>(null);
+  const restoreFocus = useRef(false);
   function close() {
+    restoreFocus.current = true;
     setEditing(false);
     setError("");
-    requestAnimationFrame(() => editButton.current?.focus());
   }
   async function submit(event: React.SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -40,7 +40,12 @@ export function DisplayNameEditor({
         <h1>{name}</h1>
         {!editing && (
           <button
-            ref={editButton}
+            ref={(button) => {
+              if (button && restoreFocus.current) {
+                restoreFocus.current = false;
+                button.focus();
+              }
+            }}
             className="text-button"
             disabled={!interactive}
             onClick={() => {

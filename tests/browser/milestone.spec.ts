@@ -121,6 +121,33 @@ async function invitationCreator(browser: Browser, name: string) {
   return page;
 }
 
+async function earlyAnimationFrames(page: Page) {
+  return page.evaluateHandle(() => {
+    const original = window.requestAnimationFrame;
+    const cancel = window.cancelAnimationFrame;
+    const pending = new Set<number>();
+    // After an async save, a frame can precede React's queued render. Exercise
+    // that ordering at the browser scheduling boundary, without changing React.
+    window.requestAnimationFrame = (callback) => {
+      const id = original(() => {});
+      pending.add(id);
+      queueMicrotask(() => {
+        if (pending.delete(id)) callback(performance.now());
+      });
+      return id;
+    };
+    window.cancelAnimationFrame = (id) => {
+      pending.delete(id);
+      cancel(id);
+    };
+    return () => {
+      pending.clear();
+      window.requestAnimationFrame = original;
+      window.cancelAnimationFrame = cancel;
+    };
+  });
+}
+
 test("account profile editing saves both names, preserves drafts, and updates profile links", async ({
   browser,
 }, testInfo) => {
@@ -134,6 +161,15 @@ test("account profile editing saves both names, preserves drafts, and updates pr
   const edit = owner.getByRole("button", { name: "Edit profile", exact: true });
   await expect(edit).toBeVisible();
   await owner.goto("/account");
+  await expect(edit).toBeEnabled();
+  await expect(edit).not.toBeFocused();
+  const profileLink = owner.getByRole("link", {
+    name: "View your profile",
+    exact: true,
+  });
+  await profileLink.focus();
+  await nextAccountRefresh(owner);
+  await expect(profileLink).toBeFocused();
   await edit.click();
   const name = owner.getByLabel("Display name", { exact: true });
   const username = owner.getByLabel("Username", { exact: true });
@@ -233,6 +269,7 @@ test("account profile editing saves both names, preserves drafts, and updates pr
     { times: 1 },
   );
   await save.click();
+  const restoreFrames = await earlyAnimationFrames(owner);
   try {
     await expect(
       owner.getByRole("button", { name: "Saving…", exact: true }),
@@ -252,6 +289,11 @@ test("account profile editing saves both names, preserves drafts, and updates pr
     ),
   ).toBe(true);
   await expect(edit).toBeFocused();
+  await restoreFrames.evaluate((restore) => restore());
+  await restoreFrames.dispose();
+  await profileLink.focus();
+  await nextAccountRefresh(owner);
+  await expect(profileLink).toBeFocused();
   await edit.click();
   await expect(profileStatus).toHaveText("");
   await cancel.click();
@@ -477,6 +519,8 @@ test("profile display name editing preserves drafts, saves, and updates existing
     exact: true,
   });
   await expect(edit).toBeVisible();
+  await expect(edit).toBeEnabled();
+  await expect(edit).not.toBeFocused();
   await expect(owner.getByText("Friends (1)", { exact: true })).toBeVisible();
   const otherTab = await owner.context().newPage();
   await otherTab.goto("/account");
@@ -553,6 +597,7 @@ test("profile display name editing preserves drafts, saves, and updates existing
     { times: 1 },
   );
   await save.click();
+  const restoreFrames = await earlyAnimationFrames(owner);
   try {
     await expect(
       owner.getByRole("button", { name: "Saving…", exact: true }),
@@ -563,6 +608,16 @@ test("profile display name editing preserves drafts, saves, and updates existing
     release();
   }
   await expect(input).toHaveCount(0);
+  await expect(edit).toBeFocused();
+  await restoreFrames.evaluate((restore) => restore());
+  await restoreFrames.dispose();
+  const friends = owner.getByRole("link", { name: "Friends", exact: true });
+  await friends.focus();
+  await owner.waitForResponse(
+    (response) =>
+      response.url().includes("/api/screenr/screen?") && response.ok(),
+  );
+  await expect(friends).toBeFocused();
   await expect(
     owner.getByRole("heading", { name: "Renée Movie Fan 🎬", exact: true }),
   ).toBeVisible();
