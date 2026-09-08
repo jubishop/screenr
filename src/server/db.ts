@@ -62,3 +62,12 @@ export function text(value: unknown, label: string, max = 2000): string {
   }
   return value.trim();
 }
+
+export function usernameText(value: unknown): string {
+  const username = text(value, "Username", 24).toLowerCase();
+  if (!/^[a-z0-9_]{3,24}$/.test(username))
+    throw new AppError(
+      "Use 3–24 letters, numbers, or underscores for your username.",
+    );
+  return username;
+}

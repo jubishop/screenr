@@ -10,6 +10,7 @@ import { Poster } from "./poster";
 import { InvitationLink } from "./invitation-link";
 import { WatchTogether } from "./watch-together";
 import { DisplayNameEditor } from "./display-name-editor";
+import { AccountProfileEditor } from "./account-profile-editor";
 import { TitleAvailability } from "./title-availability";
 import { TitleSearch } from "./title-search";
 
@@ -110,6 +111,12 @@ export function Screen({
   async function saveDisplayName(name: string) {
     pending.current?.abort();
     const updated = await api<Person>("display-name", { name });
+    setUser(updated);
+    await refresh();
+  }
+  async function saveProfile(name: string, username: string) {
+    pending.current?.abort();
+    const updated = await api<Person>("profile", { name, username });
     setUser(updated);
     await refresh();
   }
@@ -610,7 +617,7 @@ export function Screen({
             </div>
           </>
         )}
-        {data?.kind === "account" && (
+        {path.split("?")[0] === "/account" && (
           <>
             <div className="page-heading">
               <p className="eyebrow">YOUR ACCOUNT</p>
@@ -627,79 +634,82 @@ export function Screen({
                 View your profile
               </Link>
             </div>
-            <section className="settings-card">
-              <h2>Sign-in methods</h2>
-              <p>
-                Email codes sign you in to this same account. Use the email
-                address you joined with.
-              </p>
-              {googleError && (
-                <p className="error" role="alert">
-                  {googleError}
+            <AccountProfileEditor user={user} save={saveProfile} />
+            {data?.kind === "account" && (
+              <section className="settings-card">
+                <h2>Sign-in methods</h2>
+                <p>
+                  Email codes sign you in to this same account. Use the email
+                  address you joined with.
                 </p>
-              )}
-              {data.googleConnected ? (
-                <p role="status">Google connected.</p>
-              ) : data.googleEnabled ? (
-                <>
-                  <p>
-                    Connect Google to add another way to sign in. Choose the
-                    Google account with the same email address.
+                {googleError && (
+                  <p className="error" role="alert">
+                    {googleError}
                   </p>
-                  <button
-                    className="secondary"
-                    disabled={busy || connectingGoogle || !interactive}
-                    onClick={async () => {
-                      setConnectingGoogle(true);
-                      setGoogleError("");
-                      try {
-                        const result = await authClient.linkSocial({
-                          provider: "google",
-                          callbackURL: "/account",
-                          errorCallbackURL: "/account",
-                          disableRedirect: true,
-                        });
-                        if (result.error)
-                          throw new Error(
-                            result.error.message ??
-                              "Google could not be connected. Please try again.",
-                          );
-                        if (!result.data?.url)
-                          throw new Error(
-                            "Google sign-in did not start. Please try again.",
-                          );
-                        window.location.assign(result.data.url);
-                      } catch (error) {
-                        setGoogleError((error as Error).message);
-                        setConnectingGoogle(false);
-                      }
-                    }}
-                  >
-                    {connectingGoogle ? "Connecting…" : "Connect Google"}
-                  </button>
-                </>
-              ) : (
-                <p className="muted">Google sign-in is not configured yet.</p>
-              )}
-              <hr />
-              <button
-                className="text-button"
-                disabled={busy || !interactive || connectingGoogle}
-                onClick={async () => {
-                  setBusy(true);
-                  setError("");
-                  try {
-                    await signOut();
-                  } catch (error) {
-                    setError((error as Error).message);
-                  } finally {
-                    setBusy(false);
-                  }
-                }}
-              >
-                Sign out
-              </button>
-            </section>
+                )}
+                {data.googleConnected ? (
+                  <p role="status">Google connected.</p>
+                ) : data.googleEnabled ? (
+                  <>
+                    <p>
+                      Connect Google to add another way to sign in. Choose the
+                      Google account with the same email address.
+                    </p>
+                    <button
+                      className="secondary"
+                      disabled={busy || connectingGoogle || !interactive}
+                      onClick={async () => {
+                        setConnectingGoogle(true);
+                        setGoogleError("");
+                        try {
+                          const result = await authClient.linkSocial({
+                            provider: "google",
+                            callbackURL: "/account",
+                            errorCallbackURL: "/account",
+                            disableRedirect: true,
+                          });
+                          if (result.error)
+                            throw new Error(
+                              result.error.message ??
+                                "Google could not be connected. Please try again.",
+                            );
+                          if (!result.data?.url)
+                            throw new Error(
+                              "Google sign-in did not start. Please try again.",
+                            );
+                          window.location.assign(result.data.url);
+                        } catch (error) {
+                          setGoogleError((error as Error).message);
+                          setConnectingGoogle(false);
+                        }
+                      }}
+                    >
+                      {connectingGoogle ? "Connecting…" : "Connect Google"}
+                    </button>
+                  </>
+                ) : (
+                  <p className="muted">Google sign-in is not configured yet.</p>
+                )}
+                <hr />
+                <button
+                  className="text-button"
+                  disabled={busy || !interactive || connectingGoogle}
+                  onClick={async () => {
+                    setBusy(true);
+                    setError("");
+                    try {
+                      await signOut();
+                    } catch (error) {
+                      setError((error as Error).message);
+                    } finally {
+                      setBusy(false);
+                    }
+                  }}
+                >
+                  Sign out
+                </button>
+              </section>
+            )}
           </>
         )}
       </main>

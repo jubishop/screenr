@@ -9,6 +9,7 @@ import {
   changeRelationship,
   updateTitleActivity,
   updateDisplayName,
+  updateProfile,
 } from "../../../../server/social";
 import {
   completeSignup,
@@ -86,6 +87,8 @@ async function handle(
       const data = await body(request);
       if (action === "display-name")
         return json(await updateDisplayName(userId, data.name));
+      if (action === "profile")
+        return json(await updateProfile(userId, data.name, data.username));
       if (action === "invite")
         return json(await createInvitation(userId, data.limit ?? 1));
       if (action === "revoke-invite")
