@@ -13,6 +13,21 @@ export type Title = {
   release_date: string;
 };
 export type Trailer = { key: string; name: string };
+export const reactionOptions = [
+  { kind: "like", label: "Like", emoji: "👍" },
+  { kind: "love", label: "Love", emoji: "❤️" },
+  { kind: "care", label: "Care", emoji: "🥰" },
+  { kind: "haha", label: "Haha", emoji: "😆" },
+  { kind: "wow", label: "Wow", emoji: "😮" },
+  { kind: "sad", label: "Sad", emoji: "😢" },
+  { kind: "angry", label: "Angry", emoji: "😡" },
+] as const;
+export type ReactionKind = (typeof reactionOptions)[number]["kind"];
+export type ReactionSummary = {
+  kind: ReactionKind;
+  count: number;
+  reacted: boolean;
+};
 export type Conversation = {
   id: string;
   owner_id: string;
@@ -32,6 +47,7 @@ export type Conversation = {
   kind: "movie" | "tv";
   activity_at: string;
   visible_activity: string;
+  reactions: ReactionSummary[];
 };
 export type Comment = {
   id: string;
@@ -45,6 +61,7 @@ export type Comment = {
   removed: boolean;
   unavailable: boolean;
   created_at: string;
+  reactions: ReactionSummary[];
 };
 export type Thread = { conversation: Conversation; comments: Comment[] };
 

@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import type { Comment, Person, Thread } from "../shared";
 import { api, useInteractive, dateLabel } from "./client";
 import { preservePosition } from "./position";
+import { Reactions } from "./reactions";
 
 type Draft = { body: string; spoiler: boolean };
 const emptyDraft: Draft = { body: "", spoiler: false };
@@ -280,6 +281,14 @@ export function ThreadView({
               </button>
             )}
           </div>
+        )}
+        {live(comment) && (!comment.spoiler || revealed.has(comment.id)) && (
+          <Reactions
+            item={currentSnapshot.conversation.id}
+            reply={comment.id}
+            summary={comment.reactions}
+            refresh={refresh}
+          />
         )}
       </article>
     );

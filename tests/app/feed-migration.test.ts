@@ -96,6 +96,22 @@ test("migration preserves old discussions and creates only known active actions"
       ),
       beforeStandalone,
     );
+    const beforeReactions = (
+      await client.query("SELECT * FROM comment ORDER BY id")
+    ).rows;
+    await client.query(await readFile("db/006-reactions.sql", "utf8"));
+    assert.deepEqual(
+      (await client.query("SELECT * FROM comment ORDER BY id")).rows,
+      beforeReactions,
+    );
+    assert.deepEqual(
+      (
+        await client.query(
+          "SELECT * FROM feed_item ORDER BY owner_id,item_type",
+        )
+      ).rows,
+      items,
+    );
     await client.query(
       `UPDATE conversation SET recommended=false,activity_at='2020-05-01' WHERE owner_id='alice'`,
     );
