@@ -6,6 +6,7 @@ import { api, dateLabel, useInteractive } from "./client";
 import { Poster } from "./poster";
 import { ThreadView } from "./thread";
 import { preservePosition } from "./position";
+import { Reactions } from "./reactions";
 
 type Known = Map<string, { activity: string; comments: Set<string> }>;
 function capture(items: FeedItem[]): Known {
@@ -332,6 +333,14 @@ function FeedEntry({
                 </>
               )}
             </div>
+            {!hiddenSpoiler &&
+              (item.item_type !== "comment" || item.active) && (
+                <Reactions
+                  item={item.id}
+                  summary={item.reactions}
+                  refresh={refresh}
+                />
+              )}
             <p className="small" role="status">
               {copyMessage}
             </p>
