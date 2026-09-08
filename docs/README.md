@@ -64,6 +64,9 @@ both memory and design documents.
   implementation for issue #26.
 - [Title availability](title-availability.md): accepted US viewing options,
   data acquisition, cache behavior, and title-page scope for issue #7.
+- [Find a title suggestions](title-suggestions.md): accepted discovery
+  decisions, anonymous second-degree counts, and 3:1 social weighting for
+  issue #39.
 - [Application stack](application-stack.md): selected core stack, alternatives,
   tradeoffs, and proposed implementation approach.
 - [Development workflow](development-workflow.md): local setup, Git hooks,

@@ -33,6 +33,12 @@ export type WatchAvailability = {
   link: string | null;
   providers: Partial<Record<WatchCategory, WatchProvider[]>>;
 };
+export type TitleSuggestion = Title & {
+  recommended_by: Pick<Person, "username" | "display_name">[];
+  wanted_by: Pick<Person, "username" | "display_name">[];
+  second_degree_recommended: number;
+  second_degree_wanted: number;
+};
 export const reactionOptions = [
   { kind: "like", label: "Like", emoji: "👍" },
   { kind: "love", label: "Love", emoji: "❤️" },

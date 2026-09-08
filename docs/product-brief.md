@@ -5,6 +5,9 @@ status: current
 # Product brief
 
 Screenr is a social app for TV and movies, centered on people you know.
+Privacy and a close circle of known people are core product constraints.
+The [privacy boundary](#privacy-and-the-known-people-circle--2026-09-07)
+applies to every feature.
 
 ## Confirmed requirements
 
@@ -29,7 +32,10 @@ Screenr is a social app for TV and movies, centered on people you know.
   display name, username, photo, friend-request button, and the person's
   accepted friends, subject to blocking.
 - Watch activity, ratings, reviews, and recommendations are visible to their
-  owner and the owner's current accepted friends.
+  owner and the owner's current accepted friends. Title suggestions can
+  use only the explicitly allowed
+  [anonymous second-degree signals](title-suggestions.md#anonymous-friends-of-friends-explanations--2026-09-07)
+  outside that audience.
 - Users can see what their friends are watching or recommend.
 - Each movie or show has a standalone page with one unified feed below
   the title details. The [title-feed decisions](title-feed.md) define its
@@ -142,6 +148,40 @@ rules below define how that second layer becomes visible.
 This supersedes the initial proposal for optional global discovery and
 global visibility controls, including the later suggestion to defer them.
 They are not planned future features.
+
+### Privacy and the known-people circle — 2026-09-07
+
+**Decision:** Screenr is oriented around privacy and a close circle of
+people the user knows. Knowing someone through a mutual friend does not
+grant access to that person's activity or make them a discovery result.
+Friends of friends appear as people and interact with the viewer only in
+comments on content owned by a friend they share, subject to the existing
+audience and blocking rules. Their presence in that discussion does not
+expose their own recommendations, watch choices, reviews, posts, or threads.
+
+Do not surface identifiable second-degree people or attribute activity to
+them elsewhere merely because a mutual friendship exists. Do not use
+shared participation, counts, rankings, previews, or links to bypass the
+content audience. Existing deliberate connection routes, such as exact
+username search and shared profile links, expose only the already agreed
+minimal profile; they do not grant access to activity.
+
+**Explicit limited exception:** Find a title can use the
+[anonymous second-degree counts and ranking signals](title-suggestions.md)
+agreed for issue #39. These signals cannot identify the people, show their
+mutual-friend connections, or link to their activity. This exception does
+not permit named second-degree discovery or establish an exception for
+other features. Aggregation is a limited disclosure, not evidence that
+private activity is public.
+
+**Why:** The user explicitly emphasized privacy and known personal circles,
+and limited encounters with friends of friends to comments on a shared
+friend's content. The user retained anonymous suggestion signals and
+selected a 3:1 weighting after this boundary was raised.
+
+**Tradeoff:** Broader social discovery and named second-degree suggestion
+explanations are excluded. Anonymous suggestion signals are the specific
+exception; do not infer further audience expansion from them.
 
 ### Mutual friendships — 2026-09-04
 
@@ -408,6 +448,13 @@ writing a review. Ratings do not automatically become recommendations.
 **Why:** The user accepted this approach so that recommending a title is a
 deliberate choice, independent of a rating or written opinion.
 
+### Find a title suggestion scope — 2026-09-07
+
+The [Find a title suggestion decisions](title-suggestions.md) define the
+initial actions, recommendation priority, lower weight for friends of
+friends, and explanations beneath title images for issue #39. Second-degree
+explanations use anonymous counts, with a 3:1 direct-friend weighting.
+
 ### Friends recommend view — 2026-09-04
 
 **Decision:** Provide a dedicated "Friends recommend" view showing titles
@@ -634,6 +681,11 @@ update above adds accepted friend lists to this profile information.
 Watch activity, ratings, reviews, and recommendations are visible to their
 owner and the owner's current accepted friends. Viewing a profile or having
 a pending friend request does not grant access to that content.
+
+**Clarified — 2026-09-07:** The
+[anonymous suggestion-count decision](title-suggestions.md#anonymous-friends-of-friends-explanations--2026-09-07)
+defines a limited exception for aggregate second-degree activity in Find a
+title. It does not expand profile or activity-entry access.
 
 **Why:** The user accepted a minimal profile for finding friends while
 keeping viewing activity and opinions within accepted friendships.

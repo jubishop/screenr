@@ -264,10 +264,28 @@ try {
       );
       return;
     }
+    const searchQuery = new URL(
+      request.url ?? "/",
+      browserConfig.catalogURL,
+    ).searchParams.get("query");
+    const searchResults =
+      searchQuery === "no matching suggestions"
+        ? []
+        : [
+            {
+              ...fixture,
+              ...(searchQuery === "first suggestion fixture"
+                ? { id: 998011, title: "The First Signal" }
+                : {}),
+              ...(searchQuery === "second suggestion fixture"
+                ? { id: 998012, title: "The Second Signal" }
+                : {}),
+            },
+          ];
     response.end(
       JSON.stringify(
         request.url?.startsWith("/search/")
-          ? { results: [fixture] }
+          ? { results: searchResults }
           : {
               ...fixture,
               id: Number(request.url?.split("/")[2]) || fixture.id,
