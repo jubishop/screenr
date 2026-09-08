@@ -5,6 +5,7 @@ import {
   addComment,
   createTitleComment,
   removeComment,
+  setReaction,
   changeRelationship,
   updateTitleActivity,
 } from "../../../../server/social";
@@ -123,6 +124,8 @@ async function handle(
         });
       else if (action === "remove-comment")
         await removeComment(userId, String(data.id));
+      else if (action === "reaction")
+        await setReaction(userId, String(data.item), data.reply, data.kind);
       else throw new AppError("Action not found.", 404);
       return json({ ok: true });
     }

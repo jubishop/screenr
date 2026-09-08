@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { AppError, db, text, transaction } from "./db";
 import type { FeedItem, Person, Thread } from "../shared";
+import { reactionOptions } from "../shared";
 
 export async function member(userId: string): Promise<Person> {
   const profile = (
@@ -128,6 +129,16 @@ const feedEntries = `(SELECT id,conversation_id,owner_id,title_id,item_type,acti
   SELECT id,conversation_id,owner_id,title_id,'comment',removed_at IS NULL,created_at,created_at,
     CASE WHEN removed_at IS NULL THEN body ELSE '' END,spoiler
     FROM title_comment)`;
+// Counts include only current participants visible to this reader. A reaction
+// to a reply also requires that its author can still see the reply's author.
+const reactionSummary = (
+  reply: boolean,
+) => `(SELECT coalesce(jsonb_agg(summary ORDER BY kind),'[]') FROM (
+  SELECT r.kind,count(*)::int AS count,bool_or(r.user_id=$1) AS reacted FROM reaction r
+  WHERE ${reply ? "r.comment_id=cm.id AND cm.accessible AND cm.removed_at IS NULL AND NOT screenr_blocked(r.user_id,cm.author_id)" : "(r.feed_item_id=c.id OR r.title_comment_id=c.id) AND (c.item_type<>'comment' OR c.active)"}
+    AND screenr_can_read(r.user_id,c.owner_id) AND NOT screenr_blocked($1,r.user_id)
+  GROUP BY r.kind
+) summary)`;
 const itemQuery = `SELECT c.*,p.username,p.display_name,t.name AS title_name,t.poster_path,t.kind,
   (c.item_type='recommended' AND c.active) AS recommended,
   (c.item_type='want_to_watch' AND c.active) AS want_to_watch,
@@ -137,7 +148,8 @@ const itemQuery = `SELECT c.*,p.username,p.display_name,t.name AS title_name,t.p
     AND own.item_type='recommended' AND own.active) AS viewer_recommended,
   date_trunc('milliseconds', CASE WHEN c.item_type='earlier' THEN coalesce(replies.activity,replies.placeholder_activity,c.created_at)
     ELSE greatest(c.activity_at,coalesce(replies.activity,c.activity_at)) END) AS visible_activity,
-  coalesce(replies.comments,'[]') AS comments
+  coalesce(replies.comments,'[]') AS comments,
+  ${reactionSummary(false)} AS reactions
   FROM ${feedEntries} c JOIN profile p ON p.user_id=c.owner_id JOIN title t ON t.id=c.title_id
   LEFT JOIN LATERAL (
     WITH candidates AS (
@@ -161,7 +173,8 @@ const itemQuery = `SELECT c.*,p.username,p.display_name,t.name AS title_name,t.p
         AND screenr_can_read(cm.addressed_id,c.owner_id)
         AND NOT screenr_blocked($1,cm.addressed_id) THEN addressed.username ELSE NULL END,
       'removed',cm.removed_at IS NOT NULL,'unavailable',NOT cm.accessible,
-      'created_at',cm.created_at) ORDER BY cm.created_at,cm.id) AS comments,
+      'created_at',cm.created_at,
+      'reactions',${reactionSummary(true)}) ORDER BY cm.created_at,cm.id) AS comments,
       max(cm.created_at) FILTER (WHERE cm.accessible AND cm.removed_at IS NULL) AS activity,
       max(cm.created_at) AS placeholder_activity
     FROM retained cm JOIN profile author ON author.user_id=cm.author_id
@@ -330,6 +343,58 @@ export async function removeComment(viewer: string, id: string) {
       [id, viewer],
     );
     if (!standalone.rowCount) throw new AppError("Comment not found.", 404);
+  });
+}
+
+export async function setReaction(
+  viewer: string,
+  itemId: string,
+  replyId: unknown,
+  kind: unknown,
+) {
+  if (kind !== null && !reactionOptions.some((option) => option.kind === kind))
+    throw new AppError("Invalid reaction.");
+  if (
+    replyId != null &&
+    (typeof replyId !== "string" || !/^\d+$/.test(replyId))
+  )
+    throw new AppError("Invalid reply target.");
+  await transaction(async (client) => {
+    const item: FeedItem | undefined = (
+      await client.query(`${itemQuery} AND c.id::text=$2`, [viewer, itemId])
+    ).rows[0];
+    if (
+      !item ||
+      (replyId == null && item.item_type === "comment" && !item.active)
+    )
+      throw new AppError("Conversation not found.", 404);
+    if (
+      replyId != null &&
+      !item.comments.some(
+        (comment) =>
+          comment.id === replyId && !comment.removed && !comment.unavailable,
+      )
+    )
+      throw new AppError("Reply target not found.", 404);
+    const column =
+      replyId != null
+        ? "comment_id"
+        : item.item_type === "comment"
+          ? "title_comment_id"
+          : "feed_item_id";
+    const target = replyId ?? itemId;
+    if (kind === null) {
+      await client.query(
+        `DELETE FROM reaction WHERE ${column}=$1 AND user_id=$2`,
+        [target, viewer],
+      );
+    } else {
+      await client.query(
+        `INSERT INTO reaction(${column},user_id,kind) VALUES($1,$2,$3)
+        ON CONFLICT (${column},user_id) DO UPDATE SET kind=EXCLUDED.kind`,
+        [target, viewer, kind],
+      );
+    }
   });
 }
 
