@@ -291,6 +291,17 @@ direction, and counts only the visible people. Profile visibility and the
 friend list use one database snapshot. The list refreshes with the profile;
 viewing it does not grant access to private activity or pending requests.
 
+The People page includes **People you may know**, based on two accepted
+friendships. Each suggestion lists all eligible mutual friends and links to
+their profiles. Suggestions exclude the viewer, existing friends, pending
+requests in either direction, and blocked people or paths. One query reads
+the candidates and mutual friends in one snapshot. Candidates appear once,
+ordered by most mutual friends and then username; mutual friends use username
+order. The section has an empty state when nobody qualifies. Sending a request
+moves the person to the existing pending-request list. Polling, focus changes,
+and relationship actions refresh the section. This discovery route does not
+grant access to private activity or change anonymous title suggestions.
+
 All domain writes take one transaction advisory lock. This makes invitation
 capacity and permission changes ordered with content writes. It is a deliberate
 small-app simplification; measure lock waits before replacing it. Signup commits
