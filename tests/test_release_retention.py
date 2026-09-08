@@ -40,6 +40,74 @@ class ReleaseRetentionTests(unittest.TestCase):
         return subprocess.run([sys.executable, str(ROOT / 'ops/prune-releases.py'), str(active)],
                               text=True, capture_output=True, timeout=5)
 
+    def test_retry_finishes_deletion_after_dependency_removal_fails(self):
+        copies = [self.release(i, success=True) for i in range(1, 5)]
+        for path in copies:
+            dependency = path / 'node_modules/fixture/index.js'
+            dependency.parent.mkdir(parents=True)
+            dependency.write_text('x' * 1024)
+        active = copies[-1]
+        self.activate(active)
+        # Inject a filesystem error, leaving the actual cleanup CLI unchanged.
+        driver = '''import errno, os, runpy, shutil, sys
+from pathlib import Path
+from unittest.mock import patch
+unlink = os.unlink
+def interrupted(path, *args, **kwargs):
+    if Path(path).name == 'index.js':
+        raise OSError(errno.EIO, 'injected dependency deletion failure')
+    return unlink(path, *args, **kwargs)
+sys.argv = sys.argv[1:]
+with patch('os.unlink', interrupted):
+    runpy.run_path(sys.argv[0], run_name='__main__')
+'''
+        result = subprocess.run([sys.executable, '-c', driver,
+                                 str(ROOT / 'ops/prune-releases.py'), str(active)],
+                                text=True, capture_output=True, timeout=5)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('injected dependency deletion failure', result.stderr)
+        self.assertEqual((self.root / 'current').resolve(), active)
+        for _ in range(2):
+            result = self.execute(active)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(set(self.root.rglob('index.js')),
+                             {path / 'node_modules/fixture/index.js' for path in copies[1:]})
+            self.assertEqual(set(self.releases.iterdir()), set(copies[1:]))
+            self.assertEqual((self.root / 'current').resolve(), active)
+
+    def test_retired_directory_symlink_cannot_delete_external_data(self):
+        copies = [self.release(i) for i in range(1, 5)]
+        self.activate(copies[-1])
+        external = self.root / 'other-application'
+        external.mkdir()
+        sentinel = external / 'keep'
+        sentinel.write_text('untouched')
+        (self.root / 'retired-releases').symlink_to(external)
+        result = self.execute(copies[-1])
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(set(self.releases.iterdir()), set(copies))
+        self.assertEqual(sentinel.read_text(), 'untouched')
+
+    def test_retired_cleanup_preserves_symlinks_and_unrecognized_entries(self):
+        active = self.release(1)
+        self.activate(active)
+        retired = self.root / 'retired-releases'
+        retired.mkdir()
+        unrelated = retired / 'operator-notes'
+        unrelated.mkdir()
+        sentinel = unrelated / 'keep'
+        sentinel.write_text('untouched')
+        linked = retired / ('f' * 40)
+        linked.symlink_to(active)
+        partial = retired / ('e' * 40)
+        partial.mkdir()
+        (partial / 'remaining-dependency').write_text('expired release data')
+        result = self.execute(active)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(set(retired.iterdir()), {unrelated, linked})
+        self.assertEqual(sentinel.read_text(), 'untouched')
+        self.assertTrue((active / 'server.js').is_file())
+
     def test_first_cleanup_keeps_active_and_two_recent_legacy_releases(self):
         copies = [self.release(i) for i in range(1, 7)]
         active = copies[0]  # The active release need not be the newest directory.
