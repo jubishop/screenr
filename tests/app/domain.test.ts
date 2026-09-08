@@ -116,7 +116,7 @@ test("display name edits update existing social views without changing identity"
   const invite = await createInvitation(ben, 2);
   const alice = await pending("alice", invite.token);
   await completeSignup(alice, "Alice", "alice");
-  await friend(alice, ben);
+  assert.ok((await profileFor(alice, "ben")).accepted_at);
   await db.query(
     "INSERT INTO title(id,kind,tmdb_id,name) VALUES('movie:1','movie',1,'Test Movie') ON CONFLICT DO NOTHING",
   );
