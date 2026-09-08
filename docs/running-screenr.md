@@ -274,6 +274,43 @@ Cloudflare certificates, or real provider configuration.
 The browser test writes mobile and desktop screenshots to `.cache/` and
 keeps failure traces in `test-results/`.
 
+### Failed development scripts
+
+Failed browser tests also retain `script-diagnostics.json` beside their trace.
+The reporter reads failed local `/_next/static/*.js` requests from every traced
+context, including contexts created manually. It records the original browser
+error, HTTP status and selected response headers, plus Node, Next, Playwright,
+platform, and port metadata.
+For up to five distinct paths, it makes one later GET through the fixture proxy
+and one directly to Next. These probes preserve the status line, selected
+headers, byte count, and timeout or connection error. Duplicate framing headers
+are retained. Each probe stops after two seconds or 4 KiB. All probes run
+concurrently; reporter execution has a ten-second outer limit.
+
+Comparison requests are later observations. They cannot establish the exact
+bytes of an earlier intermittent failure. A successful comparison is not proof
+that the original request succeeded. Use the original trace and server log
+with the report before attributing a failure to the proxy, Next, or Chromium.
+No probe follows redirects, retries a request, or sends a mutation. Query
+strings, credentials, cookies, and unrelated application requests are omitted
+from the new report and probes. Ordinary cancelled requests are ignored unless
+they also have an HTTP error status. The existing trace remains unchanged.
+
+The report records unavailable or oversized network traces explicitly. Trace
+scanning is limited to 32 MiB and 20 failed script records. Diagnostics failures
+are logged and, when possible, written to the report; the original test still
+fails. Successful tests create no diagnostic report or comparison traffic.
+Reports are included in the existing GitHub failure-artifact upload. To use the
+reporter, run the normal `npm run test:browser` or `bin/check`; overriding
+Playwright's `--reporter` option replaces this reporter too.
+
+**Decision — 2026-09-08:** Issue #69 is complete when permanent failure
+diagnostics are delivered and another investigation of at most 30 minutes has
+a recorded outcome. Reproduction of the original error is not required for
+that scope. This permits an honest stopping condition when the original
+failure cannot be captured; it does not claim that the intermittent defect is
+fixed. The investigation result belongs in the issue and PR.
+
 ## Data and access rules
 
 The [shared-feed implementation and migration](title-feed.md#shared-feed-implementation)
