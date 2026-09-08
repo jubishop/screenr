@@ -9,11 +9,12 @@ import { TitleCommentComposer } from "./title-comment";
 import { Poster } from "./poster";
 import { InvitationLink } from "./invitation-link";
 import { WatchTogether } from "./watch-together";
+import { DisplayNameEditor } from "./display-name-editor";
 import { TitleAvailability } from "./title-availability";
 import { TitleSearch } from "./title-search";
 
 export function Screen({
-  user,
+  user: initialUser,
   path,
   initialData,
   initialError,
@@ -26,6 +27,7 @@ export function Screen({
   initialGoogleError: string;
 }) {
   const interactive = useInteractive();
+  const [user, setUser] = useState(initialUser);
   const [data, setData] = useState(initialData),
     [loadError, setLoadError] = useState(initialError),
     [error, setError] = useState(""),
@@ -41,7 +43,7 @@ export function Screen({
     const timeout = AbortSignal.timeout(10_000);
     pending.current = controller;
     try {
-      const latest = await api<ScreenData>(
+      const latest = await api<ScreenData & { user: Person }>(
         `screen?path=${encodeURIComponent(path)}`,
         undefined,
         AbortSignal.any([controller.signal, timeout]),
@@ -52,6 +54,7 @@ export function Screen({
           return;
         }
         setData(latest);
+        setUser(latest.user);
         setLoadError("");
       }
     } catch (error) {
@@ -104,6 +107,14 @@ export function Screen({
   async function relationship(target: string, action: string) {
     await mutate("relationship", { target, action });
   }
+  async function saveDisplayName(name: string) {
+    pending.current?.abort();
+    const updated = await api<Person>("display-name", { name });
+    setUser(updated);
+    await refresh();
+  }
+  const ownProfile =
+    path.split("?")[0].toLowerCase() === `/people/${user.username}`;
   const own = (
     data && "conversations" in data ? (data.conversations ?? []) : []
   ).filter((c) => c.owner_id === user.user_id);
@@ -393,7 +404,16 @@ export function Screen({
             titles={data.titles}
           />
         )}
-        {data?.kind === "profile" && (
+        {ownProfile && (
+          <div className="page-heading">
+            <p className="eyebrow">@{user.username}</p>
+            <DisplayNameEditor
+              name={user.display_name}
+              save={saveDisplayName}
+            />
+          </div>
+        )}
+        {data?.kind === "profile" && !ownProfile && (
           <>
             <div className="page-heading">
               <p className="eyebrow">@{data.profile.username}</p>
@@ -462,6 +482,10 @@ export function Screen({
                 </div>
               )}
             </div>
+          </>
+        )}
+        {data?.kind === "profile" && (
+          <>
             <details className="profile-friends">
               <summary>Friends ({data.profile.friends.length})</summary>
               <section aria-label="Friends">
@@ -595,6 +619,13 @@ export function Screen({
                 Keep the same profile and friendships when you change sign-in
                 methods.
               </p>
+              <Link
+                className="secondary button"
+                href={`/people/${user.username}`}
+                prefetch={false}
+              >
+                View your profile
+              </Link>
             </div>
             <section className="settings-card">
               <h2>Sign-in methods</h2>
