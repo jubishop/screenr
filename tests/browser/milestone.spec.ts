@@ -4,6 +4,7 @@ import { readFile } from "node:fs/promises";
 import { setTimeout as delay } from "node:timers/promises";
 import { Pool } from "pg";
 import { browserConfig } from "../../scripts/browser-config";
+import { expectTextContrast } from "./contrast";
 
 const browserErrors: string[] = [];
 
@@ -1255,6 +1256,10 @@ test("title trailers fit desktop and mobile, send an origin referrer, and omit u
   await expect.poll(() => embeds).toEqual([`${browserConfig.baseURL}/`]);
   for (const width of [1440, 390, 320]) {
     await page.setViewportSize({ width, height: 900 });
+    await expectTextContrast(page.locator(".title-hero .overview"));
+    await expectTextContrast(
+      page.getByText("A private circle", { exact: true }),
+    );
     const bounds = await player.boundingBox();
     expect(bounds!.width).toBeGreaterThanOrEqual(200);
     expect(bounds!.height).toBeGreaterThanOrEqual(200);
@@ -2558,6 +2563,8 @@ test("unified feeds show separate actions and support inline replies on title, f
       .toHaveCount(0);
     for (const width of [390, 1440]) {
       await reader.setViewportSize({ width, height: 900 });
+      await expectTextContrast(items.getByText("recommends", { exact: true }));
+      await expectTextContrast(items.first().locator(".activity-content time"));
       for (const reply of await items.getByLabel("Add your reply").all()) {
         await expect(reply).toBeVisible();
         const visibleLines = await reply.evaluate((element) => {
@@ -2615,6 +2622,11 @@ test("unified feeds show separate actions and support inline replies on title, f
     await expect(
       reader.locator(`[data-item-id="${id}"] [data-comment-id]`),
     ).toHaveCount(3);
+    const comment = reader
+      .locator(`[data-item-id="${id}"] [data-comment-id]`)
+      .first();
+    await expectTextContrast(comment.getByText("@feedreader", { exact: true }));
+    await expectTextContrast(comment.locator("time"));
   }
   await reader.evaluate(() => window.scrollTo(0, 0));
   await reader.screenshot({ path: ".cache/feed-phone.png", fullPage: true });
