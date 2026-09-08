@@ -591,6 +591,14 @@ hr {
   padding-top: 20px;
   border-top: 1px solid var(--line);
 }
+.composer:first-child {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}
+.composer textarea {
+  min-height: 0;
+}
 .title-comment-composer {
   background: var(--white);
   border: 1px solid var(--line);
