@@ -71,7 +71,7 @@ def main():
                 combined = posixpath.normpath(str(path.parent / target) if member.issym() else str(target))
                 if target.is_absolute() or combined == '..' or combined.startswith('../'):
                     raise ValueError('Escaping archive link.')
-        for required in ('REVISION', 'server.js', 'ops/activate.sh'):
+        for required in ('REVISION', 'server.js', 'ops/activate.sh', 'ops/prune-releases.py'):
             if not any(str(PurePosixPath(m.name)) == required and m.isfile() for m in members):
                 raise ValueError(f'Missing release file: {required}')
         manifest = next(m for m in members if str(PurePosixPath(m.name)) == 'REVISION')
@@ -105,6 +105,8 @@ def main():
             raise ValueError('Public health check failed.')
         if path == 'login' and 'Send sign-in code' not in body:
             raise ValueError('Public login check failed.')
+    run('ssh', host, f'python3 /opt/screenr/releases/{revision}/ops/prune-releases.py '
+        f'/opt/screenr/releases/{revision}')
     print(f'DEPLOY SUCCEEDED: {revision}\nhttps://screenr.club')
     print('Verify changed user flows and the other shared-host applications before closing the release.')
 

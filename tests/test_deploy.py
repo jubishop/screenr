@@ -49,8 +49,10 @@ elif name == 'ssh':
     if args[-1].startswith('mktemp'): print('/tmp/screenr-release.ABC123')
     elif args[-1].startswith('sh -c'):
         sys.exit(int(os.environ.get('SSH_EXIT', '0')))
+    elif args[-1].startswith('python3 '):
+        sys.exit(int(os.environ.get('PRUNE_EXIT', '0')))
 elif name == 'curl':
-    print(os.environ.get('HEALTH', '{"ok":true}') if args[-1].endswith('health') else 'Send sign-in code')
+    print(os.environ.get('HEALTH', '{"ok":true}') if args[-1].endswith('health') else os.environ.get('LOGIN', 'Send sign-in code'))
 '''
 
 
@@ -86,7 +88,7 @@ class DeploymentFixture(unittest.TestCase):
     def make_archive(self, revision=REVISION, extra=None):
         with tarfile.open(self.base / 'release.tar.gz', 'w:gz') as archive:
             for name, content in [('REVISION', revision), ('server.js', '// server'),
-                                  ('ops/activate.sh', '#!/bin/sh\n')]:
+                                  ('ops/activate.sh', '#!/bin/sh\n'), ('ops/prune-releases.py', '# fixture\n')]:
                 data = content.encode()
                 member = tarfile.TarInfo('./' + name)
                 member.size = len(data)
@@ -187,6 +189,27 @@ class CIDeploymentTests(DeploymentFixture):
         self.assertNotEqual(result.returncode, 0)
         self.assertNotIn('DEPLOY SUCCEEDED', result.stdout)
 
+    def test_retention_runs_only_after_both_public_checks_pass(self):
+        for environment in ({'HEALTH': '{"ok":false}'}, {'LOGIN': 'unavailable'}, {}):
+            with self.subTest(environment=environment):
+                (self.base / 'calls').unlink(missing_ok=True)
+                result = self.execute(**environment)
+                calls = self.calls()
+                cleanup = [i for i, call in enumerate(calls)
+                           if call[0] == 'ssh' and call[-1].startswith('python3 ')]
+                if environment:
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertEqual(cleanup, [])
+                else:
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    self.assertEqual(len(cleanup), 1)
+                    self.assertGreater(cleanup[0], max(i for i, call in enumerate(calls) if call[0] == 'curl'))
+
+    def test_retention_failure_does_not_report_deployment_complete(self):
+        result = self.execute(PRUNE_EXIT='1')
+        self.assertNotEqual(result.returncode, 0)
+        self.assertNotIn('DEPLOY SUCCEEDED', result.stdout)
+
 
 class RemoteDeploymentTests(unittest.TestCase):
     def execute_remote(self, **environment):
@@ -205,6 +228,7 @@ class RemoteDeploymentTests(unittest.TestCase):
         readlink() { command cat "$FIXTURE/current"; }
         mkdir() { printf 'created\n' >> "$FIXTURE/events"; }
         tar() { [ "${FAIL_EXTRACT:-}" != yes ]; }
+        touch() { :; }
         rm() { printf 'removed\n' >> "$FIXTURE/events"; }
         cat() { printf '%s\n' "$REVISION"; }
         test() { if [ "$1" = -f ]; then return 0; fi; command test "$@"; }
