@@ -17,11 +17,11 @@ export function AccountProfileEditor({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [saved, setSaved] = useState(false);
-  const editButton = useRef<HTMLButtonElement>(null);
+  const restoreFocus = useRef(false);
   function close() {
+    restoreFocus.current = true;
     setDraft(null);
     setError("");
-    requestAnimationFrame(() => editButton.current?.focus());
   }
   const valid =
     draft &&
@@ -118,7 +118,12 @@ export function AccountProfileEditor({
             <span className="muted">@{user.username}</span>
           </p>
           <button
-            ref={editButton}
+            ref={(button) => {
+              if (button && restoreFocus.current) {
+                restoreFocus.current = false;
+                button.focus();
+              }
+            }}
             className="secondary"
             disabled={!interactive}
             onClick={() => {
