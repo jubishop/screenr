@@ -30,6 +30,7 @@ const {
   removeComment,
   conversations,
   profileFor,
+  setReaction,
 } = await import("../../src/server/social");
 
 before(migrate);
@@ -80,6 +81,402 @@ async function setup() {
   );
   return { alice, ben, cam, outsider, conversation };
 }
+
+test("reactions support all seven kinds and one replaceable response per person on every entry and reply", async () => {
+  const { alice, ben, conversation } = await setup();
+  await friend(alice, ben);
+  const watch = await updateTitleActivity(
+    alice,
+    "movie:1",
+    "want_to_watch",
+    true,
+  );
+  const comment = await createTitleComment(
+    alice,
+    "movie:1",
+    "Standalone",
+    false,
+  );
+  const direct = await addComment(ben, comment, "Direct", false);
+  const nested = await addComment(alice, comment, "Nested", false, direct);
+  const actionReply = await addComment(
+    ben,
+    conversation,
+    "Action reply",
+    false,
+  );
+  for (const [item, reply] of [
+    [conversation, undefined],
+    [watch, undefined],
+    [comment, undefined],
+    [comment, direct],
+    [comment, nested],
+    [conversation, actionReply],
+  ] as const) {
+    const read = async (viewer = ben) => {
+      const result = await thread(viewer, item);
+      return reply
+        ? result.comments.find((c) => c.id === reply)!.reactions
+        : result.conversation.reactions;
+    };
+    assert.deepEqual(await read(), []);
+    for (const kind of [
+      "like",
+      "love",
+      "care",
+      "haha",
+      "wow",
+      "sad",
+      "angry",
+    ]) {
+      await setReaction(ben, item, reply, kind);
+      await setReaction(ben, item, reply, kind);
+      assert.deepEqual(await read(), [{ kind, count: 1, reacted: true }]);
+      assert.deepEqual(await read(alice), [{ kind, count: 1, reacted: false }]);
+    }
+    await setReaction(alice, item, reply, "angry");
+    assert.deepEqual(await read(), [
+      { kind: "angry", count: 2, reacted: true },
+    ]);
+    await Promise.all([
+      setReaction(ben, item, reply, "love"),
+      setReaction(ben, item, reply, "love"),
+    ]);
+    assert.deepEqual(await read(), [
+      { kind: "angry", count: 1, reacted: false },
+      { kind: "love", count: 1, reacted: true },
+    ]);
+    await setReaction(ben, item, reply, null);
+    await setReaction(ben, item, reply, null);
+    assert.deepEqual(await read(), [
+      { kind: "angry", count: 1, reacted: false },
+    ]);
+  }
+});
+
+test("reaction reads and writes enforce current friendship, blocks, target membership, and removal", async () => {
+  const { alice, ben, cam, outsider, conversation } = await setup();
+  await friend(alice, ben);
+  await friend(alice, cam);
+  const reply = await addComment(cam, conversation, "Cam's reply", false);
+  await addComment(
+    alice,
+    conversation,
+    "Keep the removed parent",
+    false,
+    reply,
+  );
+  for (const target of [undefined, reply]) {
+    await assert.rejects(
+      setReaction(outsider, conversation, target, "like"),
+      /not found/i,
+    );
+    await changeRelationship(outsider, alice, "request");
+    await assert.rejects(
+      setReaction(outsider, conversation, target, "like"),
+      /not found/i,
+    );
+    await setReaction(ben, conversation, target, "love");
+  }
+  assert.deepEqual((await thread(cam, conversation)).conversation.reactions, [
+    { kind: "love", count: 1, reacted: false },
+  ]);
+  assert.deepEqual((await thread(cam, conversation)).comments[0].reactions, [
+    { kind: "love", count: 1, reacted: false },
+  ]);
+  await changeRelationship(cam, ben, "block");
+  assert.deepEqual(
+    (await thread(cam, conversation)).conversation.reactions,
+    [],
+  );
+  assert.deepEqual((await thread(cam, conversation)).comments[0].reactions, []);
+  assert.deepEqual((await thread(alice, conversation)).conversation.reactions, [
+    { kind: "love", count: 1, reacted: false },
+  ]);
+  await assert.rejects(
+    setReaction(ben, conversation, reply, "haha"),
+    /not found/i,
+  );
+  await changeRelationship(cam, ben, "unblock");
+  await changeRelationship(alice, ben, "remove");
+  assert.deepEqual(
+    (await thread(cam, conversation)).conversation.reactions,
+    [],
+  );
+  assert.deepEqual((await thread(cam, conversation)).comments[0].reactions, []);
+  await assert.rejects(
+    setReaction(ben, conversation, undefined, null),
+    /not found/i,
+  );
+  await friend(alice, ben);
+  assert.equal(
+    (await thread(cam, conversation)).conversation.reactions[0].count,
+    1,
+  );
+  assert.equal(
+    (await thread(cam, conversation)).comments[0].reactions[0].count,
+    1,
+  );
+  const other = await createTitleComment(
+    alice,
+    "movie:1",
+    "Different entry",
+    false,
+  );
+  await assert.rejects(setReaction(ben, other, reply, "like"), /not found/i);
+  await removeComment(alice, reply);
+  assert.deepEqual((await thread(cam, conversation)).comments[0].reactions, []);
+  await assert.rejects(
+    setReaction(ben, conversation, reply, "like"),
+    /not found/i,
+  );
+  await changeRelationship(alice, ben, "block");
+  await assert.rejects(
+    setReaction(ben, conversation, undefined, "like"),
+    /not found/i,
+  );
+});
+
+test("reactions exclude deleted standalone entries while preserving their live replies", async () => {
+  const { alice, ben } = await setup();
+  await friend(alice, ben);
+  const item = await createTitleComment(
+    alice,
+    "movie:1",
+    "Starting text",
+    false,
+  );
+  const reply = await addComment(ben, item, "Surviving reply", false);
+  await setReaction(ben, item, undefined, "love");
+  await setReaction(alice, item, reply, "care");
+  await removeComment(alice, item);
+  for (const filter of [{}, { title: "movie:1" }, { owner: alice }]) {
+    const entry = (await conversations(ben, filter)).find(
+      (entry) => entry.id === item,
+    )!;
+    assert.equal(entry.active, false);
+    assert.equal(entry.body, "");
+    assert.deepEqual(entry.reactions, []);
+    assert.deepEqual(entry.comments[0].reactions, [
+      { kind: "care", count: 1, reacted: false },
+    ]);
+  }
+  for (const viewer of [alice, ben]) {
+    for (const kind of ["like", null]) {
+      await assert.rejects(
+        setReaction(viewer, item, undefined, kind),
+        /not found/i,
+      );
+    }
+  }
+  await setReaction(ben, item, reply, "love");
+  assert.deepEqual((await thread(ben, item)).comments[0].reactions, [
+    { kind: "care", count: 1, reacted: false },
+    { kind: "love", count: 1, reacted: true },
+  ]);
+});
+
+test("reactions exclude unavailable parent placeholders while keeping eligible children reactable", async () => {
+  const { alice, ben, cam, conversation } = await setup();
+  await friend(alice, ben);
+  await friend(alice, cam);
+  const parent = await addComment(cam, conversation, "Hidden parent", false);
+  const child = await addComment(
+    alice,
+    conversation,
+    "Visible child",
+    false,
+    parent,
+  );
+  await setReaction(alice, conversation, parent, "love");
+  for (const hide of ["block", "unfriend"] as const) {
+    if (hide === "block") await changeRelationship(ben, cam, "block");
+    else await changeRelationship(alice, cam, "remove");
+    for (const filter of [{}, { title: "movie:1" }, { owner: alice }]) {
+      const item = (await conversations(ben, filter)).find(
+        (item) => item.id === conversation,
+      )!;
+      const placeholder = item.comments.find(
+        (comment) => comment.id === parent,
+      )!;
+      assert.equal(placeholder.unavailable, true);
+      assert.deepEqual(placeholder.reactions, []);
+    }
+    for (const kind of ["like", null])
+      await assert.rejects(
+        setReaction(ben, conversation, parent, kind),
+        /not found/i,
+      );
+    await setReaction(ben, conversation, child, "care");
+    assert.deepEqual(
+      (await thread(ben, conversation)).comments.find(
+        (comment) => comment.id === child,
+      )!.reactions,
+      [{ kind: "care", count: 1, reacted: true }],
+    );
+    if (hide === "block") await changeRelationship(ben, cam, "unblock");
+    else await friend(alice, cam);
+    assert.deepEqual(
+      (await thread(ben, conversation)).comments.find(
+        (comment) => comment.id === parent,
+      )!.reactions,
+      [{ kind: "love", count: 1, reacted: false }],
+    );
+  }
+});
+
+test("reactions share feed snapshots without changing activity, notifications, or withdrawn-action visibility", async () => {
+  const { alice, ben, conversation } = await setup();
+  await friend(alice, ben);
+  const before = await conversations(ben);
+  const jobsBefore = (
+    await db.query("SELECT count(*)::int AS n FROM email_job")
+  ).rows[0].n;
+  await setReaction(ben, conversation, undefined, "care");
+  for (const filter of [{}, { title: "movie:1" }, { owner: alice }]) {
+    const items = await conversations(ben, filter);
+    assert.deepEqual(items[0].reactions, [
+      { kind: "care", count: 1, reacted: true },
+    ]);
+    assert.deepEqual(
+      items.map((c) => [c.id, c.visible_activity]),
+      before.map((c) => [c.id, c.visible_activity]),
+    );
+  }
+  assert.equal(
+    (await db.query("SELECT count(*)::int AS n FROM email_job")).rows[0].n,
+    jobsBefore,
+  );
+  await updateTitleActivity(alice, "movie:1", "recommended", false);
+  assert.deepEqual(await conversations(ben), []);
+  await assert.rejects(
+    setReaction(ben, conversation, undefined, "like"),
+    /not found/i,
+  );
+  await updateTitleActivity(alice, "movie:1", "recommended", true);
+  assert.deepEqual((await thread(ben, conversation)).conversation.reactions, [
+    { kind: "care", count: 1, reacted: true },
+  ]);
+});
+
+test("reactions reject unsupported values and invalid or missing targets without changing the saved response", async () => {
+  const { alice, conversation } = await setup();
+  await setReaction(alice, conversation, undefined, "like");
+  for (const kind of ["", "LIKE", "dislike", "👍", 1, {}, undefined])
+    await assert.rejects(
+      setReaction(alice, conversation, undefined, kind),
+      /invalid reaction/i,
+    );
+  for (const reply of ["", "invalid", 1, {}])
+    await assert.rejects(
+      setReaction(alice, conversation, reply, "love"),
+      /invalid reply/i,
+    );
+  await assert.rejects(
+    setReaction(alice, randomUUID(), undefined, "like"),
+    /not found/i,
+  );
+  await assert.rejects(
+    setReaction(alice, conversation, "9999999999999999999999999", "like"),
+    /not found/i,
+  );
+  assert.deepEqual((await thread(alice, conversation)).conversation.reactions, [
+    { kind: "like", count: 1, reacted: true },
+  ]);
+});
+
+test("earlier discussions and retained withdrawn actions support independent reactions", async () => {
+  const { alice, ben, conversation } = await setup();
+  await friend(alice, ben);
+  const legacy = (
+    await db.query(
+      "SELECT id FROM conversation WHERE owner_id=$1 AND title_id='movie:1'",
+      [alice],
+    )
+  ).rows[0].id;
+  const reply = (
+    await db.query(
+      "INSERT INTO comment(conversation_id,author_id,body) VALUES($1,$2,'Earlier reply') RETURNING id::text",
+      [legacy, ben],
+    )
+  ).rows[0].id;
+  await setReaction(ben, legacy, undefined, "wow");
+  await setReaction(alice, legacy, reply, "care");
+  const result = await thread(ben, legacy);
+  assert.equal(result.conversation.item_type, "earlier");
+  assert.deepEqual(result.conversation.reactions, [
+    { kind: "wow", count: 1, reacted: true },
+  ]);
+  assert.deepEqual(result.comments[0].reactions, [
+    { kind: "care", count: 1, reacted: false },
+  ]);
+  await addComment(ben, conversation, "Keep this discussion", false);
+  await updateTitleActivity(alice, "movie:1", "recommended", false);
+  await setReaction(ben, conversation, undefined, "sad");
+  assert.equal(
+    (await thread(ben, conversation)).conversation.reactions[0].kind,
+    "sad",
+  );
+});
+
+test("profiles list accepted friends for owners, friends, and nonfriends without exposing private activity or requests", async () => {
+  const { alice, ben, cam, outsider } = await setup();
+  await friend(alice, cam);
+  await friend(alice, ben);
+  const incoming = await person("incoming");
+  const outgoing = await person("outgoing");
+  await changeRelationship(incoming, alice, "request");
+  await changeRelationship(alice, outgoing, "request");
+
+  for (const viewer of [alice, ben, outsider]) {
+    const screen = await loadScreen(viewer, "/people/ALICE");
+    assert.ok(screen.kind === "profile");
+    assert.deepEqual(screen.profile.friends, [
+      { user_id: ben, username: "ben", display_name: "ben" },
+      { user_id: cam, username: "cam", display_name: "cam" },
+    ]);
+    assert.equal(screen.conversations.length, viewer === outsider ? 0 : 1);
+  }
+  const empty = await loadScreen(alice, "/people/outsider");
+  assert.ok(empty.kind === "profile");
+  assert.deepEqual(empty.profile.friends, []);
+});
+
+test("profile friends hide blocked people in both directions and reject blocked profiles", async () => {
+  const { alice, ben, cam, outsider } = await setup();
+  await friend(alice, ben);
+  await friend(alice, cam);
+  await changeRelationship(outsider, ben, "block");
+  await changeRelationship(cam, outsider, "block");
+  const filtered = await loadScreen(outsider, "/people/alice");
+  assert.ok(filtered.kind === "profile");
+  assert.deepEqual(filtered.profile.friends, []);
+  const owner = await loadScreen(alice, "/people/alice");
+  assert.ok(owner.kind === "profile");
+  assert.equal(owner.profile.friends.length, 2);
+  await changeRelationship(outsider, alice, "block");
+  await assert.rejects(loadScreen(outsider, "/people/alice"), /not found/i);
+  await assert.rejects(loadScreen(alice, "/people/outsider"), /not found/i);
+});
+
+test("profile friends follow acceptance, removal, and blocking on each read", async () => {
+  const { alice, ben, outsider } = await setup();
+  const friends = async () => {
+    const screen = await loadScreen(outsider, "/people/alice");
+    assert.ok(screen.kind === "profile");
+    return screen.profile.friends.map((p) => p.username);
+  };
+  await changeRelationship(alice, ben, "request");
+  assert.deepEqual(await friends(), []);
+  await changeRelationship(ben, alice, "accept");
+  assert.deepEqual(await friends(), ["ben"]);
+  await changeRelationship(ben, alice, "remove");
+  assert.deepEqual(await friends(), []);
+  await friend(alice, ben);
+  assert.deepEqual(await friends(), ["ben"]);
+  await changeRelationship(alice, ben, "block");
+  assert.deepEqual(await friends(), []);
+});
 
 test("watch together lists every current shared choice, newest shared first", async () => {
   const { alice, ben, cam } = await setup();
@@ -559,7 +956,7 @@ test("standalone discussions enforce current access, independent replies, remova
   await assert.rejects(addComment(ben, first, "Revoked", false), /not found/);
   assert.deepEqual(
     (await thread(cam, first)).comments.map((c) => c.id),
-    [child, grandchild],
+    [parent, child, grandchild],
   );
   await friend(alice, ben);
   assert.equal((await thread(ben, first)).comments.length, 3);
@@ -858,7 +1255,246 @@ test("blocking hides the pair on mutual threads, prevents requests, and excludes
   await changeRelationship(ben, cam, "unblock");
   assert.equal((await thread(ben, conversation)).comments.length, 2);
 });
-test("nested replies stay in one group; only the host removes comments and preserves replies", async () => {
+test("standalone deletion erases only the author's starting text and preserves eligible replies in every feed", async () => {
+  const { alice, ben, cam, outsider, conversation: action } = await setup();
+  await friend(alice, ben);
+  await friend(alice, cam);
+  const id = await createTitleComment(
+    alice,
+    "movie:1",
+    "Delete this spoiler",
+    true,
+  );
+  const other = await createTitleComment(
+    alice,
+    "movie:1",
+    "Keep this entry",
+    false,
+  );
+  const parent = await addComment(ben, id, "Keep this reply", false);
+  const child = await addComment(
+    cam,
+    id,
+    "Keep this nested reply",
+    true,
+    parent,
+  );
+  const before = (await thread(alice, id)).conversation;
+  for (const viewer of [ben, cam, outsider])
+    await assert.rejects(removeComment(viewer, id), /not found/);
+  await assert.rejects(removeComment(alice, action), /not found/);
+  assert.equal(
+    (await thread(alice, id)).conversation.body,
+    "Delete this spoiler",
+  );
+
+  await removeComment(alice, id);
+  await removeComment(alice, id);
+  for (const viewer of [alice, ben, cam]) {
+    for (const filter of [{}, { title: "movie:1" }, { owner: alice }]) {
+      const entries = await conversations(viewer, filter);
+      const removed = entries.find((entry) => entry.id === id)!;
+      assert.equal(removed.active, false);
+      assert.equal(removed.body, "");
+      assert.equal(removed.spoiler, true);
+      assert.deepEqual(
+        removed.comments.map((reply) => reply.id),
+        [parent, child],
+      );
+      assert.equal(removed.comments[1].root_id, parent);
+      assert.equal(removed.comments[1].addressed_username, "ben");
+      assert.equal(removed.comments[0].body, "Keep this reply");
+      assert.equal(removed.comments[1].body, "Keep this nested reply");
+      assert.equal(
+        new Date(removed.visible_activity).getTime(),
+        new Date(before.visible_activity).getTime(),
+      );
+      assert.equal(
+        entries.find((entry) => entry.id === other)?.body,
+        "Keep this entry",
+      );
+      assert.equal(entries.find((entry) => entry.id === action)?.active, true);
+    }
+  }
+  assert.equal(
+    (await db.query("SELECT body FROM title_comment WHERE id::text=$1", [id]))
+      .rows[0].body,
+    "[removed]",
+  );
+  const linked = await loadScreen(
+    ben,
+    `/titles/movie/1?item=${id}&reply=${child}`,
+  );
+  assert.equal(linked.kind, "title");
+  if (linked.kind !== "title") throw new Error("Expected title");
+  assert.equal(linked.targetUnavailable, false);
+  const continued = await addComment(
+    ben,
+    id,
+    "Continue this discussion",
+    false,
+  );
+  const nested = await addComment(
+    cam,
+    id,
+    "Continue the reply group",
+    false,
+    parent,
+  );
+  const ongoing = await thread(alice, id);
+  assert.ok(ongoing.comments.some((reply) => reply.id === continued));
+  assert.equal(
+    ongoing.comments.find((reply) => reply.id === nested)?.root_id,
+    parent,
+  );
+  await changeRelationship(alice, ben, "remove");
+  await assert.rejects(thread(ben, id), /not found/);
+  await assert.rejects(removeComment(ben, parent), /not found/);
+  await friend(alice, ben);
+  assert.equal((await thread(ben, id)).conversation.body, "");
+  await changeRelationship(alice, ben, "block");
+  await assert.rejects(thread(ben, id), /not found/);
+});
+
+test("deleted standalone entries disappear when no live reply is visible to the reader", async () => {
+  const { alice, ben, cam } = await setup();
+  await friend(alice, ben);
+  await friend(alice, cam);
+  const empty = await createTitleComment(alice, "movie:1", "No replies", false);
+  await removeComment(alice, empty);
+  await removeComment(alice, empty);
+  await assert.rejects(thread(alice, empty), /not found/);
+  await assert.rejects(
+    addComment(alice, empty, "Cannot revive an empty deleted entry", false),
+    /not found/,
+  );
+  const linked = await loadScreen(alice, `/titles/movie/1?item=${empty}`);
+  assert.equal(linked.kind, "title");
+  if (linked.kind !== "title") throw new Error("Expected title");
+  assert.equal(linked.targetUnavailable, true);
+
+  const id = await createTitleComment(alice, "movie:1", "Starting text", false);
+  const reply = await addComment(cam, id, "Only live reply", false);
+  await removeComment(alice, id);
+  await changeRelationship(ben, cam, "block");
+  for (const filter of [{}, { title: "movie:1" }, { owner: alice }]) {
+    assert.ok(
+      !(await conversations(ben, filter)).some(
+        (entry) => entry.id === empty || entry.id === id,
+      ),
+    );
+    assert.ok(
+      (await conversations(alice, filter)).some((entry) => entry.id === id),
+    );
+  }
+  await assert.rejects(thread(ben, id), /not found/);
+  await changeRelationship(ben, cam, "unblock");
+  assert.equal((await thread(ben, id)).conversation.body, "");
+  await changeRelationship(alice, cam, "remove");
+  await assert.rejects(thread(alice, id), /not found/);
+  await friend(alice, cam);
+  assert.equal((await thread(ben, id)).comments[0].id, reply);
+  await removeComment(cam, reply);
+  for (const viewer of [alice, ben, cam])
+    await assert.rejects(thread(viewer, id), /not found/);
+});
+
+for (const kind of ["action", "standalone"] as const) {
+  test(`comment authors can delete their own comments in a friend's ${kind} conversation and preserve replies`, async () => {
+    const { alice, ben, cam, outsider, conversation: action } = await setup();
+    const conversation =
+      kind === "standalone"
+        ? await createTitleComment(
+            alice,
+            "movie:1",
+            "Standalone discussion",
+            false,
+          )
+        : action;
+    await friend(alice, ben);
+    await friend(alice, cam);
+    const parent = await addComment(ben, conversation, "My comment", true);
+    const reply = await addComment(
+      cam,
+      conversation,
+      "Keep this reply",
+      false,
+      parent,
+    );
+    for (const viewer of [cam, outsider])
+      await assert.rejects(removeComment(viewer, parent), /not found/);
+    assert.equal(
+      (await thread(ben, conversation)).comments[0].body,
+      "My comment",
+    );
+
+    await removeComment(ben, parent);
+    await removeComment(ben, parent);
+    for (const viewer of [alice, ben, cam]) {
+      const comments = (await thread(viewer, conversation)).comments;
+      assert.equal(comments[0].removed, true);
+      assert.equal(comments[0].body, "");
+      assert.equal(comments[1].id, reply);
+      assert.equal(comments[1].root_id, parent);
+      assert.equal(comments[1].addressed_username, "ben");
+      assert.equal(comments[1].body, "Keep this reply");
+    }
+    assert.equal(
+      (await db.query("SELECT body FROM comment WHERE id::text=$1", [parent]))
+        .rows[0].body,
+      "[removed]",
+    );
+    await removeComment(cam, reply);
+    assert.deepEqual((await thread(alice, conversation)).comments, []);
+    await assert.rejects(
+      addComment(ben, conversation, "Reply to removed", false, parent),
+      /not found/,
+    );
+  });
+
+  test(`comment deletion rechecks current ${kind} conversation access`, async () => {
+    const { alice, ben, conversation: action } = await setup();
+    const conversation =
+      kind === "standalone"
+        ? await createTitleComment(
+            alice,
+            "movie:1",
+            "Standalone discussion",
+            false,
+          )
+        : action;
+    await friend(alice, ben);
+    const comment = await addComment(
+      ben,
+      conversation,
+      "Existing comment",
+      false,
+    );
+    await changeRelationship(alice, ben, "remove");
+    await assert.rejects(removeComment(ben, comment), /not found/);
+    await assert.rejects(removeComment(alice, comment), /not found/);
+    await friend(alice, ben);
+    await changeRelationship(alice, ben, "block");
+    await assert.rejects(removeComment(ben, comment), /not found/);
+    await changeRelationship(alice, ben, "unblock");
+    await friend(alice, ben);
+    assert.equal(
+      (await thread(ben, conversation)).comments[0].body,
+      "Existing comment",
+    );
+    await removeComment(ben, comment);
+    const own = await addComment(
+      alice,
+      conversation,
+      "Host's own comment",
+      false,
+    );
+    await removeComment(alice, own);
+    assert.deepEqual((await thread(alice, conversation)).comments, []);
+  });
+}
+
+test("nested replies stay in one group; the host can remove others' comments and preserve replies", async () => {
   const { alice, ben, cam, conversation } = await setup();
   await friend(alice, ben);
   await friend(alice, cam);
@@ -877,6 +1513,142 @@ test("nested replies stay in one group; only the host removes comments and prese
   assert.equal(after.comments[0].body, "");
   assert.equal(after.comments[0].removed, true);
   assert.equal(after.comments.length, 3);
+});
+test("nested groups retain only safe parent context through blocking, removal, and friendship changes", async () => {
+  const { alice, ben, cam, outsider, conversation } = await setup();
+  await friend(alice, ben);
+  await friend(alice, cam);
+  const parent = await addComment(cam, conversation, "Private parent", true);
+  const empty = await addComment(
+    cam,
+    conversation,
+    "Empty hidden group",
+    false,
+  );
+  const child = await addComment(
+    ben,
+    conversation,
+    "Visible child",
+    false,
+    parent,
+  );
+  const removedChild = await addComment(
+    alice,
+    conversation,
+    "Removed child",
+    false,
+    parent,
+  );
+  await removeComment(alice, removedChild);
+  await changeRelationship(ben, cam, "block");
+  for (const filter of [{}, { title: "movie:1" }, { owner: alice }]) {
+    const comments = (await conversations(ben, filter))[0].comments;
+    assert.deepEqual(
+      comments.map((c) => c.id),
+      [parent, child],
+    );
+    assert.deepEqual(comments[0], {
+      id: parent,
+      root_id: null,
+      author_id: null,
+      username: null,
+      display_name: null,
+      body: "",
+      spoiler: false,
+      addressed_username: null,
+      removed: false,
+      unavailable: true,
+      reactions: [],
+      created_at: comments[0].created_at,
+    });
+    assert.equal(comments[1].addressed_username, null);
+  }
+  await assert.rejects(
+    addComment(ben, conversation, "No hidden targets", false, parent),
+    /not found/,
+  );
+  await assert.rejects(
+    addComment(ben, conversation, "No removed targets", false, removedChild),
+    /not found/,
+  );
+  await assert.rejects(thread(outsider, conversation), /not found/);
+  const sibling = await addComment(
+    ben,
+    conversation,
+    "Reply to visible child",
+    false,
+    child,
+  );
+  assert.equal(
+    (await thread(ben, conversation)).comments.at(-1)!.root_id,
+    parent,
+  );
+  await changeRelationship(ben, cam, "unblock");
+  assert.equal(
+    (await thread(ben, conversation)).comments[0].body,
+    "Private parent",
+  );
+  await changeRelationship(alice, cam, "remove");
+  assert.equal((await thread(ben, conversation)).comments[0].unavailable, true);
+  await friend(alice, cam);
+  assert.equal(
+    (await thread(ben, conversation)).comments[0].unavailable,
+    false,
+  );
+  await removeComment(alice, parent);
+  await removeComment(alice, empty);
+  const after = (await thread(ben, conversation)).comments;
+  assert.deepEqual(
+    after.map((c) => c.id),
+    [parent, child, sibling],
+  );
+  assert.equal(after[0].removed, true);
+  assert.equal(after[0].body, "");
+  await removeComment(alice, child);
+  await removeComment(alice, sibling);
+  assert.deepEqual((await thread(ben, conversation)).comments, []);
+  await changeRelationship(alice, ben, "remove");
+  await assert.rejects(thread(ben, conversation), /not found/);
+});
+
+test("nested reply links reject unavailable parents and preserve stored groups on every feed", async () => {
+  const { alice, ben, cam, conversation } = await setup();
+  await friend(alice, ben);
+  await friend(alice, cam);
+  await db.query(
+    "INSERT INTO title_trailer(title_id,trailer,expires_at) VALUES('movie:1',NULL,now()+interval '1 day') ON CONFLICT(title_id) DO UPDATE SET expires_at=excluded.expires_at",
+  );
+  const parent = await addComment(cam, conversation, "Parent", false);
+  const child = await addComment(
+    alice,
+    conversation,
+    "Spoiler child",
+    true,
+    parent,
+  );
+  for (let i = 0; i < 5; i++)
+    await addComment(alice, conversation, `Later ${i}`, false);
+  await changeRelationship(ben, cam, "block");
+  for (const path of ["/", "/titles/movie/1", "/people/alice"]) {
+    const screen = await loadScreen(ben, path);
+    assert.ok("conversations" in screen && screen.conversations);
+    assert.equal(screen.conversations[0].comments[0].id, parent);
+    assert.equal(screen.conversations[0].comments[1].root_id, parent);
+  }
+  const hidden = await loadScreen(
+    ben,
+    `/titles/movie/1?item=${conversation}&reply=${parent}`,
+  );
+  assert.ok(hidden.kind === "title");
+  assert.equal(hidden.targetUnavailable, true);
+  assert.equal(hidden.target?.reply, undefined);
+  const visible = await loadScreen(
+    ben,
+    `/titles/movie/1?item=${conversation}&reply=${child}`,
+  );
+  assert.ok(visible.kind === "title");
+  assert.equal(visible.target?.reply, child);
+  assert.equal(visible.conversations[0].comments[1].spoiler, true);
 });
 test("screen reads and legacy links preserve item identity and filter reply targets before navigation", async () => {
   const { alice, ben, cam, outsider, conversation: id } = await setup();

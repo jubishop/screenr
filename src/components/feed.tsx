@@ -2,10 +2,11 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import type { FeedItem, Person } from "../shared";
-import { dateLabel, useInteractive } from "./client";
+import { api, dateLabel, useInteractive } from "./client";
 import { Poster } from "./poster";
 import { ThreadView } from "./thread";
 import { preservePosition } from "./position";
+import { Reactions } from "./reactions";
 
 type Known = Map<string, { activity: string; comments: Set<string> }>;
 function capture(items: FeedItem[]): Known {
@@ -57,6 +58,8 @@ export function FeedView({
             accepted.get(c.id)!.activity !== c.activity_at)) ||
         c.comments.some(
           (r) =>
+            !r.removed &&
+            !r.unavailable &&
             r.author_id !== user.user_id &&
             !accepted.get(c.id)?.comments.has(r.id),
         ),
@@ -65,19 +68,31 @@ export function FeedView({
     .flatMap((c) => {
       const previous = accepted.get(c.id);
       if (!previous && c.owner_id !== user.user_id) return [];
-      const comments = c.comments.filter(
+      const acceptedComments = c.comments.filter(
         (r) => previous?.comments.has(r.id) || r.author_id === user.user_id,
+      );
+      // Every accepted child needs its parent, including own replies posted
+      // in another tab. Keep unrelated incoming groups behind New activity.
+      const roots = new Set(
+        acceptedComments
+          .filter((r) => !r.removed && !r.unavailable)
+          .map((r) => r.root_id),
+      );
+      const comments = c.comments.filter(
+        (r) =>
+          roots.has(r.id) ||
+          (!r.removed && !r.unavailable && acceptedComments.includes(r)),
       );
       if (
         !c.active &&
-        !comments.some((r) => !r.removed) &&
+        !comments.some((r) => !r.removed && !r.unavailable) &&
         !(c.item_type === "earlier" && comments.length)
       )
         return [];
       const activation =
         c.owner_id === user.user_id ? c.activity_at : previous!.activity;
       const times = comments
-        .filter((r) => !r.removed)
+        .filter((r) => !r.removed && !r.unavailable)
         .map((r) => Date.parse(r.created_at));
       const visibleTime =
         c.item_type === "earlier"
@@ -172,7 +187,23 @@ function FeedEntry({
   }, [target, item, hiddenSpoiler]);
   const [copying, setCopying] = useState(false);
   const [copyMessage, setCopyMessage] = useState("");
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
   const titleURL = item ? `/titles/${item.title_id.replace(":", "/")}` : "";
+
+  async function deleteComment() {
+    if (!item || deleting) return;
+    setDeleting(true);
+    setDeleteError("");
+    try {
+      await api("remove-comment", { id: item.id });
+      await refresh();
+    } catch (error) {
+      setDeleteError((error as Error).message);
+    } finally {
+      setDeleting(false);
+    }
+  }
 
   async function copyDiscussion() {
     if (!item || copying) return;
@@ -237,6 +268,9 @@ function FeedEntry({
                 {dateLabel(item.visible_activity, interactive)}
               </time>
             </p>
+            {item.item_type === "comment" && !item.active && (
+              <p className="muted">Comment removed</p>
+            )}
             {hiddenSpoiler ? (
               <button className="spoiler" onClick={() => setRevealed(true)}>
                 Contains spoilers · Reveal discussion
@@ -245,6 +279,18 @@ function FeedEntry({
               item.body && <p className="comment-body">{item.body}</p>
             )}
             <div className="inline-actions">
+              {item.item_type === "comment" &&
+                item.active &&
+                item.owner_id === user.user_id && (
+                  <button
+                    type="button"
+                    className="text-button muted"
+                    disabled={busy || deleting || !interactive}
+                    onClick={() => void deleteComment()}
+                  >
+                    {deleting ? "Deleting…" : "Delete"}
+                  </button>
+                )}
               <button
                 type="button"
                 className="text-button conversation-link"
@@ -287,9 +333,22 @@ function FeedEntry({
                 </>
               )}
             </div>
+            {!hiddenSpoiler &&
+              (item.item_type !== "comment" || item.active) && (
+                <Reactions
+                  item={item.id}
+                  summary={item.reactions}
+                  refresh={refresh}
+                />
+              )}
             <p className="small" role="status">
               {copyMessage}
             </p>
+            {deleteError && (
+              <p className="error" role="alert">
+                {deleteError}
+              </p>
+            )}
           </div>
         </header>
       )}

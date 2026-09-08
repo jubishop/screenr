@@ -98,6 +98,24 @@ about a show independently of their structured activity. The user noted
 that this capability is not implemented yet. It is deferred from issue #5
 under the delivery-scope decision below.
 
+### Deleting standalone comments preserves replies — 2026-09-07
+
+**Decision:** Authors can delete their own standalone top-level comments.
+Erase the starting text and retain eligible replies under **Comment removed**.
+Hide the entry from a reader when it has no remaining visible, nonremoved
+replies. Apply this rule in the title, friends, and author-profile feeds.
+Current access, blocking, and spoiler rules continue to apply.
+Discussions that remain visible stay open for new replies. An entry with
+no visible replies stays unavailable and cannot be revived by posting to it.
+
+**Why:** The user accepted preserving other people's contributions while
+following the existing comment-removal behavior.
+
+**Tradeoff:** A discussion with visible replies remains available after its
+starting text is deleted. Deleting the whole discussion was rejected.
+The user also accepted keeping visible discussions open so participants can
+continue talking; closing them to new replies was rejected.
+
 ### Review edits update and move the existing item — 2026-09-06
 
 **Decision:** Editing a review updates its existing feed item in place
@@ -358,24 +376,45 @@ interview if they preserve these decisions:
 
 ## Shared feed implementation
 
-The implementation described here still uses the earlier flat reply preview.
-The accepted nested grouping and direct-comment preview above require a
-follow-up change; they are product requirements, not a claim of delivery.
-
 `src/server/social.ts` reads each eligible action or standalone comment and
 its replies in one PostgreSQL snapshot. The friends, title, and profile screens use this same
 read path. Items sort by the latest eligible activity at millisecond precision,
-then by item UUID for a stable tie. Removed comments remain placeholders but
-do not add activity or count as live replies. A withdrawn action with only
-removed or inaccessible replies is hidden; its stored item remains reusable.
+then by item UUID for a stable tie. A removed or inaccessible direct comment
+remains as parent context only while it has eligible nested replies. It does
+not add activity or count as a live reply. Removed nested replies and empty
+parent placeholders are omitted. A withdrawn action with only removed or
+inaccessible replies is hidden; its stored item remains reusable.
 
-`src/components/feed.tsx` supplies the shared interface. It initially renders
-the latest three eligible replies, in timestamp and comment-ID order. Earlier
-replies expand inline. Loading incoming replies retains the displayed preview
-so the reply being read stays in place; a fresh page starts with three again.
-All eligible items and replies are currently read in
-one request; there is no loaded-page boundary that can omit a link target.
-This retains the application's small-circle, unpaginated read model.
+An inaccessible parent returns no author ID, username, display name, text,
+spoiler flag, or addressed-person label. Its ID and date preserve the group's
+identity and chronological position. The browser shows **Comment unavailable**.
+A removed accessible parent shows **Comment removed**. Each descendant and
+addressed-person label still passes the current access checks. A placeholder
+cannot be a reply target, and it never grants access to the feed item.
+
+`src/components/feed.tsx` and `src/components/thread.tsx` supply the shared
+interface. The initial preview contains the latest three eligible direct
+comments. Nested replies do not consume preview places. Parent placeholders
+supply context without counting as live comments. **Show earlier comments**
+expands earlier groups inline. Each group's **View N replies** control expands
+or collapses one indented level with a connecting border. Direct comments and
+nested replies each retain timestamp and comment-ID order; nested activity
+does not move the direct parent within the discussion.
+
+Selecting **Reply** focuses a composer immediately below that comment.
+**Replying to @name** identifies its destination. The bottom **Add your reply**
+composer always posts directly to the feed item. Each destination keeps its
+own local draft and spoiler flag. Cancel or switching targets retains that
+destination's draft for later use on the same page. A target that becomes
+unavailable loses its identity label and cannot accept a post; its unsent draft
+remains available. A successful nested post expands its parent group.
+
+Loading incoming replies retains the displayed preview, expanded groups, and
+drafts so the reply being read stays in place. A fresh visit starts with the
+three-comment preview and collapsed groups. All eligible items and replies are
+currently read in one request; there is no loaded-page boundary that can omit
+a link target. This retains the application's small-circle, unpaginated read
+model.
 
 Open feeds use the existing three-second poll, focus refresh, and ten-second
 refresh deadline. A failed refresh hides server content. Local drafts remain
@@ -387,8 +426,8 @@ visible reading anchor and the draft.
 
 Item links use `/titles/<kind>/<tmdb-id>?item=<item-id>`. A targeted reply adds
 `&reply=<comment-id>`. The server checks the title, item, and reply together;
-the browser expands and scrolls to an eligible target without revealing its
-spoilers. Old `/conversations/<id>` links redirect to the preserved discussion,
+the browser exposes earlier direct comments, expands the target's parent
+group, and scrolls to an eligible target without revealing its spoilers. Old `/conversations/<id>` links redirect to the preserved discussion,
 an eligible action, or the title feed. Inaccessible targets reveal no private
 content. Existing notification features are unchanged; these same title links
 are available to future notification work.
@@ -410,7 +449,42 @@ saving remains available for the next comment. Creation does not change
 Recommend or Want to watch. Editing standalone comments, reviews, ratings,
 additional watch statuses, and titleless posts remain outside this feature.
 
+### Emoji reactions
+
+Issue [#18](https://github.com/jubishop/screenr/issues/18) adds Like, Love,
+Care, Haha, Wow, Sad, and Angry to existing feed entries and replies.
+The same controls and counts appear in title, friends, and profile feeds.
+Native emoji represent the seven named reactions.
+
+The implementation uses one reaction per person per entry or reply. Choosing
+another reaction replaces it; choosing the selected reaction removes it.
+The React button opens a labeled picker that supports touch and keyboard
+input. Count buttons show the reader's selected reaction and also permit
+changing or removing it. A failed save shows an error and allows retry.
+
+Reaction reads and writes use the existing conversation audience. Counts
+exclude people who are no longer friends with the entry owner and people
+blocked by the reader. Reactions to a reply also require access between
+the reacting person and the reply author. Restoring access restores stored
+reactions. Removed standalone comments and replies show no reactions and
+reject new ones. Unavailable parent placeholders also hide reactions and
+reject reaction writes. Live replies in a removed or unavailable parent's
+discussion still support reactions. Spoiler reactions stay behind the
+corresponding reveal control.
+
+These implementation defaults preserve the existing feed and notification
+rules: reactions update through the current refresh path, do not change item
+ordering, and do not send alerts. Reactions alone do not keep a withdrawn
+action visible; reactivation restores its stored reactions.
+
 ### Migration and rollback compatibility
+
+The nested layout uses the existing `comment.root_id` and `addressed_id`
+relationships. Direct comments have no root; replying to a nested reply reuses
+its direct root and records the addressed author. The server rejects targets
+from another item and inaccessible or removed targets. No schema change or
+relationship backfill is needed for the nested layout. Existing comment IDs,
+content, dates, authors, and stored grouping remain intact.
 
 Migration `004-feed-items.sql` adds `feed_item` and `comment.feed_item_id`.
 Existing comments remain on an **Earlier discussion** item with the original
@@ -443,6 +517,20 @@ entries or their replies. Those records remain stored and become visible
 again with this release. Take
 the normal pre-upgrade backup; no separate backfill or manual migration step
 is needed.
+
+Migration `006-reactions.sql` adds reaction storage with foreign keys to
+existing items and replies and uniqueness constraints for each person and
+target. It changes no existing content or identities. The preceding release
+can still read and write its entries and replies; it ignores the reaction
+table. The normal deployment migration and backup procedure applies.
+
+Migration `006-remove-title-comments.sql` adds removal state to standalone
+comments. Deletion erases the stored starting text, retains the original
+spoiler flag and activity date, and preserves the reply group. The shared
+feed hides a deleted entry when no live reply is visible to that reader.
+The preceding release can still create and read entries after migration;
+on rollback, it shows the stored **[removed]** marker and may display empty
+deleted entries. Deleted text is not restored.
 
 ## Decisions deferred to future features
 

@@ -457,6 +457,22 @@ export function Screen({
                 </div>
               )}
             </div>
+            <details className="profile-friends">
+              <summary>Friends ({data.profile.friends.length})</summary>
+              <section aria-label="Friends">
+                {data.profile.friends.map((person) => (
+                  <div className="person-row" key={person.user_id}>
+                    <Link href={`/people/${person.username}`} prefetch={false}>
+                      <strong>{person.display_name}</strong>
+                      <span className="muted"> @{person.username}</span>
+                    </Link>
+                  </div>
+                ))}
+                {!data.profile.friends.length && (
+                  <p className="empty">No friends to show yet.</p>
+                )}
+              </section>
+            </details>
             {!data.profile.can_read && (
               <p className="empty">
                 You’ll see their activity after you become friends.
