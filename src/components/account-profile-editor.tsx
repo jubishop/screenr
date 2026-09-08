@@ -87,7 +87,9 @@ export function AccountProfileEditor({
           </label>
           <p id="username-help" className="small muted">
             Use 3–24 letters, numbers, or underscores. Usernames are saved in
-            lowercase. Changing your username changes your profile link.
+            lowercase. Changing your username changes your profile link. Old
+            links will no longer lead to your profile. Someone else can use your
+            old username.
           </p>
           <div className="inline-actions">
             <button className="primary" disabled={busy || !valid}>
@@ -127,13 +129,11 @@ export function AccountProfileEditor({
           >
             Edit profile
           </button>
-          {saved && (
-            <p className="small" role="status">
-              Profile saved.
-            </p>
-          )}
         </>
       )}
+      <p className="small" role="status" aria-atomic="true">
+        {saved ? "Profile saved." : ""}
+      </p>
     </section>
   );
 }

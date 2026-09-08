@@ -144,6 +144,16 @@ test("account profile editing saves both names, preserves drafts, and updates pr
   await expect(username).toHaveValue("accountowner");
   await expect(username).toHaveAttribute("maxlength", "24");
   await expect(name).toHaveAttribute("maxlength", "60");
+  await expect
+    .soft(username)
+    .toHaveAccessibleDescription(
+      /Old links will no longer lead to your profile\. Someone else can use your old username\./,
+    );
+  const profileStatus = owner
+    .getByRole("region", { name: "Your profile", exact: true })
+    .getByRole("status");
+  await expect(profileStatus).toHaveText("");
+  const liveRegion = await profileStatus.elementHandle();
   let writes = 0;
   owner.on("request", (request) => {
     if (
@@ -175,6 +185,7 @@ test("account profile editing saves both names, preserves drafts, and updates pr
   await expect(username).toHaveValue("unsaved_handle");
   await cancel.click();
   await expect(edit).toBeFocused();
+  await expect(profileStatus).toHaveText("");
   expect(writes).toBe(0);
   await edit.click();
   await expect(name).toHaveValue("accountowner");
@@ -208,6 +219,7 @@ test("account profile editing saves both names, preserves drafts, and updates pr
     owner.getByRole("alert").filter({ hasText: "Could not save" }),
   ).toBeVisible();
   await expect(username).toHaveValue("Account_New");
+  await expect(profileStatus).toHaveText("");
   let release!: () => void;
   const gate = new Promise<void>((resolve) => {
     release = resolve;
@@ -232,9 +244,18 @@ test("account profile editing saves both names, preserves drafts, and updates pr
     release();
   }
   await expect(edit).toBeVisible();
-  await expect(
-    owner.getByRole("status").filter({ hasText: "Profile saved." }),
-  ).toBeVisible();
+  await expect(profileStatus).toHaveText("Profile saved.");
+  expect(
+    await liveRegion!.evaluate(
+      (element) =>
+        element.isConnected && element.textContent === "Profile saved.",
+    ),
+  ).toBe(true);
+  await expect(edit).toBeFocused();
+  await edit.click();
+  await expect(profileStatus).toHaveText("");
+  await cancel.click();
+  await expect(profileStatus).toHaveText("");
   await expect(owner.locator(".sidebar-bottom")).toContainText(
     "Renée Movie Fan 🎬",
   );
@@ -246,6 +267,7 @@ test("account profile editing saves both names, preserves drafts, and updates pr
     owner.getByRole("link", { name: "View your profile", exact: true }),
   ).toHaveAttribute("href", "/people/account_new");
   await owner.reload();
+  await expect(profileStatus).toHaveText("");
   await edit.click();
   await expect(name).toHaveValue("Renée Movie Fan 🎬");
   await expect(username).toHaveValue("account_new");
@@ -3177,12 +3199,16 @@ test("Google signup preserves edited display names across email and Google sign-
     page.getByRole("heading", { name: "Chosen Google Name", exact: true }),
   ).toBeVisible();
   await page.goto("/account");
-  await expect(page.getByRole("status")).toHaveText("Google connected.");
+  await expect(
+    page.getByRole("status").filter({ hasText: "Google connected." }),
+  ).toHaveText("Google connected.");
   await expect(
     page.getByRole("button", { name: "Connect Google", exact: true }),
   ).toHaveCount(0);
   await page.reload();
-  await expect(page.getByRole("status")).toHaveText("Google connected.");
+  await expect(
+    page.getByRole("status").filter({ hasText: "Google connected." }),
+  ).toHaveText("Google connected.");
   await page.getByRole("button", { name: "Sign out", exact: true }).click();
   await page.getByLabel("Email address").fill(email);
   await page
@@ -3207,7 +3233,9 @@ test("Google signup preserves edited display names across email and Google sign-
     page.getByRole("heading", { name: "Chosen Google Name", exact: true }),
   ).toBeVisible();
   await page.goto("/account");
-  await expect(page.getByRole("status")).toHaveText("Google connected.");
+  await expect(
+    page.getByRole("status").filter({ hasText: "Google connected." }),
+  ).toHaveText("Google connected.");
   await page.getByRole("button", { name: "Sign out", exact: true }).click();
   await page
     .getByRole("button", { name: "Continue with Google", exact: true })
@@ -3278,11 +3306,15 @@ test("email members can recover from linking failures, connect Google, and sign 
 
   await connect.click();
   await approveGoogle(page, "linkflow.browser@example.test");
-  await expect(page.getByRole("status")).toHaveText("Google connected.");
+  await expect(
+    page.getByRole("status").filter({ hasText: "Google connected." }),
+  ).toHaveText("Google connected.");
   await expect(connect).toHaveCount(0);
   await expect(page.getByRole("main").getByRole("alert")).toHaveCount(0);
   await page.reload();
-  await expect(page.getByRole("status")).toHaveText("Google connected.");
+  await expect(
+    page.getByRole("status").filter({ hasText: "Google connected." }),
+  ).toHaveText("Google connected.");
 
   await page.getByRole("button", { name: "Sign out", exact: true }).click();
   await page.getByRole("button", { name: "Continue with Google" }).click();

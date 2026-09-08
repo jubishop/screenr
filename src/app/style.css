@@ -332,8 +332,10 @@ hr {
   overflow-wrap: anywhere;
 }
 .account-profile > [role="status"] {
-  margin-top: 16px;
   margin-bottom: 0;
+}
+.account-profile > [role="status"]:not(:empty) {
+  margin-top: 16px;
 }
 .feed-list {
   display: grid;
