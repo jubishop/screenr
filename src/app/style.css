@@ -730,15 +730,24 @@ hr {
   padding: 24px;
   margin-bottom: 24px;
 }
-.title-comment-composer > label {
-  margin-bottom: 8px;
-}
 .composer > label {
   margin-bottom: 8px;
+}
+.comment-action {
+  margin-top: 12px;
+}
+.comment-action:first-child {
+  margin-top: 0;
+}
+.composer-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
 }
 .composer-footer {
   margin-top: 12px;
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   gap: 12px;
   align-items: center;

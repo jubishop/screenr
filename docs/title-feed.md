@@ -116,6 +116,17 @@ starting text is deleted. Deleting the whole discussion was rejected.
 The user also accepted keeping visible discussions open so participants can
 continue talking; closing them to new replies was rejected.
 
+### Open comment fields on demand — 2026-09-07
+
+**Decision:** Keep text-entry fields hidden until the reader chooses
+**Comment**, **Reply**, or **Start a conversation**. Use the same form layout
+for a new title comment, a direct comment on a feed item, and a reply to an
+individual comment. The form includes the text field, spoiler checkbox,
+and the appropriate posting action.
+
+**Why:** In [issue #56](https://github.com/jubishop/screenr/issues/56), the user
+requested tighter content displays and a consistent writing experience.
+
 ### Review edits update and move the existing item — 2026-09-06
 
 **Decision:** Editing a review updates its existing feed item in place
@@ -407,10 +418,12 @@ or collapses one indented level with a connecting border. Direct comments and
 nested replies each retain timestamp and comment-ID order; nested activity
 does not move the direct parent within the discussion.
 
-Selecting **Reply** focuses a composer immediately below that comment.
-**Replying to @name** identifies its destination. The bottom **Add your reply**
-composer always posts directly to the feed item. Each destination keeps its
-own local draft and spoiler flag. Cancel or switching targets retains that
+Selecting **Reply** opens and focuses a composer immediately below that
+comment. **Replying to @name** identifies its destination. The bottom
+**Comment** button opens the **Add your reply** composer, which always posts
+directly to the feed item. Both start closed. **Cancel** closes the form and
+returns focus to its opening button. Each destination keeps its own local
+draft and spoiler flag. Cancel or switching targets retains that
 destination's draft for later use on the same page. A target that becomes
 unavailable loses its identity label and cannot accept a post; its unsent draft
 remains available. A successful nested post expands its parent group.
@@ -440,7 +453,12 @@ are available to future notification work.
 
 ### Standalone title comments
 
-Issue #8 adds **Start a discussion** on movie and TV title pages. Each saved
+Issue #8 adds standalone comments on movie and TV title pages. Issue #56
+places the form behind **Start a conversation**, using the same three-line
+text field, spoiler checkbox, **Cancel**, and posting controls as replies.
+Opening focuses the text field. Cancelling closes the form and preserves
+its draft and spoiler flag for reopening on the same page. Successful posts
+clear only the submitted draft; later typing remains intact. Each saved
 comment has its own item ID and reply group. It uses the same shared feed,
 access checks, ordering, preview, expansion, and removal controls as other
 entries. Friends and profile pages show eligible comments and inline replies;
