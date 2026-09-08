@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { AppError, db, text, transaction } from "./db";
+import { AppError, db, text, transaction, usernameText } from "./db";
 import type { FeedItem, Person, Thread } from "../shared";
 import { reactionOptions } from "../shared";
 
@@ -25,6 +25,28 @@ export async function updateDisplayName(
     );
     if (!rows[0]) throw new AppError("Complete your profile first.", 403);
     return rows[0];
+  });
+}
+export async function updateProfile(
+  userId: string,
+  name: unknown,
+  username: unknown,
+): Promise<Person> {
+  const displayName = text(name, "Display name", 60);
+  const handle = usernameText(username);
+  return transaction(async (client) => {
+    try {
+      const { rows } = await client.query<Person>(
+        "UPDATE profile SET display_name=$2,username=$3 WHERE user_id=$1 RETURNING user_id,username,display_name",
+        [userId, displayName, handle],
+      );
+      if (!rows[0]) throw new AppError("Complete your profile first.", 403);
+      return rows[0];
+    } catch (error) {
+      if ((error as { code?: string }).code === "23505")
+        throw new AppError("That username is already taken.");
+      throw error;
+    }
   });
 }
 export async function profileFor(viewer: string, username: string) {

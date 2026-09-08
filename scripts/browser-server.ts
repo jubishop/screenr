@@ -119,6 +119,12 @@ try {
     profileInvitation.token,
     { mode: 0o600 },
   );
+  const accountInvitation = await createInvitation(null, 2);
+  await writeFile(
+    ".cache/browser-account-invite.txt",
+    accountInvitation.token,
+    { mode: 0o600 },
+  );
   const availabilityInvitation = await createInvitation(null, 1);
   await writeFile(
     ".cache/browser-availability-invite.txt",

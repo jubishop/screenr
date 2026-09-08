@@ -374,8 +374,7 @@ with the current name; Cancel discards the edit without saving.
 The current display name appears throughout Screenr, including on older
 posts and comments. Do not show a name-change history. This change only
 supports editing the display name; it leaves the @username and profile link
-unchanged. Username editing remains a possible future feature. Do not add
-a permanent-username warning or make permanent usernames a product rule.
+unchanged. The later Account editing decision below adds username changes.
 Implementation is tracked in [issue #38](https://github.com/jubishop/screenr/issues/38).
 
 **Why:** The user wants to edit their display name from their profile while
@@ -388,6 +387,26 @@ preserving the name used when they were created.
 This supersedes the earlier account-page placement and permanent-username
 warning requested in issue #38. Signup already lets members choose both
 names and requires no change for this issue.
+
+### Account profile editing — 2026-09-07
+
+**Decision:** Members can change both their display name and @username on
+`/account`, as requested in [issue #59](https://github.com/jubishop/screenr/issues/59).
+The existing display-name editor on the member's profile remains available.
+This extends the earlier profile-only placement and username-editing deferral.
+
+**Why:** The user wants to manage both names from Account.
+
+**Implementation:** Account has an inline **Edit profile** form with **Save**
+and **Cancel**. It uses the signup rules: display names contain 1–60 characters;
+usernames contain 3–24 letters, numbers, or underscores, are stored in lowercase,
+and must be unique. Both fields save together; a validation error leaves both
+stored values unchanged. Friendships and existing contributions stay attached
+to the same member and show the current names.
+
+Profile links and exact-username search use the current username. Changing it
+changes the profile URL; this implementation does not retain old-name redirects
+or reservations. The editor explains the link change before saving.
 
 ### Automatic inviter friendship — 2026-09-07
 

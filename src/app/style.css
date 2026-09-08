@@ -328,6 +328,15 @@ hr {
 .display-name-editor .error {
   margin-top: 16px;
 }
+.account-profile > p {
+  overflow-wrap: anywhere;
+}
+.account-profile > [role="status"] {
+  margin-bottom: 0;
+}
+.account-profile > [role="status"]:not(:empty) {
+  margin-top: 16px;
+}
 .feed-list {
   display: grid;
   gap: 16px;
