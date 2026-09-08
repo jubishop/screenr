@@ -210,14 +210,6 @@ export function ThreadView({
                 day: "numeric",
               })}
             </time>
-            <Link
-              className="small muted"
-              aria-label="Link to reply"
-              href={`/titles/${currentSnapshot.conversation.title_id.replace(":", "/")}?item=${currentSnapshot.conversation.id}&reply=${comment.id}`}
-              prefetch={false}
-            >
-              ↗
-            </Link>
           </div>
         )}
         {!comment.unavailable && comment.addressed_username && (

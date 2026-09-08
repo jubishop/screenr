@@ -1992,6 +1992,34 @@ test("discussion links copy from every feed without navigating or losing drafts 
     .getByRole("button", { name: "Post comment", exact: true })
     .click();
   await expect(owner.locator("[data-item-id]")).toHaveCount(3);
+  const discussion = owner.locator("[data-item-id]").filter({
+    hasText: "An independent discussion to share",
+  });
+  await discussion.getByLabel("Add your reply").fill("A direct comment");
+  await discussion
+    .getByRole("button", { name: "Post reply", exact: true })
+    .click();
+  const directComment = discussion.locator("[data-comment-id]").filter({
+    hasText: "A direct comment",
+  });
+  await directComment
+    .getByRole("button", { name: "Reply", exact: true })
+    .click();
+  const nestedComposer = discussion.getByRole("form", {
+    name: "Replying to @copyowner",
+    exact: true,
+  });
+  await nestedComposer
+    .getByLabel("Your nested reply")
+    .fill("A reply to that comment");
+  await nestedComposer
+    .getByRole("button", { name: "Post reply", exact: true })
+    .click();
+  await expect(
+    discussion
+      .locator("[data-comment-id]")
+      .getByText("A reply to that comment"),
+  ).toBeVisible();
   await reader
     .context()
     .grantPermissions(["clipboard-read", "clipboard-write"]);
@@ -2000,6 +2028,25 @@ test("discussion links copy from every feed without navigating or losing drafts 
     await reader.goto(path);
     const entries = reader.locator("[data-item-id]");
     await expect(entries).toHaveCount(3);
+    const comments = entries.locator("[data-comment-id]");
+    await expect(comments).toHaveCount(1);
+    await entries
+      .getByRole("button", { name: "View 1 reply", exact: true })
+      .click();
+    await expect(comments).toHaveCount(2);
+    await expect(
+      comments.getByRole("link", { name: "Link to reply" }),
+    ).toHaveCount(0);
+    await expect(comments.getByText("↗", { exact: true })).toHaveCount(0);
+    for (const comment of await comments.all()) {
+      await expect(comment.getByRole("link")).toHaveAttribute(
+        "href",
+        "/people/copyowner",
+      );
+      await expect(
+        comment.getByRole("button", { name: "Reply", exact: true }),
+      ).toBeVisible();
+    }
     for (const entry of await entries.all()) {
       const id = await entry.getAttribute("data-item-id");
       const expectedURL = `${browserConfig.baseURL}/titles/tv/987657?item=${id}`;
