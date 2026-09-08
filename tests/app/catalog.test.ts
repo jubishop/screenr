@@ -26,6 +26,11 @@ let status = 200;
 let slow = false;
 let requests: { path: string; authorization?: string }[] = [];
 const catalog = createServer((request, response) => {
+  if (request.url?.endsWith("/watch/providers")) {
+    response.setHeader("Content-Type", "application/json");
+    response.end(JSON.stringify({ id: 42, results: {} }));
+    return;
+  }
   requests.push({
     path: request.url!,
     authorization: request.headers.authorization,

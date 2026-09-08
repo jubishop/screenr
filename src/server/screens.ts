@@ -1,5 +1,5 @@
 import { conversations, people, profileFor, conversationURL } from "./social";
-import { getTitle, getTitleTrailer } from "./catalog";
+import { getTitle, getTitleTrailer, getTitleAvailability } from "./catalog";
 import { listInvitations } from "./invitations";
 import { AppError, db } from "./db";
 import { watchTogether } from "./watch-together";
@@ -54,10 +54,15 @@ export async function loadScreen(userId: string, requestedPath: string) {
       getTitle(id),
       conversations(userId, { title: id }),
     ]);
+    const [trailer, availability] = await Promise.all([
+      getTitleTrailer(id),
+      getTitleAvailability(id),
+    ]);
     return {
       kind: "title" as const,
       title,
-      trailer: await getTitleTrailer(id),
+      trailer,
+      availability,
       conversations: threads,
       target: (() => {
         const item = threads.find((c) => c.id === url.searchParams.get("item"));
