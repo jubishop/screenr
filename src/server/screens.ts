@@ -63,7 +63,7 @@ export async function loadScreen(userId: string, requestedPath: string) {
         const item = threads.find((c) => c.id === url.searchParams.get("item"));
         if (!item) return null;
         const reply = item.comments.find(
-          (c) => c.id === url.searchParams.get("reply"),
+          (c) => c.id === url.searchParams.get("reply") && !c.unavailable,
         );
         return { item: item.id, reply: reply?.id };
       })(),
@@ -73,7 +73,9 @@ export async function loadScreen(userId: string, requestedPath: string) {
           (c) =>
             c.id === url.searchParams.get("item") &&
             (!url.searchParams.get("reply") ||
-              c.comments.some((r) => r.id === url.searchParams.get("reply"))),
+              c.comments.some(
+                (r) => r.id === url.searchParams.get("reply") && !r.unavailable,
+              )),
         ),
     };
   }

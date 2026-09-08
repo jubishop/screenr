@@ -486,6 +486,15 @@ hr {
 .people-list {
   margin-bottom: 40px;
 }
+.profile-friends {
+  margin-bottom: 28px;
+  overflow-wrap: anywhere;
+}
+.profile-friends summary {
+  cursor: pointer;
+  padding: 12px 0;
+  font-weight: 600;
+}
 .badge {
   font-size: 11px;
   background: #e8efdc;
@@ -872,7 +881,8 @@ hr {
   border-left: 2px solid var(--line);
   padding-left: 16px;
 }
-.replies .comment + .comment {
+.comment-group + .comment-group,
+.nested > div + div {
   border-top: 1px solid var(--line);
 }
 .comment {
@@ -886,5 +896,25 @@ hr {
   .feed-entry,
   .comment {
     scroll-margin-top: 150px;
+  }
+}
+
+.reply-expansion {
+  margin-bottom: 12px;
+}
+.nested-composer {
+  margin: 0 0 16px;
+  padding-top: 12px;
+}
+@media (max-width: 560px) {
+  .replies {
+    padding-left: 10px;
+  }
+  .nested {
+    margin-left: 10px;
+    padding-left: 12px;
+  }
+  .nested .composer-footer {
+    flex-wrap: wrap;
   }
 }

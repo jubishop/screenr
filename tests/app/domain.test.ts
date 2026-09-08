@@ -81,6 +81,65 @@ async function setup() {
   return { alice, ben, cam, outsider, conversation };
 }
 
+test("profiles list accepted friends for owners, friends, and nonfriends without exposing private activity or requests", async () => {
+  const { alice, ben, cam, outsider } = await setup();
+  await friend(alice, cam);
+  await friend(alice, ben);
+  const incoming = await person("incoming");
+  const outgoing = await person("outgoing");
+  await changeRelationship(incoming, alice, "request");
+  await changeRelationship(alice, outgoing, "request");
+
+  for (const viewer of [alice, ben, outsider]) {
+    const screen = await loadScreen(viewer, "/people/ALICE");
+    assert.ok(screen.kind === "profile");
+    assert.deepEqual(screen.profile.friends, [
+      { user_id: ben, username: "ben", display_name: "ben" },
+      { user_id: cam, username: "cam", display_name: "cam" },
+    ]);
+    assert.equal(screen.conversations.length, viewer === outsider ? 0 : 1);
+  }
+  const empty = await loadScreen(alice, "/people/outsider");
+  assert.ok(empty.kind === "profile");
+  assert.deepEqual(empty.profile.friends, []);
+});
+
+test("profile friends hide blocked people in both directions and reject blocked profiles", async () => {
+  const { alice, ben, cam, outsider } = await setup();
+  await friend(alice, ben);
+  await friend(alice, cam);
+  await changeRelationship(outsider, ben, "block");
+  await changeRelationship(cam, outsider, "block");
+  const filtered = await loadScreen(outsider, "/people/alice");
+  assert.ok(filtered.kind === "profile");
+  assert.deepEqual(filtered.profile.friends, []);
+  const owner = await loadScreen(alice, "/people/alice");
+  assert.ok(owner.kind === "profile");
+  assert.equal(owner.profile.friends.length, 2);
+  await changeRelationship(outsider, alice, "block");
+  await assert.rejects(loadScreen(outsider, "/people/alice"), /not found/i);
+  await assert.rejects(loadScreen(alice, "/people/outsider"), /not found/i);
+});
+
+test("profile friends follow acceptance, removal, and blocking on each read", async () => {
+  const { alice, ben, outsider } = await setup();
+  const friends = async () => {
+    const screen = await loadScreen(outsider, "/people/alice");
+    assert.ok(screen.kind === "profile");
+    return screen.profile.friends.map((p) => p.username);
+  };
+  await changeRelationship(alice, ben, "request");
+  assert.deepEqual(await friends(), []);
+  await changeRelationship(ben, alice, "accept");
+  assert.deepEqual(await friends(), ["ben"]);
+  await changeRelationship(ben, alice, "remove");
+  assert.deepEqual(await friends(), []);
+  await friend(alice, ben);
+  assert.deepEqual(await friends(), ["ben"]);
+  await changeRelationship(alice, ben, "block");
+  assert.deepEqual(await friends(), []);
+});
+
 test("watch together lists every current shared choice, newest shared first", async () => {
   const { alice, ben, cam } = await setup();
   await friend(alice, ben);
@@ -559,7 +618,7 @@ test("standalone discussions enforce current access, independent replies, remova
   await assert.rejects(addComment(ben, first, "Revoked", false), /not found/);
   assert.deepEqual(
     (await thread(cam, first)).comments.map((c) => c.id),
-    [child, grandchild],
+    [parent, child, grandchild],
   );
   await friend(alice, ben);
   assert.equal((await thread(ben, first)).comments.length, 3);
@@ -1048,7 +1107,7 @@ for (const kind of ["action", "standalone"] as const) {
       "[removed]",
     );
     await removeComment(cam, reply);
-    assert.equal((await thread(alice, conversation)).comments[1].removed, true);
+    assert.deepEqual((await thread(alice, conversation)).comments, []);
     await assert.rejects(
       addComment(ben, conversation, "Reply to removed", false, parent),
       /not found/,
@@ -1093,9 +1152,7 @@ for (const kind of ["action", "standalone"] as const) {
       false,
     );
     await removeComment(alice, own);
-    assert.ok(
-      (await thread(alice, conversation)).comments.every((c) => c.removed),
-    );
+    assert.deepEqual((await thread(alice, conversation)).comments, []);
   });
 }
 
@@ -1118,6 +1175,141 @@ test("nested replies stay in one group; the host can remove others' comments and
   assert.equal(after.comments[0].body, "");
   assert.equal(after.comments[0].removed, true);
   assert.equal(after.comments.length, 3);
+});
+test("nested groups retain only safe parent context through blocking, removal, and friendship changes", async () => {
+  const { alice, ben, cam, outsider, conversation } = await setup();
+  await friend(alice, ben);
+  await friend(alice, cam);
+  const parent = await addComment(cam, conversation, "Private parent", true);
+  const empty = await addComment(
+    cam,
+    conversation,
+    "Empty hidden group",
+    false,
+  );
+  const child = await addComment(
+    ben,
+    conversation,
+    "Visible child",
+    false,
+    parent,
+  );
+  const removedChild = await addComment(
+    alice,
+    conversation,
+    "Removed child",
+    false,
+    parent,
+  );
+  await removeComment(alice, removedChild);
+  await changeRelationship(ben, cam, "block");
+  for (const filter of [{}, { title: "movie:1" }, { owner: alice }]) {
+    const comments = (await conversations(ben, filter))[0].comments;
+    assert.deepEqual(
+      comments.map((c) => c.id),
+      [parent, child],
+    );
+    assert.deepEqual(comments[0], {
+      id: parent,
+      root_id: null,
+      author_id: null,
+      username: null,
+      display_name: null,
+      body: "",
+      spoiler: false,
+      addressed_username: null,
+      removed: false,
+      unavailable: true,
+      created_at: comments[0].created_at,
+    });
+    assert.equal(comments[1].addressed_username, null);
+  }
+  await assert.rejects(
+    addComment(ben, conversation, "No hidden targets", false, parent),
+    /not found/,
+  );
+  await assert.rejects(
+    addComment(ben, conversation, "No removed targets", false, removedChild),
+    /not found/,
+  );
+  await assert.rejects(thread(outsider, conversation), /not found/);
+  const sibling = await addComment(
+    ben,
+    conversation,
+    "Reply to visible child",
+    false,
+    child,
+  );
+  assert.equal(
+    (await thread(ben, conversation)).comments.at(-1)!.root_id,
+    parent,
+  );
+  await changeRelationship(ben, cam, "unblock");
+  assert.equal(
+    (await thread(ben, conversation)).comments[0].body,
+    "Private parent",
+  );
+  await changeRelationship(alice, cam, "remove");
+  assert.equal((await thread(ben, conversation)).comments[0].unavailable, true);
+  await friend(alice, cam);
+  assert.equal(
+    (await thread(ben, conversation)).comments[0].unavailable,
+    false,
+  );
+  await removeComment(alice, parent);
+  await removeComment(alice, empty);
+  const after = (await thread(ben, conversation)).comments;
+  assert.deepEqual(
+    after.map((c) => c.id),
+    [parent, child, sibling],
+  );
+  assert.equal(after[0].removed, true);
+  assert.equal(after[0].body, "");
+  await removeComment(alice, child);
+  await removeComment(alice, sibling);
+  assert.deepEqual((await thread(ben, conversation)).comments, []);
+  await changeRelationship(alice, ben, "remove");
+  await assert.rejects(thread(ben, conversation), /not found/);
+});
+
+test("nested reply links reject unavailable parents and preserve stored groups on every feed", async () => {
+  const { alice, ben, cam, conversation } = await setup();
+  await friend(alice, ben);
+  await friend(alice, cam);
+  await db.query(
+    "INSERT INTO title_trailer(title_id,trailer,expires_at) VALUES('movie:1',NULL,now()+interval '1 day') ON CONFLICT(title_id) DO UPDATE SET expires_at=excluded.expires_at",
+  );
+  const parent = await addComment(cam, conversation, "Parent", false);
+  const child = await addComment(
+    alice,
+    conversation,
+    "Spoiler child",
+    true,
+    parent,
+  );
+  for (let i = 0; i < 5; i++)
+    await addComment(alice, conversation, `Later ${i}`, false);
+  await changeRelationship(ben, cam, "block");
+  for (const path of ["/", "/titles/movie/1", "/people/alice"]) {
+    const screen = await loadScreen(ben, path);
+    assert.ok("conversations" in screen && screen.conversations);
+    assert.equal(screen.conversations[0].comments[0].id, parent);
+    assert.equal(screen.conversations[0].comments[1].root_id, parent);
+  }
+  const hidden = await loadScreen(
+    ben,
+    `/titles/movie/1?item=${conversation}&reply=${parent}`,
+  );
+  assert.ok(hidden.kind === "title");
+  assert.equal(hidden.targetUnavailable, true);
+  assert.equal(hidden.target?.reply, undefined);
+  const visible = await loadScreen(
+    ben,
+    `/titles/movie/1?item=${conversation}&reply=${child}`,
+  );
+  assert.ok(visible.kind === "title");
+  assert.equal(visible.target?.reply, child);
+  assert.equal(visible.conversations[0].comments[1].spoiler, true);
 });
 test("screen reads and legacy links preserve item identity and filter reply targets before navigation", async () => {
   const { alice, ben, cam, outsider, conversation: id } = await setup();
