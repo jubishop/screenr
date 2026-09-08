@@ -9,6 +9,7 @@ import { TitleCommentComposer } from "./title-comment";
 import { Poster } from "./poster";
 import { InvitationLink } from "./invitation-link";
 import { WatchTogether } from "./watch-together";
+import { TitleAvailability } from "./title-availability";
 import { TitleSearch } from "./title-search";
 
 export function Screen({
@@ -236,6 +237,10 @@ export function Screen({
                 </div>
               </div>
             </div>
+            <TitleAvailability
+              availability={data.availability}
+              kind={data.title.kind}
+            />
             {data.trailer && (
               <section
                 className="title-trailer"

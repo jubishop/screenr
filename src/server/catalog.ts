@@ -1,5 +1,10 @@
 import { AppError, db } from "./db";
-import type { Title, Trailer } from "../shared";
+import {
+  watchCategories,
+  type Title,
+  type Trailer,
+  type WatchAvailability,
+} from "../shared";
 
 function catalogConfig() {
   const base =
@@ -165,5 +170,132 @@ export async function getTitleTrailer(id: string): Promise<Trailer | null> {
     return trailer;
   } catch {
     return null;
+  }
+}
+
+type AvailabilityData = Pick<WatchAvailability, "link" | "providers">;
+type CachedAvailability = {
+  availability: AvailabilityData | null;
+  fetched_at: Date | null;
+  refresh_after: Date;
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function parseAvailability(data: unknown, id: string): AvailabilityData {
+  const [kind, tmdbId] = id.split(":");
+  if (!isRecord(data) || data.id !== Number(tmdbId) || !isRecord(data.results))
+    throw new Error("Invalid watch-provider response");
+  const us = data.results.US;
+  const result: AvailabilityData = { link: null, providers: {} };
+  if (us === undefined) return result;
+  if (!isRecord(us)) throw new Error("Invalid US watch providers");
+  if (us.link !== undefined) {
+    if (typeof us.link !== "string") throw new Error("Invalid watch link");
+    const link = new URL(us.link);
+    if (
+      link.origin !== "https://www.themoviedb.org" ||
+      link.username ||
+      link.password ||
+      !new RegExp(`^/${kind}/${tmdbId}(?:-[^/]+)?/watch$`).test(link.pathname)
+    )
+      throw new Error("Invalid watch link");
+    result.link = link.href;
+  }
+  for (const category of watchCategories) {
+    const items = us[category];
+    if (items === undefined) continue;
+    if (!Array.isArray(items)) throw new Error("Invalid viewing category");
+    const providers = items.map((item: unknown) => {
+      if (
+        !isRecord(item) ||
+        !Number.isSafeInteger(item.provider_id) ||
+        Number(item.provider_id) <= 0 ||
+        typeof item.provider_name !== "string" ||
+        !item.provider_name.trim()
+      )
+        throw new Error("Invalid watch provider");
+      return {
+        provider_id: Number(item.provider_id),
+        provider_name: item.provider_name.trim(),
+        logo_path:
+          typeof item.logo_path === "string" &&
+          /^\/[a-zA-Z0-9._-]+$/.test(item.logo_path)
+            ? item.logo_path
+            : null,
+      };
+    });
+    if (providers.length)
+      result.providers[category] = [
+        ...new Map(providers.map((p) => [p.provider_id, p])).values(),
+      ];
+  }
+  return result;
+}
+
+function availabilityResult(cached?: CachedAvailability): WatchAvailability {
+  return {
+    country: "US",
+    status: !cached?.fetched_at
+      ? "unavailable"
+      : Date.now() - cached.fetched_at.getTime() < 86_400_000
+        ? "ok"
+        : "stale",
+    checked_at: cached?.fetched_at?.toISOString() ?? null,
+    link: cached?.availability?.link ?? null,
+    providers: cached?.availability?.providers ?? {},
+  };
+}
+
+// Fetch only optional public metadata here. A failed refresh must neither
+// erase the last success nor be retried on every title-screen poll.
+export async function getTitleAvailability(
+  id: string,
+): Promise<WatchAvailability> {
+  if (!/^(movie|tv):[1-9][0-9]*$/.test(id)) return availabilityResult();
+  let cached: CachedAvailability | undefined;
+  try {
+    cached = (
+      await db.query<CachedAvailability>(
+        "SELECT availability,fetched_at,refresh_after FROM title_availability WHERE title_id=$1 AND country='US'",
+        [id],
+      )
+    ).rows[0];
+    if (cached && cached.refresh_after.getTime() > Date.now())
+      return availabilityResult(cached);
+    let availability: AvailabilityData;
+    try {
+      availability = parseAvailability(
+        await fetchCatalog(`/${id.replace(":", "/")}/watch/providers`, 2000),
+        id,
+      );
+    } catch {
+      const failed = (
+        await db.query<CachedAvailability>(
+          `INSERT INTO title_availability(title_id,country,refresh_after)
+         VALUES($1,'US',now()+interval '5 minutes')
+         ON CONFLICT(title_id,country) DO UPDATE
+         SET refresh_after=greatest(title_availability.refresh_after,excluded.refresh_after)
+         RETURNING availability,fetched_at,refresh_after`,
+          [id],
+        )
+      ).rows[0];
+      return availabilityResult(failed);
+    }
+    const saved = (
+      await db.query<CachedAvailability>(
+        `INSERT INTO title_availability(title_id,country,availability,fetched_at,refresh_after)
+       VALUES($1,'US',$2,now(),now()+interval '1 day')
+       ON CONFLICT(title_id,country) DO UPDATE SET availability=excluded.availability,
+       fetched_at=excluded.fetched_at,refresh_after=excluded.refresh_after
+       RETURNING availability,fetched_at,refresh_after`,
+        [id, availability],
+      )
+    ).rows[0];
+    return availabilityResult(saved);
+  } catch {
+    return availabilityResult(cached);
   }
 }
