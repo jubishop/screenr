@@ -114,6 +114,173 @@ async function invitationCreator(browser: Browser, name: string) {
   return page;
 }
 
+test("account profile editing saves both names, preserves drafts, and updates profile links", async ({
+  browser,
+}, testInfo) => {
+  const token = (
+    await readFile(".cache/browser-account-invite.txt", "utf8")
+  ).trim();
+  const owner = await join(browser, "accountowner", { token });
+  const friend = await join(browser, "accountfriend", { token });
+  await befriend(owner, friend, "accountfriend", "accountowner");
+  await owner.goto("/account?item=ignored");
+  const edit = owner.getByRole("button", { name: "Edit profile", exact: true });
+  await expect(edit).toBeVisible();
+  await owner.goto("/account");
+  await edit.click();
+  const name = owner.getByLabel("Display name", { exact: true });
+  const username = owner.getByLabel("Username", { exact: true });
+  const save = owner.getByRole("button", { name: "Save", exact: true });
+  const cancel = owner.getByRole("button", { name: "Cancel", exact: true });
+  await expect(name).toBeFocused();
+  await expect(name).toHaveValue("accountowner");
+  await expect(username).toHaveValue("accountowner");
+  await expect(username).toHaveAttribute("maxlength", "24");
+  await expect(name).toHaveAttribute("maxlength", "60");
+  let writes = 0;
+  owner.on("request", (request) => {
+    if (
+      request.url().endsWith("/api/screenr/profile") &&
+      request.method() === "POST"
+    )
+      writes++;
+  });
+  await name.fill("Unsaved name");
+  await username.fill("unsaved_handle");
+  await nextAccountRefresh(owner);
+  await expect(name).toHaveValue("Unsaved name");
+  await expect(username).toHaveValue("unsaved_handle");
+  await owner.route(
+    "**/api/screenr/screen?**",
+    (route) =>
+      route.fulfill({
+        status: 503,
+        json: { error: "Temporary refresh failure" },
+      }),
+    { times: 1 },
+  );
+  await owner.waitForResponse(
+    (response) =>
+      response.url().includes("/api/screenr/screen?") &&
+      response.status() === 503,
+  );
+  await expect(name).toHaveValue("Unsaved name");
+  await expect(username).toHaveValue("unsaved_handle");
+  await cancel.click();
+  await expect(edit).toBeFocused();
+  expect(writes).toBe(0);
+  await edit.click();
+  await expect(name).toHaveValue("accountowner");
+  await expect(username).toHaveValue("accountowner");
+  await name.fill("   ");
+  await expect(save).toBeDisabled();
+  await name.fill("Renée Movie Fan 🎬");
+  await username.fill("ab");
+  await expect(save).toBeDisabled();
+  await username.fill("ACCOUNTFRIEND");
+  await save.click();
+  await expect(
+    owner
+      .getByRole("alert")
+      .filter({ hasText: "That username is already taken." }),
+  ).toBeVisible();
+  await expect(name).toHaveValue("Renée Movie Fan 🎬");
+  await expect(owner.locator(".sidebar-bottom")).toContainText("@accountowner");
+  await username.fill("Account_New");
+  await owner.route(
+    "**/api/screenr/profile",
+    (route) =>
+      route.fulfill({
+        status: 503,
+        json: { error: "Could not save. Try again." },
+      }),
+    { times: 1 },
+  );
+  await save.click();
+  await expect(
+    owner.getByRole("alert").filter({ hasText: "Could not save" }),
+  ).toBeVisible();
+  await expect(username).toHaveValue("Account_New");
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await owner.route(
+    "**/api/screenr/profile",
+    async (route) => {
+      await gate;
+      await route.continue();
+    },
+    { times: 1 },
+  );
+  await save.click();
+  try {
+    await expect(
+      owner.getByRole("button", { name: "Saving…", exact: true }),
+    ).toBeDisabled();
+    await expect(name).toBeDisabled();
+    await expect(username).toBeDisabled();
+    await expect(cancel).toBeDisabled();
+  } finally {
+    release();
+  }
+  await expect(edit).toBeVisible();
+  await expect(
+    owner.getByRole("status").filter({ hasText: "Profile saved." }),
+  ).toBeVisible();
+  await expect(owner.locator(".sidebar-bottom")).toContainText(
+    "Renée Movie Fan 🎬",
+  );
+  await expect(owner.locator(".sidebar-bottom a").first()).toHaveAttribute(
+    "href",
+    "/people/account_new",
+  );
+  await expect(
+    owner.getByRole("link", { name: "View your profile", exact: true }),
+  ).toHaveAttribute("href", "/people/account_new");
+  await owner.reload();
+  await edit.click();
+  await expect(name).toHaveValue("Renée Movie Fan 🎬");
+  await expect(username).toHaveValue("account_new");
+  for (const width of [390, 1280]) {
+    await owner.setViewportSize({ width, height: 900 });
+    await expect(name).toBeVisible();
+    await expect(username).toBeVisible();
+    expect(
+      await owner.evaluate(
+        () => document.documentElement.scrollWidth <= window.innerWidth,
+      ),
+    ).toBe(true);
+    await owner.screenshot({
+      path: testInfo.outputPath(`account-edit-${width}.png`),
+      fullPage: true,
+    });
+  }
+  await cancel.click();
+  await owner
+    .getByRole("link", { name: "View your profile", exact: true })
+    .click();
+  await expect(owner).toHaveURL(/\/people\/account_new$/);
+  await expect(
+    owner.getByRole("heading", { name: "Renée Movie Fan 🎬", exact: true }),
+  ).toBeVisible();
+  await expect(
+    owner.getByRole("button", { name: "Edit display name", exact: true }),
+  ).toBeVisible();
+  await friend.goto("/people");
+  await friend
+    .getByRole("link", { name: "Renée Movie Fan 🎬 @account_new", exact: true })
+    .click();
+  await expect(
+    friend.getByRole("button", { name: "Unfriend", exact: true }),
+  ).toBeVisible();
+  await expect(
+    friend.getByRole("button", { name: "Edit profile", exact: true }),
+  ).toHaveCount(0);
+  await owner.context().close();
+  await friend.context().close();
+});
+
 test("profile display name editing preserves drafts, saves, and updates existing authors", async ({
   browser,
 }) => {
@@ -2859,7 +3026,9 @@ test("email members can recover from linking failures, connect Google, and sign 
     "Choose the Google account with the same email address as your Screenr account.",
   );
   await expect(connect).toBeEnabled();
-  await expect(page.getByText("@linkflow", { exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("complementary").getByText("@linkflow", { exact: true }),
+  ).toBeVisible();
 
   await connect.click();
   await approveGoogle(page, "linkflow.browser@example.test");
@@ -2872,7 +3041,9 @@ test("email members can recover from linking failures, connect Google, and sign 
   await page.getByRole("button", { name: "Sign out", exact: true }).click();
   await page.getByRole("button", { name: "Continue with Google" }).click();
   await approveGoogle(page, "linkflow.browser@example.test");
-  await expect(page.getByText("@linkflow", { exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("complementary").getByText("@linkflow", { exact: true }),
+  ).toBeVisible();
   await expect(
     page.getByRole("heading", { name: "Better with friends." }),
   ).toBeVisible();
