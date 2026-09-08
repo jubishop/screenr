@@ -181,6 +181,7 @@ test("emoji reactions persist across feeds on entries and replies, with change, 
   ]) {
     const trigger = group.getByRole("button", { name: "React", exact: true });
     for (const focusChoice of [false, true]) {
+      await expect(trigger).toBeEnabled();
       await trigger.focus();
       await reader.keyboard.press("Enter");
       await expect(trigger).toHaveAttribute("aria-expanded", "true");
