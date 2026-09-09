@@ -40,6 +40,10 @@ jobs:
           node-version: "24"
           cache: npm
       - run: npm ci
+      - name: Isolate CI APT sources
+        run: |
+          test -s /etc/apt/sources.list.d/ubuntu.sources
+          sudo install -m 0644 .github/ci-apt.conf /etc/apt/apt.conf.d/99-screenr-ci
       - run: npx playwright install --with-deps chromium
       - name: Install check tools
         run: sudo apt-get update && sudo apt-get install --yes shellcheck caddy
