@@ -68,6 +68,9 @@ applies to every feature.
   to help them decide what to watch together. Start with a two-person
   interface and preserve implementation flexibility for more participants.
 - Users can make their own recommendations.
+- Recommend and Want to watch are mutually exclusive for each person and
+  title. Selecting either removes the other. Restoring an action reuses its
+  original entry and replies, following the [action lifecycle](title-feed.md#exclusive-recommend-and-want-to-watch--2026-09-09).
 - A dedicated Friends recommend view shows titles recommended by direct
   friends, who recommends each title, and an Add to Want to watch action.
 - Friends recommend sorts by the number of recommending friends, then the

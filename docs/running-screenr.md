@@ -183,6 +183,13 @@ The browser harness derives four loopback ports and a database named
 `screenr_browser_<checkout hash>_test` from the checkout's canonical path.
 Separate worktrees get separate defaults, Next output, screenshots, and
 `.cache/mail` captures. The harness prints its URL and database name at startup.
+Browser-facing harness URLs use `127.0.0.1` to match their IPv4-only listeners. Do not replace
+this address with `localhost`: Chromium can try IPv6 first, where these servers
+do not listen. On macOS, an ephemeral client port that equals that destination
+port can form a TCP connection to itself. Chromium then receives its own HTTP
+request and reports `ERR_INVALID_HTTP_RESPONSE`, without reaching the proxy.
+Next's development image metadata still supplies its own `localhost` origin;
+the preview test checks that framework-generated value separately.
 `TEST_DATABASE_URL` must name a loopback PostgreSQL test database without URL
 query parameters. The browser harness uses the same server and credentials,
 with its separate database name.
@@ -294,12 +301,13 @@ recipients. A full run checks:
   unrelated refreshes do not clear action errors.
 - Slow refreshes still deliver new replies and revoke access. A refresh that
   exceeds ten seconds hides server content; later recovery retains the draft.
-- Circle, profile, and title feed cards can toggle the viewer's Want to watch
-  and Recommend states independently. The inline Recommend action follows
+- Circle, profile, and title feed cards switch the viewer between Want to watch
+  and Recommend. Selecting either clears the other; selecting the active
+  action clears it. The inline Recommend action follows
   Want to watch on other people's entries. Both controls show the viewer's
   current state, including after reload. Clearing the last
   activity flag hides an empty card, while visible comments keep its thread
-  listed.
+  listed. Restoring either action reuses its original entry and replies.
 
 Database tests additionally cover concurrent signup limits, rollback after
 username conflicts, expiry, code/account identity, explicit Google linking,

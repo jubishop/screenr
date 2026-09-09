@@ -417,6 +417,12 @@ async function setup() {
 test("reactions support all seven kinds and one replaceable response per person on every entry and reply", async () => {
   const { alice, ben, conversation } = await setup();
   await friend(alice, ben);
+  const actionReply = await addComment(
+    ben,
+    conversation,
+    "Action reply",
+    false,
+  );
   const watch = await updateTitleActivity(
     alice,
     "movie:1",
@@ -431,12 +437,6 @@ test("reactions support all seven kinds and one replaceable response per person 
   );
   const direct = await addComment(ben, comment, "Direct", false);
   const nested = await addComment(alice, comment, "Nested", false, direct);
-  const actionReply = await addComment(
-    ben,
-    conversation,
-    "Action reply",
-    false,
-  );
   for (const [item, reply] of [
     [conversation, undefined],
     [watch, undefined],
@@ -988,11 +988,9 @@ test("watch together lists every current shared choice, newest shared first", as
     ELSE '2026-01-01'::timestamptz END`,
     [ben],
   );
-  // Replies and recommendations must not reorder the shared choices.
+  // Replies must not reorder the shared choices.
   const show = await updateTitleActivity(ben, "tv:1", "want_to_watch", true);
   await addComment(alice, show, "New conversation on an older match.", false);
-  await updateTitleActivity(ben, "tv:1", "recommended", true);
-
   const screen = await loadScreen(alice, "/watch-together?with=ben");
   assert.equal(screen.kind, "watch-together");
   if (screen.kind !== "watch-together")
@@ -1010,6 +1008,19 @@ test("watch together lists every current shared choice, newest shared first", as
   if (reverse.kind !== "watch-together")
     throw new Error("Expected watch together");
   assert.deepEqual(reverse.titles, screen.titles);
+  await updateTitleActivity(ben, "tv:1", "recommended", true);
+  const afterRecommendation = await loadScreen(
+    alice,
+    "/watch-together?with=ben",
+  );
+  assert.equal(afterRecommendation.kind, "watch-together");
+  if (afterRecommendation.kind !== "watch-together")
+    throw new Error("Expected watch together");
+  assert.deepEqual(
+    afterRecommendation.titles.map((title) => title.id),
+    ["movie:1"],
+  );
+  await updateTitleActivity(ben, "tv:1", "want_to_watch", true);
 
   await updateTitleActivity(alice, "tv:1", "want_to_watch", false);
   const afterRemoval = await loadScreen(alice, "/watch-together?with=ben");
@@ -1400,7 +1411,8 @@ test("standalone comments persist for movies and TV without changing structured 
   assert.equal((await thread(alice, tv)).conversation.recommended, false);
   assert.equal((await thread(alice, tv)).conversation.want_to_watch, false);
   const reply = await addComment(ben, first, "Only on the first", false);
-  for (const id of [second, tv, recommendation, saved])
+  await assert.rejects(thread(alice, recommendation), /not found/);
+  for (const id of [second, tv, saved])
     assert.deepEqual((await thread(alice, id)).comments, []);
   for (const path of ["/", "/titles/movie/1", "/people/alice"]) {
     const screen = await loadScreen(ben, path);
@@ -1561,27 +1573,30 @@ test("pending and nonfriends cannot read or write a thread; accepted friends use
 test("feed action states belong to the viewer across circle, title, and profile reads", async () => {
   const { alice, ben, conversation } = await setup();
   await friend(alice, ben);
-  await updateTitleActivity(alice, "movie:1", "want_to_watch", true);
   await addComment(ben, conversation, "Keep this discussion", false);
-  for (const recommended of [false, true, false]) {
-    await updateTitleActivity(ben, "movie:1", "recommended", recommended);
-    for (const wantToWatch of [false, true, false]) {
-      await updateTitleActivity(ben, "movie:1", "want_to_watch", wantToWatch);
-      for (const filter of [{}, { title: "movie:1" }, { owner: alice }]) {
-        const entries = (await conversations(ben, filter)).filter(
-          (item) => item.owner_id === alice,
-        );
-        assert.equal(entries.length, 2);
-        for (const item of entries) {
-          assert.equal(item.viewer_recommended, recommended);
-          assert.equal(item.viewer_want_to_watch, wantToWatch);
-        }
-      }
-      assert.equal(
-        (await thread(ben, conversation)).conversation.viewer_recommended,
-        recommended,
+  await updateTitleActivity(alice, "movie:1", "want_to_watch", true);
+  for (const [field, value, recommended, wantToWatch] of [
+    ["recommended", true, true, false],
+    ["want_to_watch", true, false, true],
+    ["recommended", false, false, true],
+    ["want_to_watch", false, false, false],
+    ["want_to_watch", true, false, true],
+    ["recommended", true, true, false],
+  ] as const) {
+    await updateTitleActivity(ben, "movie:1", field, value);
+    for (const filter of [{}, { title: "movie:1" }, { owner: alice }]) {
+      const entries = (await conversations(ben, filter)).filter(
+        (item) => item.owner_id === alice,
       );
+      assert.equal(entries.length, 2);
+      for (const item of entries) {
+        assert.equal(item.viewer_recommended, recommended);
+        assert.equal(item.viewer_want_to_watch, wantToWatch);
+      }
     }
+    const entry = (await thread(ben, conversation)).conversation;
+    assert.equal(entry.viewer_recommended, recommended);
+    assert.equal(entry.viewer_want_to_watch, wantToWatch);
   }
   await updateTitleActivity(alice, "movie:1", "recommended", false);
   await updateTitleActivity(ben, "movie:1", "recommended", true);
@@ -1594,6 +1609,12 @@ test("action items persist independently, removal does not bump activity, and re
   const { alice, ben, cam, conversation: recommendation } = await setup();
   await friend(alice, ben);
   await friend(alice, cam);
+  const reply = await addComment(
+    ben,
+    recommendation,
+    "About the recommendation",
+    false,
+  );
   const saved = await updateTitleActivity(
     alice,
     "movie:1",
@@ -1601,12 +1622,6 @@ test("action items persist independently, removal does not bump activity, and re
     true,
   );
   assert.notEqual(saved, recommendation);
-  const reply = await addComment(
-    ben,
-    recommendation,
-    "About the recommendation",
-    false,
-  );
   assert.equal((await thread(alice, saved)).comments.length, 0);
   const original = (await thread(ben, recommendation)).conversation.activity_at;
   await updateTitleActivity(alice, "movie:1", "recommended", false);
@@ -1657,13 +1672,17 @@ test("all feeds share entries and order by only visible replies without promotin
   await friend(alice, ben);
   await friend(alice, cam);
   await friend(ben, outsider);
+  const reply = await addComment(cam, first, "Mutual friend's reply", true);
   const second = await updateTitleActivity(
     alice,
     "movie:1",
     "want_to_watch",
     true,
   );
-  const reply = await addComment(cam, first, "Mutual friend's reply", true);
+  await db.query(
+    "UPDATE comment SET created_at=now()+interval '1 second' WHERE id::text=$1",
+    [reply],
+  );
   const ownCam = await updateTitleActivity(cam, "movie:1", "recommended", true);
   for (const filter of [{}, { title: "movie:1" }, { owner: alice }]) {
     const entries = await conversations(ben, filter);

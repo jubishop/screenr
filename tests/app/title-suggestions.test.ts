@@ -105,7 +105,7 @@ test("suggestions rank recommendations first with 3:1 weights, distinct people, 
   for (const [id, name] of [
     [1, "Direct"],
     [2, "Second"],
-    [3, "Both actions"],
+    [3, "Different people's actions"],
     [4, "Recent"],
     [5, "Alpha"],
     [6, "Zulu"],
@@ -117,8 +117,8 @@ test("suggestions rank recommendations first with 3:1 weights, distinct people, 
   await updateTitleActivity("ben", "movie:1", "recommended", true);
   for (const name of ["dee", "eli", "fay", "gia"])
     await updateTitleActivity(name, "movie:2", "recommended", true);
-  for (const field of ["recommended", "want_to_watch"])
-    await updateTitleActivity("cam", "movie:3", field, true);
+  await updateTitleActivity("ben", "movie:3", "recommended", true);
+  await updateTitleActivity("cam", "movie:3", "want_to_watch", true);
   for (const [name, id] of [
     ["dee", 4],
     ["eli", 5],
@@ -143,9 +143,11 @@ test("suggestions rank recommendations first with 3:1 weights, distinct people, 
   assert.equal(result[0].recommended_by.length, 2);
   assert.equal(result[0].second_degree_recommended, 0);
   assert.deepEqual(result[2].recommended_by, [
+    { username: "ben", display_name: "ben" },
+  ]);
+  assert.deepEqual(result[2].wanted_by, [
     { username: "cam", display_name: "cam" },
   ]);
-  assert.deepEqual(result[2].wanted_by, result[2].recommended_by);
 
   // A fresh reply must not move an old active action above a newer action.
   const item = await updateTitleActivity("eli", "movie:5", "recommended", true);

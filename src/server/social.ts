@@ -275,6 +275,7 @@ export async function updateTitleActivity(
     typeof value !== "boolean"
   )
     throw new AppError("Invalid title action.");
+  const other = field === "recommended" ? "want_to_watch" : "recommended";
   return transaction(async (client) => {
     if (
       !(await client.query("SELECT 1 FROM title WHERE id=$1", [titleId]))
@@ -285,6 +286,7 @@ export async function updateTitleActivity(
       await client.query(
         `INSERT INTO conversation(id,owner_id,title_id,${field}) VALUES($1,$2,$3,$4)
       ON CONFLICT(owner_id,title_id) DO UPDATE SET ${field}=$4,
+      ${other}=CASE WHEN $4 THEN false ELSE conversation.${other} END,
       activity_at=CASE WHEN $4 AND NOT conversation.${field} THEN now() ELSE conversation.activity_at END RETURNING id`,
         [randomUUID(), viewer, titleId, value],
       )
