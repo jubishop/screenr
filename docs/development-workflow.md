@@ -418,6 +418,31 @@ in CI. Resolve it and obtain a successful full CI result for the code being
 merged; a fast or focused pass alone does not satisfy that gate. Preserve the
 full CI requirements when changing the check commands.
 
+### CI dependency sources
+
+The Ubuntu 24.04 check job installs [.github/ci-apt.conf](../.github/ci-apt.conf)
+before either Playwright or the check tools run APT. It selects only the runner's
+`/etc/apt/sources.list.d/ubuntu.sources`. That file retains Ubuntu's mirrors,
+suites, components (including `universe` for Caddy), and signing key. Other
+runner sources, such as Google Chrome, do not participate. The job fails if
+the Ubuntu source file is missing or empty.
+
+The configuration applies only to the disposable check runner. It does not
+change developer machines, the deploy job, or production. APT signature and
+checksum verification remain enabled. Every required-source update error,
+including a transient failure with a cached index, stops installation.
+
+`tests/test_ci_apt.py` runs real APT against temporary
+signed HTTP repositories during full Ubuntu validation. They cover unrelated
+broken sources, previously cached vendor packages, required-source outages,
+invalid signatures, index and package checksum mismatches, and missing packages.
+They use isolated APT state and skip on machines without APT. To run them on an
+Ubuntu 24.04 system with Python, GnuPG, and dpkg installed:
+
+```sh
+python3 -B tests/test_ci_apt.py -v
+```
+
 ## Review, merge, and deploy
 
 **Decision — 2026-09-06:** Test development changes on localhost and in

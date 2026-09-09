@@ -1,4 +1,4 @@
-import { test as base } from "@playwright/test";
+import { test as base } from "../../scripts/browser-test";
 import { browserConfig } from "../../scripts/browser-config";
 
 process.env.DATABASE_URL = browserConfig.databaseURL;

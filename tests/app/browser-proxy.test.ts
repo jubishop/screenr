@@ -5,6 +5,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import { test, type TestContext } from "node:test";
 import { request } from "@playwright/test";
 import { createBrowserProxy } from "../../scripts/browser-proxy";
+import { transportPath } from "../../scripts/browser-transport";
 
 async function listen(t: TestContext, server: Server) {
   t.after(() => {
@@ -175,4 +176,66 @@ test("an interrupted upstream response fails promptly instead of returning parti
     /aborted|socket hang up|ECONNRESET/,
   );
   assert.equal(received, 1);
+});
+
+test("original script exchanges preserve framing failures and completion without capturing credentials or other traffic", async (t) => {
+  const upstream = createServer((req, res) => {
+    if (req.url?.includes("duplicate.js"))
+      req.socket.end(
+        "HTTP/1.1 200 OK\r\nContent-Length: 3\r\nContent-Length: 4\r\nSet-Cookie: secret-cookie\r\n\r\nabc",
+      );
+    else if (req.url?.includes("truncated.js")) {
+      res.writeHead(200, { "Content-Length": "100" });
+      res.write("partial");
+      setImmediate(() => res.destroy());
+    } else
+      res
+        .writeHead(200, {
+          "Content-Type": "text/javascript",
+          "Set-Cookie": "secret-cookie",
+        })
+        .end("// secret-body" + "x".repeat(5000));
+  });
+  const appPort = await listen(t, upstream);
+  const port = await listen(
+    t,
+    createBrowserProxy({ appPort, googlePort: appPort }),
+  );
+  const api = await client(t, port);
+  for (const path of [
+    "/api/private?secret-query",
+    "/_next/static/chunks/good.js?secret-query",
+    "/_next/static/chunks/duplicate.js",
+  ])
+    await api.get(path, {
+      headers: { Cookie: "secret-cookie" },
+      maxRetries: 0,
+    });
+  await assert.rejects(
+    api.get("/_next/static/chunks/truncated.js", { maxRetries: 0 }),
+  );
+  const report = await (await api.get(transportPath)).json();
+  assert.equal(report.requests.length, 3);
+  const [good, duplicate, truncated] = report.requests;
+  assert.ok(good.upstream.complete && good.downstream.complete);
+  assert.ok(good.upstream.bytes > 5000 && good.downstream.bytes > 5000);
+  assert.ok(good.upstream.prefixLimitReached);
+  assert.equal(duplicate.upstream.error.code, "HPE_UNEXPECTED_CONTENT_LENGTH");
+  assert.equal(
+    duplicate.upstream.headers.filter(
+      (h: { name: string }) => h.name === "content-length",
+    ).length,
+    2,
+  );
+  assert.equal(duplicate.downstream.statusLine, "HTTP/1.1 502 Bad Gateway");
+  assert.equal(truncated.upstream.complete, false);
+  assert.equal(truncated.downstream.complete, false);
+  assert.equal(truncated.upstream.error.code, "ECONNRESET");
+  assert.doesNotMatch(JSON.stringify(report), /secret|api\/private|partial/);
+  for (let index = 0; index < 140; index++)
+    await api.get(`/_next/static/chunks/${index}.js`);
+  const bounded = await (await api.get(transportPath)).json();
+  assert.equal(bounded.requests.length, 128);
+  assert.equal(bounded.totalRequests, 143);
+  assert.ok(Buffer.byteLength(JSON.stringify(bounded)) < 2 * 1024 * 1024);
 });
