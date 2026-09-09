@@ -242,6 +242,38 @@ date. Recommend and Want to watch do not share a reply group.
 This keeps each action's discussion together while keeping distinct
 structured actions separate.
 
+### Exclusive Recommend and Want to watch — 2026-09-09
+
+**Decision:** A person can have only one of Recommend and Want to watch
+active for a title. Selecting either action automatically removes the other.
+Enforce this in the interface and database. Selecting the active action
+removes it without restoring the other action automatically.
+
+Removing an action, either directly or by switching, retains its original
+entry and discussion. Selecting it again restores that entry with its replies
+and a new activation date. Each action keeps its own reply group and the
+existing visibility rules for withdrawn entries.
+
+**Why:** The user required exclusive choices and asked that switching or
+removing and restoring an action not abandon its comments in
+[issue #78](https://github.com/jubishop/screenr/issues/78).
+
+**Migration behavior:** `008-exclusive-title-actions.sql` keeps the most
+recently activated action when both are active. Exact timestamp ties keep
+Recommend. This is the deterministic repair rule used by the implementation;
+it does not infer a more precise history than the stored dates provide.
+The migration preserves both entries, replies, reactions, and original dates.
+Database constraints reject conflicting legacy flags and active feed items.
+The synchronization trigger deactivates the old action before activating the
+new one. Application writes save both flags in one transaction, and the
+existing UI refresh updates both controls after the save.
+
+The preceding application release can still read the migrated data and remove
+an active action. Its attempt to activate the other action while one is active
+will fail the new constraint. If rolling back the application, remove the
+active action before selecting the other. Keep the migration in place to
+preserve the exclusivity rule and all discussions.
+
 ### Removing an action does not move it up — 2026-09-06
 
 **Decision:** When Recommend or Want to watch is removed, hide its item

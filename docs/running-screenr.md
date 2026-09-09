@@ -262,12 +262,13 @@ recipients. A full run checks:
   unrelated refreshes do not clear action errors.
 - Slow refreshes still deliver new replies and revoke access. A refresh that
   exceeds ten seconds hides server content; later recovery retains the draft.
-- Circle, profile, and title feed cards can toggle the viewer's Want to watch
-  and Recommend states independently. The inline Recommend action follows
+- Circle, profile, and title feed cards switch the viewer between Want to watch
+  and Recommend. Selecting either clears the other; selecting the active
+  action clears it. The inline Recommend action follows
   Want to watch on other people's entries. Both controls show the viewer's
   current state, including after reload. Clearing the last
   activity flag hides an empty card, while visible comments keep its thread
-  listed.
+  listed. Restoring either action reuses its original entry and replies.
 
 Database tests additionally cover concurrent signup limits, rollback after
 username conflicts, expiry, code/account identity, explicit Google linking,

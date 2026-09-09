@@ -689,6 +689,11 @@ test("emoji reactions persist across feeds on entries and replies, with change, 
     field: "recommended",
     value: true,
   });
+  await post("comment", {
+    conversation: recommended,
+    body: "Keep the recommendation discussion when switching actions",
+    spoiler: false,
+  });
   const watch = await post("activity", {
     title: "movie:987654",
     field: "want_to_watch",
@@ -3714,136 +3719,6 @@ test("Google sign-in recovers from transport failure and an empty redirect", asy
   await google.click();
   await approveGoogle(page, "googleretry.browser@example.test");
   await expect(page.getByLabel("Username", { exact: true })).toBeVisible();
-});
-
-test("feed actions persist the viewer's independent recommendation and watch states", async ({
-  browser,
-}) => {
-  const owner = await join(browser, "profileowner");
-  const viewer = await join(browser, "profileviewer");
-  await befriend(owner, viewer, "profileviewer", "profileowner");
-  for (const page of [owner, viewer]) {
-    await page.request.post("/api/screenr/activity", {
-      headers: { Origin: browserConfig.baseURL },
-      data: { title: "movie:987654", field: "recommended", value: true },
-    });
-  }
-  await viewer.goto("/people/profileowner");
-  const recommended = viewer.getByRole("button", {
-    name: "✓ Recommended",
-    exact: true,
-  });
-  const recommend = viewer.getByRole("button", {
-    name: "+ Recommend",
-    exact: true,
-  });
-  await expect(recommended).toBeVisible();
-  await recommended.click();
-  await expect(recommend).toBeVisible();
-  await viewer.reload();
-  await expect(recommend).toBeVisible();
-  await viewer
-    .getByRole("button", { name: "+ Want to watch", exact: true })
-    .click();
-  await expect(
-    viewer.getByRole("button", { name: "✓ Want to watch", exact: true }),
-  ).toBeVisible();
-  await viewer.reload();
-  await expect(
-    viewer.getByRole("button", { name: "✓ Want to watch", exact: true }),
-  ).toBeVisible();
-  await expect(recommend).toBeVisible();
-  await recommend.click();
-  await expect(recommended).toBeVisible();
-  await expect(
-    viewer.getByRole("button", { name: "✓ Want to watch", exact: true }),
-  ).toBeVisible();
-  await viewer
-    .getByRole("button", { name: "✓ Want to watch", exact: true })
-    .click();
-  await expect(
-    viewer.getByRole("button", { name: "+ Want to watch", exact: true }),
-  ).toBeVisible();
-  await viewer.reload();
-  await expect(
-    viewer.getByRole("button", { name: "+ Want to watch", exact: true }),
-  ).toBeVisible();
-  await viewer.goto("/");
-  const friendEntry = viewer.locator("[data-item-id]").filter({
-    has: viewer.getByRole("link", { name: "profileowner", exact: true }),
-  });
-  await expect(
-    friendEntry.getByRole("button", { name: "✓ Recommended", exact: true }),
-  ).toBeVisible();
-  await recommended.click();
-  await expect(recommend).toBeVisible();
-  await recommend.click();
-  await expect(recommended).toBeVisible();
-  await viewer
-    .getByRole("button", { name: "+ Want to watch", exact: true })
-    .click();
-  await viewer
-    .getByRole("button", { name: "✓ Want to watch", exact: true })
-    .click();
-  await expect(
-    viewer.getByRole("button", { name: "+ Want to watch", exact: true }),
-  ).toBeVisible();
-  await viewer.reload();
-  await expect(
-    viewer.getByRole("button", { name: "+ Want to watch", exact: true }),
-  ).toBeVisible();
-  await expect(recommended).toBeVisible();
-  await viewer.goto("/titles/movie/987654");
-  const titleEntry = viewer.locator("[data-item-id]").filter({
-    has: viewer.getByRole("link", { name: "profileowner", exact: true }),
-  });
-  const titleRecommendation = titleEntry.getByRole("button", {
-    name: "✓ Recommended",
-    exact: true,
-  });
-  await expect(titleRecommendation).toBeVisible();
-  await titleRecommendation.click();
-  await expect(
-    titleEntry.getByRole("button", { name: "+ Recommend", exact: true }),
-  ).toBeVisible();
-  await expect(
-    viewer.getByRole("button", { name: "Recommend to friends", exact: true }),
-  ).toBeVisible();
-  await viewer.reload();
-  await expect(
-    titleEntry.getByRole("button", { name: "+ Recommend", exact: true }),
-  ).toBeVisible();
-  await titleEntry
-    .getByRole("button", { name: "+ Recommend", exact: true })
-    .click();
-  await expect(titleRecommendation).toBeVisible();
-  for (const width of [390, 1440]) {
-    await viewer.setViewportSize({ width, height: 900 });
-    await titleEntry.scrollIntoViewIfNeeded();
-    const watchBounds = await titleEntry
-      .getByRole("button", { name: "+ Want to watch", exact: true })
-      .boundingBox();
-    const recommendBounds = await titleRecommendation.boundingBox();
-    expect(recommendBounds!.y).toBeGreaterThanOrEqual(watchBounds!.y);
-    if (recommendBounds!.y === watchBounds!.y)
-      expect(recommendBounds!.x).toBeGreaterThan(watchBounds!.x);
-    expect(recommendBounds!.x + recommendBounds!.width).toBeLessThanOrEqual(
-      width,
-    );
-    await viewer.screenshot({
-      path: `.cache/feed-recommend-${width}.png`,
-      fullPage: true,
-    });
-  }
-  await owner.goto("/people/profileviewer");
-  await expect(
-    owner.getByRole("button", { name: "✓ Recommended", exact: true }),
-  ).toBeVisible();
-  await expect(
-    owner.getByRole("button", { name: "+ Want to watch", exact: true }),
-  ).toBeVisible();
-  await owner.context().close();
-  await viewer.context().close();
 });
 
 test("a signed-out pending member can finish with one visit to a replacement invitation", async ({
