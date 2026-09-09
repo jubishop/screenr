@@ -183,6 +183,13 @@ The browser harness derives four loopback ports and a database named
 `screenr_browser_<checkout hash>_test` from the checkout's canonical path.
 Separate worktrees get separate defaults, Next output, screenshots, and
 `.cache/mail` captures. The harness prints its URL and database name at startup.
+Browser-facing harness URLs use `127.0.0.1` to match their IPv4-only listeners. Do not replace
+this address with `localhost`: Chromium can try IPv6 first, where these servers
+do not listen. On macOS, an ephemeral client port that equals that destination
+port can form a TCP connection to itself. Chromium then receives its own HTTP
+request and reports `ERR_INVALID_HTTP_RESPONSE`, without reaching the proxy.
+Next's development image metadata still supplies its own `localhost` origin;
+the preview test checks that framework-generated value separately.
 `TEST_DATABASE_URL` must name a loopback PostgreSQL test database without URL
 query parameters. The browser harness uses the same server and credentials,
 with its separate database name.

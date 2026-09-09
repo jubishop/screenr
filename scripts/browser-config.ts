@@ -43,9 +43,12 @@ export const browserConfig = {
   catalogPort: port + 1,
   googlePort: port + 2,
   appPort: port + 3,
-  baseURL: `http://localhost:${port}`,
+  // Match the IPv4-only listeners. An IPv6 localhost connection can connect
+  // to itself when its ephemeral source port equals the unbound target port.
+  baseURL: `http://127.0.0.1:${port}`,
   catalogURL: `http://127.0.0.1:${port + 1}`,
   googleURL: `http://127.0.0.1:${port + 2}`,
+  // Next's development image metadata uses localhost regardless of its bind address.
   appURL: `http://localhost:${port + 3}`,
   databaseName,
   databaseURL: database.href,

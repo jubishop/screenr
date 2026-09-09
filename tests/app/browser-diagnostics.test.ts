@@ -57,7 +57,7 @@ test("failed scripts in manually created browser contexts retain automatic trans
 export default {...config, testDir: '.', outputDir: './results', webServer: undefined,
   reporter: config.reporter?.map(entry => Array.isArray(entry)
     ? [entry[0], {...entry[1], proxyPort: ${proxyAddress.port}, appPort: ${address.port}}] : entry),
-  use: {...config.use, baseURL: 'http://localhost:${proxyAddress.port}'}};`,
+  use: {...config.use, baseURL: 'http://127.0.0.1:${proxyAddress.port}'}};`,
   );
   await writeFile(
     join(directory, "script.spec.ts"),
@@ -67,7 +67,7 @@ test('broken script', async ({browser}) => {
   test.setTimeout(3000);
   const context=await browser.newContext();
   const page=await context.newPage();
-  await page.goto('http://localhost:${proxyAddress.port}');
+  await page.goto('http://127.0.0.1:${proxyAddress.port}');
   await expect(page.locator('body')).toHaveText('script loaded', {timeout: 20000});
 });
 test('successful page', async ({page}) => { await page.setContent('<p>ok</p>'); });`,
@@ -171,7 +171,7 @@ test("script guards cover default contexts and ignore cancellation, teardown, AP
     join(directory, "playwright.config.ts"),
     `import config from ${JSON.stringify(resolve("playwright.config.ts"))};
 export default {...config, testDir: '.', outputDir: './results', webServer: undefined, workers: 1,
-  reporter: [['list']], timeout: 3000, use: {...config.use, baseURL:'http://localhost:${address.port}'}};`,
+  reporter: [['list']], timeout: 3000, use: {...config.use, baseURL:'http://127.0.0.1:${address.port}'}};`,
   );
   await writeFile(
     join(directory, "guard.spec.ts"),

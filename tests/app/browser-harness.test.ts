@@ -50,8 +50,49 @@ test("browser configuration honors a port override", async () => {
   const config = await playwrightConfig(root, {
     SCREENR_BROWSER_PORT: "32100",
   });
-  assert.equal(config.use.baseURL, "http://localhost:32100");
-  assert.equal(config.webServer.url, "http://localhost:32100/login");
+  assert.equal(config.use.baseURL, "http://127.0.0.1:32100");
+  assert.equal(config.webServer.url, "http://127.0.0.1:32100/login");
+});
+
+test("the advertised browser URL reaches its IPv4 listener without IPv6 fallback", async (t) => {
+  const { createServer, get } = await import("node:http");
+  const { once } = await import("node:events");
+  const server = createServer((_request, response) => response.end("ready"));
+  let address;
+  do {
+    server.listen(0, "127.0.0.1");
+    await once(server, "listening");
+    address = server.address();
+    assert.ok(address && typeof address !== "string");
+    // The config reserves room for three following fixture ports.
+    if (address.port > 65532)
+      await new Promise<void>((done) => server.close(() => done()));
+  } while (address.port > 65532);
+  t.after(() => new Promise<void>((done) => server.close(() => done())));
+  const config = await playwrightConfig(root, {
+    SCREENR_BROWSER_PORT: String(address.port),
+  });
+  const body = await new Promise<string>((resolve, reject) => {
+    const request = get(
+      config.webServer.url,
+      {
+        family: 6,
+        // Model localhost resolving to IPv6 first. The harness listens only
+        // on IPv4, so its advertised address must not depend on DNS fallback.
+        lookup: (_hostname, _options, callback) => callback(null, "::1", 6),
+      },
+      (response) => {
+        let body = "";
+        response.setEncoding("utf8");
+        response.on("data", (chunk) => (body += chunk));
+        response.on("end", () => resolve(body));
+        response.on("error", reject);
+      },
+    );
+    request.setTimeout(2000, () => request.destroy(new Error("No response")));
+    request.on("error", reject);
+  });
+  assert.equal(body, "ready");
 });
 
 test("browser configuration rejects unsafe database and port settings", async () => {
