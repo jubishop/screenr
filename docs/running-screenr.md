@@ -20,6 +20,14 @@ Each application worktree needs its own database and development port if
 several copies run together. QMD setup is described in the
 [development workflow](development-workflow.md).
 
+Select Node 24 in your shell before running `npm ci` or application commands.
+Use the npm bundled with Node 24 or a newer compatible npm that supports
+[`devEngines`](https://docs.npmjs.com/cli/v11/configuring-npm/package-json/#devengines).
+The package policy rejects other Node majors before installation or script
+execution. `bin/check --full` also checks Node before running behavior tests.
+Fast and document-only checks do not need Node. See the
+[runtime decision](development-workflow.md#node-runtime) for upgrade policy.
+
 ```sh
 bin/setup
 npm ci
@@ -157,11 +165,15 @@ inspect Resend delivery activity if codes do not arrive.
 
 ```sh
 npx playwright install chromium
-bin/check
+bin/check --full
 ```
 
-`bin/check` preserves the repository foundation tests and adds formatting,
-TypeScript, PostgreSQL tests, a browser scenario, and a production build.
+`bin/check --full` preserves the repository foundation tests and adds formatting,
+TypeScript, PostgreSQL tests, the browser suite, and a production build.
+Plain `bin/check` runs only fast repository static checks; use
+`bin/check --documents-only` for Markdown edits. Follow the
+[local and CI validation policy](development-workflow.md#local-and-ci-validation)
+for focused checks during implementation and full validation before merge.
 The local default test database is `screenr_test` on port 5439. Override it
 with `TEST_DATABASE_URL`. The test role must be able to create databases.
 All test databases are disposable and are reset by the harness; never point
@@ -199,7 +211,7 @@ into two temporary checkout directories, then runs both complete browser suites
 at the same time. It also checks that active database and checkout conflicts
 fail before reset. It removes its databases and successful temporary copies.
 Failed copies retain browser logs and traces at the printed paths. It does not
-create Git branches or alter another worktree. Ordinary `bin/check` includes
+create Git branches or alter another worktree. `bin/check --full` includes
 configuration and port-conflict regression tests and one complete browser suite;
 run the concurrent check after changing browser harness isolation.
 

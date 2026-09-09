@@ -16,7 +16,7 @@ bin/setup
 bin/doctor
 ```
 
-Complete [app setup](running-screenr.md#local-setup) before running `bin/check`.
+Complete [app setup](running-screenr.md#local-setup) before running `bin/check --full`.
 Setup requires Git and Python 3.9 or later. Checks also require ShellCheck,
 available through the operating system's package manager. QMD and direnv are
 optional. Missing optional tools produce clear notices; an installed but
@@ -32,6 +32,21 @@ preserves existing choices and skips indexing when inputs are unchanged.
 Review `.envrc` before running `direnv allow`. QMD does not need direnv or
 shell-wide environment exports. Add project-specific environment settings
 to `.envrc` deliberately; preserve existing settings when adapting setup.
+
+## Node runtime
+
+**Decision — 2026-09-08:** Use Node.js 24 LTS for local application commands,
+CI, and production. Application commands must reject a different Node major
+before starting work. Fast and document-only repository checks do not require
+Node. Reassess Node 26 after it reaches LTS; this is not an automatic upgrade.
+
+**Why:** Prefer recent versions while retaining long-term support. Node 24 is
+the latest LTS line at the time of this decision, and CI and production already
+target it. Matching the local runtime reduces differences between environments.
+
+**Tradeoff:** Features available only in newer Node releases remain unavailable.
+Future major upgrades require compatibility validation and coordinated updates
+to the package requirements, CI, production provisioning, and documentation.
 
 ## Search
 
@@ -149,6 +164,27 @@ link and rerun `bin/prep-worktree`; do not delete a directory of model files.
 Remove worktrees only after checking for uncommitted and unpushed work.
 Use `git worktree remove` and verify the resulting `git worktree list`.
 
+### Validation checkout isolation
+
+**Decision — 2026-09-08:** Scope project source discovery for builds,
+typechecking, formatting, and tests to the active checkout. Keep nested
+worktrees, temporary copies, and unrelated generated output out of those
+inputs. Include required framework-generated types explicitly. Track the
+existing TypeScript scanning cleanup in a GitHub issue.
+
+**Why:** Broad recursive TypeScript patterns have included source files from
+nested worktrees in a check of the primary checkout. Another checkout's state
+must not determine whether the current checkout passes validation. Each tool's
+discovery rules need review; `.gitignore` alone does not establish this boundary.
+
+**Tradeoff:** Explicit source boundaries must evolve when new source areas or
+generated types are added. Validate both exclusion of unrelated files and
+continued coverage of all intended source, tests, scripts, and configuration.
+Keep mutable validation output specific to each checkout and check warm as
+well as fresh-cache behavior when changing discovery or cache configuration.
+
+Implementation tracking: [scope validation to the active checkout, #74](https://github.com/jubishop/screenr/issues/74).
+
 ## Existing hooks
 
 Setup does not overwrite a different active `core.hooksPath` or bypass
@@ -197,6 +233,27 @@ it is not an integrity scan of the SQLite database. If QMD reports database
 errors despite a current fingerprint, use the foreground refresh and inspect
 its log. Manually replacing the database requires a forced refresh.
 
+## Screen component organization
+
+**Decision — 2026-09-08:** Extract cohesive feature views from
+`src/components/screen.tsx`, keeping shared navigation and data coordination
+in the screen shell. Track the refactor in a GitHub issue. The existing
+file-organization guidance in `AGENTS.md` is sufficient; no additional size
+limit or component-count target is needed.
+
+**Why:** The component combines people, profiles, invitations, account, and
+title views with shared refresh and mutation behavior. These responsibilities
+make unrelated feature changes touch the same file even below the approximate
+1,000-line review threshold.
+
+**Tradeoff:** Extraction introduces component boundaries and data flow that
+must remain clear. Choose boundaries by feature, preserve user-visible
+behavior, and retain focus, drafts, and access updates across refreshes.
+Avoid moving complexity into a replacement catch-all component or a generic
+framework created only for this refactor.
+
+Implementation tracking: [extract cohesive Screen feature views, #75](https://github.com/jubishop/screenr/issues/75).
+
 ## Test-driven development
 
 Regression fixes and functional changes require automated tests that cover
@@ -230,6 +287,105 @@ expose private functionality or add production accessors or APIs only for tests.
 
 Use focused test commands during this cycle. The check command below provides
 broader validation and does not replace the red and green test runs.
+
+### Browser test setup
+
+**Decision — 2026-09-08:** Browser tests whose purpose is unrelated to signup
+or friendship should start with authenticated users and relationships prepared
+through isolated fixtures or existing APIs. Dedicated signup and friendship
+tests continue to exercise those complete browser journeys. Real sessions,
+authorization, and the feature behavior under test must still run.
+
+**Why:** Repeating email-code entry, profile creation, and friendship setup in
+unrelated feature tests adds substantial work to the browser suite. Preparing
+these prerequisites directly keeps each test focused on its intended behavior.
+
+**Tradeoff:** Each feature test no longer doubles as another signup or
+friendship test. Preserve the dedicated journey coverage and isolate fixture
+data so tests cannot affect one another or require another test to run first.
+
+### Test coverage placement
+
+**Decision — 2026-09-08:** Move repeated rule checks from browser tests to
+application or database tests when the browser adds no distinct evidence.
+Include this redistribution of coverage in the browser runtime cleanup,
+alongside faster setup. Keep real project logic running through public
+interfaces and external-system boundaries.
+
+Retain browser coverage for focus, drafts, navigation, rendering, complete
+user journeys, and visible access changes after blocking or unfriending.
+For example, invalid reaction values can be checked through the API while
+browser tests verify selecting, changing, and removing a reaction.
+
+**Why:** Repeating the same rule through the browser adds execution time
+without necessarily proving additional behavior.
+
+**Tradeoff:** Moving a case requires an explicit mapping to equivalent
+application or database coverage. Do not simply delete slow assertions or
+assume a server-side test proves the corresponding browser behavior.
+
+### Browser runtime optimization sequence
+
+**Decision — 2026-09-08:** First optimize setup and redistribute coverage with
+one browser worker, then measure the result. The implementing agent may decide
+whether to add parallel execution within the same issue, without another
+approval step. Base that decision on speed, isolation work, and the risk of
+intermittent failures from tests racing or conflicting with one another.
+
+**Why:** The current suite shares a database and fixture resources. Parallel
+execution requires additional isolation work. Measurements should establish
+whether its benefit justifies that work while preserving reliable validation.
+
+**Tradeoff:** Parallelism may reduce elapsed time but adds resource ownership
+and lifecycle concerns. Account for shared mutable data and resources, validate
+test isolation, and compare repeated runs with the improved single-worker
+baseline. If unresolved races or conflicts cause intermittent failures, retain
+one worker. Do not hide interference with retries or weaker assertions.
+
+This expands the earlier same-day decision, which deferred parallel execution
+to a later proposal. The agent now owns both the decision and any justified
+implementation, with its evidence recorded in the issue or related PR.
+
+Implementation tracking: [browser runtime improvements and measurement, #72](https://github.com/jubishop/screenr/issues/72).
+
+### Validation modes
+
+**Decision — 2026-09-08:** Adopt Project Starter's three check modes:
+
+| Command | Scope |
+| --- | --- |
+| `bin/check --documents-only` | Markdown metadata, index coverage, and local links. |
+| `bin/check` | Fast repository static checks, including applicable syntax and whitespace checks. |
+| `bin/check --full` | All foundation checks and behavior tests, application formatting and typechecking, application/database tests, browser tests, and the production build. |
+
+Run relevant application checks explicitly during implementation. Neither
+routine mode should start application tooling or a package manager. CI runs
+`bin/check --full`, preserving the full validation gate before deployment.
+
+**Why:** Routine checks should give quick feedback without automatically
+starting the complete browser suite and build. Matching Project Starter's
+contract also keeps these commands consistent across adopted repositories.
+
+**Tradeoff:** A successful plain `bin/check` will establish only the checks
+listed in its scope. Command output and agent guidance must distinguish that
+result from full application validation.
+
+### Local and CI validation
+
+**Decision — 2026-09-08:** For ordinary code changes, run focused local
+application checks and require successful full CI validation before merge and
+deployment. Run the full suite locally for test/build infrastructure changes
+or when focused checks leave material uncertainty. Documentation-only changes
+use the applicable document checks locally.
+
+**Why:** Focused local checks provide timely feedback. Mandatory full CI
+retains broad coverage without routinely running the complete browser suite
+both locally and in CI for every ordinary change.
+
+**Tradeoff:** A regression outside the focused local checks may first appear
+in CI. Resolve it and obtain a successful full CI result for the code being
+merged; a fast or focused pass alone does not satisfy that gate. Preserve the
+full CI requirements when changing the check commands.
 
 ## Review, merge, and deploy
 
@@ -269,19 +425,23 @@ artifact does not replace review and merge.
 
 ## Checks and project extensions
 
-`bin/check` validates the documented frontmatter subset, index coverage,
-local file links and ordinary heading anchors, Python syntax for these tools,
-shell syntax (Bash for `.envrc`, POSIX shell for the bundled hooks), and the
-copied foundation's behavior. The tests use disposable
-repositories and simulated QMD/direnv, with no model downloads or network access.
-Remote URLs are not fetched. Use `bin/check --documents-only` for focused edits.
+`bin/check --documents-only` validates the documented frontmatter subset,
+index coverage, local file links, and ordinary heading anchors. Remote URLs
+are not fetched. Plain `bin/check` adds Python syntax checks for foundation
+tools and tests, shell lint (Bash for `.envrc`, POSIX shell for hooks and
+operational scripts), and staged and unstaged whitespace checks.
+
+`bin/check --full` also runs the copied foundation's behavior tests. These
+use disposable repositories and simulated QMD/direnv, with no model downloads
+or network access. Full mode then runs application validation. Default and
+document-only modes do not start application commands or a package manager.
 
 Keep the foundation checks when adding application tests, builds, and linters.
 For generated or externally owned docs, add deliberate patterns to
 `checks.exclude` in `.config/knowledge.json`. Avoid broad exclusions that hide
 hand-written project knowledge.
 
-GitHub Actions runs `bin/check` on pull requests and pushes to `main` through
+GitHub Actions runs `bin/check --full` on pull requests and pushes to `main` through
 [the existing workflow](../.github/workflows/check.yml). Application formatting,
 types, PostgreSQL tests, browser verification and the production build run after
 the foundation checks. See [application verification](running-screenr.md#verification)

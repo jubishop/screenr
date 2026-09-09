@@ -44,7 +44,7 @@ jobs:
       - name: Install check tools
         run: sudo apt-get update && sudo apt-get install --yes shellcheck caddy
       - name: Check repository
-        run: ./bin/check
+        run: ./bin/check --full
       - name: Package Linux release
         if: github.event_name == 'push' && github.ref == 'refs/heads/main' && github.repository == 'jubishop/screenr'
         run: npm run release:package

@@ -29,8 +29,26 @@ Use `bin/knowledge` from the root if the Git alias is unavailable. See the
 [development workflow](docs/development-workflow.md) for worktree preparation,
 shared models, diagnostics, and recovery.
 
-Run `bin/check` before delivering repository changes. It is also the GitHub
-Actions check for pull requests and pushes to `main`.
+Use document checks for documentation changes and focused local application
+checks for ordinary code changes. Require successful full CI validation before
+merge and deployment. Run full local validation for test/build infrastructure
+changes or when focused checks leave material uncertainty. Follow the
+[validation policy](docs/development-workflow.md#local-and-ci-validation).
+
+`bin/check --documents-only` validates Markdown. Plain `bin/check` runs fast
+repository static checks. `bin/check --full` adds foundation behavior tests,
+application checks, browser tests, and the build; CI uses this full mode.
+
+Use Node.js 24 LTS for application commands, CI, and production. Keep these
+environments on the same major version. Reassess Node 26 after it reaches LTS;
+do not upgrade automatically. See the
+[runtime decision](docs/development-workflow.md#node-runtime).
+
+Scope project source discovery for builds, typechecking, formatting, and tests
+to the active checkout. Exclude nested worktrees, temporary copies, and
+unrelated generated output; include required generated types explicitly.
+Do not assume `.gitignore` controls another tool's file discovery. See the
+[checkout isolation decision](docs/development-workflow.md#validation-checkout-isolation).
 
 ## File Organization
 
@@ -61,6 +79,16 @@ systems. Put fakes at external-system boundaries so real project logic runs.
 Do not test private helpers or internal structure, expose private functionality,
 or add production APIs only for tests. Tests should allow internal refactoring
 that preserves behavior.
+
+For browser tests unrelated to signup or friendship, prepare authenticated
+users and relationships through isolated fixtures or existing APIs. Keep
+dedicated browser coverage for the complete signup and friendship journeys.
+See the [browser setup decision](docs/development-workflow.md#browser-test-setup).
+
+Put repeated rule checks in application or database tests when the browser
+adds no distinct evidence. Preserve coverage for each moved case and retain
+browser-specific behavior and complete user journeys. Follow the
+[coverage placement decision](docs/development-workflow.md#test-coverage-placement).
 
 ## Product Context
 

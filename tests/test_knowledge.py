@@ -393,6 +393,123 @@ sys.exit(int(os.environ.get("OLD_HOOK_EXIT", "0")))
         self.drain()
         self.assertEqual(len(self.records()), initial + 2)
 
+    def check_mode_tools(self):
+        self.tool("shellcheck", "import sys\nsys.exit(0)\n")
+        self.tool("node", "import os\nprint(os.environ.get('CHECK_NODE_VERSION', 'v24.20.0'))\n")
+        events = self.base / "check-events.jsonl"
+        self.env["CHECK_EVENTS"] = str(events)
+        # Replace only the disposable suites to observe execution without recursion.
+        for path in (self.repo / "tests").glob("test_*.py"):
+            path.unlink()
+        for name in ("knowledge", "other"):
+            (self.repo / "tests" / f"test_{name}.py").write_text(
+                "import json, os, unittest\n"
+                "class Probe(unittest.TestCase):\n"
+                "    def test_probe(self):\n"
+                "        with open(os.environ['CHECK_EVENTS'], 'a') as stream:\n"
+                f"            stream.write(json.dumps(['{name}']) + '\\n')\n"
+                "        self.assertNotIn('FAIL_FOUNDATION', os.environ)\n")
+        self.tool("npm", """
+import json, os, sys
+with open(os.environ["CHECK_EVENTS"], "a") as stream:
+    stream.write(json.dumps(["npm", *sys.argv[1:]]) + "\\n")
+if sys.argv[-1] == os.environ.get("FAIL_APPLICATION"):
+    print("application check failed: " + sys.argv[-1], file=sys.stderr)
+    sys.exit(17)
+""")
+        return events
+
+    def test_full_check_rejects_wrong_or_missing_node_before_behavior_tests(self):
+        events = self.check_mode_tools()
+        for version in ("v22.18.0", "v25.8.0", "v26.8.1"):
+            with self.subTest(version=version):
+                result = self.run_command("bin/check", "--full",
+                                          extra={"CHECK_NODE_VERSION": version}, check=False)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("Node.js 24.x is required", result.stderr)
+                self.assertIn(version, result.stderr)
+                self.assertFalse(events.exists())
+        (self.tools / "node").unlink()
+        self.run_command("bin/check", "--documents-only")
+        self.run_command("bin/check")
+        result = self.run_command("bin/check", "--full", check=False)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("Node.js 24.x is required", result.stderr)
+        self.assertFalse(events.exists())
+
+    def test_check_modes_run_behavior_and_application_checks_only_with_full(self):
+        events = self.check_mode_tools()
+        self.run_command("bin/check", "--documents-only")
+        self.assertFalse(events.exists())
+        fast = self.run_command("bin/check")
+        self.assertFalse(events.exists(), events.read_text() if events.exists() else "")
+        self.assertIn("Fast foundation checks passed", fast.stdout)
+        full = self.run_command("bin/check", "--full")
+        self.assertEqual([json.loads(line) for line in events.read_text().splitlines()],
+                         [["knowledge"], ["other"], *[["npm", "run", script] for script in
+                          ("format:check", "typecheck", "test", "test:browser", "build")]])
+        self.assertIn("Full application checks passed", full.stdout)
+        (self.repo / "tests/test_knowledge.py").unlink()
+        events.unlink()
+        missing = self.run_command("bin/check", "--full", check=False)
+        self.assertNotEqual(missing.returncode, 0)
+        self.assertIn("preserve the foundation tests", missing.stderr)
+        self.assertFalse(events.exists())
+
+    def test_full_check_propagates_failures_and_stops_application_commands(self):
+        events = self.check_mode_tools()
+        foundation = self.run_command("bin/check", "--full", extra={"FAIL_FOUNDATION": "1"}, check=False)
+        self.assertNotEqual(foundation.returncode, 0)
+        self.assertEqual([json.loads(line) for line in events.read_text().splitlines()],
+                         [["knowledge"], ["other"]])
+        scripts = ("format:check", "typecheck", "test", "test:browser", "build")
+        for index, script in enumerate(scripts):
+            with self.subTest(script=script):
+                events.unlink()
+                failed = self.run_command("bin/check", "--full",
+                                          extra={"FAIL_APPLICATION": script}, check=False)
+                self.assertNotEqual(failed.returncode, 0)
+                self.assertIn("application check failed: " + script, failed.stderr)
+                self.assertEqual([json.loads(line) for line in events.read_text().splitlines()],
+                                 [["knowledge"], ["other"],
+                                  *[["npm", "run", name] for name in scripts[:index + 1]]])
+
+    def test_fast_check_still_rejects_syntax_and_lint_errors(self):
+        events = self.check_mode_tools()
+        for folder in (self.repo / "bin", self.repo / "tests"):
+            with self.subTest(folder=folder):
+                broken = folder / "invalid_syntax.py"
+                broken.write_text("def broken(\n")
+                self.run_command("bin/check", "--documents-only")
+                result = self.run_command("bin/check", check=False)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("invalid_syntax.py", result.stderr)
+                self.assertFalse(events.exists())
+                broken.unlink()
+        self.tool("shellcheck", "import sys\nprint('shell lint failed', file=sys.stderr)\nsys.exit(1)\n")
+        self.run_command("bin/check", "--documents-only")
+        result = self.run_command("bin/check", check=False)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("shell lint failed", result.stderr)
+        self.assertFalse(events.exists())
+
+    def test_fast_check_still_rejects_staged_whitespace(self):
+        events = self.check_mode_tools()
+        (self.repo / "whitespace.txt").write_text("trailing space \n")
+        self.run_command("git", "add", "whitespace.txt")
+        result = self.run_command("bin/check", check=False)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("trailing whitespace", result.stdout)
+        self.assertFalse(events.exists())
+
+    def test_check_rejects_unknown_or_combined_modes(self):
+        for args in (("--unknown",), ("--full", "--documents-only"),
+                     ("--documents-only", "--full"), ("--full", "--full")):
+            with self.subTest(args=args):
+                result = self.run_command("bin/check", *args, check=False)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("Usage:", result.stderr)
+
     def test_document_schema_names_and_index_coverage(self):
         self.run_command("bin/check", "--documents-only")
         page = self.repo / "memory/example.md"

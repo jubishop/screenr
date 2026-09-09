@@ -253,14 +253,14 @@ def validate(root, areas=("memory", "docs"), options=None):
 def main():
     root = Path(__file__).resolve().parents[1]
     try:
-        if sys.argv[1:] not in ([], ["--documents-only"]):
-            raise ValueError("Usage: bin/check [--documents-only]")
+        if sys.argv[1:] not in ([], ["--documents-only"], ["--full"]):
+            raise ValueError("Usage: bin/check [--documents-only | --full]")
         errors = validate(root)
         if errors:
             print("\n".join(errors), file=sys.stderr)
             return 1
         print("Document metadata, index coverage, and local links passed.", flush=True)
-        if sys.argv[1:]:
+        if sys.argv[1:] == ["--documents-only"]:
             return 0
         if not shutil.which("shellcheck"):
             raise RuntimeError("ShellCheck is required for bin/check. Install it with your package manager.")
@@ -270,20 +270,30 @@ def main():
                 subprocess.run(["shellcheck", "--shell=bash", str(path)], cwd=root, check=True)
             elif (path.is_relative_to(root / "bin") or path.is_relative_to(root / "ops")) and path.read_bytes().startswith(b"#!/bin/sh"):
                 shell_files.append(path)
-            elif path.is_relative_to(root / "bin") and (path.suffix == ".py" or path.read_bytes().startswith(b"#!/usr/bin/env python3")):
+            elif (path.is_relative_to(root / "bin") or path.is_relative_to(root / "tests")) and (path.suffix == ".py" or path.read_bytes().startswith(b"#!/usr/bin/env python3")):
                 ast.parse(path.read_text(), filename=str(path))
         if shell_files:
             subprocess.run(["shellcheck", "--shell=sh", *map(str, shell_files)], cwd=root, check=True)
+        subprocess.run(["git", "diff", "--check"], cwd=root, check=True)
+        subprocess.run(["git", "diff", "--cached", "--check"], cwd=root, check=True)
+        if sys.argv[1:] != ["--full"]:
+            print("Fast foundation checks passed. Use bin/check --full for behavior tests and application validation.", flush=True)
+            return 0
         tests = root / "tests/test_knowledge.py"
         if not tests.exists():
             raise RuntimeError("Missing tests/test_knowledge.py; preserve the foundation tests when adapting bin/check")
+        required_node = json.loads((root / "package.json").read_text())["engines"]["node"]
+        runtime_help = f"Node.js {required_node} is required for application checks. Select Node 24 LTS and rerun bin/check --full."
+        if not shutil.which("node"):
+            raise RuntimeError(runtime_help)
+        node_version = subprocess.check_output(["node", "--version"], cwd=root, text=True).strip()
+        if node_version.split(".")[0] != "v" + required_node.split(".")[0]:
+            raise RuntimeError(f"{runtime_help} Found {node_version}.")
         subprocess.run([sys.executable, "-B", "-m", "unittest", "discover", "-s", "tests", "-p", "test_*.py", "-v"], cwd=root, check=True)
-        subprocess.run(["git", "diff", "--check"], cwd=root, check=True)
-        subprocess.run(["git", "diff", "--cached", "--check"], cwd=root, check=True)
-        print("Repository foundation checks passed.")
+        print("Full repository foundation checks passed.", flush=True)
         for script in ("format:check", "typecheck", "test", "test:browser", "build"):
             subprocess.run(["npm", "run", script], cwd=root, check=True)
-        print("Application checks passed.")
+        print("Full application checks passed.", flush=True)
         return 0
     except (OSError, ValueError, RuntimeError, SyntaxError, subprocess.SubprocessError) as error:
         print(error, file=sys.stderr)

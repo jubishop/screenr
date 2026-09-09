@@ -167,7 +167,7 @@ npm run release:package
 Packaging excludes local environment files and generated caches. It starts the
 packaged server on loopback port 3057 and checks the login page and database
 health. Set `TEST_DATABASE_URL` to an available disposable database whose name
-ends in `_test`; the default is the local test database from `bin/check`.
+ends in `_test`; the default is the local test database from `bin/check --full`.
 This check also verifies that Next's generated dependency aliases are present.
 Inspect the archive manifest before transferring it. Extract into a new revision directory as root and
 keep application source and runtime packages read-only to the service users.

@@ -310,7 +310,8 @@ To maintain the registry:
    uncertain identities separately; never guess their routes at runtime.
 4. Run `npx tsx --test tests/app/watch-provider-registry.test.ts` for coverage,
    unique membership, and data validation. Update public title-screen tests
-   for changed identity decisions, then run `bin/check`.
+   for changed identity decisions, then follow the
+   [local and CI validation policy](development-workflow.md#local-and-ci-validation).
 
 No migration, cache reset, token change, or extra deployment action is
 required for a registry update. Unknown IDs remain visible until reviewed.

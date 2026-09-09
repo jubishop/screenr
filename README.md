@@ -45,15 +45,22 @@ to include your own notes.
 ## Repository checks
 
 ```sh
+./bin/check --documents-only
 ./bin/check
+./bin/check --full
 ```
 
+Use `--documents-only` for Markdown metadata, index coverage, links, and heading
+anchors. Plain `bin/check` adds fast syntax, shell lint, and whitespace checks.
+Install ShellCheck (`brew install shellcheck` on macOS) for the default and full
+modes. Neither routine mode starts application tooling.
+
 Complete the [app setup](docs/running-screenr.md#local-setup) and install
-Playwright Chromium first. Install ShellCheck (`brew install shellcheck` on macOS). The checks
-validate scripts, document metadata, index coverage, local links and heading
-anchors, hook behavior, concurrent refreshes, and worktree isolation. They also
-run app formatting, TypeScript, PostgreSQL and browser tests, and a production build.
-GitHub Actions runs the same checks on pull requests and pushes to `main`.
+Playwright Chromium before using `--full`. Full mode also runs foundation
+behavior tests, app formatting, TypeScript, PostgreSQL and browser tests, and
+a production build. GitHub Actions uses `--full` on pull requests and pushes to
+`main`. Follow the [local and CI validation policy](docs/development-workflow.md#local-and-ci-validation)
+when choosing checks during development.
 
 Use `git knowledge search "term"` from any subdirectory. Run `bin/qmd-index`
 after uncommitted knowledge edits; unchanged inputs skip indexing work.

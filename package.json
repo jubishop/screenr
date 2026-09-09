@@ -4,7 +4,14 @@
   "private": true,
   "type": "module",
   "engines": {
-    "node": ">=22.18.0"
+    "node": "24.x"
+  },
+  "devEngines": {
+    "runtime": {
+      "name": "node",
+      "version": "24.x",
+      "onFail": "error"
+    }
   },
   "scripts": {
     "dev": "next dev --hostname 127.0.0.1",
