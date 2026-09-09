@@ -231,6 +231,7 @@ Run the repeatable concurrent check with:
 
 ```sh
 npm run test:browser:isolation
+npm run test:browser:isolation -- --warm
 ```
 
 This copies the current non-ignored Git working files and installed dependencies
@@ -241,6 +242,10 @@ Failed copies retain browser logs and traces at the printed paths. It does not
 create Git branches or alter another worktree. `bin/check --full` includes
 configuration and port-conflict regression tests and one complete browser suite;
 run the concurrent check after changing browser harness isolation.
+The `--warm` option runs each copied suite twice, first with no Next cache,
+then with that checkout's cache from the first run. Each run resets its own
+database. Successful phase logs are named `browser-fresh.log` and
+`browser-warm.log`; a failed phase also writes `browser.log`.
 
 The browser-facing port routes application requests to Next and auth requests
 to the real auth handlers with a local identity provider. This keeps OAuth redirects, state cookies, PKCE
@@ -315,21 +320,55 @@ keeps failure traces in `test-results/`.
 
 ### Failed development scripts
 
+The shared fixture in `scripts/browser-test.ts` monitors essential local script
+loads in default and manually created browser contexts. A failed transport or
+HTTP error on a GET for `/_next/static/*.js` records the original error and
+request timestamp, saves `script-failure.json`, then closes the test's contexts
+with that error as the reason. Browser actions stop promptly instead of waiting
+for an unrelated disabled control. The fixture also fails if the test catches
+the interrupted action. Ordinary navigation cancellations and context cleanup
+are excluded. API and third-party failures are outside this guard. A test that
+deliberately fails a script must list its exact path in `expectedScriptFailures`;
+there is no suite-wide retry or blanket failure suppression.
+
+The fixture proxy continuously observes the original upstream socket reads and
+downstream socket writes for these scripts. It retains a ring of 128 exchanges,
+with a 4 KiB prefix on each side. At most 128 exchanges can be captured in flight;
+additional requests are counted as omitted. Serialized reports contain status
+lines, selected headers (including duplicate framing headers), byte counts,
+parser error codes and offsets, connection ports, timestamps, and completion
+events. Response bodies and request headers are excluded. The downstream finish
+event means Node completed its writes; it does not prove Chromium received or
+accepted them. The browser error and trace provide that separate observation.
+
+The guard snapshots this ring at the first definitive failure. Match the
+browser's path and request start time to the proxy exchange ID, timestamps, and
+connection ports. The snapshot's `omitted` count, ring limit, and prefix limit
+make capture gaps explicit. Records can be evicted before a delayed failure;
+the capture is not a packet trace and cannot diagnose bytes beyond the prefix
+or prove kernel-level delivery. A missing response or missing record must not
+be treated as proof that Next or the proxy succeeded.
+
 Failed browser tests also retain `script-diagnostics.json` beside their trace.
 The reporter reads failed local `/_next/static/*.js` requests from every traced
 context, including contexts created manually. It records the original browser
 error, HTTP status and selected response headers, plus Node, Next, Playwright,
 platform, and port metadata.
+It includes the guard's original transport snapshot. When the guard has no
+snapshot, the reporter reads the current proxy ring and marks unavailable
+capture explicitly. The reporter waits for pending collection before exiting.
 For up to five distinct paths, it makes one later GET through the fixture proxy
 and one directly to Next. These probes preserve the status line, selected
 headers, byte count, and timeout or connection error. Duplicate framing headers
 are retained. Each probe stops after two seconds or 4 KiB. All probes run
-concurrently; reporter execution has a ten-second outer limit.
+concurrently; the comparison subprocess has a ten-second outer limit. Reading
+the original proxy ring has a separate two-second, 2 MiB limit and does not
+follow redirects. Waiting for the archive lock is limited to two seconds.
 
-Comparison requests are later observations. They cannot establish the exact
-bytes of an earlier intermittent failure. A successful comparison is not proof
-that the original request succeeded. Use the original trace and server log
-with the report before attributing a failure to the proxy, Next, or Chromium.
+Comparison requests are later observations. They cannot replace the original
+transport snapshot or establish bytes missing from it. A successful comparison
+is not proof that the original request succeeded. Use the original trace and
+transport snapshot before attributing a failure to the proxy, Next, or Chromium.
 No probe follows redirects, retries a request, or sends a mutation. Query
 strings, credentials, cookies, and unrelated application requests are omitted
 from the new report and probes. Ordinary cancelled requests are ignored unless
@@ -342,6 +381,25 @@ fails. Successful tests create no diagnostic report or comparison traffic.
 Reports are included in the existing GitHub failure-artifact upload. To use the
 reporter, run the normal `npm run test:browser` or `bin/check`; overriding
 Playwright's `--reporter` option replaces this reporter too.
+
+Each failed report is also copied into `.cache/browser-failures/failure-<UUID>.json`
+with private file permissions. The isolation command sends both copies' reports
+to this directory in the source checkout, outside the disposable directories.
+Keep the printed retained path when removing a failed isolation checkout.
+The archive holds at most 100 reports and 50 MiB in total, with a 2 MiB limit
+per report. Every reporter startup or archive write removes owned reports older
+than seven days and prunes the oldest reports to stay within those limits.
+Successful runs write no diagnostic reports. Concurrent writers use an exclusive
+lock. Cleanup leaves unrelated files and symlinks alone. If a killed process
+leaves `.lock`, verify no browser runner is writing before removing that lock.
+Archive errors are reported without replacing the original test failure or its
+local report. Files can also be removed manually when no runner is active.
+
+This capture and prompt-failure behavior supports the continuing correction in
+[#83](https://github.com/jubishop/screenr/issues/83). Passing reruns and additional
+logging do not establish a root cause or complete that issue. The separate
+serving-mode evaluation is tracked in
+[#84](https://github.com/jubishop/screenr/issues/84).
 
 **Decision — 2026-09-08:** Issue #69 is complete when permanent failure
 diagnostics are delivered and another investigation of at most 30 minutes has

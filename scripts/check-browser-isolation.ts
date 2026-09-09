@@ -8,12 +8,18 @@ import { promisify } from "node:util";
 import { setTimeout as delay } from "node:timers/promises";
 import { Client } from "pg";
 import type { browserConfig } from "./browser-config";
+import { retainBrowserEvidence } from "./browser-evidence";
 
 const execute = promisify(execFile);
 const source = process.cwd();
 const directory = await mkdtemp(join(tmpdir(), "screenr-browser-isolation-"));
 const checkouts = [join(directory, "first"), join(directory, "second")];
 const env = { ...process.env };
+env.SCREENR_BROWSER_EVIDENCE_DIR = join(source, ".cache/browser-failures");
+await retainBrowserEvidence(undefined, env.SCREENR_BROWSER_EVIDENCE_DIR);
+const args = process.argv.slice(2);
+const phases = args.includes("--warm") ? ["fresh", "warm"] : ["fresh"];
+const browserArgs = args.filter((arg) => arg !== "--warm");
 delete env.SCREENR_BROWSER_PORT;
 delete env.SCREENR_BROWSER_DATABASE;
 const configurations: (typeof browserConfig)[] = [];
@@ -129,22 +135,25 @@ try {
         `Starting ${checkout}: ${config.baseURL}, ${config.databaseName}`,
       );
       try {
-        const result = await execute(
-          process.execPath,
-          [
-            "node_modules/@playwright/test/cli.js",
-            "test",
-            ...process.argv.slice(2),
-          ],
-          { cwd: checkout, env, timeout: 600_000, maxBuffer: 10 * 1024 * 1024 },
-        );
-        await writeFile(
-          join(checkout, "browser.log"),
-          result.stdout + result.stderr,
-        );
-        console.log(
-          `${checkout}: ${result.stdout.match(/\d+ passed[^\n]*/)?.[0] ?? "passed"}`,
-        );
+        for (const phase of phases) {
+          const result = await execute(
+            process.execPath,
+            ["node_modules/@playwright/test/cli.js", "test", ...browserArgs],
+            {
+              cwd: checkout,
+              env,
+              timeout: 600_000,
+              maxBuffer: 10 * 1024 * 1024,
+            },
+          );
+          await writeFile(
+            join(checkout, `browser-${phase}.log`),
+            result.stdout + result.stderr,
+          );
+          console.log(
+            `${checkout} (${phase}): ${result.stdout.match(/\d+ passed[^\n]*/)?.[0] ?? "passed"}`,
+          );
+        }
       } catch (error) {
         const output = error as Error & { stdout?: string; stderr?: string };
         await writeFile(

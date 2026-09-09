@@ -4,6 +4,7 @@ import {
   type IncomingHttpHeaders,
 } from "node:http";
 import { connect } from "node:net";
+import { ScriptTransport, transportPath } from "./browser-transport";
 
 // The browser fixture routes OAuth to its local provider and all other traffic
 // to Next, including the development WebSocket connection.
@@ -11,7 +12,18 @@ export function createBrowserProxy(ports: {
   appPort: number;
   googlePort: number;
 }) {
+  const transport = new ScriptTransport();
   const proxy = createServer((request, response) => {
+    if (request.method === "GET" && request.url === transportPath) {
+      response.writeHead(200, {
+        "Content-Type": "application/json",
+        "Cache-Control": "no-store",
+        Connection: "close",
+      });
+      response.end(JSON.stringify(transport.snapshot()));
+      return;
+    }
+    const capture = transport.capture(request, response);
     const fail = (error: NodeJS.ErrnoException) => {
       if (response.destroyed) return;
       console.error(
@@ -54,6 +66,7 @@ export function createBrowserProxy(ports: {
         result.pipe(response);
       },
     );
+    capture?.(upstream);
     upstream.on("error", fail);
     request.on("error", (error) => upstream.destroy(error));
     response.on("close", () => {
