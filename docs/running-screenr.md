@@ -401,6 +401,14 @@ logging do not establish a root cause or complete that issue. The separate
 serving-mode evaluation is tracked in
 [#84](https://github.com/jubishop/screenr/issues/84).
 
+**Decision — 2026-09-09:** Deliver this capture and prompt-failure behavior
+through [PR #85](https://github.com/jubishop/screenr/pull/85) after normal review,
+while keeping #83 open for the root-cause correction. Remove the PR's closing
+keyword for #83. This puts the recorder into ordinary browser runs so it can
+capture the next occurrence. The tradeoff is that the intermittent fault remains
+unresolved after this delivery; evidence and a verified correction are still
+required before closing #83.
+
 **Decision — 2026-09-08:** Issue #69 is complete when permanent failure
 diagnostics are delivered and another investigation of at most 30 minutes has
 a recorded outcome. Reproduction of the original error is not required for
