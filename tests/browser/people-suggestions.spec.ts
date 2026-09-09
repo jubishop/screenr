@@ -1,37 +1,9 @@
-import { expect, type Page } from "@playwright/test";
-import { test, db } from "./database-fixture";
-import { createHash, randomUUID } from "node:crypto";
-import { readFile } from "node:fs/promises";
-const { createInvitation } = await import("../../src/server/invitations");
+import { expect } from "@playwright/test";
+import { db } from "./database-fixture";
+import { test } from "./member-fixture";
+import { randomUUID } from "node:crypto";
 const { changeRelationship, updateTitleActivity } =
   await import("../../src/server/social");
-
-async function signup(page: Page) {
-  const username = "suggestedviewer";
-  const { token } = await createInvitation(null, 1);
-  const email = `${username}@example.test`;
-  await page.goto(`/join/${token}`);
-  await page.getByLabel("Email address").fill(email);
-  await page
-    .getByRole("button", { name: "Send sign-in code", exact: true })
-    .click();
-  await expect(page.getByLabel("Sign-in code", { exact: true })).toBeVisible();
-  const filename = createHash("sha256").update(email).digest("hex");
-  const { otp } = JSON.parse(
-    await readFile(`.cache/mail/${filename}.json`, "utf8"),
-  );
-  await page.getByLabel("Sign-in code", { exact: true }).fill(otp);
-  await page.getByRole("button", { name: "Sign in", exact: true }).click();
-  await page.getByLabel("Display name").fill("Viewer");
-  await page.getByLabel("Username", { exact: true }).fill(username);
-  await page.getByRole("button", { name: "Join Screenr", exact: true }).click();
-  await expect(
-    page.getByRole("heading", { name: "Better with friends." }),
-  ).toBeVisible();
-  return (
-    await db.query("SELECT user_id FROM profile WHERE username=$1", [username])
-  ).rows[0].user_id as string;
-}
 
 async function person(username: string, name: string) {
   const id = randomUUID();
@@ -54,6 +26,7 @@ async function friend(a: string, b: string) {
 
 test("People suggestions show mutual friends, send requests, and refresh safely on desktop and mobile", async ({
   page,
+  signIn,
 }) => {
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
@@ -64,7 +37,9 @@ test("People suggestions show mutual friends, send requests, and refresh safely 
     )
       errors.push(message.text());
   });
-  const viewer = await signup(page);
+  const viewer = await signIn(page, "suggestedviewer", {
+    displayName: "Viewer",
+  });
   await page.goto("/people");
   const section = page.getByRole("region", {
     name: "People you may know",

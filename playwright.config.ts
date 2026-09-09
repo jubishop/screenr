@@ -4,8 +4,8 @@ import { fileURLToPath } from "node:url";
 
 export default defineConfig({
   testDir: "tests/browser",
-  fullyParallel: false,
-  workers: 1,
+  fullyParallel: true,
+  workers: 2,
   timeout: 90_000,
   expect: { timeout: 10_000 },
   reporter: [

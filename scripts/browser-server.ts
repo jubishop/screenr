@@ -5,7 +5,6 @@ import { createServer, type Server as HTTPServer } from "node:http";
 import { createBrowserProxy } from "./browser-proxy";
 import { createServer as reservePort, type Server } from "node:net";
 import { spawn, type ChildProcess } from "node:child_process";
-import { mkdir, writeFile } from "node:fs/promises";
 
 const reservations = new Map<number, Server>();
 const adminURL = new URL(browserConfig.databaseURL);
@@ -109,88 +108,8 @@ try {
   await db.query(
     'TRUNCATE "user", verification, "rateLimit", title, email_job RESTART IDENTITY CASCADE',
   );
-  const { createInvitation } = await import("../src/server/invitations");
-  const { token } = await createInvitation(null, 12);
-  await mkdir(".cache", { recursive: true });
-  await writeFile(".cache/browser-invite.txt", token, { mode: 0o600 });
-  const profileInvitation = await createInvitation(null, 2);
-  await writeFile(
-    ".cache/browser-profile-invite.txt",
-    profileInvitation.token,
-    { mode: 0o600 },
-  );
-  const accountInvitation = await createInvitation(null, 2);
-  await writeFile(
-    ".cache/browser-account-invite.txt",
-    accountInvitation.token,
-    { mode: 0o600 },
-  );
-  const availabilityInvitation = await createInvitation(null, 1);
-  await writeFile(
-    ".cache/browser-availability-invite.txt",
-    availabilityInvitation.token,
-    { mode: 0o600 },
-  );
-  const trailerInvitation = await createInvitation(null, 1);
-  await writeFile(
-    ".cache/browser-trailer-invite.txt",
-    trailerInvitation.token,
-    {
-      mode: 0o600,
-    },
-  );
-  const feedInvitation = await createInvitation(null, 12);
-  await writeFile(".cache/browser-feed-invite.txt", feedInvitation.token, {
-    mode: 0o600,
-  });
-  const commentInvitation = await createInvitation(null, 7);
-  await writeFile(
-    ".cache/browser-comment-invite.txt",
-    commentInvitation.token,
-    {
-      mode: 0o600,
-    },
-  );
-  const sharingInvitation = await createInvitation(null, 3);
-  await writeFile(
-    ".cache/browser-sharing-invite.txt",
-    sharingInvitation.token,
-    {
-      mode: 0o600,
-    },
-  );
-  const listInvitation = await createInvitation(null, 1);
-  await writeFile(".cache/browser-invite-list.txt", listInvitation.token, {
-    mode: 0o600,
-  });
-  const watchInvitation = await createInvitation(null, 2);
-  await writeFile(".cache/browser-watch-invite.txt", watchInvitation.token, {
-    mode: 0o600,
-  });
-  const nestedInvitation = await createInvitation(null, 8);
-  await writeFile(".cache/browser-nested-invite.txt", nestedInvitation.token, {
-    mode: 0o600,
-  });
-  const friendsInvitation = await createInvitation(null, 3);
-  await writeFile(
-    ".cache/browser-friends-invite.txt",
-    friendsInvitation.token,
-    { mode: 0o600 },
-  );
   const { startGoogleProvider } =
     await import("../tests/browser/google-provider");
-  const reactionInvitation = await createInvitation(null, 2);
-  await writeFile(
-    ".cache/browser-reaction-invite.txt",
-    reactionInvitation.token,
-    { mode: 0o600 },
-  );
-  const spoilerInvitation = await createInvitation(null, 2);
-  await writeFile(
-    ".cache/browser-spoiler-invite.txt",
-    spoilerInvitation.token,
-    { mode: 0o600 },
-  );
   await releasePort(browserConfig.googlePort);
   google = await startGoogleProvider();
   const fixture = {
