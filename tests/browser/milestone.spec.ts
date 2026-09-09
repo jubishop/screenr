@@ -2670,6 +2670,17 @@ test("discussion links copy from every feed without navigating or losing drafts 
   await owner
     .getByRole("button", { name: "Recommend to friends", exact: true })
     .click();
+  const recommendation = owner.locator("[data-item-id]");
+  const recommendationId = await recommendation.getAttribute("data-item-id");
+  const keepDiscussion = await owner.request.post("/api/screenr/comment", {
+    headers: { Origin: browserConfig.baseURL },
+    data: {
+      conversation: recommendationId,
+      body: "A retained recommendation discussion",
+      spoiler: false,
+    },
+  });
+  expect(keepDiscussion.status()).toBe(200);
   await owner
     .getByRole("button", { name: "+ Want to watch", exact: true })
     .click();
@@ -2724,11 +2735,11 @@ test("discussion links copy from every feed without navigating or losing drafts 
     const entries = reader.locator("[data-item-id]");
     await expect(entries).toHaveCount(3);
     const comments = entries.locator("[data-comment-id]");
-    await expect(comments).toHaveCount(1);
+    await expect(comments).toHaveCount(2);
     await entries
       .getByRole("button", { name: "View 1 reply", exact: true })
       .click();
-    await expect(comments).toHaveCount(2);
+    await expect(comments).toHaveCount(3);
     await expect(
       comments.getByRole("link", { name: "Link to reply" }),
     ).toHaveCount(0);
@@ -2896,7 +2907,7 @@ test("feed poster links name their titles and support keyboard navigation with a
   await owner.context().close();
 });
 
-test("unified feeds show separate actions and support inline replies on title, friends, and profile", async ({
+test("unified feeds show separate entries and support inline replies on title, friends, and profile", async ({
   browser,
 }) => {
   const token = (
@@ -2909,10 +2920,16 @@ test("unified feeds show separate actions and support inline replies on title, f
   await owner
     .getByRole("button", { name: "Recommend to friends", exact: true })
     .click();
-  await owner
-    .locator(".title-hero")
-    .getByRole("button", { name: "+ Want to watch", exact: true })
-    .click();
+  const separate = await owner.request.post("/api/screenr/title-comment", {
+    headers: { Origin: browserConfig.baseURL },
+    data: {
+      title: "movie:987654",
+      body: "A separate title discussion",
+      spoiler: false,
+    },
+  });
+  expect(separate.status()).toBe(200);
+  const separateId = (await separate.json()).id as string;
   await expect(owner.getByLabel("Add your reply")).toHaveCount(0);
   await expect(
     owner
@@ -3004,10 +3021,7 @@ test("unified feeds show separate actions and support inline replies on title, f
       item.getByText(`Reply from surface ${index}`, { exact: true }),
     ).toBeVisible();
     await expect(
-      reader
-        .locator("[data-item-id]")
-        .filter({ hasText: "feedowner wants to watch" })
-        .locator("[data-comment-id]"),
+      reader.locator(`[data-item-id="${separateId}"] [data-comment-id]`),
     ).toHaveCount(0);
   }
   for (const width of [1440, 390, 320]) {
@@ -3196,9 +3210,13 @@ test("loading activity retains the visible three-reply preview and its reading a
   );
   const beforeArrival = (await anchor.boundingBox())!.y;
   await reply("New reply after the preview");
-  const incomingItem = await owner.request.post("/api/screenr/activity", {
+  const incomingItem = await owner.request.post("/api/screenr/title-comment", {
     headers: { Origin: browserConfig.baseURL },
-    data: { title: "movie:987654", field: "want_to_watch", value: true },
+    data: {
+      title: "movie:987654",
+      body: "A newly started discussion",
+      spoiler: false,
+    },
   });
   expect(incomingItem.status()).toBe(200);
   await expect(
