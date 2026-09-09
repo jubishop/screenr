@@ -1,4 +1,5 @@
-import { test, expect } from "@playwright/test";
+import { expect } from "@playwright/test";
+import { test } from "../../scripts/browser-test";
 import { expectTextContrast } from "./contrast";
 
 for (const width of [390, 1440]) {
