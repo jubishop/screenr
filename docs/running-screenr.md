@@ -203,6 +203,11 @@ test's users. Rows remain for that run, contexts close after each test, and
 database pools close when their worker finishes. Run repeated measurements as
 separate commands so each starts with a reset database.
 
+The default browser command runs independent scenarios with two workers.
+Use `npm run test:browser -- --workers=1` for serial execution. The
+[runtime measurement report](research/browser-runtime.md) records the speed
+comparison, retained coverage, and shared-resource audit.
+
 Complete signup, Google sign-in, friendship, invitation, and access-restoration
 journeys retain browser interaction. Request-only reaction and title-comment
 validation is covered through the real HTTP handler in
