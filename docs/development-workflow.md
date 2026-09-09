@@ -185,6 +185,32 @@ well as fresh-cache behavior when changing discovery or cache configuration.
 
 Implementation tracking: [scope validation to the active checkout, #74](https://github.com/jubishop/screenr/issues/74).
 
+TypeScript inputs are the `.ts` and `.tsx` files under `src/`, `scripts/`,
+and `tests/`, plus `next.config.ts`, `playwright.config.ts`, `next-env.d.ts`,
+and Next's generated `.next/types/` and `.next/dev/types/` declarations.
+New modules and tests within those source areas are discovered automatically,
+including untracked files. Add an explicit input when introducing another
+source area or root configuration file. Keep temporary checkout copies outside
+these source directories. Imports from active source are still checked; input
+patterns do not make it safe to import code from another checkout.
+
+Formatting targets the application, scripts, application/browser tests, and
+named root configuration files. Application tests use `tests/app/*.test.ts`;
+Playwright uses `tests/browser/`; foundation tests use `tests/test_*.py`.
+Next builds routes from `src/app/` and uses this TypeScript configuration.
+Build output (`.next/`), the incremental compiler cache (`tsconfig.tsbuildinfo`),
+and browser artifacts remain local to each checkout. Do not copy or symlink
+these mutable outputs between checkouts.
+
+For a suspected stale compiler diagnostic, compare `npm run typecheck` with
+`npm run typecheck -- --incremental false`. If only the cached check fails,
+preserve `tsconfig.tsbuildinfo` outside the checkout for diagnosis, remove the
+local cache, and rerun the normal check. Incremental checking stays enabled.
+An earlier duplicate-declaration diagnostic disappeared after cache removal,
+but its cause was not established. The checkout-isolation regression exercises
+fresh and warm checks as nested files are added, changed, and removed; it also
+checks that new active errors and their repairs are detected.
+
 ## Existing hooks
 
 Setup does not overwrite a different active `core.hooksPath` or bypass
