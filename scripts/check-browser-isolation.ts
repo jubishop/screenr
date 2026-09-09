@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { constants } from "node:fs";
-import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { promisify } from "node:util";
@@ -162,14 +162,31 @@ try {
       .map((result) => String(result.reason))
       .join("; ")}. Inspect ${directory}/*/browser.log`,
   );
-  // Each harness must have written and retained its own invitation. Full browser
-  // journeys also read local email captures and query each configured database.
-  const tokens = await Promise.all(
-    checkouts.map((checkout) =>
-      readFile(join(checkout, ".cache/browser-invite.txt"), "utf8"),
-    ),
+  // Invitations now belong to individual tests, rather than shared files.
+  // Read both databases and verify that neither contains the other's tokens.
+  // Complete signup journeys also consume each checkout's local email captures.
+  const invitations = await Promise.all(
+    configurations.map(async (config) => {
+      const client = new Client({ connectionString: config.databaseURL });
+      try {
+        await client.connect();
+        const { rows } = await client.query<{ token_hash: string }>(
+          "SELECT token_hash FROM invitation",
+        );
+        assert.ok(
+          rows.length,
+          "The isolation check requires invitation coverage.",
+        );
+        return new Set(rows.map((row) => row.token_hash));
+      } finally {
+        await client.end();
+      }
+    }),
   );
-  assert.notEqual(tokens[0], tokens[1]);
+  assert.ok(
+    [...invitations[0]].every((token) => !invitations[1].has(token)),
+    "Concurrent checkouts must not share invitation data.",
+  );
   console.log(
     "Both concurrent browser suites passed with separate ports, databases, and capture files.",
   );

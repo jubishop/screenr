@@ -374,6 +374,11 @@ implementation, with its evidence recorded in the issue or related PR.
 
 Implementation tracking: [browser runtime improvements and measurement, #72](https://github.com/jubishop/screenr/issues/72).
 
+The [September 9 measurement report](research/browser-runtime.md) records the
+implemented setup changes, coverage mapping, and evidence for two browser
+workers. Preserve the documented fixture ownership when adding tests or
+reorganizing the suites.
+
 ### Validation modes
 
 **Decision — 2026-09-08:** Adopt Project Starter's three check modes:

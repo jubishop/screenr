@@ -71,6 +71,8 @@ both memory and design documents.
   tradeoffs, and proposed implementation approach.
 - [Development workflow](development-workflow.md): local setup, Git hooks,
   worktree preparation, and QMD search.
+- [Browser runtime measurement](research/browser-runtime.md): setup and coverage
+  changes, before/after timings, and the two-worker isolation decision for #72.
 - [Running Screenr](running-screenr.md): app setup, provider configuration,
   repeatable milestone verification, and access rules.
 - [Shared VPS deployment](deployment.md): release packaging, isolated services,

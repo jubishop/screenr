@@ -1,10 +1,9 @@
-import { expect, type Page } from "@playwright/test";
-import { test, db } from "./database-fixture";
-import { createHash, randomUUID } from "node:crypto";
-import { readFile } from "node:fs/promises";
+import { expect } from "@playwright/test";
+import { db } from "./database-fixture";
+import { test } from "./member-fixture";
+import { randomUUID } from "node:crypto";
 import { browserConfig } from "../../scripts/browser-config";
 
-const { createInvitation } = await import("../../src/server/invitations");
 const { changeRelationship, updateTitleActivity } =
   await import("../../src/server/social");
 
@@ -25,31 +24,6 @@ test.beforeEach(({ page }) => {
 });
 test.afterEach(() => expect(errors).toEqual([]));
 
-async function signup(page: Page, username: string) {
-  const { token } = await createInvitation(null, 1);
-  const email = `${username}@example.test`;
-  await page.goto(`/join/${token}`);
-  await page.getByLabel("Email address").fill(email);
-  await page
-    .getByRole("button", { name: "Send sign-in code", exact: true })
-    .click();
-  await expect(page.getByLabel("Sign-in code", { exact: true })).toBeVisible();
-  const filename = createHash("sha256").update(email).digest("hex");
-  const { otp } = JSON.parse(
-    await readFile(`.cache/mail/${filename}.json`, "utf8"),
-  );
-  await page.getByLabel("Sign-in code", { exact: true }).fill(otp);
-  await page.getByRole("button", { name: "Sign in", exact: true }).click();
-  await page.getByLabel("Display name").fill(username);
-  await page.getByLabel("Username", { exact: true }).fill(username);
-  await page.getByRole("button", { name: "Join Screenr", exact: true }).click();
-  await expect(
-    page.getByRole("heading", { name: "Better with friends." }),
-  ).toBeVisible();
-  return (
-    await db.query("SELECT user_id FROM profile WHERE username=$1", [username])
-  ).rows[0].user_id as string;
-}
 async function person(username: string, displayName = username) {
   const id = randomUUID();
   await db.query(
@@ -67,8 +41,7 @@ async function friend(a: string, b: string) {
   await changeRelationship(a, b, "request");
   await changeRelationship(b, a, "accept");
 }
-async function setup(page: Page, prefix: string) {
-  const viewer = await signup(page, `${prefix}viewer`);
+async function setup(viewer: string, prefix: string) {
   const direct = await person(
     `${prefix}direct`,
     "Alexandria With A Particularly Long Display Name For Testing",
@@ -94,9 +67,10 @@ async function setup(page: Page, prefix: string) {
 
 test("suggestion tiles explain the circle without revealing second-degree identities", async ({
   page,
+  signIn,
 }) => {
   const { viewer, direct, second, hiddenName, privateItem } = await setup(
-    page,
+    await signIn(page, "tileviewer"),
     "tile",
   );
   const response = await page.goto("/search");
@@ -205,8 +179,9 @@ test("suggestion tiles explain the circle without revealing second-degree identi
 
 test("search submission and clearing switch modes without applying suggestion exclusions to search", async ({
   page,
+  signIn,
 }) => {
-  const { viewer } = await setup(page, "search");
+  const { viewer } = await setup(await signIn(page, "searchviewer"), "search");
   await page.goto("/search");
   const input = page.getByLabel("Movie or show title");
   const grid = page.getByRole("region", {
@@ -257,8 +232,9 @@ function deferred() {
 }
 test("clearing or submitting a newer search prevents late responses from replacing the current view", async ({
   page,
+  signIn,
 }) => {
-  await setup(page, "race");
+  await setup(await signIn(page, "raceviewer"), "race");
   await page.goto("/search");
   const input = page.getByLabel("Movie or show title");
   const holds = new Map<
@@ -338,8 +314,12 @@ test("clearing or submitting a newer search prevents late responses from replaci
 
 test("relationship refreshes and failures clear social data while preserving usable search", async ({
   page,
+  signIn,
 }) => {
-  const { viewer, direct, second } = await setup(page, "refresh");
+  const { viewer, direct, second } = await setup(
+    await signIn(page, "refreshviewer"),
+    "refresh",
+  );
   await page.goto("/search");
   const input = page.getByLabel("Movie or show title");
   const grid = page.getByRole("region", {
