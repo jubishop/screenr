@@ -53,7 +53,7 @@ jobs:
         with:
           name: browser-failure-${{ github.run_id }}
           path: test-results/
-          retention-days: 1
+          retention-days: 7
           if-no-files-found: ignore
       - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         if: github.event_name == 'push' && github.ref == 'refs/heads/main' && github.repository == 'jubishop/screenr'
