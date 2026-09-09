@@ -1,14 +1,16 @@
-import { test, expect } from "@playwright/test";
+import { expect } from "@playwright/test";
+import { test } from "./database-fixture";
 import { createHash } from "node:crypto";
-import { readFile } from "node:fs/promises";
 import { Pool } from "pg";
 import { browserConfig } from "../../scripts/browser-config";
+
+const { createInvitation } = await import("../../src/server/invitations");
 
 test("invitation links expose rich previews without cookies or JavaScript", async ({
   browser,
   baseURL,
 }) => {
-  const token = (await readFile(".cache/browser-invite.txt", "utf8")).trim();
+  const { token } = await createInvitation(null, 1);
   const context = await browser.newContext({ javaScriptEnabled: false });
   const page = await context.newPage();
   try {
@@ -85,7 +87,7 @@ test("preview fetches preserve invitation eligibility and the recipient signup c
   request,
   baseURL,
 }) => {
-  const token = (await readFile(".cache/browser-invite.txt", "utf8")).trim();
+  const { token } = await createInvitation(null, 1);
   const database = new Pool({ connectionString: browserConfig.databaseURL });
   const hash = createHash("sha256").update(token).digest("hex");
   try {

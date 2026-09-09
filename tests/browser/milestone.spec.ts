@@ -1,5 +1,4 @@
 import {
-  test,
   expect,
   type Page,
   type Browser,
@@ -11,6 +10,9 @@ import { setTimeout as delay } from "node:timers/promises";
 import { Pool } from "pg";
 import { browserConfig } from "../../scripts/browser-config";
 import { expectTextContrast } from "./contrast";
+import { test, prepareFriendship, type Member } from "./member-fixture";
+
+const { createInvitation } = await import("../../src/server/invitations");
 
 const browserErrors: string[] = [];
 
@@ -52,9 +54,7 @@ async function join(
     route.fulfill({ contentType: "text/html", body: "Trailer player fixture" }),
   );
   monitorErrors(page);
-  const token =
-    options.token ??
-    (await readFile(".cache/browser-invite.txt", "utf8")).trim();
+  const token = options.token ?? (await createInvitation(null, 1)).token;
   const email = `${name}.browser@example.test`;
   await page.goto(`/join/${token}`);
   await page.getByLabel("Email address").fill(email);
@@ -106,9 +106,8 @@ async function befriend(a: Page, b: Page, bName: string, aName: string) {
   ).toBeVisible();
 }
 
-async function invitationCreator(browser: Browser, name: string) {
-  const page = await join(browser, name, {
-    token: (await readFile(".cache/browser-sharing-invite.txt", "utf8")).trim(),
+async function invitationCreator(member: Member, name: string) {
+  const page = await member(name, {
     hasTouch: true,
   });
   await page.goto("/invites");
@@ -149,14 +148,11 @@ async function earlyAnimationFrames(page: Page) {
 }
 
 test("account profile editing saves both names, preserves drafts, and updates profile links", async ({
-  browser,
+  member,
 }, testInfo) => {
-  const token = (
-    await readFile(".cache/browser-account-invite.txt", "utf8")
-  ).trim();
-  const owner = await join(browser, "accountowner", { token });
-  const friend = await join(browser, "accountfriend", { token });
-  await befriend(owner, friend, "accountfriend", "accountowner");
+  const owner = await member("accountowner");
+  const friend = await member("accountfriend");
+  await prepareFriendship(owner, friend);
   await owner.goto("/account?item=ignored");
   const edit = owner.getByRole("button", { name: "Edit profile", exact: true });
   await expect(edit).toBeVisible();
@@ -353,14 +349,11 @@ test("account profile editing saves both names, preserves drafts, and updates pr
 });
 
 test("spoiler reveal labels have readable contrast and protect discussions and comments", async ({
-  browser,
+  member,
 }, testInfo) => {
-  const token = (
-    await readFile(".cache/browser-spoiler-invite.txt", "utf8")
-  ).trim();
-  const owner = await join(browser, "spoilerowner", { token });
-  const reader = await join(browser, "spoilerreader", { token });
-  await befriend(owner, reader, "spoilerreader", "spoilerowner");
+  const owner = await member("spoilerowner");
+  const reader = await member("spoilerreader");
+  await prepareFriendship(owner, reader);
   await owner.goto("/titles/movie/987654");
   const post = async (action: string, data: object) => {
     const response = await owner.request.post(`/api/screenr/${action}`, {
@@ -493,14 +486,11 @@ test("spoiler reveal labels have readable contrast and protect discussions and c
 });
 
 test("profile display name editing preserves drafts, saves, and updates existing authors", async ({
-  browser,
+  member,
 }) => {
-  const token = (
-    await readFile(".cache/browser-profile-invite.txt", "utf8")
-  ).trim();
-  const owner = await join(browser, "renameowner", { token });
-  const friend = await join(browser, "renamefriend", { token });
-  await befriend(owner, friend, "renamefriend", "renameowner");
+  const owner = await member("renameowner");
+  const friend = await member("renamefriend");
+  await prepareFriendship(owner, friend);
   await owner.goto("/titles/movie/987654");
   await owner
     .getByRole("button", { name: "Recommend to friends", exact: true })
@@ -663,18 +653,13 @@ test("profile display name editing preserves drafts, saves, and updates existing
 });
 
 test("emoji reactions persist across feeds on entries and replies, with change, removal, and retry", async ({
-  browser,
-  request,
+  member,
 }) => {
-  const token = (
-    await readFile(".cache/browser-reaction-invite.txt", "utf8")
-  ).trim();
-  const owner = await join(browser, "reactionowner", { token });
-  const reader = await join(browser, "reactionreader", {
-    token,
+  const owner = await member("reactionowner");
+  const reader = await member("reactionreader", {
     hasTouch: true,
   });
-  await befriend(owner, reader, "reactionreader", "reactionowner");
+  await prepareFriendship(owner, reader);
   await owner.goto("/titles/movie/987654");
   const post = async (action: string, data: object) => {
     const response = await owner.request.post(`/api/screenr/${action}`, {
@@ -946,25 +931,6 @@ test("emoji reactions persist across feeds on entries and replies, with change, 
   ).toBeVisible();
   const data = { item: recommended, kind: "like" };
   const headers = { Origin: browserConfig.baseURL };
-  expect(
-    (await request.post("/api/screenr/reaction", { headers, data })).status(),
-  ).toBe(401);
-  expect(
-    (
-      await reader.request.post("/api/screenr/reaction", {
-        headers: { Origin: "https://untrusted.example" },
-        data,
-      })
-    ).status(),
-  ).toBe(403);
-  expect(
-    (
-      await reader.request.post("/api/screenr/reaction", {
-        headers,
-        data: { ...data, kind: "invalid" },
-      })
-    ).status(),
-  ).toBe(400);
   await reader.goto("/people/reactionowner");
   await reader.getByRole("button", { name: "Unfriend", exact: true }).click();
   await expect(
@@ -985,9 +951,9 @@ test("emoji reactions persist across feeds on entries and replies, with change, 
 });
 
 test("invitation links copy on repeated mobile taps and keyboard activation", async ({
-  browser,
+  member,
 }) => {
-  const page = await invitationCreator(browser, "copyinvitation");
+  const page = await invitationCreator(member, "copyinvitation");
   const link = page.getByLabel("Invitation link", { exact: true });
   const copied: string[] = [];
   let release!: () => void;
@@ -1061,10 +1027,9 @@ test("invitation links copy on repeated mobile taps and keyboard activation", as
 
 test("active invitation cards retain links across reloads and disappear after use, revocation, or expiry", async ({
   browser,
+  member,
 }) => {
-  const owner = await join(browser, "invitationowner", {
-    token: (await readFile(".cache/browser-invite-list.txt", "utf8")).trim(),
-  });
+  const owner = await member("invitationowner");
   await owner.goto("/invites");
   await expect
     .soft(owner.getByText(/completes signup.*automatically become friends/))
@@ -1180,9 +1145,9 @@ test("active invitation cards retain links across reloads and disappear after us
 });
 
 test("invitation links remain manually copyable when clipboard access fails or is unavailable", async ({
-  browser,
+  member,
 }) => {
-  const page = await invitationCreator(browser, "copyfallback");
+  const page = await invitationCreator(member, "copyfallback");
   const link = page.getByLabel("Invitation link", { exact: true });
   const url = await link.inputValue();
   for (const available of [true, false]) {
@@ -1214,9 +1179,9 @@ test("invitation links remain manually copyable when clipboard access fails or i
 });
 
 test("invitation links share the exact URL and handle cancellation, failure, and unsupported browsers", async ({
-  browser,
+  member,
 }) => {
-  const page = await invitationCreator(browser, "shareinvitation");
+  const page = await invitationCreator(member, "shareinvitation");
   const shared: { data: ShareData; active: boolean }[] = [];
   const copied: string[] = [];
   await page.exposeFunction(
@@ -1317,13 +1282,9 @@ test("invitation links share the exact URL and handle cancellation, failure, and
 });
 
 test("title watch availability shows US categories, empty results, failures, and older data on mobile and desktop", async ({
-  browser,
+  member,
 }) => {
-  const page = await join(browser, "availabilityviewer", {
-    token: (
-      await readFile(".cache/browser-availability-invite.txt", "utf8")
-    ).trim(),
-  });
+  const page = await member("availabilityviewer");
   await page.route("https://image.tmdb.org/t/p/w92/**", (route) =>
     route.fulfill({
       contentType: "image/svg+xml",
@@ -1535,11 +1496,9 @@ test("title watch availability shows US categories, empty results, failures, and
 });
 
 test("title trailers fit desktop and mobile, send an origin referrer, and omit unavailable players", async ({
-  browser,
+  member,
 }) => {
-  const page = await join(browser, "trailerviewer", {
-    token: (await readFile(".cache/browser-trailer-invite.txt", "utf8")).trim(),
-  });
+  const page = await member("trailerviewer");
   const embeds: string[] = [];
   await page.route("https://www.youtube.com/embed/**", async (route) => {
     embeds.push((await route.request().allHeaders()).referer);
@@ -1846,16 +1805,13 @@ test("invited friends discover, save, and share inline discussions with live acc
 });
 
 test("standalone title comments persist and share replies across all three mobile feeds", async ({
-  browser,
+  member,
 }) => {
   test.setTimeout(120_000);
-  const token = (
-    await readFile(".cache/browser-comment-invite.txt", "utf8")
-  ).trim();
-  const owner = await join(browser, "commentowner", { token });
-  const reader = await join(browser, "commentreader", { token });
-  const outsider = await join(browser, "commentoutsider", { token });
-  await befriend(owner, reader, "commentreader", "commentowner");
+  const owner = await member("commentowner");
+  const reader = await member("commentreader");
+  const outsider = await member("commentoutsider");
+  await prepareFriendship(owner, reader);
   await owner.goto("/titles/movie/987654");
   const composer = owner.getByRole("form", { name: "New title comment" });
   const start = owner.getByRole("button", {
@@ -2003,19 +1959,6 @@ test("standalone title comments persist and share replies across all three mobil
   await expect(
     outsider.getByText("This activity is unavailable.", { exact: true }),
   ).toBeVisible();
-  const signedOut = await browser.newContext();
-  expect(
-    (
-      await signedOut.request.post(
-        `${browserConfig.baseURL}/api/screenr/title-comment`,
-        {
-          headers: { Origin: browserConfig.baseURL },
-          data: { title: "movie:987654", body: "Anonymous", spoiler: false },
-        },
-      )
-    ).status(),
-  ).toBe(401);
-  await signedOut.close();
   await owner.goto("/titles/tv/987654");
   await owner
     .getByRole("button", { name: "Start a conversation", exact: true })
@@ -2090,15 +2033,12 @@ test("standalone title comments persist and share replies across all three mobil
 });
 
 test("standalone deletion preserves discussions across feeds, keeps spoilers hidden, and removes empty entries", async ({
-  browser,
+  member,
 }) => {
   test.setTimeout(150_000);
-  const token = (
-    await readFile(".cache/browser-comment-invite.txt", "utf8")
-  ).trim();
-  const owner = await join(browser, "deleteowner", { token });
-  const reader = await join(browser, "deletereader", { token });
-  await befriend(owner, reader, "deletereader", "deleteowner");
+  const owner = await member("deleteowner");
+  const reader = await member("deletereader");
+  await prepareFriendship(owner, reader);
   const headers = { Origin: browserConfig.baseURL };
   const create = async (body: string, spoiler = false) => {
     const response = await owner.request.post("/api/screenr/title-comment", {
@@ -2272,12 +2212,9 @@ test("standalone deletion preserves discussions across feeds, keeps spoilers hid
 });
 
 test("spoiler reply links reach the hidden discussion before revealing the target", async ({
-  browser,
+  member,
 }) => {
-  const token = (
-    await readFile(".cache/browser-comment-invite.txt", "utf8")
-  ).trim();
-  const page = await join(browser, "commentlinks", { token });
+  const page = await member("commentlinks");
   const headers = { Origin: browserConfig.baseURL };
   const body = "Hidden discussion.\n".repeat(60).trim();
   const response = await page.request.post("/api/screenr/title-comment", {
@@ -2324,12 +2261,9 @@ test("spoiler reply links reach the hidden discussion before revealing the targe
 });
 
 test("standalone composition retains drafts through posting and refresh failures", async ({
-  browser,
+  member,
 }) => {
-  const token = (
-    await readFile(".cache/browser-comment-invite.txt", "utf8")
-  ).trim();
-  const page = await join(browser, "commentdrafts", { token });
+  const page = await member("commentdrafts");
   await page.goto("/titles/movie/987655");
   await page
     .getByRole("button", { name: "Start a conversation", exact: true })
@@ -2393,36 +2327,17 @@ test("standalone composition retains drafts through posting and refresh failures
   await expect(
     page.getByText("Keep my standalone draft", { exact: true }),
   ).toBeVisible();
-  const wrongOrigin = await page.request.post("/api/screenr/title-comment", {
-    headers: { Origin: "http://untrusted.example.test" },
-    data: { title: "movie:987655", body: "Cross-origin", spoiler: false },
-  });
-  expect(wrongOrigin.status()).toBe(403);
-  for (const [data, status] of [
-    [{ title: "movie:987655", body: " ", spoiler: false }, 400],
-    [{ title: "movie:987655", body: "Valid", spoiler: "false" }, 400],
-    [{ body: "Titleless", spoiler: false }, 404],
-  ] as const) {
-    const response = await page.request.post("/api/screenr/title-comment", {
-      headers: { Origin: browserConfig.baseURL },
-      data,
-    });
-    expect(response.status()).toBe(status);
-  }
   await page.context().close();
 });
 
 test("profile friends support discovery and refresh accepted friendships and blocks", async ({
-  browser,
+  member,
   page,
 }) => {
-  const token = (
-    await readFile(".cache/browser-friends-invite.txt", "utf8")
-  ).trim();
-  const owner = await join(browser, "circleowner", { token });
+  const owner = await member("circleowner");
   const displayName = "W".repeat(60);
-  const friend = await join(browser, "circlefriend", { token, displayName });
-  const viewer = await join(browser, "circleviewer", { token });
+  const friend = await member("circlefriend", { displayName });
+  const viewer = await member("circleviewer");
   await befriend(owner, friend, "circlefriend", "circleowner");
 
   const anonymous = await page.request.get(
@@ -2505,14 +2420,11 @@ test("profile friends support discovery and refresh accepted friendships and blo
 });
 
 test("watch together opens from a friend profile, filters shared titles, and refreshes choices and access", async ({
-  browser,
+  member,
   page,
 }) => {
-  const token = (
-    await readFile(".cache/browser-watch-invite.txt", "utf8")
-  ).trim();
-  const owner = await join(browser, "watchowner", { token });
-  const friend = await join(browser, "watchfriend", { token });
+  const owner = await member("watchowner");
+  const friend = await member("watchfriend");
   const path = "/watch-together?with=watchfriend";
   const apiPath = `/api/screenr/screen?path=${encodeURIComponent(path)}`;
   await owner.goto("/people/watchfriend");
@@ -2653,14 +2565,11 @@ test("watch together opens from a friend profile, filters shared titles, and ref
 });
 
 test("discussion links copy from every feed without navigating or losing drafts and recover from clipboard failures", async ({
-  browser,
+  member,
 }) => {
-  const token = (
-    await readFile(".cache/browser-feed-invite.txt", "utf8")
-  ).trim();
-  const owner = await join(browser, "copyowner", { token });
-  const reader = await join(browser, "copyreader", { token, hasTouch: true });
-  await befriend(owner, reader, "copyreader", "copyowner");
+  const owner = await member("copyowner");
+  const reader = await member("copyreader", { hasTouch: true });
+  await prepareFriendship(owner, reader);
   await owner.goto("/titles/tv/987657");
   await owner
     .getByRole("button", { name: "Recommend to friends", exact: true })
@@ -2821,14 +2730,11 @@ test("discussion links copy from every feed without navigating or losing drafts 
 });
 
 test("feed poster links name their titles and support keyboard navigation with and without artwork", async ({
-  browser,
+  member,
 }) => {
-  const token = (
-    await readFile(".cache/browser-feed-invite.txt", "utf8")
-  ).trim();
-  const owner = await join(browser, "posterowner", { token });
-  const reader = await join(browser, "posterreader", { token });
-  await befriend(owner, reader, "posterreader", "posterowner");
+  const owner = await member("posterowner");
+  const reader = await member("posterreader");
+  await prepareFriendship(owner, reader);
   for (const page of [owner, reader]) {
     await page.route("**/_next/image?**", (route) =>
       route.fulfill({
@@ -2892,14 +2798,11 @@ test("feed poster links name their titles and support keyboard navigation with a
 });
 
 test("unified feeds show separate actions and support inline replies on title, friends, and profile", async ({
-  browser,
+  member,
 }) => {
-  const token = (
-    await readFile(".cache/browser-feed-invite.txt", "utf8")
-  ).trim();
-  const owner = await join(browser, "feedowner", { token });
-  const reader = await join(browser, "feedreader", { token });
-  await befriend(owner, reader, "feedreader", "feedowner");
+  const owner = await member("feedowner");
+  const reader = await member("feedreader");
+  await prepareFriendship(owner, reader);
   await owner.goto("/titles/movie/987654");
   await owner
     .getByRole("button", { name: "Recommend to friends", exact: true })
@@ -3029,14 +2932,11 @@ test("unified feeds show separate actions and support inline replies on title, f
 });
 
 test("every feed holds incoming activity, preserves drafts and position, and expands reply links safely", async ({
-  browser,
+  member,
 }) => {
-  const token = (
-    await readFile(".cache/browser-feed-invite.txt", "utf8")
-  ).trim();
-  const owner = await join(browser, "incomingowner", { token });
-  const reader = await join(browser, "incomingreader", { token });
-  await befriend(owner, reader, "incomingreader", "incomingowner");
+  const owner = await member("incomingowner");
+  const reader = await member("incomingreader");
+  await prepareFriendship(owner, reader);
   async function action(field: string, value: boolean) {
     const result = await owner.request.post("/api/screenr/activity", {
       headers: { Origin: browserConfig.baseURL },
@@ -3162,14 +3062,11 @@ test("every feed holds incoming activity, preserves drafts and position, and exp
 });
 
 test("loading activity retains the visible three-reply preview and its reading anchor", async ({
-  browser,
+  member,
 }) => {
-  const token = (
-    await readFile(".cache/browser-feed-invite.txt", "utf8")
-  ).trim();
-  const owner = await join(browser, "previewowner", { token });
-  const reader = await join(browser, "previewreader", { token });
-  await befriend(owner, reader, "previewreader", "previewowner");
+  const owner = await member("previewowner");
+  const reader = await member("previewreader");
+  await prepareFriendship(owner, reader);
   const activity = await owner.request.post("/api/screenr/activity", {
     headers: { Origin: browserConfig.baseURL },
     data: { title: "movie:987654", field: "recommended", value: true },
@@ -3224,13 +3121,10 @@ test("loading activity retains the visible three-reply preview and its reading a
 });
 
 test("an unavailable legacy link navigates after friendship restores access", async ({
-  browser,
+  member,
 }) => {
-  const token = (
-    await readFile(".cache/browser-feed-invite.txt", "utf8")
-  ).trim();
-  const owner = await join(browser, "recoveryowner", { token });
-  const reader = await join(browser, "recoveryreader", { token });
+  const owner = await member("recoveryowner");
+  const reader = await member("recoveryreader");
   await owner.goto("/titles/movie/987654");
   const response = await owner.request.post("/api/screenr/activity", {
     headers: { Origin: browserConfig.baseURL },
@@ -3316,7 +3210,7 @@ test("Google signup preserves edited display names across email and Google sign-
   page,
 }) => {
   await useTestGoogle(page);
-  const token = (await readFile(".cache/browser-invite.txt", "utf8")).trim();
+  const { token } = await createInvitation(null, 1);
   const email = "googlefirst.browser@example.test";
   await page.goto(`/join/${token}`);
   await page.getByRole("button", { name: "Continue with Google" }).click();
@@ -3387,9 +3281,9 @@ test("Google signup preserves edited display names across email and Google sign-
 });
 
 test("email members can recover from linking failures, connect Google, and sign back into their profile", async ({
-  browser,
+  member,
 }) => {
-  const page = await join(browser, "linkflow");
+  const page = await member("linkflow");
   await page.setViewportSize({ width: 1280, height: 900 });
   await useTestGoogle(page);
   await page.goto("/account");
@@ -3468,13 +3362,11 @@ test("email members can recover from linking failures, connect Google, and sign 
 
 for (const complete of [true, false]) {
   test(`sign-out failures remain visible and retryable from ${complete ? "Account" : "Setup"}`, async ({
-    browser,
+    member,
   }) => {
-    const page = await join(
-      browser,
-      complete ? "signoutmember" : "signoutpending",
-      { complete },
-    );
+    const page = await member(complete ? "signoutmember" : "signoutpending", {
+      complete,
+    });
     if (complete) await page.goto("/account");
     const startURL = page.url();
     const signOut = page.getByRole("button", { name: "Sign out", exact: true });
@@ -3510,9 +3402,9 @@ for (const complete of [true, false]) {
 }
 
 test("slow and failed refreshes enforce access while preserving reply drafts", async ({
-  browser,
+  member,
 }) => {
-  const page = await join(browser, "draftrefresh");
+  const page = await member("draftrefresh");
   const activity = await page.request.post("/api/screenr/activity", {
     headers: { Origin: browserConfig.baseURL },
     data: { title: "movie:987654", field: "recommended", value: true },
@@ -3556,7 +3448,7 @@ test("slow and failed refreshes enforce access while preserving reply drafts", a
     headers: { Origin: browserConfig.baseURL },
     data: { limit: 1 },
   });
-  const viewer = await join(browser, "slowviewer", {
+  const viewer = await member("slowviewer", {
     token: (await invitation.json()).token,
   });
   await page.goto("/people/slowviewer");
@@ -3624,9 +3516,9 @@ test("slow and failed refreshes enforce access while preserving reply drafts", a
 });
 
 test("posting preserves later typing and background refresh preserves action errors", async ({
-  browser,
+  member,
 }) => {
-  const page = await join(browser, "draftposting");
+  const page = await member("draftposting");
   const response = await page.request.post("/api/screenr/activity", {
     headers: { Origin: browserConfig.baseURL },
     data: { title: "movie:987654", field: "recommended", value: true },
@@ -3694,7 +3586,7 @@ test("Google sign-in recovers from transport failure and an empty redirect", asy
   page,
 }) => {
   await useTestGoogle(page);
-  const token = (await readFile(".cache/browser-invite.txt", "utf8")).trim();
+  const { token } = await createInvitation(null, 1);
   await page.goto(`/join/${token}`);
   const google = page.getByRole("button", { name: "Continue with Google" });
   for (const transportFailure of [true, false]) {
@@ -3717,11 +3609,11 @@ test("Google sign-in recovers from transport failure and an empty redirect", asy
 });
 
 test("feed actions persist the viewer's independent recommendation and watch states", async ({
-  browser,
+  member,
 }) => {
-  const owner = await join(browser, "profileowner");
-  const viewer = await join(browser, "profileviewer");
-  await befriend(owner, viewer, "profileviewer", "profileowner");
+  const owner = await member("profileowner");
+  const viewer = await member("profileviewer");
+  await prepareFriendship(owner, viewer);
   for (const page of [owner, viewer]) {
     await page.request.post("/api/screenr/activity", {
       headers: { Origin: browserConfig.baseURL },
@@ -3848,8 +3740,9 @@ test("feed actions persist the viewer's independent recommendation and watch sta
 
 test("a signed-out pending member can finish with one visit to a replacement invitation", async ({
   browser,
+  member,
 }) => {
-  const owner = await join(browser, "replacementowner");
+  const owner = await member("replacementowner");
   const post = (action: string, data: unknown) =>
     owner.request.post(`/api/screenr/${action}`, {
       headers: { Origin: browserConfig.baseURL },
@@ -3905,15 +3798,12 @@ test("a signed-out pending member can finish with one visit to a replacement inv
   await pending.context().close();
 });
 
-async function nestedDiscussion(browser: Browser, suffix: string) {
-  const token = (
-    await readFile(".cache/browser-nested-invite.txt", "utf8")
-  ).trim();
-  const owner = await join(browser, `nestowner${suffix}`, { token });
-  const reader = await join(browser, `nestreader${suffix}`, { token });
-  const other = await join(browser, `nestother${suffix}`, { token });
-  await befriend(owner, reader, `nestreader${suffix}`, `nestowner${suffix}`);
-  await befriend(owner, other, `nestother${suffix}`, `nestowner${suffix}`);
+async function nestedDiscussion(member: Member, suffix: string) {
+  const owner = await member(`nestowner${suffix}`);
+  const reader = await member(`nestreader${suffix}`);
+  const other = await member(`nestother${suffix}`);
+  await prepareFriendship(owner, reader);
+  await prepareFriendship(owner, other);
   const response = await owner.request.post("/api/screenr/activity", {
     headers: { Origin: browserConfig.baseURL },
     data: { title: "movie:987654", field: "recommended", value: true },
@@ -3939,14 +3829,11 @@ async function nestedDiscussion(browser: Browser, suffix: string) {
 }
 
 test("own nested replies keep their parent when another tab has not accepted new activity", async ({
-  browser,
+  member,
 }) => {
-  const token = (
-    await readFile(".cache/browser-nested-invite.txt", "utf8")
-  ).trim();
-  const owner = await join(browser, "pendingparentowner", { token });
-  const reader = await join(browser, "pendingparentreader", { token });
-  await befriend(owner, reader, "pendingparentreader", "pendingparentowner");
+  const owner = await member("pendingparentowner");
+  const reader = await member("pendingparentreader");
+  await prepareFriendship(owner, reader);
   const response = await owner.request.post("/api/screenr/activity", {
     headers: { Origin: browserConfig.baseURL },
     data: { title: "movie:987654", field: "recommended", value: true },
@@ -4010,11 +3897,11 @@ test("own nested replies keep their parent when another tab has not accepted new
 });
 
 test("nested discussions group stored replies, preview direct comments, and keep two composer destinations", async ({
-  browser,
+  member,
 }) => {
   test.setTimeout(180_000);
   const { owner, reader, other, id, write, item, comment } =
-    await nestedDiscussion(browser, "layout");
+    await nestedDiscussion(member, "layout");
   const first = await write(other, "Old direct comment");
   const root = await write(other, "Parent comment");
   const second = await write(owner, "Unrelated direct comment");
@@ -4234,11 +4121,11 @@ test("nested discussions group stored replies, preview direct comments, and keep
 });
 
 test("nested updates preserve drafts, expansion, and position while parent access changes immediately", async ({
-  browser,
+  member,
 }) => {
   test.setTimeout(180_000);
   const { owner, reader, other, id, write, item, comment } =
-    await nestedDiscussion(browser, "access");
+    await nestedDiscussion(member, "access");
   const root = await write(other, "Parent that will be hidden");
   const child = await write(owner, "Eligible child", root);
   const removed = await write(owner, "Removed nested reply", root);

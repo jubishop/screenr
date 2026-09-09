@@ -181,11 +181,33 @@ these commands at a database with records to keep.
 
 The browser harness derives four loopback ports and a database named
 `screenr_browser_<checkout hash>_test` from the checkout's canonical path.
-Separate worktrees get separate defaults, Next output, invitation files, and
+Separate worktrees get separate defaults, Next output, screenshots, and
 `.cache/mail` captures. The harness prints its URL and database name at startup.
 `TEST_DATABASE_URL` must name a loopback PostgreSQL test database without URL
 query parameters. The browser harness uses the same server and credentials,
 with its separate database name.
+
+Feature tests use `tests/browser/member-fixture.ts` to prepare members without
+repeating the signup interface. The fixture creates an invited user, runs the
+real profile setup, and obtains a signed session from the real auth handler.
+Only email delivery is replaced with an in-memory code capture. The browser
+and application still use normal sessions and access checks. `member` creates
+a mobile browser context; `signIn` prepares the test's existing page.
+`prepareFriendship` sends and accepts requests through the authenticated API.
+
+Give each test distinct usernames and relationship data. Invitations are
+created per test, including for the complete signup and preview journeys;
+there are no shared invitation-capacity files. The harness resets its locked
+database once before the suite. Tests must not reset it or change another
+test's users. Rows remain for that run, contexts close after each test, and
+database pools close when their worker finishes. Run repeated measurements as
+separate commands so each starts with a reset database.
+
+Complete signup, Google sign-in, friendship, invitation, and access-restoration
+journeys retain browser interaction. Request-only reaction and title-comment
+validation is covered through the real HTTP handler in
+`tests/app/discussion-api.test.ts`. Focus, drafts, navigation, rendering,
+spoilers, and visible access changes remain browser assertions.
 
 To override a port collision, set `SCREENR_BROWSER_PORT` to the first port in a
 free four-port range (1024 through 65532). The following ports serve the catalog,
