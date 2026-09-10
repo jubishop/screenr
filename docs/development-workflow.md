@@ -379,6 +379,16 @@ implemented setup changes, coverage mapping, and evidence for two browser
 workers. Preserve the documented fixture ownership when adding tests or
 reorganizing the suites.
 
+### Browser serving mode
+
+The standard browser command builds the current checkout and runs its generated
+production standalone server. Full validation uses this same artifact and has
+no second build step. The development server remains available through
+`npm run test:browser:dev` for development-specific diagnostics. See the
+[serving-mode evaluation](research/browser-production.md) for the measured
+decision and the [browser setup instructions](running-screenr.md#verification)
+for freshness, environment, and resource ownership requirements.
+
 ### Validation modes
 
 **Decision — 2026-09-08:** Adopt Project Starter's three check modes:

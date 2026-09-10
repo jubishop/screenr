@@ -55,6 +55,8 @@ try {
     await cp(join(source, "node_modules"), join(checkout, "node_modules"), {
       recursive: true,
       mode: constants.COPYFILE_FICLONE,
+      // Keep command links within the copied dependency tree.
+      verbatimSymlinks: true,
     });
     const result = await execute(
       process.execPath,
