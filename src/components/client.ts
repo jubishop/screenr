@@ -44,10 +44,15 @@ export function dateLabel(
   interactive: boolean,
   options: Intl.DateTimeFormatOptions = {},
 ) {
-  // The server cannot know the browser's time zone. Use a stable first render,
-  // then show the reader's local date once the client is ready.
-  return new Date(value).toLocaleDateString("en-US", {
-    ...options,
-    ...(!interactive ? { timeZone: "UTC" } : {}),
-  });
+  const date = new Date(value);
+  // Even with en-US and UTC, locale punctuation differs between runtimes.
+  // Use ISO fields for hydration, then localize once the client is ready.
+  if (!interactive) {
+    if (Number.isNaN(date.getTime())) return "Invalid Date";
+    const iso = date.toISOString();
+    return options.hour || options.minute
+      ? `${iso.slice(0, 10)} ${iso.slice(11, 16)} UTC`
+      : iso.slice(0, 10);
+  }
+  return date.toLocaleDateString("en-US", options);
 }
