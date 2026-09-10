@@ -3,16 +3,15 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ScreenData } from "../server/screens";
 import type { Person } from "../shared";
-import { api, authClient, signOut, useInteractive, dateLabel } from "./client";
+import { api, signOut } from "./client";
 import { FeedView } from "./feed";
-import { TitleCommentComposer } from "./title-comment";
-import { Poster } from "./poster";
-import { InvitationLink } from "./invitation-link";
 import { WatchTogether } from "./watch-together";
-import { DisplayNameEditor } from "./display-name-editor";
-import { AccountProfileEditor } from "./account-profile-editor";
-import { TitleAvailability } from "./title-availability";
 import { TitleSearch } from "./title-search";
+import { AccountView } from "./account-view";
+import { InvitationsView } from "./invitations-view";
+import { PeopleView } from "./people-view";
+import { ProfileView } from "./profile-view";
+import { TitleView } from "./title-view";
 
 export function Screen({
   user: initialUser,
@@ -27,16 +26,11 @@ export function Screen({
   initialError: string;
   initialGoogleError: string;
 }) {
-  const interactive = useInteractive();
   const [user, setUser] = useState(initialUser);
   const [data, setData] = useState(initialData),
     [loadError, setLoadError] = useState(initialError),
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false);
-  const [googleError, setGoogleError] = useState(initialGoogleError),
-    [connectingGoogle, setConnectingGoogle] = useState(false);
-  const [query, setQuery] = useState("");
-  const [inviteLimit, setInviteLimit] = useState(1);
   const pending = useRef<AbortController | null>(null);
   const refresh = useCallback(async () => {
     pending.current?.abort();
@@ -105,6 +99,17 @@ export function Screen({
       setBusy(false);
     }
   }
+  async function signOutOfAccount() {
+    setBusy(true);
+    setError("");
+    try {
+      await signOut();
+    } catch (error) {
+      setError((error as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
   async function relationship(target: string, action: string) {
     await mutate("relationship", { target, action });
   }
@@ -122,9 +127,6 @@ export function Screen({
   }
   const ownProfile =
     path.split("?")[0].toLowerCase() === `/people/${user.username}`;
-  const own = (
-    data && "conversations" in data ? (data.conversations ?? []) : []
-  ).filter((c) => c.owner_id === user.user_id);
   function activity(title: string, field: string, value: boolean) {
     return mutate("activity", { title, field, value });
   }
@@ -204,249 +206,28 @@ export function Screen({
             </div>
           </>
         )}
-        {data?.kind === "title" && (
-          <>
-            <div className="title-hero">
-              <Poster
-                path={data.title.poster_path}
-                name={data.title.name}
-                large
-              />
-              <div>
-                <p className="eyebrow">
-                  {data.title.kind === "movie" ? "MOVIE" : "TV SHOW"} ·{" "}
-                  {data.title.release_date.slice(0, 4) || "DATE UNAVAILABLE"}
-                </p>
-                <h1>{data.title.name}</h1>
-                <p className="overview">
-                  {data.title.overview || "No synopsis available."}
-                </p>
-                <div className="inline-actions">
-                  <button
-                    className="primary"
-                    disabled={busy || !interactive}
-                    onClick={() =>
-                      void activity(
-                        data.title.id,
-                        "recommended",
-                        !own.some((c) => c.recommended),
-                      )
-                    }
-                  >
-                    {own.some((c) => c.recommended)
-                      ? "✓ Recommended"
-                      : "Recommend to friends"}
-                  </button>
-                  <button
-                    className="secondary"
-                    disabled={busy || !interactive}
-                    onClick={() =>
-                      void activity(
-                        data.title.id,
-                        "want_to_watch",
-                        !own.some((c) => c.want_to_watch),
-                      )
-                    }
-                  >
-                    {own.some((c) => c.want_to_watch)
-                      ? "✓ Want to watch"
-                      : "+ Want to watch"}
-                  </button>
-                </div>
-              </div>
-            </div>
-            <TitleAvailability
-              availability={data.availability}
-              kind={data.title.kind}
-            />
-            {data.trailer && (
-              <section
-                className="title-trailer"
-                aria-labelledby="trailer-heading"
-              >
-                <div className="section-heading">
-                  <h2 id="trailer-heading">Trailer</h2>
-                  <a
-                    href={`https://www.youtube.com/watch?v=${data.trailer.key}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    Watch on YouTube
-                  </a>
-                </div>
-                <iframe
-                  className="trailer-player"
-                  src={`https://www.youtube.com/embed/${data.trailer.key}?autoplay=0&playsinline=1`}
-                  title={`${data.title.name} trailer: ${data.trailer.name}`}
-                  referrerPolicy="strict-origin-when-cross-origin"
-                  allow="encrypted-media; fullscreen; picture-in-picture"
-                  allowFullScreen
-                />
-                <p className="small muted">
-                  If the trailer cannot play here, watch it on YouTube.
-                </p>
-              </section>
-            )}
-            <div className="section-heading">
-              <h2>Around this title</h2>
-              <span className="muted">Your circle’s conversations</span>
-            </div>
-          </>
+        {/* Keep draft-owning views mounted while failed reads clear their data. */}
+        {path.startsWith("/titles/") && (
+          <TitleView
+            data={data?.kind === "title" ? data : null}
+            user={user}
+            busy={busy}
+            activity={activity}
+            refresh={refresh}
+          />
         )}
         {path.split("?")[0] === "/search" && (
           <TitleSearch
             suggestions={data?.kind === "search" ? data.suggestions : null}
           />
         )}
-        {data?.kind === "people" && (
-          <>
-            <div className="page-heading">
-              <p className="eyebrow">GOOD COMPANY</p>
-              <h1>Your friends.</h1>
-              <p>Friendships start with a request and an acceptance.</p>
-            </div>
-            <form
-              className="search-form"
-              onSubmit={(e) => {
-                e.preventDefault();
-                window.location.assign(
-                  `/people/${encodeURIComponent(query.trim().toLowerCase())}`,
-                );
-              }}
-            >
-              <label className="sr-only" htmlFor="friend-search">
-                Exact username
-              </label>
-              <input
-                disabled={!interactive}
-                id="friend-search"
-                placeholder="Find an exact username"
-                value={query}
-                required
-                pattern="[a-zA-Z0-9_]{3,24}"
-                onChange={(e) => setQuery(e.target.value)}
-              />
-              <button className="primary">Find person</button>
-            </form>
-            <div className="people-list">
-              {data.connections.map((p) => (
-                <article className="person-row" key={p.user_id}>
-                  <Link href={`/people/${p.username}`} prefetch={false}>
-                    <strong>{p.display_name}</strong>
-                    <span className="muted"> @{p.username}</span>
-                  </Link>
-                  <div className="inline-actions">
-                    {p.accepted_at ? (
-                      <>
-                        <span className="badge">Friends</span>
-                        <button
-                          className="text-button"
-                          disabled={busy || !interactive}
-                          onClick={() => void relationship(p.user_id, "remove")}
-                        >
-                          Unfriend
-                        </button>
-                      </>
-                    ) : p.requested_by === user.user_id ? (
-                      <>
-                        <span className="small muted">Request sent</span>
-                        <button
-                          className="text-button"
-                          disabled={busy || !interactive}
-                          onClick={() => void relationship(p.user_id, "remove")}
-                        >
-                          Cancel
-                        </button>
-                      </>
-                    ) : (
-                      <>
-                        <button
-                          className="primary"
-                          disabled={busy || !interactive}
-                          onClick={() => void relationship(p.user_id, "accept")}
-                        >
-                          Accept
-                        </button>
-                        <button
-                          className="text-button"
-                          disabled={busy || !interactive}
-                          onClick={() => void relationship(p.user_id, "remove")}
-                        >
-                          Decline
-                        </button>
-                      </>
-                    )}
-                  </div>
-                </article>
-              ))}
-              {!data.connections.length && (
-                <p className="empty">
-                  Start with someone you know. Find their username or send an
-                  invitation.
-                </p>
-              )}
-            </div>
-            <section
-              className="people-suggestions people-list"
-              aria-labelledby="people-suggestions-heading"
-            >
-              <h2 id="people-suggestions-heading">People you may know</h2>
-              <p className="muted">Meet people through your mutual friends.</p>
-              {data.suggestions.map((person) => (
-                <article className="person-row" key={person.user_id}>
-                  <div>
-                    <Link href={`/people/${person.username}`} prefetch={false}>
-                      <strong>{person.display_name}</strong>
-                      <span className="muted"> @{person.username}</span>
-                    </Link>
-                    <p className="small muted">
-                      {person.mutual_friends.length === 1
-                        ? "Mutual friend: "
-                        : "Mutual friends: "}
-                      {person.mutual_friends.map((mutual, index) => (
-                        <span key={mutual.user_id}>
-                          {index > 0 && ", "}
-                          <Link
-                            href={`/people/${mutual.username}`}
-                            prefetch={false}
-                          >
-                            {mutual.display_name} (@{mutual.username})
-                          </Link>
-                        </span>
-                      ))}
-                    </p>
-                  </div>
-                  <button
-                    className="primary"
-                    disabled={busy || !interactive}
-                    onClick={() => void relationship(person.user_id, "request")}
-                  >
-                    Send friend request
-                  </button>
-                </article>
-              ))}
-              {!data.suggestions.length && (
-                <p className="empty">No friend suggestions yet.</p>
-              )}
-            </section>
-            {data.blocked.length > 0 && (
-              <>
-                <h2>Blocked people</h2>
-                {data.blocked.map((p) => (
-                  <div className="person-row" key={p.user_id}>
-                    <span>{p.display_name}</span>
-                    <button
-                      className="text-button"
-                      disabled={busy || !interactive}
-                      onClick={() => void relationship(p.user_id, "unblock")}
-                    >
-                      Unblock
-                    </button>
-                  </div>
-                ))}
-              </>
-            )}
-          </>
+        {path.split("?")[0] === "/people" && (
+          <PeopleView
+            data={data?.kind === "people" ? data : null}
+            user={user}
+            busy={busy}
+            relationship={relationship}
+          />
         )}
         {data?.kind === "watch-together" && (
           <WatchTogether
@@ -454,115 +235,14 @@ export function Screen({
             titles={data.titles}
           />
         )}
-        {ownProfile && (
-          <div className="page-heading">
-            <p className="eyebrow">@{user.username}</p>
-            <DisplayNameEditor
-              name={user.display_name}
-              save={saveDisplayName}
-            />
-          </div>
-        )}
-        {data?.kind === "profile" && !ownProfile && (
-          <>
-            <div className="page-heading">
-              <p className="eyebrow">@{data.profile.username}</p>
-              <h1>{data.profile.display_name}</h1>
-              {data.profile.user_id !== user.user_id && (
-                <div className="inline-actions">
-                  {data.profile.accepted_at && (
-                    <Link
-                      className="primary button"
-                      href={`/watch-together?with=${encodeURIComponent(data.profile.username)}`}
-                      prefetch={false}
-                    >
-                      Watch together
-                    </Link>
-                  )}
-                  {data.profile.accepted_at ? (
-                    <button
-                      className="secondary"
-                      disabled={busy || !interactive}
-                      onClick={() =>
-                        void relationship(data.profile.user_id, "remove")
-                      }
-                    >
-                      Unfriend
-                    </button>
-                  ) : data.profile.requested_by === user.user_id ? (
-                    <button
-                      className="secondary"
-                      disabled={busy || !interactive}
-                      onClick={() =>
-                        void relationship(data.profile.user_id, "remove")
-                      }
-                    >
-                      Cancel friend request
-                    </button>
-                  ) : data.profile.requested_by ? (
-                    <button
-                      className="primary"
-                      disabled={busy || !interactive}
-                      onClick={() =>
-                        void relationship(data.profile.user_id, "accept")
-                      }
-                    >
-                      Accept friend request
-                    </button>
-                  ) : (
-                    <button
-                      className="primary"
-                      disabled={busy || !interactive}
-                      onClick={() =>
-                        void relationship(data.profile.user_id, "request")
-                      }
-                    >
-                      Send friend request
-                    </button>
-                  )}
-                  <button
-                    className="text-button muted"
-                    disabled={busy || !interactive}
-                    onClick={() =>
-                      void relationship(data.profile.user_id, "block")
-                    }
-                  >
-                    Block
-                  </button>
-                </div>
-              )}
-            </div>
-          </>
-        )}
-        {data?.kind === "profile" && (
-          <>
-            <details className="profile-friends">
-              <summary>Friends ({data.profile.friends.length})</summary>
-              <section aria-label="Friends">
-                {data.profile.friends.map((person) => (
-                  <div className="person-row" key={person.user_id}>
-                    <Link href={`/people/${person.username}`} prefetch={false}>
-                      <strong>{person.display_name}</strong>
-                      <span className="muted"> @{person.username}</span>
-                    </Link>
-                  </div>
-                ))}
-                {!data.profile.friends.length && (
-                  <p className="empty">No friends to show yet.</p>
-                )}
-              </section>
-            </details>
-            {!data.profile.can_read && (
-              <p className="empty">
-                You’ll see their activity after you become friends.
-              </p>
-            )}
-          </>
-        )}
-        {path.startsWith("/titles/") && (
-          <TitleCommentComposer
-            titleId={data?.kind === "title" ? data.title.id : null}
-            refresh={refresh}
+        {(ownProfile || data?.kind === "profile") && (
+          <ProfileView
+            data={data?.kind === "profile" ? data : null}
+            user={user}
+            ownProfile={ownProfile}
+            busy={busy}
+            relationship={relationship}
+            saveDisplayName={saveDisplayName}
           />
         )}
         {(path === "/" ||
@@ -583,177 +263,22 @@ export function Screen({
             showEmpty={data?.kind !== "profile" || data.profile.can_read}
           />
         )}
-        {data?.kind === "invites" && (
-          <>
-            <div className="page-heading">
-              <p className="eyebrow">MAKE ROOM FOR FRIENDS</p>
-              <h1>Good things are shared.</h1>
-              <p>
-                Invite someone to Screenr. Your link works for 30 days. When
-                someone completes signup through it, you automatically become
-                friends.
-              </p>
-            </div>
-            <form
-              className="invite-form"
-              onSubmit={async (e) => {
-                e.preventDefault();
-                await mutate("invite", { limit: inviteLimit });
-              }}
-            >
-              <label>
-                Maximum signups
-                <select
-                  disabled={!interactive}
-                  value={inviteLimit}
-                  onChange={(e) => setInviteLimit(Number(e.target.value))}
-                >
-                  {Array.from({ length: 12 }, (_, i) => (
-                    <option key={i + 1} value={i + 1}>
-                      {i + 1}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <button className="primary" disabled={busy || !interactive}>
-                Create invitation
-              </button>
-            </form>
-            <div className="invite-list">
-              {!data.invitations.length && (
-                <p className="muted">No active invitations.</p>
-              )}
-              {data.invitations.map((invite) => (
-                <article className="invite-card" key={invite.id}>
-                  <div className="section-heading">
-                    <strong>
-                      {invite.uses} of {invite.max_uses} signups
-                    </strong>
-                    <button
-                      className="text-button"
-                      disabled={busy || !interactive}
-                      onClick={() =>
-                        void mutate("revoke-invite", { id: invite.id })
-                      }
-                    >
-                      Revoke
-                    </button>
-                  </div>
-                  <p className="small muted">
-                    Expires {dateLabel(invite.expires_at, interactive)}
-                  </p>
-                  <InvitationLink key={invite.url} url={invite.url} />
-                  <p>
-                    {invite.joined.map((p: Person) => (
-                      <Link
-                        className="joined-person"
-                        key={p.username}
-                        href={`/people/${p.username}`}
-                        prefetch={false}
-                      >
-                        {p.display_name} (@{p.username})
-                      </Link>
-                    ))}
-                  </p>
-                </article>
-              ))}
-            </div>
-          </>
+        {path.split("?")[0] === "/invites" && (
+          <InvitationsView
+            data={data?.kind === "invites" ? data : null}
+            busy={busy}
+            mutate={mutate}
+          />
         )}
         {path.split("?")[0] === "/account" && (
-          <>
-            <div className="page-heading">
-              <p className="eyebrow">YOUR ACCOUNT</p>
-              <h1>One you. One circle.</h1>
-              <p>
-                Keep the same profile and friendships when you change sign-in
-                methods.
-              </p>
-              <Link
-                className="secondary button"
-                href={`/people/${user.username}`}
-                prefetch={false}
-              >
-                View your profile
-              </Link>
-            </div>
-            <AccountProfileEditor user={user} save={saveProfile} />
-            {data?.kind === "account" && (
-              <section className="settings-card">
-                <h2>Sign-in methods</h2>
-                <p>
-                  Email codes sign you in to this same account. Use the email
-                  address you joined with.
-                </p>
-                {googleError && (
-                  <p className="error" role="alert">
-                    {googleError}
-                  </p>
-                )}
-                {data.googleConnected ? (
-                  <p role="status">Google connected.</p>
-                ) : data.googleEnabled ? (
-                  <>
-                    <p>
-                      Connect Google to add another way to sign in. Choose the
-                      Google account with the same email address.
-                    </p>
-                    <button
-                      className="secondary"
-                      disabled={busy || connectingGoogle || !interactive}
-                      onClick={async () => {
-                        setConnectingGoogle(true);
-                        setGoogleError("");
-                        try {
-                          const result = await authClient.linkSocial({
-                            provider: "google",
-                            callbackURL: "/account",
-                            errorCallbackURL: "/account",
-                            disableRedirect: true,
-                          });
-                          if (result.error)
-                            throw new Error(
-                              result.error.message ??
-                                "Google could not be connected. Please try again.",
-                            );
-                          if (!result.data?.url)
-                            throw new Error(
-                              "Google sign-in did not start. Please try again.",
-                            );
-                          window.location.assign(result.data.url);
-                        } catch (error) {
-                          setGoogleError((error as Error).message);
-                          setConnectingGoogle(false);
-                        }
-                      }}
-                    >
-                      {connectingGoogle ? "Connecting…" : "Connect Google"}
-                    </button>
-                  </>
-                ) : (
-                  <p className="muted">Google sign-in is not configured yet.</p>
-                )}
-                <hr />
-                <button
-                  className="text-button"
-                  disabled={busy || !interactive || connectingGoogle}
-                  onClick={async () => {
-                    setBusy(true);
-                    setError("");
-                    try {
-                      await signOut();
-                    } catch (error) {
-                      setError((error as Error).message);
-                    } finally {
-                      setBusy(false);
-                    }
-                  }}
-                >
-                  Sign out
-                </button>
-              </section>
-            )}
-          </>
+          <AccountView
+            data={data?.kind === "account" ? data : null}
+            user={user}
+            busy={busy}
+            initialGoogleError={initialGoogleError}
+            saveProfile={saveProfile}
+            onSignOut={signOutOfAccount}
+          />
         )}
       </main>
     </div>
