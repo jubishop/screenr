@@ -1,7 +1,15 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { constants } from "node:fs";
-import { cp, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import {
+  cp,
+  mkdir,
+  mkdtemp,
+  readFile,
+  realpath,
+  rm,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { promisify } from "node:util";
@@ -150,6 +158,18 @@ try {
             join(checkout, `browser-${phase}.log`),
             result.stdout + result.stderr,
           );
+          assert.equal(
+            await realpath(join(checkout, ".next")),
+            join(await realpath(checkout), ".next"),
+            "Build output must stay inside its owning checkout.",
+          );
+          if (config.mode === "production") {
+            const buildID = (
+              await readFile(join(checkout, ".next/BUILD_ID"), "utf8")
+            ).trim();
+            assert.ok(buildID, "Each checkout must produce a build artifact.");
+            console.log(`${checkout} (${phase}) production build: ${buildID}`);
+          }
           console.log(
             `${checkout} (${phase}): ${result.stdout.match(/\d+ passed[^\n]*/)?.[0] ?? "passed"}`,
           );
@@ -197,7 +217,7 @@ try {
     "Concurrent checkouts must not share invitation data.",
   );
   console.log(
-    "Both concurrent browser suites passed with separate ports, databases, and capture files.",
+    "Both concurrent browser suites passed with separate build output, ports, databases, and capture files.",
   );
   passed = true;
 } finally {

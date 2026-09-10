@@ -47,6 +47,19 @@ test("the browser command builds current checkout sources before serving and sto
   });
   await mkdir(join(root, "node_modules/next/dist/bin"), { recursive: true });
   await mkdir(join(root, ".next"));
+  await mkdir(join(root, "public"));
+  const record = `fs.appendFileSync('calls.jsonl', JSON.stringify({mode, source, cwd:process.cwd(), nodeEnv:process.env.NODE_ENV,
+  database: new URL(process.env.DATABASE_URL).pathname, origin:process.env.BETTER_AUTH_URL,
+  catalog:process.env.SCREENR_TEST_TMDB_URL, test:process.env.SCREENR_BROWSER_TEST,
+  token:process.env.TMDB_READ_TOKEN, email:process.env.EMAIL_TRANSPORT})+'\\n');`;
+  const standalone = `
+const fs = require('node:fs');
+const mode = 'start';
+const source = fs.readFileSync('.next/standalone/.next/static/source','utf8');
+require('node:assert/strict').equal(fs.readFileSync('.next/standalone/public/source','utf8'), source);
+${record}
+require('node:http').createServer((req,res) => res.end(source)).listen(Number(process.env.PORT), process.env.HOSTNAME);
+`;
   // Next is the external process boundary. All project resource ownership,
   // fixture setup, environment preparation, and lifecycle logic stays real.
   await writeFile(
@@ -55,21 +68,23 @@ test("the browser command builds current checkout sources before serving and sto
 const fs = require('node:fs');
 const mode = process.argv[2];
 const source = fs.readFileSync('source.txt', 'utf8');
-fs.appendFileSync('calls.jsonl', JSON.stringify({mode, source, cwd:process.cwd(), nodeEnv:process.env.NODE_ENV,
-  database: new URL(process.env.DATABASE_URL).pathname, origin:process.env.BETTER_AUTH_URL,
-  catalog:process.env.SCREENR_TEST_TMDB_URL, test:process.env.SCREENR_BROWSER_TEST,
-  token:process.env.TMDB_READ_TOKEN, email:process.env.EMAIL_TRANSPORT})+'\\n');
+${record}
 if (mode === 'build') {
   if (source === 'fail') process.exit(23);
   fs.writeFileSync('.next/BUILD_ID', source);
-} else {
+  fs.mkdirSync('.next/static', {recursive:true});
+  fs.writeFileSync('.next/static/source', source);
+  fs.mkdirSync('.next/standalone', {recursive:true});
+  fs.writeFileSync('.next/standalone/server.js', ${JSON.stringify(standalone)});
+} else if (mode === 'dev') {
   const port = Number(process.argv[process.argv.indexOf('--port')+1]);
   require('node:http').createServer((req,res) => res.end(fs.readFileSync('.next/BUILD_ID','utf8'))).listen(port,'127.0.0.1');
-}
+} else { throw new Error('Standalone output requires its generated server'); }
 `,
   );
   async function run(source: string, mode?: string) {
     await writeFile(join(root, "source.txt"), source);
+    await writeFile(join(root, "public/source"), source);
     const child = spawn(process.execPath, ["--import", loader, harness], {
       cwd: root,
       env: {

@@ -76,3 +76,32 @@ test("production catalog fixtures require an explicit isolated browser environme
     "rejected environments must not contact the fixture",
   );
 });
+
+test("the browser catalog opt-in does not enable production email capture", async () => {
+  await assert.rejects(
+    execute(
+      process.execPath,
+      [
+        "--import",
+        "tsx",
+        "--input-type=module",
+        "-e",
+        `import {queueCode} from ${JSON.stringify(resolve("src/server/email.ts"))};
+       import {db} from ${JSON.stringify(resolve("src/server/db.ts"))};
+       try { await queueCode({email:"fixture@example.test",otp:"123456"}); } finally { await db.end(); }`,
+      ],
+      {
+        env: {
+          ...process.env,
+          NODE_ENV: "production",
+          SCREENR_BROWSER_TEST: "1",
+          DATABASE_URL: "postgresql://127.0.0.1:1/screenr_browser_email_test",
+          BETTER_AUTH_URL: "http://127.0.0.1:32100",
+          EMAIL_TRANSPORT: "file",
+        },
+        timeout: 5000,
+      },
+    ),
+    /File email capture is disabled in production/,
+  );
+});
