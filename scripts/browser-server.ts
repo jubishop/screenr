@@ -97,7 +97,7 @@ try {
   process.env.DATABASE_URL = browserConfig.databaseURL;
   // The local identity provider owns file email capture. Only the Next child
   // uses the selected application serving mode.
-  process.env.NODE_ENV = "test";
+  Object.assign(process.env, { NODE_ENV: "test" });
   process.env.TZ = "UTC";
   process.env.BETTER_AUTH_URL = browserConfig.baseURL;
   process.env.BETTER_AUTH_SECRET =

@@ -34,6 +34,11 @@ async function playwrightConfig(cwd: string, env = {}) {
 test("browser runs refuse to reuse an unrelated server", async () => {
   const config = await playwrightConfig(root, { CI: "" });
   assert.equal(config.webServer.reuseExistingServer, false);
+  assert.equal(
+    config.webServer.stdout,
+    "pipe",
+    "build diagnostics must reach the caller",
+  );
 });
 
 test("separate checkout directories select separate browser URLs", async (t) => {
