@@ -73,6 +73,8 @@ both memory and design documents.
   worktree preparation, and QMD search.
 - [Browser runtime measurement](research/browser-runtime.md): setup and coverage
   changes, before/after timings, and the two-worker isolation decision for #72.
+- [Test organization](research/test-organization.md): feature-suite map, fixture
+  lifecycle, and complete before/after coverage inventory for #70.
 - [Running Screenr](running-screenr.md): app setup, provider configuration,
   repeatable milestone verification, and access rules.
 - [Shared VPS deployment](deployment.md): release packaging, isolated services,
