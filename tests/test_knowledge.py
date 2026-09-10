@@ -447,7 +447,7 @@ if sys.argv[-1] == os.environ.get("FAIL_APPLICATION"):
         full = self.run_command("bin/check", "--full")
         self.assertEqual([json.loads(line) for line in events.read_text().splitlines()],
                          [["knowledge"], ["other"], *[["npm", "run", script] for script in
-                          ("format:check", "typecheck", "test", "test:browser", "build")]])
+                          ("format:check", "typecheck", "test", "test:browser")]])
         self.assertIn("Full application checks passed", full.stdout)
         (self.repo / "tests/test_knowledge.py").unlink()
         events.unlink()
@@ -462,7 +462,7 @@ if sys.argv[-1] == os.environ.get("FAIL_APPLICATION"):
         self.assertNotEqual(foundation.returncode, 0)
         self.assertEqual([json.loads(line) for line in events.read_text().splitlines()],
                          [["knowledge"], ["other"]])
-        scripts = ("format:check", "typecheck", "test", "test:browser", "build")
+        scripts = ("format:check", "typecheck", "test", "test:browser")
         for index, script in enumerate(scripts):
             with self.subTest(script=script):
                 events.unlink()

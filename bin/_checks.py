@@ -291,7 +291,8 @@ def main():
             raise RuntimeError(f"{runtime_help} Found {node_version}.")
         subprocess.run([sys.executable, "-B", "-m", "unittest", "discover", "-s", "tests", "-p", "test_*.py", "-v"], cwd=root, check=True)
         print("Full repository foundation checks passed.", flush=True)
-        for script in ("format:check", "typecheck", "test", "test:browser", "build"):
+        # Browser validation builds and tests the current production artifact.
+        for script in ("format:check", "typecheck", "test", "test:browser"):
             subprocess.run(["npm", "run", script], cwd=root, check=True)
         print("Full application checks passed.", flush=True)
         return 0

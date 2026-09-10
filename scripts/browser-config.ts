@@ -5,6 +5,9 @@ import { realpathSync } from "node:fs";
 // from the checkout, including when the checkout is reached through a symlink.
 const root = realpathSync(process.cwd());
 const identity = createHash("sha256").update(root).digest("hex");
+const mode = process.env.SCREENR_BROWSER_MODE ?? "production";
+if (mode !== "production" && mode !== "development")
+  throw new Error("SCREENR_BROWSER_MODE must be production or development.");
 const port = Number(
   process.env.SCREENR_BROWSER_PORT ??
     20_000 + (parseInt(identity.slice(0, 8), 16) % 10_000) * 4,
@@ -39,6 +42,7 @@ database.pathname = `/${databaseName}`;
 
 export const browserConfig = {
   root,
+  mode,
   port,
   catalogPort: port + 1,
   googlePort: port + 2,
@@ -52,4 +56,4 @@ export const browserConfig = {
   appURL: `http://localhost:${port + 3}`,
   databaseName,
   databaseURL: database.href,
-};
+} as const;

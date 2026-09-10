@@ -102,6 +102,12 @@ try {
   process.env.GOOGLE_CLIENT_ID = "screenr-browser-test";
   process.env.GOOGLE_CLIENT_SECRET = "screenr-browser-test";
   process.env.SCREENR_TEST_TMDB_URL = browserConfig.catalogURL;
+  process.env.SCREENR_BROWSER_TEST = "1";
+  // Never send an inherited provider credential to a fixture. Explicit empty
+  // values also prevent Next's dotenv loading from filling these settings.
+  process.env.TMDB_READ_TOKEN = "";
+  process.env.RESEND_API_KEY = "";
+  process.env.EMAIL_FROM = "";
   const { migrate } = await import("./migrate");
   db = (await import("../src/server/db")).db;
   await migrate();
@@ -266,18 +272,37 @@ try {
   await releasePort(browserConfig.catalogPort);
   catalog.listen(browserConfig.catalogPort, "127.0.0.1");
   await once(catalog, "listening");
+  const nextEnv = { ...process.env, NODE_ENV: browserConfig.mode };
+  if (browserConfig.mode === "production") {
+    // Build under the same checkout/database locks as the server. Every real
+    // browser invocation builds current files; an existing artifact is never
+    // accepted as proof of freshness. Next may reuse its local compiler cache.
+    console.log("Building the current checkout for browser validation.");
+    app = spawn(
+      process.execPath,
+      ["node_modules/next/dist/bin/next", "build"],
+      {
+        cwd: browserConfig.root,
+        stdio: "inherit",
+        env: nextEnv,
+      },
+    );
+    const [code] = await once(app, "exit");
+    if (code !== 0)
+      throw new Error(`Browser production build failed (${code}).`);
+  }
   await releasePort(browserConfig.appPort);
   app = spawn(
     process.execPath,
     [
       "node_modules/next/dist/bin/next",
-      "dev",
+      browserConfig.mode === "production" ? "start" : "dev",
       "--hostname",
       "127.0.0.1",
       "--port",
       String(browserConfig.appPort),
     ],
-    { stdio: "inherit", env: process.env },
+    { cwd: browserConfig.root, stdio: "inherit", env: nextEnv },
   );
   app.on("error", (error) => {
     console.error(error);

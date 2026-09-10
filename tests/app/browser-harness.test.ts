@@ -104,6 +104,7 @@ test("browser configuration rejects unsafe database and port settings", async ()
       },
       /loopback PostgreSQL test database/,
     ],
+    [{ SCREENR_BROWSER_MODE: "typo" }, /SCREENR_BROWSER_MODE/],
     [{ SCREENR_BROWSER_PORT: "65533" }, /SCREENR_BROWSER_PORT/],
     [{ SCREENR_BROWSER_PORT: "1234.5" }, /SCREENR_BROWSER_PORT/],
     [{ SCREENR_BROWSER_PORT: "0" }, /SCREENR_BROWSER_PORT/],

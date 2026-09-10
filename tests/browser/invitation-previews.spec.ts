@@ -60,9 +60,11 @@ test("invitation links expose rich previews without cookies or JavaScript", asyn
         .locator('meta[property="og:image"]')
         .getAttribute("content");
       expect(imageURL).toBeTruthy();
-      // Next's file-based image metadata uses its own port in development;
-      // the browser harness uses a separate port for Next.
-      expect(new URL(imageURL!).origin).toBe(browserConfig.appURL);
+      // Development metadata uses Next's own origin; production uses the
+      // configured public origin. Keep an exact expectation in both modes.
+      expect(new URL(imageURL!).origin).toBe(
+        browserConfig.mode === "development" ? browserConfig.appURL : baseURL,
+      );
       const image = await fetch(imageURL!);
       expect(image.status).toBe(200);
       expect(image.headers.get("content-type")).toBe("image/png");
