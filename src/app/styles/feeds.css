@@ -1,0 +1,270 @@
+/* Feed entries, discussions, composers, spoilers, and reactions.
+   Keep later entry and nested-reply overrides after the general thread rules. */
+.reactions {
+  margin-top: 8px;
+}
+.reaction-summary,
+.reaction-picker {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.reaction-summary button {
+  min-height: 44px;
+  min-width: 44px;
+  padding: 8px 10px;
+}
+.reaction-count {
+  border: 1px solid #d5ddd3;
+}
+.reactions button[aria-pressed="true"] {
+  background: #e7efdd;
+  box-shadow: inset 0 0 0 2px #55753a;
+}
+.reaction-picker {
+  margin-top: 8px;
+  padding: 8px;
+  border: 1px solid #d5ddd3;
+  border-radius: 12px;
+  background: var(--white);
+}
+.reaction-picker button {
+  display: grid;
+  gap: 3px;
+  padding: 6px;
+  min-width: 44px;
+  font-size: 12px;
+}
+.reaction-picker button span:first-child {
+  font-size: 24px;
+}
+.feed-list {
+  display: grid;
+  gap: 16px;
+}
+.activity-card {
+  padding: 23px;
+  display: flex;
+  gap: 22px;
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+.activity-content {
+  flex: 1;
+  min-width: 0;
+}
+.activity-by {
+  font-size: 12px;
+  margin-bottom: 5px;
+}
+.activity-by a {
+  font-weight: 600;
+}
+.activity-content h2 {
+  font-size: 21px;
+  margin-bottom: 3px;
+}
+.activity-content > .small {
+  margin-bottom: 13px;
+}
+.conversation-link {
+  font-size: 12px;
+  font-weight: 600;
+}
+.thread {
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 27px;
+}
+.comment-group {
+  border-top: 1px solid var(--line);
+}
+.comment {
+  padding: 18px 0;
+}
+.comment-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12px;
+}
+.comment-heading + .small {
+  margin: 5px 0;
+}
+.comment-body {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  margin: 10px 0;
+}
+.nested {
+  margin-left: 22px;
+  border-left: 2px solid var(--line);
+  padding-left: 20px;
+}
+.spoiler {
+  display: block;
+  width: 100%;
+  text-align: left;
+  font-size: 13px;
+  background: #eef0e6;
+  color: #5c6d57;
+  margin: 12px 0;
+  padding: 14px;
+}
+.feed-updates {
+  position: sticky;
+  top: 12px;
+  z-index: 2;
+  height: 0;
+}
+.new-replies {
+  background: var(--accent);
+  border: 1px solid #b7cc73;
+  box-shadow: 0 3px 15px #163c3415;
+  margin: 5px 0 20px;
+}
+.composer {
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid var(--line);
+}
+.composer:first-child {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}
+.composer textarea {
+  min-height: 0;
+}
+.title-comment-composer {
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 24px;
+  margin-bottom: 24px;
+}
+.composer > label {
+  margin-bottom: 8px;
+}
+.comment-action {
+  margin-top: 12px;
+}
+.comment-action:first-child {
+  margin-top: 0;
+}
+.composer-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+.composer-footer {
+  margin-top: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+}
+@media (max-width: 800px) {
+  .activity-card {
+    padding: 18px;
+    gap: 15px;
+  }
+  .activity-content h2 {
+    font-size: 19px;
+  }
+}
+@media (max-width: 560px) {
+  .activity-card {
+    padding: 17px 14px;
+    gap: 14px;
+  }
+  .activity-content h2 {
+    font-size: 18px;
+  }
+  .activity-content .inline-actions {
+    gap: 5px;
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .thread {
+    padding: 18px 14px;
+  }
+  .comment-heading {
+    flex-wrap: wrap;
+    gap: 3px;
+  }
+  .comment-heading time {
+    font-size: 10px;
+  }
+  .nested {
+    margin-left: 9px;
+    padding-left: 12px;
+  }
+  .feed-updates {
+    top: 145px;
+  }
+}
+
+.feed-entry {
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  min-width: 0;
+  scroll-margin-top: 20px;
+}
+.feed-entry[hidden] {
+  display: none;
+}
+.feed-entry .activity-card {
+  border: 0;
+  border-radius: 12px 12px 0 0;
+}
+.feed-entry .thread {
+  border: 0;
+  padding-top: 0;
+}
+.replies {
+  border-left: 2px solid var(--line);
+  padding-left: 16px;
+}
+.comment-group + .comment-group,
+.nested > div + div {
+  border-top: 1px solid var(--line);
+}
+.comment {
+  scroll-margin-top: 20px;
+}
+.interactive-feed {
+  overflow-anchor: none;
+}
+
+@media (max-width: 560px) {
+  .feed-entry,
+  .comment {
+    scroll-margin-top: 150px;
+  }
+}
+
+.reply-expansion {
+  margin-bottom: 12px;
+}
+.nested-composer {
+  margin: 0 0 16px;
+  padding-top: 12px;
+}
+@media (max-width: 560px) {
+  .replies {
+    padding-left: 10px;
+  }
+  .nested {
+    margin-left: 10px;
+    padding-left: 12px;
+  }
+  .nested .composer-footer {
+    flex-wrap: wrap;
+  }
+}
