@@ -120,4 +120,4 @@ npm run test:browser:isolation
 
 Run timing samples as separate invocations, with the same dependency versions, machine class, and cache policy. A temporary Playwright config can spread the normal config and append list/JSON reporters while preserving the diagnostics reporter; resolve its `testDir` and `outputDir` to the checkout if placing that config under `.cache/`. Capture complete command wall time as well as reporter durations. Do not compare a focused test or a warm reused server against a complete fresh harness.
 
-Test-file organization remains [issue #70](https://github.com/jubishop/screenr/issues/70). Its refactor should reuse the member and database fixtures and preserve this inventory. There is no new ordering dependency and no new follow-up issue.
+The later [test-organization report](test-organization.md) maps the feature suites extracted for [issue #70](https://github.com/jubishop/screenr/issues/70). It reuses the member and database fixtures and preserves the then-current inventory. The counts and filenames above describe this earlier runtime measurement.
