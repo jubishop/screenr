@@ -1,0 +1,126 @@
+/* Account and profile editors, people lists, and member invitations. */
+.profile-name {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px 16px;
+  margin-bottom: 17px;
+}
+.profile-name h1 {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.display-name-editor {
+  max-width: 460px;
+}
+.display-name-editor .error {
+  margin-top: 16px;
+}
+.account-profile > p {
+  overflow-wrap: anywhere;
+}
+.account-profile > [role="status"] {
+  margin-bottom: 0;
+}
+.account-profile > [role="status"]:not(:empty) {
+  margin-top: 16px;
+}
+.person-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 15px;
+  align-items: center;
+  padding: 22px 0;
+  border-bottom: 1px solid var(--line);
+}
+.people-list {
+  margin-bottom: 40px;
+}
+.people-list .person-row > a,
+.people-suggestions .person-row > div {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+.people-suggestions .person-row > button {
+  flex-shrink: 0;
+}
+.profile-friends {
+  margin-bottom: 28px;
+  overflow-wrap: anywhere;
+}
+.profile-friends summary {
+  cursor: pointer;
+  padding: 12px 0;
+  font-weight: 600;
+}
+.badge {
+  font-size: 11px;
+  background: #e8efdc;
+  padding: 4px 9px;
+  border-radius: 5px;
+}
+.invite-form {
+  display: flex;
+  gap: 20px;
+  align-items: center;
+}
+.invite-form label {
+  min-width: 180px;
+}
+.invite-card,
+.invitation-created,
+.settings-card {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 24px;
+  background: var(--white);
+  margin-bottom: 18px;
+}
+.joined-person {
+  display: block;
+  font-size: 13px;
+}
+.invite-card .invitation-created {
+  border: 0;
+  padding: 0;
+  margin-bottom: 0;
+}
+.invitation-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.invitation-actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+}
+.invitation-actions button[aria-disabled="true"] {
+  opacity: 0.55;
+  cursor: wait;
+}
+.invitation-created input {
+  cursor: pointer;
+  font-size: 16px;
+}
+.invitation-created [role="status"] {
+  margin-bottom: 0;
+}
+@media (max-width: 560px) {
+  .person-row {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .invite-form {
+    gap: 14px;
+  }
+  .invite-form label {
+    min-width: 120px;
+  }
+}

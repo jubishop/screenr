@@ -1,0 +1,42 @@
+/* Sign-in, signup, and the public credits page. */
+.auth-page {
+  max-width: 620px;
+  margin: 45px auto;
+  padding: 0 24px;
+  text-align: center;
+}
+.auth-card {
+  margin: 35px 0 24px;
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  padding: 45px;
+  text-align: left;
+}
+.auth-card h1 {
+  font-size: 36px;
+}
+.auth-card form {
+  margin-top: 23px;
+}
+.auth-card .small {
+  margin-top: 15px;
+}
+.divider {
+  text-align: center;
+  font-size: 12px;
+  color: var(--muted);
+  margin: 20px 0;
+}
+@media (max-width: 560px) {
+  .auth-page {
+    margin: 24px auto;
+  }
+  .auth-card {
+    padding: 28px 23px;
+    margin-top: 24px;
+  }
+  .auth-card h1 {
+    font-size: 30px;
+  }
+}
