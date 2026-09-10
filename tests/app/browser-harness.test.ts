@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { promisify } from "node:util";
@@ -22,6 +22,7 @@ async function playwrightConfig(cwd: string, env = {}) {
       cwd,
       env: {
         ...process.env,
+        SCREENR_BROWSER_MODE: undefined,
         SCREENR_BROWSER_PORT: undefined,
         SCREENR_BROWSER_DATABASE: undefined,
         ...env,
@@ -34,6 +35,11 @@ async function playwrightConfig(cwd: string, env = {}) {
 test("browser runs refuse to reuse an unrelated server", async () => {
   const config = await playwrightConfig(root, { CI: "" });
   assert.equal(config.webServer.reuseExistingServer, false);
+  assert.equal(
+    config.webServer.stdout,
+    "pipe",
+    "build diagnostics must reach the caller",
+  );
 });
 
 test("separate checkout directories select separate browser URLs", async (t) => {
@@ -104,6 +110,7 @@ test("browser configuration rejects unsafe database and port settings", async ()
       },
       /loopback PostgreSQL test database/,
     ],
+    [{ SCREENR_BROWSER_MODE: "typo" }, /SCREENR_BROWSER_MODE/],
     [{ SCREENR_BROWSER_PORT: "65533" }, /SCREENR_BROWSER_PORT/],
     [{ SCREENR_BROWSER_PORT: "1234.5" }, /SCREENR_BROWSER_PORT/],
     [{ SCREENR_BROWSER_PORT: "0" }, /SCREENR_BROWSER_PORT/],
@@ -162,5 +169,37 @@ test("an occupied fixture port fails before contacting PostgreSQL", async (t) =>
         return true;
       },
     );
+  }
+});
+
+test("standard and diagnostic browser commands select their mode despite inherited settings", async (t) => {
+  const directory = await mkdtemp(join(tmpdir(), "screenr-browser-command-"));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const manifest = JSON.parse(await readFile("package.json", "utf8"));
+  await writeFile(
+    join(directory, "package.json"),
+    JSON.stringify({
+      name: "browser-command-fixture",
+      private: true,
+      scripts: manifest.scripts,
+    }),
+  );
+  await mkdir(join(directory, "node_modules/.bin"), { recursive: true });
+  // Replace only the external Playwright executable; npm runs the real scripts.
+  await writeFile(
+    join(directory, "node_modules/.bin/playwright"),
+    '#!/usr/bin/env node\nconsole.log("selected-mode=" + process.env.SCREENR_BROWSER_MODE);\n',
+    { mode: 0o755 },
+  );
+  for (const [command, expected, inherited] of [
+    ["test:browser", "production", "development"],
+    ["test:browser:dev", "development", "production"],
+  ]) {
+    const { stdout } = await execute("npm", ["run", command], {
+      cwd: directory,
+      env: { ...process.env, SCREENR_BROWSER_MODE: inherited },
+      timeout: 10000,
+    });
+    assert.ok(stdout.includes(`selected-mode=${expected}`), stdout);
   }
 });

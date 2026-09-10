@@ -7,16 +7,33 @@ import {
   type WatchAvailability,
 } from "../shared";
 
+function isolatedBrowserTest() {
+  try {
+    const database = new URL(process.env.DATABASE_URL ?? "");
+    return (
+      process.env.SCREENR_BROWSER_TEST === "1" &&
+      /^http:\/\/127\.0\.0\.1:\d+$/.test(process.env.BETTER_AUTH_URL ?? "") &&
+      ["postgres:", "postgresql:"].includes(database.protocol) &&
+      ["127.0.0.1", "localhost", "[::1]"].includes(database.hostname) &&
+      database.search === "" &&
+      /^\/screenr_browser_[a-z0-9_]+_test$/.test(database.pathname) &&
+      database.pathname.length <= 64
+    );
+  } catch {
+    return false;
+  }
+}
+
 function catalogConfig() {
   const base =
     process.env.SCREENR_TEST_TMDB_URL ?? "https://api.themoviedb.org/3";
   if (
     process.env.SCREENR_TEST_TMDB_URL &&
-    (process.env.NODE_ENV === "production" ||
+    ((process.env.NODE_ENV === "production" && !isolatedBrowserTest()) ||
       !/^http:\/\/127\.0\.0\.1:\d+$/.test(base))
   ) {
     throw new Error(
-      "The catalog test server is allowed only on loopback outside production.",
+      "The catalog test server requires loopback and, in production mode, an isolated browser-test environment.",
     );
   }
   if (!process.env.TMDB_READ_TOKEN && !process.env.SCREENR_TEST_TMDB_URL)

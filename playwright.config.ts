@@ -20,6 +20,7 @@ export default defineConfig({
     url: `${browserConfig.baseURL}/login`,
     cwd: browserConfig.root,
     reuseExistingServer: false,
+    stdout: browserConfig.mode === "production" ? "pipe" : "ignore",
     timeout: 90_000,
   },
 });

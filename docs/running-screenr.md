@@ -169,7 +169,9 @@ bin/check --full
 ```
 
 `bin/check --full` preserves the repository foundation tests and adds formatting,
-TypeScript, PostgreSQL tests, the browser suite, and a production build.
+TypeScript, PostgreSQL tests, and the browser suite against a fresh production
+build. The browser command performs that build once; the full check does not
+build a second artifact afterward.
 Plain `bin/check` runs only fast repository static checks; use
 `bin/check --documents-only` for Markdown edits. Follow the
 [local and CI validation policy](development-workflow.md#local-and-ci-validation)
@@ -210,6 +212,36 @@ test's users. Rows remain for that run, contexts close after each test, and
 database pools close when their worker finishes. Run repeated measurements as
 separate commands so each starts with a reset database.
 
+The standard `npm run test:browser` command builds the current checkout with
+`next build`, then serves its generated standalone server with `NODE_ENV=production`.
+This uses the same entry point as a packaged release. The harness copies the
+build's static assets and `public/` into the standalone directory before serving.
+There is no build-reuse switch: focused runs also build first, even when `.next/`
+already exists. Compiler caches remain local and may be reused by Next. Listing
+tests with `--list` does not start a server or build.
+
+Use `npm run test:browser:dev` to diagnose behavior specific to `next dev`.
+This diagnostic command does not perform a production build. A full check
+always selects production serving, even if `SCREENR_BROWSER_MODE=development`
+is inherited. Direct Playwright and harness calls default to production;
+`SCREENR_BROWSER_MODE` accepts only `production` or `development`.
+
+The harness sets its disposable database, auth origin, test Google credentials,
+UTC timezone, and local catalog before building. It clears inherited catalog
+and email service credentials. No production service or private dotenv file is
+needed. Keep credentials out of `NEXT_PUBLIC_*` and Next's `env` configuration;
+those values are included in browser bundles. Normal server configuration stays
+runtime configuration. The auth fixture remains a separate process running the
+real auth handlers with a local Google provider and file email capture. Next's
+production pages and API handlers read the same real signed sessions.
+
+`SCREENR_BROWSER_TEST=1` permits the catalog fixture in production mode only
+with a loopback browser database, a loopback auth origin, and a loopback catalog
+URL. The database must be named `screenr_browser_<name>_test` with no connection
+query parameters. This opt-in is set only on harness child processes, not in
+Next's compiled configuration or deployment settings. File email capture remains
+disabled in the production application; the separate auth fixture owns it.
+
 The default browser command runs independent scenarios with two workers.
 Use `npm run test:browser -- --workers=1` for serial execution. The
 [runtime measurement report](research/browser-runtime.md) records the speed
@@ -232,7 +264,8 @@ and direct database access use these settings.
 Server reuse is disabled. An occupied port fails before fixture reset. Database
 locks also reject concurrent runs with the same browser database or checkout.
 A port hash collision produces a conflict error; it cannot reuse another server.
-Run only one browser suite per checkout at a time.
+Run only one browser suite per checkout at a time. Do not run a separate build
+or development server in that checkout while validation owns `.next/`.
 
 Run the repeatable concurrent check with:
 
@@ -243,7 +276,8 @@ npm run test:browser:isolation -- --warm
 
 This copies the current non-ignored Git working files and installed dependencies
 into two temporary checkout directories, then runs both complete browser suites
-at the same time. It also checks that active database and checkout conflicts
+at the same time. It verifies that each build directory resolves inside its
+own checkout. It also checks that active database and checkout conflicts
 fail before reset. It removes its databases and successful temporary copies.
 Failed copies retain browser logs and traces at the printed paths. It does not
 create Git branches or alter another worktree. `bin/check --full` includes

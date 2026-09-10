@@ -1,6 +1,7 @@
 import { Client, type Pool } from "pg";
 import { browserConfig } from "./browser-config";
 import { once } from "node:events";
+import { cp } from "node:fs/promises";
 import { createServer, type Server as HTTPServer } from "node:http";
 import { createBrowserProxy } from "./browser-proxy";
 import { createServer as reservePort, type Server } from "node:net";
@@ -94,6 +95,9 @@ try {
     if ((error as { code: string }).code !== "42P04") throw error;
   }
   process.env.DATABASE_URL = browserConfig.databaseURL;
+  // The local identity provider owns file email capture. Only the Next child
+  // uses the selected application serving mode.
+  Object.assign(process.env, { NODE_ENV: "test" });
   process.env.TZ = "UTC";
   process.env.BETTER_AUTH_URL = browserConfig.baseURL;
   process.env.BETTER_AUTH_SECRET =
@@ -102,6 +106,12 @@ try {
   process.env.GOOGLE_CLIENT_ID = "screenr-browser-test";
   process.env.GOOGLE_CLIENT_SECRET = "screenr-browser-test";
   process.env.SCREENR_TEST_TMDB_URL = browserConfig.catalogURL;
+  process.env.SCREENR_BROWSER_TEST = "1";
+  // Never send an inherited provider credential to a fixture. Explicit empty
+  // values also prevent Next's dotenv loading from filling these settings.
+  process.env.TMDB_READ_TOKEN = "";
+  process.env.RESEND_API_KEY = "";
+  process.env.EMAIL_FROM = "";
   const { migrate } = await import("./migrate");
   db = (await import("../src/server/db")).db;
   await migrate();
@@ -266,18 +276,53 @@ try {
   await releasePort(browserConfig.catalogPort);
   catalog.listen(browserConfig.catalogPort, "127.0.0.1");
   await once(catalog, "listening");
+  const nextEnv = { ...process.env, NODE_ENV: browserConfig.mode };
+  if (browserConfig.mode === "production") {
+    // Build under the same checkout/database locks as the server. Every real
+    // browser invocation builds current files; an existing artifact is never
+    // accepted as proof of freshness. Next may reuse its local compiler cache.
+    console.log("Building the current checkout for browser validation.");
+    app = spawn(
+      process.execPath,
+      ["node_modules/next/dist/bin/next", "build"],
+      {
+        cwd: browserConfig.root,
+        stdio: "inherit",
+        env: nextEnv,
+      },
+    );
+    const [code] = await once(app, "exit");
+    if (code !== 0)
+      throw new Error(`Browser production build failed (${code}).`);
+    // Standalone output excludes static/public assets, just as in release
+    // packaging. Serve the supported generated entry point with those assets.
+    await cp(".next/static", ".next/standalone/.next/static", {
+      recursive: true,
+    });
+    await cp("public", ".next/standalone/public", { recursive: true });
+  }
   await releasePort(browserConfig.appPort);
   app = spawn(
     process.execPath,
-    [
-      "node_modules/next/dist/bin/next",
-      "dev",
-      "--hostname",
-      "127.0.0.1",
-      "--port",
-      String(browserConfig.appPort),
-    ],
-    { stdio: "inherit", env: process.env },
+    browserConfig.mode === "production"
+      ? [".next/standalone/server.js"]
+      : [
+          "node_modules/next/dist/bin/next",
+          "dev",
+          "--hostname",
+          "127.0.0.1",
+          "--port",
+          String(browserConfig.appPort),
+        ],
+    {
+      cwd: browserConfig.root,
+      stdio: "inherit",
+      env: {
+        ...nextEnv,
+        HOSTNAME: "127.0.0.1",
+        PORT: String(browserConfig.appPort),
+      },
+    },
   );
   app.on("error", (error) => {
     console.error(error);
