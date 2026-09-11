@@ -16,7 +16,7 @@ const { migrate } = await import("../../scripts/migrate");
 const { queueCode, deliverOne } = await import("../../src/server/email");
 before(migrate);
 beforeEach(async () => {
-  await db.query("TRUNCATE email_job");
+  await db.query("TRUNCATE email_job CASCADE");
 });
 afterEach(() => mock.restoreAll());
 after(() => db.end());

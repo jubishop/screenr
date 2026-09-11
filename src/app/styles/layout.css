@@ -20,6 +20,12 @@
   color: var(--muted);
   margin: 18px 0 44px;
 }
+.brand-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
 .sidebar nav {
   display: grid;
   gap: 8px;
@@ -120,7 +126,7 @@
     border-right: 0;
     border-bottom: 1px solid var(--line);
   }
-  .sidebar > .brand {
+  .sidebar .brand {
     font-size: 27px;
   }
   .sidebar-tagline,

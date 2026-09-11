@@ -20,6 +20,12 @@ import { getTitle } from "../../../../server/catalog";
 import { findTitles } from "../../../../server/title-viewing";
 import { saveServices } from "../../../../server/streaming-services";
 import { loadScreen } from "../../../../server/screens";
+import {
+  notifications,
+  readNotification,
+  readAllNotifications,
+  saveActivityEmail,
+} from "../../../../server/notifications";
 
 const json = (data: unknown, status = 200) =>
   Response.json(data, {
@@ -78,6 +84,15 @@ async function handle(
     const user = await member(userId);
     if (request.method === "GET") {
       const url = new URL(request.url);
+      if (action === "notifications")
+        return json(
+          await notifications(
+            userId,
+            url.searchParams.get("before"),
+            url.searchParams.get("unread") === "true",
+            url.searchParams.get("through"),
+          ),
+        );
       if (action === "screen")
         return json({
           ...(await loadScreen(userId, url.searchParams.get("path") ?? "/")),
@@ -87,6 +102,14 @@ async function handle(
         return json(await findTitles(url.searchParams.get("q") ?? ""));
     } else {
       const data = await body(request);
+      if (action === "activity-email")
+        return json(await saveActivityEmail(userId, data.enabled));
+      if (action === "read-notification")
+        return json(await readNotification(userId, data.id));
+      if (action === "read-notifications") {
+        await readAllNotifications(userId, data.through);
+        return json({ ok: true });
+      }
       if (action === "streaming-services")
         return json(await saveServices(userId, data.serviceIds));
       if (action === "display-name")

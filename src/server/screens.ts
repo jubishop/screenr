@@ -6,8 +6,19 @@ import { watchTogether } from "./watch-together";
 import { titleSuggestions } from "./title-suggestions";
 import { savedServices, streamingServices } from "./streaming-services";
 import { withViewingOptions } from "./title-viewing";
+import { activityEmail, unreadNotifications } from "./notifications";
 
 export async function loadScreen(userId: string, requestedPath: string) {
+  const [content, unread] = await Promise.all([
+    loadContent(userId, requestedPath),
+    unreadNotifications(userId),
+  ]);
+  return content.kind === "redirect"
+    ? content
+    : { ...content, unreadNotifications: unread };
+}
+
+async function loadContent(userId: string, requestedPath: string) {
   const url = new URL(requestedPath, "http://screenr.local");
   const path = url.pathname;
   if (path === "/")
@@ -40,6 +51,7 @@ export async function loadScreen(userId: string, requestedPath: string) {
   if (path === "/account")
     return {
       kind: "account" as const,
+      activityEmail: await activityEmail(userId),
       services: streamingServices,
       serviceIds: await savedServices(userId),
       googleEnabled: !!(

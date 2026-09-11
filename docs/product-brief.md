@@ -809,6 +809,51 @@ release.
 **Why:** The user accepted email as a way to notice friend requests and
 replies before checking Screenr becomes a habit.
 
+### Notification panel — 2026-09-11
+
+**Decision:** Open notifications from a bell near the Screenr logo or a
+similar persistent position. The bell opens a dropdown panel over the
+current page, following the interaction shown in the user's Facebook
+reference. Keep the current page in place beneath the panel; opening
+notifications does not navigate to a separate page.
+
+On desktop, anchor the dropdown to the bell. On phones, open a full-screen
+Notifications panel with a clear Close button. Closing either panel returns
+the reader to the same page and scroll position, preserving unfinished
+comments.
+
+**Why:** The user wants to check notifications in place and explicitly
+selected an overlay instead of the proposed full Notifications page.
+
+**Tradeoff:** The panel temporarily covers part of the current content.
+The phone layout covers the full screen to provide enough room to read
+and select notifications.
+
+### Notification read state — 2026-09-11
+
+**Decision:** Mark an individual notification read when the member selects
+it. Provide a **Mark all as read** action. Opening the panel alone does not
+mark notifications read. The bell shows the unread count.
+
+**Why:** The user accepted explicit read actions so opening the panel does
+not clear notifications they have not selected.
+
+**Tradeoff:** Members must select notifications or use the bulk action to
+clear the unread count, even if they have skimmed the list.
+
+### Activity email timing — 2026-09-11
+
+**Decision:** For members who enable activity emails, wait 10 minutes and
+combine new notifications that are still unread into one email. Omit
+notifications read before delivery. Opening the panel does not prevent an
+email unless the member reads the notifications or marks them all read.
+
+**Why:** The user accepted a delay to reduce emails from active
+conversations and omit notifications already read in Screenr.
+
+**Tradeoff:** Email alerts arrive later than in-app notifications. Activity
+email remains off by default under the existing delivery decision.
+
 ### First-release success and measurement — 2026-09-05
 
 **Decision:** Judge the first release by whether the initial group keeps

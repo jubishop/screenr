@@ -161,6 +161,44 @@ do not queue email. Better Auth also limits requests and code attempts. The
 shared Resend free allowance can still be exhausted by other applications;
 inspect Resend delivery activity if codes do not arrive.
 
+### Notifications and activity email
+
+The bell beside the logo shows the current unread count. It opens an anchored
+dropdown on desktop and a full-screen panel on phones. Close or Escape returns
+to the underlying page without losing its scroll position or comment drafts.
+The panel has All and Unread filters and controls for earlier notifications.
+Opening it does not mark notifications read. Selecting a notification marks
+it read and opens its person or exact title reply. **Mark all as read** applies
+through the newest notification in the displayed snapshot, leaving later
+arrivals unread. Older pages and their refreshes keep that boundary; returning
+to **Latest notifications** displays new arrivals and updates the boundary.
+
+Migration `010-notifications.sql` creates notification records and transaction
+triggers for friendship and comment events. It seeds existing pending friend
+requests without sending email. It does not backfill old comments or accepted
+friendships. Invited signup creates one new-friend notification for the inviter.
+Comments notify their content owner and addressed commenter, excluding the
+actor and duplicate recipients. Notifications use current names and access;
+they contain no comment text. Withdrawn requests and deleted or inaccessible
+comments disappear from lists and counts. Restoring comment access preserves
+the notification's read state.
+
+Members enable **Email me about new activity** in Account. The setting is off
+by default. Only events created while it is on enter the email queue. After
+the first pending event is 10 minutes old, the existing worker groups pending
+events into one job. It sends only events still unread and accessible, using
+the member's verified email address. Turning the setting off cancels queued
+and unqueued activity emails; turning it back on does not send an old backlog.
+
+Activity jobs store notification references, with message text generated from
+current data immediately before each send. Each job keeps its original event
+membership during retries. Identical retries reuse a provider idempotency key;
+changes in visible content use a new key. As with any ambiguous network failure,
+provider acceptance cannot always be determined locally. The worker serializes
+delivery with access, preference, and read changes and prioritizes sign-in codes.
+Activity jobs expire after 24 hours; their notifications remain in the app.
+The current worker and Resend configuration need no new service or credentials.
+
 ## Verification
 
 ```sh
