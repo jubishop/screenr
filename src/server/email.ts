@@ -8,6 +8,7 @@ import {
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { db } from "./db";
+import { notificationEmail, queueNotificationEmails } from "./notifications";
 
 type Mail = { to: string; subject: string; text: string };
 function encryptionKey() {
@@ -90,25 +91,58 @@ export async function deliverOne(): Promise<boolean> {
   const client = await db.connect();
   try {
     await client.query("BEGIN");
-    const job = (
-      await client.query(`SELECT * FROM email_job WHERE sent_at IS NULL AND available_at<=now()
-      AND expires_at>now() ORDER BY available_at LIMIT 1 FOR UPDATE SKIP LOCKED`)
-    ).rows[0];
+    const due = (activity: boolean) =>
+      client.query(
+        `SELECT * FROM email_job WHERE sent_at IS NULL AND available_at<=now()
+      AND (notification_recipient IS NOT NULL)=$1
+      AND expires_at>now() ORDER BY available_at
+      LIMIT 1 FOR UPDATE SKIP LOCKED`,
+        [activity],
+      );
+    let job = (await due(false)).rows[0];
+    if (!job) {
+      // Take the domain lock before locking activity jobs, matching opt-out's
+      // lock order. Codes need no content-access check and keep their old path.
+      // No private activity is sent after a block or opt-out has committed.
+      await client.query("SELECT pg_advisory_xact_lock(713934201)");
+      job = (await due(true)).rows[0];
+      if (!job) {
+        await queueNotificationEmails(client);
+        job = (await due(true)).rows[0];
+      }
+    }
     if (!job) {
       await client.query("COMMIT");
       return false;
     }
     try {
+      const mail = job.notification_recipient
+        ? await notificationEmail(client, job.id, job.notification_recipient)
+        : decrypt(job.payload);
+      if (!mail) {
+        await client.query(
+          "UPDATE email_job SET sent_at=now(),last_error=NULL WHERE id=$1",
+          [job.id],
+        );
+        await client.query("COMMIT");
+        return true;
+      }
       if (!process.env.RESEND_API_KEY || !process.env.EMAIL_FROM)
         throw new Error("Email configuration missing");
-      const mail = decrypt(job.payload);
+      // Reuse the key for identical retries. Changed visibility or current names
+      // must never reuse a provider key with different content.
+      const deliveryKey = job.notification_recipient
+        ? createHash("sha256")
+            .update(`${job.id}:${JSON.stringify(mail)}`)
+            .digest("hex")
+        : job.id;
       const response = await fetch("https://api.resend.com/emails", {
         method: "POST",
         signal: AbortSignal.timeout(10_000),
         headers: {
           Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
           "Content-Type": "application/json",
-          "Idempotency-Key": job.id,
+          "Idempotency-Key": deliveryKey,
         },
         body: JSON.stringify({
           from: process.env.EMAIL_FROM,

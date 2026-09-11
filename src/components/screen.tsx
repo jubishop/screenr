@@ -12,6 +12,7 @@ import { InvitationsView } from "./invitations-view";
 import { PeopleView } from "./people-view";
 import { ProfileView } from "./profile-view";
 import { TitleView } from "./title-view";
+import { Notifications } from "./notifications";
 
 export function Screen({
   user: initialUser,
@@ -143,9 +144,19 @@ export function Screen({
   return (
     <div className="app-shell">
       <aside className="sidebar">
-        <Link href="/" className="brand" prefetch={false}>
-          screenr<span>●</span>
-        </Link>
+        <div className="brand-row">
+          <Link href="/" className="brand" prefetch={false}>
+            screenr<span>●</span>
+          </Link>
+          <Notifications
+            count={
+              data && "unreadNotifications" in data
+                ? data.unreadNotifications
+                : null
+            }
+            refreshScreen={refresh}
+          />
+        </div>
         <p className="sidebar-tagline">
           Good company.
           <br />
@@ -289,6 +300,7 @@ export function Screen({
             initialGoogleError={initialGoogleError}
             saveProfile={saveProfile}
             saveServices={saveServices}
+            refresh={refresh}
             onSignOut={signOutOfAccount}
           />
         )}

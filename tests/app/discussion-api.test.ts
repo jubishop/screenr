@@ -12,7 +12,7 @@ process.env.BETTER_AUTH_URL = "http://localhost:3000";
 const { db } = await import("../../src/server/db");
 const { migrate } = await import("../../scripts/migrate");
 const { createAuth } = await import("../../src/server/auth");
-const { POST } = await import("../../src/app/api/screenr/[action]/route");
+const { POST, GET } = await import("../../src/app/api/screenr/[action]/route");
 const { createInvitation, invitationHash, completeSignup } =
   await import("../../src/server/invitations");
 const { changeRelationship, updateTitleActivity, thread } =
@@ -95,6 +95,69 @@ function post(
     { params: Promise.resolve({ action }) },
   );
 }
+
+test("notification API enforces authentication, origin, ownership, read actions, and email preferences", async () => {
+  const owner = await member("noticeowner");
+  const actor = await member("noticeactor");
+  const stranger = await member("noticestranger");
+  await changeRelationship(actor.id, owner.id, "request");
+  const get = (cookie: string, query = "") =>
+    GET(
+      new Request(`http://localhost:3000/api/screenr/notifications${query}`, {
+        headers: { Cookie: cookie },
+      }),
+      { params: Promise.resolve({ action: "notifications" }) },
+    );
+  assert.equal((await get("")).status, 401);
+  const listed = await get(owner.cookie);
+  assert.equal(listed.status, 200);
+  assert.match(listed.headers.get("Cache-Control")!, /no-store/);
+  const page = await listed.json();
+  assert.equal(page.items.length, 1);
+  assert.equal((await get(owner.cookie, "?before=bad")).status, 400);
+  assert.equal(
+    (await post("read-notification", stranger.cookie, { id: page.items[0].id }))
+      .status,
+    404,
+  );
+  assert.equal(
+    (
+      await post(
+        "read-notification",
+        owner.cookie,
+        { id: page.items[0].id },
+        "https://outside.example",
+      )
+    ).status,
+    403,
+  );
+  const selected = await post("read-notification", owner.cookie, {
+    id: page.items[0].id,
+  });
+  assert.equal(selected.status, 200);
+  assert.deepEqual(await selected.json(), { href: "/people/noticeactor" });
+  assert.equal(
+    (await (await get(owner.cookie, "?unread=true")).json()).items.length,
+    0,
+  );
+  assert.equal(
+    (await post("read-notifications", owner.cookie, { through: page.through }))
+      .status,
+    200,
+  );
+  assert.equal(
+    (await post("activity-email", owner.cookie, { enabled: "yes" })).status,
+    400,
+  );
+  assert.equal(
+    (await post("activity-email", owner.cookie, { enabled: true })).status,
+    200,
+  );
+  assert.equal(
+    (await post("activity-email", owner.cookie, { enabled: false })).status,
+    200,
+  );
+});
 
 test("reaction API rejects anonymous, cross-origin, and invalid requests without changing a saved reaction", async () => {
   const owner = await member("owner");

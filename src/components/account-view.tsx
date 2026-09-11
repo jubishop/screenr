@@ -6,6 +6,7 @@ import type { Person } from "../shared";
 import { authClient, useInteractive } from "./client";
 import { AccountProfileEditor } from "./account-profile-editor";
 import { StreamingServicesEditor } from "./streaming-services-editor";
+import { ActivityEmailSetting } from "./activity-email-setting";
 export function AccountView({
   data,
   user,
@@ -13,6 +14,7 @@ export function AccountView({
   initialGoogleError,
   saveProfile,
   saveServices,
+  refresh,
   onSignOut,
 }: {
   data: Extract<ScreenData, { kind: "account" }> | null;
@@ -21,6 +23,7 @@ export function AccountView({
   initialGoogleError: string;
   saveProfile: (name: string, username: string) => Promise<void>;
   saveServices: (ids: string[]) => Promise<void>;
+  refresh: () => Promise<void>;
   onSignOut: () => Promise<void>;
 }) {
   const interactive = useInteractive();
@@ -43,6 +46,10 @@ export function AccountView({
         </Link>
       </div>
       <AccountProfileEditor user={user} save={saveProfile} />
+      <ActivityEmailSetting
+        enabled={data?.activityEmail ?? null}
+        refresh={refresh}
+      />
       <StreamingServicesEditor
         services={data?.services ?? []}
         serviceIds={data?.serviceIds ?? null}
