@@ -307,7 +307,7 @@ test("blocking either edge suppresses a path even with a retained accepted frien
   }
 });
 
-test("suggestions include every eligible title without catalog requests or a fixed limit", async () => {
+test("suggestions include every eligible title without a fixed limit", async () => {
   await person("alice");
   await person("ben");
   await friend("alice", "ben");

@@ -460,6 +460,21 @@ fixed. The investigation result belongs in the issue and PR.
 
 ## Data and access rules
 
+Account includes optional **Your streaming services** settings. Members can
+search the grouped service list, select services, save, cancel, or clear their
+choices. Signup does not require selections. These preferences belong to the
+signed-in member and are not exposed on public profiles.
+
+**Find a title** shows all catalog results and circle suggestions by default,
+with service notes and indicators for saved services. **My services** includes
+saved subscription services and any reported free option. **Watch together**
+puts shared choices available through either person's services or a free option
+first, followed by known unmatched choices and unknown availability separately.
+Both views use US availability, broad service names, and the existing cache.
+They preserve their original title order within each displayed group. See
+[title availability](title-availability.md#current-implementation) for cache,
+request limits, and the additive service-preferences migration.
+
 The [shared-feed implementation and migration](title-feed.md#shared-feed-implementation)
 describe item identity, old-link redirects, and compatibility with the previous
 release. `src/server/social.ts` owns shared reads and writes. PostgreSQL functions

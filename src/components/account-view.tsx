@@ -5,12 +5,14 @@ import type { ScreenData } from "../server/screens";
 import type { Person } from "../shared";
 import { authClient, useInteractive } from "./client";
 import { AccountProfileEditor } from "./account-profile-editor";
+import { StreamingServicesEditor } from "./streaming-services-editor";
 export function AccountView({
   data,
   user,
   busy,
   initialGoogleError,
   saveProfile,
+  saveServices,
   onSignOut,
 }: {
   data: Extract<ScreenData, { kind: "account" }> | null;
@@ -18,6 +20,7 @@ export function AccountView({
   busy: boolean;
   initialGoogleError: string;
   saveProfile: (name: string, username: string) => Promise<void>;
+  saveServices: (ids: string[]) => Promise<void>;
   onSignOut: () => Promise<void>;
 }) {
   const interactive = useInteractive();
@@ -40,6 +43,11 @@ export function AccountView({
         </Link>
       </div>
       <AccountProfileEditor user={user} save={saveProfile} />
+      <StreamingServicesEditor
+        services={data?.services ?? []}
+        serviceIds={data?.serviceIds ?? null}
+        save={saveServices}
+      />
       {data?.kind === "account" && (
         <section className="settings-card">
           <h2>Sign-in methods</h2>

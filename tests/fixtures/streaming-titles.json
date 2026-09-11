@@ -1,0 +1,61 @@
+[
+  {
+    "id": 939101,
+    "media_type": "movie",
+    "title": "Night Crossing",
+    "name": "Night Crossing",
+    "providers": {
+      "flatrate": [
+        {
+          "provider_id": 1796,
+          "provider_name": "Netflix with ads",
+          "logo_path": null
+        }
+      ]
+    }
+  },
+  {
+    "id": 939102,
+    "media_type": "tv",
+    "title": "Night Harbor",
+    "name": "Night Harbor",
+    "providers": {
+      "flatrate": [
+        {
+          "provider_id": 528,
+          "provider_name": "AMC+ Amazon Channel",
+          "logo_path": null
+        }
+      ]
+    }
+  },
+  {
+    "id": 939103,
+    "media_type": "movie",
+    "title": "Night Orchard",
+    "name": "Night Orchard",
+    "providers": {
+      "ads": [
+        { "provider_id": 73, "provider_name": "Tubi TV", "logo_path": null }
+      ]
+    }
+  },
+  {
+    "id": 939104,
+    "media_type": "movie",
+    "title": "Night Market",
+    "name": "Night Market",
+    "providers": {
+      "flatrate": [
+        { "provider_id": 1899, "provider_name": "HBO Max", "logo_path": null }
+      ]
+    }
+  },
+  {
+    "id": 939105,
+    "media_type": "tv",
+    "title": "Night Signal",
+    "name": "Night Signal",
+    "providers": null
+  }
+]

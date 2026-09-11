@@ -56,15 +56,7 @@ export function TitleAvailability({
                           unoptimized
                         />
                       )}
-                      <span>
-                        {provider.name}
-                        {provider.route_note && (
-                          <small className="availability-route muted">
-                            {" "}
-                            {provider.route_note}
-                          </small>
-                        )}
-                      </span>
+                      <span>{provider.name}</span>
                     </li>
                   ))}
                 </ul>

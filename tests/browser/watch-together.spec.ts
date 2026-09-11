@@ -51,7 +51,7 @@ test("watch together opens from a friend profile, filters shared titles, and ref
     owner.getByRole("heading", { name: "Watch together", exact: true }),
   ).toBeVisible();
   const results = owner.getByLabel("Shared titles");
-  await expect(results.getByRole("heading", { level: 2 })).toHaveText([
+  await expect(results.getByRole("heading", { level: 3 })).toHaveText([
     "The Harbor Signal",
     "The Lantern Room",
   ]);
@@ -62,7 +62,7 @@ test("watch together opens from a friend profile, filters shared titles, and ref
     owner.getByRole("button", { name: /Want to watch/ }),
   ).toHaveCount(0);
   await owner.getByRole("button", { name: "Movies", exact: true }).click();
-  await expect(results.getByRole("heading", { level: 2 })).toHaveText([
+  await expect(results.getByRole("heading", { level: 3 })).toHaveText([
     "The Lantern Room",
   ]);
   await owner.waitForResponse((response) =>
@@ -72,11 +72,11 @@ test("watch together opens from a friend profile, filters shared titles, and ref
     owner.getByRole("button", { name: "Movies", exact: true }),
   ).toHaveAttribute("aria-pressed", "true");
   await owner.getByRole("button", { name: "TV", exact: true }).click();
-  await expect(results.getByRole("heading", { level: 2 })).toHaveText([
+  await expect(results.getByRole("heading", { level: 3 })).toHaveText([
     "The Harbor Signal",
   ]);
   await owner.reload();
-  await expect(results.getByRole("heading", { level: 2 })).toHaveText([
+  await expect(results.getByRole("heading", { level: 3 })).toHaveText([
     "The Harbor Signal",
     "The Lantern Room",
   ]);
@@ -110,7 +110,7 @@ test("watch together opens from a friend profile, filters shared titles, and ref
     owner.getByRole("heading", { name: "No shared TV shows yet." }),
   ).toBeVisible();
   await owner.getByRole("button", { name: "All", exact: true }).click();
-  await expect(results.getByRole("heading", { level: 2 })).toHaveText([
+  await expect(results.getByRole("heading", { level: 3 })).toHaveText([
     "The Lantern Room",
   ]);
   await friend.goto("/titles/movie/987654");
@@ -125,7 +125,7 @@ test("watch together opens from a friend profile, filters shared titles, and ref
     .locator(".title-hero")
     .getByRole("button", { name: "+ Want to watch", exact: true })
     .click();
-  await expect(results.getByRole("heading", { level: 2 })).toHaveText([
+  await expect(results.getByRole("heading", { level: 3 })).toHaveText([
     "The Lantern Room",
   ]);
   await friend.goto("/people/watchowner");

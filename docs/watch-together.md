@@ -66,6 +66,33 @@ and filtering, with no inline changes to title choices.
 
 **Why:** The user chose to use the existing title pages for changes.
 
+### Streaming services from either participant — 2026-09-10
+
+**Decision:** Compare each shared Want to watch title with the streaming
+services saved by either participant. A matching service held by one person
+is enough; both people do not need the same service. Show matching titles
+first. Keep shared titles without a matching service in a separate section
+below, explaining that neither person has a listed service for them.
+Preserve the existing shared-choice ordering within each section.
+
+This extends the earlier single-list presentation. It does not change the
+requirement that both participants currently want to watch each title.
+Implementation is tracked in [issue #93](https://github.com/jubishop/screenr/issues/93).
+
+**Why:** The user wants Watch together to prioritize titles the pair can
+watch using a service one of them has, while retaining their other shared
+choices below.
+
+### Free options qualify automatically — 2026-09-10
+
+**Decision:** A reported free or ad-supported US option also puts a shared
+title in the top section, even when neither participant selected that
+service. Label the free option clearly. Paid rental and purchase offers do
+not qualify.
+
+**Why:** The user accepted including these options because they do not
+require a paid subscription.
+
 ## Implementation
 
 The profile link opens `/watch-together?with=<friend-username>`. The signed-in
@@ -82,12 +109,21 @@ model. This does not expose group selection or establish future group rules.
 The latest participant addition determines the shared date. Replies and
 recommendations do not affect it. Equal dates sort by title name, then title ID,
 for stable results. The query returns every match without a feed-sized limit.
-No new table, migration, dependency, or persistent private cache is needed.
+The shared-choice query needs no persistent private cache. Issue #93 adds
+member service selections in `db/009-streaming-services.sql`. After the
+permission check, the server combines the participants' selected service
+identities and reads viewing options through the existing availability cache.
+It returns only the services matching each shared title, not either person's
+full settings or whose service matched.
 
 The page reuses the existing title-result layout and poster component. Its
 All / Movies / TV filter stays selected during successful background refreshes;
 opening or reloading the page starts with All. Empty states distinguish no
-shared choices from no matches for the selected title type.
+shared choices from no matches for the selected title type. **Ready to watch**
+contains titles with a matching saved service or a free option. **Not on your
+services** keeps other known shared choices below. **Availability unknown**
+keeps failed lookups separate. Each section preserves newest-shared-first
+ordering. Service notes use broad identities without plan or reseller labels.
 
 The existing screen refresh checks choices and access every three seconds
 while visible and on focus. A failed refresh clears private results until a

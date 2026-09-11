@@ -44,6 +44,14 @@ export type WatchAvailability = {
   providers: Partial<Record<WatchCategory, WatchProvider[]>>;
   sections: WatchSection[];
 };
+export type TitleViewing = Pick<
+  WatchAvailability,
+  "status" | "checked_at" | "sections"
+>;
+export type ViewingTitle<T extends Title = Title> = T & {
+  viewing: TitleViewing;
+};
+export type ViewingAccess = "available" | "unmatched" | "unknown";
 export type TitleSuggestion = Title & {
   recommended_by: Pick<Person, "username" | "display_name">[];
   wanted_by: Pick<Person, "username" | "display_name">[];

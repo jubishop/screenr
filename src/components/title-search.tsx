@@ -1,7 +1,9 @@
 "use client";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import type { Title, TitleSuggestion } from "../shared";
+import type { TitleSuggestion, ViewingTitle } from "../shared";
+import { viewingAccess } from "../viewing";
+import { TitleServices, ViewingAttribution } from "./title-services";
 import { api, useInteractive } from "./client";
 import { Poster } from "./poster";
 
@@ -44,12 +46,15 @@ function Reason({
 
 export function TitleSearch({
   suggestions,
+  serviceIds,
 }: {
-  suggestions: TitleSuggestion[] | null;
+  suggestions: ViewingTitle<TitleSuggestion>[] | null;
+  serviceIds: string[] | null;
 }) {
   const interactive = useInteractive();
   const [query, setQuery] = useState("");
-  const [results, setResults] = useState<Title[] | null>(null);
+  const [results, setResults] = useState<ViewingTitle[] | null>(null);
+  const [myServices, setMyServices] = useState(false);
   const [searching, setSearching] = useState(false);
   const [error, setError] = useState("");
   const pending = useRef<AbortController | null>(null);
@@ -85,7 +90,7 @@ export function TitleSearch({
     setResults([]);
     setError("");
     try {
-      const titles = await api<Title[]>(
+      const titles = await api<ViewingTitle[]>(
         `search?q=${encodeURIComponent(query.trim())}`,
         undefined,
         AbortSignal.any([controller.signal, timeout]),
@@ -105,6 +110,16 @@ export function TitleSearch({
       }
     }
   }
+
+  const included = (title: ViewingTitle) =>
+    !myServices ||
+    (serviceIds !== null &&
+      viewingAccess(title.viewing, serviceIds) === "available");
+  const visibleResults = results?.filter(included);
+  const visibleSuggestions = suggestions?.filter(included);
+  const unknownCount = (results ?? suggestions ?? []).filter(
+    (title) => viewingAccess(title.viewing, serviceIds ?? []) === "unknown",
+  ).length;
 
   return (
     <>
@@ -138,6 +153,33 @@ export function TitleSearch({
           {searching ? "Searching…" : "Search"}
         </button>
       </form>
+      <div className="service-filter">
+        <button
+          type="button"
+          className={myServices ? "primary" : "secondary"}
+          aria-pressed={myServices}
+          disabled={!interactive || (serviceIds === null && !myServices)}
+          onClick={() => setMyServices(!myServices)}
+        >
+          My services
+        </button>
+        <p className="small muted">
+          Includes your saved services and free options.{" "}
+          <Link href="/account" prefetch={false}>
+            Edit services
+          </Link>
+        </p>
+      </div>
+      {myServices && unknownCount > 0 && (
+        <p className="small muted" role="status">
+          {unknownCount} {unknownCount === 1 ? "title has" : "titles have"}{" "}
+          unknown viewing options. Turn off My services to see{" "}
+          {unknownCount === 1 ? "it" : "them"}.
+        </p>
+      )}
+      {myServices && serviceIds === null && (
+        <p role="status">Your services could not be loaded. Try refreshing.</p>
+      )}
       {error && (
         <div className="error" role="alert">
           {error}
@@ -149,7 +191,7 @@ export function TitleSearch({
           aria-label="Search results"
           aria-busy={searching}
         >
-          {results.map((title) => (
+          {visibleResults?.map((title) => (
             <Link
               className="search-result"
               key={title.id}
@@ -164,6 +206,10 @@ export function TitleSearch({
                   {title.release_date.slice(0, 4)}
                 </p>
                 <p className="small overview">{title.overview.slice(0, 150)}</p>
+                <TitleServices
+                  viewing={title.viewing}
+                  serviceIds={serviceIds ?? []}
+                />
               </div>
               <span aria-hidden="true">↗</span>
             </Link>
@@ -171,6 +217,15 @@ export function TitleSearch({
           {!searching && !error && results.length === 0 && (
             <p className="empty">No matches. Try a different title.</p>
           )}
+          {!searching &&
+            !error &&
+            results.length > 0 &&
+            visibleResults?.length === 0 && (
+              <p className="empty">
+                No matches on your services or free. Turn off My services to see
+                all results.
+              </p>
+            )}
         </section>
       ) : suggestions !== null ? (
         suggestions.length ? (
@@ -179,7 +234,7 @@ export function TitleSearch({
               <h2>From your circle</h2>
             </div>
             <section className="suggestion-grid" aria-label="Title suggestions">
-              {suggestions.map((title) => (
+              {visibleSuggestions?.map((title) => (
                 <Link
                   className="suggestion-tile"
                   key={title.id}
@@ -192,6 +247,10 @@ export function TitleSearch({
                     sizes="(max-width: 560px) 45vw, 220px"
                   />
                   <h3>{title.name}</h3>
+                  <TitleServices
+                    viewing={title.viewing}
+                    serviceIds={serviceIds ?? []}
+                  />
                   <div className="suggestion-reasons">
                     <Reason
                       people={title.recommended_by}
@@ -207,6 +266,12 @@ export function TitleSearch({
                 </Link>
               ))}
             </section>
+            {visibleSuggestions?.length === 0 && (
+              <p className="empty">
+                No suggestions on your services or free. Turn off My services to
+                see all suggestions.
+              </p>
+            )}
           </>
         ) : (
           <div className="empty-card">
@@ -218,6 +283,7 @@ export function TitleSearch({
           </div>
         )
       ) : null}
+      <ViewingAttribution />
     </>
   );
 }
