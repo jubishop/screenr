@@ -114,6 +114,20 @@ test("notification selection opens the exact older reply, with read filters and 
   );
   await expect(owner.locator(`[data-comment-id="${first.id}"]`)).toBeVisible();
   await expect(bell(owner)).toHaveAccessibleName("Notifications, 6 unread");
+  await owner.evaluate(() => window.scrollTo(0, 0));
+  await expect(
+    owner.locator(`[data-comment-id="${first.id}"]`),
+  ).not.toBeInViewport();
+  await bell(owner).click();
+  await owner
+    .getByRole("dialog")
+    .getByRole("button", { name: /noticereader commented/ })
+    .last()
+    .click();
+  await expect(
+    owner.locator(`[data-comment-id="${first.id}"]`),
+  ).toBeInViewport();
+  await expect(bell(owner)).toHaveAccessibleName("Notifications, 6 unread");
   await bell(owner).click();
   panel = owner.getByRole("dialog");
   await panel.getByRole("button", { name: "Unread", exact: true }).click();

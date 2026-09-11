@@ -122,7 +122,11 @@ export function Notifications({
       const result = await api<{ href: string }>("read-notification", { id });
       setOpen(false);
       void refreshScreen();
-      router.push(result.href);
+      // Reopening the same destination must rerun its reply positioning, which
+      // otherwise stays completed in the mounted feed during client navigation.
+      if (window.location.pathname + window.location.search === result.href)
+        window.location.assign(result.href);
+      else router.push(result.href);
     } catch (failure) {
       setPage(null);
       setError((failure as Error).message);
