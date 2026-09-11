@@ -210,3 +210,18 @@ test("a slow sign-in email does not delay an unrelated friendship request", asyn
     await delivery;
   }
 });
+
+test("email summaries order all new replies from newest to oldest across ID digit boundaries", async () => {
+  const { alice, ben, conversation } = await setup();
+  await friend(alice, ben);
+  await saveActivityEmail(alice, true);
+  const replies: string[] = [];
+  for (let i = 0; i < 12; i++)
+    replies.push(await addComment(ben, conversation, `Reply ${i}`, false));
+  await due();
+  await deliverOne();
+  assert.deepEqual(
+    [...sent[0].text.matchAll(/reply=(\d+)/g)].map((match) => match[1]),
+    replies.reverse(),
+  );
+});

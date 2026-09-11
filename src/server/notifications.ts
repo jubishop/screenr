@@ -195,7 +195,7 @@ export async function notificationEmail(
   const rows = (
     await client.query<NotificationRow>(
       `SELECT ${columns} FROM visible_notification
-       WHERE recipient_id=$1 AND email_job_id=$2 AND read_at IS NULL ORDER BY id DESC`,
+       WHERE recipient_id=$1 AND email_job_id=$2 AND read_at IS NULL ORDER BY visible_notification.id DESC`,
       [viewer, id],
     )
   ).rows;
