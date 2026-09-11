@@ -1,5 +1,6 @@
 import { Client, type Pool } from "pg";
 import { browserConfig } from "./browser-config";
+import streamingTitles from "../tests/fixtures/streaming-titles.json" with { type: "json" };
 import { once } from "node:events";
 import { cp } from "node:fs/promises";
 import { createServer, type Server as HTTPServer } from "node:http";
@@ -135,6 +136,27 @@ try {
   let availabilityFailure = false;
   catalog = createServer((request, response) => {
     response.setHeader("Content-Type", "application/json");
+    const streamingTitle = streamingTitles.find((title) =>
+      request.url?.startsWith(`/${title.media_type}/${title.id}`),
+    );
+    if (streamingTitle) {
+      if (request.url?.endsWith("/watch/providers")) {
+        if (!streamingTitle.providers) response.writeHead(503).end();
+        else
+          response.end(
+            JSON.stringify({
+              id: streamingTitle.id,
+              results: { US: streamingTitle.providers },
+            }),
+          );
+      } else if (request.url?.endsWith("/videos"))
+        response.end(JSON.stringify({ results: [] }));
+      else {
+        const { providers: _providers, ...title } = streamingTitle;
+        response.end(JSON.stringify(title));
+      }
+      return;
+    }
     if (request.url === "/availability-failure") {
       availabilityFailure = request.method === "POST";
       response.end("{}");
@@ -239,19 +261,21 @@ try {
       browserConfig.catalogURL,
     ).searchParams.get("query");
     const searchResults =
-      searchQuery === "no matching suggestions"
-        ? []
-        : [
-            {
-              ...fixture,
-              ...(searchQuery === "first suggestion fixture"
-                ? { id: 998011, title: "The First Signal" }
-                : {}),
-              ...(searchQuery === "second suggestion fixture"
-                ? { id: 998012, title: "The Second Signal" }
-                : {}),
-            },
-          ];
+      searchQuery === "streaming choices"
+        ? streamingTitles.map(({ providers: _providers, ...title }) => title)
+        : searchQuery === "no matching suggestions"
+          ? []
+          : [
+              {
+                ...fixture,
+                ...(searchQuery === "first suggestion fixture"
+                  ? { id: 998011, title: "The First Signal" }
+                  : {}),
+                ...(searchQuery === "second suggestion fixture"
+                  ? { id: 998012, title: "The Second Signal" }
+                  : {}),
+              },
+            ];
     response.end(
       JSON.stringify(
         request.url?.startsWith("/search/")

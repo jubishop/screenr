@@ -46,6 +46,10 @@ applies to every feature.
 - Show US viewing options on movie and TV title pages under Subs and Free.
   Group duplicate service variants within each section, following the
   [title availability decisions](title-availability.md).
+- Let members save their streaming services. On Find a title, mark matches
+  in search results and suggestions, and offer an optional My services filter.
+  Include free options automatically. Keep all titles available when the
+  filter is off.
 - The friends feed automatically includes watch-status changes and ratings,
   alongside reviews, recommendations, and discussion posts. The
   [shared feed rules](title-feed.md) define item identity, visibility,
@@ -67,6 +71,9 @@ applies to every feature.
   a dedicated page comparing the viewer's and friend's Want to watch choices
   to help them decide what to watch together. Start with a two-person
   interface and preserve implementation flexibility for more participants.
+- In Watch together, prioritize shared titles carried by a streaming service
+  saved by either participant. Retain the other shared titles in a separate
+  section below, following the [streaming service decision](watch-together.md#streaming-services-from-either-participant--2026-09-10).
 - Users can make their own recommendations.
 - Recommend and Want to watch are mutually exclusive for each person and
   title. Selecting either removes the other. Restoring an action reuses its
@@ -857,9 +864,50 @@ and excludes rental and purchase offers. The
 [service grouping decision](title-availability.md#group-services-within-each-viewing-category--2026-09-08)
 deduplicates services within each section. The
 [current implementation](title-availability.md#current-implementation) uses
-a complete US provider registry and section-specific reseller notes, with
-no cache migration. Implementation is tracked in
-[issue #62](https://github.com/jubishop/screenr/issues/62).
+a complete US provider registry, introduced in
+[issue #62](https://github.com/jubishop/screenr/issues/62). The
+[service-name-only decision](title-availability.md#service-names-only-in-the-ui--2026-09-10)
+supersedes its reseller notes as part of issue #93.
+
+### Saved streaming services and discovery — 2026-09-10
+
+**Decision:** Let each member save their streaming services. On Find a title,
+mark titles that match those services and provide an optional **My services**
+filter for both catalog results and circle suggestions. Leave the filter off
+by default so every otherwise eligible title remains available. Preserve
+catalog order and the accepted social ranking within the selected results.
+Include reported free and ad-supported US options automatically, even if
+the member has not selected those services. The filter therefore means a
+saved service or a free option, matching Watch together's access rule.
+The [Watch together service decision](watch-together.md#streaming-services-from-either-participant--2026-09-10)
+defines how a pair's services affect their shared choices.
+Implementation is tracked in [issue #93](https://github.com/jubishop/screenr/issues/93).
+
+**Why:** The user accepted marking matches and offering an optional filter,
+so members can still find any title to discuss or save. The user also
+accepted including free options automatically in the filter.
+
+**Tradeoff:** Saving services does not automatically hide other titles from
+Find a title. Members choose when to narrow the results.
+
+### Streaming service selection level — 2026-09-10
+
+**Decision:** Members select service names, using the existing
+[service identity boundary](title-availability.md#service-identity-boundary--2026-09-08).
+Do not ask for specific subscription plans or reseller channels. A selected
+service also matches its grouped channels. Keep notes naming the service
+carrying a title, such as "On AMC+" or "Free on Tubi". Show only the broad
+service identity throughout the UI, following the
+[service-name-only decision](title-availability.md#service-names-only-in-the-ui--2026-09-10).
+Do not show specific plans or reseller routes on any page.
+
+**Why:** The user accepted service-level selection consistent with the
+existing title-page grouping, then clarified that service notes should
+remain visible using the broader identities everywhere. This supersedes
+the initial proposal to retain channel notes alongside matches.
+
+**Tradeoff:** A match identifies a service, not a verified entitlement for
+the member's specific subscription plan or purchase route.
 
 ### Non-commercial scope — 2026-09-05
 

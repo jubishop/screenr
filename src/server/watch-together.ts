@@ -1,5 +1,7 @@
 import { AppError, db } from "./db";
 import type { Person, Title } from "../shared";
+import { withViewingOptions } from "./title-viewing";
+import { matchingServices, viewingAccess } from "../viewing";
 
 export async function watchTogether(viewer: string, usernames: string[]) {
   const names = usernames.map((name) => name.toLowerCase());
@@ -40,5 +42,19 @@ export async function watchTogether(viewer: string, usernames: string[]) {
     [viewer, names],
   );
   if (!rows[0]) throw new AppError("Watch together not found.", 404);
-  return rows[0];
+  const { participants, titles } = rows[0];
+  const { rows: services } = await db.query<{ service_id: string }>(
+    "SELECT DISTINCT service_id FROM member_streaming_service WHERE user_id=ANY($1::text[])",
+    [participants.map((person) => person.user_id)],
+  );
+  const serviceIds = services.map((service) => service.service_id);
+  return {
+    participants,
+    titles: (await withViewingOptions(titles)).map((title) => ({
+      ...title,
+      access: viewingAccess(title.viewing, serviceIds),
+      // Expose only services matching a shared title, not a friend's full list.
+      matchingServiceIds: matchingServices(title.viewing, serviceIds),
+    })),
+  };
 }

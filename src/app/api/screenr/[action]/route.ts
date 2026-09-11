@@ -16,7 +16,9 @@ import {
   createInvitation,
   revokeInvitation,
 } from "../../../../server/invitations";
-import { getTitle, searchTitles } from "../../../../server/catalog";
+import { getTitle } from "../../../../server/catalog";
+import { findTitles } from "../../../../server/title-viewing";
+import { saveServices } from "../../../../server/streaming-services";
 import { loadScreen } from "../../../../server/screens";
 
 const json = (data: unknown, status = 200) =>
@@ -82,9 +84,11 @@ async function handle(
           user,
         });
       if (action === "search")
-        return json(await searchTitles(url.searchParams.get("q") ?? ""));
+        return json(await findTitles(url.searchParams.get("q") ?? ""));
     } else {
       const data = await body(request);
+      if (action === "streaming-services")
+        return json(await saveServices(userId, data.serviceIds));
       if (action === "display-name")
         return json(await updateDisplayName(userId, data.name));
       if (action === "profile")

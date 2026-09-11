@@ -82,6 +82,32 @@
   display: block;
   font-size: 13px;
 }
+.streaming-settings {
+  overflow-wrap: anywhere;
+}
+.service-options {
+  max-height: 320px;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 12px;
+  margin-bottom: 18px;
+}
+.service-option {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 44px;
+  margin: 0;
+  cursor: pointer;
+}
+.service-option input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  flex-shrink: 0;
+  accent-color: var(--ink);
+}
 .invite-card .invitation-created {
   border: 0;
   padding: 0;

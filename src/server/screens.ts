@@ -4,6 +4,8 @@ import { listInvitations } from "./invitations";
 import { AppError, db } from "./db";
 import { watchTogether } from "./watch-together";
 import { titleSuggestions } from "./title-suggestions";
+import { savedServices, streamingServices } from "./streaming-services";
+import { withViewingOptions } from "./title-viewing";
 
 export async function loadScreen(userId: string, requestedPath: string) {
   const url = new URL(requestedPath, "http://screenr.local");
@@ -16,7 +18,8 @@ export async function loadScreen(userId: string, requestedPath: string) {
   if (path === "/search")
     return {
       kind: "search" as const,
-      suggestions: await titleSuggestions(userId),
+      suggestions: await withViewingOptions(await titleSuggestions(userId)),
+      serviceIds: await savedServices(userId),
     };
   if (path === "/people")
     return { kind: "people" as const, ...(await people(userId)) };
@@ -37,6 +40,8 @@ export async function loadScreen(userId: string, requestedPath: string) {
   if (path === "/account")
     return {
       kind: "account" as const,
+      services: streamingServices,
+      serviceIds: await savedServices(userId),
       googleEnabled: !!(
         process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET
       ),

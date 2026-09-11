@@ -125,6 +125,16 @@ export function Screen({
     setUser(updated);
     await refresh();
   }
+  async function saveServices(serviceIds: string[]) {
+    pending.current?.abort();
+    const saved = await api<{ serviceIds: string[] }>("streaming-services", {
+      serviceIds,
+    });
+    setData((current) =>
+      current?.kind === "account" ? { ...current, ...saved } : current,
+    );
+    await refresh();
+  }
   const ownProfile =
     path.split("?")[0].toLowerCase() === `/people/${user.username}`;
   function activity(title: string, field: string, value: boolean) {
@@ -219,6 +229,7 @@ export function Screen({
         {path.split("?")[0] === "/search" && (
           <TitleSearch
             suggestions={data?.kind === "search" ? data.suggestions : null}
+            serviceIds={data?.kind === "search" ? data.serviceIds : null}
           />
         )}
         {path.split("?")[0] === "/people" && (
@@ -277,6 +288,7 @@ export function Screen({
             busy={busy}
             initialGoogleError={initialGoogleError}
             saveProfile={saveProfile}
+            saveServices={saveServices}
             onSignOut={signOutOfAccount}
           />
         )}

@@ -270,6 +270,7 @@ function availabilityResult(cached?: CachedAvailability): WatchAvailability {
 // erase the last success nor be retried on every title-screen poll.
 export async function getTitleAvailability(
   id: string,
+  refreshBefore = Infinity,
 ): Promise<WatchAvailability> {
   if (!/^(movie|tv):[1-9][0-9]*$/.test(id)) return availabilityResult();
   let cached: CachedAvailability | undefined;
@@ -280,7 +281,10 @@ export async function getTitleAvailability(
         [id],
       )
     ).rows[0];
-    if (cached && cached.refresh_after.getTime() > Date.now())
+    if (
+      Date.now() >= refreshBefore ||
+      (cached && cached.refresh_after.getTime() > Date.now())
+    )
       return availabilityResult(cached);
     let availability: AvailabilityData;
     try {

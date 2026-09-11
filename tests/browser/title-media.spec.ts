@@ -28,12 +28,12 @@ test("title watch availability shows US categories, empty results, failures, and
     const subs = availability.getByRole("group", { name: "Subs", exact: true });
     const free = availability.getByRole("group", { name: "Free", exact: true });
     await expect(subs.getByRole("listitem")).toHaveText([
-      "AMC+ via Amazon, Apple TV, Roku",
+      "AMC+",
       "An exceptionally long service name with aVeryLongUnbrokenPartForNarrowScreens",
       "Apple TV",
       "Harbor Stream",
       "Netflix",
-      "Qello Concerts by Stingray via Amazon",
+      "Qello Concerts by Stingray",
     ]);
     await expect(free.getByRole("listitem")).toHaveText([
       "Apple TV",
@@ -43,6 +43,9 @@ test("title watch availability shows US categories, empty results, failures, and
     ]);
     await expect(subs.getByText("Apple TV", { exact: true })).toHaveCount(1);
     await expect(availability.getByText("Harbor Store")).toHaveCount(0);
+    await expect(
+      availability.getByText(/via Amazon|via Apple|via Roku|with ads/),
+    ).toHaveCount(0);
     await expect(
       subs
         .getByRole("listitem")
@@ -175,9 +178,7 @@ test("title watch availability shows US categories, empty results, failures, and
     await expect(availability.getByRole("heading", { level: 3 })).toHaveText([
       "Free",
     ]);
-    await expect(availability.getByRole("listitem")).toHaveText([
-      "Apple TV via Amazon",
-    ]);
+    await expect(availability.getByRole("listitem")).toHaveText(["Apple TV"]);
     // Exercise the real HTTP failure on an older successful empty result too.
     await pool.query(
       "UPDATE title_availability SET availability=$1, fetched_at='2020-01-02T12:00:00Z', refresh_after=now()-interval '1 second' WHERE title_id='movie:987660'",

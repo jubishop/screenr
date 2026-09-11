@@ -122,24 +122,25 @@ The provider map must follow this boundary across the full supported US
 catalog. Its exact records are implementation work, not permission to merge
 products solely because their names are similar.
 
-## Channel-only availability notes — 2026-09-08
+## Service names only in the UI — 2026-09-10
 
-**Decision:** When only a reseller's channel is listed for a service, keep
-one entry under the service's name and add a small route note, such as
-Apple TV with "via Amazon". Omit that note when the standalone service is
-also listed in the same section for the title.
+**Decision:** Keep visible notes identifying the services that carry a
+title, using only the broad grouped names, such as "On AMC+" or "Free on
+Tubi". Apply this across title pages, service selection, discovery, and
+Watch together. Do not display subscription-plan variants or reseller
+notes such as "via Amazon". A channel-only listing still uses its broad
+service name.
 
-Apply the rule independently within Subs and Free. A standalone offer
-under Free does not remove a required route note under Subs. If several
-resellers are listed without a standalone offer, combine their distinct
-names in the same note rather than adding service entries. Only mention
-routes actually reported for that title and section.
+This supersedes the 2026-09-08 decision to show channel-only route notes.
+Keep source provider IDs and registry membership for grouping and matching;
+their plan or reseller distinctions are not user-facing labels.
 
-**Why:** The user accepted retaining useful access information without
-adding duplicate service entries.
+**Why:** The user explicitly asked to retain service notes while using
+broader grouping identities everywhere in the UI during
+[issue #93](https://github.com/jubishop/screenr/issues/93).
 
-**Tradeoff:** Channel-only entries need a little more text. A grouped name
-alone must not imply that a standalone offer was reported.
+**Tradeoff:** A grouped service match does not verify access through a
+particular plan or reseller. The UI does not distinguish those entitlements.
 
 ## US availability — 2026-09-07
 
@@ -187,10 +188,13 @@ show-level availability must not imply that every season is included.
 **Why:** The user explicitly requested this limited display while keeping
 the work focused on obtaining availability data.
 
-**Scope:** The title-page availability section is the only UI addition.
+**Original issue #7 scope:** The title-page availability section is the only UI addition.
 Do not add service preferences, country settings, discovery filters,
 availability on other pages, recommendation changes, or Watch together
-changes in this issue. Further product uses need separate issues.
+changes in that issue. Issue #93 adds the
+[saved-service discovery](product-brief.md#saved-streaming-services-and-discovery--2026-09-10)
+and [Watch together](watch-together.md#streaming-services-from-either-participant--2026-09-10)
+uses.
 
 ## Display transformation
 
@@ -205,8 +209,8 @@ Preserve the original cached offers and derive the two display sections
 when presenting a title. This lets current, older, and newly fetched cache
 entries use the same mapping without a data migration or forced refresh.
 The registry's existence does not establish an offer: only the title's
-reported eligible providers can put a service in a section or suppress a
-channel-only note.
+reported eligible providers can put a service in a section. Do not display
+channel-only notes.
 
 Retain existing behavior for unmatched providers and missing logos:
 unmapped IDs remain visible with their reported names, and missing images
@@ -228,7 +232,8 @@ Acceptance criteria and mapping examples are in issue #62.
 
 ## Current implementation
 
-This implementation includes the Subs and Free display from issue #62.
+This implementation includes the Subs and Free display from issue #62 and
+the saved-service discovery and comparison views from issue #93.
 
 `src/server/catalog.ts` fetches and validates the US watch-provider response.
 `db/007-title-availability.sql` adds a separate cache keyed by title and
@@ -251,8 +256,8 @@ result path. The provider-ID lookup is built once from the checked-in
 registry. No catalog request or name inference runs during grouping. The
 server sorts services with an English, case-insensitive comparison and a
 stable identity tie-breaker; the client renders that same ordered result.
-Unknown providers use separate `provider:<id>` identities. Reseller notes
-use only that section's reported members. Canonical logos take precedence;
+Unknown providers use separate `provider:<id>` identities. Source route
+metadata is retained but is not rendered. Canonical logos take precedence;
 fallbacks use eligible member ID, reported name, then safe logo path in
 deterministic order.
 
@@ -260,6 +265,26 @@ Title screens load availability and trailers concurrently after loading the
 title. `src/components/title-availability.tsx` shows Subs and Free,
 US region, last-checked time, attribution, and watch-page link. It distinguishes
 empty, failed, and older cached data, including older empty results.
+
+`src/server/title-viewing.ts` adds this same availability to catalog results,
+circle suggestions, and shared Want to watch titles. It allows four concurrent
+lookups and stops starting provider requests after three seconds. Catalog search
+also stops starting provider requests seven seconds after the search began,
+leaving room within the browser's ten-second deadline. In-flight requests retain
+the two-second timeout. Remaining titles use cached data or
+an explicit unknown state; they are not dropped. Search summaries create only
+missing title identities for the cache and never overwrite richer details.
+
+`db/009-streaming-services.sql` stores each member's selected stable service
+identities. `src/server/streaming-services.ts` validates selections against the
+registry and replaces them atomically. Account exposes only the signed-in
+member's settings. Watch together returns matching services for shared titles,
+without disclosing a participant's complete service list or ownership.
+
+`src/components/title-services.tsx` supplies service notes and match indicators
+for discovery and Watch together. Free options qualify without a saved
+selection. Paid rental and purchase offers do not qualify. Older results keep
+an age warning, and failed lookups stay distinct from known unmatched titles.
 
 ## Provider registry and maintenance
 
@@ -323,11 +348,19 @@ service and the real database, following the existing catalog tests. Cover
 movies and TV, all viewing categories, missing US data, empty results,
 fresh and expired caches, and failed or malformed provider responses.
 Cover both display sections, same-service plans and channels, distinct
-products, unknown IDs, eligible logo fallback, section-local route notes,
+products, unknown IDs, eligible logo fallback, retained route metadata,
 and deterministic sorting. Include fresh and stale pre-existing cache rows
 with all five original categories. Verify that successful data survives a
 failed refresh and that failure does not break the title or its conversations.
 Browser coverage should verify
 the title-page presentation, sections, attribution, link, and data states.
-Check desktop, mobile, and 320px width with long names and route notes.
+Check desktop, mobile, and 320px width with long names and grouped services.
+Assert that plan and reseller suffixes are absent from rendered service names.
 The registry test checks the full union rather than a fixed provider count.
+
+`tests/app/streaming-services.test.ts` covers authenticated writes, isolation,
+validation, free access, either participant's services, and blocked access.
+`tests/app/title-viewing.test.ts` covers enrichment, cache reuse, failure
+recovery, and bounded cold-list requests through the public API.
+`tests/browser/streaming-services.spec.ts` covers saving, cancelling, clearing,
+failed saves, filters, background preference changes, and responsive grouping.

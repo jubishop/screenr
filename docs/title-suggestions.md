@@ -188,9 +188,10 @@ behavior. It describes engineering choices, not additional interview answers.
   direct friend can contribute anonymously only if an eligible two-edge
   connection remains; a blocked person cannot contribute through another
   mutual friend. Removing the final eligible connection removes that signal.
-- Read existing stored title metadata for suggestions. The implementation
-  needs no live TMDB request per tile, new catalog recommendation service,
-  schema migration, or new dependency.
+- Read existing stored title metadata for social suggestions. This query
+  needs no catalog recommendation service or external title-detail requests.
+  Issue #93 adds bounded, cached viewing-option lookups after this query, using
+  the existing TMDB provider client and separate saved-service storage.
 
 ### Ordering and presentation
 
@@ -226,7 +227,8 @@ people, then filters and aggregates active actions. It reads names only
 for direct-friend attribution. Its explicit response fields contain public
 title metadata, direct-friend names/usernames, and anonymous second-degree
 counts. Ranking scores, second-degree identities, and connecting paths are
-not returned. `src/server/screens.ts` includes these suggestions for `/search`.
+not returned. `src/server/screens.ts` includes these suggestions for `/search`
+and adds viewing options and the viewer's saved service identities.
 
 `src/components/title-search.tsx` owns the search input, results, and tiled
 suggestions. `src/components/screen.tsx` keeps it mounted when suggestion
@@ -235,7 +237,13 @@ while preserving search text and submitted results. Search requests have a
 timeout and an abort controller. Clearing, submitting a newer query, or
 leaving the page cancels the old request; only the current request can
 publish results or errors. The existing Poster component accepts responsive
-image sizes for the grid.
+image sizes for the grid. The optional **My services** filter includes titles
+on a saved service or with a free option. It starts off and preserves the
+existing social order. Service notes use broad names, such as AMC+, without
+plan or reseller suffixes. Failed availability remains visible with the filter
+off; when it is on, a notice explains how to see titles with unknown options.
+These additions follow the
+[saved-service decision](product-brief.md#saved-streaming-services-and-discovery--2026-09-10).
 
 `tests/app/title-suggestions.test.ts` exercises the public screen loader
 against PostgreSQL, including weighting, unique connections, current choices,
@@ -247,7 +255,9 @@ and recovery from network failures. The issue owns the acceptance checklist.
 
 ## Scope boundary
 
-Watching follows future watch-status tracking. This issue does not build
-that tracking, the separately planned Friends recommend view, filters,
+Watching follows future watch-status tracking. The original suggestion issue
+does not build that tracking, the separately planned Friends recommend view,
 inline title actions, permanent dismissals, or global recommendations.
+Issue #93 adds the optional service filter described above; title-type filters
+remain outside this suggestion view.
 It does not expand access to profiles, activity entries, or discussions.
