@@ -63,9 +63,13 @@ export async function notifications(
   viewer: string,
   before?: string | null,
   unread = false,
+  through?: string | null,
 ) {
   const cursor = before ? identifier(before) : null;
-  // The page and its bulk-read boundary come from the same database snapshot.
+  // Older pages retain the latest displayed page's bulk-read boundary. A bare
+  // pagination cursor also must not include newer, undisplayed arrivals.
+  const boundary = through ? identifier(through) : cursor;
+  // The page and current unread count come from the same database snapshot.
   const result = (
     await db.query<{
       items: NotificationRow[];
@@ -73,14 +77,15 @@ export async function notifications(
       unread: number;
     }>(
       `WITH visible AS (SELECT * FROM visible_notification WHERE recipient_id=$1)
-       SELECT (SELECT max(id)::text FROM visible) AS through,
+       SELECT coalesce($4::bigint,(SELECT max(id) FROM visible))::text AS through,
        (SELECT count(*)::int FROM visible WHERE read_at IS NULL) AS unread,
        coalesce((SELECT jsonb_agg(page ORDER BY id::bigint DESC) FROM (
          SELECT ${columns} FROM visible
          WHERE ($2::bigint IS NULL OR id<$2) AND (NOT $3::boolean OR read_at IS NULL)
+         AND ($4::bigint IS NULL OR id<=$4)
          ORDER BY visible.id DESC LIMIT 31
        ) page),'[]') AS items`,
-      [viewer, cursor, unread],
+      [viewer, cursor, unread, boundary],
     )
   ).rows[0];
   const hasMore = result.items.length > 30;

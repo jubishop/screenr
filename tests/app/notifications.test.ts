@@ -109,6 +109,26 @@ test("pagination orders numeric IDs and reaches all older notifications without 
   assert.equal(await unread(alice), 35);
 });
 
+test("older-page snapshots leave newer unseen notifications unread until returning to latest", async () => {
+  const { alice, ben, conversation } = await setup();
+  await friend(alice, ben);
+  for (let i = 0; i < 34; i++)
+    await addComment(ben, conversation, `Comment ${i}`, false);
+  const first = await notifications(alice);
+  await addComment(ben, conversation, "Arrived after the latest page", false);
+  const older = await notifications(alice, first.next, false, first.through);
+  assert.equal(older.through, first.through);
+  assert.equal(older.items.length, 5);
+  assert.equal(older.unread, 36);
+  await readAllNotifications(alice, older.through);
+  const latest = await notifications(alice, null, true);
+  assert.equal(latest.items.length, 1);
+  assert.equal(latest.unread, 1);
+  assert.notEqual(latest.through, first.through);
+  await readAllNotifications(alice, latest.through);
+  assert.equal(await unread(alice), 0);
+});
+
 test("current access removes notices and counts, and restored comments retain their read state", async () => {
   const { alice, ben, cam, conversation } = await setup();
   await friend(alice, ben);

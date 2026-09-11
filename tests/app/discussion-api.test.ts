@@ -115,6 +115,7 @@ test("notification API enforces authentication, origin, ownership, read actions,
   const page = await listed.json();
   assert.equal(page.items.length, 1);
   assert.equal((await get(owner.cookie, "?before=bad")).status, 400);
+  assert.equal((await get(owner.cookie, "?through=bad")).status, 400);
   assert.equal(
     (await post("read-notification", stranger.cookie, { id: page.items[0].id }))
       .status,

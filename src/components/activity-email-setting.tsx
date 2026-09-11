@@ -16,8 +16,9 @@ export function ActivityEmailSetting({
     <section className="settings-card" aria-labelledby="activity-email-heading">
       <h2 id="activity-email-heading">Activity emails</h2>
       <p>
-        Get an email about new friend requests and replies. We wait 10 minutes
-        and group notifications you have not read yet.
+        Get an email about friend requests, new friendships, comments, and
+        replies. We wait 10 minutes and group notifications you have not read
+        yet.
       </p>
       <label className="checkbox">
         <input

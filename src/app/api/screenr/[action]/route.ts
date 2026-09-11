@@ -90,6 +90,7 @@ async function handle(
             userId,
             url.searchParams.get("before"),
             url.searchParams.get("unread") === "true",
+            url.searchParams.get("through"),
           ),
         );
       if (action === "screen")

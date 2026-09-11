@@ -170,7 +170,8 @@ The panel has All and Unread filters and controls for earlier notifications.
 Opening it does not mark notifications read. Selecting a notification marks
 it read and opens its person or exact title reply. **Mark all as read** applies
 through the newest notification in the displayed snapshot, leaving later
-arrivals unread.
+arrivals unread. Older pages and their refreshes keep that boundary; returning
+to **Latest notifications** displays new arrivals and updates the boundary.
 
 Migration `010-notifications.sql` creates notification records and transaction
 triggers for friendship and comment events. It seeds existing pending friend

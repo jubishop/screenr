@@ -26,7 +26,10 @@ export function Notifications({
   const pending = useRef<AbortController | null>(null);
   const [open, setOpen] = useState(false);
   const [unreadOnly, setUnreadOnly] = useState(false);
-  const [before, setBefore] = useState<string | null>(null);
+  const [cursor, setCursor] = useState<{
+    before: string;
+    through: string;
+  } | null>(null);
   const [page, setPage] = useState<NotificationPage | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -37,7 +40,10 @@ export function Notifications({
     const controller = new AbortController();
     pending.current = controller;
     const query = new URLSearchParams({ unread: String(unreadOnly) });
-    if (before) query.set("before", before);
+    if (cursor) {
+      query.set("before", cursor.before);
+      query.set("through", cursor.through);
+    }
     try {
       const result = await api<NotificationPage>(
         `notifications?${query}`,
@@ -56,7 +62,7 @@ export function Notifications({
     } finally {
       if (pending.current === controller) pending.current = null;
     }
-  }, [before, unreadOnly]);
+  }, [cursor, unreadOnly]);
 
   useEffect(() => {
     if (!open) return;
@@ -101,7 +107,7 @@ export function Notifications({
   }, [open]);
 
   function show() {
-    setBefore(null);
+    setCursor(null);
     setUnreadOnly(false);
     setPage(null);
     setError("");
@@ -218,9 +224,9 @@ export function Notifications({
                 aria-pressed={unreadOnly === onlyUnread}
                 disabled={busy}
                 onClick={() => {
-                  if (unreadOnly === onlyUnread && before === null) return;
+                  if (unreadOnly === onlyUnread && cursor === null) return;
                   setPage(null);
-                  setBefore(null);
+                  setCursor(null);
                   setUnreadOnly(onlyUnread);
                 }}
               >
@@ -289,24 +295,25 @@ export function Notifications({
                   <h3>
                     {unreadOnly
                       ? "You're all caught up."
-                      : before
+                      : cursor
                         ? "No earlier notifications."
                         : "No notifications yet."}
                   </h3>
                   <p>
                     {unreadOnly
                       ? "New notifications will appear here."
-                      : "Friend requests and replies will appear here."}
+                      : "Friend requests, new friendships, comments, and replies will appear here."}
                   </p>
                 </div>
               )}
               <div className="notification-pagination">
-                {before && (
+                {cursor && (
                   <button
                     className="secondary"
+                    disabled={busy}
                     onClick={() => {
                       setPage(null);
-                      setBefore(null);
+                      setCursor(null);
                     }}
                   >
                     Latest notifications
@@ -315,9 +322,11 @@ export function Notifications({
                 {page.next && (
                   <button
                     className="secondary"
+                    disabled={busy}
                     onClick={() => {
+                      if (!page.next || !page.through) return;
                       setPage(null);
-                      setBefore(page.next);
+                      setCursor({ before: page.next, through: page.through });
                     }}
                   >
                     Earlier notifications

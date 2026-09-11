@@ -174,3 +174,44 @@ test("open panel removes blocked activity, recovers from failed reads, and activ
   await expect(panel.getByText("No notifications yet.")).toBeVisible();
   await expect(panel.getByText(/noticeblocked/)).toHaveCount(0);
 });
+
+test("mark all on a polled older page preserves new arrivals until Latest is displayed", async ({
+  member,
+}) => {
+  const owner = await member("olderowner");
+  const reader = await member("olderreader");
+  await prepareFriendship(owner, reader);
+  const { id } = await post(owner, "activity", {
+    title: "tv:987657",
+    field: "recommended",
+    value: true,
+  });
+  for (let i = 0; i < 34; i++)
+    await post(reader, "comment", {
+      conversation: id,
+      body: `Older notification ${i}`,
+      spoiler: false,
+    });
+  await owner.goto("/");
+  await bell(owner).click();
+  const panel = owner.getByRole("dialog");
+  await panel.getByRole("button", { name: "Earlier notifications" }).click();
+  await expect(panel.locator(".notification-item")).toHaveCount(5);
+  await post(reader, "comment", {
+    conversation: id,
+    body: "A new arrival while browsing an older page",
+    spoiler: false,
+  });
+  await expect(bell(owner)).toHaveAccessibleName("Notifications, 36 unread");
+  await panel.getByRole("button", { name: "Mark all as read" }).click();
+  await expect(bell(owner)).toHaveAccessibleName("Notifications, 1 unread");
+  await expect(
+    panel.getByRole("img", { name: "Unread", exact: true }),
+  ).toHaveCount(0);
+  await panel.getByRole("button", { name: "Latest notifications" }).click();
+  await expect(
+    panel.getByRole("img", { name: "Unread", exact: true }),
+  ).toHaveCount(1);
+  await panel.getByRole("button", { name: "Mark all as read" }).click();
+  await expect(bell(owner)).toHaveAccessibleName("Notifications");
+});
