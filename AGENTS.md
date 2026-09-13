@@ -19,8 +19,12 @@ Use the repository's QMD helper for topic lookup:
 - `git knowledge get <path>[:line] -l N`: read one page or a focused slice.
 
 Run a QMD lookup before non-trivial area work and before writing memory.
-Use `rg` or direct reads when the path is already known. If QMD is unavailable
-or stale, read the source Markdown files; they remain authoritative.
+Use direct reads or `rg` for known paths or after a successful lookup with no
+matches. Markdown source files are authoritative. Update existing pages when possible.
+If configured QMD fails, report it to the user immediately and attempt repair.
+If repair fails, pause knowledge-dependent work until the user approves a
+fallback; never silently bypass broken QMD with `rg` or direct reads. Follow
+the [search failure policy](docs/development-workflow.md#search-failures).
 
 Tracked hooks under `bin/hooks/` refresh QMD after checkout, commit, merge,
 and rewrite. Run `bin/setup` after cloning, `bin/doctor` to inspect setup,

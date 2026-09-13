@@ -4,8 +4,9 @@ Durable repository notes: user guidance, external context, incidents, gotchas,
 workarounds, and lessons that cannot be recovered cheaply from source code.
 
 Pages are not auto-loaded. Search with QMD before writing, and update an
-existing related page when possible. If the index is unavailable, search the
-Markdown files directly. Keep this index current when pages move or change.
+existing related page when possible. Follow the
+[search failure policy](../docs/development-workflow.md#search-failures) if
+configured QMD fails. Keep this index current when pages move or change.
 
 ## Scope
 
