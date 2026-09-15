@@ -314,6 +314,27 @@ framework created only for this refactor.
 
 Implementation tracking: [extract cohesive Screen feature views, #75](https://github.com/jubishop/screenr/issues/75).
 
+## Markdown pages
+
+Keep each memory, documentation, or other hand-written Markdown page focused
+on one topic or reader task. Before extending a long page, review its scope
+and remove repetition. Split it when it mixes independent topics, a section
+can be read and maintained on its own, or readers must scan unrelated material
+to find what they need. Use those signals instead of line, word, or token limits.
+
+Extract complete topics into descriptively named pages. Keep a short overview
+and links in the original page, and update indexes and incoming file or heading
+links. Keep each rule or decision in one authoritative place. Preserve its
+reasons, evidence, dates, status, and enough context to understand it on its own.
+Archive obsolete material according to the memory or docs lifecycle rules.
+
+Keep README indexes and automatically loaded instructions concise; link to
+detailed guidance instead of copying it. Headings help readers navigate a
+coherent page, but do not resolve unrelated topics accumulating in one file.
+Larger pages are acceptable when readers need the material together. Do not
+compress prose, discard useful context, or create arbitrary numbered fragments
+just to make a page shorter. Preserve generated and tool-managed record formats.
+
 ## Test-driven development
 
 Regression fixes and functional changes require automated tests that cover

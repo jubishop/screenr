@@ -31,6 +31,11 @@ index. Remove archived pages from active indexes. Use relative Markdown links
 and ordinary heading anchors; `bin/check` validates both. Review material design changes with their related
 implementation; do not label an unreviewed proposal as approved.
 
+Keep each page focused on one topic or reader task. Review long pages before
+extending them, and move independent topics into linked pages when useful.
+Preserve decision reasons and evidence. Follow the
+[Markdown guidance](development-workflow.md#markdown-pages).
+
 ## Recording decisions
 
 During a product or implementation interview, update the relevant document

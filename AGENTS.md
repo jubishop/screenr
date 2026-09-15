@@ -63,6 +63,11 @@ consider extracting a cohesive area. Larger files are acceptable when
 splitting would reduce clarity. Do not compress formatting or create
 arbitrary fragments to meet a line count.
 
+Keep memory, docs, and other Markdown pages focused on one topic or reader
+task. When extending a long page, review its scope and split independent
+topics into linked pages when that improves reading and maintenance. Use
+the [Markdown guidance](docs/development-workflow.md#markdown-pages), without numeric size thresholds.
+
 ## Deployment
 
 Test changes on localhost and in isolated CI. Complete PR review and merge

@@ -59,6 +59,13 @@ them. Do not invent verification dates.
 
 This index is plain Markdown and does not need frontmatter.
 
+## Page organization
+
+Keep each page focused on one topic. Review a long page before adding more;
+split independent topics into linked pages when that improves reading and
+maintenance. Preserve the rule, reason, and evidence together. Follow the
+[Markdown guidance](../docs/development-workflow.md#markdown-pages).
+
 ## Archive
 
 Move resolved incidents and superseded guidance into `memory/archive/`.
