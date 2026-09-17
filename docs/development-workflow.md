@@ -180,10 +180,20 @@ records the verified primary path in local `knowledge.primaryWorktree` to
 support Git layouts whose worktree listing exposes only the metadata path.
 Rerun preparation in the primary checkout after moving it.
 
-New model caches use the common Git directory's `knowledge/models` folder.
-Each checkout links its `.cache/qmd/models` to that shared location. An existing
-primary model cache is preserved and shared with new worktrees. Existing
-worktree model caches are preserved, even if they are independent.
+All projects and worktrees share model files at `~/.cache/qmd/models`.
+This fixed path is independent of `XDG_CACHE_HOME`. Each checkout links its
+`.cache/qmd/models` there; its index stays in `.cache/qmd/index.sqlite` inside
+that checkout. Setup creates the shared directory. With QMD installed, initial
+embedding downloads a missing embedding model there; query expansion and
+reranking download their models on first use. Existing files are reused.
+
+Setup and refresh migrate old caches. They verify file contents before removing
+identical copies from a checkout-local directory. Conflicting filenames or
+unexpected entries stop migration without deleting those files. Inspect the
+reported paths before retrying. An old symlink is replaced, but its external
+target is retained because other consumers may still need it. Remove redundant
+external copies only after verifying their contents and redirecting all users.
+Do not delete `~/.cache/qmd/models` when cleaning up a repository or worktree.
 
 A linked worktree's `.envrc` is approved automatically only when its bytes
 match a primary checkout file that direnv already reports as allowed.
@@ -191,9 +201,8 @@ Ordinary branch switches do not approve changed environment files. Bare
 repositories have no primary environment file to inherit trust from.
 
 After moving a checkout, use Git's worktree repair procedure if required,
-then inspect `bin/doctor`. A broken pre-existing model link is preserved for
-inspection. Once you have confirmed it is only a broken link, remove that
-link and rerun `bin/prep-worktree`; do not delete a directory of model files.
+then inspect `bin/doctor`. Run `bin/prep-worktree` to repair a broken model
+link and restore the fixed shared cache. Existing indexes remain local.
 
 Remove worktrees only after checking for uncommitted and unpushed work.
 Use `git worktree remove` and verify the resulting `git worktree list`.
