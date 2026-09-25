@@ -298,3 +298,50 @@ storage and request usage before enabling backups and as they grow. Keep this
 deployment within the existing allowance; do not enable a paid upgrade or buy
 more VPS capacity without a new decision. Restic retention does not itself
 enforce an account-wide spending cap.
+
+### Backup storage warning
+
+**Decision — 2026-09-25:** Keep seven daily and four weekly snapshots. After
+each successful backup and prune, measure the entire dedicated R2 bucket and
+email the owner through Resend when it exceeds 1 GB (1,000,000,000 bytes).
+Send one warning while usage remains above the threshold. Rearm only after a
+successful measurement below it. Equality neither starts nor clears a warning.
+Backups continue. The owner wants notice of growth before backup costs become
+material; reducing retention to one snapshot was considered and withdrawn.
+
+`ops/check-backup-size.py` uses Python 3.10 or newer and its standard library.
+It lists every page of R2 objects, including Restic data and metadata, even
+when the repository URL specifies a prefix. It does not download backups.
+The measurement excludes incomplete multipart uploads, other buckets, and
+temporary upload peaks. It is a warning, not a billing limit. R2's allowance
+and billing apply to the whole account.
+
+Before deploying this monitor, add `EMAIL_FROM`, `RESEND_API_KEY`, and
+`BACKUP_ALERT_TO` to the root-owned, mode-0600 `/etc/screenr/backup.env`.
+Use the verified Screenr sender and a sending-only key. Keep the owner's
+recipient private. The backup process does not need the rest of `app.env`.
+
+Latest bytes, object count, check time, and warning state are saved atomically
+in `/var/lib/screenr-backup/size.json`, mode 0600, outside release directories.
+The job logs each successful measurement. A failed listing preserves the last
+measurement and does not clear a warning. Email failure preserves the new
+measurement and pending notification. The backup service then reports failure,
+but its completed backup and retention cleanup remain intact. A failing backup
+service can also block deployment's required pre-activation backup check.
+
+Email attempts share a persisted key and unchanged payload. The monitor makes
+up to three attempts per invocation. Resend retains keys for
+[24 hours](https://resend.com/docs/dashboard/emails/idempotency-keys)
+(verified September 25, 2026). An uncertain delivery stops automatic retries
+after 23 hours, with margin for request duration and clock differences.
+A definite initial rejection, such as an invalid key, can retry after the
+configuration is fixed. An acceptance receipt means Resend accepted the email;
+it does not prove inbox delivery.
+
+Inspect `journalctl -u screenr-backup.service` and the private state file when
+the job fails. Correct configuration or network errors, then rerun the service.
+For expired uncertain delivery, first reconcile the saved key and message in
+Resend. If accepted, record its receipt ID and acceptance time as `email_id`
+and `sent_at` in the saved warning. If confirmed unsent, clear `attempted_at`
+to `null` before retrying. Preserve the message, key, owner, and file mode.
+Do not delete warning state to bypass an uncertain send; it could send twice.
