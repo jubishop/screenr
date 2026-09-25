@@ -9,3 +9,4 @@ trap 'rm -f "$dump"' EXIT HUP INT TERM
 pg_dump --format=custom --no-owner --no-acl --file="$dump" screenr
 restic backup --host bishop --tag screenr "$dump"
 restic forget --host bishop --tag screenr --keep-daily 7 --keep-weekly 4 --prune
+python3 /opt/screenr/current/ops/check-backup-size.py
