@@ -2,7 +2,8 @@
 
 Product decisions, architecture, initiatives, and research. Use
 [memory](../memory/README.md) for durable guidance and non-code context.
-Use GitHub issues for work that needs lifecycle tracking.
+Use [td](task-tracking.md) for local progress and handoffs, and GitHub issues
+for shared scope and acceptance criteria.
 
 Every document except this index starts with:
 
@@ -61,6 +62,7 @@ both memory and design documents.
 
 ## Product and development
 
+- [Local task tracking](task-tracking.md): td setup, progress, handoffs, review, and local data.
 - [Product brief](product-brief.md): confirmed requirements and open design choices.
 - [Unified title feed](title-feed.md): confirmed shared feed decisions for
   issue #5, shared implementation and migration, and standalone comment scope

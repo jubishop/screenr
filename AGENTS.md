@@ -11,6 +11,12 @@ Repository context lives in `memory/`, `docs/`, and GitHub issues:
 - GitHub issues in `jubishop/screenr`: TODOs, bugs, and work that needs lifecycle
   tracking.
 
+Use `td` for local tasks, progress, blockers, and handoffs. In each new agent
+context, run `td usage --new-session -q` once; use `td usage` for full workflow
+guidance. Follow the [task workflow](docs/task-tracking.md), including first-time
+setup. Keep GitHub Issues for shared scope and acceptance criteria; link related
+issues from td.
+
 Use the repository's QMD helper for topic lookup:
 
 - `git knowledge search "known term"`: exact names, paths, APIs, and concepts.
@@ -60,10 +66,11 @@ on one topic or reader task, without numeric size limits.
 
 ## Deployment
 
-Test changes on localhost and in isolated CI. Complete PR review and merge
-to `main` before deploying to production. An unmerged branch requires an
-explicit user-approved exception for that deployment. Follow the
-[release workflow](docs/development-workflow.md#review-merge-and-deploy).
+Test changes locally and require successful full CI before production deployment.
+Direct pushes to `main` are allowed; a PR is optional. Nonfunctional changes may
+skip deployment after checking the complete change since the last successful
+release. Keep CI enabled and record the skip reason in the commit trailers.
+Follow the [release workflow](docs/development-workflow.md#main-branch-delivery).
 
 ## Testing
 

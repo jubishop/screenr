@@ -109,6 +109,12 @@ class DeploymentFixture(unittest.TestCase):
 class CIDeploymentTests(DeploymentFixture):
     command = 'deploy-ci'
 
+    def test_checked_manual_main_run_can_deploy(self):
+        result = self.execute(GITHUB_EVENT_NAME='workflow_dispatch', RUN_EVENT='workflow_dispatch')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('DEPLOY SUCCEEDED', result.stdout)
+        self.assertTrue(any(call[0] == 'scp' for call in self.calls()))
+
     def test_checked_push_downloads_and_deploys_without_dispatching_again(self):
         result = self.execute(RUN_EVENT='push')
         self.assertEqual(result.returncode, 0, result.stderr)

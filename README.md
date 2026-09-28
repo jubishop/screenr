@@ -15,8 +15,9 @@ After [local app setup](docs/running-screenr.md#local-setup), run `npm run dev`
 and open <http://localhost:3000>. Changes reload automatically. If the database
 is stopped, start it with `docker compose up -d --wait`.
 
-After PR review and merge, every push to `main` runs the checks, builds the
-Linux release, and deploys it automatically through GitHub Actions. See the
+Direct pushes to `main` run full checks and normally build and deploy through
+GitHub Actions. Nonfunctional changes may skip deployment with a recorded
+reason; a PR is optional. See the
 [deployment guide](docs/deployment.md#build-and-activate-a-release) for the
 one-time production environment setup and release checks.
 
@@ -71,3 +72,11 @@ after uncommitted knowledge edits; unchanged inputs skip indexing work.
 - [Memory](memory/README.md): durable guidance and non-code context.
 - [Design documents](docs/README.md): product decisions, architecture, and research.
 - [GitHub issues](https://github.com/jubishop/screenr/issues): tracked work.
+
+## Local task tracking
+
+Use `td` for local tasks, progress, blockers, and session handoffs. After cloning,
+install td and run `td init` in the primary checkout. Use `td status` or
+`td monitor` to inspect progress. Follow the [task workflow](docs/task-tracking.md)
+for setup, review, worktrees, and local data. Keep GitHub Issues for shared scope
+and acceptance criteria, linked from related td tasks.

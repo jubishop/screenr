@@ -76,10 +76,12 @@ header so authentication rate limits apply to the actual client.
 
 ## Build and activate a release
 
-Follow the [review, merge, and deploy workflow](development-workflow.md#review-merge-and-deploy).
-Each push to `main`, including a PR merge, runs the repository checks and packages
-a Linux x64 release. A separate `deploy` job starts only after the check job
-passes. PR workflows only run checks. There is no local deployment command.
+Follow the [main branch workflow](development-workflow.md#main-branch-delivery).
+Direct pushes to `main` run full checks and, by default, package a Linux x64
+release. A separate `deploy` job starts only after checks pass. Nonfunctional
+changes can skip packaging and deployment with the documented commit trailers;
+checks still run. PR workflows only run checks. **Run workflow** on `main`
+forces a checked deployment when needed. There is no local deployment command.
 
 The deployment job downloads the archive from its own run, checks its revision
 and paths, and verifies the transfer checksum. It takes a backup, activates the
@@ -131,8 +133,8 @@ release tree.
 
 Create a GitHub Actions environment named `production` in `jubishop/screenr`.
 Allow only the **branch** `main` through its deployment branch policy. Do not
-add required deployment reviewers; PR review happens before merge. Protect
-`main` with the repository's normal PR review and required-check rules.
+add required deployment reviewers or require a PR for direct main delivery.
+The successful full check job gates production deployment.
 
 Add these environment secrets:
 
@@ -211,8 +213,7 @@ deployment acceptance.
 
 For initial setup or relevant provider configuration changes, also verify
 real email-code delivery and sign-in, Google sign-in or explicit linking,
-and real TMDB search. Run these checks after deployment of the reviewed,
-merged revision; they do not justify deploying an unmerged branch.
+and real TMDB search. Run these checks after deployment of the checked main revision.
 
 Useful read-only commands:
 
@@ -227,12 +228,12 @@ curl --fail https://screenr.club/api/health
 
 **Decision — 2026-09-06:** The owner is the only user. Apply the
 [hostname change](product-brief.md#public-hostname--2026-09-06) as a small
-configuration update after review and merge. This replaces the previous
+configuration update through the main branch workflow. This replaces the previous
 maintenance window, extra backup verification, full sign-in and invitation
 checklist, and mandatory CI rerun. The normal deployment already takes a
 backup and checks the services.
 
-1. **Let deployment finish.** Merge normally; no extra before-merge task is
+1. **Let deployment finish.** Push the checked change to `main`; no extra before-merge task is
    required. Wait for the automatic run to end before editing server settings.
    The final `screenr.club` check can fail because the domain is not configured
    yet. If activation and remote service checks passed, continue below;
@@ -246,7 +247,7 @@ backup and checks the services.
    `/etc/caddy/certs/screenr-club.key`, readable by Caddy with the key private.
    Save private copies of `/etc/screenr/app.env` and `/etc/caddy/Caddyfile`,
    preserving permissions. Set `BETTER_AUTH_URL=https://screenr.club` and
-   install both Screenr blocks from the merged `ops/Caddyfile`, preserving
+   install both Screenr blocks from the checked `ops/Caddyfile`, preserving
    unrelated sites and the existing firewall. Run
    `caddy validate --config /etc/caddy/Caddyfile`, then
    `systemctl restart screenr-web screenr-worker` and `systemctl reload caddy`.

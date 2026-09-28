@@ -9,6 +9,9 @@ Each checkout has its own index. Git hooks refresh it in the background.
 
 ## First setup
 
+Install td and run `td init` in the primary checkout as described in the
+[task workflow](task-tracking.md). This is separate from knowledge setup below.
+
 Run from the repository root:
 
 ```sh
@@ -539,41 +542,41 @@ Ubuntu 24.04 system with Python, GnuPG, and dpkg installed:
 python3 -B tests/test_ci_apt.py -v
 ```
 
-## Review, merge, and deploy
+## Main branch delivery
 
-**Decision — 2026-09-06:** Test development changes on localhost and in
-isolated CI. Complete PR review and merge to `main` before deploying them
-to production.
+**Decision — 2026-09-28:** Direct pushes to `main` are allowed. A PR and its
+review are optional. This replaces the mandatory PR-before-deployment rule
+from 2026-09-06. Test locally and require successful full CI before deployment.
 
-**Why:** The user wants review and merge to happen before changes reach the
-live application.
+Push the checked change to `main`. GitHub Actions runs full validation, then
+packages and deploys the selected main revision using the
+[deployment procedure](deployment.md). Verify the live behavior and service
+health after deployment. Production credentials remain restricted to `main`.
 
-The normal sequence is:
+Documentation, agent instructions, local task setup, comments, and other
+nonfunctional changes do not require a deployment. Decide from the complete
+difference between current `main` and the last successful production release,
+including earlier commits in the push. Do not skip if any undeployed change
+affects runtime behavior, dependencies, assets, migrations, configuration, or
+operations. When uncertain, deploy. This is an assessment of behavior, not a
+file-extension rule.
 
-1. Implement and verify the change locally, including relevant browser flows.
-2. Push the feature branch, pass CI, and complete PR review.
-3. Merge the PR to `main`. Build the release from the selected merged revision
-   and require its checks to pass.
-4. GitHub Actions automatically deploys that checked revision using the
-   [deployment procedure](deployment.md). Independently verify the live
-   behavior and service health after the deployment job passes.
+To skip only release packaging and deployment, put these trailers at the end
+of the main commit message, after a blank line:
 
-**Decision — 2026-09-06:** Couple deployment to pushes and merges into `main`.
-The successful check job gates the production deployment. There is no separate
-local release command or deployment approval step. This keeps review and merge
-as the release action. GitHub's production environment holds the deployment
-credentials and permits only `main`; PR checks have no production credentials.
+```text
+Screenr-Deploy: skip
+Screenr-Deploy-Reason: Instructions only; production contains all material changes through <deployed SHA>.
+```
+
+Replace the example reason with the actual assessment and deployed revision.
+The workflow uses the push's final commit. Missing, duplicate, or conflicting
+trailers keep deployment enabled. Full CI still runs. Never use `[skip ci]`
+for this purpose. A manual **Run workflow** on `main` runs checks, packages,
+and deploys current main even if its commit has a skip trailer.
 
 For the one-time move to `screenr.club`, use the short
-[domain cutover procedure](deployment.md#domain-cutover). It defines the
-complete post-merge work for this owner-only service; do not add a separate
-maintenance window or repeat checks already performed by deployment.
-
-The initial live deployment for issue #1 was a bootstrap exception used to
-verify the first production setup. It does not establish the normal release
-process. Any future deployment from an unmerged branch requires the user's
-explicit approval for that exception. Passing tests or creating a release
-artifact does not replace review and merge.
+[domain cutover procedure](deployment.md#domain-cutover).
 
 ## Checks and project extensions
 
@@ -597,7 +600,8 @@ GitHub Actions runs `bin/check --full` on pull requests and pushes to `main` thr
 [the existing workflow](../.github/workflows/check.yml). Application formatting,
 types, PostgreSQL tests, browser verification and the production build run after
 the foundation checks. See [application verification](running-screenr.md#verification)
-for requirements. GitHub issues track implementation work.
+for requirements. GitHub issues track shared work; [td](task-tracking.md)
+records local progress and handoffs.
 
 For clones created before this foundation upgrade, copy any existing local
 `screenr.homeMemoryPath` value to `knowledge.homeMemoryPath` before rerunning

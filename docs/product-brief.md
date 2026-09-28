@@ -1038,9 +1038,9 @@ which also records the user's preference to avoid new costs until measured
 limits require a decision. The public hostname is selected below; use the
 Resend relay selected above.
 
-The [release workflow](development-workflow.md#review-merge-and-deploy)
-records the initial bootstrap exception and the normal requirement to review
-and merge changes before production deployment.
+The [release workflow](development-workflow.md#main-branch-delivery)
+permits direct main delivery after validation and allows nonfunctional changes
+to skip deployment. It replaces the earlier mandatory PR review and merge step.
 
 ### Public hostname — 2026-09-06
 

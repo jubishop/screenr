@@ -4,6 +4,7 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -17,6 +18,8 @@ jobs:
   check:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
+    outputs:
+      deploy: ${{ steps.release.outputs.deploy }}
     services:
       postgres:
         image: postgres:18
@@ -49,8 +52,15 @@ jobs:
         run: sudo apt-get update && sudo apt-get install --yes shellcheck caddy
       - name: Check repository
         run: ./bin/check --full
+      - name: Decide whether to deploy
+        id: release
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REF: ${{ github.ref }}
+          REVISION: ${{ github.sha }}
+        run: bin/deployment-decision "$EVENT_NAME" "$REF" "$REVISION" >> "$GITHUB_OUTPUT"
       - name: Package Linux release
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && github.repository == 'jubishop/screenr'
+        if: steps.release.outputs.deploy == 'true' && github.repository == 'jubishop/screenr'
         run: npm run release:package
       - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         if: failure()
@@ -60,7 +70,7 @@ jobs:
           retention-days: 7
           if-no-files-found: ignore
       - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && github.repository == 'jubishop/screenr'
+        if: steps.release.outputs.deploy == 'true' && github.repository == 'jubishop/screenr'
         with:
           name: screenr-linux-x64-${{ github.sha }}
           path: .cache/screenr-*.tar.gz
@@ -72,7 +82,7 @@ jobs:
 
   deploy:
     needs: check
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && github.repository == 'jubishop/screenr'
+    if: needs.check.outputs.deploy == 'true' && github.repository == 'jubishop/screenr'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     environment:
