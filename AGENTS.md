@@ -4,13 +4,12 @@ Repository context lives in `memory/`, `docs/`, and GitHub issues:
 
 - `memory/`: durable user guidance, external context, incidents, and gotchas
   that cannot be recovered cheaply from the repository. Follow
-  [`memory/README.md`](memory/README.md). Search before writing and update an
-  existing page when possible. Move obsolete notes into `memory/archive/`.
+  [`memory/README.md`](memory/README.md). Move obsolete notes into `memory/archive/`.
 - `docs/`: product decisions, architecture, initiatives, and research. Follow
   [`docs/README.md`](docs/README.md). Keep confirmed decisions separate from
   proposals and open questions.
 - GitHub issues in `jubishop/screenr`: TODOs, bugs, and work that needs lifecycle
-  tracking. Do not keep task checklists or session logs in durable memory.
+  tracking.
 
 Use the repository's QMD helper for topic lookup:
 
@@ -20,7 +19,7 @@ Use the repository's QMD helper for topic lookup:
 
 Run a QMD lookup before non-trivial area work and before writing memory.
 Use direct reads or `rg` for known paths or after a successful lookup with no
-matches. Markdown source files are authoritative. Update existing pages when possible.
+matches. Markdown source files are authoritative.
 If configured QMD fails, report it to the user immediately and attempt repair.
 If repair fails, pause knowledge-dependent work until the user approves a
 fallback; never silently bypass broken QMD with `rg` or direct reads. Follow
@@ -48,25 +47,16 @@ environments on the same major version. Reassess Node 26 after it reaches LTS;
 do not upgrade automatically. See the
 [runtime decision](docs/development-workflow.md#node-runtime).
 
-Scope project source discovery for builds, typechecking, formatting, and tests
-to the active checkout. Exclude nested worktrees, temporary copies, and
-unrelated generated output; include required generated types explicitly.
-Do not assume `.gitignore` controls another tool's file discovery. See the
-[checkout isolation decision](docs/development-workflow.md#validation-checkout-isolation).
+Isolate [source discovery and mutable validation output](docs/development-workflow.md#validation-checkout-isolation)
+to the active checkout, including required generated types deliberately.
 
 ## File Organization
 
-Keep files focused on one coherent responsibility or feature area. Use
-approximately 1,000 lines as a review threshold for hand-written source,
-tests, and styles, not a hard cap or CI failure. When extending a large file,
-consider extracting a cohesive area. Larger files are acceptable when
-splitting would reduce clarity. Do not compress formatting or create
-arbitrary fragments to meet a line count.
+Keep [files cohesive](docs/development-workflow.md#file-organization);
+approximately 1,000 lines is a review threshold for source, tests, and styles.
 
-Keep memory, docs, and other Markdown pages focused on one topic or reader
-task. When extending a long page, review its scope and split independent
-topics into linked pages when that improves reading and maintenance. Use
-the [Markdown guidance](docs/development-workflow.md#markdown-pages), without numeric size thresholds.
+Keep [Markdown pages focused](docs/development-workflow.md#markdown-pages)
+on one topic or reader task, without numeric size limits.
 
 ## Deployment
 
@@ -77,17 +67,10 @@ explicit user-approved exception for that deployment. Follow the
 
 ## Testing
 
-Regression fixes and functional changes require automated tests for the
-changed behavior. Use red-green test-driven development (TDD) whenever
-practical: prove a focused test fails before implementation and passes after.
-If testing first is not practical, explain why and how the behavior was
-verified. Follow the [testing workflow](docs/development-workflow.md#test-driven-development).
-
-Test user-visible outcomes, public interfaces, and interactions with external
-systems. Put fakes at external-system boundaries so real project logic runs.
-Do not test private helpers or internal structure, expose private functionality,
-or add production APIs only for tests. Tests should allow internal refactoring
-that preserves behavior.
+Cover regression fixes and functional changes with automated tests. Follow
+[red-green TDD](docs/development-workflow.md#test-driven-development) when
+practical; explain exceptions. Test observable behavior through public
+interfaces, with fakes at external-system boundaries.
 
 For browser tests unrelated to signup or friendship, prepare authenticated
 users and relationships through isolated fixtures or existing APIs. Keep

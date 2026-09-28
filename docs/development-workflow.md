@@ -315,12 +315,21 @@ it is not an integrity scan of the SQLite database. If QMD reports database
 errors despite a current fingerprint, use the foreground refresh and inspect
 its log. Manually replacing the database requires a forced refresh.
 
+## File organization
+
+Keep files focused on one coherent responsibility or feature area. Use
+approximately 1,000 lines as a review threshold for hand-written source,
+tests, and styles, not a hard cap or CI failure. When extending a large file,
+consider extracting a cohesive area. Larger files are acceptable when
+splitting would reduce clarity. Do not compress formatting or create
+arbitrary fragments to meet a line count.
+
 ## Screen component organization
 
 **Decision — 2026-09-08:** Extract cohesive feature views from
 `src/components/screen.tsx`, keeping shared navigation and data coordination
-in the screen shell. Track the refactor in a GitHub issue. The existing
-file-organization guidance in `AGENTS.md` is sufficient; no additional size
+in the screen shell. Track the refactor in a GitHub issue. The
+[file organization policy](#file-organization) is sufficient; no additional size
 limit or component-count target is needed.
 
 **Why:** The component combines people, profiles, invitations, account, and
