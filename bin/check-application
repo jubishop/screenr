@@ -1,0 +1,41 @@
+#!/usr/bin/env python3
+"""Run screenr's application checks; bin/check --full calls this after the foundation checks."""
+
+import json
+from pathlib import Path
+import shutil
+import subprocess
+import sys
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+def run(*command):
+    subprocess.run(command, cwd=ROOT, check=True)
+
+
+def main():
+    required = json.loads((ROOT / "package.json").read_text())["engines"]["node"]
+    runtime_help = f"Node.js {required} is required for application checks. Select Node 24 LTS and rerun bin/check --full."
+    if not shutil.which("node"):
+        raise RuntimeError(runtime_help)
+    found = subprocess.check_output(["node", "--version"], cwd=ROOT, text=True).strip()
+    if found.split(".")[0] != "v" + required.split(".")[0]:
+        raise RuntimeError(f"{runtime_help} Found {found}.")
+    scripts = [str(path) for path in sorted((ROOT / "ops").iterdir())
+               if path.is_file() and path.read_bytes().startswith(b"#!/bin/sh")]
+    if scripts:
+        run("shellcheck", "--shell=sh", *scripts)
+    run(sys.executable, "-B", "-m", "unittest", "discover", "-s", "tests", "-p", "test_*.py", "-v")
+    # Browser validation builds and tests the current production artifact.
+    for script in ("format:check", "typecheck", "test", "test:browser"):
+        run("npm", "run", script)
+    print("Application checks passed.", flush=True)
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except (OSError, RuntimeError, subprocess.SubprocessError) as error:
+        print(error, file=sys.stderr)
+        sys.exit(1)

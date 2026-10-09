@@ -1,64 +1,47 @@
-## Project Memory and Tracking
+<!-- project-starter:begin -->
+Project Starter manages this block; add project rules after it.
 
-Repository context lives in `memory/`, `docs/`, and GitHub issues:
+- Keep durable guidance and non-derivable context in [memory](memory/README.md),
+  and designs, decisions, and research in [docs](docs/README.md). Before
+  non-trivial work or writing memory, search with `bin/knowledge search "term"`
+  or `bin/knowledge query "question" --no-rerank`, then read results with
+  `bin/knowledge get <path> -l 80`. Markdown sources are authoritative.
+- If configured QMD fails, tell the user immediately and attempt repair. If
+  repair fails, pause knowledge-dependent work until the user approves a
+  fallback; never silently substitute `rg` or direct reads. See
+  [search failures](docs/foundation/knowledge-search.md#search-failures).
+- Use td for work with multiple stages, interruptions, blockers, or handoffs;
+  run `td usage --new-session -q` once per new context and keep handoffs
+  current. See [task tracking](docs/foundation/task-tracking.md).
+- Follow the [engineering policy](docs/foundation/engineering-policy.md):
+  fewer dependencies, red-green tests for behavior changes, cohesive files and
+  pages, checkout-isolated validation, and declared toolchain versions.
+- Run [checks](docs/foundation/engineering-policy.md#checks) by change:
+  `bin/check --documents-only` for Markdown, application checks for code, and
+  `bin/check --full` before merge or release unless an enforced CI gate runs
+  it. Skip checks for read-only work and reuse passing results.
+- Run `bin/setup` after cloning, `bin/doctor` to diagnose setup, and
+  `bin/qmd-index` after uncommitted knowledge edits. Managed files listed in
+  `.project-starter.json` change only through Project Starter or a recorded
+  override with its reason.
+<!-- project-starter:end -->
 
-- `memory/`: durable user guidance, external context, incidents, and gotchas
-  that cannot be recovered cheaply from the repository. Follow
-  [`memory/README.md`](memory/README.md). Move obsolete notes into `memory/archive/`.
-- `docs/`: product decisions, architecture, initiatives, and research. Follow
-  [`docs/README.md`](docs/README.md). Keep confirmed decisions separate from
-  proposals and open questions.
-- GitHub issues in `jubishop/screenr`: TODOs, bugs, and work that needs lifecycle
-  tracking.
+## Project
 
-Follow the local [task workflow](docs/task-tracking.md) for td setup and commands.
+Track TODOs, bugs, and work that needs lifecycle tracking in GitHub issues in
+`jubishop/screenr`.
 
-Use the repository's QMD helper for topic lookup:
-
-- `git knowledge search "known term"`: exact names, paths, APIs, and concepts.
-- `git knowledge query "question" --no-rerank`: fuzzy or open-ended lookup.
-- `git knowledge get <path>[:line] -l N`: read one page or a focused slice.
-
-Run a QMD lookup before non-trivial area work and before writing memory.
-Use direct reads or `rg` for known paths or after a successful lookup with no
-matches. Markdown source files are authoritative.
-If configured QMD fails, report it to the user immediately and attempt repair.
-If repair fails, pause knowledge-dependent work until the user approves a
-fallback; never silently bypass broken QMD with `rg` or direct reads. Follow
-the [search failure policy](docs/development-workflow.md#search-failures).
-
-Tracked hooks under `bin/hooks/` refresh QMD after checkout, commit, merge,
-and rewrite. Run `bin/setup` after cloning, `bin/doctor` to inspect setup,
-and `bin/qmd-index` after uncommitted knowledge edits when fresh search matters.
-Use `bin/knowledge` from the root if the Git alias is unavailable. See the
-[development workflow](docs/development-workflow.md) for worktree preparation,
-shared models, diagnostics, and recovery.
-
-Use document checks for documentation changes and focused local application
-checks for ordinary code changes. Require successful full CI validation before
-merge and deployment. Run full local validation for test/build infrastructure
-changes or when focused checks leave material uncertainty. Follow the
+`bin/check --full` runs `bin/check-application`: shell lint for `ops/`, Python
+tests, formatting, typechecking, application and browser tests, and the
+build. CI uses this full mode. Require successful full CI before merge and
+deployment, and follow the
 [validation policy](docs/development-workflow.md#local-and-ci-validation).
+Checkout isolation also covers required generated types, included deliberately.
 
-`bin/check --documents-only` validates Markdown. Plain `bin/check` runs fast
-repository static checks. `bin/check --full` adds foundation behavior tests,
-application checks, browser tests, and the build; CI uses this full mode.
-
-Use Node.js 24 LTS for application commands, CI, and production. Keep these
-environments on the same major version. Reassess Node 26 after it reaches LTS;
-do not upgrade automatically. See the
+Use Node.js 24 LTS for application commands, CI, and production, and keep
+them on the same major version. Reassess Node 26 after it reaches LTS; do not
+upgrade automatically. See the
 [runtime decision](docs/development-workflow.md#node-runtime).
-
-Isolate [source discovery and mutable validation output](docs/development-workflow.md#validation-checkout-isolation)
-to the active checkout, including required generated types deliberately.
-
-## File Organization
-
-Keep [files cohesive](docs/development-workflow.md#file-organization);
-approximately 1,000 lines is a review threshold for source, tests, and styles.
-
-Keep [Markdown pages focused](docs/development-workflow.md#markdown-pages)
-on one topic or reader task, without numeric size limits.
 
 ## Deployment
 
@@ -69,11 +52,6 @@ release. Keep CI enabled and record the skip reason in the commit trailers.
 Follow the [release workflow](docs/development-workflow.md#main-branch-delivery).
 
 ## Testing
-
-Cover regression fixes and functional changes with automated tests. Follow
-[red-green TDD](docs/development-workflow.md#test-driven-development) when
-practical; explain exceptions. Test observable behavior through public
-interfaces, with fakes at external-system boundaries.
 
 For browser tests unrelated to signup or friendship, prepare authenticated
 users and relationships through isolated fixtures or existing APIs. Keep

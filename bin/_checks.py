@@ -1,6 +1,7 @@
 """Validate the documented Markdown subset and the portable foundation."""
 
 import ast
+import hashlib
 import html
 import json
 import os
@@ -13,6 +14,55 @@ import unicodedata
 from urllib.parse import unquote, urlsplit
 
 from _knowledge import matches
+
+
+MARKERS = ("project-starter:begin", "project-starter:end")
+
+
+def digest(data):
+    return hashlib.sha256(data).hexdigest()
+
+
+def managed_block(text):
+    """Return the text between the Project Starter marker lines, or None without markers."""
+    lines = text.splitlines(keepends=True)
+    begins = [i for i, line in enumerate(lines) if MARKERS[0] in line]
+    ends = [i for i, line in enumerate(lines) if MARKERS[1] in line]
+    if not begins and not ends:
+        return None
+    if len(begins) != 1 or len(ends) != 1 or ends[0] < begins[0]:
+        raise ValueError("expected one project-starter:begin line before one project-starter:end line")
+    return "".join(lines[begins[0] + 1:ends[0]])
+
+
+def manifest_errors(root):
+    """Compare managed files and blocks with the hashes recorded by Project Starter's bin/sync."""
+    path = root / ".project-starter.json"
+    manifest = json.loads(path.read_text()) if path.is_file() else {}
+    if "managed" not in manifest:
+        return []
+    overrides = manifest.get("overrides", {})
+    errors = [".project-starter.json: override for " + relative + " needs a reason"
+              for relative, reason in sorted(overrides.items()) if not isinstance(reason, str) or not reason.strip()]
+    restore = ("; restore it with Project Starter's bin/sync or record an override with its reason"
+               " in .project-starter.json")
+    for kind, entries in (("file", manifest["managed"]), ("block", manifest.get("blocks", {}))):
+        for relative, expected in sorted(entries.items()):
+            if relative in overrides:
+                continue
+            file = root / relative
+            try:
+                content = None
+                if file.is_file():
+                    content = file.read_bytes() if kind == "file" else managed_block(file.read_text())
+                if content is None:
+                    errors.append(relative + ": managed " + kind + " is missing" + restore)
+                elif digest(content if kind == "file" else content.encode()) != expected:
+                    errors.append(relative + ": managed " + kind + " differs from Project Starter "
+                                  + str(manifest.get("version")) + restore)
+            except ValueError as error:
+                errors.append(relative + ": " + str(error))
+    return errors
 
 
 def tracked_files(root):
@@ -255,7 +305,7 @@ def main():
     try:
         if sys.argv[1:] not in ([], ["--documents-only"], ["--full"]):
             raise ValueError("Usage: bin/check [--documents-only | --full]")
-        errors = validate(root)
+        errors = manifest_errors(root) + validate(root)
         if errors:
             print("\n".join(errors), file=sys.stderr)
             return 1
@@ -268,7 +318,7 @@ def main():
         for path in tracked_files(root):
             if path == root / ".envrc":
                 subprocess.run(["shellcheck", "--shell=bash", str(path)], cwd=root, check=True)
-            elif (path.is_relative_to(root / "bin") or path.is_relative_to(root / "ops")) and path.read_bytes().startswith(b"#!/bin/sh"):
+            elif path.is_relative_to(root / "bin") and path.read_bytes().startswith(b"#!/bin/sh"):
                 shell_files.append(path)
             elif (path.is_relative_to(root / "bin") or path.is_relative_to(root / "tests")) and (path.suffix == ".py" or path.read_bytes().startswith(b"#!/usr/bin/env python3")):
                 ast.parse(path.read_text(), filename=str(path))
@@ -277,24 +327,16 @@ def main():
         subprocess.run(["git", "diff", "--check"], cwd=root, check=True)
         subprocess.run(["git", "diff", "--cached", "--check"], cwd=root, check=True)
         if sys.argv[1:] != ["--full"]:
-            print("Fast foundation checks passed. Use bin/check --full for behavior tests and application validation.", flush=True)
+            print("Fast foundation checks passed. Use bin/check --full for application validation.", flush=True)
             return 0
-        tests = root / "tests/test_knowledge.py"
-        if not tests.exists():
-            raise RuntimeError("Missing tests/test_knowledge.py; preserve the foundation tests when adapting bin/check")
-        required_node = json.loads((root / "package.json").read_text())["engines"]["node"]
-        runtime_help = f"Node.js {required_node} is required for application checks. Select Node 24 LTS and rerun bin/check --full."
-        if not shutil.which("node"):
-            raise RuntimeError(runtime_help)
-        node_version = subprocess.check_output(["node", "--version"], cwd=root, text=True).strip()
-        if node_version.split(".")[0] != "v" + required_node.split(".")[0]:
-            raise RuntimeError(f"{runtime_help} Found {node_version}.")
-        subprocess.run([sys.executable, "-B", "-m", "unittest", "discover", "-s", "tests", "-p", "test_*.py", "-v"], cwd=root, check=True)
-        print("Full repository foundation checks passed.", flush=True)
-        # Browser validation builds and tests the current production artifact.
-        for script in ("format:check", "typecheck", "test", "test:browser"):
-            subprocess.run(["npm", "run", script], cwd=root, check=True)
-        print("Full application checks passed.", flush=True)
+        application = root / "bin/check-application"
+        if not application.exists():
+            print("Full foundation checks passed; no bin/check-application is present.", flush=True)
+            return 0
+        if not os.access(application, os.X_OK):
+            raise RuntimeError("bin/check-application must be executable")
+        subprocess.run([str(application)], cwd=root, check=True)
+        print("Full foundation and application checks passed.", flush=True)
         return 0
     except (OSError, ValueError, RuntimeError, SyntaxError, subprocess.SubprocessError) as error:
         print(error, file=sys.stderr)

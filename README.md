@@ -40,7 +40,7 @@ prepares local caches, and builds the QMD index when QMD is available. Run
 commands.
 
 Home-memory search is optional and uses a local Git setting. Follow the
-[search configuration instructions](docs/development-workflow.md#optional-home-memory)
+[search configuration instructions](docs/foundation/knowledge-search.md#optional-home-memory)
 to include your own notes.
 
 ## Repository checks
@@ -57,9 +57,9 @@ Install ShellCheck (`brew install shellcheck` on macOS) for the default and full
 modes. Neither routine mode starts application tooling.
 
 Complete the [app setup](docs/running-screenr.md#local-setup) and install
-Playwright Chromium before using `--full`. Full mode also runs foundation
-behavior tests, app formatting, TypeScript, PostgreSQL and browser tests, and
-a production build. GitHub Actions uses `--full` on pull requests and pushes to
+Playwright Chromium before using `--full`. Full mode also runs
+`bin/check-application`: shell lint, Python tests, app formatting, TypeScript,
+PostgreSQL and browser tests, and a production build. GitHub Actions uses `--full` on pull requests and pushes to
 `main`. Follow the [local and CI validation policy](docs/development-workflow.md#local-and-ci-validation)
 when choosing checks during development.
 
@@ -77,6 +77,6 @@ after uncommitted knowledge edits; unchanged inputs skip indexing work.
 
 Use `td` for local tasks, progress, blockers, and session handoffs. After cloning,
 install td and run `td init` in the primary checkout. Use `td status` or
-`td monitor` to inspect progress. Follow the [task workflow](docs/task-tracking.md)
+`td monitor` to inspect progress. Follow the [task workflow](docs/foundation/task-tracking.md)
 for setup, review, worktrees, and local data. Keep GitHub Issues for shared scope
 and acceptance criteria, linked from related td tasks.

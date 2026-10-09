@@ -5,7 +5,7 @@ workarounds, and lessons that cannot be recovered cheaply from source code.
 
 Pages are not auto-loaded. Search with QMD before writing, and update an
 existing related page when possible. Follow the
-[search failure policy](../docs/development-workflow.md#search-failures) if
+[search failure policy](../docs/foundation/knowledge-search.md#search-failures) if
 configured QMD fails. Keep this index current when pages move or change.
 
 ## Scope
@@ -23,7 +23,7 @@ Do not use memory for:
 - Code patterns or paths that current source explains directly.
 - Recent changes or Git history: use `git log` and `git blame`.
 - Local tasks, implementation checklists, or session progress: use
-  [td](../docs/task-tracking.md). Keep shared work in GitHub issues.
+  [td](../docs/foundation/task-tracking.md). Keep shared work in GitHub issues.
 - Secrets or private personal records: this repository is public.
 
 ## Page format
@@ -65,7 +65,7 @@ This index is plain Markdown and does not need frontmatter.
 Keep each page focused on one topic. Review a long page before adding more;
 split independent topics into linked pages when that improves reading and
 maintenance. Preserve the rule, reason, and evidence together. Follow the
-[Markdown guidance](../docs/development-workflow.md#markdown-pages).
+[Markdown guidance](../docs/foundation/engineering-policy.md#markdown-pages).
 
 ## Archive
 

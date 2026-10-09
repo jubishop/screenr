@@ -2,7 +2,7 @@
 
 Product decisions, architecture, initiatives, and research. Use
 [memory](../memory/README.md) for durable guidance and non-code context.
-Use [td](task-tracking.md) for local progress and handoffs, and GitHub issues
+Use [td](foundation/task-tracking.md) for local progress and handoffs, and GitHub issues
 for shared scope and acceptance criteria.
 
 Every document except this index starts with:
@@ -35,7 +35,7 @@ implementation; do not label an unreviewed proposal as approved.
 Keep each page focused on one topic or reader task. Review long pages before
 extending them, and move independent topics into linked pages when useful.
 Preserve decision reasons and evidence. Follow the
-[Markdown guidance](development-workflow.md#markdown-pages).
+[Markdown guidance](foundation/engineering-policy.md#markdown-pages).
 
 ## Recording decisions
 
@@ -62,7 +62,8 @@ both memory and design documents.
 
 ## Product and development
 
-- [Local task tracking](task-tracking.md): td setup, progress, handoffs, review, and local data.
+- [Project Starter foundation](foundation/README.md): shared engineering,
+  knowledge search, and task tracking policy.
 - [Product brief](product-brief.md): confirmed requirements and open design choices.
 - [Unified title feed](title-feed.md): confirmed shared feed decisions for
   issue #5, shared implementation and migration, and standalone comment scope
