@@ -1,13 +1,3 @@
-.DS_Store
-.cache/
-.config/qmd/
-.env
-.env.*
-!.env.example
-.envrc.local
-__pycache__/
-*.py[cod]
-worktrees/
 node_modules/
 .next/
 *.tsbuildinfo
@@ -16,7 +6,7 @@ test-results/
 next-env.d.ts
 
 # Local td task state
-.todos/
+
 # project-starter:begin
 .DS_Store
 .cache/
