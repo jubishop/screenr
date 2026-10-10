@@ -25,18 +25,25 @@ need it.
 
 ## Node runtime
 
-**Decision — 2026-09-08:** Use Node.js 24 LTS for local application commands,
-CI, and production. Application commands must reject a different Node major
-before starting work. Fast and document-only repository checks do not require
-Node. Reassess Node 26 after it reaches LTS; this is not an automatic upgrade.
+**Decision — 2026-10-09:** Use the latest Node.js LTS release for local
+application commands, CI, and production, following the
+[toolchain policy](foundation/engineering-policy.md#runtime-and-toolchain-versions).
+The minimum is Node 24, declared in `package.json`; application commands
+reject older versions before starting work and accept newer ones. CI installs
+`lts/*` on every run, and production uses the host's shared runtime, which a
+host updater moves to each new LTS release with health checks and rollback
+(see [deployment](deployment.md#node-runtime)). Fast and document-only
+repository checks do not require Node. This supersedes the 2026-09-08
+decision to stay on Node 24 and reassess Node 26 manually.
 
-**Why:** Prefer recent versions while retaining long-term support. Node 24 is
-the latest LTS line at the time of this decision, and CI and production already
-target it. Matching the local runtime reduces differences between environments.
+**Why:** The user chose the latest stable toolchains so versions do not go
+stale when nobody is watching.
 
-**Tradeoff:** Features available only in newer Node releases remain unavailable.
-Future major upgrades require compatibility validation and coordinated updates
-to the package requirements, CI, production provisioning, and documentation.
+**Tradeoff:** A new LTS major can reach CI, development machines, and
+production before anyone reviews it, and each updates on its own schedule, so
+they can briefly run different LTS releases. Full CI on each push and the
+production health checks with rollback limit that risk. Raise the minimum when
+the application starts relying on a newer release.
 
 ## Checks
 

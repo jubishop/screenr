@@ -40,9 +40,8 @@ deployment, and follow the
 [validation policy](docs/development-workflow.md#local-and-ci-validation).
 Checkout isolation also covers required generated types, included deliberately.
 
-Use Node.js 24 LTS for application commands, CI, and production, and keep
-them on the same major version. Reassess Node 26 after it reaches LTS; do not
-upgrade automatically. See the
+Use the latest Node.js LTS release, with a minimum of Node 24, for
+application commands, CI, and production. See the
 [runtime decision](docs/development-workflow.md#node-runtime).
 
 ## Deployment

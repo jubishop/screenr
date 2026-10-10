@@ -108,7 +108,7 @@ Repeated passes cannot prove the absence of every race. Future tests must preser
 - `npm run test:browser:isolation`: two complete 46-test suites ran concurrently in fresh checkouts and passed in 212.8 seconds for the whole isolation command. The active database and checkout conflicts were rejected before reset. Final database readback found disjoint invitation hashes. Temporary checkouts and their databases were removed.
 - The existing CI gate and failure artifact retention remain unchanged. Full CI must pass for the PR before merge.
 
-Use Node 24 and the normal commands:
+Use the latest Node LTS release and the normal commands:
 
 ```sh
 npm run test:browser -- --workers=1

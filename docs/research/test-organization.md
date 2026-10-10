@@ -16,7 +16,7 @@ tests use `tests/app/<feature>.test.ts`. Related features use the same name in
 both directories. The existing focused suites, such as title activity,
 suggestions, and discussion API validation, stay in their original files.
 
-With Node 24 selected, run one suite by its filename:
+With the latest Node LTS release selected, run one suite by its filename:
 
 ```sh
 npx tsx scripts/test-database.ts

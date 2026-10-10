@@ -1,6 +1,8 @@
 #!/bin/sh
 # One-time provisioning for the existing Ubuntu 24.04 x64 shared VPS.
+# Screenr runs the host's shared Node runtime, which follows the latest LTS.
 set -eu
+shared_node=/opt/node/current
 test "$(id -u)" = 0
 test "$(uname -m)" = x86_64
 # shellcheck disable=SC1091
@@ -9,6 +11,10 @@ test "$ID" = ubuntu
 test "$VERSION_ID" = 24.04
 test ! -e /var/lib/screenr/postgres
 test ! -e /opt/screenr/node
+if ! test -x "$shared_node/bin/node"; then
+    echo "Install the host's shared Node runtime at $shared_node first." >&2
+    exit 1
+fi
 test ! -e /etc/systemd/system/screenr-db.service
 if id screenr >/dev/null 2>&1 || id screenr-db >/dev/null 2>&1; then
     echo "A Screenr service user already exists." >&2
@@ -44,16 +50,8 @@ useradd --system --home-dir /var/lib/screenr/postgres --shell /usr/sbin/nologin 
 install -d -m 0755 /opt/screenr /opt/screenr/releases /var/lib/screenr
 install -d -m 0700 -o screenr-db -g screenr-db /var/lib/screenr/postgres
 install -d -m 0700 /etc/screenr
-runtime=$(mktemp -d /opt/screenr/node-install.XXXXXX)
-trap 'rm -rf "$runtime"' EXIT HUP INT TERM
-cd "$runtime"
-version=v24.20.0
-archive=node-$version-linux-x64.tar.xz
-curl --fail --silent --show-error "https://nodejs.org/dist/$version/$archive" -o "$archive"
-curl --fail --silent --show-error "https://nodejs.org/dist/$version/SHASUMS256.txt" -o SHASUMS256.txt
-grep "  $archive\$" SHASUMS256.txt | sha256sum --check --strict -
-tar -xJf "$archive"
-mv "node-$version-linux-x64" /opt/screenr/node
+# Services and activation use this link; the host's updater moves the shared runtime.
+ln -s "$shared_node" /opt/screenr/node
 cd /
 runuser -u screenr-db -- /usr/lib/postgresql/18/bin/initdb \
     -D /var/lib/screenr/postgres --auth-local=peer --auth-host=scram-sha-256

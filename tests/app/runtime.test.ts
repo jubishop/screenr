@@ -8,7 +8,7 @@ import { promisify } from "node:util";
 
 const execute = promisify(execFile);
 
-test("npm rejects other Node majors before running application commands", async () => {
+test("npm rejects Node versions below the minimum before running application commands", async () => {
   const directory = await mkdtemp(join(tmpdir(), "screenr-runtime-"));
   try {
     const manifest = JSON.parse(await readFile("package.json", "utf8"));
@@ -30,7 +30,8 @@ test("npm rejects other Node majors before running application commands", async 
 Object.defineProperty(process.versions, "node", { value: process.env.TEST_NODE_VERSION });
 `,
     );
-    for (const version of ["24.20.0", "22.18.0", "25.8.0", "26.8.1"]) {
+    const accepted = ["24.20.0", "25.8.0", "26.8.1", "28.0.0"];
+    for (const version of [...accepted, "22.18.0", "23.11.1"]) {
       const result = await execute("npm", ["run", "dev"], {
         cwd: directory,
         timeout: 10000,
@@ -44,7 +45,7 @@ Object.defineProperty(process.versions, "node", { value: process.env.TEST_NODE_V
         (output) => ({ ...output, code: 0 }),
         (error: { stdout: string; stderr: string; code: number }) => error,
       );
-      if (version.startsWith("24.")) {
+      if (accepted.includes(version)) {
         assert.equal(result.code, 0, result.stderr);
         assert.match(result.stdout, /application started/);
       } else {

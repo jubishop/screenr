@@ -16,11 +16,14 @@ def run(*command):
 
 def main():
     required = json.loads((ROOT / "package.json").read_text())["engines"]["node"]
-    runtime_help = f"Node.js {required} is required for application checks. Select Node 24 LTS and rerun bin/check --full."
+    minimum = int(required.removeprefix(">="))
+    runtime_help = (f"Node.js {required} is required for application checks. "
+                    "Select the latest Node LTS release and rerun bin/check --full.")
     if not shutil.which("node"):
         raise RuntimeError(runtime_help)
     found = subprocess.check_output(["node", "--version"], cwd=ROOT, text=True).strip()
-    if found.split(".")[0] != "v" + required.split(".")[0]:
+    major = found.removeprefix("v").split(".")[0]
+    if not major.isdigit() or int(major) < minimum:
         raise RuntimeError(f"{runtime_help} Found {found}.")
     scripts = [str(path) for path in sorted((ROOT / "ops").iterdir())
                if path.is_file() and path.read_bytes().startswith(b"#!/bin/sh")]

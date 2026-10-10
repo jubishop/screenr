@@ -18,7 +18,7 @@ follow the [domain cutover procedure](#domain-cutover) for an existing installat
 | --- | --- |
 | Releases | `/opt/screenr/releases/<Git revision>` |
 | Active release | `/opt/screenr/current` symlink |
-| Isolated Node 24 runtime | `/opt/screenr/node/bin/node` |
+| Node runtime | `/opt/screenr/node/bin/node`, through a link to the host's shared `/opt/node/current` |
 | Web process | `screenr-web.service`, loopback port 3060, 384 MB memory limit |
 | Email worker | `screenr-worker.service`, 128 MB memory limit |
 | PostgreSQL 18 | `screenr-db.service`, loopback port 5439, 256 MB memory limit |
@@ -33,11 +33,23 @@ documented limits protect a small shared host; they are not measured capacity
 guarantees. Inspect memory peaks, restart counts, CPU and disk use before
 deciding whether more capacity is needed.
 
+## Node runtime
+
+Production follows the latest Node LTS release, under the
+[runtime decision](development-workflow.md#node-runtime). A host updater, not
+Screenr's deployment, manages `/opt/node/current`. Each week it installs a new
+LTS release when one is available, restarts `screenr-web` and `screenr-worker`
+along with the host's other Node services, and requires the units to be active
+and `http://127.0.0.1:3060/api/health` to answer. It rolls back to the previous
+runtime when a check fails. Releases and activation do not change the runtime.
+
 ## Provisioning
 
-Install PostgreSQL 18 binaries from the official PostgreSQL Ubuntu repository,
-an isolated official Node 24 Linux x64 distribution with its published checksum,
+Install PostgreSQL 18 binaries from the official PostgreSQL Ubuntu repository
 and `restic`. Avoid creating an unused automatically started PostgreSQL cluster.
+Screenr uses the host's shared Node runtime at `/opt/node/current`, which must
+exist before provisioning; `ops/provision.sh` links `/opt/screenr/node` to it
+instead of installing a separate copy.
 Create separate system users `screenr` and `screenr-db`, with no login shells.
 `ops/provision.sh` performs this one-time installation and creates the isolated
 cluster. It refuses existing Screenr targets; inspect a partial installation

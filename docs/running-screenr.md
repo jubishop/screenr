@@ -12,18 +12,18 @@ outside this milestone.
 
 ## Local setup
 
-Use Node.js 24 LTS, npm, Python 3.9+, ShellCheck, Caddy, OpenSSL, and a
-Docker-compatible engine. Caddy and OpenSSL are used by the local proxy test;
+Use the latest Node.js LTS release, npm, Python 3.9+, ShellCheck, Caddy,
+OpenSSL, and a Docker-compatible engine. Caddy and OpenSSL are used by the local proxy test;
 do not start a system Caddy service. On macOS, install the test tools with
 `brew install caddy openssl`; the existing Colima installation can provide Docker.
 Each application worktree needs its own database and development port if
 several copies run together. QMD setup is described in the
 [development workflow](development-workflow.md).
 
-Select Node 24 in your shell before running `npm ci` or application commands.
-Use the npm bundled with Node 24 or a newer compatible npm that supports
-[`devEngines`](https://docs.npmjs.com/cli/v11/configuring-npm/package-json/#devengines).
-The package policy rejects other Node majors before installation or script
+Select the latest Node LTS release in your shell before running `npm ci` or
+application commands. Use its bundled npm or a newer compatible npm that
+supports [`devEngines`](https://docs.npmjs.com/cli/v11/configuring-npm/package-json/#devengines).
+The package policy rejects Node versions below 24 before installation or script
 execution. `bin/check --full` also checks Node before running behavior tests.
 Fast and document-only checks do not need Node. See the
 [runtime decision](development-workflow.md#node-runtime) for upgrade policy.

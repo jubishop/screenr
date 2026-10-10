@@ -68,18 +68,27 @@ class CheckApplicationTests(unittest.TestCase):
                                            *[["npm", "run", script] for script in SCRIPTS]])
         self.assertIn("Application checks passed", result.stdout)
 
-    def test_wrong_or_missing_node_stops_before_any_check(self):
-        for version in ("v22.18.0", "v25.8.0", "v26.8.1"):
+    def test_newer_node_majors_run_the_checks(self):
+        for version in ("v25.8.0", "v26.8.1", "v28.0.0"):
+            with self.subTest(version=version):
+                self.events.unlink(missing_ok=True)
+                result = self.check(CHECK_NODE_VERSION=version)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(self.recorded()[-1], ["npm", "run", SCRIPTS[-1]])
+
+    def test_old_or_missing_node_stops_before_any_check(self):
+        for version in ("v20.19.5", "v22.18.0", "v23.11.1"):
             with self.subTest(version=version):
                 result = self.check(CHECK_NODE_VERSION=version)
                 self.assertNotEqual(result.returncode, 0)
-                self.assertIn("Node.js 24.x is required", result.stderr)
+                self.assertIn("Node.js >=24 is required", result.stderr)
+                self.assertIn("latest Node LTS", result.stderr)
                 self.assertIn(version, result.stderr)
                 self.assertEqual(self.recorded(), [])
         (self.tools / "node").unlink()
         result = self.check()
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn("Node.js 24.x is required", result.stderr)
+        self.assertIn("Node.js >=24 is required", result.stderr)
         self.assertEqual(self.recorded(), [])
 
     def test_failures_propagate_and_stop_later_commands(self):

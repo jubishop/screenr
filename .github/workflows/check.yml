@@ -16,7 +16,7 @@ concurrency:
 
 jobs:
   check:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     timeout-minutes: 15
     outputs:
       deploy: ${{ steps.release.outputs.deploy }}
@@ -40,7 +40,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
-          node-version: "24"
+          node-version: lts/*
           cache: npm
       - run: npm ci
       - name: Isolate CI APT sources
@@ -83,7 +83,7 @@ jobs:
   deploy:
     needs: check
     if: needs.check.outputs.deploy == 'true' && github.repository == 'jubishop/screenr'
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     timeout-minutes: 20
     environment:
       name: production
