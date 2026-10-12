@@ -12,6 +12,7 @@ import { FeedView } from "./feed";
 import { WatchTogether } from "./watch-together";
 import { TitleSearch } from "./title-search";
 import { AccountView } from "./account-view";
+import { sendPhoto, type PhotoChange } from "./photo-editor";
 import { InvitationsView } from "./invitations-view";
 import { PeopleView } from "./people-view";
 import { ProfileView } from "./profile-view";
@@ -157,6 +158,12 @@ export function Screen({
     pending.current?.abort();
     const updated = await api<Person>("profile", { name, username });
     setUser(updated);
+    await refresh();
+  }
+  async function savePhoto(change: PhotoChange) {
+    pending.current?.abort();
+    const { photo } = await sendPhoto(change);
+    setUser((current) => ({ ...current, photo }));
     await refresh();
   }
   async function saveServices(serviceIds: string[]) {
@@ -348,6 +355,7 @@ export function Screen({
             user={user}
             initialGoogleError={initialGoogleError}
             saveProfile={saveProfile}
+            savePhoto={savePhoto}
             saveServices={saveServices}
             refresh={refresh}
           />

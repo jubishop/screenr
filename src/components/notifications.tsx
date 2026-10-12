@@ -396,6 +396,7 @@ export function Notifications({
                           person={{
                             user_id: item.actorId,
                             display_name: item.actor,
+                            photo: item.actorPhoto,
                           }}
                         />
                         <span className="notification-copy">

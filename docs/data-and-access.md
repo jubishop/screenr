@@ -36,14 +36,18 @@ result becomes the JSON response; an action without one responds
 
 1. A POST must come from the app's origin (403).
 2. The request needs a session (401).
-3. Every action except profile setup needs a completed profile (403).
+3. Every action except profile setup and photo changes needs a completed
+   profile (403).
 4. An unknown action, or a known one with another method, returns 404.
-5. Usage telemetry records the day for member POST actions and title searches
+5. Usage telemetry records the day for member POST actions, photo changes by
+   members, and title searches
    ([active days](usage-telemetry.md#active-days)).
 6. A POST body must be a JSON object of at most 16,000 bytes (400 or 413).
+   A photo upload's body is the image itself, at most 200 KB.
 
 Add an action as one entry, using `read` for a member GET, `write` for a
-member POST, or `signup` for a POST that runs before profile setup.
+member POST, `signup` for a POST that runs before profile setup, or `photo`
+for a photo change, which works before and after setup.
 
 ## Sign-in return path
 
@@ -74,6 +78,80 @@ no such names when it was added
 ([issue #108](https://github.com/jubishop/screenr/issues/108)). After a
 rollback, the previous release also cannot store these names, but shows a
 server error instead of that message.
+
+## Profile photos
+
+Members add, replace, or remove an optional photo during setup and on
+Account, following the
+[profile photos decision](product-brief.md#profile-photos--2026-10-12)
+([issue #104](https://github.com/jubishop/screenr/issues/104)). The shared
+[avatar](interface-design.md#avatars-wherever-a-person-appears--2026-10-12)
+shows the photo over the member's initial, which remains while the photo
+loads or if it cannot load. `src/server/photos.ts` holds the rules below, and
+`tests/app/profile-photos.test.ts` and `tests/browser/profile-photos.spec.ts`
+cover them.
+
+**Storage.** Migration `019-profile-photos.sql` adds `profile_photo`, which
+stores each photo as `bytea` in Screenr's PostgreSQL database under
+`/var/lib/screenr/postgres`, Screenr's data directory. The existing encrypted
+backups and the weekly restore check therefore cover photos with no change to
+the backup, restore, or service units. A photo is at most 200 KB, and members
+are few, so the database stays small. Rows reference the auth user rather
+than the profile, so a Google signup's copy exists during setup. A row
+without an image records that the member removed their photo. The
+`screenr_photo(user_id)` function returns the photo's version, the first 16
+hex digits of its SHA-256, which every query that returns a person includes
+as `photo`. Blocked people are listed with no photo.
+
+**Uploads.** The browser crops the center square, resizes it to 512×512, and
+encodes a JPEG, lowering the quality until it is under 60 KB. That stays
+within the decided 200 KB maximum and under the 64 KB request body limit in
+`ops/Caddyfile`, so the shared Caddy configuration needs no change. Reading
+the file through `createImageBitmap` needs no `blob:` or `data:` image URL,
+which the [content security policy](deployment.md#provisioning) would block.
+The `photo` action receives the JPEG as the raw request body. The server
+reads at most 200 KB (413) and accepts only bytes that start with the JPEG
+signature, whatever the request's content type says (415). Photo changes
+skip the shared write lock because they change no access rules.
+
+**Serving.** `/api/photos/<user ID>/<version>` returns the photo only to a
+signed-in person viewing their own photo, including before setup, or to a
+member viewing a member whose profile they can open. Blocking hides it in
+both directions. Other requests get 401 or 404 with `no-store`. A photo
+response is `Cache-Control: private, max-age=86400` with `Vary: Cookie`, an
+`ETag` of its version, and `Cross-Origin-Resource-Policy: same-origin`.
+`private` keeps shared caches from storing it, `Vary: Cookie` keeps a
+browser from reusing it for another signed-in person, and a changed photo
+has a new URL, so the old one returns 404. URLs are same-origin, so the
+policy's `img-src 'self'` covers them.
+
+**Google pictures.** Screenr fetches a Google picture only from
+`lh3.googleusercontent.com` through `lh6`, over HTTPS, requests the
+`=s512-c` size, follows at most three redirects within those hosts, and
+reads at most 200 KB of JPEG, PNG, or WebP. It never links to Google. It
+reads the picture from `user.image`, set by a Google signup, or else from the
+`picture` claim of the Google account's stored ID token, for an account
+linked after an email-code signup. A `user.image` outside Google's hosts is
+ignored, so the URL cannot direct a request elsewhere.
+
+- **Automatic copies:** Better Auth's `account.create.after` hook runs after
+  a Google signup or link commits. It copies the picture unless the person
+  already has a photo row, including a recorded removal, and the insert never
+  replaces one. A failure keeps the initial and logs
+  `google photo copy failed` without failing the sign-in.
+- **Use my Google photo:** shown with a Google sign-in. It replaces the
+  current photo or a removal, and reports a failed copy beside the button.
+- **One-time backfill:** after the release with photos deploys,
+  `screenr-worker` copies the picture for everyone with a Google account and
+  no photo row, one at a time, beside email delivery. It logs each failure
+  and then one `google photo backfill finished` line with counts, and records
+  `google-photos` in `screenr_backfill` so later starts skip it. A stopped
+  pass runs again on the next start. To retry failures, delete that row and
+  restart the worker, as in [deployment](deployment.md#failure-logs); a
+  retry fetches only for people who still have no photo or removal.
+
+A rollback to a release without photos keeps the table and ignores it;
+avatars show initials until the photo release returns.
 
 ## Profile friends and suggestions
 

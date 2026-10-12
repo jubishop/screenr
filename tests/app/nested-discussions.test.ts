@@ -164,6 +164,7 @@ test("nested groups retain only safe parent context through blocking, removal, a
       author_id: null,
       username: null,
       display_name: null,
+      photo: null,
       body: "",
       spoiler: false,
       addressed_username: null,

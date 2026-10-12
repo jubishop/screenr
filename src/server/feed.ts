@@ -38,7 +38,7 @@ export const viewerStatus = (title: string) => `coalesce(
     (SELECT own.status FROM watch_progress own WHERE own.owner_id=$1 AND own.title_id=${title} AND own.active),
     (SELECT 'want_to_watch' FROM feed_item own WHERE own.owner_id=$1 AND own.title_id=${title}
       AND own.item_type='want_to_watch' AND own.active))`;
-export const itemQuery = `SELECT c.*,p.username,p.display_name,t.name AS title_name,t.poster_path,t.kind,t.release_date,
+export const itemQuery = `SELECT c.*,p.username,p.display_name,screenr_photo(p.user_id) AS photo,t.name AS title_name,t.poster_path,t.kind,t.release_date,
   (c.item_type='recommended' AND c.active) AS recommended,
   (c.item_type='want_to_watch' AND c.active) AS want_to_watch,
   EXISTS (SELECT 1 FROM feed_item own WHERE own.owner_id=$1 AND own.title_id=c.title_id
@@ -67,6 +67,7 @@ export const itemQuery = `SELECT c.*,p.username,p.display_name,t.name AS title_n
       'id',cm.id::text,'author_id',CASE WHEN cm.accessible THEN cm.author_id ELSE NULL END,
       'username',CASE WHEN cm.accessible THEN author.username ELSE NULL END,
       'display_name',CASE WHEN cm.accessible THEN author.display_name ELSE NULL END,
+      'photo',CASE WHEN cm.accessible THEN screenr_photo(author.user_id) ELSE NULL END,
       'body',CASE WHEN cm.accessible AND cm.removed_at IS NULL THEN cm.body ELSE '' END,
       'spoiler',cm.accessible AND cm.spoiler,
       'root_id',cm.root_id::text,'addressed_username',CASE WHEN cm.accessible

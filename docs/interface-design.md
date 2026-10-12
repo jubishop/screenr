@@ -400,8 +400,10 @@ Browsers without `Intl.Segmenter` fall back to the first code point.
 user ID picks one of eight theme colors, `--avatar-0` to `--avatar-7`, and
 each context sets the size through `--avatar-size`. The avatar also appears
 in the profile's Friends list and every Friends page row. A profile photo
-from [issue #104](https://github.com/jubishop/screenr/issues/104) replaces
-the initial inside this component.
+from [issue #104](https://github.com/jubishop/screenr/issues/104) covers
+the initial inside this component; the initial and its color remain while the
+photo loads or if it cannot load. Blocked people show the initial
+([profile photos](data-and-access.md#profile-photos)).
 
 ### Sectioned Friends page — 2026-10-12
 

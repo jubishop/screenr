@@ -2,6 +2,8 @@ export type Person = {
   user_id: string;
   username: string;
   display_name: string;
+  // The profile photo's version for its avatar URL, or null for the initial.
+  photo: string | null;
 };
 export type Title = {
   id: string;
@@ -121,6 +123,7 @@ export type Conversation = {
   viewer_status: WatchStatus | null;
   username: string;
   display_name: string;
+  photo: string | null;
   title_name: string;
   poster_path: string | null;
   kind: "movie" | "tv";
@@ -134,6 +137,7 @@ export type Comment = {
   author_id: string | null;
   username: string | null;
   display_name: string | null;
+  photo: string | null;
   body: string;
   spoiler: boolean;
   root_id: string | null;

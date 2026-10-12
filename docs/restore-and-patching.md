@@ -7,7 +7,8 @@ status: current
 This runbook restores Screenr's production database and settings from the
 [encrypted backups](deployment.md#encrypted-backups-and-restore-check), on
 the existing VPS or a replacement, and describes how the host software that
-Screenr depends on is patched. Backups run daily, so a restore can lose up to
+Screenr depends on is patched. The database includes profile photos, so
+restoring it restores them. Backups run daily, so a restore can lose up to
 about a day of changes. Formal recovery targets remain
 [deferred](application-stack.md#initial-backup-scope--2026-09-05).
 

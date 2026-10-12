@@ -6,6 +6,7 @@ import { codeLimitMessage } from "../shared";
 import { db, transaction } from "./db";
 import { activeInvitation, invitationHash } from "./invitations";
 import { queueCode } from "./email";
+import { copyGooglePhoto } from "./photos";
 
 export function tokenFromCookie(headers?: Headers) {
   const token = headers
@@ -81,7 +82,12 @@ async function reserveCodeEmail(email: string) {
 }
 
 export function createAuth(
-  options: { sendCode?: typeof queueCode; rateLimit?: boolean } = {},
+  options: {
+    sendCode?: typeof queueCode;
+    rateLimit?: boolean;
+    // Tests replace Google's image servers.
+    fetchPhoto?: typeof fetch;
+  } = {},
 ) {
   // Tests and fixtures that disable rate limits also skip the code caps.
   const limited = options.rateLimit ?? true;
@@ -202,6 +208,21 @@ export function createAuth(
                 message: "A valid invitation is required to join Screenr.",
               });
             return { data: { ...user, invitationHash: hash } };
+          },
+        },
+      },
+      account: {
+        create: {
+          // A Google signup or link copies the Google picture once, unless
+          // the person already has a photo or removed one. Better Auth runs
+          // this after its transaction commits; failures keep the initial.
+          after: async (account) => {
+            if (account.providerId === "google")
+              await copyGooglePhoto(
+                account.userId,
+                "account",
+                options.fetchPhoto,
+              );
           },
         },
       },

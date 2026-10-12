@@ -172,6 +172,34 @@ a.person:hover strong {
   background: var(--white);
   margin-bottom: 18px;
 }
+/* The photo editor on Account and during setup. On phones the buttons wrap
+   beside the avatar. */
+.photo-editor {
+  --avatar-size: 72px;
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+}
+.photo-editor > div {
+  flex: 1;
+  min-width: 0;
+}
+/* The Add or Replace photo button opens the file picker. */
+.photo-editor input[type="file"] {
+  display: none;
+}
+.photo-editor p.small {
+  margin: 0 0 12px;
+}
+.photo-editor .inline-actions {
+  gap: 10px 12px;
+}
+.photo-editor [role="status"] {
+  margin: 0;
+}
+.photo-editor [role="status"]:not(:empty) {
+  margin-top: 12px;
+}
 .joined-person {
   display: block;
   font-size: 13px;

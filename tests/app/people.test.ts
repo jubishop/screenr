@@ -49,25 +49,38 @@ test("people suggestions list distinct friends of friends and all mutual friends
 
   const screen = await loadScreen(alice, "/people");
   assert.ok(screen.kind === "people");
-  const mutualBen = { user_id: ben, username: "ben", display_name: "ben" };
-  const mutualCam = { user_id: cam, username: "cam", display_name: "cam" };
+  const mutualBen = {
+    user_id: ben,
+    username: "ben",
+    display_name: "ben",
+    photo: null,
+  };
+  const mutualCam = {
+    user_id: cam,
+    username: "cam",
+    display_name: "cam",
+    photo: null,
+  };
   assert.deepEqual(screen.suggestions, [
     {
       user_id: outsider,
       username: "outsider",
       display_name: "outsider",
+      photo: null,
       mutual_friends: [mutualBen, mutualCam],
     },
     {
       user_id: aaron,
       username: "aaron",
       display_name: "aaron",
+      photo: null,
       mutual_friends: [mutualCam],
     },
     {
       user_id: zara,
       username: "zara",
       display_name: "zara",
+      photo: null,
       mutual_friends: [mutualBen],
     },
   ]);
@@ -147,8 +160,14 @@ for (const pair of [
           user_id: outsider,
           username: "outsider",
           display_name: "outsider",
+          photo: null,
           mutual_friends: [
-            { user_id: cam, username: "cam", display_name: "cam" },
+            {
+              user_id: cam,
+              username: "cam",
+              display_name: "cam",
+              photo: null,
+            },
           ],
         },
       ]);
@@ -173,8 +192,18 @@ test("profiles list accepted friends for owners, friends, and nonfriends without
     const screen = await loadScreen(viewer, "/people/ALICE");
     assert.ok(screen.kind === "profile");
     assert.deepEqual(screen.profile.friends, [
-      { user_id: ben, username: "ben", display_name: "ben" },
-      { user_id: cam, username: "cam", display_name: "cam" },
+      {
+        user_id: ben,
+        username: "ben",
+        display_name: "ben",
+        photo: null,
+      },
+      {
+        user_id: cam,
+        username: "cam",
+        display_name: "cam",
+        photo: null,
+      },
     ]);
     assert.equal(screen.conversations.length, viewer === outsider ? 0 : 1);
   }

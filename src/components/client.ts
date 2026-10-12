@@ -63,6 +63,7 @@ export async function signOut() {
     );
   window.location.assign("/login");
 }
+// A Blob, such as a photo, is sent as the raw request body; other data as JSON.
 export async function api<T = Record<string, unknown>>(
   action: string,
   data?: unknown,
@@ -72,8 +73,15 @@ export async function api<T = Record<string, unknown>>(
     method: data === undefined ? "GET" : "POST",
     cache: "no-store",
     signal,
-    headers: data === undefined ? {} : { "Content-Type": "application/json" },
-    body: data === undefined ? undefined : JSON.stringify(data),
+    headers:
+      data === undefined
+        ? {}
+        : {
+            "Content-Type":
+              data instanceof Blob ? data.type : "application/json",
+          },
+    body:
+      data === undefined || data instanceof Blob ? data : JSON.stringify(data),
   });
   if (response.status === 401) {
     // Return to this member page, or to the one setup was continuing to.

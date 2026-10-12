@@ -15,8 +15,8 @@ export async function watchTogether(viewer: string, usernames: string[]) {
     titles: Title[];
   }>(
     `WITH participants AS (
-      SELECT user_id,username,display_name FROM profile
-      WHERE user_id=$1 OR username=ANY($2::text[])
+      SELECT user_id,username,display_name,screenr_photo(user_id) AS photo
+      FROM profile WHERE user_id=$1 OR username=ANY($2::text[])
     ), eligible AS (
       SELECT count(*)=cardinality($2::text[])+1
         AND bool_and(screenr_can_read($1,user_id)) AS allowed

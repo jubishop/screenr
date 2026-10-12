@@ -13,10 +13,11 @@ test flow, and [Testing Screenr](docs/testing.md) for the automated suites.
 ## What Screenr does today
 
 - **Joining:** People sign up through an invitation link with Google or an
-  emailed code, then choose a display name and username. Signup makes the
-  inviter an accepted friend. Members create, share, and revoke their own
-  invitation links, which show rich previews in messaging apps. Signing in
-  from a link returns to the linked page.
+  emailed code, then choose a display name and username, with an optional
+  profile photo; Google members start with a copy of their Google picture.
+  Signup makes the inviter an accepted friend. Members create, share, and
+  revoke their own invitation links, which show rich previews in messaging
+  apps. Signing in from a link returns to the linked page.
 - **Friends:** Members find people by profile link or exact username, through
   People you may know with named mutual friends, and through friend lists on
   profiles. The Friends page groups requests, friends, sent requests,
@@ -25,7 +26,8 @@ test flow, and [Testing Screenr](docs/testing.md) for the automated suites.
   Block then opens the Friends page with a notice. Declining, unfriending,
   blocking, deleting or removing a comment, and revoking an invitation each
   ask for an in-page confirmation. Current friendship and blocking rules
-  decide what each person sees. Avatars mark every person.
+  decide what each person sees. Avatars mark every person with their photo
+  or initial.
 - **Titles:** Find a title searches the TMDB catalog and suggests titles from
   friends' Recommend, Want to watch, and Watching choices, with anonymous
   counts once at least three friends of friends share a choice. Title pages show details,
@@ -48,8 +50,8 @@ test flow, and [Testing Screenr](docs/testing.md) for the automated suites.
   first.
 - **Notifications and account:** An in-app panel covers friend requests,
   acceptances, comments, and replies, with optional activity email. Account
-  settings edit the display name and username, connect Google, and save
-  streaming services.
+  settings edit the display name, username, and profile photo, connect
+  Google, and save streaming services.
 - **Home screen:** Members can add Screenr to a phone's home screen and open
   it as a standalone app. Offline page loads show a plain offline page; there
   is no offline content.
@@ -70,8 +72,6 @@ Remaining product features are tracked as
   titles by default ([#172](https://github.com/jubishop/screenr/issues/172))
 - Title-less discussion posts and season or episode labels
   ([#103](https://github.com/jubishop/screenr/issues/103))
-- Optional profile photos
-  ([#104](https://github.com/jubishop/screenr/issues/104))
 - A ranked top 10 on each profile
   ([#99](https://github.com/jubishop/screenr/issues/99))
 - A dark theme that follows the system setting
@@ -92,11 +92,11 @@ in Cloudflare R2. See the [application stack](docs/application-stack.md) and
 | --- | --- |
 | `src/app/` | Next.js routes: sign-in, profile setup, invitation links, credits, member screens, API handlers, app icons, the web manifest, and stylesheets |
 | `src/components/` | React views and controls for feeds, titles, people, invitations, notifications, and account settings |
-| `src/server/` | Server-only domain code: authentication, access rules, social reads and writes, invitations, catalog and availability, suggestions, notifications, email, and usage telemetry |
+| `src/server/` | Server-only domain code: authentication, access rules, social reads and writes, profile photos, invitations, catalog and availability, suggestions, notifications, email, and usage telemetry |
 | `src/shared.ts`, `src/viewing.ts`, `src/member-routes.ts` | Types, helpers, and the member route parser shared by browser and server code |
 | `public/` | Static files: the TMDB logo, manifest icons, and the offline-page service worker |
 | `db/` | Numbered SQL migrations |
-| `scripts/` | Migration, bootstrap invitation, email worker, usage report, release packaging, icon generation, and browser-test harness commands |
+| `scripts/` | Migration, bootstrap invitation, email and photo backfill worker, usage report, release packaging, icon generation, and browser-test harness commands |
 | `tests/` | Application and PostgreSQL tests in `app/`, Playwright suites in `browser/`, and Python tests for operations and check scripts |
 | `ops/` | VPS provisioning, release activation, systemd units, Caddy and PostgreSQL configuration, backups, restore checks, and failure alerts |
 | `bin/` | Repository setup, checks, knowledge search, deployment helpers, and Git hooks |
@@ -106,7 +106,7 @@ Member screens share one catch-all route in `src/app/(member)/`. It loads
 screen data through `src/server/` and renders views from `src/components/`;
 background reads and member actions go to the handler in
 `src/app/api/screenr/`, which serves the actions declared in
-`src/server/actions.ts`. The page, the
+`src/server/actions.ts`. `src/app/api/photos/` serves profile photos. The page, the
 screen loader, and the browser shell all read paths through
 `src/member-routes.ts`, which names each screen and the query parameters it
 keeps. Sign-in accepts only these paths as

@@ -14,9 +14,11 @@ const observedSurfaces: SaveSurface[] = [
 
 // Signed-in page renders and member actions call this; background screen and
 // notification refreshes do not. Rows hold only the member and the date.
+// Someone who has not finished setup has no profile, so no day is recorded.
 export async function recordActiveDay(userId: string) {
   await db.query(
-    "INSERT INTO member_active_day(user_id) VALUES($1) ON CONFLICT DO NOTHING",
+    `INSERT INTO member_active_day(user_id) SELECT user_id FROM profile
+    WHERE user_id=$1 ON CONFLICT DO NOTHING`,
     [userId],
   );
 }

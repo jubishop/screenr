@@ -141,7 +141,8 @@ action declared in `src/server/actions.ts`, including rejected ones, and for
 title searches. Screen and notification
 reads, which clients repeat in the background while a page or the
 notification panel stays open, never record activity. Profile setup records
-nothing; the member page that follows it does.
+nothing; the member page that follows it does. Photo changes record the day
+once the person has a profile, so a photo added during setup records nothing.
 
 ### Save attribution
 

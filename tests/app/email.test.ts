@@ -268,6 +268,8 @@ test("the worker refuses to start without the Resend transport, key, and sender"
 test("the worker deletes expired jobs on its first pass and exits cleanly on SIGTERM", async () => {
   // No member left by another suite can queue activity email for the worker.
   await db.query('TRUNCATE "user" CASCADE');
+  // The first start also runs the one-time Google photo backfill.
+  await db.query("DELETE FROM screenr_backfill");
   await queueCode({ email: "stale@example.test", otp: "000000" });
   await db.query("UPDATE email_job SET expires_at=now()-interval '1 second'");
   const child = spawn(process.execPath, worker, {
@@ -279,9 +281,12 @@ test("the worker deletes expired jobs on its first pass and exits cleanly on SIG
   const exited = once(child, "exit");
   try {
     // The worker handles SIGTERM before its first pass, which deletes
-    // expired jobs.
+    // expired jobs, and before the backfill records its marker.
     const deadline = Date.now() + 15_000;
-    while ((await db.query("SELECT 1 FROM email_job")).rowCount) {
+    while (
+      (await db.query("SELECT 1 FROM email_job")).rowCount ||
+      !(await db.query("SELECT 1 FROM screenr_backfill")).rowCount
+    ) {
       assert.equal(child.exitCode, null, output);
       assert.ok(Date.now() < deadline, `No expired job cleanup. ${output}`);
       await setTimeout(50);
@@ -293,11 +298,19 @@ test("the worker deletes expired jobs on its first pass and exits cleanly on SIG
       exited,
       setTimeout(5_000).then(() => assert.fail("The worker did not stop.")),
     ]);
+    // The backfill, with no Google members, reports its counts and nothing
+    // else is printed.
     assert.deepEqual(
       { code, signal, output },
-      { code: 0, signal: null, output: "" },
+      {
+        code: 0,
+        signal: null,
+        output:
+          '{"event":"google photo backfill finished","copied":0,"kept":0,"no picture":0,"failed":0}\n',
+      },
     );
   } finally {
     child.kill("SIGKILL");
+    await db.query("DELETE FROM screenr_backfill");
   }
 });

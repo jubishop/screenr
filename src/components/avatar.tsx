@@ -12,13 +12,22 @@ export function avatarTone(userId: string) {
   return hash % avatarTones;
 }
 
+// The same-origin URL of a profile photo version.
+export const photoURL = (userId: string, photo: string) =>
+  `/api/photos/${encodeURIComponent(userId)}/${photo}`;
+
 // Every place a member appears uses this avatar beside their visible name, so
-// it is decorative. A person who is not available gets a neutral placeholder.
-// A future profile photo replaces the initial here.
+// it is decorative. A profile photo covers the initial, which still shows
+// while the photo loads or if it cannot load. A person who is not available
+// gets a neutral placeholder.
 export function Avatar({
   person,
 }: {
-  person: { user_id: string; display_name: string } | null;
+  person: {
+    user_id: string;
+    display_name: string;
+    photo?: string | null;
+  } | null;
 }) {
   if (!person)
     return (
@@ -33,6 +42,16 @@ export function Avatar({
       aria-hidden="true"
     >
       {initial(person.display_name)}
+      {person.photo && (
+        <img
+          src={photoURL(person.user_id, person.photo)}
+          alt=""
+          width={512}
+          height={512}
+          loading="lazy"
+          decoding="async"
+        />
+      )}
     </span>
   );
 }

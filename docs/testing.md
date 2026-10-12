@@ -258,7 +258,13 @@ journeys retain browser interaction. Request-only reaction and title-comment
 validation is covered through the real HTTP handler in
 `tests/app/discussion-api.test.ts`. `tests/app/api-requests.test.ts` covers
 the same handler's 16,000-byte body limit, missing or non-object JSON, unknown
-actions, and origin and session checks before a body is read. Focus, drafts,
+actions, and origin and session checks before a body is read.
+`tests/app/profile-photos.test.ts` covers photo upload validation, who may
+load a photo and its caching headers, automatic Google copies after signup
+and after linking, the removed-photo rule, Use my Google photo, and the
+backfill. A replaced `fetch` stands in for Google's image servers, so no test
+contacts Google. `tests/browser/profile-photos.spec.ts` adds, replaces, and
+removes photos at phone and desktop widths. Focus, drafts,
 navigation, rendering, spoilers, and visible access changes remain browser
 assertions.
 

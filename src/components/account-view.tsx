@@ -6,6 +6,7 @@ import { authClient, signOut, useInteractive } from "./client";
 import { useActionError } from "./action-error";
 import { ActionButton } from "./action-button";
 import { AccountProfileEditor } from "./account-profile-editor";
+import { PhotoEditor, type PhotoChange } from "./photo-editor";
 import { StreamingServicesEditor } from "./streaming-services-editor";
 import { ActivityEmailSetting } from "./activity-email-setting";
 export function AccountView({
@@ -13,6 +14,7 @@ export function AccountView({
   user,
   initialGoogleError,
   saveProfile,
+  savePhoto,
   saveServices,
   refresh,
 }: {
@@ -20,6 +22,7 @@ export function AccountView({
   user: Person;
   initialGoogleError: string;
   saveProfile: (name: string, username: string) => Promise<void>;
+  savePhoto: (change: PhotoChange) => Promise<void>;
   saveServices: (ids: string[]) => Promise<void>;
   refresh: () => Promise<void>;
 }) {
@@ -34,6 +37,14 @@ export function AccountView({
         <h1 className="page-title">Account</h1>
       </div>
       <AccountProfileEditor user={user} save={saveProfile} />
+      <section className="settings-card" aria-labelledby="photo-heading">
+        <h2 id="photo-heading">Profile photo</h2>
+        <PhotoEditor
+          person={user}
+          google={data?.googleConnected ?? false}
+          save={savePhoto}
+        />
+      </section>
       <ActivityEmailSetting
         enabled={data?.activityEmail ?? null}
         refresh={refresh}

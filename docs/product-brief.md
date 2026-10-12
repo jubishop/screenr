@@ -475,6 +475,13 @@ that choice and do not add a Google picture again unless they choose "Use my
 Google photo". The user chose automatic copies for new members over limiting
 them to the one-time backfill.
 
+**Implementation note:** PostgreSQL stores the photos, under Screenr's data
+directory `/var/lib/screenr/postgres`, so the existing encrypted backups
+cover them. Uploads stay under 60 KB to pass the proxy's 64 KB request limit,
+within the 200 KB maximum. The worker runs the backfill once after deployment.
+[Profile photos](data-and-access.md#profile-photos) describes storage,
+access, caching, and the Google copies.
+
 ### Display name editing — 2026-09-07
 
 **Decision:** Members can change their display name on their own profile

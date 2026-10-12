@@ -40,3 +40,15 @@
     font-size: 30px;
   }
 }
+.setup-photo {
+  border: 0;
+  padding: 0;
+  margin: 4px 0 22px;
+  min-width: 0;
+}
+.setup-photo legend {
+  padding: 0;
+  margin-bottom: 10px;
+  font-size: 14px;
+  font-weight: 600;
+}

@@ -4,15 +4,17 @@ import type { Person } from "../shared";
 export async function people(viewer: string) {
   const connections = (
     await db.query<Person & { requested_by: string; accepted_at: Date | null }>(
-      `SELECT p.user_id,p.username,p.display_name,f.requested_by,f.accepted_at
+      `SELECT p.user_id,p.username,p.display_name,screenr_photo(p.user_id) AS photo,
+    f.requested_by,f.accepted_at
     FROM friendship f JOIN profile p ON p.user_id=CASE WHEN f.low_id=$1 THEN f.high_id ELSE f.low_id END
     WHERE $1 IN (f.low_id,f.high_id) AND NOT screenr_blocked($1,p.user_id) ORDER BY p.username`,
       [viewer],
     )
   ).rows;
+  // Blocking hides the profile, and with it the photo.
   const blocked = (
     await db.query<Person>(
-      `SELECT p.user_id,p.username,p.display_name FROM block b
+      `SELECT p.user_id,p.username,p.display_name,NULL AS photo FROM block b
     JOIN profile p ON p.user_id=b.blocked_id WHERE b.blocker_id=$1 ORDER BY p.username`,
       [viewer],
     )
@@ -27,8 +29,10 @@ export async function people(viewer: string) {
           AND NOT screenr_blocked($1,p.user_id)
       )
       SELECT candidate.user_id,candidate.username,candidate.display_name,
+        screenr_photo(candidate.user_id) AS photo,
         jsonb_agg(jsonb_build_object(
-          'user_id',mutual.user_id,'username',mutual.username,'display_name',mutual.display_name
+          'user_id',mutual.user_id,'username',mutual.username,'display_name',mutual.display_name,
+          'photo',screenr_photo(mutual.user_id)
         ) ORDER BY mutual.username) AS mutual_friends
       FROM direct mutual JOIN friendship f
         ON mutual.user_id IN (f.low_id,f.high_id) AND f.accepted_at IS NOT NULL

@@ -4,6 +4,7 @@ import { codeLimitMessage } from "../shared";
 import { loginPath, setupPath } from "../member-routes";
 import { authClient, api, signOut, useInteractive } from "./client";
 import { ActionButton } from "./action-button";
+import { PhotoEditor, sendPhoto } from "./photo-editor";
 
 // `next` is the validated member path to return to after sign-in.
 export function SignIn({
@@ -166,17 +167,24 @@ export function SignIn({
 }
 
 export function Setup({
+  userId,
   email,
   name,
   verified,
   next,
+  photo: initialPhoto,
+  google,
 }: {
+  userId: string;
   email: string;
   name: string;
   verified: boolean;
   next?: string;
+  photo: string | null;
+  google: boolean;
 }) {
   const interactive = useInteractive();
+  const [photo, setPhoto] = useState(initialPhoto);
   const [displayName, setName] = useState(name),
     [username, setUsername] = useState(""),
     [code, setCode] = useState(""),
@@ -253,6 +261,16 @@ export function Setup({
               <p id="username-help" className="small muted">
                 3–24 letters, numbers, or underscores.
               </p>
+              <fieldset className="setup-photo">
+                <legend>Profile photo (optional)</legend>
+                <PhotoEditor
+                  person={{ user_id: userId, display_name: displayName, photo }}
+                  google={google}
+                  save={async (change) =>
+                    setPhoto((await sendPhoto(change)).photo)
+                  }
+                />
+              </fieldset>
             </>
           ) : (
             sent && (

@@ -213,6 +213,7 @@ export function ThreadView({
         ? {
             user_id: comment.author_id,
             display_name: comment.display_name ?? "",
+            photo: comment.photo,
           }
         : null;
     return (

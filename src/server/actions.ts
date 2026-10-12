@@ -13,6 +13,12 @@ import {
   respondToFriendRequest,
   saveActivityEmail,
 } from "./notifications";
+import {
+  chooseGooglePhoto,
+  photoLimit,
+  removePhoto,
+  uploadPhoto,
+} from "./photos";
 import { updateDisplayName, updateProfile } from "./profiles";
 import { setReaction } from "./reactions";
 import { changeRelationship } from "./relationships";
@@ -61,7 +67,10 @@ export type Action =
   | {
       method: "POST";
       profile: false;
-      usage: false;
+      // Records the day only once the person has a profile.
+      usage: boolean;
+      // Reads the raw request body, up to this many bytes, as `upload`.
+      upload?: number;
       respond: (body: Body, context: SignedIn) => Promise<unknown>;
     };
 
@@ -97,6 +106,22 @@ function signup<Input>({
     method: "POST",
     profile: false,
     usage: false,
+    respond: (body, context) => run(input(body), context),
+  };
+}
+
+// Photo changes work during setup, before the profile exists, and later on
+// Account. They count toward usage telemetry once the profile exists.
+function photo<Input>({
+  input,
+  run,
+  upload,
+}: Definition<Body, Input, SignedIn> & { upload?: number }): Action {
+  return {
+    method: "POST",
+    profile: false,
+    usage: true,
+    upload,
     respond: (body, context) => run(input(body), context),
   };
 }
@@ -161,6 +186,20 @@ const actions: Record<string, Action> = {
     input: ({ name, username }) => ({ name, username }),
     run: ({ name, username }, { userId }) =>
       updateProfile(userId, name, username),
+  }),
+  // The browser sends a 512×512 JPEG as the request body.
+  photo: photo({
+    upload: photoLimit,
+    input: ({ upload }) => upload,
+    run: (upload, { userId }) => uploadPhoto(userId, upload),
+  }),
+  "remove-photo": photo({
+    input: () => undefined,
+    run: (_, { userId }) => removePhoto(userId),
+  }),
+  "google-photo": photo({
+    input: () => undefined,
+    run: (_, { userId }) => chooseGooglePhoto(userId),
   }),
   invite: write({
     input: ({ limit }) => limit ?? 1,

@@ -10,7 +10,7 @@ const json = (data: unknown, status = 200) =>
     status,
     headers: { "Cache-Control": "private, no-store", Vary: "Cookie" },
   });
-async function body(request: Request) {
+async function read(request: Request, limit: number) {
   const reader = request.body?.getReader();
   if (!reader) throw new AppError("A request body is required.");
   const chunks: Uint8Array[] = [];
@@ -19,14 +19,18 @@ async function body(request: Request) {
     const { value, done } = await reader.read();
     if (done) break;
     size += value.length;
-    if (size > 16_000) {
+    if (size > limit) {
       await reader.cancel();
       throw new AppError("Request too large.", 413);
     }
     chunks.push(value);
   }
+  return Buffer.concat(chunks);
+}
+async function body(request: Request) {
+  const bytes = await read(request, 16_000);
   try {
-    const parsed = JSON.parse(Buffer.concat(chunks).toString());
+    const parsed = JSON.parse(bytes.toString());
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed))
       throw new Error("Expected an object");
     return parsed as Record<string, unknown>;
@@ -50,10 +54,13 @@ async function handle(
     const session = await auth().api.getSession({ headers: request.headers });
     if (!session) throw new AppError("Sign in to continue.", 401);
     const context = { userId: session.user.id, headers: request.headers };
-    if (action && !action.profile)
-      return json(
-        (await action.respond(await body(request), context)) ?? { ok: true },
-      );
+    if (action && !action.profile) {
+      if (action.usage) await recordActiveDay(context.userId);
+      const input = action.upload
+        ? { upload: await read(request, action.upload) }
+        : await body(request);
+      return json((await action.respond(input, context)) ?? { ok: true });
+    }
     const user = await member(context.userId);
     if (!action) throw new AppError("Action not found.", 404);
     if (action.usage) await recordActiveDay(context.userId);

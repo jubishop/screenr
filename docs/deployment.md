@@ -203,7 +203,9 @@ build assets and optimized images, with a new 128-bit nonce for each request.
 Next adds that nonce to the scripts it renders, so the root layout renders
 every page per request. Resources the decision does not name load only from
 Screenr, and forms submit only to Screenr. Styles also allow the inline style
-attributes that Next's image layout and React use. Development serving adds `'unsafe-eval'` for React's error stacks. The
+attributes that Next's image layout and React use. Profile photos load from
+Screenr's own `/api/photos/` URLs, and the photo editor reads files without a
+`blob:` or `data:` image URL, so `img-src` needs no addition. Development serving adds `'unsafe-eval'` for React's error stacks. The
 [testing guide](testing.md#security-policy-reports) describes the checks.
 
 The app is the only source of its security headers. `next.config.ts` also
@@ -658,6 +660,8 @@ journalctl -u screenr-worker --since '1 day ago' --no-pager | grep '"event":"ema
 | `page failed` | web | `route`, the member route kind, such as `search` or `profile` |
 | `worker failed` | worker | Error fields only |
 | `email delivery failed` | worker | `job` ID, `kind` (`code` or `activity`), `attempt`, and `final` |
+| `google photo copy failed` | web, worker | `user` ID, `trigger` (`account`, `choice`, or `backfill`), `reason`, and `status` for an HTTP reply |
+| `google photo backfill failed` | worker | Error fields only |
 
 For a Resend reply, `email delivery failed` adds the HTTP `status` and the
 `provider` error name, such as `daily_quota_exceeded` or `invalid_api_key`.
@@ -673,6 +677,31 @@ Its other failures, and the other events, add error fields:
   `.next/server` files. Fetch failures have none.
 - `cause`: the class and code of the underlying error, such as the network
   error behind a failed fetch.
+
+A `google photo copy failed` reason is `status` (Google replied with another
+HTTP status), `redirect` (a redirect left Google's image hosts or exceeded
+three), `too large` (over 200 KB), `not an image`, or `error` with error
+fields, such as a timeout. The worker prints the
+[Google photo backfill](data-and-access.md#profile-photos) result once, on
+standard output, as counts only:
+
+```sh
+journalctl -u screenr-worker --no-pager | grep '"event":"google photo'
+```
+
+```json
+{"event":"google photo backfill finished","copied":3,"kept":0,"no picture":1,"failed":0}
+```
+
+`kept` counts people who chose a photo during the pass, and `no picture`
+counts Google accounts with no picture URL. To retry failed copies, remove
+the marker and restart the worker; people with a photo or a removal are
+skipped:
+
+```sh
+runuser -u screenr-db -- psql -h /run/screenr-db -p 5439 -d screenr -c "DELETE FROM screenr_backfill WHERE name='google-photos'"
+systemctl restart screenr-worker
+```
 
 Logs never include error messages, PostgreSQL details, page paths, request
 bodies, email addresses, email content, cookies, or keys. Messages and details
@@ -738,7 +767,9 @@ fails when the newest snapshot is more than 30 hours old, so stopped backups
 cannot pass by restoring an older snapshot. It then reads the encrypted
 repository, restores a consistent dump into a uniquely named temporary
 database, and fails if the restore has no profiles. It queries core tables and
-an access function, and drops only that temporary database. To restore
+an access function, and drops only that temporary database. Profile photos
+live in PostgreSQL, so each dump and restore includes them
+([profile photos](data-and-access.md#profile-photos)). To restore
 production itself, follow the
 [restore runbook](restore-and-patching.md#restore-on-the-existing-host).
 

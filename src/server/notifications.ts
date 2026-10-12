@@ -8,6 +8,7 @@ type NotificationRow = {
   actor_id: string;
   display_name: string;
   username: string;
+  photo: string | null;
   title_id: string | null;
   title_name: string | null;
   item_id: string | null;
@@ -16,7 +17,8 @@ type NotificationRow = {
   read_at: string | null;
 };
 
-const columns = `id::text,kind,actor_id,display_name,username,title_id,title_name,
+const columns = `id::text,kind,actor_id,display_name,username,
+  screenr_photo(actor_id) AS photo,title_id,title_name,
   item_id::text,comment_id::text,created_at,read_at`;
 
 function present(row: NotificationRow) {
@@ -33,6 +35,7 @@ function present(row: NotificationRow) {
     kind: row.kind,
     actor: row.display_name,
     actorId: row.actor_id,
+    actorPhoto: row.photo,
     message: `${row.display_name} ${action}${row.title_name ? ` about ${row.title_name}` : ""}.`,
     href: row.title_id
       ? `/titles/${row.title_id.replace(":", "/")}?item=${row.item_id}&reply=${row.comment_id}`

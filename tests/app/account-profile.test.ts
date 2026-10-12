@@ -71,6 +71,7 @@ test("account profile edits update both names across existing social views and p
     user_id: alice,
     username: "alice_new",
     display_name: "Renée Movie Fan 🎬",
+    photo: null,
   });
   const profile = await profileFor(ben, "ALICE_NEW");
   assert.equal(profile.user_id, alice);
@@ -232,6 +233,7 @@ test("display name edits update existing social views without changing identity"
     user_id: alice,
     username: "alice",
     display_name: "Renée Movie Fan 🎬",
+    photo: null,
   });
   const profile = await profileFor(ben, "alice");
   assert.equal(profile.user_id, alice);

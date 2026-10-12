@@ -358,6 +358,7 @@ function FeedEntry({
         person={{
           user_id: item.owner_id,
           display_name: item.display_name,
+          photo: item.photo,
         }}
       />
       <Link href={`/people/${item.username}`} prefetch={false}>
