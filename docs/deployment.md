@@ -189,7 +189,9 @@ sent no HSTS header on 2026-10-12; keep its HSTS setting off so that it
 cannot send a conflicting value. The permissions policy lets trailers use
 autoplay, encrypted media, fullscreen, and picture-in-picture from
 `https://www.youtube.com`, and denies camera, microphone, location, payment,
-sensors, device access, and similar features. Clipboard access and sharing,
+sensors, device access, and similar features. It lists only features that
+every supported browser build recognizes; Linux Chromium reports `bluetooth`
+as unrecognized, so it is left out. Clipboard access and sharing,
 which Screenr uses, keep browser defaults; browsers already ask before a page
 reads the clipboard.
 

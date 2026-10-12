@@ -16,7 +16,6 @@ const shared = {
     `fullscreen=${youtube}`,
     `picture-in-picture=${youtube}`,
     "accelerometer=()",
-    "bluetooth=()",
     "browsing-topics=()",
     "camera=()",
     "display-capture=()",

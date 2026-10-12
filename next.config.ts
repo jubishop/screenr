@@ -9,9 +9,10 @@ const youtube = [
 ];
 // Deny browser features Screenr does not use: docs/deployment.md#provisioning
 // Unlisted features, such as the clipboard and sharing, keep browser defaults.
+// Only list features every supported browser build recognizes: Linux Chromium
+// reports `bluetooth` as an unrecognized feature, so it is left out.
 const denied = [
   "accelerometer",
-  "bluetooth",
   "browsing-topics",
   "camera",
   "display-capture",
