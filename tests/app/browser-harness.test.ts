@@ -219,9 +219,6 @@ test("the browser command rejects focused tests", async (t) => {
     "package.json",
     "playwright.config.ts",
     "scripts/browser-config.ts",
-    "scripts/browser-reporter.ts",
-    "scripts/browser-transport.ts",
-    "scripts/browser-evidence.ts",
   ]) {
     await mkdir(dirname(join(directory, path)), { recursive: true });
     await copyFile(path, join(directory, path));

@@ -3,20 +3,35 @@ import {
   type BrowserContext,
   type Request,
 } from "@playwright/test";
-import { mkdir, writeFile } from "node:fs/promises";
-import { dirname } from "node:path";
-import { readTransport, scriptPath } from "./browser-transport";
 
+// Returns the path of an essential Next script, never an encoded traversal.
+function scriptPath(value: string) {
+  try {
+    if (!/^\/_next\/static\/[A-Za-z0-9_./%~@+\[\]-]+\.js$/.test(value)) return;
+    const decoded = decodeURIComponent(value);
+    if (
+      decoded.includes("\\") ||
+      decoded.split("/").some((p) => p === "." || p === "..")
+    )
+      return;
+    return value.slice(0, 1024);
+  } catch {
+    return;
+  }
+}
+
+// A failed local script closes the test's contexts with the browser error, so
+// actions stop promptly; Playwright keeps the failure trace.
 export const test = base.extend<{
   expectedScriptFailures: string[];
   scriptGuard: void;
 }>({
   expectedScriptFailures: [[], { option: true }],
   scriptGuard: [
-    async ({ browser, baseURL, expectedScriptFailures }, use, testInfo) => {
+    async ({ browser, baseURL, expectedScriptFailures }, use) => {
       const contexts = new Set<BrowserContext>();
       const closing = new WeakSet<BrowserContext>();
-      let failure: Promise<void> | undefined;
+      let failure: Promise<unknown> | undefined;
       let reason: string | undefined;
       let stopping = false;
       const createContext = browser.newContext;
@@ -42,36 +57,12 @@ export const test = base.extend<{
           expectedScriptFailures.includes(path)
         )
           return;
-        const file = testInfo.outputPath("script-failure.json");
-        reason = `Essential local script failed: ${error} (${path}). Evidence: ${file}`;
-        failure = (async () => {
-          const evidence = {
-            path,
-            error,
-            observedAt: new Date().toISOString(),
-            startedAt: request.timing().startTime,
-            originalTransport: await readTransport(Number(port)),
-          };
-          try {
-            await mkdir(dirname(file), { recursive: true });
-            await writeFile(file, JSON.stringify(evidence, null, 2), {
-              mode: 0o600,
-            });
-            testInfo.attachments.push({
-              name: "script-failure",
-              path: file,
-              contentType: "application/json",
-            });
-          } finally {
-            await Promise.all(
-              [...contexts].map((context) =>
-                context.close({ reason }).catch(() => {}),
-              ),
-            );
-          }
-        })();
-        // The fixture rethrows this after cleanup; never leak an unhandled rejection.
-        void failure.catch(() => {});
+        reason = `Essential local script failed: ${error} (${path})`;
+        failure = Promise.all(
+          [...contexts].map((context) =>
+            context.close({ reason }).catch(() => {}),
+          ),
+        );
       }
       browser.newContext = async function (...args) {
         const context = await Reflect.apply(createContext, this, args);

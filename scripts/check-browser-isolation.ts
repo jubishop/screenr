@@ -16,15 +16,12 @@ import { promisify } from "node:util";
 import { setTimeout as delay } from "node:timers/promises";
 import { Client } from "pg";
 import type { browserConfig } from "./browser-config";
-import { retainBrowserEvidence } from "./browser-evidence";
 
 const execute = promisify(execFile);
 const source = process.cwd();
 const directory = await mkdtemp(join(tmpdir(), "screenr-browser-isolation-"));
 const checkouts = [join(directory, "first"), join(directory, "second")];
 const env = { ...process.env };
-env.SCREENR_BROWSER_EVIDENCE_DIR = join(source, ".cache/browser-failures");
-await retainBrowserEvidence(undefined, env.SCREENR_BROWSER_EVIDENCE_DIR);
 const args = process.argv.slice(2);
 const phases = args.includes("--warm") ? ["fresh", "warm"] : ["fresh"];
 const browserArgs = args.filter((arg) => arg !== "--warm");

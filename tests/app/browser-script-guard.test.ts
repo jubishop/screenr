@@ -2,14 +2,7 @@ import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { once } from "node:events";
 import { createServer } from "node:http";
-import {
-  mkdir,
-  mkdtemp,
-  readFile,
-  readdir,
-  rm,
-  writeFile,
-} from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { promisify } from "node:util";
 import { test } from "node:test";
@@ -17,21 +10,15 @@ import { createBrowserProxy } from "../../scripts/browser-proxy";
 
 const execute = promisify(execFile);
 
-test("failed scripts in manually created browser contexts retain automatic transport diagnostics", async (t) => {
+test("a failed script in a manually created context fails promptly and keeps the browser error and trace", async (t) => {
   await mkdir(resolve(".cache"), { recursive: true });
-  const directory = await mkdtemp(resolve(".cache/script-diagnostics-test-"));
+  const directory = await mkdtemp(resolve(".cache/script-guard-test-"));
   t.after(() => rm(directory, { recursive: true, force: true }));
-  let broken = true;
   const upstream = createServer((req, res) => {
-    if (req.url?.startsWith("/_next/static/")) {
-      // A malformed HTTP status line reaches the real proxy parser.
-      if (broken) {
-        broken = false;
-        req.socket.end("NOT HTTP\r\n\r\n");
-      } else res.end("// recovered");
-    } else {
-      res.end('<script src="/_next/static/chunks/broken.js"></script>');
-    }
+    // A malformed HTTP status line reaches the real proxy parser.
+    if (req.url?.startsWith("/_next/static/"))
+      req.socket.end("NOT HTTP\r\n\r\n");
+    else res.end('<script src="/_next/static/chunks/broken.js"></script>');
   });
   upstream.listen(0, "127.0.0.1");
   await once(upstream, "listening");
@@ -55,8 +42,6 @@ test("failed scripts in manually created browser contexts retain automatic trans
     join(directory, "playwright.config.ts"),
     `import config from ${JSON.stringify(resolve("playwright.config.ts"))};
 export default {...config, testDir: '.', outputDir: './results', webServer: undefined,
-  reporter: config.reporter?.map(entry => Array.isArray(entry)
-    ? [entry[0], {...entry[1], proxyPort: ${proxyAddress.port}, appPort: ${address.port}}] : entry),
   use: {...config.use, baseURL: 'http://127.0.0.1:${proxyAddress.port}'}};`,
   );
   await writeFile(
@@ -81,65 +66,30 @@ test('successful page', async ({page}) => { await page.setContent('<p>ok</p>'); 
         "--config",
         join(directory, "playwright.config.ts"),
       ],
-      {
-        timeout: 30_000,
-        env: {
-          ...process.env,
-          CI: "",
-          SCREENR_BROWSER_EVIDENCE_DIR: join(directory, "retained"),
-        },
-      },
+      { timeout: 30_000, env: { ...process.env, CI: "" } },
     ),
     (error: Error & { stdout?: string }) => {
       assert.match(error.stdout ?? "", /1 failed/);
       assert.match(error.stdout ?? "", /1 passed/);
       assert.match(
         error.stdout ?? "",
-        /Essential local script failed: HTTP 502/,
+        /Essential local script failed: HTTP 502 \(\/_next\/static\/chunks\/broken\.js\)/,
       );
+      assert.doesNotMatch(error.stdout ?? "", /Test timeout/);
       return true;
     },
   );
-  const reports = (
-    await readdir(join(directory, "results"), { recursive: true })
-  ).filter((path) => path.endsWith("script-diagnostics.json"));
-  assert.equal(reports.length, 1, "only the failed test must retain a report");
-  const report = JSON.parse(
-    await readFile(join(directory, "results", reports[0]), "utf8"),
-  );
-  assert.equal(report.failures[0].path, "/_next/static/chunks/broken.js");
-  assert.equal(report.failures[0].status, 502);
-  assert.equal(report.comparisons[0].proxy.statusLine, "HTTP/1.1 200 OK");
-  assert.equal(report.comparisons[0].upstream.statusLine, "HTTP/1.1 200 OK");
-  assert.equal(report.comparisons[0].upstream.http, true);
-  assert.equal(report.runtime.node, process.version);
-  assert.ok(
-    report.originalTransport,
-    "retain the original exchange, not only later probes",
-  );
-  assert.equal(
-    report.originalTransport.requests[0].upstream.statusLine,
-    "NOT HTTP",
-  );
-  assert.equal(
-    report.originalTransport.requests[0].upstream.error.code,
-    "HPE_INVALID_CONSTANT",
-  );
-  assert.equal(
-    report.originalTransport.requests[0].downstream.statusLine,
-    "HTTP/1.1 502 Bad Gateway",
-  );
-  assert.ok(
-    report.originalTransport.requests[0].upstream.connection.remotePort,
-  );
-  const retained = await readdir(join(directory, "retained"));
-  assert.equal(retained.length, 1);
-  await rm(join(directory, "results"), { recursive: true });
+  // Playwright's failure trace is the retained evidence. The retired transport
+  // capture's reports must not return; .last-run.json is Playwright's own.
+  const results = await readdir(join(directory, "results"), {
+    recursive: true,
+  });
+  assert.equal(results.filter((path) => path.endsWith("trace.zip")).length, 1);
   assert.deepEqual(
-    JSON.parse(
-      await readFile(join(directory, "retained", retained[0]), "utf8"),
+    results.filter(
+      (path) => path.endsWith(".json") && path !== ".last-run.json",
     ),
-    report,
+    [],
   );
 });
 

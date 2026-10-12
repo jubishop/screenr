@@ -34,9 +34,6 @@ async function fixture(t: TestContext) {
     "compose.yml",
     "scripts/test-database.ts",
     "scripts/browser-config.ts",
-    "scripts/browser-reporter.ts",
-    "scripts/browser-transport.ts",
-    "scripts/browser-evidence.ts",
   ])
     await write(path, await readFile(path, "utf8"));
   // Dependencies are read-only shared inputs. The fixture owns its config,
