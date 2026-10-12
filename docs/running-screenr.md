@@ -726,6 +726,18 @@ SQL filenames must match `NNN-name.sql`, with lowercase letters and hyphens in
 the name. Invalid SQL filenames fail the release instead of being ignored.
 Back up before deploying schema changes.
 
+Better Auth's migrations add tables, columns, and indexes but never relax or
+remove them. Its 1.7.3 and later releases validate the schema on every
+request and reject a required column they never write. Tests start from a
+fresh database, so check each Better Auth upgrade guide for steps that
+existing databases need. Migration `014-nullable-account-issuer.sql` makes
+the `account.issuer` column that Better Auth 1.7.0 through 1.7.2 required
+nullable; 1.7.3 and later neither read nor write it. The column and its
+`account_issuer_accountId_uidx` index remain while rollback to 1.7.2 is
+possible, because 1.7.2 finds accounts by issuer. Accounts that 1.7.3 or later
+creates or links have no issuer, so 1.7.2 would not recognize them. A later
+migration can drop the index and then the column.
+
 TMDB data is cached for 24 hours. A title page refreshes stored title details
 after that, with a two-second timeout. If TMDB fails, times out, returns an
 invalid title, or no longer has the title, the page shows the stored details
