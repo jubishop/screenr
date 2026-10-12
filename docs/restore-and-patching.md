@@ -246,7 +246,8 @@ other applications that it checks to be running.
 
    ```sh
    systemctl enable screenr-web screenr-worker
-   systemctl enable --now screenr-backup.timer screenr-restore-check.timer
+   systemctl enable --now screenr-backup.timer screenr-restore-check.timer \
+     screenr-backup-age.timer screenr-postgresql-updates.timer
    rm -rf /opt/screenr/releases/bootstrap
    systemctl start screenr-restore-check.service
    ```
@@ -318,8 +319,37 @@ curl --fail https://screenr.club/api/health
 
 The units and scripts run PostgreSQL 18's binaries by path. A major-version
 upgrade needs its own plan.
-[Issue #185](https://github.com/jubishop/screenr/issues/185) tracks
-notifying the owner when an update is pending.
+
+#### Pending update notice
+
+`screenr-postgresql-updates.timer` checks for pending PostgreSQL repository
+updates daily around 09:00 PDT / 08:00 PST
+([issue #185](https://github.com/jubishop/screenr/issues/185)). Its service
+runs `ops/check-postgresql-updates.py` as an unprivileged dynamic user. The
+script reads `apt list --upgradable` from the package lists that Ubuntu's
+`apt-daily.timer` refreshes each day, keeps only the `-pgdg` suite, and
+installs nothing. It saves the date it first saw each pending package version
+in `/var/lib/screenr-postgresql-updates/pending.json`.
+
+When any version has been pending for three days, the script emails the owner
+once through the [failure alert](deployment.md#failure-alerts) delivery. The
+email lists every pending PostgreSQL package and links this section. The wait
+leaves time to install a release by hand first and gathers packages that
+reach the repository on different days into one email. A newer version
+starts its own wait and sends its own email. Installed updates leave the
+state file. If listing, saving, or delivery fails, the service fails, its
+failure alert emails the owner, and the next day's check retries the notice.
+An unexpected `apt` output line also fails the check, so a format change
+cannot pass as "nothing pending".
+
+Show the pending versions, and the email when one is due, without sending it
+or saving state:
+
+```sh
+systemd-run --quiet --wait --pipe --collect -p DynamicUser=yes \
+  -p StateDirectory=screenr-postgresql-updates \
+  /usr/bin/python3 /opt/screenr/current/ops/check-postgresql-updates.py --dry-run
+```
 
 ### Reboots
 

@@ -155,11 +155,11 @@ UptimeRobot's free plan has no heartbeat monitors.
 **Rejected alternative:** A separate third-party heartbeat service for
 backups.
 
-The backup, restore check, stale-backup check, web, worker, and database
-units each set `OnFailure=screenr-alert@%n.service`. That template runs
-`ops/failure-alert.py` with the failed unit's name. It sends through the
-Resend settings in `/etc/screenr/backup.env` described under
-[backup storage warning](#backup-storage-warning). It runs as the backup
+The backup, restore check, stale-backup check, PostgreSQL update check, web,
+worker, and database units each set `OnFailure=screenr-alert@%n.service`.
+That template runs `ops/failure-alert.py` with the failed unit's name. It
+sends through the Resend settings in `/etc/screenr/backup.env` described
+under [backup storage warning](#backup-storage-warning). It runs as the backup
 user `screenr-db`, so root never runs the release's copy of the script. A
 dynamic user cannot query systemd over D-Bus on this host.
 systemd also starts `OnFailure=` units before each automatic restart. The
@@ -178,13 +178,20 @@ each deployment blocked by a failing backup sends one.
 runs `ops/check-backup-age.py`; its failure starts the alert. A single missed
 backup is over 30 hours old at the next check.
 
+`screenr-postgresql-updates.timer` runs the daily
+[PostgreSQL update check](restore-and-patching.md#pending-update-notice)
+around 09:00 PDT / 08:00 PST. It sends its own one-time notice through
+`failure-alert.py`'s Resend delivery when an update has been pending for three
+days, and its failure starts the alert.
+
 Until [#117](https://github.com/jubishop/screenr/issues/117) installs unit
 changes during deployment, install Screenr's changed units by hand after the
 release that contains them is active. Copy only `ops/screenr-*.service` and
 `ops/screenr-*.timer` from a Git checkout of that revision, not from the
 release directory, to `/etc/systemd/system`. Run
-`systemctl daemon-reload`, and enable the stale-backup check with
-`systemctl enable --now screenr-backup-age.timer`.
+`systemctl daemon-reload`, and enable the stale-backup and PostgreSQL update
+checks with
+`systemctl enable --now screenr-backup-age.timer screenr-postgresql-updates.timer`.
 
 Verify the alert path without sending email:
 
@@ -193,6 +200,8 @@ Verify the alert path without sending email:
   `screenr-web.service is active (running); no alert`.
 - `systemctl start screenr-backup-age.service` passes while backups are
   current.
+- `systemctl start screenr-postgresql-updates.service` passes. Its first run
+  only records pending versions, so it sends nothing.
 - For a deliberately failed transient unit, `failure-alert.py --dry-run`
   prints the email instead of sending it:
 

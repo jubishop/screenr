@@ -1,0 +1,10 @@
+[Unit]
+Description=Daily Screenr pending PostgreSQL update check
+
+[Timer]
+OnCalendar=*-*-* 16:00:00 UTC
+RandomizedDelaySec=10m
+Persistent=true
+
+[Install]
+WantedBy=timers.target

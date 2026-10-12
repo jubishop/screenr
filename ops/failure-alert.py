@@ -32,6 +32,10 @@ JOBS = {
         'no backup in the last 30 hours',
         'The daily stale-backup check found no backup from the last 30 hours, or could not '
         'read the backup snapshots. Backups may have stopped running.'),
+    'screenr-postgresql-updates.service': (
+        'PostgreSQL update check failed',
+        'The daily PostgreSQL update check could not list pending package updates, save its '
+        'state, or email its notice. A pending PostgreSQL update may go unreported.'),
 }
 SERVICES = {
     'screenr-web.service': 'web application',

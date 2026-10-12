@@ -96,6 +96,13 @@ class FailureAlertTests(unittest.TestCase):
         self.assertIn('30 hours', message['text'])
         self.assertIn('journalctl -u screenr-backup-age.service', message['text'])
 
+    def test_failed_postgresql_update_check_emails_the_owner(self):
+        code, _, errors = self.execute('screenr-postgresql-updates.service')
+        self.assertEqual(code, 0, errors)
+        message = self.message()
+        self.assertIn('PostgreSQL update check failed', message['subject'])
+        self.assertIn('journalctl -u screenr-postgresql-updates.service', message['text'])
+
     def test_service_at_its_restart_limit_emails_the_owner(self):
         for unit, name in [('screenr-web.service', 'web application'),
                            ('screenr-worker.service', 'email worker'),
@@ -223,8 +230,8 @@ def daily_utc_seconds(timer):
 
 class FailureAlertUnitTests(unittest.TestCase):
     MONITORED = ['screenr-backup.service', 'screenr-restore-check.service',
-                 'screenr-backup-age.service', 'screenr-web.service', 'screenr-worker.service',
-                 'screenr-db.service']
+                 'screenr-backup-age.service', 'screenr-postgresql-updates.service',
+                 'screenr-web.service', 'screenr-worker.service', 'screenr-db.service']
 
     def test_monitored_units_start_the_alert_on_failure(self):
         for name in self.MONITORED:
