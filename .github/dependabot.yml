@@ -12,8 +12,8 @@ updates:
         applies-to: version-updates
         patterns: ["*"]
         update-types: [minor, patch]
-    # Dependabot would otherwise create labels outside the repository's set.
-    labels: []
+    # Existing labels only: with no labels, Dependabot creates its defaults.
+    labels: [improvement]
 
   - package-ecosystem: github-actions
     directory: /
@@ -24,4 +24,4 @@ updates:
         applies-to: version-updates
         patterns: ["*"]
         update-types: [minor, patch]
-    labels: []
+    labels: [improvement, "area: tooling"]

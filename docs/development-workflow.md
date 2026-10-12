@@ -73,17 +73,18 @@ security updates are on.
 version updates. The npm `increase` strategy moves each exact `package.json`
 version to the new release, and Action updates keep commit-SHA pins. One
 group per ecosystem collects minor and patch updates; every major update
-opens its own pull request. Update pull requests carry no labels, so
-Dependabot does not add labels outside the repository's set.
+opens its own pull request. Update pull requests use only existing labels:
+`improvement`, plus `area: tooling` for Actions. Without configured labels,
+including with an empty list, Dependabot creates and applies its own default
+labels.
 
 Dependabot pull requests run [the check workflow](../.github/workflows/check.yml),
 including `bin/check --full`, like any other pull request. GitHub gives them
 a read-only token and no Actions secrets, and the check job needs neither.
 They cannot deploy: `bin/deployment-decision` selects deployment only for
 pushes and manual runs on `main`, and the `production` environment accepts
-only `main`.
-Merging an update pull request pushes to `main`, which runs full CI and
-deploys.
+only `main`. Merging an update pull request pushes to `main`, which runs full
+CI and deploys.
 
 ## Checks
 
