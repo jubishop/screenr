@@ -8,44 +8,58 @@ const { createInvitation, completeSignup } =
 
 useDatabase();
 
-const migration = "014-nullable-account-issuer.sql";
+// Migration 014 relaxed Better Auth 1.7.2's account.issuer column so 1.7.3
+// and later could write accounts; 016 drops it and its index.
+async function migrateIssuer(client: { query(sql: string): Promise<unknown> }) {
+  for (const name of [
+    "014-nullable-account-issuer.sql",
+    "016-drop-account-issuer.sql",
+  ])
+    await client.query(await readFile(`db/${name}`, "utf8"));
+}
 
-test("the account issuer migration relaxes only the Better Auth 1.7.2 column and keeps its index", async () => {
+test("the account issuer migrations drop Better Auth 1.7.2's index and column and leave fresh databases unchanged", async () => {
   const client = await db.connect();
   try {
     await client.query("BEGIN");
     await client.query("CREATE SCHEMA account_issuer_migration_test");
     await client.query("SET LOCAL search_path=account_issuer_migration_test");
-    const sql = await readFile(`db/${migration}`, "utf8");
+    const shape = async () => ({
+      columns: (
+        await client.query(
+          `SELECT column_name FROM information_schema.columns
+          WHERE table_schema = current_schema() AND table_name = 'account'
+          ORDER BY ordinal_position`,
+        )
+      ).rows.map((row) => row.column_name),
+      indexes: (
+        await client.query(
+          `SELECT indexname FROM pg_indexes
+          WHERE schemaname = current_schema() AND tablename = 'account'
+          ORDER BY indexname`,
+        )
+      ).rows.map((row) => row.indexname),
+    });
+    const fresh = {
+      columns: ["id", "accountId", "providerId"],
+      indexes: ["account_pkey"],
+    };
     // Databases first created by Better Auth 1.7.3 or later have no issuer.
-    await client.query(
-      'CREATE TABLE account (id text PRIMARY KEY, "accountId" text NOT NULL)',
-    );
-    await client.query(sql);
+    await client.query(`CREATE TABLE account (id text PRIMARY KEY,
+      "accountId" text NOT NULL, "providerId" text NOT NULL)`);
+    await migrateIssuer(client);
+    assert.deepEqual(await shape(), fresh);
+
     await client.query(`DROP TABLE account;
       CREATE TABLE account (id text PRIMARY KEY, issuer text NOT NULL,
         "accountId" text NOT NULL, "providerId" text NOT NULL);
       CREATE UNIQUE INDEX "account_issuer_accountId_uidx" ON account (issuer, "accountId");
       INSERT INTO account VALUES ('old', 'https://accounts.google.com', 'sub-1', 'google')`);
-    await client.query(sql);
-    // Better Auth 1.7.3 and later insert accounts without an issuer.
-    await client.query(`INSERT INTO account (id, "accountId", "providerId")
-      VALUES ('new', 'sub-2', 'google'), ('other', 'sub-2', 'other')`);
-    assert.deepEqual(
-      (await client.query("SELECT id, issuer FROM account ORDER BY id")).rows,
-      [
-        { id: "new", issuer: null },
-        { id: "old", issuer: "https://accounts.google.com" },
-        { id: "other", issuer: null },
-      ],
-    );
-    // Better Auth 1.7.2 still gets its unique account key after a rollback.
-    await assert.rejects(
-      client.query(
-        "INSERT INTO account VALUES ('again', 'https://accounts.google.com', 'sub-1', 'google')",
-      ),
-      /account_issuer_accountId_uidx/,
-    );
+    await migrateIssuer(client);
+    assert.deepEqual(await shape(), fresh);
+    assert.deepEqual((await client.query("SELECT * FROM account")).rows, [
+      { id: "old", accountId: "sub-1", providerId: "google" },
+    ]);
   } finally {
     await client.query("ROLLBACK");
     client.release();
@@ -53,8 +67,8 @@ test("the account issuer migration relaxes only the Better Auth 1.7.2 column and
 });
 
 test("sign-in, sessions, and Google linking work after migrating a database created by Better Auth 1.7.2", async () => {
-  // Recreate production's account schema from Better Auth 1.7.2 before this
-  // migration ran. Better Auth 1.7.3 and later validate the schema on every
+  // Recreate production's account schema from Better Auth 1.7.2 before these
+  // migrations ran. Better Auth 1.7.3 and later validate the schema on every
   // request and reject a required column they never write.
   await db.query(`ALTER TABLE account ADD COLUMN IF NOT EXISTS issuer text;
     ALTER TABLE account ALTER COLUMN issuer SET NOT NULL;
@@ -69,18 +83,22 @@ test("sign-in, sessions, and Google linking work after migrating a database crea
       'google', $1, now(), now())`,
     [existingId],
   );
-  // Run the file directly. Removing its record would leave it out of order
-  // once later migrations exist, and the migration command would refuse it.
-  await db.query(await readFile(`db/${migration}`, "utf8"));
+  // Run the files directly. Removing their records would leave them out of
+  // order once later migrations exist, and the migration command would refuse
+  // them.
+  await migrateIssuer(db);
   assert.deepEqual(
     (
       await db.query(
-        `SELECT is_nullable FROM information_schema.columns
+        `SELECT column_name FROM information_schema.columns
         WHERE table_schema = current_schema() AND table_name = 'account'
-          AND column_name = 'issuer'`,
+          AND column_name = 'issuer'
+        UNION ALL SELECT indexname FROM pg_indexes
+        WHERE schemaname = current_schema()
+          AND indexname = 'account_issuer_accountId_uidx'`,
       )
     ).rows,
-    [{ is_nullable: "YES" }],
+    [],
   );
 
   process.env.GOOGLE_CLIENT_ID = "test-google-client";
@@ -153,7 +171,7 @@ test("sign-in, sessions, and Google linking work after migrating a database crea
     .map((value) => value.split(";")[0])
     .join("; ");
 
-  // Better Auth 1.7.3 and later write this linked account without an issuer.
+  // Better Auth 1.7.3 and later link accounts by provider and account ID.
   identity = { id: "email-google", email };
   await request("link-social", social, session);
   const googleLogin = await request("sign-in/social", social);

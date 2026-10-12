@@ -151,8 +151,10 @@ request and reject a required column they never write. Tests start from a
 fresh database, so check each Better Auth upgrade guide for steps that
 existing databases need. Migration `014-nullable-account-issuer.sql` makes
 the `account.issuer` column that Better Auth 1.7.0 through 1.7.2 required
-nullable; 1.7.3 and later neither read nor write it. The column and its
-`account_issuer_accountId_uidx` index remain while rollback to 1.7.2 is
-possible, because 1.7.2 finds accounts by issuer. Accounts that 1.7.3 or later
-creates or links have no issuer, so 1.7.2 would not recognize them. A later
-migration can drop the index and then the column.
+nullable; 1.7.3 and later neither read nor write it. It kept the column and
+its `account_issuer_accountId_uidx` index while rollback to 1.7.2 was
+possible, because 1.7.2 finds accounts by issuer. Once no retained release
+shipped 1.7.2, migration `016-drop-account-issuer.sql` dropped the index and
+then the column, following Better Auth's 1.7 upgrade guide. Databases first
+created by 1.7.3 or later have neither, so it changes nothing there. A
+release that ships 1.7.2 can no longer run against a migrated database.
