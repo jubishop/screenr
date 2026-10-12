@@ -212,6 +212,17 @@ read like a release date. Activity times also used three formats:
 **Rejected alternative:** Absolute dates in one format would fix the
 placement and consistency but make recent activity less obvious.
 
+**Implementation note:** [Issue #168](https://github.com/jubishop/screenr/issues/168)
+renders these times with `ActivityTime` in
+`src/components/activity-time.tsx`, using `relativeTime` in
+`src/components/client.ts`. Units count elapsed time, so daylight saving
+changes don't shift them; dates and the current year follow the reader's
+time zone. A reader's clock running up to a week behind shows new activity
+as "now". Like other dates since
+[issue #86](https://github.com/jubishop/screenr/issues/86), the server and
+hydration render the UTC date and a UTC hover time, then localize once the
+page is interactive. Screen and notification refreshes re-render the times.
+
 ### Compact entries on title pages — 2026-10-12
 
 **Decision:** On a movie or TV title page, show feed entries without the
@@ -477,7 +488,10 @@ pattern inconsistent.
 navigation symbols rendered at mismatched sizes, and accepting a request
 otherwise required leaving the panel for the Friends page.
 
-**Implementation note:** The shared icon set lives in `src/components/icons.tsx`.
+**Implementation note:** [Issue #168](https://github.com/jubishop/screenr/issues/168)
+applied the description clamp and chevron to the shared title card in
+`src/components/title-card.tsx`. Phones still hide the description, as
+before. The shared icon set lives in `src/components/icons.tsx`.
 [Issue #166](https://github.com/jubishop/screenr/issues/166) added the link
 icon and [#167](https://github.com/jubishop/screenr/issues/167) the
 navigation icons; later stages add theirs to the same module.

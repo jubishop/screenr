@@ -10,9 +10,11 @@ import { Avatar } from "./avatar";
 export function WatchTogether({
   participants,
   titles,
+  viewerHasServices,
 }: {
   participants: Person[];
   titles: Extract<ScreenData, { kind: "watch-together" }>["titles"];
+  viewerHasServices: boolean;
 }) {
   const [filter, setFilter] = useState<"all" | Title["kind"]>("all");
   const visible = titles.filter(
@@ -62,6 +64,13 @@ export function WatchTogether({
       <p className="small muted watch-together-count" role="status">
         {visible.length} shared {visible.length === 1 ? "title" : "titles"}
       </p>
+      {!viewerHasServices && (
+        <p className="services-prompt">
+          <Link href="/account#streaming-services" prefetch={false}>
+            Save your streaming services to see what you can watch right now.
+          </Link>
+        </p>
+      )}
       <section aria-label="Shared titles">
         {(
           [

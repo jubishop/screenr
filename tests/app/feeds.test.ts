@@ -4,7 +4,8 @@ import { useDatabase, db, denied, friend, setup } from "./social-fixture";
 const { changeRelationship } = await import("../../src/server/relationships");
 const { thread, conversations } = await import("../../src/server/feed");
 const { updateTitleActivity } = await import("../../src/server/title-actions");
-const { addComment, removeComment } = await import("../../src/server/comments");
+const { addComment, removeComment, createTitleComment } =
+  await import("../../src/server/comments");
 
 useDatabase();
 
@@ -162,6 +163,47 @@ test("all feeds share entries and order by only visible replies without promotin
     (await conversations(ben)).map((c) => [c.id, c.visible_activity]),
     ordered,
   );
+});
+
+test("feed entries carry their title's release date for the year beside its kind", async () => {
+  const { alice, ben, conversation } = await setup();
+  await friend(alice, ben);
+  await db.query(
+    `INSERT INTO title(id,kind,tmdb_id,name,release_date) VALUES('tv:2022','tv',2022,'Dated Show','2022-03-04')
+    ON CONFLICT(id) DO UPDATE SET release_date=excluded.release_date`,
+  );
+  const dated = await updateTitleActivity(
+    alice,
+    "tv:2022",
+    "want_to_watch",
+    true,
+  );
+  const comment = await createTitleComment(
+    alice,
+    "tv:2022",
+    "Standalone",
+    false,
+  );
+  const releases = async (filter = {}) =>
+    Object.fromEntries(
+      (await conversations(ben, filter)).map((c) => [c.id, c.release_date]),
+    );
+  const all = {
+    [conversation]: "",
+    [dated]: "2022-03-04",
+    [comment]: "2022-03-04",
+  };
+  assert.deepEqual(await releases(), all);
+  assert.deepEqual(await releases({ owner: alice }), all);
+  assert.deepEqual(await releases({ title: "tv:2022" }), {
+    [dated]: "2022-03-04",
+    [comment]: "2022-03-04",
+  });
+  assert.equal(
+    (await thread(ben, dated)).conversation.release_date,
+    "2022-03-04",
+  );
+  assert.equal((await thread(ben, conversation)).conversation.release_date, "");
 });
 
 test("clearing activity hides empty items while preserving eligible discussions", async () => {

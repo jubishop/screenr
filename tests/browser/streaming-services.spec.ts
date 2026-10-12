@@ -1,6 +1,7 @@
 import { expect, type Page } from "@playwright/test";
 import { test } from "./monitored-test";
 import { prepareFriendship } from "./member-fixture";
+import { db } from "./database-fixture";
 import { browserConfig } from "../../scripts/browser-config";
 import fixtures from "../fixtures/streaming-titles.json" with { type: "json" };
 
@@ -149,6 +150,10 @@ test("Find a title filters catalog results and suggestions using current service
   // These fixtures have no release date, so cards show only the kind.
   await expect(results.getByText("Movie", { exact: true })).toHaveCount(3);
   await expect(results.getByText("TV show", { exact: true })).toHaveCount(2);
+  await expect(results.locator(".search-result > svg:last-child")).toHaveCount(
+    5,
+  );
+  await expect(results.getByText("↗")).toHaveCount(0);
   await expect(filter).toHaveAttribute("aria-pressed", "false");
   await expect(results.getByText("On AMC+", { exact: true })).toBeVisible();
   await expect(
@@ -200,7 +205,20 @@ test("Watch together groups either member's services and free titles ahead of un
   for (const id of titles)
     for (const person of [page, other])
       await choose(person, id, "want_to_watch");
+  // Rows show the whole description, clamped to two lines on desktop.
+  const overview = Array(8)
+    .fill("A night ferry crosses a quiet harbor while old friends")
+    .join(" and ");
+  await db.query("UPDATE title SET overview=$1 WHERE id=$2", [
+    overview,
+    "movie:939103",
+  ]);
+  await page.setViewportSize({ width: 1440, height: 950 });
   await page.goto("/watch-together?with=streamingpartner");
+  const prompt = page.getByRole("link", {
+    name: "Save your streaming services to see what you can watch right now.",
+    exact: true,
+  });
   const ready = page.getByRole("region", {
     name: "Ready to watch",
     exact: true,
@@ -225,6 +243,21 @@ test("Watch together groups either member's services and free titles ahead of un
     "Night Signal",
   ]);
   await expect(ready.getByText("On AMC+ ✓", { exact: true })).toBeVisible();
+  await expect(prompt).toHaveCount(0);
+  const description = ready
+    .getByRole("link")
+    .filter({ hasText: "Night Orchard" })
+    .locator(".overview");
+  await expect(description).toHaveText(overview);
+  expect(
+    await description.evaluate((element) => ({
+      lines: Math.round(
+        element.clientHeight / parseFloat(getComputedStyle(element).lineHeight),
+      ),
+      clamped: element.scrollHeight > element.clientHeight,
+    })),
+  ).toEqual({ lines: 2, clamped: true });
+  await expect(page.locator(".search-result > svg:last-child")).toHaveCount(5);
   await expect(page.getByText(/via Amazon|with ads/)).toHaveCount(0);
   await noOverflow(page, "streaming-together");
   await page.getByRole("button", { name: "TV", exact: true }).click();
@@ -251,4 +284,14 @@ test("Watch together groups either member's services and free titles ahead of un
   await expect(page).toHaveURL("/titles/tv/939102?from=watch_together");
   const availability = page.getByRole("region", { name: "Where to watch" });
   await expect(availability.getByRole("listitem")).toHaveText(["AMC+"]);
+  // Without saved services of their own, the viewer is prompted to add them.
+  await save(page, []);
+  await page.goto("/watch-together?with=streamingpartner");
+  await expect(prompt).toBeVisible();
+  await noOverflow(page, "streaming-together-prompt");
+  await prompt.click();
+  await expect(page).toHaveURL("/account#streaming-services");
+  await expect(
+    page.getByRole("region", { name: "Your streaming services" }),
+  ).toBeInViewport();
 });

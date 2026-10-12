@@ -10,7 +10,7 @@ for (const [index, timezoneId] of ["UTC", "America/Los_Angeles"].entries()) {
   test.describe(timezoneId, () => {
     test.use({ timezoneId });
 
-    test("dates hydrate across runtime formats and then show the reader's local date", async ({
+    test("dates hydrate across runtime formats and then show the reader's local and relative times", async ({
       page,
       signIn,
     }) => {
@@ -31,11 +31,16 @@ for (const [index, timezoneId] of ["UTC", "America/Los_Angeles"].entries()) {
       const instant = `${year}-01-02T00:30:00.000Z`;
       const localDay = timezoneId === "UTC" ? 2 : 1;
       const localTime = timezoneId === "UTC" ? "12:30 AM UTC" : "4:30 PM PST";
+      // Relative times count from the reader's clock, fixed two hours after
+      // the entry's activity. The reply is older than a week in the same year.
+      const now = `${year}-03-01T20:00:00.000Z`;
+      const activity = `${year}-03-01T18:00:00.000Z`;
+      const activityTime = timezoneId === "UTC" ? "6:00 PM" : "10:00 AM";
       const titleIds = [998860 + index * 2, 998861 + index * 2];
       for (const [variant, id] of titleIds.entries()) {
         await db.query(
-          `INSERT INTO title(id,kind,tmdb_id,name) VALUES($1,'movie',$2,'Date boundary')`,
-          [`movie:${id}`, id],
+          `INSERT INTO title(id,kind,tmdb_id,name,release_date) VALUES($1,'movie',$2,'Date boundary',$3)`,
+          [`movie:${id}`, id, variant ? "" : "1999-05-01"],
         );
         await db.query(
           `INSERT INTO title_availability(title_id,country,availability,fetched_at,refresh_after)
@@ -68,8 +73,19 @@ for (const [index, timezoneId] of ["UTC", "America/Los_Angeles"].entries()) {
       );
       const reply = await addComment(owner, item, "Date boundary reply", false);
       await db.query("UPDATE feed_item SET activity_at=$1 WHERE id=$2", [
-        instant,
+        activity,
         item,
+      ]);
+      // An entry from the previous year shows its year, in both time zones.
+      const earlier = await updateTitleActivity(
+        owner,
+        `movie:${titleIds[1]}`,
+        "recommended",
+        true,
+      );
+      await db.query("UPDATE feed_item SET activity_at=$1 WHERE id=$2", [
+        `${year - 1}-12-31T12:00:00.000Z`,
+        earlier,
       ]);
       await db.query("UPDATE comment SET created_at=$1 WHERE id=$2", [
         instant,
@@ -81,6 +97,7 @@ for (const [index, timezoneId] of ["UTC", "America/Los_Angeles"].entries()) {
         invitation.id,
       ]);
 
+      await page.clock.setFixedTime(now);
       for (const [variant, id] of titleIds.entries()) {
         await page.goto(`/titles/movie/${id}`);
         const availability = page.getByRole("region", {
@@ -113,14 +130,36 @@ for (const [index, timezoneId] of ["UTC", "America/Los_Angeles"].entries()) {
 
       await page.goto("/");
       const entry = page.locator(`[data-item-id="${item}"]`);
-      const feedDate = entry.locator("time").first();
-      await expect(feedDate).toHaveAttribute("datetime", instant);
-      await expect(feedDate).toHaveText(`1/${localDay}/${year}`);
+      // The author line carries the activity time; the metadata line carries
+      // the release year, or only the kind without a release date.
+      await expect(entry.locator(".activity-by")).toContainText(
+        `dateviewer${index} recommends · 2h`,
+      );
+      await expect(entry.locator(".activity-content > .small")).toHaveText(
+        "Movie · 1999",
+      );
+      const feedDate = entry.locator(".activity-by time");
+      await expect(feedDate).toHaveAttribute("datetime", activity);
+      await expect(feedDate).toHaveAttribute(
+        "title",
+        `Mar 1, ${year} at ${activityTime}`,
+      );
       const replyDate = entry.locator(`[data-comment-id="${reply}"] time`);
       expect(
         new Date((await replyDate.getAttribute("datetime"))!).toISOString(),
       ).toBe(instant);
       await expect(replyDate).toHaveText(`Jan ${localDay}`);
+      await expect(replyDate).toHaveAttribute(
+        "title",
+        `Jan ${localDay}, ${year} at ${localTime.slice(0, -4)}`,
+      );
+      const undated = page.locator(`[data-item-id="${earlier}"]`);
+      await expect(undated.locator(".activity-by")).toContainText(
+        `dateviewer${index} recommends · Dec 31, ${year - 1}`,
+      );
+      await expect(undated.locator(".activity-content > .small")).toHaveText(
+        "Movie",
+      );
       await page.goto("/invites");
       await expect(page.locator(".invite-card")).toContainText(
         `Expires 1/${localDay}/${year}`,
@@ -138,6 +177,7 @@ for (const [index, timezoneId] of ["UTC", "America/Los_Angeles"].entries()) {
           return [...document.querySelectorAll("time")].map((time) => ({
             value: time.dateTime,
             label: time.textContent,
+            title: time.title,
           }));
         },
         await titleResponse.text(),
@@ -146,6 +186,13 @@ for (const [index, timezoneId] of ["UTC", "America/Los_Angeles"].entries()) {
       expect(serverDates[0]).toEqual({
         value: instant,
         label: expect.stringMatching(new RegExp(`${year}.*UTC`)),
+        title: "",
+      });
+      // Relative times wait for the reader's clock and time zone.
+      expect(serverDates[1]).toEqual({
+        value: activity,
+        label: `${year}-03-01`,
+        title: `${year}-03-01 18:00 UTC`,
       });
       expect(serverDates.every(({ label }) => /\d/.test(label ?? ""))).toBe(
         true,

@@ -28,6 +28,7 @@ export function StreamingServicesEditor({
   );
   return (
     <section
+      id="streaming-services"
       className="settings-card streaming-settings"
       aria-labelledby="streaming-heading"
     >

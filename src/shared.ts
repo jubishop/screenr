@@ -104,6 +104,7 @@ export type Conversation = {
   title_name: string;
   poster_path: string | null;
   kind: "movie" | "tv";
+  release_date: string;
   activity_at: string;
   visible_activity: string;
   reactions: ReactionSummary[];

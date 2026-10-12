@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import type { FeedItem, Person, SaveSurface } from "../shared";
-import { api, dateLabel, useInteractive } from "./client";
+import { api, useInteractive } from "./client";
 import { Poster } from "./poster";
 import { ThreadView } from "./thread";
 import { preservePosition } from "./position";
@@ -10,6 +10,8 @@ import { Reactions } from "./reactions";
 import { Icon } from "./icons";
 import { Avatar } from "./avatar";
 import { useActionError } from "./action-error";
+import { ActivityTime } from "./activity-time";
+import { titleDetails } from "./title-card";
 
 type Known = Map<string, { activity: string; comments: Set<string> }>;
 function capture(items: FeedItem[]): Known {
@@ -346,18 +348,21 @@ function FeedEntry({
                           ? "wants to watch"
                           : "removed Want to watch"}
                 </span>
+                {/* Non-breaking spaces keep the time beside the action. */}
+                <span className="muted">
+                  {"\u00a0·\u00a0"}
+                  <ActivityTime
+                    value={item.visible_activity}
+                    interactive={interactive}
+                  />
+                </span>
               </p>
               <h2>
                 <Link href={titleURL} prefetch={false}>
                   {item.title_name}
                 </Link>
               </h2>
-              <p className="small muted">
-                {item.kind === "tv" ? "TV show" : "Movie"} ·{" "}
-                <time dateTime={item.visible_activity}>
-                  {dateLabel(item.visible_activity, interactive)}
-                </time>
-              </p>
+              <p className="small muted">{titleDetails(item)}</p>
               {item.item_type === "comment" && !item.active && (
                 <p className="muted">Comment removed</p>
               )}

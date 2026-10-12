@@ -261,6 +261,7 @@ export function Screen({
           <WatchTogether
             participants={data.participants}
             titles={data.titles}
+            viewerHasServices={data.viewerHasServices}
           />
         )}
         {route.kind === "profile" && (

@@ -284,6 +284,13 @@ recipients. A full run checks:
 - The Friends page orders its relationship sections and keeps row actions on
   the person's line at phone and desktop widths. Avatars keep their color
   after a rename and show a whole emoji initial.
+- Feed, comment, and notification times use the relative format with the
+  full local date and time on hover. They hydrate with Safari's date
+  punctuation in UTC and Los Angeles. Feed entries show the release year, or
+  only the kind without a release date.
+- Search and Watch together rows clamp descriptions to two lines and end in a
+  chevron. Watch together prompts a viewer without saved services to save
+  them on Account.
 - Invitations can be created and revoked.
 - A failed feed entry, comment, title header, Friends row, profile,
   confirmation, invitation, or sign-out action shows its error beneath that

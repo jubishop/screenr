@@ -137,7 +137,9 @@ selected title type. **Ready to watch** contains titles with a matching saved
 service or a free option. **Not on your services** keeps other known shared
 choices below. **Availability unknown** keeps failed lookups separate. Each
 section preserves newest-shared-first ordering. Service notes use broad
-identities without plan or reseller labels.
+identities without plan or reseller labels. The server reports only whether
+the viewer has saved services. Without any, the page shows the prompt above
+the results, linked to `/account#streaming-services`.
 
 The existing screen refresh checks choices and access every three seconds
 while visible and on focus. A failed refresh clears private results until a

@@ -2,7 +2,8 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import type { Comment, Person, Thread } from "../shared";
-import { api, useInteractive, dateLabel } from "./client";
+import { api, useInteractive } from "./client";
+import { ActivityTime } from "./activity-time";
 import { preservePosition } from "./position";
 import { Reactions } from "./reactions";
 import { Avatar } from "./avatar";
@@ -245,12 +246,11 @@ export function ThreadView({
             )}
           </span>
           {!comment.unavailable && (
-            <time className="small muted" dateTime={comment.created_at}>
-              {dateLabel(comment.created_at, interactive, {
-                month: "short",
-                day: "numeric",
-              })}
-            </time>
+            <ActivityTime
+              className="small muted"
+              value={comment.created_at}
+              interactive={interactive}
+            />
           )}
         </div>
         {!comment.unavailable && comment.addressed_username && (

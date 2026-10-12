@@ -19,7 +19,7 @@ const reactionSummary = (
     AND screenr_can_read(r.user_id,c.owner_id) AND NOT screenr_blocked($1,r.user_id)
   GROUP BY r.kind
 ) summary)`;
-export const itemQuery = `SELECT c.*,p.username,p.display_name,t.name AS title_name,t.poster_path,t.kind,
+export const itemQuery = `SELECT c.*,p.username,p.display_name,t.name AS title_name,t.poster_path,t.kind,t.release_date,
   (c.item_type='recommended' AND c.active) AS recommended,
   (c.item_type='want_to_watch' AND c.active) AS want_to_watch,
   EXISTS (SELECT 1 FROM feed_item own WHERE own.owner_id=$1 AND own.title_id=c.title_id

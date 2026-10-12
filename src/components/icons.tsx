@@ -46,6 +46,8 @@ const icons = {
       <circle cx="19" cy="12" r="1.2" />
     </>
   ),
+  // Ends a title list row that opens a page inside Screenr.
+  chevron: <path d="m9 5 7 7-7 7" />,
   // Placeholder avatar for a person who is not available.
   person: (
     <>

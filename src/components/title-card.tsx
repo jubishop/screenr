@@ -1,7 +1,16 @@
 import Link from "next/link";
-import type { SaveSurface, ViewingTitle } from "../shared";
+import type { SaveSurface, Title, ViewingTitle } from "../shared";
 import { Poster } from "./poster";
 import { TitleServices } from "./title-services";
+import { Icon } from "./icons";
+
+// The kind and release year, such as "TV show · 2022", or only the kind when
+// the release date is unknown.
+export function titleDetails(title: Pick<Title, "kind" | "release_date">) {
+  const kind = title.kind === "movie" ? "Movie" : "TV show";
+  const year = title.release_date.slice(0, 4);
+  return year ? `${kind} · ${year}` : kind;
+}
 
 // One row in a title list, such as search results or Watch together. The
 // heading level follows the list's place in the page outline. `from` tells
@@ -28,18 +37,15 @@ export function TitleCard({
       <Poster path={title.poster_path} name={title.name} />
       <div>
         <Heading>{title.name}</Heading>
-        <p className="muted">
-          {title.kind === "movie" ? "Movie" : "TV show"}
-          {title.release_date && ` · ${title.release_date.slice(0, 4)}`}
-        </p>
-        <p className="small overview">{title.overview.slice(0, 150)}</p>
+        <p className="muted">{titleDetails(title)}</p>
+        {title.overview && <p className="small overview">{title.overview}</p>}
         <TitleServices
           viewing={title.viewing}
           serviceIds={serviceIds}
           shared={shared}
         />
       </div>
-      <span aria-hidden="true">↗</span>
+      <Icon name="chevron" />
     </Link>
   );
 }

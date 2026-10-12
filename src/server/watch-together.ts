@@ -43,13 +43,19 @@ export async function watchTogether(viewer: string, usernames: string[]) {
   );
   if (!rows[0]) throw new AppError("Watch together not found.", 404);
   const { participants, titles } = rows[0];
-  const { rows: services } = await db.query<{ service_id: string }>(
-    "SELECT DISTINCT service_id FROM member_streaming_service WHERE user_id=ANY($1::text[])",
-    [participants.map((person) => person.user_id)],
+  const { rows: services } = await db.query<{
+    service_id: string;
+    viewer: boolean;
+  }>(
+    `SELECT service_id,bool_or(user_id=$2) AS viewer FROM member_streaming_service
+    WHERE user_id=ANY($1::text[]) GROUP BY service_id`,
+    [participants.map((person) => person.user_id), viewer],
   );
   const serviceIds = services.map((service) => service.service_id);
   return {
     participants,
+    // Prompts the viewer to save services; reveals nothing about the friend's.
+    viewerHasServices: services.some((service) => service.viewer),
     titles: (await withViewingOptions(titles)).map((title) => ({
       ...title,
       access: viewingAccess(title.viewing, serviceIds),

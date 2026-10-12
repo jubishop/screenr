@@ -180,8 +180,8 @@ test("Watch together combines either member's services, preserves other picks, a
   for (const user of [alice, ben])
     for (const id of [netflix, channel, distinct, rental, unknown, stale])
       await updateTitleActivity(user, id, "want_to_watch", true);
-  const read = async () => {
-    const screen = await loadScreen(alice, "/watch-together?with=ben");
+  const read = async (viewer = alice, other = "ben") => {
+    const screen = await loadScreen(viewer, `/watch-together?with=${other}`);
     if (screen.kind !== "watch-together")
       throw new Error("Expected Watch together");
     return screen;
@@ -212,6 +212,20 @@ test("Watch together combines either member's services, preserves other picks, a
     "stale",
   );
   assert.equal(JSON.stringify(screen).includes("service:hulu"), false);
+  // Only the viewer's own saved services decide the prompt to save some.
+  assert.equal(screen.viewerHasServices, true);
+  assert.equal((await save(aliceCookie, [])).status, 200);
+  const unsaved = await read();
+  assert.equal(unsaved.viewerHasServices, false);
+  assert.equal((await read(ben, "alice")).viewerHasServices, true);
+  assert.equal(
+    unsaved.titles.find((t) => t.id === channel)?.access,
+    "available",
+  );
+  assert.equal(
+    unsaved.titles.find((t) => t.id === netflix)?.access,
+    "unmatched",
+  );
   assert.equal((await save(benCookie, [])).status, 200);
   assert.equal(
     (await read()).titles.find((t) => t.id === channel)?.access,

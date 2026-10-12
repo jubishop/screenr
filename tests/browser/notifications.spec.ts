@@ -51,6 +51,13 @@ test("desktop dropdown and mobile panel preserve drafts, scroll, and unread stat
     ).toHaveAttribute("aria-pressed", "true");
     await panel.getByRole("button", { name: "All", exact: true }).click();
     await expect(panel.locator(".notification-item")).toHaveCount(6);
+    // Notifications share the feed's relative times, with the full date on hover.
+    const time = panel.locator(".notification-item time").first();
+    await expect(time).toHaveText(/^(now|\d+m)$/);
+    await expect(time).toHaveAttribute(
+      "title",
+      /^\w{3} \d+, \d{4}, \d+:\d{2} [AP]M$/,
+    );
     const rect = await panel.boundingBox();
     expect(rect!.width).toBe(width <= 560 ? width : 420);
     if (width <= 560) {

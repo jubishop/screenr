@@ -169,6 +169,22 @@
 .search-result p {
   margin-bottom: 4px;
 }
+/* Show whole words: the description stops after two lines with an ellipsis. */
+.search-result .overview {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+}
+.search-result > .icon {
+  flex: none;
+  align-self: center;
+  color: var(--muted);
+}
+.services-prompt a {
+  text-decoration: underline;
+}
 .service-filter {
   margin-bottom: 24px;
 }

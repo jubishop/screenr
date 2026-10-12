@@ -9,7 +9,8 @@ import {
 } from "react";
 import { useRouter } from "next/navigation";
 import type { NotificationPage } from "../server/notifications";
-import { api, dateLabel, useInteractive } from "./client";
+import { api, useInteractive } from "./client";
+import { ActivityTime } from "./activity-time";
 import { Avatar } from "./avatar";
 import { Confirmation } from "./confirmation";
 
@@ -398,14 +399,10 @@ export function Notifications({
                         />
                         <span className="notification-copy">
                           <span>{item.message}</span>
-                          <time dateTime={item.createdAt}>
-                            {dateLabel(item.createdAt, interactive, {
-                              month: "short",
-                              day: "numeric",
-                              hour: "numeric",
-                              minute: "2-digit",
-                            })}
-                          </time>
+                          <ActivityTime
+                            value={item.createdAt}
+                            interactive={interactive}
+                          />
                         </span>
                         {!item.read && (
                           <span
