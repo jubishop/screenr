@@ -26,7 +26,8 @@ function deferred() {
 // Activate a control from the keyboard while its write is held. It keeps
 // focus, reports itself unavailable, and ignores repeated Enter and Space
 // presses. The write then completes, or fails with `fail`. The returned
-// `pressed` locator follows the same element through label changes.
+// `pressed` locator follows the same element through label changes. A menu
+// button opens with `key`, and `choose` picks the menu item that writes.
 // Chromium leaves focus on a control that becomes disabled, but other
 // browsers can move it to the page, so the pending control stays focusable:
 // never `disabled`, but `aria-disabled`, or read-only for a text field.
@@ -38,7 +39,8 @@ async function pressWhilePending(
     key = "Enter",
     fail,
     screenshot,
-  }: { key?: string; fail?: string; screenshot?: string } = {},
+    choose,
+  }: { key?: string; fail?: string; screenshot?: string; choose?: string } = {},
 ) {
   const started = deferred();
   const gate = deferred();
@@ -61,6 +63,10 @@ async function pressWhilePending(
   const pressed = page.locator("[data-pressed]");
   await control.focus();
   await page.keyboard.press(key);
+  if (choose)
+    await page
+      .getByRole("menuitemradio", { name: choose, exact: true })
+      .press("Enter");
   await started.promise;
   await expect(pressed).toBeFocused();
   await expect(pressed).not.toHaveAttribute("disabled");
@@ -139,14 +145,17 @@ test("feed entry and title actions keep keyboard focus while their writes are pe
   const titleRecommend = hero.getByRole("button", {
     name: /^(Recommend to friends|✓ Recommended)$/,
   });
-  const titleWant = hero.getByRole("button", { name: /Want to watch$/ });
-  for (const [width, control, done] of [
-    [390, titleRecommend, "✓ Recommended"],
-    [1366, titleWant, "✓ Want to watch"],
+  // The status menu returns focus to its button, which keeps it while the
+  // chosen status saves.
+  const titleStatus = hero.getByRole("button", { name: /Want to watch$/ });
+  for (const [width, control, done, action, choose] of [
+    [390, titleRecommend, "✓ Recommended", "activity", undefined],
+    [1366, titleStatus, "✓ Want to watch", "watch-status", "Want to watch"],
   ] as const) {
     await reader.setViewportSize({ width, height: 844 });
-    pending = await pressWhilePending(reader, control, "activity", {
+    pending = await pressWhilePending(reader, control, action, {
       screenshot: "pending-title",
+      choose,
     });
     await expect(control).toHaveText(done);
     await expect(pending.pressed).toBeFocused();

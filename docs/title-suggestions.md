@@ -310,7 +310,10 @@ from network failures. The issue owns the acceptance checklist.
 
 ## Scope boundary
 
-Watching follows future watch-status tracking. The original suggestion issue
+Watching and the other
+[watch statuses](title-feed.md#watch-progress-entries) shipped in #100;
+using them in suggestions is tracked in
+[#192](https://github.com/jubishop/screenr/issues/192). The original suggestion issue
 does not build that tracking, the separately planned Friends recommend view,
 inline title actions, permanent dismissals, or global recommendations.
 Issue #93 adds the optional service filter described above; title-type filters

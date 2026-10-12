@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ScreenData } from "../server/screens";
-import type { Person, SaveSurface } from "../shared";
+import type { Person, SaveSurface, WatchStatus } from "../shared";
 import { parseMemberRoute, type MemberRoute } from "../member-routes";
 import { api } from "./client";
 import { Avatar } from "./avatar";
@@ -160,6 +160,17 @@ export function Screen({
   ) {
     return mutate("activity", { title, field, value, surface });
   }
+  function watchStatus(
+    title: string,
+    status: WatchStatus | null,
+    finishedOn?: string,
+    surface?: SaveSurface,
+  ) {
+    return mutate("watch-status", { title, status, finishedOn, surface });
+  }
+  function finishedDate(title: string, date: string | null) {
+    return mutate("finished-date", { title, date });
+  }
   return (
     <div className="app-shell">
       <header className="sidebar">
@@ -243,6 +254,8 @@ export function Screen({
             user={user}
             busy={busy}
             activity={activity}
+            watchStatus={watchStatus}
+            finishedDate={finishedDate}
             refresh={refresh}
             showEntry={(item) => setShownEntry({ item })}
           />

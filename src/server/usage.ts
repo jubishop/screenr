@@ -68,9 +68,10 @@ export async function usageReport({
     ), entries AS (
       SELECT id, owner_id, created_at FROM feed_item
       UNION ALL SELECT id, owner_id, created_at FROM title_comment
+      UNION ALL SELECT id, owner_id, created_at FROM watch_progress
     ), comments AS (
       -- Removed comments still count as activity when they were posted.
-      SELECT coalesce(feed_item_id, title_comment_id) AS entry, author_id, created_at FROM comment
+      SELECT coalesce(feed_item_id, title_comment_id, watch_progress_id) AS entry, author_id, created_at FROM comment
     ), posts AS (
       -- An entry's owner posts the entry itself; everyone else posts comments.
       SELECT e.id AS entry, e.owner_id AS author, e.created_at FROM entries e
@@ -174,8 +175,7 @@ export function formatUsageReport(weeks: UsageWeek[]) {
       )}
 Observed: saved where a friend's recommendation was shown.
 Inferred: saved while a direct friend was recommending the title.
-Watch statuses are not built yet (#100), so saves are not yet followed to
-Watching, Caught up, or Finished.`,
+Saves are not yet followed to Watching, Caught up, or Finished (#188).`,
       section(
         "Conversations with at least two people",
         ["Conversations", "Back-and-forth", "Repeat commenters"],

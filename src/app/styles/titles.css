@@ -30,6 +30,76 @@
 .title-feed-heading .text-button {
   white-space: nowrap;
 }
+/* The watch status menu button and its panel in the title header. */
+.status-menu {
+  position: relative;
+}
+.status-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.status-button .icon {
+  width: 16px;
+  height: 16px;
+}
+.status-button[aria-expanded="true"] .icon {
+  transform: rotate(180deg);
+}
+/* Opens from the button's start; the menu shifts it left when it would pass
+   the viewport's edge. */
+.status-panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 3;
+  width: 240px;
+  max-width: calc(100vw - 32px);
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--white);
+  box-shadow: 0 10px 30px #163c3424;
+}
+.status-panel [role="menu"] {
+  display: grid;
+}
+.status-panel [role="menu"] button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  text-align: left;
+  padding: 10px 12px;
+  border-radius: 6px;
+}
+.status-panel [role="menu"] button:hover,
+.status-panel [role="menu"] button:focus-visible {
+  background: var(--paper);
+}
+.status-panel [role="menu"] button:focus-visible {
+  outline-offset: -3px;
+}
+.status-panel .clear-status {
+  margin-top: 4px;
+  border-top: 1px solid var(--line);
+  border-radius: 0 0 6px 6px;
+}
+.menu-check {
+  width: 1em;
+  flex: none;
+}
+.finished-date {
+  margin-top: 6px;
+  padding: 10px 12px 2px;
+  border-top: 1px solid var(--line);
+}
+.finished-date label {
+  margin-bottom: 0;
+}
+.finished-date-actions {
+  display: flex;
+  gap: 18px;
+}
 .title-trailer {
   margin-bottom: 42px;
 }

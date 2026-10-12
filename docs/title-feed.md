@@ -466,8 +466,8 @@ interview if they preserve these decisions:
 
 ## Shared feed implementation
 
-`src/server/feed.ts` reads each eligible action or standalone comment and
-its replies in one PostgreSQL snapshot. The friends, title, and profile screens use this same
+`src/server/feed.ts` reads each eligible action, progress entry, or standalone
+comment and its replies in one PostgreSQL snapshot. The friends, title, and profile screens use this same
 read path. Items sort by the latest eligible activity at millisecond precision,
 then by item UUID for a stable tie. A removed or inaccessible direct comment
 remains as parent context only while it has eligible nested replies. It does
@@ -578,6 +578,45 @@ rules: reactions update through the current refresh path, do not change item
 ordering, and do not send alerts. Reactions alone do not keep a withdrawn
 action visible; reactivation restores its stored reactions.
 
+### Watch progress entries
+
+[Issue #100](https://github.com/jubishop/screenr/issues/100) adds watch
+statuses. Each member has at most one current status per title. Want to watch
+stays a `feed_item` action. Watching, Caught up, Finished, and Stopped
+watching share one `watch_progress` row per person and title, which is that
+person's progress entry in the shared read path. The row holds the status and
+the optional last-finished date. Caught up needs a TV title; the database
+checks the `tv:` title ID prefix.
+
+`updateWatchStatus` in `src/server/title-actions.ts` saves each choice in one
+transaction:
+
+- Want to watch uses the existing action write. It records the usage save,
+  withdraws Recommend, and withdraws the progress entry.
+- A progress status withdraws Want to watch, which keeps its entry, replies,
+  and date, and leaves Recommend unchanged. A new status, or a status chosen
+  again after clearing, updates the progress entry in place with a new
+  activity date. Choosing the current status changes nothing.
+- Finished sets the last-finished date to the browser's local date, or the
+  Pacific date when none is sent. Other statuses keep the date, as in a
+  rewatch.
+- Clearing withdraws Want to watch and the progress entry. A withdrawn entry
+  keeps its activity date, replies, reactions, and last-finished date,
+  follows the removal rule, and is reused by the next progress status.
+
+`setFinishedDate` changes or clears the date without moving the entry. Dates
+are calendar dates from 1900 through today in the earliest time zone. The
+one-tap Want to watch action also replaces a progress status; turning it off
+leaves a progress status alone.
+
+Entries read "is watching", "is caught up", "finished · Oct 12", or "stopped
+watching". The finished date shows its year outside the current year, and no
+date appears when none is set. A cleared entry kept for its replies reads
+"removed their watch status". Replies and reactions use their
+`watch_progress_id` columns, and comment notifications link to the entry.
+Status changes create no notifications. Each entry's `viewer_status` is the
+reader's own status for its title.
+
 ### Migration and rollback compatibility
 
 The nested layout uses the existing `comment.root_id` and `addressed_id`
@@ -654,12 +693,24 @@ triggers. On rollback, the preceding release saves the flags, which no longer
 affect feed items. Take the normal pre-upgrade backup; no manual step is
 needed.
 
+Migration `018-watch-statuses.sql` adds `watch_progress`, reply and reaction
+columns for it, one-target checks that include it, and its item ID in the
+notification view. It changes no existing rows. The preceding release reads
+only `feed_item` and `title_comment`, so it shows neither progress entries
+nor their replies, and notifications for those replies open an unavailable
+target. Its Want to watch write would leave a progress status current beside
+it, so the `feed_item_withdraw_progress` trigger withdraws the progress entry
+when Want to watch turns on. This release withdraws it itself, so a later
+migration can drop the trigger once the preceding release does too
+([#195](https://github.com/jubishop/screenr/issues/195)). Statuses saved
+before a rollback reappear with this release.
+
 ## Decisions deferred to future features
 
 - How edits to freeform comments affect existing items. Standalone comments
   shipped in #8 without editing.
-- Implementation of future watch statuses and combinations of review,
-  rating, or watch changes saved together. The existing
+- Combinations of review, rating, or watch changes saved together. The
+  existing
   [grouped-update rule](product-brief.md#friends-feed--2026-09-04) for those
   other future features is unchanged. Recommend and Want to watch each
   have their own item and reply group.

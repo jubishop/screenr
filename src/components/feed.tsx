@@ -13,6 +13,7 @@ import { useActionError } from "./action-error";
 import { ActivityTime } from "./activity-time";
 import { titleDetails } from "./title-card";
 import { ActionButton } from "./action-button";
+import { progressPhrase, statusLabels } from "./watch-status";
 
 type Known = Map<string, { activity: string; comments: Set<string> }>;
 function capture(items: FeedItem[]): Known {
@@ -307,26 +308,36 @@ function FeedEntry({
       )}
       {!compact && item.owner_id !== user.user_id && (
         <>
-          <ActionButton
-            className="text-button"
-            disabled={!interactive}
-            unavailable={busy}
-            aria-describedby={failure.describedBy("want_to_watch")}
-            onClick={() =>
-              void failure.run("want_to_watch", () =>
-                activity(
-                  item.title_id,
-                  "want_to_watch",
-                  !item.viewer_want_to_watch,
-                  item.item_type === "recommended" && item.active
-                    ? "friend_recommendation"
-                    : "friend_entry",
-                ),
-              )
-            }
-          >
-            {item.viewer_want_to_watch ? "✓ Want to watch" : "+ Want to watch"}
-          </ActionButton>
+          {/* One tap saves to Want to watch. A reader with another status
+              sees it instead, linked to the title page's status menu. */}
+          {item.viewer_status && item.viewer_status !== "want_to_watch" ? (
+            <Link className="text-button" href={titleURL} prefetch={false}>
+              ✓ {statusLabels[item.viewer_status]}
+            </Link>
+          ) : (
+            <ActionButton
+              className="text-button"
+              disabled={!interactive}
+              unavailable={busy}
+              aria-describedby={failure.describedBy("want_to_watch")}
+              onClick={() =>
+                void failure.run("want_to_watch", () =>
+                  activity(
+                    item.title_id,
+                    "want_to_watch",
+                    !item.viewer_want_to_watch,
+                    item.item_type === "recommended" && item.active
+                      ? "friend_recommendation"
+                      : "friend_entry",
+                  ),
+                )
+              }
+            >
+              {item.viewer_want_to_watch
+                ? "✓ Want to watch"
+                : "+ Want to watch"}
+            </ActionButton>
+          )}
           <ActionButton
             className="text-button"
             disabled={!interactive}
@@ -367,13 +378,20 @@ function FeedEntry({
             : "commented on"
           : item.item_type === "earlier"
             ? "· Earlier discussion"
-            : item.item_type === "recommended"
-              ? item.active
-                ? "recommends"
-                : "removed their recommendation"
-              : item.active
-                ? "wants to watch"
-                : "removed Want to watch"}
+            : item.item_type === "progress"
+              ? progressPhrase(
+                  item.status!,
+                  item.finished_on,
+                  item.active,
+                  interactive,
+                )
+              : item.item_type === "recommended"
+                ? item.active
+                  ? "recommends"
+                  : "removed their recommendation"
+                : item.active
+                  ? "wants to watch"
+                  : "removed Want to watch"}
       </span>
       {/* Non-breaking spaces keep the time beside the action. */}
       <span className="muted">

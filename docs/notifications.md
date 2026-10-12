@@ -101,7 +101,8 @@ triggers for friendship and comment events. It seeds existing pending friend
 requests without sending email. It does not backfill old comments or accepted
 friendships. Invited signup creates one new-friend notification for the inviter.
 Comments notify their content owner and addressed commenter, excluding the
-actor and duplicate recipients. Notifications use current names and access;
+actor and duplicate recipients. Watch status changes notify no one; comments
+on a progress entry notify like comments on other entries. Notifications use current names and access;
 they contain no comment text. Withdrawn requests and deleted or inaccessible
 comments disappear from lists and counts. Restoring comment access preserves
 the notification's read state.

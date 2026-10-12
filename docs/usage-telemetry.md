@@ -198,15 +198,15 @@ week and an asterisk on the week in progress:
 - **Want to watch saves:** saves that week, observed saves (the surfaces
   marked Observed above), and inferred saves (`friend_recommending`). Each
   counts a member and title once per week, so turning Want to watch off and on
-  again counts once. Following saves to Watching, Caught up, or Finished waits
-  for watch statuses and is tracked in
-  [issue #188](https://github.com/jubishop/screenr/issues/188).
+  again counts once. Following saves to Watching, Caught up, or Finished is
+  tracked in [issue #188](https://github.com/jubishop/screenr/issues/188).
 - **Conversations with at least two people:** feed entries that received a
   comment or reply that week and whose owner and commenters number at least
   two by the week's end; how many of those had back-and-forth by the week's
   end, counting the entry as its owner's first post; and members who
   commented that week and in any earlier week. Entries include Recommend,
-  Want to watch, earlier discussion, and standalone comment entries. Posting a
+  Want to watch, watch progress, earlier discussion, and standalone comment
+  entries. Posting a
   standalone comment starts a conversation and does not count as commenting.
   Removed comments count when they were posted.
 

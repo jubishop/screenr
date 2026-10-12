@@ -2,6 +2,7 @@ import { expect, type Locator } from "@playwright/test";
 import { db } from "./database-fixture";
 import { test } from "./monitored-test";
 import { friend, userId } from "./member-fixture";
+import { chooseStatus } from "./watch-status";
 
 const { updateTitleActivity } = await import("../../src/server/title-actions");
 const { addComment } = await import("../../src/server/comments");
@@ -109,9 +110,10 @@ test("title and feed actions switch exclusively and restore each original discus
     await expect(
       button(page.locator(`[data-item-id="${friendItem}"]`), name),
     ).toHaveCount(0);
+  // The title header's status menu chooses Want to watch.
   const header = page.locator(".title-hero .inline-actions");
   await states(header, true, false, true);
-  await button(header, "+ Want to watch").click();
+  await chooseStatus(page, "Want to watch");
   await states(header, false, true, true);
   const recEntry = page.locator(`[data-item-id="${recommendation}"]`);
   const watchEntry = page.locator(`[data-item-id="${wanted}"]`);
@@ -122,9 +124,9 @@ test("title and feed actions switch exclusively and restore each original discus
   await expect(
     watchEntry.locator(`[data-comment-id="${wantedReply}"]`),
   ).toContainText("Watch discussion");
-  await button(header, "✓ Want to watch").click();
+  await chooseStatus(page, "Clear status");
   await states(header, false, false, true);
-  await button(header, "+ Want to watch").click();
+  await chooseStatus(page, "Want to watch");
   await states(header, false, true, true);
   await expect(watchEntry).toContainText("wants to watch");
   await button(header, "Recommend to friends").click();

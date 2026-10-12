@@ -349,6 +349,11 @@ recipients. A full run checks:
   current state, including after reload. Clearing the last
   activity flag hides an empty card, while visible comments keep its thread
   listed. Restoring either action reuses its original entry and replies.
+- The title page's status menu sets, dates, and clears statuses by pointer
+  and keyboard, lists Caught up only for TV shows, and stays on screen at
+  phone and desktop widths. A friend sees one progress entry, saves its title
+  with one tap, and then sees their own status as a link. Clearing keeps an
+  entry with replies, marked as removed.
 
 Database tests additionally cover concurrent signup limits, rollback after
 username conflicts, expiry, code/account identity, explicit Google linking,
@@ -357,7 +362,10 @@ They verify automatic inviter friendships for email and Google signup, legacy
 links, and replacement invitations. Retrying setup does not consume another
 use or restore a friendship after unfriending or blocking. Invites refreshes
 don't wait for the shared write lock, and writes stop waiting for it with a
-retryable error.
+retryable error. Watch status tests cover each status and transition, its
+interplay with Recommend and Want to watch, the progress entry lifecycle,
+date validation, audience and blocking, notifications, and migration 018
+with the previous release's writes.
 `tests/app/failure-logs.test.ts` and `tests/app/email.test.ts` capture the
 [failure logs](deployment.md#failure-logs) of request, page, worker, and
 Resend failures. They compare the logged fields exactly, check that comment

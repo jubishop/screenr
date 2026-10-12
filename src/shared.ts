@@ -82,6 +82,17 @@ export const saveSurfaces = [
   "watch_together", // a title page opened from Watch together
 ] as const;
 export type SaveSurface = (typeof saveSurfaces)[number];
+// Each person has at most one current status per title. Want to watch is a
+// title action; the others share one progress entry. Caught up is TV only.
+// db/018-watch-statuses.sql enforces the same progress statuses.
+export const progressStatuses = [
+  "watching",
+  "caught_up",
+  "finished",
+  "stopped",
+] as const;
+export type ProgressStatus = (typeof progressStatuses)[number];
+export type WatchStatus = "want_to_watch" | ProgressStatus;
 export type ReactionSummary = {
   kind: ReactionKind;
   count: number;
@@ -91,14 +102,20 @@ export type Conversation = {
   id: string;
   owner_id: string;
   title_id: string;
-  item_type: "recommended" | "want_to_watch" | "earlier" | "comment";
+  item_type:
+    "recommended" | "want_to_watch" | "earlier" | "comment" | "progress";
   body: string | null;
   spoiler: boolean;
   active: boolean;
   recommended: boolean;
   want_to_watch: boolean;
+  // A progress entry's status and last-finished date (YYYY-MM-DD).
+  status: ProgressStatus | null;
+  finished_on: string | null;
   viewer_want_to_watch: boolean;
   viewer_recommended: boolean;
+  // The reader's own current status for the entry's title.
+  viewer_status: WatchStatus | null;
   username: string;
   display_name: string;
   title_name: string;

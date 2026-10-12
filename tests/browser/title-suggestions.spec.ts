@@ -3,6 +3,7 @@ import { db } from "./database-fixture";
 import { test } from "./monitored-test";
 import { person, friend } from "./member-fixture";
 import { browserConfig } from "../../scripts/browser-config";
+import { chooseStatus } from "./watch-status";
 
 const { changeRelationship } = await import("../../src/server/relationships");
 const { updateTitleActivity } = await import("../../src/server/title-actions");
@@ -135,13 +136,7 @@ test("suggestion tiles explain the circle without revealing second-degree identi
   await expect(page).toHaveURL(
     /\/titles\/movie\/987654\?from=suggestion_recommendation$/,
   );
-  await page
-    .getByRole("button", { name: "+ Want to watch", exact: true })
-    .first()
-    .click();
-  await expect(
-    page.getByRole("button", { name: "✓ Want to watch", exact: true }).first(),
-  ).toBeVisible();
+  await chooseStatus(page, "Want to watch");
   // Usage telemetry attributes the save to the tile naming a recommending friend.
   expect(
     (

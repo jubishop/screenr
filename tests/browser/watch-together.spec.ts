@@ -2,6 +2,7 @@ import { expect } from "@playwright/test";
 import { test } from "./monitored-test";
 import { prepareFriendship } from "./member-fixture";
 import { confirmProfileAction } from "./journey-helpers";
+import { chooseStatus, statusButton } from "./watch-status";
 
 test("watch together opens from a friend profile, filters shared titles, and refreshes choices and access", async ({
   member,
@@ -32,15 +33,7 @@ test("watch together opens from a friend profile, filters shared titles, and ref
   for (const title of ["/titles/movie/987654", "/titles/tv/998001"]) {
     for (const person of [owner, friend]) {
       await person.goto(title);
-      await person
-        .locator(".title-hero")
-        .getByRole("button", { name: "+ Want to watch", exact: true })
-        .click();
-      await expect(
-        person
-          .locator(".title-hero")
-          .getByRole("button", { name: "✓ Want to watch", exact: true }),
-      ).toBeVisible();
+      await chooseStatus(person, "Want to watch");
     }
   }
   await owner.goto("/people/watchfriend");
@@ -96,17 +89,10 @@ test("watch together opens from a friend profile, filters shared titles, and ref
     .filter({ hasText: "The Lantern Room" })
     .click();
   await expect(owner).toHaveURL("/titles/movie/987654?from=watch_together");
-  await expect(
-    owner
-      .locator(".title-hero")
-      .getByRole("button", { name: "✓ Want to watch", exact: true }),
-  ).toBeVisible();
+  await expect(statusButton(owner)).toHaveText("✓ Want to watch");
   await owner.goBack();
   await owner.getByRole("button", { name: "TV", exact: true }).click();
-  await friend
-    .locator(".title-hero")
-    .getByRole("button", { name: "✓ Want to watch", exact: true })
-    .click();
+  await chooseStatus(friend, "Clear status");
   await expect(
     owner.getByRole("heading", { name: "No shared TV shows yet." }),
   ).toBeVisible();
@@ -115,17 +101,11 @@ test("watch together opens from a friend profile, filters shared titles, and ref
     "The Lantern Room",
   ]);
   await friend.goto("/titles/movie/987654");
-  await friend
-    .locator(".title-hero")
-    .getByRole("button", { name: "✓ Want to watch", exact: true })
-    .click();
+  await chooseStatus(friend, "Clear status");
   await expect(
     owner.getByRole("heading", { name: "No shared titles yet." }),
   ).toBeVisible();
-  await friend
-    .locator(".title-hero")
-    .getByRole("button", { name: "+ Want to watch", exact: true })
-    .click();
+  await chooseStatus(friend, "Want to watch");
   await expect(results.getByRole("heading", { level: 3 })).toHaveText([
     "The Lantern Room",
   ]);

@@ -30,6 +30,11 @@ test flow, and [Testing Screenr](docs/testing.md) for the automated suites.
   options under Subs and Free, and the title's feed in compact entries.
   Saved streaming services mark matching titles and enable a My services
   filter.
+- **Watch statuses:** A title page's status menu sets one current status:
+  Want to watch, Watching, Caught up (TV only), Finished, or Stopped watching,
+  with an optional last-finished date. Watching through Stopped watching share
+  one feed entry per person and title that updates as the status changes.
+  Recommend can go with any status except Want to watch.
 - **Feeds and conversations:** Members recommend titles or add them to Want to
   watch, which are mutually exclusive, and post standalone comments on title
   pages. The friends, profile, and title feeds show the same entries. Members
@@ -55,8 +60,6 @@ test flow, and [Testing Screenr](docs/testing.md) for the automated suites.
 Remaining product features are tracked as
 [open feature issues](https://github.com/jubishop/screenr/issues?q=is%3Aissue%20state%3Aopen%20label%3Afeature):
 
-- Watch statuses and a last-finished date
-  ([#100](https://github.com/jubishop/screenr/issues/100))
 - Star ratings and written reviews
   ([#101](https://github.com/jubishop/screenr/issues/101))
 - The Friends recommend view

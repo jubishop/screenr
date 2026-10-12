@@ -2,6 +2,7 @@ import { expect } from "@playwright/test";
 import { browserConfig } from "../../scripts/browser-config";
 import { test } from "./monitored-test";
 import { prepareFriendship } from "./member-fixture";
+import { chooseStatus } from "./watch-status";
 
 test("discussion links copy from every feed without navigating or losing drafts and recover from clipboard failures", async ({
   member,
@@ -24,9 +25,7 @@ test("discussion links copy from every feed without navigating or losing drafts 
     },
   });
   expect(keepDiscussion.status()).toBe(200);
-  await owner
-    .getByRole("button", { name: "+ Want to watch", exact: true })
-    .click();
+  await chooseStatus(owner, "Want to watch");
   await owner
     .getByRole("button", { name: "Start a conversation", exact: true })
     .click();

@@ -14,9 +14,12 @@ const legacyFunctions = `SELECT proname FROM pg_proc
   WHERE pronamespace=current_schema()::text::regnamespace
   AND proname IN ('screenr_sync_actions','screenr_attach_legacy_comment')`;
 
-test("migrated databases keep only the notification triggers", async () => {
+// Besides notifications, only the watch status guard for the release before
+// migration 018 remains; a later migration drops it.
+test("migrated databases keep only the notification and watch status triggers", async () => {
   assert.deepEqual((await db.query(triggers)).rows, [
     { table: "comment", name: "comment_notify" },
+    { table: "feed_item", name: "feed_item_withdraw_progress" },
     { table: "friendship", name: "friendship_notify" },
   ]);
   assert.deepEqual((await db.query(legacyFunctions)).rows, []);

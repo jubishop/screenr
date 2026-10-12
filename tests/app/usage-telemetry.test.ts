@@ -447,8 +447,7 @@ Week of     Saves  Observed  Inferred
 2026-11-02      0         0         0
 Observed: saved where a friend's recommendation was shown.
 Inferred: saved while a direct friend was recommending the title.
-Watch statuses are not built yet (#100), so saves are not yet followed to
-Watching, Caught up, or Finished.
+Saves are not yet followed to Watching, Caught up, or Finished (#188).
 
 Conversations with at least two people
 Week of     Conversations  Back-and-forth  Repeat commenters

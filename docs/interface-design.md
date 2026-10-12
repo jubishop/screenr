@@ -296,6 +296,20 @@ and the profile top 10 control without taking more header space.
 **Rejected alternative:** A row of status chips, which takes more room,
 especially on phone.
 
+**Implementation note:** `src/components/watch-status.tsx` holds the status
+button ([issue #100](https://github.com/jubishop/screenr/issues/100)). It
+follows the More actions menu pattern: Enter, Space, or the arrow keys open
+it; arrow keys, Home, and End move between choices; Escape returns to the
+button; moving focus elsewhere or pressing outside closes it. Statuses are
+menu radio items with a check beside the current one. Clear status appears
+when a status exists. While a progress status or a stored date exists, a
+Last finished date field below the choices offers Save date and Clear date.
+Choosing Finished sends the reader's local date. While a choice saves, the
+button keeps focus and does not open. The panel opens from the button and
+shifts left to stay on a phone screen. A feed entry keeps its
+one-tap "+ Want to watch"; a reader with another status for the title sees
+that status instead, for example "✓ Watching", linked to the title page.
+
 ### Trailer collapsed until played — 2026-10-12
 
 **Decision:** When a title has a supported trailer, show a one-line

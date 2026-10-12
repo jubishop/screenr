@@ -18,7 +18,11 @@ import { setReaction } from "./reactions";
 import { changeRelationship } from "./relationships";
 import { loadScreen } from "./screens";
 import { saveServices } from "./streaming-services";
-import { updateTitleActivity } from "./title-actions";
+import {
+  setFinishedDate,
+  updateTitleActivity,
+  updateWatchStatus,
+} from "./title-actions";
 import { findTitles } from "./title-viewing";
 import type { Person } from "../shared";
 
@@ -187,6 +191,28 @@ const actions: Record<string, Action> = {
         surface,
       ),
     }),
+  }),
+  "watch-status": write({
+    input: ({ title, status, finishedOn, surface }) => ({
+      title: id(title),
+      status,
+      finishedOn,
+      surface,
+    }),
+    run: async ({ title, status, finishedOn, surface }, { userId }) => ({
+      id: await updateWatchStatus(
+        userId,
+        await ensureTitle(title),
+        status,
+        finishedOn,
+        surface,
+      ),
+    }),
+  }),
+  "finished-date": write({
+    input: ({ title, date }) => ({ title: id(title), date }),
+    run: async ({ title, date }, { userId }) =>
+      setFinishedDate(userId, await ensureTitle(title), date),
   }),
   "title-comment": write({
     input: ({ title, body, spoiler }) => ({ title: id(title), body, spoiler }),

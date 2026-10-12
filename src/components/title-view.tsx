@@ -1,7 +1,7 @@
 "use client";
 import { useSearchParams } from "next/navigation";
 import type { ScreenData } from "../server/screens";
-import type { Person, SaveSurface } from "../shared";
+import type { Person, SaveSurface, WatchStatus } from "../shared";
 import { useInteractive } from "./client";
 import { Poster } from "./poster";
 import { TitleAvailability } from "./title-availability";
@@ -10,8 +10,10 @@ import { TitleFriends } from "./title-friends";
 import { TitleTrailer } from "./title-trailer";
 import { useActionError } from "./action-error";
 import { ActionButton } from "./action-button";
+import { localToday, WatchStatusMenu } from "./watch-status";
 // Suggestion tiles and Watch together open title pages with ?from=<surface>,
-// so a Want to watch save here reports where the member found the title.
+// so a Want to watch status chosen here reports where the member found the
+// title.
 const origins: SaveSurface[] = [
   "friends_recommend",
   "suggestion_recommendation",
@@ -24,6 +26,8 @@ export function TitleView({
   user,
   busy,
   activity,
+  watchStatus,
+  finishedDate,
   refresh,
   showEntry,
 }: {
@@ -36,6 +40,13 @@ export function TitleView({
     value: boolean,
     surface?: SaveSurface,
   ) => Promise<unknown>;
+  watchStatus: (
+    title: string,
+    status: WatchStatus | null,
+    finishedOn?: string,
+    surface?: SaveSurface,
+  ) => Promise<unknown>;
+  finishedDate: (title: string, date: string | null) => Promise<unknown>;
   refresh: () => Promise<void>;
   showEntry: (item: string) => void;
 }) {
@@ -85,26 +96,29 @@ export function TitleView({
                     ? "✓ Recommended"
                     : "Recommend to friends"}
                 </ActionButton>
-                <ActionButton
-                  className="secondary"
+                <WatchStatusMenu
+                  kind={data.title.kind}
+                  status={data.watch.status}
+                  finishedOn={data.watch.finished_on}
                   disabled={!interactive}
                   unavailable={busy}
-                  aria-describedby={failure.describedBy("want_to_watch")}
-                  onClick={() =>
-                    void failure.run("want_to_watch", () =>
-                      activity(
+                  describedBy={failure.describedBy("status")}
+                  onStatus={(status) =>
+                    void failure.run("status", () =>
+                      watchStatus(
                         data.title.id,
-                        "want_to_watch",
-                        !own.some((c) => c.want_to_watch),
-                        surface,
+                        status,
+                        status === "finished" ? localToday() : undefined,
+                        status === "want_to_watch" ? surface : undefined,
                       ),
                     )
                   }
-                >
-                  {own.some((c) => c.want_to_watch)
-                    ? "✓ Want to watch"
-                    : "+ Want to watch"}
-                </ActionButton>
+                  onDate={(date) =>
+                    void failure.run("status", () =>
+                      finishedDate(data.title.id, date),
+                    )
+                  }
+                />
               </div>
               {failure.alert}
               <TitleFriends friends={data.friends} showEntry={showEntry} />

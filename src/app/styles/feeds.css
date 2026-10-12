@@ -17,6 +17,10 @@
 .reactions {
   gap: 6px;
 }
+/* A reader's own watch status links to the title page in place of a button. */
+.title-actions a.text-button {
+  display: inline-block;
+}
 .reaction-count {
   min-height: 44px;
   min-width: 44px;

@@ -3,6 +3,7 @@ import { db } from "./database-fixture";
 import { test } from "./monitored-test";
 import { person, friend } from "./member-fixture";
 import { nextAccountRefreshForPath } from "./refresh-helpers";
+import { chooseStatus, statusButton } from "./watch-status";
 
 const { updateTitleActivity } = await import("../../src/server/title-actions");
 
@@ -56,16 +57,9 @@ test("page loads and navigation count as active days, background refreshes do no
     ).toBeVisible();
   }
   await page.goto("/titles/tv/998001");
-  const hero = page.locator(".title-hero");
-  await hero
-    .getByRole("button", { name: "✓ Want to watch", exact: true })
-    .click();
-  await hero
-    .getByRole("button", { name: "+ Want to watch", exact: true })
-    .click();
-  await expect(
-    hero.getByRole("button", { name: "✓ Want to watch", exact: true }),
-  ).toBeVisible();
+  await expect(statusButton(page)).toHaveText("✓ Want to watch");
+  await chooseStatus(page, "Clear status");
+  await chooseStatus(page, "Want to watch");
   expect(
     (
       await db.query(

@@ -4,21 +4,40 @@ import type { FeedItem, FriendActivity, Thread } from "../shared";
 // Access, replies, counts, and activity are read in one PostgreSQL snapshot.
 // All surfaces use this query; reply authors never expand the parent audience.
 export const feedEntries = `(SELECT id,conversation_id,owner_id,title_id,item_type,active,created_at,activity_at,
-    NULL::text AS body,false AS spoiler FROM feed_item
+    NULL::text AS body,false AS spoiler,NULL::text AS status,NULL::text AS finished_on FROM feed_item
   UNION ALL
   SELECT id,conversation_id,owner_id,title_id,'comment',removed_at IS NULL,created_at,created_at,
-    CASE WHEN removed_at IS NULL THEN body ELSE '' END,spoiler
-    FROM title_comment)`;
+    CASE WHEN removed_at IS NULL THEN body ELSE '' END,spoiler,NULL,NULL
+    FROM title_comment
+  UNION ALL
+  SELECT id,conversation_id,owner_id,title_id,'progress',active,created_at,activity_at,
+    NULL,false,status,finished_on::text FROM watch_progress)`;
+// Replies and reactions name their entry in the column for its type.
+export const entryColumn = (itemType: string) =>
+  itemType === "comment"
+    ? "title_comment_id"
+    : itemType === "progress"
+      ? "watch_progress_id"
+      : "feed_item_id";
+// Whether reply or reaction `row` belongs to the entry with ID `entry`.
+export const belongsTo = (row: string, entry: string) =>
+  `(${row}.feed_item_id=${entry} OR ${row}.title_comment_id=${entry} OR ${row}.watch_progress_id=${entry})`;
 // Counts include only current participants visible to this reader. A reaction
 // to a reply also requires that its author can still see the reply's author.
 const reactionSummary = (
   reply: boolean,
 ) => `(SELECT coalesce(jsonb_agg(summary ORDER BY kind),'[]') FROM (
   SELECT r.kind,count(*)::int AS count,bool_or(r.user_id=$1) AS reacted FROM reaction r
-  WHERE ${reply ? "r.comment_id=cm.id AND cm.accessible AND cm.removed_at IS NULL AND NOT screenr_blocked(r.user_id,cm.author_id)" : "(r.feed_item_id=c.id OR r.title_comment_id=c.id) AND (c.item_type<>'comment' OR c.active)"}
+  WHERE ${reply ? "r.comment_id=cm.id AND cm.accessible AND cm.removed_at IS NULL AND NOT screenr_blocked(r.user_id,cm.author_id)" : `${belongsTo("r", "c.id")} AND (c.item_type<>'comment' OR c.active)`}
     AND screenr_can_read(r.user_id,c.owner_id) AND NOT screenr_blocked($1,r.user_id)
   GROUP BY r.kind
 ) summary)`;
+// The reader's ($1) current status for a title: a progress status, Want to
+// watch, or none. One status is current at a time.
+export const viewerStatus = (title: string) => `coalesce(
+    (SELECT own.status FROM watch_progress own WHERE own.owner_id=$1 AND own.title_id=${title} AND own.active),
+    (SELECT 'want_to_watch' FROM feed_item own WHERE own.owner_id=$1 AND own.title_id=${title}
+      AND own.item_type='want_to_watch' AND own.active))`;
 export const itemQuery = `SELECT c.*,p.username,p.display_name,t.name AS title_name,t.poster_path,t.kind,t.release_date,
   (c.item_type='recommended' AND c.active) AS recommended,
   (c.item_type='want_to_watch' AND c.active) AS want_to_watch,
@@ -26,6 +45,7 @@ export const itemQuery = `SELECT c.*,p.username,p.display_name,t.name AS title_n
     AND own.item_type='want_to_watch' AND own.active) AS viewer_want_to_watch,
   EXISTS (SELECT 1 FROM feed_item own WHERE own.owner_id=$1 AND own.title_id=c.title_id
     AND own.item_type='recommended' AND own.active) AS viewer_recommended,
+  ${viewerStatus("c.title_id")} AS viewer_status,
   date_trunc('milliseconds', CASE WHEN c.item_type='earlier' THEN coalesce(replies.activity,replies.placeholder_activity,c.created_at)
     ELSE greatest(c.activity_at,coalesce(replies.activity,c.activity_at)) END) AS visible_activity,
   coalesce(replies.comments,'[]') AS comments,
@@ -35,7 +55,7 @@ export const itemQuery = `SELECT c.*,p.username,p.display_name,t.name AS title_n
     WITH candidates AS (
       SELECT cm.*,screenr_can_read(cm.author_id,c.owner_id)
         AND NOT screenr_blocked($1,cm.author_id) AS accessible
-      FROM comment cm WHERE cm.feed_item_id=c.id OR cm.title_comment_id=c.id
+      FROM comment cm WHERE ${belongsTo("cm", "c.id")}
     ), retained AS (
       SELECT cm.* FROM candidates cm
       WHERE (cm.accessible AND cm.removed_at IS NULL)

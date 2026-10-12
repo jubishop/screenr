@@ -10,6 +10,7 @@ import { savedServices, streamingServices } from "./streaming-services";
 import { withViewingOptions } from "./title-viewing";
 import { activityEmail, unreadNotifications } from "./notifications";
 import { logFailure } from "./log";
+import { watchStatus } from "./title-actions";
 import { parseMemberRoute, type MemberRoute } from "../member-routes";
 
 export async function loadScreen(userId: string, requestedPath: string) {
@@ -91,17 +92,19 @@ async function loadContent(userId: string, route: MemberRoute) {
     const { id, item, reply } = route;
     // Catalog requests run together to fit the client's refresh deadline.
     const stored = getTitle(id);
-    const [title, threads, trailer, availability] = await Promise.all([
+    const [title, threads, trailer, availability, watch] = await Promise.all([
       stored,
       conversations(userId, { title: id }),
       getTitleTrailer(id, stored),
       getTitleAvailability(id, Infinity, stored),
+      watchStatus(userId, id),
     ]);
     return {
       kind: "title" as const,
       title,
       trailer,
       availability,
+      watch,
       conversations: threads,
       friends: friendActivity(userId, threads),
       target: (() => {

@@ -482,8 +482,11 @@ test("a failed entry, comment, or title action shows its error beside that contr
     exact: true,
   });
   await expect(titleWant).toBeEnabled();
-  await failAction(reader, "activity", message);
+  await failAction(reader, "watch-status", message);
   await press(titleWant);
+  await reader
+    .getByRole("menuitemradio", { name: "Want to watch", exact: true })
+    .click();
   for (const width of [390, 1366]) {
     await reader.setViewportSize({ width, height: 844 });
     await expectErrorBeside(reader, {

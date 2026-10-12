@@ -48,6 +48,8 @@ const icons = {
   ),
   // Ends a title list row that opens a page inside Screenr.
   chevron: <path d="m9 5 7 7-7 7" />,
+  // A menu button that opens beneath it, such as the watch status.
+  expand: <path d="m7 10 5 5 5-5" />,
   // Placeholder avatar for a person who is not available.
   person: (
     <>

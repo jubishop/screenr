@@ -1,5 +1,5 @@
 import { AppError, transaction } from "./db";
-import { itemQuery } from "./feed";
+import { entryColumn, itemQuery } from "./feed";
 import type { FeedItem } from "../shared";
 import { reactionOptions } from "../shared";
 
@@ -33,12 +33,7 @@ export async function setReaction(
       )
     )
       throw new AppError("Reply target not found.", 404);
-    const column =
-      replyId != null
-        ? "comment_id"
-        : item.item_type === "comment"
-          ? "title_comment_id"
-          : "feed_item_id";
+    const column = replyId != null ? "comment_id" : entryColumn(item.item_type);
     const target = replyId ?? itemId;
     if (kind === null) {
       await client.query(
