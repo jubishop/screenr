@@ -70,6 +70,18 @@ export const reactionOptions = [
   { kind: "angry", label: "Angry", emoji: "😡" },
 ] as const;
 export type ReactionKind = (typeof reactionOptions)[number]["kind"];
+// Where a member saved a title to Want to watch, for usage telemetry.
+// db/015-usage-telemetry.sql enforces the same list.
+export const saveSurfaces = [
+  "friend_recommendation", // the action on a friend's active Recommend entry
+  "friend_entry", // the action on any other friend's feed entry
+  "friends_recommend", // the Friends recommend view
+  "suggestion_recommendation", // a title page opened from a suggestion tile naming a recommending friend
+  "suggestion", // a title page opened from another suggestion tile
+  "title", // a title page reached any other way
+  "watch_together", // a title page opened from Watch together
+] as const;
+export type SaveSurface = (typeof saveSurfaces)[number];
 export type ReactionSummary = {
   kind: ReactionKind;
   count: number;

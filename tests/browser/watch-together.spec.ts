@@ -94,7 +94,7 @@ test("watch together opens from a friend profile, filters shared titles, and ref
     .getByRole("link")
     .filter({ hasText: "The Lantern Room" })
     .click();
-  await expect(owner).toHaveURL("/titles/movie/987654");
+  await expect(owner).toHaveURL("/titles/movie/987654?from=watch_together");
   await expect(
     owner
       .locator(".title-hero")

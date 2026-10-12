@@ -41,6 +41,10 @@ test flow, and [Testing Screenr](docs/testing.md) for the automated suites.
 - **Home screen:** Members can add Screenr to a phone's home screen and open
   it as a standalone app. Offline page loads show a plain offline page; there
   is no offline content.
+- **Usage measures:** Screenr records members' active days and where Want to
+  watch saves come from in its own database, with no third-party analytics.
+  The owner's `npm run report:usage` prints weekly totals for the
+  [initial success measures](docs/usage-telemetry.md).
 
 ## Not built yet
 
@@ -60,8 +64,6 @@ Remaining product features are tracked as
   ([#104](https://github.com/jubishop/screenr/issues/104))
 - A ranked top 10 on each profile
   ([#99](https://github.com/jubishop/screenr/issues/99))
-- Usage telemetry for the initial success measures
-  ([#105](https://github.com/jubishop/screenr/issues/105))
 - A dark theme that follows the system setting
   ([#171](https://github.com/jubishop/screenr/issues/171))
 
@@ -80,11 +82,11 @@ in Cloudflare R2. See the [application stack](docs/application-stack.md) and
 | --- | --- |
 | `src/app/` | Next.js routes: sign-in, profile setup, invitation links, credits, member screens, API handlers, app icons, the web manifest, and stylesheets |
 | `src/components/` | React views and controls for feeds, titles, people, invitations, notifications, and account settings |
-| `src/server/` | Server-only domain code: authentication, access rules, social reads and writes, invitations, catalog and availability, suggestions, notifications, and email |
+| `src/server/` | Server-only domain code: authentication, access rules, social reads and writes, invitations, catalog and availability, suggestions, notifications, email, and usage telemetry |
 | `src/shared.ts`, `src/viewing.ts`, `src/member-routes.ts` | Types, helpers, and the member route parser shared by browser and server code |
 | `public/` | Static files: the TMDB logo, manifest icons, and the offline-page service worker |
 | `db/` | Numbered SQL migrations |
-| `scripts/` | Migration, bootstrap invitation, email worker, release packaging, icon generation, and browser-test harness commands |
+| `scripts/` | Migration, bootstrap invitation, email worker, usage report, release packaging, icon generation, and browser-test harness commands |
 | `tests/` | Application and PostgreSQL tests in `app/`, Playwright suites in `browser/`, and Python tests for operations and check scripts |
 | `ops/` | VPS provisioning, release activation, systemd units, Caddy and PostgreSQL configuration, backups, restore checks, and failure alerts |
 | `bin/` | Repository setup, checks, knowledge search, deployment helpers, and Git hooks |

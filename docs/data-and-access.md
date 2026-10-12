@@ -66,7 +66,8 @@ then changes nothing and returns HTTP 503 with "Screenr is busy. Please try
 again." Waiting requests therefore release database connections before the
 pool's five-second connection timeout, which session lookups share. The email
 worker holds the lock during each activity email send, so a write during a slow
-send may need a retry. Page loads and refreshes don't take the lock. Listing
+send may need a retry. Page loads, refreshes, and
+[usage telemetry](usage-telemetry.md#active-days) don't take the lock. Listing
 invitations takes it only to store a missing share link, for an old invitation
 or after a secret rotation
 ([issue #130](https://github.com/jubishop/screenr/issues/130)). Signup

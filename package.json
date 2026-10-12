@@ -26,6 +26,7 @@
     "format:check": "prettier --check src scripts tests/app tests/browser package.json tsconfig.json next.config.ts playwright.config.ts compose.yml",
     "dev:code": "tsx scripts/dev-code.ts",
     "worker": "tsx --env-file=.env scripts/worker.ts",
+    "report:usage": "tsx scripts/report-usage.ts",
     "release:package": "tsx scripts/package.ts"
   },
   "dependencies": {

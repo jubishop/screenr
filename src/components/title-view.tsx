@@ -1,11 +1,21 @@
 "use client";
+import { useSearchParams } from "next/navigation";
 import type { ScreenData } from "../server/screens";
-import type { Person } from "../shared";
+import type { Person, SaveSurface } from "../shared";
 import { useInteractive } from "./client";
 import { Poster } from "./poster";
 import { TitleAvailability } from "./title-availability";
 import { TitleCommentComposer } from "./title-comment";
 import { TitleTrailer } from "./title-trailer";
+// Suggestion tiles and Watch together open title pages with ?from=<surface>,
+// so a Want to watch save here reports where the member found the title.
+const origins: SaveSurface[] = [
+  "friends_recommend",
+  "suggestion_recommendation",
+  "suggestion",
+  "watch_together",
+];
+
 export function TitleView({
   data,
   user,
@@ -16,10 +26,17 @@ export function TitleView({
   data: Extract<ScreenData, { kind: "title" }> | null;
   user: Person;
   busy: boolean;
-  activity: (title: string, field: string, value: boolean) => Promise<unknown>;
+  activity: (
+    title: string,
+    field: string,
+    value: boolean,
+    surface?: SaveSurface,
+  ) => Promise<unknown>;
   refresh: () => Promise<void>;
 }) {
   const interactive = useInteractive();
+  const from = useSearchParams().get("from") as SaveSurface | null;
+  const surface = from && origins.includes(from) ? from : "title";
   const own = (data?.conversations ?? []).filter(
     (c) => c.owner_id === user.user_id,
   );
@@ -66,6 +83,7 @@ export function TitleView({
                       data.title.id,
                       "want_to_watch",
                       !own.some((c) => c.want_to_watch),
+                      surface,
                     )
                   }
                 >

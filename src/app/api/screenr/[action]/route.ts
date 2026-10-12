@@ -20,6 +20,7 @@ import { ensureTitle } from "../../../../server/catalog";
 import { findTitles } from "../../../../server/title-viewing";
 import { saveServices } from "../../../../server/streaming-services";
 import { loadScreen } from "../../../../server/screens";
+import { recordActiveDay } from "../../../../server/usage";
 import {
   notifications,
   readNotification,
@@ -82,6 +83,11 @@ async function handle(
       return json({ ok: true });
     }
     const user = await member(userId);
+    // Usage telemetry counts member actions, including title searches, but
+    // not the screen and notification reads that clients repeat in the
+    // background.
+    if (request.method === "POST" || action === "search")
+      await recordActiveDay(userId);
     if (request.method === "GET") {
       const url = new URL(request.url);
       if (action === "notifications")
@@ -134,6 +140,7 @@ async function handle(
             title,
             String(data.field),
             data.value,
+            data.surface,
           ),
         });
       } else if (action === "title-comment") {

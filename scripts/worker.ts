@@ -1,5 +1,6 @@
 import { deliverOne } from "../src/server/email";
 import { db } from "../src/server/db";
+import { pruneUsage } from "../src/server/usage";
 import { setTimeout } from "node:timers/promises";
 if (
   process.env.EMAIL_TRANSPORT !== "resend" ||
@@ -21,8 +22,10 @@ let iterations = 0;
 while (!stopping) {
   try {
     await deliverOne();
-    if (iterations++ % 60 === 0)
+    if (iterations++ % 60 === 0) {
       await db.query("DELETE FROM email_job WHERE expires_at < now()");
+      await pruneUsage();
+    }
   } catch {
     console.error("Email worker could not complete a database operation.");
   }

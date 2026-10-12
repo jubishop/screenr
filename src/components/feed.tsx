@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import type { FeedItem, Person } from "../shared";
+import type { FeedItem, Person, SaveSurface } from "../shared";
 import { api, dateLabel, useInteractive } from "./client";
 import { Poster } from "./poster";
 import { ThreadView } from "./thread";
@@ -34,7 +34,12 @@ export function FeedView({
   snapshot: FeedItem[] | null;
   user: Person;
   refresh: () => Promise<void>;
-  activity: (title: string, field: string, value: boolean) => Promise<unknown>;
+  activity: (
+    title: string,
+    field: string,
+    value: boolean,
+    surface?: SaveSurface,
+  ) => Promise<unknown>;
   busy: boolean;
   target: { item: string; reply?: string } | null;
   unavailable: boolean;
@@ -163,7 +168,12 @@ function FeedEntry({
   item: FeedItem | null;
   user: Person;
   refresh: () => Promise<void>;
-  activity: (title: string, field: string, value: boolean) => Promise<unknown>;
+  activity: (
+    title: string,
+    field: string,
+    value: boolean,
+    surface?: SaveSurface,
+  ) => Promise<unknown>;
   busy: boolean;
   target: { item: string; reply?: string } | null;
 }) {
@@ -246,6 +256,9 @@ function FeedEntry({
                 item.title_id,
                 "want_to_watch",
                 !item.viewer_want_to_watch,
+                item.item_type === "recommended" && item.active
+                  ? "friend_recommendation"
+                  : "friend_entry",
               )
             }
           >

@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ScreenData } from "../server/screens";
-import type { Person } from "../shared";
+import type { Person, SaveSurface } from "../shared";
 import { parseMemberRoute, type MemberRoute } from "../member-routes";
 import { api, signOut } from "./client";
 import { initial } from "./initial";
@@ -163,8 +163,13 @@ export function Screen({
   const route = parseMemberRoute(path);
   const ownProfile =
     route.kind === "profile" && route.username.toLowerCase() === user.username;
-  function activity(title: string, field: string, value: boolean) {
-    return mutate("activity", { title, field, value });
+  function activity(
+    title: string,
+    field: string,
+    value: boolean,
+    surface?: SaveSurface,
+  ) {
+    return mutate("activity", { title, field, value, surface });
   }
   return (
     <div className="app-shell">

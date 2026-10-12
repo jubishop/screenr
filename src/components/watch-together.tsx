@@ -96,6 +96,7 @@ export function WatchTogether({
                     heading="h3"
                     serviceIds={title.matchingServiceIds}
                     shared
+                    from="watch_together"
                   />
                 ))}
               </div>

@@ -428,7 +428,8 @@ systemd-run --quiet --wait --pipe --collect --uid=screenr \
   /opt/screenr/node/bin/node --import tsx scripts/bootstrap.ts
 ```
 
-Do not paste the resulting invitation into a public issue or PR.
+Do not paste the resulting invitation into a public issue or PR. The
+[usage report](usage-telemetry.md#owner-report) runs the same way.
 
 ## Independent acceptance
 

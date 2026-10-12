@@ -163,7 +163,9 @@ test("suggestion tiles explain the circle without revealing second-degree identi
   });
   await tile.focus();
   await page.keyboard.press("Enter");
-  await expect(page).toHaveURL(/\/titles\/movie\/987654$/);
+  await expect(page).toHaveURL(
+    /\/titles\/movie\/987654\?from=suggestion_recommendation$/,
+  );
   await page
     .getByRole("button", { name: "+ Want to watch", exact: true })
     .first()
@@ -171,6 +173,17 @@ test("suggestion tiles explain the circle without revealing second-degree identi
   await expect(
     page.getByRole("button", { name: "✓ Want to watch", exact: true }).first(),
   ).toBeVisible();
+  // Usage telemetry attributes the save to the tile naming a recommending friend.
+  expect(
+    (
+      await db.query(
+        "SELECT surface,friend_recommending FROM want_to_watch_save WHERE user_id=$1",
+        [viewer],
+      )
+    ).rows,
+  ).toEqual([
+    { surface: "suggestion_recommendation", friend_recommending: true },
+  ]);
   await page.goBack();
   await expect(grid.getByRole("link")).toHaveCount(1);
   await updateTitleActivity(viewer, "movie:987654", "want_to_watch", false);

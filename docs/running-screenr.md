@@ -168,7 +168,9 @@ codes in its own `.cache/mail`; run `npm run dev:code` in that checkout.
 
 Production runs `scripts/worker.ts` as `screenr-worker.service`. It sends
 queued sign-in codes and grouped activity emails through Resend, retries
-failed sends, and deletes expired jobs. Local development does not need it.
+failed sends, and deletes expired jobs and
+[usage telemetry](usage-telemetry.md#retention-and-tests) older than 12
+months. Local development does not need it.
 With `EMAIL_TRANSPORT=file`, Next writes sign-in codes directly to
 `.cache/mail` without queueing them, and `npm run worker` refuses to start
 unless `EMAIL_TRANSPORT=resend`, `RESEND_API_KEY`, and `EMAIL_FROM` are set.

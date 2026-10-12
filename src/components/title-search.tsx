@@ -222,7 +222,11 @@ export function TitleSearch({
                 <Link
                   className="suggestion-tile"
                   key={title.id}
-                  href={`/titles/${title.id.replace(":", "/")}`}
+                  href={`/titles/${title.id.replace(":", "/")}?from=${
+                    title.recommended_by.length
+                      ? "suggestion_recommendation"
+                      : "suggestion"
+                  }`}
                   prefetch={false}
                 >
                   <Poster

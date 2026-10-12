@@ -121,3 +121,106 @@ personal activity indefinitely.
 
 **Rejected alternatives:** Keeping the rows indefinitely, and keeping them
 for 90 days.
+
+## Implementation
+
+Migration `db/015-usage-telemetry.sql` adds the two tables below. The previous
+release ignores them, so activation and rollback stay compatible.
+`src/server/usage.ts` records active days, prunes old rows, and builds the
+report.
+
+### Active days
+
+`member_active_day` holds one row per member and Pacific date, with no other
+columns. Recording inserts the row only when it is missing, outside the shared
+domain lock. Each member page render records the day through `currentMember`
+in `src/server/session.ts`. That covers loading a signed-in page and client
+navigation, which renders the page on the server. The action route in
+`src/app/api/screenr/[action]/route.ts` records the day for every POST action,
+including rejected ones, and for title searches. Screen and notification
+reads, which clients repeat in the background while a page or the
+notification panel stays open, never record activity. Profile setup records
+nothing; the member page that follows it does.
+
+### Save attribution
+
+`updateTitleActivity` in `src/server/social.ts` adds a `want_to_watch_save` row
+in the same transaction when Want to watch turns on. It adds nothing when the
+title was already saved, when Want to watch turns off, or for Recommend. The
+row holds the member, title, Pacific date, surface, and
+`friend_recommending`: whether any current direct friend had an active
+Recommend for the title at that moment. The member's own Recommend does not
+count, and the row never identifies the friend.
+
+The client sends one of these surfaces with the Want to watch action:
+
+| Surface | Save made from | Observed |
+| --- | --- | --- |
+| `friend_recommendation` | A friend's active Recommend entry in any feed | Yes |
+| `friend_entry` | Any other friend's entry, such as Want to watch or a comment | No |
+| `suggestion_recommendation` | A title page opened from a suggestion tile naming a recommending friend | Yes |
+| `suggestion` | A title page opened from another suggestion tile | No |
+| `watch_together` | A title page opened from Watch together | No |
+| `title` | A title page reached another way, such as search or a feed link | No |
+| `friends_recommend` | Reserved for the Friends recommend view ([#102](https://github.com/jubishop/screenr/issues/102)) | Yes |
+
+Suggestion tiles and Watch together have no inline title actions, so their
+links add `?from=<surface>` to the title page address. The title page sends
+that surface with its Want to watch action. The member route parser ignores
+the parameter, so it does not change which screen loads; a copied address
+keeps it. A save without a surface, from a page loaded before this release,
+stores no surface and can count only as inferred. An unknown surface is
+rejected.
+
+### Owner report
+
+`npm run report:usage` runs `scripts/report-usage.ts`, which reads `.env` when
+present. It prints 12 weeks ending with the current week. Pass
+`--weeks N` (1–104) or `--through YYYY-MM-DD`, any date in the last week to
+show. On the server, run it as the service user with the production
+environment:
+
+```sh
+systemd-run --quiet --wait --pipe --collect --uid=screenr \
+  --working-directory=/opt/screenr/current \
+  -p EnvironmentFile=/etc/screenr/app.env -p Environment=NODE_ENV=production \
+  -p Environment=PATH=/opt/screenr/node/bin:/usr/bin:/bin \
+  /opt/screenr/node/bin/npm run --silent report:usage -- --weeks 12
+```
+
+The report only reads data. It prints one table per measure, with one row per
+week and an asterisk on the week in progress:
+
+- **Members who return each week:** members with an active day that week, and
+  how many of them also had one the week before, even when that week falls
+  outside the range shown.
+- **Want to watch saves:** saves that week, observed saves (the surfaces
+  marked Observed above), and inferred saves (`friend_recommending`). Each
+  counts a member and title once per week, so turning Want to watch off and on
+  again counts once. Following saves to Watching, Caught up, or Finished waits
+  for watch statuses and is tracked in
+  [issue #188](https://github.com/jubishop/screenr/issues/188).
+- **Conversations with at least two people:** feed entries that received a
+  comment or reply that week and whose owner and commenters number at least
+  two by the week's end; how many of those had back-and-forth by the week's
+  end, counting the entry as its owner's first post; and members who
+  commented that week and in any earlier week. Entries include Recommend,
+  Want to watch, earlier discussion, and standalone comment entries. Posting a
+  standalone comment starts a conversation and does not count as commenting.
+  Removed comments count when they were posted.
+
+### Retention and tests
+
+About once a minute, the worker's existing cleanup in `scripts/worker.ts`
+deletes expired email jobs and then active days and saves dated before the
+Pacific date 12 months earlier.
+
+`tests/app/usage-telemetry.test.ts` covers the recording rules through the
+action route, including background reads, row contents, and save attribution
+for friends, pending requests, and inactive or own Recommends. It covers each
+report figure at Monday boundaries, including a week that ends after daylight
+saving time ends, the printed command output without member identities, and
+12-month cleanup. `tests/browser/usage-telemetry.spec.ts` checks that page
+loads and client navigation record a day while background refreshes do not,
+and the feed and title page surfaces. `tests/browser/title-suggestions.spec.ts`
+checks the suggestion tile surface.

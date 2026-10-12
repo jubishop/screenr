@@ -7,8 +7,8 @@ import {
   transaction,
   usernameText,
 } from "./db";
-import type { FeedItem, Person, Thread } from "../shared";
-import { reactionOptions } from "../shared";
+import type { FeedItem, Person, SaveSurface, Thread } from "../shared";
+import { reactionOptions, saveSurfaces } from "../shared";
 
 export async function member(userId: string): Promise<Person> {
   const profile = (
@@ -271,15 +271,18 @@ export async function conversations(
   ).rows;
 }
 
+// `surface` reports where a Want to watch save was made, for usage telemetry.
 export async function updateTitleActivity(
   viewer: string,
   titleId: string,
   field: string,
   value: unknown,
+  surface?: unknown,
 ) {
   if (
     !["recommended", "want_to_watch"].includes(field) ||
-    typeof value !== "boolean"
+    typeof value !== "boolean" ||
+    (surface != null && !saveSurfaces.includes(surface as SaveSurface))
   )
     throw new AppError("Invalid title action.");
   const other = field === "recommended" ? "want_to_watch" : "recommended";
@@ -289,6 +292,19 @@ export async function updateTitleActivity(
         .rowCount
     )
       throw new AppError("Title not found.", 404);
+    // A save turns Want to watch on. Store only whether any direct friend
+    // recommends the title now, never who.
+    if (field === "want_to_watch" && value)
+      await client.query(
+        `INSERT INTO want_to_watch_save(user_id,title_id,surface,friend_recommending)
+        SELECT $1,$2,$3,EXISTS (
+          SELECT 1 FROM feed_item f WHERE f.title_id=$2 AND f.item_type='recommended'
+            AND f.active AND f.owner_id<>$1 AND screenr_can_read($1,f.owner_id))
+        WHERE NOT EXISTS (
+          SELECT 1 FROM feed_item own WHERE own.owner_id=$1 AND own.title_id=$2
+            AND own.item_type='want_to_watch' AND own.active)`,
+        [viewer, titleId, surface ?? null],
+      );
     const legacy = (
       await client.query(
         `INSERT INTO conversation(id,owner_id,title_id,${field}) VALUES($1,$2,$3,$4)

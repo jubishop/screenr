@@ -248,7 +248,7 @@ test("Watch together groups either member's services and free titles ahead of un
     .getByRole("link")
     .filter({ hasText: "Night Harbor" })
     .click();
-  await expect(page).toHaveURL("/titles/tv/939102");
+  await expect(page).toHaveURL("/titles/tv/939102?from=watch_together");
   const availability = page.getByRole("region", { name: "Where to watch" });
   await expect(availability.getByRole("listitem")).toHaveText(["AMC+"]);
 });
