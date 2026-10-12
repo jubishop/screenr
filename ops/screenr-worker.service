@@ -18,10 +18,33 @@ Restart=on-failure
 RestartSec=5
 MemoryMax=128M
 CPUQuota=15%
+# The web and worker units share this sandbox; only the web writes files.
 NoNewPrivileges=true
 PrivateTmp=true
+PrivateDevices=true
 ProtectSystem=strict
 ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+ProtectProc=invisible
+ProcSubset=pid
+# Loopback PostgreSQL and HTTPS to Resend and TMDB need only these families.
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+# MemoryDenyWriteExecute stays off because V8's JIT writes executable memory.
+SystemCallFilter=@system-service
+SystemCallArchitectures=native
+SystemCallErrorNumber=EPERM
+CapabilityBoundingSet=
+# Other applications on the shared host. '-' ignores a path that is missing.
+InaccessiblePaths=-/etc/caddy -/var/log/caddy -/opt/health -/opt/health-site -/opt/kidsbank -/opt/news -/opt/trading
 UMask=0077
 
 [Install]

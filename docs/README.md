@@ -107,10 +107,10 @@ both memory and design documents.
 - [Installation and offline page](installation.md): home-screen manifest, app
   icon generation, and the service worker's offline page.
 - [Shared VPS deployment](deployment.md): host layout and isolated services,
-  the Node runtime, provisioning, drift checks and failure alerts, release
-  packaging and activation, acceptance, the old hostname redirect, production
-  secret copies, and encrypted backups with retention, size warnings, and
-  restore checks.
+  the Node runtime, the service sandbox, provisioning, drift checks and
+  failure alerts, release packaging and activation, acceptance, the old
+  hostname redirect, production secret copies, and encrypted backups with
+  retention, size warnings, and restore checks.
 - [Production restore and patching](restore-and-patching.md): secret copies,
   backup commands, database restore on the existing or a replacement host, and
   automatic update, restic, PostgreSQL, and reboot patching.

@@ -6,6 +6,7 @@ same way, with a fake systemctl at the operating-system boundary.
 import json
 import os
 from pathlib import Path
+import re
 import subprocess
 import sys
 import tempfile
@@ -84,6 +85,21 @@ class HostConfigTests(unittest.TestCase):
         # Existing timers keep their enablement; only systemd reloads.
         self.assertEqual(self.systemctl(), ['daemon-reload'])
         self.assertEqual(sorted(path.name for path in self.units.iterdir()), UNITS)
+
+    def test_sandbox_rollout_installs_only_the_app_units(self):
+        # The host still has the web and worker units from before their sandbox.
+        sandbox = re.compile(r'^(PrivateDevices|ProtectKernel\w+|ProtectControlGroups|ProtectClock|'
+                             r'ProtectHostname|ProtectProc|ProcSubset|Restrict\w+|LockPersonality|'
+                             r'SystemCall\w+|CapabilityBoundingSet|InaccessiblePaths)=.*\n', re.M)
+        for name in ('screenr-web.service', 'screenr-worker.service'):
+            (self.units / name).write_text(sandbox.sub('', self.checked[name]))
+        result = self.execute()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('Installed screenr-web.service, screenr-worker.service from the release and reloaded '
+                      'systemd.', result.stdout)
+        self.assertEqual(self.host_units(), {name: self.checked[name] for name in UNITS})
+        # Activation restarts both services under the new units.
+        self.assertEqual(self.systemctl(), ['daemon-reload'])
 
     def test_new_timer_is_installed_and_enabled(self):
         for name in ('screenr-backup-size.service', 'screenr-backup-size.timer'):

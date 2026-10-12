@@ -42,6 +42,72 @@ along with the host's other Node services, and requires the units to be active
 and `http://127.0.0.1:3060/api/health` to answer. It rolls back to the previous
 runtime when a check fails. Releases and activation do not change the runtime.
 
+## Service sandbox
+
+`screenr-web.service` and `screenr-worker.service` share one systemd sandbox
+([issue #118](https://github.com/jubishop/screenr/issues/118)). Remote code
+execution in the public web server then cannot list the shared host's other
+processes or read other applications' files. Both services run as `screenr`
+with no capabilities and have:
+
+- a read-only operating system, no home directories, private `/tmp` and
+  `/var/tmp`, and only pseudo-devices such as `/dev/null` and `/dev/urandom`;
+- only their own processes in `/proc`, and none of its system files;
+- IPv4, IPv6, and local sockets, but no netlink or other socket families;
+- the `@system-service` system calls for the native architecture only. Any
+  other call fails with `EPERM` instead of killing the service;
+- no access to other applications' directories under `/opt` or to Caddy's
+  configuration and logs. Add a new application's directories to
+  `InaccessiblePaths` in both units; the `-` prefix ignores a missing path;
+- no access to kernel tunables, modules, or logs. They cannot set the clock
+  or hostname, create namespaces, use realtime scheduling, create SUID or
+  SGID files, or change their execution domain.
+
+Only the web writes files: Next keeps optimized TMDB posters in the active
+release's `.next/cache`. `MemoryDenyWriteExecute` stays off because V8's JIT
+writes executable memory. In the sandbox, `os.cpus()` returns an empty list
+and `os.networkInterfaces()` fails. Next calls the latter at startup when
+`HOSTNAME` is unset, so the web unit needs `HOSTNAME=127.0.0.1`.
+`tests/test_app_sandbox.py` checks these settings.
+
+`systemd-analyze security` rated both units 8.3 (exposed) before the sandbox
+and 1.5 (OK) after, on the host's systemd 255. Network access, visibility of
+other users, and the system call groups that Node uses account for the rest.
+
+On 2026-10-12, before rollout, transient units with these settings ran beside
+the live services. Three releases served health, login, and the signed-out
+session on a spare loopback port, wrote an optimized TMDB poster to
+`.next/cache`, and stayed up without restarting. The worker ran for 25
+seconds with its database connection and stopped cleanly. Probes reached
+PostgreSQL, Resend, and TMDB, and could not read other applications' files. A
+repeat in which a filtered call kills the process found no such call.
+
+Test a sandbox change the same way before deploying it. Pass each `[Service]`
+setting except `ExecStart` and the restart settings to `systemd-run` with
+`-p`, and set `Environment=PORT=` to a free loopback port for the web. Leave
+out `[Unit]`, so a failure starts no alert, and stop the transient units
+afterwards.
+
+### Restore the previous units
+
+Rollback restores the previous release but not its units. When a unit change
+stops the services, install the last working units by hand from a trusted
+checkout, never from a release directory, with `REVISION` set to the commit
+before the change:
+
+```sh
+git archive --format=tar REVISION ops/screenr-web.service ops/screenr-worker.service |
+    ssh root@YOUR_SSH_HOST 'set -e; d=$(mktemp -d); tar -x -C "$d"
+        install -m 0644 "$d"/ops/screenr-web.service "$d"/ops/screenr-worker.service /etc/systemd/system/
+        rm -rf "$d"; systemctl daemon-reload
+        systemctl reset-failed screenr-web screenr-worker
+        systemctl restart screenr-web screenr-worker'
+```
+
+Then check `http://127.0.0.1:3060/api/health` on the host and the public
+health endpoint. Each deployment installs its revision's units, so fix the
+units in `main` before the next deployment.
+
 ## Provisioning
 
 Install PostgreSQL 18 binaries from the official PostgreSQL Ubuntu repository
@@ -174,7 +240,8 @@ next run. A changed `screenr-db.service` applies after a manual
 by hand. Rollback after a failed activation restores the previous release but
 not its units, so keep unit changes compatible with the previous release, as
 with migrations. A unit change that stops the services also stops the
-restored release, until a fix deploys.
+restored release, until a fix deploys or the
+[previous units are restored](#restore-the-previous-units).
 
 ### Failure alerts
 
