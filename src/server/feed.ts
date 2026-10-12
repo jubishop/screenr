@@ -1,5 +1,5 @@
 import { AppError, db } from "./db";
-import type { FeedItem, Thread } from "../shared";
+import type { FeedItem, FriendActivity, Thread } from "../shared";
 
 // Access, replies, counts, and activity are read in one PostgreSQL snapshot.
 // All surfaces use this query; reply authors never expand the parent audience.
@@ -76,6 +76,32 @@ export async function conversations(
       [viewer, filter.title ?? null, filter.owner ?? null],
     )
   ).rows;
+}
+
+// The title page friend line comes from the viewer's title feed, so it lists
+// only current friends under the same audience and blocking checks. The
+// header already shows the viewer's own choice. Newest action first.
+export function friendActivity(
+  viewer: string,
+  items: FeedItem[],
+): FriendActivity {
+  const group = (type: "recommended" | "want_to_watch") =>
+    items
+      .filter((c) => c.item_type === type && c.active && c.owner_id !== viewer)
+      .sort(
+        (a, b) =>
+          new Date(b.activity_at).getTime() -
+            new Date(a.activity_at).getTime() || a.id.localeCompare(b.id),
+      )
+      .map((c) => ({
+        item: c.id,
+        user_id: c.owner_id,
+        display_name: c.display_name,
+      }));
+  return {
+    recommended: group("recommended"),
+    want_to_watch: group("want_to_watch"),
+  };
 }
 
 export async function thread(viewer: string, id: string): Promise<Thread> {

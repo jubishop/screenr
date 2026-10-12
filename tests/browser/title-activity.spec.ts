@@ -85,7 +85,8 @@ test("title and feed actions switch exclusively and restore each original discus
       button(scope, want ? "+ Want to watch" : "✓ Want to watch"),
     ).toHaveCount(0);
   }
-  for (const path of ["/people/exclusiveowner", "/", "/titles/movie/987654"]) {
+  // Title page entries are compact; their header owns the title actions.
+  for (const path of ["/people/exclusiveowner", "/"]) {
     await page.goto(path);
     const entry = page.locator(`[data-item-id="${friendItem}"]`);
     await states(entry, true, false);
@@ -103,6 +104,11 @@ test("title and feed actions switch exclusively and restore each original discus
     await states(entry, true, false);
   }
 
+  await page.goto("/titles/movie/987654");
+  for (const name of ["+ Want to watch", "+ Recommend", "✓ Recommended"])
+    await expect(
+      button(page.locator(`[data-item-id="${friendItem}"]`), name),
+    ).toHaveCount(0);
   const header = page.locator(".title-hero .inline-actions");
   await states(header, true, false, true);
   await button(header, "+ Want to watch").click();
@@ -134,6 +140,7 @@ test("title and feed actions switch exclusively and restore each original discus
     watchEntry.locator(`[data-comment-id="${wantedReply}"]`),
   ).toContainText("Watch discussion");
 
+  await page.goto("/");
   const friendEntry = page.locator(`[data-item-id="${friendItem}"]`);
   for (const width of [390, 1440]) {
     await page.setViewportSize({ width, height: 900 });

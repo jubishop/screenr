@@ -146,6 +146,9 @@ export function Screen({
     );
     await refresh();
   }
+  // The title page friend line asks the feed to show a friend's entry. Each
+  // request is a new object, so choosing the same name again still scrolls.
+  const [shownEntry, setShownEntry] = useState<{ item: string } | null>(null);
   const route = parseMemberRoute(path);
   const ownProfile =
     route.kind === "profile" && route.username.toLowerCase() === user.username;
@@ -241,6 +244,7 @@ export function Screen({
             busy={busy}
             activity={activity}
             refresh={refresh}
+            showEntry={(item) => setShownEntry({ item })}
           />
         )}
         {route.kind === "search" && (
@@ -290,6 +294,8 @@ export function Screen({
             target={data?.kind === "title" ? data.target : null}
             unavailable={data?.kind === "title" && data.targetUnavailable}
             showEmpty={data?.kind !== "profile" || data.profile.can_read}
+            compact={route.kind === "title"}
+            shownEntry={route.kind === "title" ? shownEntry : null}
           />
         )}
         {route.kind === "invites" && (

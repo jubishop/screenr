@@ -7,6 +7,29 @@
 .title-hero h1 {
   font-size: 36px;
 }
+/* Friends' current choices, beneath the header buttons. */
+.friend-activity {
+  margin: 14px 0 0;
+  font-size: 14px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.friend-activity > span {
+  display: inline-block;
+}
+.friend-activity a {
+  color: var(--ink);
+  font-weight: 600;
+}
+/* The title feed heading row ends with Start a conversation. */
+.title-feed-heading {
+  flex-wrap: wrap;
+  align-items: baseline;
+  row-gap: 0;
+}
+.title-feed-heading .text-button {
+  white-space: nowrap;
+}
 .title-trailer {
   margin-bottom: 42px;
 }

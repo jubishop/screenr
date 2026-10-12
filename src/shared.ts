@@ -124,5 +124,13 @@ export type Comment = {
   reactions: ReactionSummary[];
 };
 export type Thread = { conversation: Conversation; comments: Comment[] };
+// A friend's active Recommend or Want to watch entry on a title page.
+export type FriendAction = Pick<Person, "user_id" | "display_name"> & {
+  item: string;
+};
+export type FriendActivity = {
+  recommended: FriendAction[];
+  want_to_watch: FriendAction[];
+};
 
 export type FeedItem = Conversation & { comments: Comment[] };

@@ -240,6 +240,12 @@ every entry on the title page.
 **Rejected alternatives:** Removing only the poster would still repeat the
 title name and actions. Keeping full entries repeats the header in each one.
 
+**Implementation note:** [Issue #169](https://github.com/jubishop/screenr/issues/169)
+renders compact entries with the `compact` mode of `FeedView` in
+`src/components/feed.tsx`. A comment's author keeps Delete beside React. With
+no title heading, each compact entry takes its accessible name from the
+author line.
+
 ### Friend activity in the title header — 2026-10-12
 
 **Decision:** Below the title page's Recommend and Want to watch buttons,
@@ -261,6 +267,17 @@ sections.
 [profile top 10](profile-top-ten.md#show-ranks-where-friends-are-named--2026-10-12)
 adds each recommender's rank beside their name and lists top 10
 recommenders first, best rank first.
+
+**Implementation note:** [Issue #169](https://github.com/jubishop/screenr/issues/169)
+derives the line from the viewer's title feed with `friendActivity` in
+`src/server/feed.ts`, so it uses the feed's friendship, audience, and
+blocking checks. Each group lists the most recent action first.
+`src/components/title-friends.tsx` renders the line, for example "Recommended
+by A, B, C, and 2 more · D and E want to watch". Each name is an in-page link
+to the entry, which it scrolls to and focuses. When the entry is still
+waiting behind New activity, choosing the name shows the pending activity
+first. The line follows refreshes, so it can name a friend's new action
+before New activity is chosen.
 
 ### Watch status button on title pages — 2026-10-12
 
@@ -326,6 +343,10 @@ because it contained only one small text button.
 
 **Rejected alternative:** A button styled like an empty text field would
 keep the card's height.
+
+**Implementation note:** [Issue #169](https://github.com/jubishop/screenr/issues/169)
+moves the heading into `src/components/title-comment.tsx`, which owns the
+button, the draft, and the composer card that opens beneath the heading.
 
 ### Avatars wherever a person appears — 2026-10-12
 

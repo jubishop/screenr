@@ -208,7 +208,17 @@ test("feed entries lay out actions in full-width rows with an icon copy link and
   });
   const like = header.getByRole("button", { name: "Like: 1", exact: true });
   const react = header.getByRole("button", { name: "React", exact: true });
-  for (const path of ["/", "/people/actionsowner", "/titles/movie/987654"]) {
+  const copiedURL = async () => {
+    const copied = new URL(
+      await reader.evaluate(() => navigator.clipboard.readText()),
+    );
+    expect(copied.origin).toBe(browserConfig.baseURL);
+    expect(copied.pathname + copied.search).toBe(
+      `/titles/movie/987654?item=${id}`,
+    );
+  };
+  // Title page entries are compact and checked below.
+  for (const path of ["/", "/people/actionsowner"]) {
     await reader.goto(path);
     await expect(want).toBeEnabled();
     await entry
@@ -282,18 +292,67 @@ test("feed entries lay out actions in full-width rows with an icon copy link and
   const status = header.getByRole("status");
   await expect(status).toHaveText("Link copied.");
   await expect(copy).toBeFocused();
-  await expect(reader).toHaveURL(/\/titles\/movie\/987654$/);
-  const copied = new URL(
-    await reader.evaluate(() => navigator.clipboard.readText()),
-  );
-  expect(copied.origin).toBe(browserConfig.baseURL);
-  expect(copied.pathname + copied.search).toBe(
-    `/titles/movie/987654?item=${id}`,
-  );
+  await expect(reader).toHaveURL(/\/people\/actionsowner$/);
+  await copiedURL();
   const statusBox = await box(status);
   const copyBox = await box(copy);
   expect(statusBox.x).toBeGreaterThanOrEqual(copyBox.x + copyBox.width);
   expect(lines([statusBox, copyBox])).toBe(1);
+
+  // On the title page, the copy link ends the compact entry's author line
+  // and the reactions keep one row, with no space reserved beneath it.
+  await reader.goto("/titles/movie/987654");
+  const author = header.getByRole("link", {
+    name: "actionsowner",
+    exact: true,
+  });
+  await expect(want).toHaveCount(0);
+  await entry
+    .getByRole("button", { name: "View 1 reply", exact: true })
+    .click();
+  for (const width of [390, 1366]) {
+    await reader.setViewportSize({ width, height: 844 });
+    const [authorBox, copyBox, likeBox, reactBox] = await Promise.all(
+      [author, copy, like, react].map(box),
+    );
+    expect(center(copyBox)).toBeGreaterThan(authorBox.y);
+    expect(center(copyBox)).toBeLessThan(authorBox.y + authorBox.height);
+    expect(copyBox.x).toBeGreaterThan(authorBox.x + authorBox.width);
+    expect(lines([likeBox, reactBox])).toBe(1);
+    expect(likeBox.y).toBeGreaterThanOrEqual(authorBox.y + authorBox.height);
+    const card = await box(header);
+    const padding = await header.evaluate((element) =>
+      parseFloat(getComputedStyle(element).paddingBottom),
+    );
+    expect(
+      card.y +
+        card.height -
+        Math.max(likeBox.y + likeBox.height, reactBox.y + reactBox.height),
+    ).toBeLessThanOrEqual(padding + 1);
+  }
+  await reader.setViewportSize({ width: 390, height: 844 });
+  await author.focus();
+  for (const next of [copy, like, react]) {
+    await reader.keyboard.press("Tab");
+    await expect(next).toBeFocused();
+  }
+  await reader.evaluate(() => navigator.clipboard.writeText(""));
+  await copy.focus();
+  await reader.keyboard.press("Enter");
+  await expect(status).toHaveText("Link copied.");
+  await expect(copy).toBeFocused();
+  await expect(reader).toHaveURL(/\/titles\/movie\/987654$/);
+  await copiedURL();
+  // The status shares the author line, just before the icon.
+  const compactStatus = await box(status);
+  const compactCopy = await box(copy);
+  expect(compactStatus.x + compactStatus.width).toBeLessThanOrEqual(
+    compactCopy.x,
+  );
+  expect(center(compactStatus)).toBeGreaterThan(compactCopy.y);
+  expect(center(compactStatus)).toBeLessThan(
+    compactCopy.y + compactCopy.height,
+  );
   // The reaction picker opens beneath the whole comment line.
   const reply = entry.locator(`[data-comment-id="${nested}"]`);
   const trigger = reply.getByRole("button", { name: "React", exact: true });

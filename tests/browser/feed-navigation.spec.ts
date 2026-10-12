@@ -218,7 +218,8 @@ test("feed poster links name their titles and support keyboard navigation with a
     await expect(
       owner.getByRole("button", { name: "✓ Recommended", exact: true }),
     ).toBeVisible();
-    for (const path of ["/", "/people/posterowner", titlePath]) {
+    // Compact title page entries have no poster or title link.
+    for (const path of ["/", "/people/posterowner"]) {
       await reader.goto(path);
       const entry = reader.locator(".feed-entry").filter({
         has: reader.getByRole("heading", { name, exact: true }),

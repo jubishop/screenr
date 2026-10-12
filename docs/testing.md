@@ -302,6 +302,13 @@ recipients. A full run checks:
   full local date and time on hover. They hydrate with Safari's date
   punctuation in UTC and Los Angeles. Feed entries show the release year, or
   only the kind without a release date.
+- Title pages show compact entries with the copy link ending the author
+  line, and Start a conversation on the "Around this title" heading row at
+  phone and desktop widths. The friend line follows the header buttons, names
+  up to three friends per group, and hides without a friend's action. Each
+  name scrolls to and focuses its entry, including one waiting behind New
+  activity. `tests/app/title-page.test.ts` covers the line's grouping, order,
+  name limit, and friendship and blocking rules.
 - Search and Watch together rows clamp descriptions to two lines and end in a
   chevron. Watch together prompts a viewer without saved services to save
   them on Account.
@@ -333,9 +340,9 @@ recipients. A full run checks:
   unrelated refreshes do not clear action errors.
 - Slow refreshes still deliver new replies and revoke access. A refresh that
   exceeds ten seconds hides server content; later recovery retains the draft.
-- Circle, profile, and title feed cards switch the viewer between Want to watch
-  and Recommend. Selecting either clears the other; selecting the active
-  action clears it. The inline Recommend action follows
+- Circle and profile feed cards and the title header switch the viewer
+  between Want to watch and Recommend. Selecting either clears the other;
+  selecting the active action clears it. The inline Recommend action follows
   Want to watch on other people's entries. Both controls show the viewer's
   current state, including after reload. Clearing the last
   activity flag hides an empty card, while visible comments keep its thread

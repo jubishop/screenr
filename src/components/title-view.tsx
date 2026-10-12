@@ -6,6 +6,7 @@ import { useInteractive } from "./client";
 import { Poster } from "./poster";
 import { TitleAvailability } from "./title-availability";
 import { TitleCommentComposer } from "./title-comment";
+import { TitleFriends } from "./title-friends";
 import { TitleTrailer } from "./title-trailer";
 import { useActionError } from "./action-error";
 import { ActionButton } from "./action-button";
@@ -24,6 +25,7 @@ export function TitleView({
   busy,
   activity,
   refresh,
+  showEntry,
 }: {
   data: Extract<ScreenData, { kind: "title" }> | null;
   user: Person;
@@ -35,6 +37,7 @@ export function TitleView({
     surface?: SaveSurface,
   ) => Promise<unknown>;
   refresh: () => Promise<void>;
+  showEntry: (item: string) => void;
 }) {
   const interactive = useInteractive();
   const from = useSearchParams().get("from") as SaveSurface | null;
@@ -104,6 +107,7 @@ export function TitleView({
                 </ActionButton>
               </div>
               {failure.alert}
+              <TitleFriends friends={data.friends} showEntry={showEntry} />
             </div>
           </div>
           <TitleAvailability
@@ -117,10 +121,6 @@ export function TitleView({
               trailer={data.trailer}
             />
           )}
-          <div className="section-heading">
-            <h2>Around this title</h2>
-            <span className="muted">Your circle’s conversations</span>
-          </div>
         </>
       )}
       <TitleCommentComposer

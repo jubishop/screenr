@@ -35,6 +35,8 @@ export function FeedView({
   target,
   unavailable,
   showEmpty,
+  compact,
+  shownEntry,
 }: {
   snapshot: FeedItem[] | null;
   user: Person;
@@ -49,6 +51,8 @@ export function FeedView({
   target: { item: string; reply?: string } | null;
   unavailable: boolean;
   showEmpty: boolean;
+  compact: boolean;
+  shownEntry: { item: string } | null;
 }) {
   const [known, setKnown] = useState<Known | null>(() =>
     snapshot ? capture(snapshot) : null,
@@ -127,6 +131,19 @@ export function FeedView({
     ...visible.map((c) => c.id),
     ...slots.filter((id) => !visible.some((c) => c.id === id)),
   ];
+  // A friend line name can name an entry still waiting behind New activity.
+  // Showing it accepts the pending activity, as New activity would.
+  const [handledEntry, setHandledEntry] = useState(shownEntry);
+  if (shownEntry !== handledEntry) {
+    setHandledEntry(shownEntry);
+    if (
+      snapshot &&
+      shownEntry &&
+      !visible.some((c) => c.id === shownEntry.item) &&
+      snapshot.some((c) => c.id === shownEntry.item)
+    )
+      setKnown(capture(snapshot));
+  }
   return (
     <section className="interactive-feed" aria-label="Activity feed">
       {unavailable && <p role="status">This activity is unavailable.</p>}
@@ -150,6 +167,8 @@ export function FeedView({
             activity={activity}
             busy={busy}
             target={target?.item === id ? target : null}
+            compact={compact}
+            shown={shownEntry?.item === id ? shownEntry : null}
           />
         ))}
       </div>
@@ -169,6 +188,8 @@ function FeedEntry({
   activity,
   busy,
   target,
+  compact,
+  shown,
 }: {
   item: FeedItem | null;
   user: Person;
@@ -181,6 +202,8 @@ function FeedEntry({
   ) => Promise<unknown>;
   busy: boolean;
   target: { item: string; reply?: string } | null;
+  compact: boolean;
+  shown: { item: string } | null;
 }) {
   const interactive = useInteractive();
   const [revealed, setRevealed] = useState(false);
@@ -201,6 +224,16 @@ function FeedEntry({
       navigated.current = id;
     }
   }, [target, item, hiddenSpoiler]);
+  // Move to an entry chosen from the friend line once it is shown, and focus
+  // it so keyboard and screen reader users continue from there.
+  const handledShow = useRef<object | null>(null);
+  useEffect(() => {
+    if (!shown || !item || handledShow.current === shown) return;
+    handledShow.current = shown;
+    const element = document.getElementById(`item-${item.id}`);
+    element?.scrollIntoView({ block: "start" });
+    element?.focus({ preventScroll: true });
+  }, [shown, item]);
   const [copying, setCopying] = useState(false);
   const [copyMessage, setCopyMessage] = useState("");
   const [deleting, setDeleting] = useState(false);
@@ -234,23 +267,45 @@ function FeedEntry({
     }
   }
 
-  const titleActions = item && (
+  const copyLink = (
+    <span className="copy-link">
+      <ActionButton
+        type="button"
+        className="icon-button"
+        aria-label="Copy link to discussion"
+        title="Copy link to discussion"
+        disabled={!interactive}
+        unavailable={copying}
+        onClick={() => void copyDiscussion()}
+      >
+        <Icon name="link" />
+      </ActionButton>
+      <span className="copy-status small" role="status">
+        {copyMessage}
+      </span>
+    </span>
+  );
+  const canDelete =
+    item?.item_type === "comment" &&
+    item.active &&
+    item.owner_id === user.user_id;
+  // Compact title page entries leave the title actions to the page header
+  // and move the copy link to the author line.
+  const titleActions = item && (!compact || canDelete) && (
     <div className="title-actions">
-      {item.item_type === "comment" &&
-        item.active &&
-        item.owner_id === user.user_id && (
-          <ActionButton
-            type="button"
-            className="text-button muted"
-            disabled={!interactive}
-            unavailable={busy || deleting}
-            aria-describedby={failure.describedBy("delete")}
-            onClick={() => void deleteComment()}
-          >
-            {deleting ? "Deleting…" : "Delete"}
-          </ActionButton>
-        )}
-      {item.owner_id !== user.user_id && (
+      {canDelete && (
+        <ActionButton
+          type="button"
+          className="text-button muted"
+          disabled={!interactive}
+          unavailable={busy || deleting}
+          aria-describedby={failure.describedBy("delete")}
+          onClick={() => void deleteComment()}
+        >
+          {deleting ? "Deleting…" : "Delete"}
+        </ActionButton>
+      )}
+      {!compact && item.owner_id !== user.user_id && (
         <>
           <ActionButton
             className="text-button"
@@ -291,82 +346,84 @@ function FeedEntry({
           </ActionButton>
         </>
       )}
-      <span className="copy-link">
-        <ActionButton
-          type="button"
-          className="icon-button"
-          aria-label="Copy link to discussion"
-          title="Copy link to discussion"
-          disabled={!interactive}
-          unavailable={copying}
-          onClick={() => void copyDiscussion()}
-        >
-          <Icon name="link" />
-        </ActionButton>
-        <span className="copy-status small" role="status">
-          {copyMessage}
-        </span>
-      </span>
+      {!compact && copyLink}
     </div>
+  );
+  const byline = item && (
+    <p className="activity-by" id={`by-${item.id}`}>
+      <Avatar
+        person={{
+          user_id: item.owner_id,
+          display_name: item.display_name,
+        }}
+      />
+      <Link href={`/people/${item.username}`} prefetch={false}>
+        {item.display_name}
+      </Link>{" "}
+      <span className="muted">
+        {item.item_type === "comment"
+          ? compact
+            ? "commented"
+            : "commented on"
+          : item.item_type === "earlier"
+            ? "· Earlier discussion"
+            : item.item_type === "recommended"
+              ? item.active
+                ? "recommends"
+                : "removed their recommendation"
+              : item.active
+                ? "wants to watch"
+                : "removed Want to watch"}
+      </span>
+      {/* Non-breaking spaces keep the time beside the action. */}
+      <span className="muted">
+        {"\u00a0·\u00a0"}
+        <ActivityTime value={item.visible_activity} interactive={interactive} />
+      </span>
+    </p>
   );
 
   return (
     <article
       hidden={!item}
-      className="feed-entry"
+      className={`feed-entry${compact ? " compact" : ""}`}
       data-item-id={item?.id}
       id={item ? `item-${item.id}` : undefined}
+      // Compact entries have no title heading; the author line names them.
+      // The friend line focuses an entry after scrolling to it.
+      aria-labelledby={item && compact ? `by-${item.id}` : undefined}
+      tabIndex={compact ? -1 : undefined}
     >
       {item && (
         <header className="activity-card" data-item-heading={item.id}>
           <div className="activity-summary">
-            <Link
-              className="poster-link"
-              href={titleURL}
-              prefetch={false}
-              aria-label={item.title_name}
-            >
-              <Poster path={item.poster_path} name={item.title_name} />
-            </Link>
+            {!compact && (
+              <Link
+                className="poster-link"
+                href={titleURL}
+                prefetch={false}
+                aria-label={item.title_name}
+              >
+                <Poster path={item.poster_path} name={item.title_name} />
+              </Link>
+            )}
             <div className="activity-content">
-              <p className="activity-by">
-                <Avatar
-                  person={{
-                    user_id: item.owner_id,
-                    display_name: item.display_name,
-                  }}
-                />
-                <Link href={`/people/${item.username}`} prefetch={false}>
-                  {item.display_name}
-                </Link>{" "}
-                <span className="muted">
-                  {item.item_type === "comment"
-                    ? "commented on"
-                    : item.item_type === "earlier"
-                      ? "· Earlier discussion"
-                      : item.item_type === "recommended"
-                        ? item.active
-                          ? "recommends"
-                          : "removed their recommendation"
-                        : item.active
-                          ? "wants to watch"
-                          : "removed Want to watch"}
-                </span>
-                {/* Non-breaking spaces keep the time beside the action. */}
-                <span className="muted">
-                  {"\u00a0·\u00a0"}
-                  <ActivityTime
-                    value={item.visible_activity}
-                    interactive={interactive}
-                  />
-                </span>
-              </p>
-              <h2>
-                <Link href={titleURL} prefetch={false}>
-                  {item.title_name}
-                </Link>
-              </h2>
-              <p className="small muted">{titleDetails(item)}</p>
+              {compact ? (
+                <div className="compact-byline">
+                  {byline}
+                  {copyLink}
+                </div>
+              ) : (
+                <>
+                  {byline}
+                  <h2>
+                    <Link href={titleURL} prefetch={false}>
+                      {item.title_name}
+                    </Link>
+                  </h2>
+                  <p className="small muted">{titleDetails(item)}</p>
+                </>
+              )}
               {item.item_type === "comment" && !item.active && (
                 <p className="muted">Comment removed</p>
               )}
@@ -388,7 +445,7 @@ function FeedEntry({
               {titleActions}
             </Reactions>
           ) : (
-            <div className="item-actions">{titleActions}</div>
+            titleActions && <div className="item-actions">{titleActions}</div>
           )}
           {failure.alert}
         </header>

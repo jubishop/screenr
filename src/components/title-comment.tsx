@@ -38,51 +38,58 @@ export function TitleCommentComposer({
       setBusy(false);
     }
   }
+  // The "Around this title" heading row holds Start a conversation, which
+  // opens the composer beneath the heading.
   return (
-    <section
-      className="title-comment-composer"
-      aria-label="Start a conversation"
-    >
-      <button
-        type="button"
-        id="title-comment-action"
-        className="text-button"
-        disabled={!interactive}
-        aria-expanded={open}
-        aria-controls="title-comment-form"
-        onClick={() => {
-          setOpen(true);
-          if (open) area.current?.focus();
-        }}
-      >
-        Start a conversation
-      </button>
-      {open && (
-        <CommentComposer
-          id="title-comment"
-          inputRef={area}
-          interactive={interactive}
-          label="New title comment"
-          fieldLabel="Your comment"
-          submitLabel="Post comment"
-          draft={draft}
-          onChange={(change) =>
-            setDraft((current) => ({ ...current, ...change }))
-          }
-          onSubmit={post}
-          onCancel={() => {
-            setOpen(false);
-            document.getElementById("title-comment-action")?.focus();
+    <>
+      <div className="section-heading title-feed-heading">
+        <h2>Around this title</h2>
+        <button
+          type="button"
+          id="title-comment-action"
+          className="text-button"
+          disabled={!interactive}
+          aria-expanded={open}
+          aria-controls="title-comment-form"
+          onClick={() => {
+            setOpen(true);
+            if (open) area.current?.focus();
           }}
-          busy={busy}
-          error={error}
         >
-          <p className="small muted">
-            Post a comment about this title. Only you and your friends can see
-            it.
-          </p>
-        </CommentComposer>
+          Start a conversation
+        </button>
+      </div>
+      {open && (
+        <section
+          className="title-comment-composer"
+          aria-label="Start a conversation"
+        >
+          <CommentComposer
+            id="title-comment"
+            inputRef={area}
+            interactive={interactive}
+            label="New title comment"
+            fieldLabel="Your comment"
+            submitLabel="Post comment"
+            draft={draft}
+            onChange={(change) =>
+              setDraft((current) => ({ ...current, ...change }))
+            }
+            onSubmit={post}
+            onCancel={() => {
+              setOpen(false);
+              document.getElementById("title-comment-action")?.focus();
+            }}
+            busy={busy}
+            error={error}
+          >
+            <p className="small muted">
+              Post a comment about this title. Only you and your friends can see
+              it.
+            </p>
+          </CommentComposer>
+        </section>
       )}
-    </section>
+    </>
   );
 }

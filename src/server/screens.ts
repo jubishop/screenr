@@ -1,6 +1,6 @@
 import { profileFor } from "./profiles";
 import { people } from "./relationships";
-import { conversations, conversationURL } from "./feed";
+import { conversations, conversationURL, friendActivity } from "./feed";
 import { getTitle, getTitleTrailer, getTitleAvailability } from "./catalog";
 import { listInvitations } from "./invitations";
 import { AppError, db } from "./db";
@@ -103,6 +103,7 @@ async function loadContent(userId: string, route: MemberRoute) {
       trailer,
       availability,
       conversations: threads,
+      friends: friendActivity(userId, threads),
       target: (() => {
         const targeted = threads.find((c) => c.id === item);
         if (!targeted) return null;

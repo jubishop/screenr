@@ -127,6 +127,34 @@
 .activity-card > .error {
   margin: 12px 0 0;
 }
+/* Compact title page entries: the author line ends with the copy link. The
+   link's status shares that line, and the link wraps beneath it only when
+   the author line would otherwise get less than about half the width. */
+.compact-byline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 8px;
+  margin-bottom: 5px;
+}
+.compact-byline .activity-by {
+  flex: 1 1 0;
+  min-width: 55%;
+  margin: 0;
+}
+.compact-byline .copy-link {
+  flex: 0 1 auto;
+  flex-direction: row-reverse;
+  margin-left: auto;
+}
+.compact-byline .copy-status:not(:empty) {
+  margin: 0 4px 0 0;
+}
+/* Keep the 40px target without making the line taller, and align the icon
+   with the card's edge. */
+.compact-byline .icon-button {
+  margin: -8px -10px -8px 0;
+}
 .thread {
   background: var(--white);
   border: 1px solid var(--line);

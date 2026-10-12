@@ -26,7 +26,8 @@ test flow, and [Testing Screenr](docs/testing.md) for the automated suites.
 - **Titles:** Find a title searches the TMDB catalog and suggests titles from
   friends' Recommend and Want to watch choices, with anonymous counts once
   at least three friends of friends share a choice. Title pages show details,
-  a trailer, US viewing options under Subs and Free, and the title's feed.
+  which friends recommend or want to watch the title, a trailer, US viewing
+  options under Subs and Free, and the title's feed in compact entries.
   Saved streaming services mark matching titles and enable a My services
   filter.
 - **Feeds and conversations:** Members recommend titles or add them to Want to

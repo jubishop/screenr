@@ -528,7 +528,8 @@ reply through these same title links.
 ### Standalone title comments
 
 Issue #8 adds standalone comments on movie and TV title pages. Issue #56
-places the form behind **Start a conversation**, using the same three-line
+places the form behind **Start a conversation**, which issue #169 moves to the
+"Around this title" heading row. The form uses the same three-line
 text field, spoiler checkbox, **Cancel**, and posting controls as replies.
 Opening focuses the text field. Cancelling closes the form and preserves
 its draft and spoiler flag for reopening on the same page. Successful posts
