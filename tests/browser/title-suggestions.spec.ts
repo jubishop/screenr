@@ -327,9 +327,9 @@ test("relationship refreshes and failures clear social data while preserving usa
     name: "Title suggestions",
     exact: true,
   });
-  const failure = page
-    .getByRole("alert")
-    .filter({ hasText: "Failed to fetch" });
+  const failure = page.getByRole("alert").filter({
+    hasText: "Could not reach Screenr. Check your connection and try again.",
+  });
   await input.fill("A draft search");
   await changeRelationship(second, viewer, "block");
   await page.evaluate(() => window.dispatchEvent(new Event("focus")));

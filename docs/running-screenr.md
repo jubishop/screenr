@@ -700,7 +700,10 @@ backfilled. Thread reads use one database snapshot. Open pages poll every three
 seconds while visible,
 waiting for any active refresh to finish, and refresh on focus. Each refresh
 has a ten-second deadline; failure clears server content until a successful
-refresh. Access changes clear content on the next refresh without
+refresh. Writes and other requests stop waiting after fifteen seconds, which
+re-enables their controls. Proxy error pages, empty bodies, and other
+unreadable replies show a message asking the member to try again instead of
+parser errors. Access changes clear content on the next refresh without
 waiting for the New activity button. Previously delivered content cannot be
 retracted from a user's device.
 

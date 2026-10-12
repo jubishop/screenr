@@ -2,6 +2,8 @@ import { expect, type Page } from "@playwright/test";
 import { test } from "./member-fixture";
 
 const screenRead = "**/api/screenr/screen?**";
+const unavailable =
+  "Screenr is temporarily unavailable. Please try again in a moment.";
 
 async function refresh(page: Page) {
   const response = page.waitForResponse((response) =>
@@ -96,6 +98,74 @@ test("invitations retain the signup limit through reads and disable creation whi
   expect(submitted).toEqual({ limit: 7 });
   await expect(limit).toHaveValue("7");
   await expect(create).toBeEnabled();
+});
+
+test("proxy error pages show a retryable message instead of parser errors", async ({
+  member,
+}) => {
+  const page = await member("proxyerrors");
+  await page.goto("/invites");
+  const main = page.getByRole("main");
+  const create = page.getByRole("button", {
+    name: "Create invitation",
+    exact: true,
+  });
+  await expect(create).toBeEnabled();
+
+  await page.route("**/api/screenr/invite", (route) =>
+    route.fulfill({ status: 502, body: "" }),
+  );
+  await create.click();
+  await expect(main.getByRole("alert")).toContainText(unavailable);
+  await expect(create).toBeEnabled();
+  await page.getByRole("button", { name: "Dismiss", exact: true }).click();
+
+  await page.route(screenRead, (route) =>
+    route.fulfill({
+      status: 502,
+      contentType: "text/html",
+      body: "<!doctype html><title>502 Bad Gateway</title><h1>Bad Gateway</h1>",
+    }),
+  );
+  await refresh(page);
+  await expect(main.getByRole("alert")).toContainText(unavailable);
+  await expect(main).not.toContainText(/Unexpected|JSON/);
+  await expect(create).toHaveCount(0);
+  await page.unroute(screenRead);
+  await page.getByRole("button", { name: "Try again", exact: true }).click();
+  await expect(main.getByRole("alert")).toHaveCount(0);
+  await expect(create).toBeEnabled();
+});
+
+test("a stalled write times out and re-enables its controls", async ({
+  member,
+}) => {
+  const page = await member("stalledwrite");
+  await page.clock.install();
+  await page.goto("/invites");
+  const create = page.getByRole("button", {
+    name: "Create invitation",
+    exact: true,
+  });
+  await expect(create).toBeEnabled();
+  // Paused timers stop polling. The write aborts any active read, so the
+  // jump below can expire only the write's own deadline.
+  await page.clock.pauseAt(Date.now() + 1000);
+  const started = deferred();
+  await page.route("**/api/screenr/invite", () => started.resolve());
+  await create.click();
+  await started.promise;
+  await expect(create).toBeDisabled();
+  await page.clock.fastForward(15_000);
+  await expect(page.getByRole("main").getByRole("alert")).toContainText(
+    "The request timed out. Please try again.",
+  );
+  await expect(create).toBeEnabled();
+
+  await page.unroute("**/api/screenr/invite");
+  await page.clock.resume();
+  await create.click();
+  await expect(page.getByText("0 of 1 signups", { exact: true })).toBeVisible();
 });
 
 test("account linking and sign-out keep pending states and errors across read recovery", async ({

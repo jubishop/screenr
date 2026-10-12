@@ -11,26 +11,66 @@ export async function signOut() {
     );
   window.location.assign("/login");
 }
+// `status` is the HTTP status, or undefined when no response arrived.
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    readonly status?: number,
+  ) {
+    super(message);
+    this.name = "ApiError";
+  }
+}
+// Every request stops waiting here, so a stalled write releases its controls.
+// Writes can wait on the catalog's eight-second timeout. Reads also pass
+// shorter deadlines with their own messages.
+const requestDeadline = 15_000;
+const unavailable =
+  "Screenr is temporarily unavailable. Please try again in a moment.";
 export async function api<T = Record<string, unknown>>(
   action: string,
   data?: unknown,
   signal?: AbortSignal,
 ): Promise<T> {
-  const response = await fetch(`/api/screenr/${action}`, {
-    method: data === undefined ? "GET" : "POST",
-    cache: "no-store",
-    signal,
-    headers: data === undefined ? {} : { "Content-Type": "application/json" },
-    body: data === undefined ? undefined : JSON.stringify(data),
-  });
+  const deadline = AbortSignal.timeout(requestDeadline);
+  let response: Response, text: string;
+  try {
+    response = await fetch(`/api/screenr/${action}`, {
+      method: data === undefined ? "GET" : "POST",
+      cache: "no-store",
+      signal: signal ? AbortSignal.any([signal, deadline]) : deadline,
+      headers: data === undefined ? {} : { "Content-Type": "application/json" },
+      body: data === undefined ? undefined : JSON.stringify(data),
+    });
+    text = await response.text();
+  } catch (error) {
+    // Callers recognize their own cancellations and read timeouts.
+    if (signal?.aborted) throw error;
+    throw new ApiError(
+      deadline.aborted
+        ? "The request timed out. Please try again."
+        : "Could not reach Screenr. Check your connection and try again.",
+    );
+  }
   if (response.status === 401) {
     window.location.replace("/login");
-    throw new Error("Sign in to continue.");
+    throw new ApiError("Sign in to continue.", 401);
   }
-  const result = await response.json();
-  if (!response.ok)
-    throw new Error(result.error ?? "Request failed. Please try again.");
-  return result as T;
+  // Proxies can answer with HTML or an empty body, such as during a restart.
+  let result: unknown;
+  try {
+    result = JSON.parse(text);
+  } catch {}
+  if (response.ok && result !== undefined) return result as T;
+  const message = (result as { error?: unknown } | null | undefined)?.error;
+  throw new ApiError(
+    typeof message === "string" && message
+      ? message
+      : response.ok || response.status >= 500
+        ? unavailable
+        : "Request failed. Please try again.",
+    response.status,
+  );
 }
 
 export function useInteractive() {
