@@ -380,7 +380,10 @@ needed. Keep credentials out of `NEXT_PUBLIC_*` and Next's `env` configuration;
 those values are included in browser bundles. Normal server configuration stays
 runtime configuration. The auth fixture remains a separate process running the
 real auth handlers with a local Google provider and file email capture. Next's
-production pages and API handlers read the same real signed sessions.
+production pages and API handlers read the same real signed sessions. Because
+the fixture answers `/api/auth/*`, the built auth route runs only in the
+[release packaging check](deployment.md#build-and-activate-a-release) and the
+deployment's public checks.
 
 `SCREENR_BROWSER_TEST=1` permits the catalog fixture in production mode only
 with a loopback browser database, a loopback auth origin, and a loopback catalog

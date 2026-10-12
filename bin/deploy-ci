@@ -122,13 +122,17 @@ def main():
             run('ssh', host, f'rm -f {remote}')
         except subprocess.SubprocessError:
             print(f'Could not remove temporary upload: {remote}', file=sys.stderr)
-    for path in ('api/health', 'login'):
+    for path in ('api/health', 'login', 'api/auth/get-session'):
         body = run('curl', '--fail', '--silent', '--show-error', '--max-time', '20',
                    f'https://screenr.club/{path}', capture=True)
         if path == 'api/health' and json.loads(body).get('ok') is not True:
             raise ValueError('Public health check failed.')
         if path == 'login' and 'Send sign-in code' not in body:
             raise ValueError('Public login check failed.')
+        # The login page renders without the auth handler; a signed-out
+        # session request proves the sign-in route itself answers.
+        if path == 'api/auth/get-session' and body.strip() != 'null':
+            raise ValueError('Public sign-in check failed.')
     run('ssh', host, shlex.join(('python3', '-c', prune, f'/opt/screenr/releases/{revision}')))
     print(f'DEPLOY SUCCEEDED: {revision}\nhttps://screenr.club')
     print('Verify changed user flows and the other shared-host applications before closing the release.')

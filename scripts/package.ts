@@ -65,21 +65,29 @@ const testDatabase =
   "postgresql://screenr:screenr-local-only@127.0.0.1:5439/screenr_test";
 if (!new URL(testDatabase).pathname.endsWith("_test"))
   throw new Error("Release verification requires a dedicated test database.");
+const releaseEnvironment: NodeJS.ProcessEnv = {
+  PATH: process.env.PATH,
+  NODE_ENV: "production",
+  NODE_OPTIONS: "--max-old-space-size=256",
+  HOSTNAME: "127.0.0.1",
+  PORT: "3057",
+  TZ: "UTC",
+  DATABASE_URL: testDatabase,
+  BETTER_AUTH_URL: "http://localhost:3057",
+  BETTER_AUTH_SECRET: "release-smoke-test-only-never-used-in-production",
+  EMAIL_TRANSPORT: "file",
+  NEXT_TELEMETRY_DISABLED: "1",
+};
+// Like activation, migrate with the packaged command before starting. The
+// sign-in route needs the auth tables, even in a fresh disposable database.
+execFileSync(process.execPath, ["--import", "tsx", "scripts/migrate.ts"], {
+  cwd: output,
+  env: releaseEnvironment,
+  stdio: "inherit",
+});
 const server = spawn(process.execPath, ["server.js"], {
   cwd: output,
-  env: {
-    PATH: process.env.PATH,
-    NODE_ENV: "production",
-    NODE_OPTIONS: "--max-old-space-size=256",
-    HOSTNAME: "127.0.0.1",
-    PORT: "3057",
-    TZ: "UTC",
-    DATABASE_URL: testDatabase,
-    BETTER_AUTH_URL: "http://localhost:3057",
-    BETTER_AUTH_SECRET: "release-smoke-test-only-never-used-in-production",
-    EMAIL_TRANSPORT: "file",
-    NEXT_TELEMETRY_DISABLED: "1",
-  },
+  env: releaseEnvironment,
   stdio: ["ignore", "pipe", "pipe"],
 });
 let logs = "",
@@ -117,7 +125,15 @@ try {
   const login = await fetch("http://127.0.0.1:3057/login");
   if (!login.ok || !(await login.text()).includes("Send sign-in code"))
     throw new Error(`Packaged login page failed.\n${logs}`);
-  console.log("Packaged production server and database access passed.");
+  // The login page renders without the auth handler. A signed-out session
+  // request proves the sign-in route and its traced dependencies load.
+  const session = await fetch("http://127.0.0.1:3057/api/auth/get-session");
+  const sessionBody = await session.text();
+  if (session.status !== 200 || sessionBody.trim() !== "null")
+    throw new Error(
+      `Packaged sign-in route failed: HTTP ${session.status} ${sessionBody.slice(0, 200)}\n${logs}`,
+    );
+  console.log("Packaged production server, sign-in, and database passed.");
 } finally {
   server.kill("SIGTERM");
   await Promise.race([closed, delay(5000, undefined, { ref: false })]);

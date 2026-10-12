@@ -72,7 +72,9 @@ elif name == 'ssh':
     elif args[-1].startswith('python3 '):
         sys.exit(int(os.environ.get('PRUNE_EXIT', '0')))
 elif name == 'curl':
-    print(os.environ.get('HEALTH', '{"ok":true}') if args[-1].endswith('health') else os.environ.get('LOGIN', 'Send sign-in code'))
+    if args[-1].endswith('health'): print(os.environ.get('HEALTH', '{"ok":true}'))
+    elif args[-1].endswith('get-session'): print(os.environ.get('SESSION', 'null'))
+    else: print(os.environ.get('LOGIN', 'Send sign-in code'))
 '''
 
 
@@ -154,7 +156,8 @@ class CIDeploymentTests(DeploymentFixture):
         self.assertTrue(any(call[0] == 'scp' for call in calls))
         self.assertTrue(any(call[0] == 'ssh' and call[-1].startswith('sh -c') for call in calls))
         self.assertEqual([call[-1] for call in calls if call[0] == 'curl'],
-                         ['https://screenr.club/api/health', 'https://screenr.club/login'])
+                         ['https://screenr.club/api/health', 'https://screenr.club/login',
+                          'https://screenr.club/api/auth/get-session'])
         self.assertIn('https://screenr.club', result.stdout)
         for call in calls:
             if call[0] in ('ssh', 'scp'):
@@ -311,8 +314,19 @@ class CIDeploymentTests(DeploymentFixture):
         self.assertNotEqual(result.returncode, 0)
         self.assertNotIn('DEPLOY SUCCEEDED', result.stdout)
 
-    def test_retention_runs_only_after_both_public_checks_pass(self):
-        for environment in ({'HEALTH': '{"ok":false}'}, {'LOGIN': 'unavailable'}, {}):
+    def test_broken_public_sign_in_route_is_not_success(self):
+        # A signed-out session request returns JSON null; a broken auth route
+        # answers with an error document or an unexpected body instead.
+        for session in ('<!DOCTYPE html><title>500</title>', '{"session":{}}', ''):
+            with self.subTest(session=session):
+                result = self.execute(SESSION=session)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn('Public sign-in check failed', result.stderr)
+                self.assertNotIn('DEPLOY SUCCEEDED', result.stdout)
+
+    def test_retention_runs_only_after_all_public_checks_pass(self):
+        for environment in ({'HEALTH': '{"ok":false}'}, {'LOGIN': 'unavailable'},
+                            {'SESSION': 'unavailable'}, {}):
             with self.subTest(environment=environment):
                 (self.base / 'calls').unlink(missing_ok=True)
                 result = self.execute(**environment)

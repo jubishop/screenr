@@ -223,9 +223,10 @@ forces a checked deployment when needed. There is no local deployment command.
 
 The deployment job downloads the archive from its own run, checks its revision
 and paths, and verifies the transfer checksum. It takes a backup, activates the
-release, and checks Screenr services, the public health endpoint, and the login
-page. It also checks that Caddy, Health, KidsBank, and Trading retain their running
-service state. [`bin/deploy-ci`](../bin/deploy-ci) is the internal Actions helper;
+release, and checks Screenr services, the public health endpoint, the login
+page, and the sign-in route: a signed-out `/api/auth/get-session` must return
+`null`. It also checks that Caddy, Health, KidsBank, and Trading retain their
+running service state. [`bin/deploy-ci`](../bin/deploy-ci) is the internal Actions helper;
 [`ops/deploy-release.sh`](../ops/deploy-release.sh) runs the remote steps.
 
 **Decision — 2026-10-12:** Send `ops/activate.sh` and `ops/prune-releases.py`
@@ -277,7 +278,7 @@ startup removes only a new candidate after successful rollback. Failures in
 later verification require inspection and, when necessary, manual recovery.
 Database migrations are not reversed.
 
-After the public health and login checks pass, deployment runs the checked
+After the public health, login, and sign-in checks pass, deployment runs the checked
 `ops/prune-releases.py` with the verified release path. Cleanup takes the same
 host lock as activation and confirms that this release is still active. It
 keeps the active release and the two most recent successful releases, then
@@ -336,11 +337,17 @@ npm run build
 npm run release:package
 ```
 
-Packaging excludes local environment files and generated caches. It starts the
-packaged server on loopback port 3057 and checks the login page and database
-health. Set `TEST_DATABASE_URL` to an available disposable database whose name
-ends in `_test`; the default is the local test database from `bin/check --full`.
-This check also verifies that Next's generated dependency aliases are present.
+Packaging excludes local environment files and generated caches. It then
+verifies the package against a disposable database. Set `TEST_DATABASE_URL` to
+an available database whose name ends in `_test`; the default is the local test
+database from `bin/check --full`. Like activation, packaging first applies
+migrations with the packaged migration command. It then starts the packaged
+server on loopback port 3057 and checks database health, the login page, and
+the sign-in route. A signed-out `GET /api/auth/get-session` must return HTTP 200
+with `null`. The login page renders without the auth handler, and browser tests
+send auth requests to a separate fixture, so only this request runs the built
+sign-in route. This check also verifies that Next's generated dependency aliases
+are present.
 Inspect the archive manifest before transferring it. Extract into a new revision directory as root and
 keep application source and runtime packages read-only to the service users.
 Copy `ops/activate.sh` from a checkout of the same revision, not from the
