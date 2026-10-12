@@ -136,6 +136,11 @@ try {
   let availabilityFailure = false;
   catalog = createServer((request, response) => {
     response.setHeader("Content-Type", "application/json");
+    // TMDB has no title with this ID.
+    if (request.url?.startsWith("/movie/987690")) {
+      response.writeHead(404).end(JSON.stringify({ status_code: 34 }));
+      return;
+    }
     const streamingTitle = streamingTitles.find((title) =>
       request.url?.startsWith(`/${title.media_type}/${title.id}`),
     );

@@ -364,6 +364,11 @@ recipients. A full run checks:
   unrelated refreshes do not clear action errors.
 - Slow refreshes still deliver new replies and revoke access. A refresh that
   exceeds ten seconds hides server content; later recovery retains the draft.
+- Missing titles, people, and pages respond 404 with the member's navigation
+  and the reason, through page loads and client navigation. Polling continues
+  through 503 refreshes and stops after a permanent error until the reader
+  tries again or returns to the page. The catalog fixture has no title
+  `movie:987690`.
 - Circle and profile feed cards and the title header switch the viewer
   between Want to watch and Recommend. Selecting either clears the other;
   selecting the active action clears it. The inline Recommend action follows

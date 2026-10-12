@@ -116,7 +116,7 @@ test("watch together opens from a friend profile, filters shared titles, and ref
   ).toBeVisible();
   await expect(results).toHaveCount(0);
   expect((await owner.request.get(apiPath)).status()).toBe(404);
-  await owner.reload();
+  expect((await owner.reload())?.status()).toBe(404);
   await expect(
     owner.getByRole("alert").filter({ hasText: "Watch together not found." }),
   ).toBeVisible();

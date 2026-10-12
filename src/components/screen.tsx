@@ -1,11 +1,15 @@
 "use client";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ScreenData } from "../server/screens";
 import type { Person, SaveSurface, WatchStatus } from "../shared";
-import { parseMemberRoute, type MemberRoute } from "../member-routes";
-import { api } from "./client";
+import {
+  memberPath,
+  parseMemberRoute,
+  type MemberRoute,
+} from "../member-routes";
+import { api, ApiError, isPermanent } from "./client";
 import { Avatar } from "./avatar";
 import { Icon, type IconName } from "./icons";
 import { FeedView } from "./feed";
@@ -41,17 +45,39 @@ function currentSection(route: MemberRoute, href: string) {
   return undefined;
 }
 
+// A missing page responds 404 through the not-found view, which receives no
+// route props. Its screen reads the requested path in the browser, and its
+// first read shows why the page is missing, such as "Person not found."
+export function MissingScreen({ user }: { user: Person }) {
+  const pathname = usePathname();
+  const query = useSearchParams();
+  const path = memberPath(parseMemberRoute(`${pathname}?${query}`));
+  return (
+    <Screen
+      key={path}
+      user={user}
+      path={path}
+      initialData={null}
+      initialError=""
+      initialGoogleError=""
+    />
+  );
+}
+
 export function Screen({
   user: initialUser,
   path,
   initialData,
   initialError,
+  initialStatus,
   initialGoogleError,
 }: {
   user: Person;
   path: string;
   initialData: ScreenData | null;
   initialError: string;
+  // The page load's status, when it already read this screen.
+  initialStatus?: number;
   initialGoogleError: string;
 }) {
   const [user, setUser] = useState(initialUser);
@@ -62,6 +88,11 @@ export function Screen({
   const pending = useRef<AbortController | null>(null);
   // Set while a write makes this page unreadable, so no refresh reads it.
   const leaving = useRef(false);
+  // Polling stops after a permanent error, such as a missing page, and
+  // resumes after the next successful read. Until then only the reader's
+  // actions read again: Try again, returning to the page, a write, or
+  // navigation.
+  const stopped = useRef(isPermanent(initialStatus));
   const refresh = useCallback(async () => {
     if (leaving.current) return;
     pending.current?.abort();
@@ -79,12 +110,15 @@ export function Screen({
           window.location.replace(latest.url);
           return;
         }
+        stopped.current = false;
         setData(latest);
         setUser(latest.user);
         setLoadError("");
       }
     } catch (error) {
       if (!controller.signal.aborted) {
+        stopped.current =
+          error instanceof ApiError && isPermanent(error.status);
         setData(null);
         setLoadError(
           timeout.aborted
@@ -97,11 +131,15 @@ export function Screen({
     }
   }, [path]);
   useEffect(() => {
-    void refresh();
+    if (!stopped.current) void refresh();
     const timer = setInterval(() => {
       // A slow request must finish before the next poll starts. Explicit
       // refreshes still supersede old reads after mutations or focus changes.
-      if (document.visibilityState === "visible" && !pending.current)
+      if (
+        document.visibilityState === "visible" &&
+        !pending.current &&
+        !stopped.current
+      )
         void refresh();
     }, 3000);
     const focus = () => {

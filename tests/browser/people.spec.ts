@@ -110,12 +110,14 @@ test("an unavailable legacy link navigates after friendship restores access", as
   );
   const waiting = await reader.context().newPage();
   monitorErrors(waiting);
-  await waiting.goto(`/conversations/${entry.conversation_id}`);
+  const missing = await waiting.goto(`/conversations/${entry.conversation_id}`);
+  expect(missing?.status()).toBe(404);
   await expect(waiting.getByRole("main").getByRole("alert")).toContainText(
     "Conversation not found.",
   );
   await befriend(owner, reader, "recoveryreader", "recoveryowner");
-  await waiting.bringToFront();
+  // The missing page stopped polling, so the reader tries again.
+  await waiting.getByRole("button", { name: "Try again", exact: true }).click();
   await expect(waiting).toHaveURL(
     new RegExp(`/titles/movie/987654\\?item=${id}$`),
   );

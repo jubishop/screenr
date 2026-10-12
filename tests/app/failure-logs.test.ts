@@ -104,7 +104,11 @@ test("an unexpected page failure logs its route kind, error class, code, and sta
     const printed = captureFailures();
     assert.deepEqual(
       await initialScreen(alice, `/search?q=${encodeURIComponent(query)}`),
-      { data: null, error: "This page could not load. Please try again." },
+      {
+        data: null,
+        error: "This page could not load. Please try again.",
+        status: 500,
+      },
     );
     const { fields, stack } = logged(printed);
     assert.deepEqual(fields, {
@@ -131,6 +135,7 @@ test("expected page errors show their message and log nothing", async () => {
   assert.deepEqual(await initialScreen(alice, "/watch-together"), {
     data: null,
     error: "Choose one friend from their profile.",
+    status: 400,
   });
   await settled();
   assert.deepEqual(printed, []);

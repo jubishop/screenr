@@ -1,4 +1,4 @@
-import { redirect } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { currentMember } from "../../../server/session";
 import { initialScreen } from "../../../server/screens";
 import { Screen } from "../../../components/screen";
@@ -30,6 +30,8 @@ export default async function Page({
           ? "Choose the Google account with the same email address as your Screenr account."
           : "Google could not be connected. Please try again.";
   const screen = await initialScreen(user.user_id, requestedPath);
+  // A missing title, person, or page responds 404 through not-found.tsx.
+  if (screen.status === 404) notFound();
   const initialData = screen.data && JSON.parse(JSON.stringify(screen.data));
   if (initialData?.kind === "redirect") redirect(initialData.url);
   return (
@@ -39,6 +41,7 @@ export default async function Page({
       path={requestedPath}
       initialData={initialData}
       initialError={screen.error}
+      initialStatus={screen.status}
       initialGoogleError={initialGoogleError}
     />
   );

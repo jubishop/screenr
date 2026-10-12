@@ -10,6 +10,7 @@ import {
 } from "./social-fixture";
 
 const { POST, GET } = await import("../../src/app/api/screenr/[action]/route");
+const { initialScreen } = await import("../../src/server/screens");
 useDatabase();
 
 const origin = "http://localhost:3000";
@@ -37,9 +38,9 @@ function send(
   });
 }
 
-function get(action: string, cookie: string) {
+function get(action: string, cookie: string, query = "") {
   return GET(
-    new Request(`${origin}/api/screenr/${action}`, {
+    new Request(`${origin}/api/screenr/${action}${query}`, {
       headers: { Cookie: cookie },
     }),
     { params: Promise.resolve({ action }) },
@@ -143,4 +144,29 @@ test("API route checks origin and session before reading request bodies", async 
       denied.signedOut,
     );
   }
+});
+
+// The member page responds 404 when its loader reports one, so open tabs on a
+// missing page get the same status from the page and from each refresh.
+test("missing member pages return 404 from the screen API and the page loader", async () => {
+  const alice = await person("alice");
+  const cookie = await cookieFor(alice);
+  for (const [path, message] of [
+    ["/titles/movie/not-a-title", "Title not found."],
+    ["/people/nobody", "Person not found."],
+    ["/nothing/here", "Page not found."],
+  ]) {
+    await assertRouteError(
+      await get("screen", cookie, `?path=${encodeURIComponent(path)}`),
+      { status: 404, message },
+    );
+    assert.deepEqual(await initialScreen(alice, path), {
+      data: null,
+      error: message,
+      status: 404,
+    });
+  }
+  const found = await initialScreen(alice, "/people/alice");
+  assert.equal(found.status, 200);
+  assert.equal(found.data?.kind, "profile");
 });

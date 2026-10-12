@@ -13,6 +13,18 @@ export class ApiError extends Error {
     this.name = "ApiError";
   }
 }
+// Repeating a read cannot fix a client error, such as a missing page, denied
+// access, or an ended session. Timeouts (408), rate limits (429), server
+// errors, and network failures can pass, so background reads keep retrying.
+export function isPermanent(status: number | undefined) {
+  return (
+    status !== undefined &&
+    status >= 400 &&
+    status < 500 &&
+    status !== 408 &&
+    status !== 429
+  );
+}
 // Every request, including Better Auth's, stops waiting here, so a stalled
 // request releases its controls. Writes can wait on the catalog's
 // eight-second timeout. Reads also pass shorter deadlines with their own

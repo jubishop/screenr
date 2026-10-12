@@ -195,9 +195,17 @@ are not backfilled. Thread reads use one database snapshot. Open pages poll
 every three seconds while visible,
 waiting for any active refresh to finish, and refresh on focus. Each refresh
 has a ten-second deadline; failure clears server content until a successful
-refresh. Writes and other requests stop waiting after fifteen seconds, which
-re-enables their controls. Better Auth requests, such as email codes, Google
-sign-in and linking, and sign-out, share this deadline and its retry messages
+refresh. A permanent error, any 4xx response except 408 and 429, stops polling
+until a read succeeds. Until then, only Try again, returning to the page, a
+write, or navigation reads again. Timeouts, network failures, rate limits, and
+5xx responses keep polling. A missing title, person, page, conversation, or
+Watch together responds 404 from both the page and the screen API. The page
+keeps the member's navigation, and its first read shows the reason, such as
+"Person not found."
+([issue #139](https://github.com/jubishop/screenr/issues/139)). Writes and
+other requests stop waiting after fifteen seconds, which re-enables their
+controls. Better Auth requests, such as email codes, Google sign-in and
+linking, and sign-out, share this deadline and its retry messages
 ([issue #183](https://github.com/jubishop/screenr/issues/183)). While a write
 is pending, its button and the others it blocks stay focusable with
 `aria-disabled` and ignore presses, and text fields become read-only, so

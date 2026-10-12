@@ -24,14 +24,20 @@ export async function loadScreen(userId: string, requestedPath: string) {
 }
 
 // The member page loads its first screen on the server. A failure shows its
-// message in the page instead of an error page. Unexpected failures are
-// logged with the route kind, not the path, which can name people or
+// message in the page instead of an error page, and its status tells the page
+// to respond 404 and the browser whether to keep polling. Unexpected failures
+// are logged with the route kind, not the path, which can name people or
 // search terms.
 export async function initialScreen(userId: string, requestedPath: string) {
   try {
-    return { data: await loadScreen(userId, requestedPath), error: "" };
+    return {
+      data: await loadScreen(userId, requestedPath),
+      error: "",
+      status: 200,
+    };
   } catch (error) {
-    if (error instanceof AppError) return { data: null, error: error.message };
+    if (error instanceof AppError)
+      return { data: null, error: error.message, status: error.status };
     logFailure(
       "page failed",
       { route: parseMemberRoute(requestedPath).kind },
@@ -40,6 +46,7 @@ export async function initialScreen(userId: string, requestedPath: string) {
     return {
       data: null,
       error: "This page could not load. Please try again.",
+      status: 500,
     };
   }
 }
