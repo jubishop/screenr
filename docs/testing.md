@@ -227,8 +227,11 @@ not substitutes.
 Complete signup, Google sign-in, friendship, invitation, and access-restoration
 journeys retain browser interaction. Request-only reaction and title-comment
 validation is covered through the real HTTP handler in
-`tests/app/discussion-api.test.ts`. Focus, drafts, navigation, rendering,
-spoilers, and visible access changes remain browser assertions.
+`tests/app/discussion-api.test.ts`. `tests/app/api-requests.test.ts` covers
+the same handler's 16,000-byte body limit, missing or non-object JSON, unknown
+actions, and origin and session checks before a body is read. Focus, drafts,
+navigation, rendering, spoilers, and visible access changes remain browser
+assertions.
 
 The browser-facing port routes application requests to Next and auth requests
 to the real auth handlers with a local identity provider. This keeps OAuth redirects, state cookies, PKCE
