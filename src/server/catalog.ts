@@ -62,12 +62,19 @@ async function fetchCatalog(path: string, timeout = 8000) {
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
-function parseTitle(raw: unknown, kind: "movie" | "tv"): Title {
+// Details for a requested title must carry its TMDB ID, so a mismatched
+// response is never stored or served under either ID.
+function parseTitle(
+  raw: unknown,
+  kind: "movie" | "tv",
+  requestedId?: number,
+): Title {
   const name = isRecord(raw) && (kind === "movie" ? raw.title : raw.name);
   if (
     !isRecord(raw) ||
     !Number.isSafeInteger(raw.id) ||
     Number(raw.id) <= 0 ||
+    (requestedId !== undefined && raw.id !== requestedId) ||
     typeof name !== "string" ||
     !name
   )
@@ -105,8 +112,9 @@ export async function searchTitles(query: string): Promise<Title[]> {
     )
     .map((r) => parseTitle(r, r.media_type as "movie" | "tv"));
 }
-// Stored details refresh after a day. When TMDB fails, times out, or no longer
-// has the title, the stored row is served and the refresh waits five minutes.
+// Stored details refresh after a day. When TMDB fails, times out, returns
+// invalid details, or no longer has the title, the stored row is served and
+// the refresh waits five minutes.
 // Only a title that was never stored depends on the catalog response.
 export async function getTitle(id: string): Promise<Title> {
   if (!/^(movie|tv):[1-9][0-9]*$/.test(id))
@@ -130,6 +138,7 @@ export async function getTitle(id: string): Promise<Title> {
     title = parseTitle(
       await fetchCatalog(`/${kind}/${tmdbId}`, stored ? 2000 : 8000),
       kind as "movie" | "tv",
+      Number(tmdbId),
     );
   } catch (error) {
     if (!stored) throw error;

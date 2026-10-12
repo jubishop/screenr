@@ -19,7 +19,9 @@ the nullable `title.retry_after` column for this delay, which the previous
 release ignores; `fetched_at` still records the last successful fetch. Only a
 title that was never stored depends on TMDB, with an eight-second timeout.
 For such a title, a TMDB 404 returns not found, and any other TMDB failure or
-invalid response returns a 502 catalog error. Search returns the same catalog
+invalid response returns a 502 catalog error. Details whose TMDB ID differs
+from the requested ID count as an invalid title, and their contents are stored
+under neither ID. Search returns the same catalog
 errors. It sends no request for fewer than two non-space characters, rejects
 queries over 120 characters, and drops results that are not movies or TV.
 Title details, trailer, and availability load in parallel, and the optional

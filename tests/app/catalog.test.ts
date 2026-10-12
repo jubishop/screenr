@@ -228,13 +228,21 @@ for (const failure of ["http", "timeout", "configuration"]) {
 const detailRequests = (kind = "movie") =>
   requests.filter((request) => request.path === `/${kind}/42`).length;
 
-for (const failure of ["http", "timeout", "not found", "invalid"]) {
+for (const failure of [
+  "http",
+  "timeout",
+  "not found",
+  "invalid",
+  "mismatched ID",
+]) {
   test(`a stale stored title renders during a TMDB ${failure} failure and backs off`, async () => {
     await db.query("UPDATE title SET fetched_at=now()-interval '2 days'");
     details.status =
       failure === "http" ? 503 : failure === "not found" ? 404 : 200;
     details.slow = failure === "timeout";
     if (failure === "invalid") details.body = { id: 42 };
+    if (failure === "mismatched ID")
+      details.body = { id: 43, title: "Other Movie", name: "Other Show" };
     for (const kind of ["movie", "tv"]) {
       const result = await screen(kind);
       assert.equal(
@@ -260,6 +268,10 @@ for (const failure of ["http", "timeout", "not found", "invalid"]) {
         "failed refreshes must not repeat on each page refresh",
       );
     }
+    assert.deepEqual(
+      (await db.query("SELECT id FROM title ORDER BY id")).rows,
+      [{ id: "movie:42" }, { id: "tv:42" }],
+    );
   });
 }
 
@@ -373,6 +385,16 @@ for (const [kind, body] of [
     assert.equal(await storedTitle(`${kind}:43`), undefined);
   });
 }
+
+test("cold title details for another TMDB ID store and update nothing", async () => {
+  const titles = async () =>
+    (await db.query("SELECT * FROM title ORDER BY id")).rows;
+  const existing = await titles();
+  details.body = { id: 42, title: "Other Movie", name: "Other Show" };
+  for (const kind of ["movie", "tv"])
+    await assert.rejects(getTitle(`${kind}:43`), invalidTitle);
+  assert.deepEqual(await titles(), existing);
+});
 
 test("cold title details keep each kind's fields and only text values", async () => {
   details.body = {
