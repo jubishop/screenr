@@ -132,6 +132,40 @@ bar keeps the scroll position. Both clear the device's safe areas.
 [Issue #170](https://github.com/jubishop/screenr/issues/170) adds the header
 avatar link, shown only on phones beside the bell.
 
+### Page titles and focus after navigation — 2026-10-12
+
+**Decision:** Give each member page its own document title. After client
+navigation, move focus to the new page's heading, and add a skip link to the
+main content. The four-item navigation marks the current page with
+`aria-current="page"`. This is the decided approach in
+[issue #136](https://github.com/jubishop/screenr/issues/136).
+
+**Why:** Screen-reader users heard nothing when they navigated. Every tab,
+history entry, and bookmark read "Screenr · Better with friends", and
+keyboard users started from the top of the sidebar after each navigation.
+
+**Implementation note:** `memberTitle` in `src/member-routes.ts` names each
+page with its heading, the title's name, or the person's display name,
+followed by "· Screenr", for example "Find a title · Screenr". Until a title
+or profile loads, the route names the page: "Movie", "TV show", or
+"@username". `src/components/screen.tsx` renders the title, which React places
+in the document head, and the member page drops the layout's title. The server
+sends the title with the page, and client navigation changes it in the same
+render, so Next's route announcer reads the new title aloud. A metadata title
+arrives after the navigation renders, so the announcer would read only the
+heading. A refresh that renames the title or person updates the title. A read
+that finds the page missing titles it "Page not found"; other failed reads
+keep the title. Every screen after the first in a document comes from client
+navigation and focuses its heading, or the main region when an error replaces
+the heading. Focus moves without scrolling, so linked entries keep their
+position, and refreshes never move focus. The skip link is the first focusable
+element and shows above the phone header only while focused. It focuses the
+main region without changing the URL. The heading and the main region keep
+focus only until they lose it and show no focus ring.
+`tests/browser/page-frame.spec.ts` checks titles, focus after keyboard, link,
+and Back navigation at 390px and 1366px, focus during refreshes, and the skip
+link.
+
 ### Friends recommend as a Find a title tab — 2026-10-12
 
 **Decision:** Reach the Friends recommend view from

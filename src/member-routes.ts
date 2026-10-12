@@ -131,3 +131,38 @@ function withReturn(page: string, next?: string) {
     ? `${page}?next=${encodeURIComponent(path)}`
     : page;
 }
+
+// Screen data that can name its page: a loaded title or profile.
+type NamedScreen = {
+  kind: string;
+  title?: { name: string };
+  profile?: { display_name: string };
+};
+const pageNames = {
+  feed: "Your circle",
+  search: "Find a title",
+  people: "Friends",
+  invites: "Invite friends",
+  account: "Account",
+  "watch-together": "Watch together",
+  conversation: "Conversation",
+  "not-found": "Page not found",
+};
+
+/**
+ * Returns a member page's document title, such as "Find a title · Screenr".
+ * Title and profile pages use the loaded name, or the route until it loads.
+ */
+export function memberTitle(route: MemberRoute, data?: NamedScreen | null) {
+  let name: string;
+  if (route.kind === "title")
+    name =
+      (data?.kind === "title" && data.title?.name) ||
+      (route.id.startsWith("tv:") ? "TV show" : "Movie");
+  else if (route.kind === "profile")
+    name =
+      (data?.kind === "profile" && data.profile?.display_name) ||
+      `@${route.username}`;
+  else name = pageNames[route.kind];
+  return `${name} · Screenr`;
+}

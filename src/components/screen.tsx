@@ -6,6 +6,7 @@ import type { ScreenData } from "../server/screens";
 import type { Person, SaveSurface, WatchStatus } from "../shared";
 import {
   memberPath,
+  memberTitle,
   parseMemberRoute,
   type MemberRoute,
 } from "../member-routes";
@@ -64,6 +65,22 @@ export function MissingScreen({ user }: { user: Person }) {
   );
 }
 
+// Focus a heading or the main region only until it loses focus, so it never
+// becomes a Tab stop or catches later clicks.
+function focusOnce(target: HTMLElement, options?: FocusOptions) {
+  if (!target.hasAttribute("tabindex")) {
+    target.tabIndex = -1;
+    target.addEventListener("blur", () => target.removeAttribute("tabindex"), {
+      once: true,
+    });
+  }
+  target.focus(options);
+}
+
+// Each route mounts a new screen. The first one in a document keeps the
+// browser's focus; later ones come from client navigation.
+let screensShown = 0;
+
 export function Screen({
   user: initialUser,
   path,
@@ -84,6 +101,11 @@ export function Screen({
   const [data, setData] = useState(initialData),
     [loadError, setLoadError] = useState(initialError),
     [busy, setBusy] = useState(false);
+  // Reads can rename a title or person, and a missing page is titled Page not
+  // found. Other failed reads keep the last title.
+  const [pageTitle, setPageTitle] = useState(() =>
+    memberTitle(parseMemberRoute(path), initialData),
+  );
   const router = useRouter();
   const pending = useRef<AbortController | null>(null);
   // Set while a write makes this page unreadable, so no refresh reads it.
@@ -93,6 +115,19 @@ export function Screen({
   // actions read again: Try again, returning to the page, a write, or
   // navigation.
   const stopped = useRef(isPermanent(initialStatus));
+  const main = useRef<HTMLElement>(null);
+  // After client navigation, focus the new page's heading, or the main region
+  // when an error replaces it, so screen readers announce the page and
+  // keyboard users continue from it. Refreshes keep focus, and linked entries
+  // keep their scroll position.
+  const screenNumber = useRef(0);
+  useEffect(() => {
+    screenNumber.current ||= ++screensShown;
+    if (screenNumber.current === 1 || !main.current) return;
+    focusOnce(main.current.querySelector("h1") ?? main.current, {
+      preventScroll: true,
+    });
+  }, []);
   const refresh = useCallback(async () => {
     if (leaving.current) return;
     pending.current?.abort();
@@ -112,6 +147,7 @@ export function Screen({
         }
         stopped.current = false;
         setData(latest);
+        setPageTitle(memberTitle(parseMemberRoute(path), latest));
         setUser(latest.user);
         setLoadError("");
       }
@@ -119,6 +155,8 @@ export function Screen({
       if (!controller.signal.aborted) {
         stopped.current =
           error instanceof ApiError && isPermanent(error.status);
+        if (error instanceof ApiError && error.status === 404)
+          setPageTitle(memberTitle({ kind: "not-found", path }, null));
         setData(null);
         setLoadError(
           timeout.aborted
@@ -241,6 +279,19 @@ export function Screen({
   }
   return (
     <div className="app-shell">
+      {/* React places the title in the document head. */}
+      <title>{pageTitle}</title>
+      <a
+        className="skip-link"
+        href="#main-content"
+        onClick={(event) => {
+          if (!main.current) return;
+          event.preventDefault();
+          focusOnce(main.current);
+        }}
+      >
+        Skip to main content
+      </a>
       <header className="sidebar">
         <div className="brand-row">
           <Link href="/" className="brand" prefetch={false}>
@@ -301,7 +352,7 @@ export function Screen({
           </Link>
         </div>
       </header>
-      <main className="main">
+      <main className="main" id="main-content" ref={main}>
         {loadError && (
           <div className="error" role="alert">
             {loadError}

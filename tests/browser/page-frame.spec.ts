@@ -294,8 +294,12 @@ test("navigation moves between the four sections and opens invitations from Frie
     viewer.getByRole("link", { name: "Invite friends" }),
   ).toHaveCount(0);
 
-  // Keyboard order: logo, notifications, then the four sections.
+  // Keyboard order: skip link, logo, notifications, then the four sections.
   await viewer.evaluate(() => (document.activeElement as HTMLElement).blur());
+  await viewer.keyboard.press("Tab");
+  await expect(
+    viewer.getByRole("link", { name: "Skip to main content", exact: true }),
+  ).toBeFocused();
   await viewer.keyboard.press("Tab");
   await expect(viewer.getByRole("link", { name: /^screenr/ })).toBeFocused();
   await viewer.keyboard.press("Tab");
@@ -355,4 +359,160 @@ test("navigation moves between the four sections and opens invitations from Frie
   }
   await viewer.goto("/titles/movie/987654");
   await expect(nav.locator("[aria-current]")).toHaveCount(0);
+});
+
+test("each member page has its own title, and navigation focuses its heading", async ({
+  member,
+}) => {
+  const viewer = await member("titledviewer", { displayName: "Titled Viewer" });
+  const friend = await member("titledfriend", { displayName: "Titled Friend" });
+  await prepareFriendship(viewer, friend);
+  const named: [string, string][] = [
+    ...sections.map(({ path, heading }): [string, string] => [path, heading]),
+    ["/watch-together?with=titledfriend", "Watch together"],
+    ["/titles/movie/987654", "The Lantern Room"],
+    ["/people/titledfriend", "Titled Friend"],
+    ["/people/titledviewer", "Titled Viewer"],
+  ];
+  for (const [path, name] of named) {
+    // The server renders the title, so tabs and history name the page before
+    // any script runs.
+    const html = await (await viewer.request.get(path)).text();
+    expect(html.match(/<title>[^<]*<\/title>/g), path).toEqual([
+      `<title>${name} · Screenr</title>`,
+    ]);
+    expect(html.indexOf("<title>")).toBeLessThan(html.indexOf("</head>"));
+    await viewer.goto(path);
+    await expect(viewer).toHaveTitle(`${name} · Screenr`);
+    // A full page load leaves focus where the browser puts it.
+    expect(
+      await viewer.evaluate(() => document.activeElement === document.body),
+      path,
+    ).toBe(true);
+  }
+
+  const nav = navigation(viewer);
+  const main = viewer.getByRole("main");
+  const heading = (name: string) =>
+    main.getByRole("heading", { level: 1, name, exact: true });
+  const search = viewer.getByLabel("Movie or show title", { exact: true });
+  for (const width of [1366, 390]) {
+    await viewer.setViewportSize({ width, height: 844 });
+    await viewer.goto("/");
+    // Choosing a section from the keyboard moves focus to the new heading, so
+    // the next Tab continues in the page instead of the navigation.
+    await nav
+      .getByRole("link", { name: width > 560 ? "Find a title" : "Find" })
+      .focus();
+    await viewer.keyboard.press("Enter");
+    await expect(viewer).toHaveURL(/\/search$/);
+    await expect(viewer).toHaveTitle("Find a title · Screenr");
+    await expect(heading("Find a title")).toBeFocused();
+    // Next's route announcer reads the new title aloud.
+    await expect(viewer.locator("#__next-route-announcer__")).toHaveText(
+      "Find a title · Screenr",
+    );
+    expect(
+      await viewer.evaluate(() => document.querySelectorAll("title").length),
+    ).toBe(1);
+    await viewer.keyboard.press("Tab");
+    await expect(search).toBeFocused();
+
+    // Background refreshes keep focus and the draft where the reader left them.
+    await search.fill("Lantern");
+    const refreshed = viewer.waitForResponse((response) =>
+      response.url().includes("/api/screenr/screen?"),
+    );
+    await viewer.evaluate(() => window.dispatchEvent(new Event("focus")));
+    await refreshed;
+    await expect(search).toBeFocused();
+    await expect(search).toHaveValue("Lantern");
+    await expect(viewer).toHaveTitle("Find a title · Screenr");
+
+    // Links inside a page, and Back, focus the heading they open.
+    await nav.getByRole("link", { name: "Friends", exact: true }).click();
+    await expect(heading("Friends")).toBeFocused();
+    await expect(viewer).toHaveTitle("Friends · Screenr");
+    await main.getByRole("link", { name: /^Titled Friend/ }).click();
+    await expect(viewer).toHaveURL(/\/people\/titledfriend$/);
+    await expect(heading("Titled Friend")).toBeFocused();
+    await expect(viewer).toHaveTitle("Titled Friend · Screenr");
+    await viewer.goBack();
+    await expect(viewer).toHaveURL(/\/people$/);
+    await expect(heading("Friends")).toBeFocused();
+    await expect(viewer).toHaveTitle("Friends · Screenr");
+    // The focused heading is in view below the phone header.
+    await expect(heading("Friends")).toBeInViewport();
+    await expectUncovered(heading("Friends"));
+  }
+
+  // A missing page is titled as missing, and its main region takes focus.
+  // Next's router navigates as in-app links and notifications do.
+  await viewer.evaluate(() =>
+    (
+      window as unknown as { next: { router: { push(path: string): void } } }
+    ).next.router.push("/people/nobodyhere"),
+  );
+  await expect(main.getByText("Person not found.")).toBeVisible();
+  await expect(viewer).toHaveTitle("Page not found · Screenr");
+  await expect(main).toBeFocused();
+  await viewer.goBack();
+  await expect(heading("Friends")).toBeFocused();
+
+  // Renaming yourself renames your profile's title without a navigation.
+  await viewer
+    .getByRole("banner")
+    .getByRole("link", { name: "Your profile", exact: true })
+    .click();
+  await expect(heading("Titled Viewer")).toBeFocused();
+  await viewer
+    .getByRole("button", { name: "Edit display name", exact: true })
+    .click();
+  await viewer.getByLabel("Display name", { exact: true }).fill("Renamed");
+  await viewer.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(heading("Renamed")).toBeVisible();
+  await expect(viewer).toHaveTitle("Renamed · Screenr");
+  await nav.getByRole("link", { name: "Account", exact: true }).click();
+  await expect(viewer).toHaveTitle("Account · Screenr");
+  await viewer.goBack();
+  await expect(viewer).toHaveTitle("Renamed · Screenr");
+  expect(
+    await viewer.evaluate(() => document.querySelectorAll("title").length),
+  ).toBe(1);
+});
+
+test("a skip link moves keyboard focus past the navigation to the page", async ({
+  member,
+}) => {
+  const viewer = await member("skipreader");
+  const skip = viewer.getByRole("link", {
+    name: "Skip to main content",
+    exact: true,
+  });
+  const main = viewer.getByRole("main");
+  for (const width of [390, 1366]) {
+    await viewer.setViewportSize({ width, height: 844 });
+    await viewer.goto("/search");
+    // The link stays out of sight until keyboard focus reaches it.
+    expect((await box(skip)).width).toBeLessThanOrEqual(1);
+    await viewer.keyboard.press("Tab");
+    await expect(skip).toBeFocused();
+    await expect(skip).toBeInViewport();
+    expect((await box(skip)).height).toBeGreaterThanOrEqual(44);
+    for (const colorScheme of ["dark", "light"] as const) {
+      await viewer.emulateMedia({ colorScheme });
+      await expectTextContrast(skip);
+    }
+    await expectUncovered(skip);
+    await viewer.keyboard.press("Enter");
+    await expect(main).toBeFocused();
+    await expect(viewer).toHaveURL(/\/search$/);
+    await viewer.keyboard.press("Tab");
+    await expect(
+      viewer.getByLabel("Movie or show title", { exact: true }),
+    ).toBeFocused();
+    // The main region takes focus only from the link, not from later clicks.
+    await expect(main).not.toHaveAttribute("tabindex");
+    expect((await box(skip)).width).toBeLessThanOrEqual(1);
+  }
 });

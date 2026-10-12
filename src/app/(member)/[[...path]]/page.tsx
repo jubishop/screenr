@@ -1,9 +1,13 @@
+import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { currentMember } from "../../../server/session";
 import { initialScreen } from "../../../server/screens";
 import { Screen } from "../../../components/screen";
 import { memberPath, parseMemberRoute } from "../../../member-routes";
 export const dynamic = "force-dynamic";
+// The screen renders each member page's title, so client navigation and
+// refreshes change it in the same render as the page. Drop the layout's title.
+export const metadata: Metadata = { title: null };
 export default async function Page({
   params,
   searchParams,

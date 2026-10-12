@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   loginPath,
   memberPath,
+  memberTitle,
   parseMemberRoute,
   returnPath,
   setupPath,
@@ -164,4 +165,50 @@ test("sign-in and setup links carry only a valid return path", () => {
     assert.equal(loginPath(next), "/login", String(next));
     assert.equal(setupPath(next), "/setup", String(next));
   }
+});
+
+test("member page titles name each screen, title, or person", () => {
+  const title = (path: string, data?: Parameters<typeof memberTitle>[1]) =>
+    memberTitle(parseMemberRoute(path), data);
+  for (const [path, name] of [
+    ["/", "Your circle"],
+    ["/?item=post&reply=answer", "Your circle"],
+    ["/search", "Find a title"],
+    ["/search?q=Severance", "Find a title"],
+    ["/people", "Friends"],
+    ["/invites", "Invite friends"],
+    ["/account?error=access_denied", "Account"],
+    ["/watch-together?with=ben", "Watch together"],
+    ["/conversations/legacy", "Conversation"],
+    ["/unknown", "Page not found"],
+    ["/titles/movie/42/extra", "Page not found"],
+  ])
+    assert.equal(title(path), `${name} · Screenr`, path);
+  assert.equal(
+    title("/titles/movie/42?item=post", {
+      kind: "title",
+      title: { name: "The Lantern Room" },
+    }),
+    "The Lantern Room · Screenr",
+  );
+  assert.equal(
+    title("/people/alice", {
+      kind: "profile",
+      profile: { display_name: "Alice Smith" },
+    }),
+    "Alice Smith · Screenr",
+  );
+  // Before a title or profile loads, or after it fails, the route names it.
+  // Another screen's data never names the page.
+  assert.equal(title("/titles/movie/42"), "Movie · Screenr");
+  assert.equal(title("/titles/tv/7", null), "TV show · Screenr");
+  assert.equal(
+    title("/titles/tv/7", { kind: "profile", profile: { display_name: "A" } }),
+    "TV show · Screenr",
+  );
+  assert.equal(title("/people/a%20b"), "@a b · Screenr");
+  assert.equal(
+    title("/people/alice", { kind: "title", title: { name: "Lost" } }),
+    "@alice · Screenr",
+  );
 });

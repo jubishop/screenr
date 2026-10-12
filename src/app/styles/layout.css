@@ -80,6 +80,33 @@
   padding-right: max(58px, env(safe-area-inset-right));
   min-width: 0;
 }
+/* The skip link shows only while it has focus, above the phone header. */
+.skip-link {
+  position: fixed;
+  top: max(8px, env(safe-area-inset-top));
+  left: max(8px, env(safe-area-inset-left));
+  z-index: 10;
+  padding: 10px 16px;
+  border-radius: 8px;
+  background: var(--ink);
+  color: var(--surface);
+  font-weight: 600;
+  line-height: 24px;
+}
+.skip-link:not(:focus) {
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+/* Navigation and the skip link focus the heading or main region so screen
+   readers start there. Neither is a control, so neither shows a focus ring. */
+.main:focus,
+.main h1:focus {
+  outline: none;
+}
 .page-heading {
   margin-bottom: 32px;
   max-width: 650px;
