@@ -299,9 +299,7 @@ test("title trailers load YouTube only after Play trailer, fit desktop and mobil
   for (const width of [1440, 390, 320]) {
     await page.setViewportSize({ width, height: 900 });
     await expectTextContrast(page.locator(".title-hero .overview"));
-    await expectTextContrast(
-      page.getByText("A private circle", { exact: true }),
-    );
+    await expectTextContrast(page.locator(".title-hero .eyebrow"));
     const bounds = await player.boundingBox();
     expect(bounds!.width).toBeGreaterThanOrEqual(200);
     expect(bounds!.height).toBeGreaterThanOrEqual(200);

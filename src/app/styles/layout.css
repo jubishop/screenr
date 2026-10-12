@@ -9,16 +9,13 @@
 .sidebar {
   border-right: 1px solid var(--line);
   padding: 36px 28px;
+  /* Landscape phones put the notch beside the sidebar or the content. */
+  padding-left: max(28px, env(safe-area-inset-left));
   position: sticky;
   top: 0;
   height: 100dvh;
   display: flex;
   flex-direction: column;
-}
-.sidebar-tagline {
-  font-size: 12px;
-  color: var(--muted);
-  margin: 18px 0 44px;
 }
 .brand-row {
   display: flex;
@@ -26,11 +23,12 @@
   justify-content: space-between;
   gap: 8px;
 }
-.sidebar nav {
+.main-nav {
   display: grid;
   gap: 8px;
+  margin-top: 40px;
 }
-.sidebar nav a {
+.main-nav a {
   display: flex;
   gap: 12px;
   align-items: center;
@@ -38,14 +36,16 @@
   font-size: 14px;
   border-radius: 7px;
 }
-.sidebar nav a span {
-  font-size: 20px;
+.main-nav .icon {
   width: 22px;
-  text-align: center;
+  height: 22px;
 }
-.sidebar nav .active {
+.main-nav [aria-current] {
   background: var(--accent);
   font-weight: 600;
+}
+.nav-short {
+  display: none;
 }
 .sidebar-bottom {
   margin-top: auto;
@@ -66,39 +66,38 @@
 .main {
   max-width: 1000px;
   width: 100%;
-  padding: 0 58px 70px;
+  padding: 44px 58px 70px;
+  padding-right: max(58px, env(safe-area-inset-right));
   min-width: 0;
 }
-.topbar {
-  display: flex;
-  justify-content: space-between;
-  border-bottom: 1px solid var(--line);
-  padding: 26px 0 19px;
-  margin-bottom: 44px;
-  align-items: center;
-}
-.topbar .eyebrow {
-  margin: 0;
-}
 .page-heading {
-  margin-bottom: 37px;
+  margin-bottom: 32px;
   max-width: 650px;
 }
 .page-heading > p:last-child {
   color: var(--muted);
   max-width: 480px;
 }
-.page-heading.compact {
-  margin-bottom: 25px;
+/* Utility pages use a smaller plain title than title and profile pages. */
+.page-title {
+  font-size: 32px;
+  letter-spacing: -1px;
+  margin-bottom: 0;
+}
+.page-title + p {
+  margin-top: 12px;
+}
+.heading-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 16px;
+  max-width: none;
 }
 @media (min-width: 1250px) {
   .main {
-    padding-left: 80px;
-    padding-right: 80px;
-  }
-  .page-heading {
-    margin-top: 55px;
-    margin-bottom: 45px;
+    padding: 56px 80px 70px;
   }
 }
 @media (max-width: 800px) {
@@ -107,67 +106,103 @@
   }
   .sidebar {
     padding: 26px 17px;
+    padding-left: max(17px, env(safe-area-inset-left));
   }
   .main {
-    padding: 0 28px 50px;
+    padding: 32px 28px 50px;
+    padding-right: max(28px, env(safe-area-inset-right));
   }
 }
+/* Phone: a slim sticky header and a bottom navigation bar. */
 @media (max-width: 560px) {
+  :root {
+    --header-height: calc(56px + env(safe-area-inset-top));
+    --nav-height: calc(60px + env(safe-area-inset-bottom));
+  }
+  /* Scrolling to focused or linked content keeps it clear of the header and
+     bar. Header controls have no margin, so focusing them never scrolls. */
+  .main * {
+    scroll-margin: var(--header-height) 0 var(--nav-height);
+  }
   .app-shell {
     display: block;
   }
   .sidebar {
-    height: auto;
-    position: sticky;
-    top: 0;
     z-index: 5;
+    justify-content: center;
+    height: var(--header-height);
+    padding: env(safe-area-inset-top) max(18px, env(safe-area-inset-right)) 0
+      max(18px, env(safe-area-inset-left));
     background: var(--paper);
-    padding: 13px 18px 0;
     border-right: 0;
     border-bottom: 1px solid var(--line);
   }
   .sidebar .brand {
     font-size: 27px;
   }
-  .sidebar-tagline,
   .sidebar-bottom {
     display: none;
   }
-  .sidebar nav {
-    display: flex;
-    justify-content: space-between;
+  .main-nav {
+    position: fixed;
+    inset: auto 0 0;
+    z-index: 5;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0;
+    height: var(--nav-height);
+    margin: 0;
+    padding: 0 max(4px, env(safe-area-inset-right)) env(safe-area-inset-bottom)
+      max(4px, env(safe-area-inset-left));
+    background: var(--white);
+    border-top: 1px solid var(--line);
+  }
+  .main-nav a {
+    flex-direction: column;
+    justify-content: center;
     gap: 2px;
-    margin-top: 10px;
+    padding: 4px 2px;
+    font-size: 12px;
+    line-height: 16px;
+    font-weight: 600;
+    color: var(--muted);
+    border-radius: 10px;
   }
-  .sidebar nav a {
-    display: block;
-    padding: 8px 6px;
-    font-size: 10px;
-    border-radius: 7px 7px 0 0;
-    text-align: center;
-    flex: 1;
+  .main-nav a:focus-visible {
+    outline-offset: -3px;
   }
-  .sidebar nav a span {
-    display: block;
-    font-size: 18px;
-    width: auto;
-    line-height: 1.2;
+  .main-nav .icon {
+    width: 24px;
+    height: 24px;
+  }
+  .nav-icon {
+    display: grid;
+    place-items: center;
+    width: 56px;
+    height: 28px;
+    border-radius: 14px;
+  }
+  .main-nav [aria-current] {
+    background: none;
+    color: var(--ink);
+  }
+  .main-nav [aria-current] .nav-icon {
+    background: var(--accent);
+  }
+  .nav-full {
+    display: none;
+  }
+  .nav-short {
+    display: inline;
   }
   .main {
-    padding: 0 18px 45px;
-  }
-  .topbar {
-    padding: 18px 0;
-    margin-bottom: 26px;
-  }
-  .topbar .eyebrow {
-    font-size: 8px;
-    letter-spacing: 1.5px;
-  }
-  .topbar .small {
-    font-size: 10px;
+    padding: 20px max(18px, env(safe-area-inset-right))
+      calc(var(--nav-height) + 36px) max(18px, env(safe-area-inset-left));
   }
   .page-heading {
-    margin-bottom: 24px;
+    margin-bottom: 20px;
+  }
+  .page-title {
+    font-size: 28px;
+    letter-spacing: -0.6px;
   }
 }

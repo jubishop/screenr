@@ -20,8 +20,7 @@ export function WatchTogether({
   return (
     <>
       <div className="page-heading">
-        <p className="eyebrow">GOOD COMPANY. SHARED PICKS.</p>
-        <h1>Watch together</h1>
+        <h1 className="page-title">Watch together</h1>
         <p>
           {participants.map((person, index) => (
             <span key={person.user_id}>

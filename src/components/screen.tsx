@@ -5,6 +5,7 @@ import type { ScreenData } from "../server/screens";
 import type { Person } from "../shared";
 import { api, signOut } from "./client";
 import { initial } from "./initial";
+import { Icon, type IconName } from "./icons";
 import { FeedView } from "./feed";
 import { WatchTogether } from "./watch-together";
 import { TitleSearch } from "./title-search";
@@ -14,6 +15,26 @@ import { PeopleView } from "./people-view";
 import { ProfileView } from "./profile-view";
 import { TitleView } from "./title-view";
 import { Notifications } from "./notifications";
+
+// The phone bottom bar shows the short labels; the sidebar shows full names.
+const sections: {
+  href: string;
+  label: string;
+  short: string;
+  icon: IconName;
+}[] = [
+  { href: "/", label: "Your circle", short: "Circle", icon: "circle" },
+  { href: "/search", label: "Find a title", short: "Find", icon: "search" },
+  { href: "/people", label: "Friends", short: "Friends", icon: "friends" },
+  { href: "/account", label: "Account", short: "Account", icon: "account" },
+];
+
+// Invitations open from the Friends page, so Friends stays the current section.
+function currentSection(pathname: string, href: string) {
+  if (pathname === href) return "page";
+  if (href === "/people" && pathname === "/invites") return "true";
+  return undefined;
+}
 
 export function Screen({
   user: initialUser,
@@ -137,14 +158,14 @@ export function Screen({
     );
     await refresh();
   }
-  const ownProfile =
-    path.split("?")[0].toLowerCase() === `/people/${user.username}`;
+  const pathname = path.split("?")[0];
+  const ownProfile = pathname.toLowerCase() === `/people/${user.username}`;
   function activity(title: string, field: string, value: boolean) {
     return mutate("activity", { title, field, value });
   }
   return (
     <div className="app-shell">
-      <aside className="sidebar">
+      <header className="sidebar">
         <div className="brand-row">
           <Link href="/" className="brand" prefetch={false}>
             screenr<span>●</span>
@@ -158,27 +179,25 @@ export function Screen({
             refreshScreen={refresh}
           />
         </div>
-        <p className="sidebar-tagline">
-          Good company.
-          <br />
-          Great things to watch.
-        </p>
-        <nav aria-label="Main navigation">
-          {[
-            ["/", "Your circle", "◉"],
-            ["/search", "Find a title", "⌕"],
-            ["/people", "Friends", "♧"],
-            ["/invites", "Invite friends", "+"],
-            ["/account", "Account", "○"],
-          ].map(([href, label, icon]) => (
+        <nav className="main-nav" aria-label="Main navigation">
+          {sections.map(({ href, label, short, icon }) => (
             <Link
               key={href}
               href={href}
               prefetch={false}
-              className={path === href ? "active" : ""}
+              aria-current={currentSection(pathname, href)}
             >
-              <span aria-hidden="true">{icon}</span>
-              {label}
+              <span className="nav-icon">
+                <Icon name={icon} />
+              </span>
+              {short === label ? (
+                <span>{label}</span>
+              ) : (
+                <>
+                  <span className="nav-full">{label}</span>
+                  <span className="nav-short">{short}</span>
+                </>
+              )}
             </Link>
           ))}
         </nav>
@@ -194,12 +213,8 @@ export function Screen({
             Catalog credits
           </Link>
         </div>
-      </aside>
+      </header>
       <main className="main">
-        <header className="topbar">
-          <span className="eyebrow">YOUR PEOPLE. YOUR PICKS.</span>
-          <span className="small muted">A private circle</span>
-        </header>
         {loadError && (
           <div className="error" role="alert">
             {loadError}
@@ -217,16 +232,9 @@ export function Screen({
           </div>
         )}
         {data?.kind === "feed" && (
-          <>
-            <div className="page-heading">
-              <p className="eyebrow">THE FRIENDS FEED</p>
-              <h1>Better with friends.</h1>
-              <p>
-                Fresh recommendations and familiar voices. Find your next great
-                watch.
-              </p>
-            </div>
-          </>
+          <div className="page-heading">
+            <h1 className="page-title">Your circle</h1>
+          </div>
         )}
         {/* Keep draft-owning views mounted while failed reads clear their data. */}
         {path.startsWith("/titles/") && (
@@ -238,13 +246,13 @@ export function Screen({
             refresh={refresh}
           />
         )}
-        {path.split("?")[0] === "/search" && (
+        {pathname === "/search" && (
           <TitleSearch
             suggestions={data?.kind === "search" ? data.suggestions : null}
             serviceIds={data?.kind === "search" ? data.serviceIds : null}
           />
         )}
-        {path.split("?")[0] === "/people" && (
+        {pathname === "/people" && (
           <PeopleView
             data={data?.kind === "people" ? data : null}
             user={user}
@@ -286,14 +294,14 @@ export function Screen({
             showEmpty={data?.kind !== "profile" || data.profile.can_read}
           />
         )}
-        {path.split("?")[0] === "/invites" && (
+        {pathname === "/invites" && (
           <InvitationsView
             data={data?.kind === "invites" ? data : null}
             busy={busy}
             mutate={mutate}
           />
         )}
-        {path.split("?")[0] === "/account" && (
+        {pathname === "/account" && (
           <AccountView
             data={data?.kind === "account" ? data : null}
             user={user}

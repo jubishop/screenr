@@ -133,7 +133,7 @@ test("active invitation cards retain links across reloads and disappear after us
     .getByRole("button", { name: "Join Screenr", exact: true })
     .click();
   await expect(
-    guest.getByRole("heading", { name: "Better with friends." }),
+    guest.getByRole("heading", { name: "Your circle", exact: true }),
   ).toBeVisible();
   await expect(
     owner.getByText("1 of 2 signups", { exact: true }),

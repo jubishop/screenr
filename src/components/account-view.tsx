@@ -1,5 +1,4 @@
 "use client";
-import Link from "next/link";
 import { useState } from "react";
 import type { ScreenData } from "../server/screens";
 import type { Person } from "../shared";
@@ -32,18 +31,7 @@ export function AccountView({
   return (
     <>
       <div className="page-heading">
-        <p className="eyebrow">YOUR ACCOUNT</p>
-        <h1>One you. One circle.</h1>
-        <p>
-          Keep the same profile and friendships when you change sign-in methods.
-        </p>
-        <Link
-          className="secondary button"
-          href={`/people/${user.username}`}
-          prefetch={false}
-        >
-          View your profile
-        </Link>
+        <h1 className="page-title">Account</h1>
       </div>
       <AccountProfileEditor user={user} save={saveProfile} />
       <ActivityEmailSetting
@@ -56,8 +44,12 @@ export function AccountView({
         save={saveServices}
       />
       {data?.kind === "account" && (
-        <section className="settings-card">
-          <h2>Sign-in methods</h2>
+        <section className="settings-card" aria-labelledby="sign-in-heading">
+          <h2 id="sign-in-heading">Sign-in methods</h2>
+          <p>
+            Keep the same profile and friendships when you change sign-in
+            methods.
+          </p>
           <p>
             Email codes sign you in to this same account. Use the email address
             you joined with.

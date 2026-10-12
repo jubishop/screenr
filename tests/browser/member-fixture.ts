@@ -106,7 +106,7 @@ export const test = databaseTest.extend<{ signIn: SignIn; member: Member }>({
           ).toBeVisible();
         else
           await expect(
-            page.getByRole("heading", { name: "Better with friends." }),
+            page.getByRole("heading", { name: "Your circle", exact: true }),
           ).toBeVisible();
         return id;
       });

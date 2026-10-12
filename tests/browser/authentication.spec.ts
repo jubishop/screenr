@@ -194,7 +194,7 @@ test("email members can recover from linking failures, connect Google, and sign 
   );
   await expect(connect).toBeEnabled();
   await expect(
-    page.getByRole("complementary").getByText("@linkflow", { exact: true }),
+    page.getByRole("banner").getByText("@linkflow", { exact: true }),
   ).toBeVisible();
 
   await connect.click();
@@ -213,10 +213,10 @@ test("email members can recover from linking failures, connect Google, and sign 
   await page.getByRole("button", { name: "Continue with Google" }).click();
   await approveGoogle(page, "linkflow.browser@example.test");
   await expect(
-    page.getByRole("complementary").getByText("@linkflow", { exact: true }),
+    page.getByRole("banner").getByText("@linkflow", { exact: true }),
   ).toBeVisible();
   await expect(
-    page.getByRole("heading", { name: "Better with friends." }),
+    page.getByRole("heading", { name: "Your circle", exact: true }),
   ).toBeVisible();
   await page.context().close();
 });
@@ -330,7 +330,7 @@ test("a signed-out pending member can finish with one visit to a replacement inv
     .getByRole("button", { name: "Join Screenr", exact: true })
     .click();
   await expect(
-    pending.getByRole("heading", { name: "Better with friends." }),
+    pending.getByRole("heading", { name: "Your circle", exact: true }),
   ).toBeVisible();
   const screen = await (
     await owner.request.get("/api/screenr/screen?path=/invites")

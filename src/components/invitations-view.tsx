@@ -21,8 +21,7 @@ export function InvitationsView({
   return (
     <>
       <div className="page-heading">
-        <p className="eyebrow">MAKE ROOM FOR FRIENDS</p>
-        <h1>Good things are shared.</h1>
+        <h1 className="page-title">Invite friends</h1>
         <p>
           Invite someone to Screenr. Your link works for 30 days. When someone
           completes signup through it, you automatically become friends.

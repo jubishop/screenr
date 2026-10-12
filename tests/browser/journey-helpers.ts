@@ -53,7 +53,7 @@ export async function join(
   if (completed.status() !== 200) throw new Error(await completed.text());
   expect(completed.status()).toBe(200);
   await expect(
-    page.getByRole("heading", { name: "Better with friends." }),
+    page.getByRole("heading", { name: "Your circle", exact: true }),
   ).toBeVisible();
   return page;
 }

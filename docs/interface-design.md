@@ -83,6 +83,9 @@ the login page branding.
 down. On phone, the top bar added about 70px to every page before its
 content.
 
+**Implementation note:** [Issue #167](https://github.com/jubishop/screenr/issues/167)
+removed both from the page frame in `src/components/screen.tsx`.
+
 ### Four-item navigation with a phone bottom bar — 2026-10-12
 
 **Decision:** Reduce the main navigation to four items: Your circle, Find a
@@ -116,6 +119,17 @@ avatar beside the notification bell. It links to the viewer's profile, with
 link to the viewer's profile. The user chose this so a phone has a direct
 path to the viewer's own profile, which the hidden sidebar link provided
 only on wider screens.
+
+**Implementation note:** [Issue #167](https://github.com/jubishop/screenr/issues/167)
+renders one navigation for both layouts in `src/components/screen.tsx`. Each
+item shows the full name in the sidebar and the short label in the phone bar;
+the hidden label is not exposed, so each link's name matches its visible text.
+The current item has `aria-current="page"`, and Friends has
+`aria-current="true"` on the invitations page. Phone pages pad their content
+and give it scroll margins, so the 56px header and the 60px bar never cover
+content, focused controls, or the New activity button. Focusing the header or
+bar keeps the scroll position. Both clear the device's safe areas. #170 adds
+the header avatar.
 
 ### Friends recommend as a Find a title tab — 2026-10-12
 
@@ -169,6 +183,12 @@ on desktop. Title and profile pages keep their current, larger heading sizes
 so a movie, show, or person stands out more than a utility page. The user
 chose this over 24px and 28px headings and over leaving the size to the
 implementer.
+
+**Implementation note:** [Issue #167](https://github.com/jubishop/screenr/issues/167)
+gives the plain headings the `page-title` class. Desktop sizes apply above
+560px. The Friends heading row holds the Invite friends button. Title and
+profile headers keep their line above the name: the title's kind and year,
+and the profile's @username, which #170 moves below the name.
 
 ### Relative activity times and release years — 2026-10-12
 
@@ -435,7 +455,8 @@ otherwise required leaving the panel for the Friends page.
 
 **Implementation note:** The shared icon set lives in `src/components/icons.tsx`.
 [Issue #166](https://github.com/jubishop/screenr/issues/166) added the link
-icon; later stages add theirs to the same module.
+icon and [#167](https://github.com/jubishop/screenr/issues/167) the
+navigation icons; later stages add theirs to the same module.
 
 ### Dark theme follows the system setting — 2026-10-12
 

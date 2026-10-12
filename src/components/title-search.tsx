@@ -124,9 +124,7 @@ export function TitleSearch({
   return (
     <>
       <div className="page-heading">
-        <p className="eyebrow">FIND SOMETHING GOOD</p>
-        <h1>What’s on your mind?</h1>
-        <p>Discover something through your circle, or search for a title.</p>
+        <h1 className="page-title">Find a title</h1>
       </div>
       <form
         className="search-form"

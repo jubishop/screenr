@@ -10,6 +10,34 @@ const icons = {
       <path d="M8.5 12h7" />
     </g>
   ),
+  // Navigation: Your circle, Find a title, Friends, and Account.
+  circle: (
+    <>
+      <circle cx="12" cy="12" r="9" />
+      <circle cx="12" cy="12" r="3.5" />
+    </>
+  ),
+  search: (
+    <>
+      <circle cx="10.5" cy="10.5" r="6.5" />
+      <path d="m15.5 15.5 5 5" />
+    </>
+  ),
+  friends: (
+    <>
+      <circle cx="9" cy="8" r="3.5" />
+      <path d="M2.5 20a6.5 6.5 0 0 1 13 0" />
+      <path d="M15.5 4.7a3.5 3.5 0 0 1 0 6.6" />
+      <path d="M18 14.2a6.5 6.5 0 0 1 3.5 5.8" />
+    </>
+  ),
+  account: (
+    <>
+      <circle cx="12" cy="12" r="9" />
+      <circle cx="12" cy="10" r="3" />
+      <path d="M6.2 18.4a6.5 6.5 0 0 1 11.6 0" />
+    </>
+  ),
 } satisfies Record<string, ReactNode>;
 
 export type IconName = keyof typeof icons;

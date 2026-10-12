@@ -94,10 +94,10 @@ npm run dev:code -- you@example.test
 ```
 
 Complete the display name and username. Create another invitation from
-**Invite friends**, and open it in a separate browser profile for a second
-member. Completing signup automatically makes the new member and inviter
-accepted friends. Find a movie or show, recommend it, and open its conversation
-from the other member's feed.
+**Invite friends** on the Friends page, and open it in a separate browser
+profile for a second member. Completing signup automatically makes the new
+member and inviter accepted friends. Find a movie or show, recommend it, and
+open its conversation from the other member's feed.
 Save it as Want to watch and post a reply inline. The title page, friends
 feed, and profile show the same item and its replies. Recommend and Want to
 watch each have a separate discussion.

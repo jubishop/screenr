@@ -21,10 +21,11 @@ export function PeopleView({
   if (!data) return null;
   return (
     <>
-      <div className="page-heading">
-        <p className="eyebrow">GOOD COMPANY</p>
-        <h1>Your friends.</h1>
-        <p>Friendships start with a request and an acceptance.</p>
+      <div className="page-heading heading-row">
+        <h1 className="page-title">Friends</h1>
+        <Link className="primary button" href="/invites" prefetch={false}>
+          Invite friends
+        </Link>
       </div>
       <form
         className="search-form"

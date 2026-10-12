@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 import { useRef, useState } from "react";
 import type { Person } from "../shared";
 import { useInteractive } from "./client";
@@ -117,23 +118,32 @@ export function AccountProfileEditor({
             <br />
             <span className="muted">@{user.username}</span>
           </p>
-          <button
-            ref={(button) => {
-              if (button && restoreFocus.current) {
-                restoreFocus.current = false;
-                button.focus();
-              }
-            }}
-            className="secondary"
-            disabled={!interactive}
-            onClick={() => {
-              setDraft({ name: user.display_name, username: user.username });
-              setError("");
-              setSaved(false);
-            }}
-          >
-            Edit profile
-          </button>
+          <div className="inline-actions">
+            <button
+              ref={(button) => {
+                if (button && restoreFocus.current) {
+                  restoreFocus.current = false;
+                  button.focus();
+                }
+              }}
+              className="secondary"
+              disabled={!interactive}
+              onClick={() => {
+                setDraft({ name: user.display_name, username: user.username });
+                setError("");
+                setSaved(false);
+              }}
+            >
+              Edit profile
+            </button>
+            <Link
+              className="secondary button"
+              href={`/people/${user.username}`}
+              prefetch={false}
+            >
+              View your profile
+            </Link>
+          </div>
         </>
       )}
       <p className="small" role="status" aria-atomic="true">

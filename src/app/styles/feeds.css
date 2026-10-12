@@ -260,7 +260,7 @@
     padding-left: 12px;
   }
   .feed-updates {
-    top: 145px;
+    top: calc(var(--header-height) + 10px);
   }
 }
 
@@ -300,7 +300,7 @@
 @media (max-width: 560px) {
   .feed-entry,
   .comment {
-    scroll-margin-top: 150px;
+    scroll-margin-top: calc(var(--header-height) + 20px);
   }
 }
 
