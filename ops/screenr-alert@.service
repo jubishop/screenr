@@ -4,7 +4,9 @@ After=network-online.target
 
 [Service]
 Type=oneshot
-DynamicUser=yes
+# A dynamic user cannot reach systemd's D-Bus API on the host.
+User=screenr-db
+Group=screenr-db
 EnvironmentFile=/etc/screenr/backup.env
 ExecStart=/usr/bin/python3 /opt/screenr/current/ops/failure-alert.py %i
 MemoryMax=64M

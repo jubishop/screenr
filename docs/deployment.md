@@ -159,8 +159,9 @@ The backup, restore check, stale-backup check, web, worker, and database
 units each set `OnFailure=screenr-alert@%n.service`. That template runs
 `ops/failure-alert.py` with the failed unit's name. It sends through the
 Resend settings in `/etc/screenr/backup.env` described under
-[backup storage warning](#backup-storage-warning). It uses a dynamic
-unprivileged user, so root never runs the release's copy of the script.
+[backup storage warning](#backup-storage-warning). It runs as the backup
+user `screenr-db`, so root never runs the release's copy of the script. A
+dynamic user cannot query systemd over D-Bus on this host.
 systemd also starts `OnFailure=` units before each automatic restart. The
 script emails only when the unit is still `failed`: a failed job, or a
 service that reached its restart limit of five starts in 60 seconds. The
@@ -194,7 +195,7 @@ Verify the alert path without sending email:
 
   ```sh
   systemd-run --unit=screenr-alert-probe --wait /bin/false
-  systemd-run --quiet --wait --pipe --collect -p DynamicUser=yes \
+  systemd-run --quiet --wait --pipe --collect -p User=screenr-db \
       -p EnvironmentFile=/etc/screenr/backup.env /usr/bin/python3 \
       /opt/screenr/current/ops/failure-alert.py --dry-run screenr-alert-probe.service
   systemctl reset-failed screenr-alert-probe.service
