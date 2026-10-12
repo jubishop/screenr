@@ -27,6 +27,32 @@ def run(*args, capture=False):
                           stdin=subprocess.DEVNULL).stdout
 
 
+def contains(older, newer):
+    """Report whether newer equals older or descends from it, using GitHub history."""
+    try:
+        comparison = json.loads(run('gh', 'api', f'repos/{REPO}/compare/{older}...{newer}?per_page=1',
+                                    capture=True))
+        return comparison['status'] in ('identical', 'ahead')
+    except (subprocess.SubprocessError, ValueError, KeyError, TypeError) as error:
+        raise ValueError(f'Could not compare {older} with {newer}.') from error
+
+
+def check_release(revision, host):
+    """Require main to contain the release and the release to contain production."""
+    if not contains(revision, 'main'):
+        raise ValueError(f'Release {revision} is not in main. Deploy a revision that main contains.')
+    try:
+        active = run('ssh', host, 'cat /opt/screenr/current/REVISION', capture=True).strip()
+    except subprocess.SubprocessError as error:
+        raise ValueError('Could not read the active production revision.') from error
+    if not re.fullmatch(r'[0-9a-f]{40}', active):
+        raise ValueError('Could not read the active production revision.')
+    if not contains(active, revision):
+        raise ValueError(f'Release {revision} does not contain production revision {active}. '
+                         'Production never moves backwards.')
+    print(f'Main contains {revision}; production has {active}.', flush=True)
+
+
 def main():
     if (os.environ.get('GITHUB_REPOSITORY') != REPO or
             os.environ.get('GITHUB_EVENT_NAME') not in {'push', 'workflow_dispatch'} or
@@ -51,9 +77,11 @@ def main():
         raise ValueError('The release checks must pass before deployment.')
     if run('git', 'rev-parse', 'HEAD', capture=True).strip() != revision:
         raise ValueError('Checkout does not match the checked revision.')
-    current = json.loads(run('gh', 'api', f'repos/{REPO}/commits/main', capture=True))['sha']
-    if revision != current:
-        raise ValueError('Release is not current main. Build current main before deploying.')
+    # Root runs these scripts. The build job packages ops/ after third-party
+    # install scripts run, so never send the archive's copies.
+    deploy, activate, prune = (run('git', 'show', f'{revision}:ops/{name}', capture=True)
+                               for name in ('deploy-release.sh', 'activate.sh', 'prune-releases.py'))
+    check_release(revision, host)
     artifact_name = f'screenr-linux-x64-{revision}'
     print(f'Deploying {revision} from run {run_id}', flush=True)
     directory = ROOT / '.cache' / 'deploy' / run_id
@@ -82,18 +110,12 @@ def main():
         if artifact['name'] == artifact_name:
             run('gh', 'api', '--method', 'DELETE', f"repos/{REPO}/actions/artifacts/{artifact['id']}")
     checksum = hashlib.sha256(archive.read_bytes()).hexdigest()
-    # Root runs these scripts. The build job packages ops/ after third-party
-    # install scripts run, so never send the archive's copies.
-    deploy, activate, prune = (run('git', 'show', f'{revision}:ops/{name}', capture=True)
-                               for name in ('deploy-release.sh', 'activate.sh', 'prune-releases.py'))
     remote = run('ssh', host, 'mktemp /tmp/screenr-release.XXXXXXXX', capture=True).strip()
     if not re.fullmatch(r'/tmp/screenr-release\.[A-Za-z0-9]+', remote):
         raise ValueError('Unexpected remote temporary path.')
     try:
         run('scp', str(archive), f'{host}:{remote}')
-        current = json.loads(run('gh', 'api', f'repos/{REPO}/commits/main', capture=True))['sha']
-        if current != revision:
-            raise ValueError('Main changed during packaging. The newer push will deploy its release.')
+        check_release(revision, host)
         run('ssh', host, shlex.join(('sh', '-c', deploy, 'deploy-release', revision, checksum, remote, activate)))
     finally:
         try:

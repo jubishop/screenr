@@ -328,8 +328,12 @@ from 2026-09-06. Test locally and require successful full CI before deployment.
 
 Push the checked change to `main`. GitHub Actions runs full validation, then
 packages and deploys the selected main revision using the
-[deployment procedure](deployment.md). Verify the live behavior and service
-health after deployment. Production credentials remain restricted to `main`.
+[deployment procedure](deployment.md). A run deploys its validated revision
+while `main` contains it and it is at least as new as production, even after
+newer pushes. Production never moves backwards; see
+[build and activate](deployment.md#build-and-activate-a-release). Verify the
+live behavior and service health after deployment. Production credentials
+remain restricted to `main`.
 
 Documentation, agent instructions, local task setup, comments, and other
 nonfunctional changes do not require a deployment. Decide from the complete

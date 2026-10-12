@@ -47,13 +47,25 @@ elif name == 'gh':
         print(json.dumps(dict(conclusion='success', head_branch=os.environ.get('RUN_BRANCH', 'main'),
                              event=os.environ.get('RUN_EVENT', 'push'), path='.github/workflows/check.yml',
                              head_sha=os.environ.get('RUN_SHA', 'a'*40))))
-    elif 'commits/main' in args[-1]:
-        count = sum('commits/main' in line for line in (base / 'calls').read_text().splitlines())
-        revision = 'b'*40 if os.environ.get('LATE_PUSH') and count > 1 else os.environ.get('REMOTE_SHA', 'a'*40)
-        print(json.dumps(dict(sha=revision)))
+    elif '/compare/' in args[-1]:
+        # Linear history 0 -> a -> b; any other revision is on another line.
+        if os.environ.get('COMPARE_FAIL'): sys.exit(1)
+        count = sum('...main' in line for line in (base / 'calls').read_text().splitlines())
+        main = os.environ['LATE_MAIN'] if os.environ.get('LATE_MAIN') and count > 1 else os.environ.get('MAIN_SHA', 'a'*40)
+        older, newer = (main if ref == 'main' else ref for ref in args[-1].split('/compare/')[1].split('?')[0].split('...'))
+        history = ['0'*40, 'a'*40, 'b'*40]
+        if older == newer: status = 'identical'
+        elif older in history and newer in history:
+            status = 'ahead' if history.index(newer) > history.index(older) else 'behind'
+        else: status = 'diverged'
+        print(json.dumps(dict(status=status)))
     else: sys.exit(99)
 elif name == 'ssh':
     if args[-1].startswith('mktemp'): print('/tmp/screenr-release.ABC123')
+    elif args[-1] == 'cat /opt/screenr/current/REVISION':
+        if os.environ.get('ACTIVE_EXIT'): sys.exit(1)
+        count = sum('current/REVISION' in line for line in (base / 'calls').read_text().splitlines())
+        print(os.environ['LATE_ACTIVE'] if os.environ.get('LATE_ACTIVE') and count > 1 else os.environ.get('ACTIVE_SHA', '0'*40))
     elif args[-1].startswith('sh -c'):
         sys.exit(int(os.environ.get('SSH_EXIT', '0')))
     elif args[-1].startswith('python3 '):
@@ -203,19 +215,74 @@ class CIDeploymentTests(DeploymentFixture):
                 self.assertNotEqual(result.returncode, 0)
                 self.assertFalse(any(call[0] in ('ssh', 'scp') for call in self.calls()))
 
-    def test_changed_main_never_contacts_host(self):
-        result = self.execute(REMOTE_SHA='b' * 40)
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn('current main', result.stderr)
-        self.assertFalse(any(call[0] == 'scp' or (call[0] == 'ssh' and call[-1].startswith(('mktemp', 'sh -c'))) for call in self.calls()))
+    def uploaded(self):
+        return any(call[0] == 'scp' or (call[0] == 'ssh' and call[-1].startswith(('mktemp', 'sh -c')))
+                   for call in self.calls())
 
-    def test_push_during_upload_stops_activation_and_cleans_upload(self):
-        result = self.execute(LATE_PUSH='yes')
-        self.assertNotEqual(result.returncode, 0)
+    def test_superseded_release_newer_than_production_deploys(self):
+        # A newer push moved main while this run's checks ran.
+        result = self.execute(MAIN_SHA='b' * 40)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('DEPLOY SUCCEEDED', result.stdout)
+        self.assertIn('production has ' + '0' * 40, result.stdout)
         calls = self.calls()
-        self.assertTrue(any(call[0] == 'scp' for call in calls))
-        self.assertFalse(any(call[0] == 'ssh' and call[-1].startswith('sh -c') for call in calls))
-        self.assertTrue(any(call[0] == 'ssh' and call[-1].startswith('rm -f') for call in calls))
+        checks = [i for i, call in enumerate(calls) if call[-1].startswith('repos/jubishop/screenr/compare/')
+                  or call[-1] == 'cat /opt/screenr/current/REVISION']
+        upload = next(i for i, call in enumerate(calls) if call[0] == 'scp')
+        activation = next(i for i, call in enumerate(calls) if call[0] == 'ssh' and call[-1].startswith('sh -c'))
+        self.assertEqual(len(checks), 6)
+        self.assertLess(max(checks[:3]), upload)
+        self.assertTrue(upload < min(checks[3:]) and max(checks[3:]) < activation)
+
+    def test_active_release_deploys_to_verify_health(self):
+        result = self.execute(ACTIVE_SHA=REVISION)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('DEPLOY SUCCEEDED', result.stdout)
+
+    def test_release_outside_main_never_contacts_host(self):
+        # Main was rewound behind the release or rewritten without it.
+        for main in ('0' * 40, 'f' * 40):
+            with self.subTest(main=main):
+                (self.base / 'calls').unlink(missing_ok=True)
+                result = self.execute(MAIN_SHA=main)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn('not in main', result.stderr)
+                self.assertFalse(any(call[0] in ('ssh', 'scp') for call in self.calls()))
+
+    def test_release_older_than_production_never_uploads(self):
+        # Production is newer, or runs a revision this release does not contain.
+        for active in ('b' * 40, 'f' * 40):
+            with self.subTest(active=active):
+                (self.base / 'calls').unlink(missing_ok=True)
+                result = self.execute(MAIN_SHA='b' * 40, ACTIVE_SHA=active)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn('does not contain production revision ' + active, result.stderr)
+                self.assertFalse(self.uploaded())
+
+    def test_unverifiable_release_never_uploads(self):
+        for environment in ({'COMPARE_FAIL': 'yes'}, {'ACTIVE_EXIT': '1'}, {'ACTIVE_SHA': 'unknown'}):
+            with self.subTest(environment=environment):
+                (self.base / 'calls').unlink(missing_ok=True)
+                result = self.execute(**environment)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn('Could not', result.stderr)
+                self.assertFalse(self.uploaded())
+
+    def test_push_during_upload_still_activates(self):
+        result = self.execute(LATE_MAIN='b' * 40)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('DEPLOY SUCCEEDED', result.stdout)
+
+    def test_rewritten_main_or_newer_production_during_upload_stops_activation(self):
+        for environment in ({'LATE_MAIN': 'f' * 40}, {'LATE_ACTIVE': 'b' * 40}):
+            with self.subTest(environment=environment):
+                (self.base / 'calls').unlink(missing_ok=True)
+                result = self.execute(**environment)
+                self.assertNotEqual(result.returncode, 0)
+                calls = self.calls()
+                self.assertTrue(any(call[0] == 'scp' for call in calls))
+                self.assertFalse(any(call[0] == 'ssh' and call[-1].startswith('sh -c') for call in calls))
+                self.assertTrue(any(call[0] == 'ssh' and call[-1].startswith('rm -f') for call in calls))
 
     def test_mismatched_archive_never_contacts_host(self):
         self.make_archive(revision='b' * 40)

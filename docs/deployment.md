@@ -193,22 +193,31 @@ installs as root, such as unit files for
 [host configuration drift](#host-configuration-drift).
 
 A new push does not cancel a running main workflow or interrupt activation.
-GitHub keeps the latest pending run when pushes arrive quickly. Before uploading
-and again before activation, the helper rejects a revision that is no longer
-current `main`; the newer push supplies the replacement release. A skip trailer
-on that push cannot strand the rejected release: skipping requires every commit
-since the last successful production deployment to skip. The host also locks
-deployment so two activations cannot run together.
+The workflow's concurrency group runs one main workflow at a time and keeps
+the latest pending run when pushes arrive quickly. Before uploading and again
+before activation, the helper reads the active revision from
+`/opt/screenr/current/REVISION` over the deployment SSH connection. It then
+uses GitHub's compare API to require that `main` contains the checked revision
+and that the revision contains the active one. A run superseded by newer pushes
+therefore still deploys its validated release; the next run deploys the newer
+revision. Production never moves backwards: the helper refuses a revision that
+`main` does not contain, or one that is older than or diverged from
+production. If a comparison or the production read fails, it refuses before
+activation. A skip trailer on a later push cannot strand a refused or failed
+release: skipping requires every commit since the last successful production
+deployment to skip. The host also locks deployment so two activations cannot
+run together.
 
 The workflow stores release artifacts with one-day retention. After downloading
 and verifying an archive, the deployment job deletes its GitHub artifact. Build
 jobs have no production secrets. To retry a failed deploy job, use
 **Re-run all jobs** in GitHub Actions, so checks and packaging produce a fresh
-artifact. If `main` has advanced, use the newer push's run instead. A repeat
-deployment of the active revision verifies health without extracting or
-restarting it. A failed extraction or startup removes only a new candidate after
-successful rollback. Failures in later verification require inspection and,
-when necessary, manual recovery. Database migrations are not reversed.
+artifact. The retry is refused once production runs a newer revision, which
+already contains the change. A repeat deployment of the active revision
+verifies health without extracting or restarting it. A failed extraction or
+startup removes only a new candidate after successful rollback. Failures in
+later verification require inspection and, when necessary, manual recovery.
+Database migrations are not reversed.
 
 After the public health and login checks pass, deployment runs the checked
 `ops/prune-releases.py` with the verified release path. Cleanup takes the same
