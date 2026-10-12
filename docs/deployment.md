@@ -46,6 +46,7 @@ runtime when a check fails. Releases and activation do not change the runtime.
 
 Install PostgreSQL 18 binaries from the official PostgreSQL Ubuntu repository
 and `restic`. Avoid creating an unused automatically started PostgreSQL cluster.
+[Patching](restore-and-patching.md#patching) covers their updates.
 Screenr uses the host's shared Node runtime at `/opt/node/current`, which must
 exist before provisioning; `ops/provision.sh` links `/opt/screenr/node` to it
 instead of installing a separate copy.
@@ -374,10 +375,10 @@ VPS in three places:
 - **1Password:** documents "Screenr production.env" and "Screenr
   backup.env" in the owner's Private vault, tagged `screenr`.
 
-The restore runbook from
-[issue #123](https://github.com/jubishop/screenr/issues/123) restores secrets
-from these copies. Whenever a production secret changes, update the server
-and every copy together, and have the runbook check them against the server
+The [restore runbook](restore-and-patching.md#production-secrets) restores
+secrets from these copies. Whenever a production secret changes, update the
+server and every copy together, and have the runbook
+[check them](restore-and-patching.md#check-the-copies) against the server
 before relying on them.
 
 **Why:** The owner already kept the files in `~/.config/screenr/`, which
@@ -392,7 +393,9 @@ fails when the newest snapshot is more than 30 hours old, so stopped backups
 cannot pass by restoring an older snapshot. It then reads the encrypted
 repository, restores a consistent dump into a uniquely named temporary
 database, and fails if the restore has no profiles. It queries core tables and
-an access function, and drops only that temporary database.
+an access function, and drops only that temporary database. To restore
+production itself, follow the
+[restore runbook](restore-and-patching.md#restore-on-the-existing-host).
 
 `ops/check-backup-age.py` performs the age check. It lists snapshot metadata
 without locking the repository and exits non-zero when the newest snapshot is

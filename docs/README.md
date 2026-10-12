@@ -95,3 +95,6 @@ both memory and design documents.
   repeatable verification, and access rules.
 - [Shared VPS deployment](deployment.md): release packaging, isolated services,
   acceptance, encrypted backups, and restore checks.
+- [Production restore and patching](restore-and-patching.md): secret copies,
+  database restore on the existing or a replacement host, and PostgreSQL,
+  restic, and reboot patching.
