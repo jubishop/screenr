@@ -1,48 +1,12 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { useDatabase, db, person, friend } from "./social-fixture";
+import { useDatabase, db, person, friend, cookieFor } from "./social-fixture";
 
-const { createAuth } = await import("../../src/server/auth");
 const { loadScreen } = await import("../../src/server/screens");
 const { updateTitleActivity, changeRelationship } =
   await import("../../src/server/social");
 const { POST, GET } = await import("../../src/app/api/screenr/[action]/route");
 useDatabase();
-
-async function cookieFor(userId: string) {
-  const { email } = (
-    await db.query('SELECT email FROM "user" WHERE id=$1', [userId])
-  ).rows[0];
-  let code = "";
-  const auth = createAuth({
-    rateLimit: false,
-    sendCode: async ({ otp }) => {
-      code = otp;
-    },
-  });
-  const post = (path: string, data: unknown) =>
-    auth.handler(
-      new Request(`http://localhost:3000/api/auth/${path}`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Origin: "http://localhost:3000",
-        },
-        body: JSON.stringify(data),
-      }),
-    );
-  assert.equal(
-    (await post("email-otp/send-verification-otp", { email, type: "sign-in" }))
-      .status,
-    200,
-  );
-  const response = await post("sign-in/email-otp", { email, otp: code });
-  assert.equal(response.status, 200);
-  return response.headers
-    .getSetCookie()
-    .map((value) => value.split(";", 1)[0])
-    .join("; ");
-}
 
 async function save(
   cookie: string,

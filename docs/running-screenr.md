@@ -722,8 +722,20 @@ SQL filenames must match `NNN-name.sql`, with lowercase letters and hyphens in
 the name. Invalid SQL filenames fail the release instead of being ignored.
 Back up before deploying schema changes.
 
-TMDB data is cached for 24 hours. `public/tmdb.svg` is the unmodified approved
-short logo from the [TMDB logo page](https://www.themoviedb.org/about/logos-attribution).
+TMDB data is cached for 24 hours. A title page refreshes stored title details
+after that, with a two-second timeout. If TMDB fails, times out, returns an
+invalid title, or no longer has the title, the page shows the stored details
+and waits five minutes before retrying. Migration `013-title-retry.sql` adds
+the nullable `title.retry_after` column for this delay, which the previous
+release ignores; `fetched_at` still records the last successful fetch. Only a
+title that was never stored depends on TMDB, with an eight-second timeout.
+Title details, trailer, and availability load in parallel, and the optional
+caches are written once the title is stored. Actions and comments use the
+stored title without contacting TMDB, so members can still remove actions on
+a title TMDB dropped.
+
+`public/tmdb.svg` is the unmodified approved short logo from the
+[TMDB logo page](https://www.themoviedb.org/about/logos-attribution).
 The Credits page supplies the required attribution notice.
 
 ### Title availability

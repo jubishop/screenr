@@ -67,13 +67,13 @@ async function loadContent(userId: string, requestedPath: string) {
   const parts = path.split("/").filter(Boolean);
   if (parts[0] === "titles" && parts.length === 3) {
     const id = `${parts[1]}:${parts[2]}`;
-    const [title, threads] = await Promise.all([
-      getTitle(id),
+    // Catalog requests run together to fit the client's refresh deadline.
+    const stored = getTitle(id);
+    const [title, threads, trailer, availability] = await Promise.all([
+      stored,
       conversations(userId, { title: id }),
-    ]);
-    const [trailer, availability] = await Promise.all([
-      getTitleTrailer(id),
-      getTitleAvailability(id),
+      getTitleTrailer(id, stored),
+      getTitleAvailability(id, Infinity, stored),
     ]);
     return {
       kind: "title" as const,

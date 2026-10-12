@@ -103,25 +103,44 @@ export async function searchTitles(query: string): Promise<Title[]> {
       parseTitle(r, r.media_type as "movie" | "tv"),
     );
 }
+// Stored details refresh after a day. When TMDB fails, times out, or no longer
+// has the title, the stored row is served and the refresh waits five minutes.
+// Only a title that was never stored depends on the catalog response.
 export async function getTitle(id: string): Promise<Title> {
   if (!/^(movie|tv):[1-9][0-9]*$/.test(id))
     throw new AppError("Title not found.", 404);
-  const cached = (
-    await db.query(
-      "SELECT * FROM title WHERE id=$1 AND fetched_at>now()-interval '1 day'",
+  const stored = (
+    await db.query<Title & { current?: boolean }>(
+      `SELECT id,kind,tmdb_id,name,overview,poster_path,release_date,
+      (fetched_at>now()-interval '1 day' OR retry_after>now()) IS TRUE AS current
+      FROM title WHERE id=$1`,
       [id],
     )
   ).rows[0];
-  if (cached) return cached;
+  if (stored) {
+    const { current } = stored;
+    delete stored.current;
+    if (current) return stored;
+  }
   const [kind, tmdbId] = id.split(":");
-  const title = parseTitle(
-    await fetchCatalog(`/${kind}/${tmdbId}`),
-    kind as "movie" | "tv",
-  );
+  let title: Title;
+  try {
+    title = parseTitle(
+      await fetchCatalog(`/${kind}/${tmdbId}`, stored ? 2000 : 8000),
+      kind as "movie" | "tv",
+    );
+  } catch (error) {
+    if (!stored) throw error;
+    await db.query(
+      "UPDATE title SET retry_after=now()+interval '5 minutes' WHERE id=$1",
+      [id],
+    );
+    return stored;
+  }
   await db.query(
     `INSERT INTO title(id,kind,tmdb_id,name,overview,poster_path,release_date) VALUES($1,$2,$3,$4,$5,$6,$7)
     ON CONFLICT(id) DO UPDATE SET name=excluded.name,overview=excluded.overview,poster_path=excluded.poster_path,
-    release_date=excluded.release_date,fetched_at=now()`,
+    release_date=excluded.release_date,fetched_at=now(),retry_after=NULL`,
     [
       title.id,
       title.kind,
@@ -133,6 +152,14 @@ export async function getTitle(id: string): Promise<Title> {
     ],
   );
   return title;
+}
+
+// Actions and comments need only a stored title, even with stale details.
+// Returns the stored ID, fetching the title only if it was never stored.
+export async function ensureTitle(id: string): Promise<string> {
+  if ((await db.query("SELECT 1 FROM title WHERE id=$1", [id])).rowCount)
+    return id;
+  return (await getTitle(id)).id;
 }
 
 function selectTrailer(data: unknown): Trailer | null {
@@ -160,7 +187,12 @@ function selectTrailer(data: unknown): Trailer | null {
 
 // Optional public metadata has its own cache and timeout. A failed provider
 // request must not break a title page or repeat on every three-second poll.
-export async function getTitleTrailer(id: string): Promise<Trailer | null> {
+// The cache references the stored title, so a request made alongside the
+// title's first fetch waits for `titleStored` before writing.
+export async function getTitleTrailer(
+  id: string,
+  titleStored: Promise<unknown> = Promise.resolve(),
+): Promise<Trailer | null> {
   if (!/^(movie|tv):[1-9][0-9]*$/.test(id)) return null;
   try {
     const cached = (
@@ -179,6 +211,7 @@ export async function getTitleTrailer(id: string): Promise<Trailer | null> {
     } catch {
       lifetime = 300;
     }
+    await titleStored;
     await db.query(
       `INSERT INTO title_trailer(title_id,trailer,expires_at)
        VALUES($1,$2,now()+$3*interval '1 second')
@@ -267,10 +300,12 @@ function availabilityResult(cached?: CachedAvailability): WatchAvailability {
 }
 
 // Fetch only optional public metadata here. A failed refresh must neither
-// erase the last success nor be retried on every title-screen poll.
+// erase the last success nor be retried on every title-screen poll. Cache
+// writes wait for `titleStored`, as for trailers.
 export async function getTitleAvailability(
   id: string,
   refreshBefore = Infinity,
+  titleStored: Promise<unknown> = Promise.resolve(),
 ): Promise<WatchAvailability> {
   if (!/^(movie|tv):[1-9][0-9]*$/.test(id)) return availabilityResult();
   let cached: CachedAvailability | undefined;
@@ -293,6 +328,7 @@ export async function getTitleAvailability(
         id,
       );
     } catch {
+      await titleStored;
       const failed = (
         await db.query<CachedAvailability>(
           `INSERT INTO title_availability(title_id,country,refresh_after)
@@ -305,6 +341,7 @@ export async function getTitleAvailability(
       ).rows[0];
       return availabilityResult(failed);
     }
+    await titleStored;
     const saved = (
       await db.query<CachedAvailability>(
         `INSERT INTO title_availability(title_id,country,availability,fetched_at,refresh_after)

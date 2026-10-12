@@ -16,7 +16,7 @@ import {
   createInvitation,
   revokeInvitation,
 } from "../../../../server/invitations";
-import { getTitle } from "../../../../server/catalog";
+import { ensureTitle } from "../../../../server/catalog";
 import { findTitles } from "../../../../server/title-viewing";
 import { saveServices } from "../../../../server/streaming-services";
 import { loadScreen } from "../../../../server/screens";
@@ -127,24 +127,19 @@ async function handle(
           String(data.action),
         );
       else if (action === "activity") {
-        const title = await getTitle(String(data.title));
+        const title = await ensureTitle(String(data.title));
         return json({
           id: await updateTitleActivity(
             userId,
-            title.id,
+            title,
             String(data.field),
             data.value,
           ),
         });
       } else if (action === "title-comment") {
-        const title = await getTitle(String(data.title));
+        const title = await ensureTitle(String(data.title));
         return json({
-          id: await createTitleComment(
-            userId,
-            title.id,
-            data.body,
-            data.spoiler,
-          ),
+          id: await createTitleComment(userId, title, data.body, data.spoiler),
         });
       } else if (action === "comment")
         return json({
