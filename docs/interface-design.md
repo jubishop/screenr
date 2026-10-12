@@ -10,6 +10,11 @@ layouts with seeded local data. Behavior rules for feeds stay in the
 [unified title feed](title-feed.md) decisions. The review's Watch together
 change is recorded with the other
 [Watch together decisions](watch-together.md#prompt-to-save-streaming-services--2026-10-12).
+[Issue #165](https://github.com/jubishop/screenr/issues/165) and its
+sub-issues track implementation. The trailer is tracked in
+[#112](https://github.com/jubishop/screenr/issues/112), the other destructive
+actions in [#132](https://github.com/jubishop/screenr/issues/132), and the
+Friends recommend tab in [#102](https://github.com/jubishop/screenr/issues/102).
 
 ## Accepted decisions
 
@@ -92,6 +97,42 @@ about 136px tall, and the "Invite friends" label wraps onto two lines.
 top of the screen. A five-tab bottom bar would keep Invite friends as a
 primary destination.
 
+**Clarified — 2026-10-12:** The phone bottom bar uses the short labels
+Circle, Find, Friends, and Account, at 12px or larger and meeting text
+contrast requirements. The desktop sidebar and page headings keep the full
+names. This addresses the small navigation text raised in
+[issue #146](https://github.com/jubishop/screenr/issues/146). The user chose
+short labels over the full names at 12px or 11px.
+
+**Clarified — 2026-10-12:** The slim phone header also shows the viewer's
+avatar beside the notification bell. It links to the viewer's profile, with
+"Your profile" as its accessible name. On desktop, the sidebar keeps its
+link to the viewer's profile. The user chose this so a phone has a direct
+path to the viewer's own profile, which the hidden sidebar link provided
+only on wider screens.
+
+### Friends recommend as a Find a title tab — 2026-10-12
+
+**Decision:** Reach the Friends recommend view from
+[issue #102](https://github.com/jubishop/screenr/issues/102) through two tabs
+on Find a title, beneath the search form and My services control:
+Suggestions, which holds today's From your circle list, and Friends
+recommend. The selected tab is part of the page URL. Searching shows results
+in place of the tab content, as search results replace suggestions today. The
+main navigation keeps its four items.
+
+The My services filter applies to both tabs and to search results. When it
+is on, Friends recommend lists only titles on the viewer's saved services or
+free options, and marks matching services the same way as suggestions. The
+view's own Movies/TV and Finished filters still apply.
+
+**Why:** The user placed the view with the other ways of choosing something
+to watch, keeping the four-item navigation. The user chose one page-wide
+services filter because the control sits above both tabs.
+
+**Rejected alternatives:** A link from the friends feed, a fifth navigation
+item, and leaving the entry point open in #102.
+
 ### Plain page titles — 2026-10-12
 
 **Decision:** Title each member page with its name in a smaller heading.
@@ -104,7 +145,7 @@ where it explains how the page works.
 | Find a title | Find a title | None |
 | Friends | Friends | None |
 | Invitations | Invite friends | Keep the explanation of the 30-day link and automatic friendship. |
-| Account | Account | None. Move "Keep the same profile and friendships when you change sign-in methods." into the Sign-in methods section. |
+| Account | Account | None. Move "Keep the same profile and friendships when you change sign-in methods." into the Sign-in methods section, and move View your profile into the Your profile section beside Edit profile. |
 | Watch together | Watch together | Keep the participants and the explanation of the result order. |
 
 Title and profile pages keep the title or person's name as the heading.
@@ -116,6 +157,12 @@ on Account and "What's on your mind?" on Find a title did not name the page.
 
 **Rejected alternative:** Compacting only the friends feed would keep the
 slogans on the other pages.
+
+**Clarified — 2026-10-12:** Plain page headings are 28px on phone and 32px
+on desktop. Title and profile pages keep their current, larger heading sizes
+so a movie, show, or person stands out more than a utility page. The user
+chose this over 24px and 28px headings and over leaving the size to the
+implementer.
 
 ### Relative activity times and release years — 2026-10-12
 
@@ -165,11 +212,17 @@ List recommenders first. Show up to three names in each group, followed by
 in the title feed. Hide the line when no friend has either action.
 
 Include only current accepted friends, subject to the title feed's access
-and blocking rules. The header buttons already show the viewer's own choice.
+and blocking rules. Never list the viewer; the header buttons already show
+the viewer's own choice. The user confirmed this exclusion on 2026-10-12.
 
 **Why:** The user accepted surfacing friends' signals at the top of the page.
 Today they appear only in the feed, below the availability and trailer
 sections.
+
+**Updated — 2026-10-12:** The
+[profile top 10](profile-top-ten.md#show-ranks-where-friends-are-named--2026-10-12)
+adds each recommender's rank beside their name and lists top 10
+recommenders first, best rank first.
 
 ### Trailer collapsed until played — 2026-10-12
 
@@ -188,6 +241,15 @@ player also avoids contacting YouTube for viewers who never play it.
 **Rejected alternatives:** Moving the open player below the feed would keep
 its height on every visit. Keeping it in place leaves the discussion below
 the fold.
+
+**Clarified — 2026-10-12:** Keep the `youtube.com` embed domain after the
+viewer activates Play trailer. YouTube Premium removes ads from embedded
+videos only for signed-in viewers whose browser allows YouTube's cookies on
+other sites, and the privacy-enhanced `youtube-nocookie.com` mode is not
+designed to use that session. Its privacy benefit after playback starts is
+also disputed, while not loading the player before Play already provides
+the main privacy gain. The user chose `youtube.com` after reviewing this
+tradeoff for [issue #112](https://github.com/jubishop/screenr/issues/112).
 
 ### Start a conversation from the section heading — 2026-10-12
 
@@ -246,7 +308,9 @@ relationship section:
 
 Unfriending moves to the person's profile. On phone, each row keeps its
 actions on the same line as the person; the @username may wrap beneath the
-display name. Keep the Find person button on one line at every width.
+display name. Label the username search button "Find" and keep it on one
+line at every width; the field's placeholder already says it finds an exact
+username.
 
 **Why:** The user accepted separating relationship states after the review
 found an incoming request sorted alphabetically among existing friends. Every
@@ -279,6 +343,38 @@ hides comments, and blocking also prevents new friend requests.
 **Rejected alternatives:** A menu without confirmation would still act on a
 single choice. Visible buttons with confirmation would keep destructive
 actions beside Watch together.
+
+**Clarified — 2026-10-12:** After a confirmed Block, open the Friends page
+with a dismissible notice, for example "You blocked Maya Chen." The person
+appears under Blocked people, where Unblock remains. Today the blocked
+profile can no longer load and the page shows "Person not found." instead.
+This resolves the blocking result in
+[issue #132](https://github.com/jubishop/screenr/issues/132). The user chose
+this over keeping the viewer on a minimal blocked profile, which would need a
+server change to profile access.
+
+### Confirm other destructive actions — 2026-10-12
+
+**Decision:** Use the same in-page confirmation as Unfriend and Block for
+these actions, which act on a single tap today:
+
+- Delete on the viewer's own comment or standalone title comment, and Remove
+  on someone else's comment under the viewer's entry. For example: "Delete
+  this comment? Its text will be erased."
+- Decline on an incoming friend request, on the Friends page and in
+  notifications.
+- Revoke on an active invitation.
+
+Each confirmation states the effect and offers the action and Cancel. Do not
+use a browser dialog. This resolves the choice between confirmation and undo
+in [issue #132](https://github.com/jubishop/screenr/issues/132).
+
+**Why:** The user chose one consistent confirmation pattern for every
+destructive action.
+
+**Rejected alternatives:** An undo window would need delayed deletion or
+restore support on the server. Leaving Decline as a single tap would make the
+pattern inconsistent.
 
 ### Interface polish — 2026-10-12
 
@@ -319,3 +415,11 @@ Screenr has none, while people often browse TV and movies in a dark room.
 **Rejected alternatives:** A Light, Dark, and System control in Account adds
 a setting to store and apply before the first paint. Deferring the theme to a
 separate issue was also offered.
+
+**Clarified — 2026-10-12:** Base the dark palette on the brand's deep green.
+Use green-tinted charcoal surfaces, with the page around `#0f1a17` and cards
+one step lighter. Use warm off-white text close to the light theme's paper
+color, muted sage for secondary text, and the lime accent for the current
+navigation item and pressed states. The implementer chooses the exact values
+within the contrast requirements. The user chose this over a neutral gray
+palette and over reviewing a preview of both directions first.
