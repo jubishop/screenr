@@ -15,6 +15,7 @@ import { titleDetails } from "./title-card";
 import { ActionButton } from "./action-button";
 import { progressPhrase, statusLabels } from "./watch-status";
 import { ConfirmAction } from "./confirmation";
+import { around, useRemovalFocus, type FocusTarget } from "./removal-focus";
 
 type Known = Map<string, { activity: string; comments: Set<string> }>;
 function capture(items: FeedItem[]): Known {
@@ -147,7 +148,12 @@ export function FeedView({
       setKnown(capture(snapshot));
   }
   return (
-    <section className="interactive-feed" aria-label="Activity feed">
+    <section
+      className="interactive-feed"
+      aria-label="Activity feed"
+      // Focus moves to the feed when its last entry leaves.
+      tabIndex={-1}
+    >
       {unavailable && <p role="status">This activity is unavailable.</p>}
       <div className="feed-updates">
         {snapshot && incoming.length > 0 && (
@@ -241,6 +247,15 @@ function FeedEntry({
   // Delete waits for its confirmation beneath the entry's action line.
   const [confirming, setConfirming] = useState(false);
   const deleteButton = useRef<HTMLButtonElement>(null);
+  const entry = useRef<HTMLElement>(null);
+  const removal = useRemovalFocus();
+  // Where focus goes when this entry's content leaves with its control: the
+  // entry, then the nearest entry still shown, then the feed.
+  const entryFocus = (): FocusTarget[] => [
+    entry.current,
+    ...around(entry.current, entry.current?.parentElement, ".feed-entry"),
+    entry.current?.closest(".interactive-feed"),
+  ];
   // The title actions share one message beneath the entry's action line.
   const failure = useActionError();
   const titleURL = item ? `/titles/${item.title_id.replace(":", "/")}` : "";
@@ -396,14 +411,22 @@ function FeedEntry({
 
   return (
     <article
+      ref={entry}
       hidden={!item}
       className={`feed-entry${compact ? " compact" : ""}`}
       data-item-id={item?.id}
       id={item ? `item-${item.id}` : undefined}
-      // Compact entries have no title heading; the author line names them.
-      // The friend line focuses an entry after scrolling to it.
-      aria-labelledby={item && compact ? `by-${item.id}` : undefined}
-      tabIndex={compact ? -1 : undefined}
+      // The author line and title name an entry; compact entries have no
+      // title heading. The friend line focuses an entry after scrolling to
+      // it, and removals can move focus to it.
+      aria-labelledby={
+        item
+          ? compact
+            ? `by-${item.id}`
+            : `by-${item.id} title-${item.id}`
+          : undefined
+      }
+      tabIndex={-1}
     >
       {item && (
         <header className="activity-card" data-item-heading={item.id}>
@@ -427,7 +450,7 @@ function FeedEntry({
               ) : (
                 <>
                   {byline}
-                  <h2>
+                  <h2 id={`title-${item.id}`}>
                     <Link href={titleURL} prefetch={false}>
                       {item.title_name}
                     </Link>
@@ -436,7 +459,9 @@ function FeedEntry({
                 </>
               )}
               {item.item_type === "comment" && !item.active && (
-                <p className="muted">Comment removed</p>
+                <p className="muted" id={`removed-${item.id}`} tabIndex={-1}>
+                  Comment removed
+                </p>
               )}
               {hiddenSpoiler ? (
                 <button className="spoiler" onClick={() => setRevealed(true)}>
@@ -464,10 +489,19 @@ function FeedEntry({
               message="Delete this comment? Its text will be erased."
               action="Delete"
               run={async () => {
+                // An entry with replies keeps its placeholder; otherwise it
+                // leaves the feed.
+                removal.start(deleteButton.current, [
+                  `removed-${item.id}`,
+                  ...entryFocus(),
+                ]);
                 await api("remove-comment", { id: item.id });
                 await refresh();
               }}
-              onDone={() => setConfirming(false)}
+              onDone={() => {
+                setConfirming(false);
+                removal.done();
+              }}
               onCancel={() => {
                 setConfirming(false);
                 deleteButton.current?.focus();
@@ -485,6 +519,7 @@ function FeedEntry({
         user={user}
         refresh={refresh}
         targetReply={target?.reply}
+        entryFocus={entryFocus}
       />
     </article>
   );

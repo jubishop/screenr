@@ -8,6 +8,7 @@ import { preservePosition } from "./position";
 import { Reactions } from "./reactions";
 import { Avatar } from "./avatar";
 import { ConfirmAction } from "./confirmation";
+import { around, useRemovalFocus, type FocusTarget } from "./removal-focus";
 import {
   CommentComposer,
   type CommentDraft as Draft,
@@ -21,11 +22,14 @@ export function ThreadView({
   user,
   refresh,
   targetReply,
+  entryFocus,
 }: {
   snapshot: Thread | null;
   user: Person;
   refresh: () => Promise<void>;
   targetReply?: string;
+  // Where focus goes when no comment is left to take it.
+  entryFocus: () => FocusTarget[];
 }) {
   const interactive = useInteractive();
   const [expanded, setExpanded] = useState(false);
@@ -41,6 +45,8 @@ export function ThreadView({
   const [errors, setErrors] = useState<Record<string, string>>({});
   // The comment whose Delete or Remove waits for confirmation.
   const [confirming, setConfirming] = useState<string | null>(null);
+  const thread = useRef<HTMLElement>(null);
+  const removalFocus = useRemovalFocus();
   const area = useRef<HTMLTextAreaElement>(null);
   const directArea = useRef<HTMLTextAreaElement>(null);
   // Focus only when a reader opens a destination, not when a failed refresh
@@ -221,9 +227,12 @@ export function ThreadView({
         className="comment"
         data-comment-id={comment.id}
         id={`comment-${comment.id}`}
+        aria-labelledby={`author-${comment.id}`}
+        // A removal can move focus to the nearest comment.
+        tabIndex={-1}
       >
         <div className="comment-heading">
-          <span className="comment-author">
+          <span className="comment-author" id={`author-${comment.id}`}>
             <Avatar person={author} />
             {author ? (
               <Link href={`/people/${comment.username}`} prefetch={false}>
@@ -248,7 +257,9 @@ export function ThreadView({
           </p>
         )}
         {comment.unavailable ? null : comment.removed ? (
-          <p className="muted">Comment removed</p>
+          <p className="muted" id={`removed-${comment.id}`} tabIndex={-1}>
+            Comment removed
+          </p>
         ) : comment.spoiler && !revealed.has(comment.id) ? (
           <button
             className="spoiler"
@@ -277,10 +288,27 @@ export function ThreadView({
             message={`${removal(comment)} this comment? Its text will be erased.`}
             action={removal(comment)}
             run={async () => {
+              // A comment with replies keeps its placeholder; otherwise the
+              // nearest comment, in reading order, takes focus.
+              removalFocus.start(
+                document.getElementById(`remove-action-${comment.id}`),
+                [
+                  `removed-${comment.id}`,
+                  ...around(
+                    document.getElementById(`comment-${comment.id}`),
+                    thread.current,
+                    ".comment",
+                  ),
+                  ...entryFocus(),
+                ],
+              );
               await api("remove-comment", { id: comment.id });
               await refresh();
             }}
-            onDone={() => setConfirming(null)}
+            onDone={() => {
+              setConfirming(null);
+              removalFocus.done();
+            }}
             onCancel={() => {
               setConfirming(null);
               document.getElementById(`remove-action-${comment.id}`)?.focus();
@@ -291,7 +319,7 @@ export function ThreadView({
     );
   }
   return (
-    <section aria-label="Conversation" className="thread">
+    <section aria-label="Conversation" className="thread" ref={thread}>
       {comments.length > 0 && (
         <>
           <p className="reply-count small muted">

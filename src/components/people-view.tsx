@@ -9,14 +9,17 @@ import { useActionError } from "./action-error";
 import { ActionButton } from "./action-button";
 import { ConfirmAction } from "./confirmation";
 import { PageNotice } from "./page-notice";
+import { around, useRemovalFocus, type RemovalFocus } from "./removal-focus";
 
 // A destructive action names its `confirm` question and waits for the
-// in-page confirmation.
+// in-page confirmation. An action that moves the person to another section
+// `follows` them there with focus.
 type Action = {
   label: string;
   run: () => Promise<void>;
   primary?: boolean;
   confirm?: string;
+  follows?: boolean;
 };
 
 // One person: avatar, display name, and @username, linking to the profile.
@@ -32,6 +35,7 @@ function PersonRow({
   disabled = false,
   busy = false,
   blocked = false,
+  removal,
 }: {
   person: Person;
   note?: ReactNode;
@@ -40,6 +44,7 @@ function PersonRow({
   disabled?: boolean;
   busy?: boolean;
   blocked?: boolean;
+  removal?: RemovalFocus;
 }) {
   const failure = useActionError();
   const [confirming, setConfirming] = useState<string | null>(null);
@@ -47,17 +52,38 @@ function PersonRow({
     (action) => action.confirm && action.label === confirming,
   );
   const trigger = useRef<HTMLButtonElement | null>(null);
+  const row = useRef<HTMLElement>(null);
+  const id = `person-${person.user_id}`;
+  // Each action moves the row or removes it. Focus follows the person to
+  // their new row, or moves to the next row in the section, the previous
+  // one, then the nearest section heading.
+  function leave(control: Element | null, action: Action) {
+    const section = row.current?.parentElement;
+    removal?.start(control, [
+      action.follows ? id : null,
+      ...around(row.current, section, ".person-row"),
+      ...around(section, section?.parentElement, ".people-list").map((list) =>
+        list.querySelector("h2"),
+      ),
+    ]);
+  }
   const name = (
     <>
       <Avatar person={person} />
-      <span className="person-name">
+      <span className="person-name" id={`${id}-name`}>
         <strong>{person.display_name}</strong>
         {!blocked && <span className="muted"> @{person.username}</span>}
       </span>
     </>
   );
   return (
-    <article className={`person-row${actions.length ? "" : " link-row"}`}>
+    <article
+      ref={row}
+      id={id}
+      className={`person-row${actions.length ? "" : " link-row"}`}
+      aria-labelledby={`${id}-name`}
+      tabIndex={-1}
+    >
       {blocked ? (
         <span className="person">{name}</span>
       ) : (
@@ -80,10 +106,14 @@ function PersonRow({
               unavailable={busy}
               aria-describedby={failure.describedBy(action.label)}
               onClick={(event) => {
-                if (!action.confirm)
-                  return void failure.run(action.label, action.run);
-                trigger.current = event.currentTarget;
-                setConfirming(action.label);
+                if (action.confirm) {
+                  trigger.current = event.currentTarget;
+                  return setConfirming(action.label);
+                }
+                leave(event.currentTarget, action);
+                void failure.run(action.label, action.run).then((done) => {
+                  if (done) removal?.done();
+                });
               }}
             >
               {action.label}
@@ -99,8 +129,14 @@ function PersonRow({
           message={open.confirm}
           action={open.label}
           busy={busy}
-          run={open.run}
-          onDone={() => setConfirming(null)}
+          run={() => {
+            leave(trigger.current, open);
+            return open.run();
+          }}
+          onDone={() => {
+            setConfirming(null);
+            removal?.done();
+          }}
           onCancel={() => {
             setConfirming(null);
             trigger.current?.focus();
@@ -122,7 +158,9 @@ function PeopleSection({
 }) {
   return (
     <section className="people-list" aria-labelledby={id}>
-      <h2 id={id}>{heading}</h2>
+      <h2 id={id} tabIndex={-1}>
+        {heading}
+      </h2>
       {children}
     </section>
   );
@@ -142,6 +180,7 @@ export function PeopleView({
   const interactive = useInteractive();
   const [query, setQuery] = useState("");
   const heading = useRef<HTMLHeadingElement>(null);
+  const removal = useRemovalFocus();
   // Retain the draft while failed reads hide the protected snapshot.
   if (!data) return null;
   const act = (person: Person, action: string) => () =>
@@ -201,7 +240,12 @@ export function PeopleView({
               key={person.user_id}
               person={person}
               actions={[
-                { label: "Accept", run: act(person, "accept"), primary: true },
+                {
+                  label: "Accept",
+                  run: act(person, "accept"),
+                  primary: true,
+                  follows: true,
+                },
                 {
                   label: "Decline",
                   run: act(person, "remove"),
@@ -210,6 +254,7 @@ export function PeopleView({
               ]}
               disabled={!interactive}
               busy={busy}
+              removal={removal}
             />
           ))}
         </PeopleSection>
@@ -231,6 +276,7 @@ export function PeopleView({
               actions={[{ label: "Cancel", run: act(person, "remove") }]}
               disabled={!interactive}
               busy={busy}
+              removal={removal}
             />
           ))}
         </PeopleSection>
@@ -239,7 +285,9 @@ export function PeopleView({
         className="people-suggestions people-list"
         aria-labelledby="people-suggestions-heading"
       >
-        <h2 id="people-suggestions-heading">People you may know</h2>
+        <h2 id="people-suggestions-heading" tabIndex={-1}>
+          People you may know
+        </h2>
         <p className="muted">Meet people through your mutual friends.</p>
         {data.suggestions.map((person) => (
           <PersonRow
@@ -265,10 +313,12 @@ export function PeopleView({
                 label: "Send friend request",
                 run: act(person, "request"),
                 primary: true,
+                follows: true,
               },
             ]}
             disabled={!interactive}
             busy={busy}
+            removal={removal}
           />
         ))}
         {!data.suggestions.length && (
@@ -280,7 +330,9 @@ export function PeopleView({
           className="people-list"
           aria-labelledby="people-blocked-heading"
         >
-          <h2 id="people-blocked-heading">Blocked people</h2>
+          <h2 id="people-blocked-heading" tabIndex={-1}>
+            Blocked people
+          </h2>
           {data.blocked.map((person) => (
             <PersonRow
               key={person.user_id}
@@ -289,6 +341,7 @@ export function PeopleView({
               actions={[{ label: "Unblock", run: act(person, "unblock") }]}
               disabled={!interactive}
               busy={busy}
+              removal={removal}
             />
           ))}
         </section>

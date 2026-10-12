@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import { useRef, useState } from "react";
+import { useId, useRef, useState } from "react";
 import type { ScreenData } from "../server/screens";
 import type { Person } from "../shared";
 import { dateLabel, useInteractive } from "./client";
@@ -8,6 +8,7 @@ import { InvitationLink } from "./invitation-link";
 import { useActionError } from "./action-error";
 import { ActionButton } from "./action-button";
 import { ConfirmAction } from "./confirmation";
+import { around, useRemovalFocus, type RemovalFocus } from "./removal-focus";
 
 type Invitation = Extract<
   ScreenData,
@@ -26,6 +27,7 @@ export function InvitationsView({
   const interactive = useInteractive();
   const [inviteLimit, setInviteLimit] = useState(1);
   const failure = useActionError();
+  const removal = useRemovalFocus();
   // Keep the chosen limit through failed reads without retaining invitation data.
   if (!data) return null;
   return (
@@ -72,7 +74,9 @@ export function InvitationsView({
       {failure.alert}
       <div className="invite-list">
         {!data.invitations.length && (
-          <p className="muted">No active invitations.</p>
+          <p className="muted" id="invitations-empty" tabIndex={-1}>
+            No active invitations.
+          </p>
         )}
         {data.invitations.map((invite) => (
           <InvitationCard
@@ -81,6 +85,7 @@ export function InvitationsView({
             disabled={!interactive}
             busy={busy}
             revoke={() => mutate("revoke-invite", { id: invite.id })}
+            removal={removal}
           />
         ))}
       </div>
@@ -93,19 +98,30 @@ function InvitationCard({
   disabled,
   busy,
   revoke,
+  removal,
 }: {
   invite: Invitation;
   disabled: boolean;
   busy: boolean;
   revoke: () => Promise<unknown>;
+  removal: RemovalFocus;
 }) {
   const interactive = useInteractive();
   const [confirming, setConfirming] = useState(false);
   const trigger = useRef<HTMLButtonElement>(null);
+  const card = useRef<HTMLElement>(null);
+  const id = useId();
+  // The signups and expiry name the card. After Revoke, focus moves to the
+  // next invitation, the previous one, then the empty list's message.
   return (
-    <article className="invite-card">
+    <article
+      ref={card}
+      className="invite-card"
+      aria-labelledby={`${id}-uses ${id}-expires`}
+      tabIndex={-1}
+    >
       <div className="section-heading">
-        <strong>
+        <strong id={`${id}-uses`}>
           {invite.uses} of {invite.max_uses} signups
         </strong>
         <button
@@ -122,15 +138,28 @@ function InvitationCard({
           message="Revoke this invitation? Its link will stop working."
           action="Revoke"
           busy={busy}
-          run={revoke}
-          onDone={() => setConfirming(false)}
+          run={() => {
+            removal.start(trigger.current, [
+              ...around(
+                card.current,
+                card.current?.parentElement,
+                ".invite-card",
+              ),
+              "invitations-empty",
+            ]);
+            return revoke();
+          }}
+          onDone={() => {
+            setConfirming(false);
+            removal.done();
+          }}
           onCancel={() => {
             setConfirming(false);
             trigger.current?.focus();
           }}
         />
       )}
-      <p className="small muted">
+      <p className="small muted" id={`${id}-expires`}>
         Expires {dateLabel(invite.expires_at, interactive)}
       </p>
       <InvitationLink key={invite.url} url={invite.url} />

@@ -216,10 +216,11 @@ only before hydration. Focus stays there after the write, or moves to the
 control that replaced it: Watch together after accepting on a profile, the
 notification's result, More actions after a profile confirmation closes, or
 the Friends page notice after Block. Cancel in a confirmation returns focus to
-the action that opened it. Where a
-successful write removes its button, such as Delete,
-[issue #191](https://github.com/jubishop/screenr/issues/191) tracks where
-focus goes. Proxy error pages, empty bodies, and other
+the action that opened it. Where a successful write removes its button, such
+as Delete, focus moves to what takes its place, such as the next item in the
+list ([issue #191](https://github.com/jubishop/screenr/issues/191)); see
+[removed controls](interface-design.md#confirm-other-destructive-actions--2026-10-12).
+Proxy error pages, empty bodies, and other
 unreadable replies show a message asking the member to try again instead of
 parser errors. A failed write shows its message as an alert beneath the
 control that started it, in the same entry, comment, person row, invitation,

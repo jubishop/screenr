@@ -516,9 +516,30 @@ confirmation opens beneath its action's line, in the comment, entry, Friends
 row, or invitation card, while the action stays in place. Cancel returns
 focus to that action. Remove asks "Remove this comment? Its text will be
 erased.", Decline uses the notification's question, and Revoke asks "Revoke
-this invitation? Its link will stop working." Where focus goes after a
-confirmed action removes its control is tracked in
-[issue #191](https://github.com/jubishop/screenr/issues/191).
+this invitation? Its link will stop working."
+
+**Implementation note:** When a successful action removes the control that
+had focus, focus moves to what takes its place
+([issue #191](https://github.com/jubishop/screenr/issues/191)). This covers
+Delete and Remove, Revoke, and every Friends row action:
+
+- A comment or standalone entry that keeps replies: its "Comment removed"
+  placeholder.
+- Accept or Send friend request: the person's new row in Friends or Sent
+  requests.
+- Otherwise, the next comment, entry, Friends row, or invitation in the same
+  list, or the previous one when the removed item was last.
+- An emptied list: the conversation's entry after its last comment, the
+  activity feed after its last entry, the next Friends section's heading
+  (People you may know after Blocked people), or "No active invitations."
+  When an entry leaves with its last comment, the nearest entry or the feed
+  takes focus.
+
+`src/components/removal-focus.ts` chooses the targets as the write starts and
+moves focus once the page no longer shows the control, unless the reader has
+moved focus elsewhere. Entries, comments, Friends rows, and invitation cards
+take focus without joining the Tab order. The author line and title, the
+comment's author, the person, or the signups and expiry name them.
 
 ### Interface polish — 2026-10-12
 
