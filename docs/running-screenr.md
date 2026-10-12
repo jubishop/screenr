@@ -15,9 +15,9 @@ Use the latest Node.js LTS release, npm, Python 3.9+, ShellCheck, Caddy,
 OpenSSL, and a Docker-compatible engine. Caddy and OpenSSL are used by the local proxy test;
 do not start a system Caddy service. On macOS, install the test tools with
 `brew install caddy openssl`; the existing Colima installation can provide Docker.
-Each application worktree needs its own database and development port if
-several copies run together. QMD setup is described in the
-[development workflow](development-workflow.md).
+To run several checkouts at once, give each its own database and development
+port as described in [several checkouts at once](#several-checkouts-at-once).
+QMD setup is described in the [development workflow](development-workflow.md).
 
 Select the latest Node LTS release in your shell before running `npm ci` or
 application commands. Use its bundled npm or a newer compatible npm that
@@ -106,6 +106,102 @@ The code capture files are private, ignored files under `.cache/mail`.
 Production explicitly rejects this transport. Restart Next after changing
 provider credentials. The local catalog needs a real TMDB token; automated
 tests use a fictional catalog served only on loopback.
+
+### Several checkouts at once
+
+Checkouts that run the app at the same time each need their own development
+database, test database, and development port. The browser harness already
+derives its own ports and database from the checkout path; see
+[Verification](#verification).
+
+The simplest setup shares one PostgreSQL server. Start it from one checkout
+only: Compose names its project after the checkout directory, so
+`docker compose up` in another worktree tries to start a second container on
+the same host port and fails. `npm run db:migrate` does not create databases,
+so create one for each additional checkout from the checkout that started
+PostgreSQL:
+
+```sh
+docker compose exec postgres createdb -U screenr screenr_feature
+```
+
+In the additional checkout, set `DATABASE_URL` in `.env` to
+`postgresql://screenr:screenr-local-only@127.0.0.1:5439/screenr_feature`.
+Test commands do not read `.env`, so export a separate test database in that
+checkout's shell. They create the database if needed and reset it; its name
+must end in `_test`:
+
+```sh
+export TEST_DATABASE_URL=postgresql://screenr:screenr-local-only@127.0.0.1:5439/screenr_feature_test
+```
+
+To give a checkout its own server instead, set `SCREENR_DB_PORT` to a free
+port in that checkout's `.env`. Docker Compose reads it from that file, and a
+shell variable of the same name takes precedence. Use the same port in
+`DATABASE_URL` and `TEST_DATABASE_URL`. `docker compose up -d --wait` then
+starts a separate container, with its own data volume, on that port. Without
+the setting, Compose uses 5439, which `.env.example` also uses.
+
+```sh
+SCREENR_DB_PORT=5440
+DATABASE_URL=postgresql://screenr:screenr-local-only@127.0.0.1:5440/screenr
+```
+
+The development server uses port 3000 unless you pass another one. Match it
+in that checkout's `BETTER_AUTH_URL`, such as `http://localhost:3001`, and
+open that URL:
+
+```sh
+npm run dev -- --port 3001
+```
+
+Sign-in and member actions reject requests from any other origin, and
+bootstrap and invitation links use `BETTER_AUTH_URL`. The registered local
+Google callback uses port 3000, so use email codes on other ports, or leave
+the Google credentials empty to hide Google sign-in. Each checkout captures
+codes in its own `.cache/mail`; run `npm run dev:code` in that checkout.
+
+### Email worker
+
+Production runs `scripts/worker.ts` as `screenr-worker.service`. It sends
+queued sign-in codes and grouped activity emails through Resend, retries
+failed sends, and deletes expired jobs. Local development does not need it.
+With `EMAIL_TRANSPORT=file`, Next writes sign-in codes directly to
+`.cache/mail` without queueing them, and `npm run worker` refuses to start
+unless `EMAIL_TRANSPORT=resend`, `RESEND_API_KEY`, and `EMAIL_FROM` are set.
+
+Locally, the activity email setting and notifications work, but no activity
+email is sent. `tests/app/email.test.ts` and
+`tests/app/notification-email.test.ts` cover worker delivery with the Resend
+request replaced. A local worker with the real Resend key would send real
+email and use the shared Resend free allowance. Switching Next to the
+`resend` transport also queues codes for the worker, so `npm run dev:code`
+no longer finds them.
+
+### Production build
+
+There is no `npm start` script. `next start` does not support the
+`standalone` output set in `next.config.ts`: Next warns and points to the
+generated `server.js` instead. Production, release packaging, and
+`npm run test:browser` all run that server. To run it locally, use the port in
+`BETTER_AUTH_URL`:
+
+```sh
+npm run build
+cp -R public .next/standalone/
+cp -R .next/static .next/standalone/.next/
+PORT=3000 HOSTNAME=127.0.0.1 node .next/standalone/server.js
+```
+
+The standalone output omits `public/` and `.next/static/`, so copy them after
+each build. Without `HOSTNAME`, the server listens on every interface. It runs
+in production mode from `.next/standalone` and reads the copy of `.env` that
+the build placed there; rebuild after changing `.env`, or set variables in the
+shell, which take precedence. Production mode rejects the file transport, so
+email-code sign-in reports success but writes no code. Use this server to
+inspect the production artifact. `npm run test:browser` exercises sign-in and
+the complete app against the same artifact with local fixtures. Do not build
+in a checkout while its browser suite owns `.next/`.
 
 ## Provider configuration
 

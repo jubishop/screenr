@@ -16,7 +16,6 @@
   "scripts": {
     "dev": "next dev --hostname 127.0.0.1",
     "build": "next build",
-    "start": "next start --hostname 127.0.0.1",
     "typecheck": "tsc --noEmit",
     "test": "tsx scripts/test-database.ts && tsx --test --test-concurrency=1 tests/app/*.test.ts",
     "db:migrate": "tsx --env-file=.env scripts/migrate.ts",
