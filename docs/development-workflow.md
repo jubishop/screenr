@@ -98,7 +98,7 @@ and PostgreSQL tests, and browser tests against the production build.
 GitHub Actions runs `bin/check --full` on pull requests and pushes to `main` through
 [the existing workflow](../.github/workflows/check.yml). Application formatting,
 types, PostgreSQL tests, browser verification and the production build run after
-the foundation checks. See [application verification](running-screenr.md#verification)
+the foundation checks. See [running checks](testing.md#running-checks)
 for requirements. GitHub issues track shared work; [td](foundation/task-tracking.md)
 records local progress and handoffs.
 
@@ -241,10 +241,10 @@ implementation, with its evidence recorded in the issue or related PR.
 
 Implementation tracking: [browser runtime improvements and measurement, #72](https://github.com/jubishop/screenr/issues/72).
 
-The [September 9 measurement report](research/browser-runtime.md) records the
-implemented setup changes, coverage mapping, and evidence for two browser
-workers. Preserve the documented fixture ownership when adding tests or
-reorganizing the suites.
+The archived [September 9 measurement report](archive/browser-runtime.md)
+records the implemented setup changes, coverage mapping, and evidence for two
+browser workers. Preserve the [resource ownership rules](testing.md#resource-ownership)
+when adding tests or reorganizing the suites.
 
 ### Browser serving mode
 
@@ -252,9 +252,9 @@ The standard browser command builds the current checkout and runs its generated
 production standalone server. Full validation uses this same artifact and has
 no second build step. The development server remains available through
 `npm run test:browser:dev` for development-specific diagnostics. See the
-[serving-mode evaluation](research/browser-production.md) for the measured
-decision and the [browser setup instructions](running-screenr.md#verification)
-for freshness, environment, and resource ownership requirements.
+archived [serving-mode evaluation](archive/browser-production.md) for the
+measured decision and the [browser harness](testing.md#browser-harness) for
+freshness, environment, and resource ownership requirements.
 
 ### Validation modes
 

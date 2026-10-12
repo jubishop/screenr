@@ -8,7 +8,7 @@ Screenr is a mobile-friendly web app for phone and computer browsers, live at
 ship continuously as their issues are completed; there is
 [no release gate](docs/product-brief.md#no-release-gate--2026-10-12). Start
 with [Running Screenr](docs/running-screenr.md) for app setup and a repeatable
-test flow.
+test flow, and [Testing Screenr](docs/testing.md) for the automated suites.
 
 ## What Screenr does today
 
@@ -149,7 +149,8 @@ Install ShellCheck (`brew install shellcheck` on macOS) for the default and full
 modes. Neither routine mode starts application tooling.
 
 Complete the [app setup](docs/running-screenr.md#local-setup) and install
-Playwright Chromium before using `--full`. Full mode also runs
+Playwright Chromium, as the [testing guide](docs/testing.md#running-checks)
+describes, before using `--full`. Full mode also runs
 `bin/check-application`: shell lint, Python tests, app formatting, TypeScript,
 PostgreSQL and browser tests, and a production build. GitHub Actions uses `--full` on pull requests and pushes to
 `main`. Follow the [local and CI validation policy](docs/development-workflow.md#local-and-ci-validation)

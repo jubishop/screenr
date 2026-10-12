@@ -1,6 +1,6 @@
 import type { MetadataRoute } from "next";
 
-// Installable without offline content: docs/running-screenr.md#installation-and-offline-page
+// Installable without offline content: docs/installation.md#home-screen-installation
 export default function manifest(): MetadataRoute.Manifest {
   return {
     id: "/",

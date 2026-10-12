@@ -298,7 +298,7 @@ tradeoff for [issue #112](https://github.com/jubishop/screenr/issues/112).
 the Watch on YouTube link, under a "Trailer" heading kept for screen readers.
 Opening the player moves focus to it. `src/components/title-trailer.tsx`
 implements the section, and
-[Title trailers](running-screenr.md#title-trailers) lists its checks.
+[Title trailers](title-catalog.md#title-trailers) lists its checks.
 
 ### Start a conversation from the section heading — 2026-10-12
 

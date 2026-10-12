@@ -337,7 +337,7 @@ a green "s" on cream.
 
 **Implementation note:** [Issue #145](https://github.com/jubishop/screenr/issues/145)
 added the manifest, icons, and offline page; see
-[installation and offline page](running-screenr.md#installation-and-offline-page).
+[installation and offline page](installation.md).
 
 ### Interface design — 2026-10-12
 
@@ -949,71 +949,11 @@ Implementing those features is outside issue #5.
 **Why:** The user initially accepted automatic activity updates. The newer
 decisions make each contribution independently discussable in every feed.
 
-### Notification triggers — 2026-09-04
+### Notifications — 2026-09-04
 
-**Decision:** At launch, notify users about friend requests and acceptances,
-comments on their posts or reviews, and replies to their comments. Watch
-updates, ratings, and recommendations appear in the feed without generating
-alerts. Notification visibility and previews follow the existing access,
-blocking, and spoiler rules.
-
-**Why:** The user accepted notifications focused on these interactions,
-with routine viewing activity left in the feed.
-
-### Notification delivery — 2026-09-04
-
-**Decision:** Provide an in-app notification inbox and opt-in email alerts
-for the agreed notification triggers. Activity email alerts remain off until
-the user enables them. Browser push notifications are outside the initial
-release.
-
-**Why:** The user accepted email as a way to notice friend requests and
-replies before checking Screenr becomes a habit.
-
-### Notification panel — 2026-09-11
-
-**Decision:** Open notifications from a bell near the Screenr logo or a
-similar persistent position. The bell opens a dropdown panel over the
-current page, following the interaction shown in the user's Facebook
-reference. Keep the current page in place beneath the panel; opening
-notifications does not navigate to a separate page.
-
-On desktop, anchor the dropdown to the bell. On phones, open a full-screen
-Notifications panel with a clear Close button. Closing either panel returns
-the reader to the same page and scroll position, preserving unfinished
-comments.
-
-**Why:** The user wants to check notifications in place and explicitly
-selected an overlay instead of the proposed full Notifications page.
-
-**Tradeoff:** The panel temporarily covers part of the current content.
-The phone layout covers the full screen to provide enough room to read
-and select notifications.
-
-### Notification read state — 2026-09-11
-
-**Decision:** Mark an individual notification read when the member selects
-it. Provide a **Mark all as read** action. Opening the panel alone does not
-mark notifications read. The bell shows the unread count.
-
-**Why:** The user accepted explicit read actions so opening the panel does
-not clear notifications they have not selected.
-
-**Tradeoff:** Members must select notifications or use the bulk action to
-clear the unread count, even if they have skimmed the list.
-
-### Activity email timing — 2026-09-11
-
-**Decision:** For members who enable activity emails, wait 10 minutes and
-combine new notifications that are still unread into one email. Omit
-notifications read before delivery. Opening the panel does not prevent an
-email unless the member reads the notifications or marks them all read.
-
-**Why:** The user accepted a delay to reduce emails from active
-conversations and omit notifications already read in Screenr.
-
-**Tradeoff:** Email alerts arrive later than in-app notifications. Activity
-email remains off by default under the existing delivery decision.
+The [notification decisions](notifications.md) define the alert triggers,
+in-app and opt-in email delivery, the bell panel, explicit read state, and
+grouped activity email timing.
 
 ### First-release success and measurement — 2026-09-05
 

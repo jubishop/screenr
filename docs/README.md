@@ -25,7 +25,9 @@ pages need a clear title and opening summary; README indexes need no metadata.
 
 Keep product and architecture documents at the top level. Use
 `docs/initiatives/` for plans that span several changes and `docs/research/`
-for investigations. Create those directories when they have content.
+for investigations. Create those directories when they have content. When a
+report or one-time procedure is complete, move its lasting rules into a
+current page, then move it to `docs/archive/`.
 
 Link every active page from this index, directly or through a linked README
 index. Remove archived pages from active indexes. Use relative Markdown links
@@ -85,14 +87,20 @@ both memory and design documents.
   tradeoffs, and implementation conventions.
 - [Development workflow](development-workflow.md): local setup, Git hooks,
   worktree preparation, and QMD search.
-- [Browser runtime measurement](research/browser-runtime.md): setup and coverage
-  changes, before/after timings, and the two-worker isolation decision for #72.
-- [Browser production evaluation](research/browser-production.md): serving-mode
-  comparison, build freshness, environment limits, and adoption evidence for #84.
-- [Test organization](research/test-organization.md): feature-suite map, fixture
-  lifecycle, and complete before/after coverage inventory for #70.
-- [Running Screenr](running-screenr.md): app setup, provider configuration,
-  repeatable verification, and access rules.
+- [Running Screenr](running-screenr.md): local setup, invitations, several
+  checkouts, the email worker, production builds, and provider configuration.
+- [Testing Screenr](testing.md): test commands, running one suite, the browser
+  harness, fixtures, resource ownership rules, coverage, and script-failure
+  diagnostics.
+- [Notifications](notifications.md): accepted trigger, delivery, panel, read
+  state, and activity email decisions, with their implementation.
+- [Data and access rules](data-and-access.md): shared-feed access checks,
+  display names, profile friends and suggestions, the write lock and refresh
+  behavior, comment removal, and schema migrations.
+- [Title catalog](title-catalog.md): TMDB title search, the title details
+  cache, attribution, and trailers.
+- [Installation and offline page](installation.md): home-screen manifest, app
+  icon generation, and the service worker's offline page.
 - [Shared VPS deployment](deployment.md): release packaging, isolated services,
   acceptance, encrypted backups, and restore checks.
 - [Production restore and patching](restore-and-patching.md): secret copies,

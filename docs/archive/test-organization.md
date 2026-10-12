@@ -1,8 +1,14 @@
 ---
-status: current
+status: archived
 ---
 
 # Test organization and coverage inventory
+
+This completed report recorded the feature-suite extraction for
+[issue #70](https://github.com/jubishop/screenr/issues/70). Its inventory
+describes the suites at that time. The current suite layout, fixtures, and
+commands are in the [testing guide](../testing.md#running-one-suite). The
+report below is kept unchanged.
 
 The feature suites replace `tests/browser/milestone.spec.ts` and
 `tests/app/domain.test.ts` for [issue #70](https://github.com/jubishop/screenr/issues/70).

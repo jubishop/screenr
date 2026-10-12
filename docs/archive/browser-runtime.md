@@ -1,8 +1,15 @@
 ---
-status: current
+status: archived
 ---
 
 # Browser runtime measurement
+
+This completed report recorded the focused setup and two-worker measurement
+for [issue #72](https://github.com/jubishop/screenr/issues/72). Later changes
+reorganized the suites, so its counts and filenames, including the deleted
+`milestone.spec.ts`, describe that time only. The current commands, fixtures,
+and [resource ownership rules](../testing.md#resource-ownership) are in the
+[testing guide](../testing.md). The report below is kept unchanged.
 
 Measured on September 9, 2026 (PDT) for [issue #72](https://github.com/jubishop/screenr/issues/72).
 Focused setup reduced the browser median from 345.3 to 307.7 seconds with one worker.

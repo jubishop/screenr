@@ -233,7 +233,22 @@ Acceptance criteria and mapping examples are in issue #62.
 ## Current implementation
 
 This implementation includes the Subs and Free display from issue #62 and
-the saved-service discovery and comparison views from issue #93.
+the saved-service discovery and comparison views from issue #93. It uses the
+existing server-side `TMDB_READ_TOKEN`; no additional provider account is
+needed.
+
+Account includes optional **Your streaming services** settings. Members can
+search the grouped service list, select services, save, cancel, or clear their
+choices. Signup does not require selections. These preferences belong to the
+signed-in member and are not exposed on public profiles.
+
+**Find a title** shows all catalog results and circle suggestions by default,
+with service notes and indicators for saved services. **My services** includes
+saved subscription services and any reported free option. **Watch together**
+puts shared choices available through either person's services or a free option
+first, followed by known unmatched choices and unknown availability separately.
+Both views use US availability, broad service names, and the existing cache.
+They preserve their original title order within each displayed group.
 
 `src/server/catalog.ts` fetches and validates the US watch-provider response.
 `db/007-title-availability.sql` adds a separate cache keyed by title and

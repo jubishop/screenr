@@ -1,8 +1,14 @@
 ---
-status: current
+status: archived
 ---
 
 # Production browser validation evaluation
+
+This completed evaluation adopted production browser serving for
+[issue #84](https://github.com/jubishop/screenr/issues/84). The current
+harness behavior is in the [testing guide](../testing.md#browser-harness).
+The report below is kept unchanged, except that its link to the former
+Verification section now points to the testing guide.
 
 This evaluation implements [issue #84](https://github.com/jubishop/screenr/issues/84).
 **Implementation decision — September 9, 2026 (PDT):** Adopt production browser
@@ -187,7 +193,7 @@ not evidence that the historical declaration corruption was fixed.
 
 ## Commands
 
-See [Verification](../running-screenr.md#verification) for environment and
+See [the browser harness](../testing.md#browser-harness) for environment and
 ownership details. `npm run test:browser` and `bin/check --full` build before
 browser execution. `npm run test:browser:dev` retains development diagnostics.
 `npm run test:browser:isolation -- --warm` checks concurrent fresh and warm

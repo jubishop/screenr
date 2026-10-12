@@ -1,5 +1,5 @@
 // Screenr has no offline mode. This worker only replaces the browser's error
-// when a page load fails offline: docs/running-screenr.md#installation-and-offline-page
+// when a page load fails offline: docs/installation.md#offline-page
 // It carries its one page in this script and stores nothing in Cache Storage,
 // so feeds, titles, and other member data always come from the network.
 const offlinePage = `<!doctype html>

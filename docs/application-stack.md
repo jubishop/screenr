@@ -23,9 +23,9 @@ The technical rationale below is the engineering assessment.
 
 Screenr implements this stack. The authentication library decision appears
 below. Database access uses `pg` and owned SQL; email jobs use a small
-PostgreSQL queue. See [Running Screenr](running-screenr.md) for implementation
-and verification, and [deployment](deployment.md) for the live setup
-requirements. This assessment does not establish measured capacity.
+PostgreSQL queue. See [Running Screenr](running-screenr.md) for setup,
+[testing](testing.md) for verification, and [deployment](deployment.md) for
+the live setup requirements. This assessment does not establish measured capacity.
 
 ## What matters for Screenr
 
@@ -199,8 +199,8 @@ The [backup storage decision](deployment.md#backup-storage-warning) of
 ## Implementation approach
 
 The application follows these conventions. The
-[application guide](running-screenr.md#data-and-access-rules) describes the
-implemented data boundaries and current refresh behavior.
+[data and access rules](data-and-access.md) describe the implemented data
+boundaries and current refresh behavior.
 
 - Put friendship and content-access rules in shared server modules. Call
   them from every read and write entry point, including background work.
