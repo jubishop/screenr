@@ -199,6 +199,10 @@ rules above. In [issue #19](https://github.com/jubishop/screenr/issues/19),
 the user requested this change because the discussion is already available
 inline and the link is useful for sharing it with other people.
 
+**Updated — 2026-10-12:** The control is now a
+[link icon button](interface-design.md#copy-link-as-an-icon-button--2026-10-12)
+with the same accessible name and behavior.
+
 **Comment links — 2026-09-07:** Remove the upper-right arrow link from each
 comment. Keep **Copy link to discussion** on the parent feed entry. In
 [issue #41](https://github.com/jubishop/screenr/issues/41), the user said the
@@ -363,6 +367,10 @@ replying, and viewing updates operate on the same stored discussion.
 
 **Why:** The user confirmed profiles should show their owner's entries
 and wants the same interactive discussions available wherever they appear.
+
+**Updated — 2026-10-12:** Title pages show the same entries in a
+[compact presentation](interface-design.md#compact-entries-on-title-pages--2026-10-12)
+without the details that the title header already provides.
 
 ### Create top-level comments on titles; reply in every feed — 2026-09-06
 

@@ -70,6 +70,8 @@ both memory and design documents.
   for follow-up issue #8.
 - [Watch together](watch-together.md): accepted shared-choice behavior and
   implementation for issue #26.
+- [Interface design](interface-design.md): accepted layout and presentation
+  decisions from the 2026-10-12 design review.
 - [Title availability](title-availability.md): accepted US viewing options,
   data acquisition, cache behavior, and title-page scope for issue #7.
 - [Find a title suggestions](title-suggestions.md): accepted discovery

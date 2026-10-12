@@ -93,6 +93,19 @@ not qualify.
 **Why:** The user accepted including these options because they do not
 require a paid subscription.
 
+### Prompt to save streaming services — 2026-10-12
+
+**Decision:** When the viewer has no saved streaming services, show a short
+note above the Watch together results: "Save your streaming services to see
+what you can watch right now." Link it to the streaming services setting on
+the Account page. The note does not change which titles appear or their
+order.
+
+**Why:** The user accepted the prompt after the 2026-10-12
+[design review](interface-design.md) found that a viewer without saved
+services sees shared titles under "Not on your services" with no hint about
+the cause.
+
 ## Implementation
 
 The profile link opens `/watch-together?with=<friend-username>`. The signed-in

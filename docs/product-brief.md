@@ -301,6 +301,11 @@ is central to its purpose.
 The [application stack](application-stack.md) is selected. Features such as
 installation or offline support remain open.
 
+### Interface design — 2026-10-12
+
+The [interface design decisions](interface-design.md) define the layout and
+presentation changes accepted after the 2026-10-12 design review.
+
 ### Invite-only launch — 2026-09-04
 
 **Decision:** Make the first release invite-only, starting with the user
