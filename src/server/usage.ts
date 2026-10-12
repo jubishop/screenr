@@ -39,6 +39,11 @@ export type UsageWeek = {
   saves: number;
   observedSaves: number;
   inferredSaves: number;
+  // Of those saves, the ones the same member later marked Watching, Caught
+  // up, or Finished, at any time since.
+  followedSaves: number;
+  followedObserved: number;
+  followedInferred: number;
   conversations: number;
   backAndForth: number;
   repeatCommenters: number;
@@ -89,6 +94,8 @@ export async function usageReport({
           WHERE p.user_id = a.user_id AND p.day >= s.week - 7 AND p.day < s.week
         ))::int AS "activePreviousWeek",
       saves.total AS saves, saves.observed AS "observedSaves", saves.inferred AS "inferredSaves",
+      saves.followed AS "followedSaves", saves.followed_observed AS "followedObserved",
+      saves.followed_inferred AS "followedInferred",
       talk.conversations, talk.back_and_forth AS "backAndForth",
       (SELECT count(DISTINCT c.author_id) FROM comments c
         WHERE c.created_at >= s.starts AND c.created_at < s.ends AND EXISTS (
@@ -98,9 +105,15 @@ export async function usageReport({
     FROM spans s
     CROSS JOIN LATERAL (
       -- Toggling Want to watch off and on again in one week counts once.
+      -- Follow-through counts in the week of the save, whenever it happened.
       SELECT count(DISTINCT (w.user_id, w.title_id))::int AS total,
         (count(DISTINCT (w.user_id, w.title_id)) FILTER (WHERE w.surface = ANY($3)))::int AS observed,
-        (count(DISTINCT (w.user_id, w.title_id)) FILTER (WHERE w.friend_recommending))::int AS inferred
+        (count(DISTINCT (w.user_id, w.title_id)) FILTER (WHERE w.friend_recommending))::int AS inferred,
+        (count(DISTINCT (w.user_id, w.title_id)) FILTER (WHERE w.followed_through))::int AS followed,
+        (count(DISTINCT (w.user_id, w.title_id))
+          FILTER (WHERE w.followed_through AND w.surface = ANY($3)))::int AS followed_observed,
+        (count(DISTINCT (w.user_id, w.title_id))
+          FILTER (WHERE w.followed_through AND w.friend_recommending))::int AS followed_inferred
       FROM want_to_watch_save w WHERE w.saved_on >= s.week AND w.saved_on < s.week + 7
     ) saves
     CROSS JOIN LATERAL (
@@ -176,8 +189,18 @@ export function formatUsageReport(weeks: UsageWeek[]) {
         (week) => [week.saves, week.observedSaves, week.inferredSaves],
       )}
 Observed: saved where a friend's recommendation was shown.
-Inferred: saved while a direct friend was recommending the title.
-Saves are not yet followed to Watching, Caught up, or Finished (#188).`,
+Inferred: saved while a direct friend was recommending the title.`,
+      `${section(
+        "Those saves later marked Watching, Caught up, or Finished",
+        ["Saves", "Observed", "Inferred"],
+        (week) => [
+          week.followedSaves,
+          week.followedObserved,
+          week.followedInferred,
+        ],
+      )}
+Each save counts in its own week once the same member marks that title.
+Stopped watching alone does not count.`,
       section(
         "Conversations with at least two people",
         ["Conversations", "Back-and-forth", "Repeat commenters"],

@@ -596,7 +596,9 @@ transaction:
 - A progress status withdraws Want to watch, which keeps its entry, replies,
   and date, and leaves Recommend unchanged. A new status, or a status chosen
   again after clearing, updates the progress entry in place with a new
-  activity date. Choosing the current status changes nothing.
+  activity date. Choosing the current status changes nothing. Watching,
+  Caught up, and Finished also mark the member's earlier usage saves of the
+  title as [followed through](usage-telemetry.md#save-follow-through).
 - Finished sets the last-finished date to the browser's local date, or the
   Pacific date when none is sent. Other statuses keep the date, as in a
   rewatch.

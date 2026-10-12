@@ -124,8 +124,10 @@ for 90 days.
 
 ## Implementation
 
-Migration `db/015-usage-telemetry.sql` adds the two tables below. The previous
-release ignores them, so activation and rollback stay compatible.
+Migration `db/015-usage-telemetry.sql` adds the two tables below, and
+`db/021-save-follow-through.sql` adds the
+[follow-through](#save-follow-through) flag to saves. The previous release
+ignores them, so activation and rollback stay compatible.
 `src/server/usage.ts` records active days, prunes old rows, and builds the
 report.
 
@@ -174,6 +176,24 @@ keeps it. A save without a surface, from a page loaded before this release,
 stores no surface and can count only as inferred. An unknown surface is
 rejected.
 
+### Save follow-through
+
+Each save row also holds `followed_through`, false when saved. When a member
+chooses Watching, Caught up, or Finished for a title, `updateWatchStatus`
+sets it, in the same transaction, on every earlier save of that title by the
+same member. A status chosen before a save never counts for it, because the
+save comes later. Stopped watching alone sets nothing, but a save followed by
+Watching and then Stopped watching stays followed. Clearing a status later
+keeps the flag. The flag records only that this happened, not which status
+or when. Another member's status for the same title never changes it.
+
+Migration 021 marks saves made before it whose member's current status for
+the title is Watching, Caught up, or Finished. A save turns off any progress
+status, so that status came after every save. A status that was cleared or
+changed to Stopped watching before the migration cannot be recovered, so its
+saves stay unfollowed. So do saves whose member chose a status while a
+rollback ran the previous release.
+
 ### Owner report
 
 `npm run report:usage` runs `scripts/report-usage.ts`, which reads `.env` when
@@ -190,8 +210,8 @@ systemd-run --quiet --wait --pipe --collect --uid=screenr \
   /opt/screenr/node/bin/npm run --silent report:usage -- --weeks 12
 ```
 
-The report only reads data. It prints one table per measure, with one row per
-week and an asterisk on the week in progress:
+The report only reads data. It prints a table for each measure, and a second
+one for saves, with one row per week and an asterisk on the week in progress:
 
 - **Members who return each week:** members with an active day that week, and
   how many of them also had one the week before, even when that week falls
@@ -199,8 +219,12 @@ week and an asterisk on the week in progress:
 - **Want to watch saves:** saves that week, observed saves (the surfaces
   marked Observed above), and inferred saves (`friend_recommending`). Each
   counts a member and title once per week, so turning Want to watch off and on
-  again counts once. Following saves to Watching, Caught up, or Finished is
-  tracked in [issue #188](https://github.com/jubishop/screenr/issues/188).
+  again counts once. A second table shows how many of those saves, observed
+  saves, and inferred saves are [followed through](#save-follow-through):
+  the same member later marked the title Watching, Caught up, or Finished. A
+  member and title saved twice in a week count once when either save was
+  followed. Each save counts in the week it was made, so recent weeks rise as
+  members start watching.
 - **Conversations with at least two people:** feed entries that received a
   comment or reply that week and whose owner and commenters number at least
   two by the week's end; how many of those had back-and-forth by the week's
@@ -215,13 +239,16 @@ week and an asterisk on the week in progress:
 
 About once a minute, the worker's existing cleanup in `scripts/worker.ts`
 deletes expired email jobs and then active days and saves dated before the
-Pacific date 12 months earlier.
+Pacific date 12 months earlier. A save's follow-through flag goes with it.
 
 `tests/app/usage-telemetry.test.ts` covers the recording rules through the
 action route, including background reads, row contents, and save attribution
-for friends, pending requests, and inactive or own Recommends. It covers each
-report figure at Monday boundaries, including a week that ends after daylight
-saving time ends, the printed command output without member identities, and
+for friends, pending requests, and inactive or own Recommends. It covers
+follow-through recorded by the status write, including statuses chosen before
+the save, other members' statuses, Stopped watching, and Watching then Stopped
+watching, and migration 021's marking of earlier saves. It covers each report
+figure at Monday boundaries, including a week that ends after daylight saving
+time ends, the printed command output without member identities, and
 12-month cleanup. `tests/browser/usage-telemetry.spec.ts` checks that page
 loads and client navigation record a day while background refreshes do not,
 and the feed and title page surfaces. `tests/browser/title-suggestions.spec.ts`

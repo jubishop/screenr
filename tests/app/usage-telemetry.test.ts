@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
+import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { promisify } from "node:util";
 import {
@@ -15,7 +16,8 @@ import {
 } from "./social-fixture";
 const { POST, GET } = await import("../../src/app/api/screenr/[action]/route");
 const { changeRelationship } = await import("../../src/server/relationships");
-const { updateTitleActivity } = await import("../../src/server/title-actions");
+const { updateTitleActivity, updateWatchStatus } =
+  await import("../../src/server/title-actions");
 const { addComment, createTitleComment, removeComment } =
   await import("../../src/server/comments");
 const { pruneUsage, usageReport } = await import("../../src/server/usage");
@@ -151,7 +153,14 @@ test("Want to watch saves record the surface and whether a direct friend recomme
     title_id: string,
     surface: string | null,
     friend_recommending: boolean,
-  ) => ({ user_id, title_id, saved_on: today, surface, friend_recommending });
+  ) => ({
+    user_id,
+    title_id,
+    saved_on: today,
+    surface,
+    friend_recommending,
+    followed_through: false,
+  });
 
   assert.equal(
     (await save(ben, "movie:1", true, "friend_recommendation")).status,
@@ -190,8 +199,9 @@ test("Want to watch saves record the surface and whether a direct friend recomme
     200,
   );
 
-  // Each row holds exactly the saver, title, Pacific date, surface, and a
-  // yes-or-no friend recommendation, never the recommending friend.
+  // Each row holds exactly the saver, title, Pacific date, surface, a
+  // yes-or-no friend recommendation, never the recommending friend, and
+  // whether the saver later chose a watch status.
   assert.deepEqual(await saves(), [
     row(ben, "movie:1", "friend_recommendation", true),
     row(ben, "movie:1", "title", true),
@@ -273,7 +283,7 @@ test("weekly returns use Monday-to-Sunday Pacific weeks and count the week befor
   });
 });
 
-test("saves report observed and inferred lines once per member and title each week", async () => {
+test("saves report observed and inferred lines and their follow-through once per member and title in each save's Pacific week", async () => {
   const [ben, cam, dana, erin, frank] = await members(
     "ben",
     "cam",
@@ -282,22 +292,24 @@ test("saves report observed and inferred lines once per member and title each we
     "frank",
   );
   await titles(1, 2);
-  for (const [user, title, day, surface, recommending] of [
-    [ben, "movie:1", "2026-10-26", "friend_recommendation", true],
-    [ben, "movie:1", "2026-10-27", "friend_recommendation", true],
-    [cam, "movie:1", "2026-11-01", "title", true],
-    [dana, "movie:2", "2026-10-30", "suggestion_recommendation", false],
-    [erin, "movie:2", "2026-10-31", "friend_entry", false],
-    [frank, "movie:1", "2026-10-28", null, true],
-    [ben, "movie:2", "2026-11-02", "friends_recommend", true],
-    [cam, "movie:2", "2026-11-03", "watch_together", false],
-    [dana, "movie:1", "2026-11-08", "suggestion", false],
-    [erin, "movie:1", "2026-11-09", "friend_recommendation", true],
+  // The last column marks a save the member later followed with Watching,
+  // Caught up, or Finished, whenever that happened.
+  for (const [user, title, day, surface, recommending, followed] of [
+    [ben, "movie:1", "2026-10-26", "friend_recommendation", true, true],
+    [ben, "movie:1", "2026-10-27", "friend_recommendation", true, false],
+    [cam, "movie:1", "2026-11-01", "title", true, true],
+    [dana, "movie:2", "2026-10-30", "suggestion_recommendation", false, false],
+    [erin, "movie:2", "2026-10-31", "friend_entry", false, true],
+    [frank, "movie:1", "2026-10-28", null, true, false],
+    [ben, "movie:2", "2026-11-02", "friends_recommend", true, true],
+    [cam, "movie:2", "2026-11-03", "watch_together", false, false],
+    [dana, "movie:1", "2026-11-08", "suggestion", false, true],
+    [erin, "movie:1", "2026-11-09", "friend_recommendation", true, true],
   ] as const)
     await db.query(
-      `INSERT INTO want_to_watch_save(user_id,title_id,saved_on,surface,friend_recommending)
-      VALUES($1,$2,$3,$4,$5)`,
-      [user, title, day, surface, recommending],
+      `INSERT INTO want_to_watch_save(user_id,title_id,saved_on,surface,friend_recommending,followed_through)
+      VALUES($1,$2,$3,$4,$5,$6)`,
+      [user, title, day, surface, recommending, followed],
     );
   const weeks = await usageReport({ weeks: 3, through: "2026-11-08" });
   assert.deepEqual(
@@ -308,6 +320,120 @@ test("saves report observed and inferred lines once per member and title each we
       ["2026-11-02", 3, 1, 1],
     ],
   );
+  // A Sunday save stays in its week, and a member and title saved twice in
+  // a week count once when either save was followed.
+  assert.deepEqual(
+    weeks.map((w) => [
+      w.week,
+      w.followedSaves,
+      w.followedObserved,
+      w.followedInferred,
+    ]),
+    [
+      ["2026-10-19", 0, 0, 0],
+      ["2026-10-26", 3, 1, 2],
+      ["2026-11-02", 2, 1, 1],
+    ],
+  );
+});
+
+test("a save follows through only when the same member later marks Watching, Caught up, or Finished", async () => {
+  const [alice, ben, cam, dana] = await members("alice", "ben", "cam", "dana");
+  await titles(1, 2, 3);
+  await db.query(
+    "INSERT INTO title(id,kind,tmdb_id,name) VALUES('tv:4','tv',4,'Telemetry Show 4') ON CONFLICT DO NOTHING",
+  );
+  for (const member of [ben, cam, dana]) await friend(alice, member);
+  for (const title of ["movie:1", "movie:2", "tv:4"])
+    await updateTitleActivity(alice, title, "recommended", true);
+  const save = (member: string, title: string, surface: string) =>
+    updateWatchStatus(member, title, "want_to_watch", null, surface);
+
+  // A status chosen before the save does not follow it, and neither does
+  // another member's status for the same title.
+  await updateWatchStatus(ben, "movie:1", "watching");
+  await save(ben, "movie:1", "friend_recommendation");
+  await updateWatchStatus(cam, "movie:1", "finished");
+  // Stopped watching alone is not follow-through.
+  await save(ben, "movie:2", "title");
+  await updateWatchStatus(ben, "movie:2", "stopped");
+  // Watching counts even when the member stops afterward.
+  await save(cam, "movie:2", "friend_recommendation");
+  await updateWatchStatus(cam, "movie:2", "watching");
+  await updateWatchStatus(cam, "movie:2", "stopped");
+  await save(cam, "tv:4", "suggestion_recommendation");
+  await updateWatchStatus(cam, "tv:4", "caught_up");
+  // Finished follows the save before it; saving again starts a new save.
+  await save(dana, "movie:3", "title");
+  await updateWatchStatus(dana, "movie:3", "finished");
+  await save(dana, "movie:3", "title");
+
+  assert.deepEqual(
+    (
+      await db.query(
+        "SELECT user_id,title_id,followed_through FROM want_to_watch_save ORDER BY id",
+      )
+    ).rows,
+    [
+      { user_id: ben, title_id: "movie:1", followed_through: false },
+      { user_id: ben, title_id: "movie:2", followed_through: false },
+      { user_id: cam, title_id: "movie:2", followed_through: true },
+      { user_id: cam, title_id: "tv:4", followed_through: true },
+      { user_id: dana, title_id: "movie:3", followed_through: true },
+      { user_id: dana, title_id: "movie:3", followed_through: false },
+    ],
+  );
+  const [week] = await usageReport({ weeks: 1 });
+  assert.deepEqual(
+    [week.saves, week.observedSaves, week.inferredSaves],
+    [5, 3, 4],
+  );
+  assert.deepEqual(
+    [week.followedSaves, week.followedObserved, week.followedInferred],
+    [3, 2, 2],
+  );
+});
+
+test("migration 021 marks saves followed by a current Watching, Caught up, or Finished status", async () => {
+  const [ben, cam, dana] = await members("ben", "cam", "dana");
+  await titles(1, 2);
+  const save = (member: string, title: string) =>
+    updateWatchStatus(member, title, "want_to_watch", null, "title");
+  await save(ben, "movie:1");
+  await updateWatchStatus(ben, "movie:1", "watching");
+  await save(ben, "movie:2");
+  await updateWatchStatus(ben, "movie:2", "stopped");
+  await updateWatchStatus(cam, "movie:1", "finished");
+  await save(cam, "movie:1");
+  await save(dana, "movie:1");
+  await updateWatchStatus(dana, "movie:1", null);
+  await save(dana, "movie:1");
+  await updateWatchStatus(dana, "movie:1", "finished");
+  // Saves from the previous release start unfollowed.
+  await db.query("UPDATE want_to_watch_save SET followed_through=false");
+
+  // Rerunning the migration changes nothing more.
+  const migration = await readFile(
+    resolve(root, "db/021-save-follow-through.sql"),
+    "utf8",
+  );
+  for (let run = 0; run < 2; run++) {
+    await db.query(migration);
+    assert.deepEqual(
+      (
+        await db.query(
+          "SELECT user_id,title_id,followed_through FROM want_to_watch_save ORDER BY id",
+        )
+      ).rows,
+      [
+        { user_id: ben, title_id: "movie:1", followed_through: true },
+        { user_id: ben, title_id: "movie:2", followed_through: false },
+        { user_id: cam, title_id: "movie:1", followed_through: false },
+        { user_id: dana, title_id: "movie:1", followed_through: true },
+        { user_id: dana, title_id: "movie:1", followed_through: true },
+      ],
+    );
+  }
 });
 
 test("conversation measures count two-person, back-and-forth, and repeat activity at Pacific week boundaries", async () => {
@@ -405,8 +531,9 @@ test("npm run report:usage prints weekly totals without identifying members", as
       day,
     ]);
   await db.query(
-    `INSERT INTO want_to_watch_save(user_id,title_id,saved_on,surface,friend_recommending)
-    VALUES($1,'movie:1','2026-10-28','friend_recommendation',true)`,
+    `INSERT INTO want_to_watch_save(user_id,title_id,saved_on,surface,friend_recommending,followed_through)
+    VALUES($1,'movie:1','2026-10-28','friend_recommendation',true,true),
+      ($1,'movie:1','2026-11-03','title',true,false)`,
     [ben],
   );
   await db.query(
@@ -444,10 +571,16 @@ Week of     Active members  Also active the week before
 Want to watch saves from friends' recommendations
 Week of     Saves  Observed  Inferred
 2026-10-26      1         1         1
-2026-11-02      0         0         0
+2026-11-02      1         0         1
 Observed: saved where a friend's recommendation was shown.
 Inferred: saved while a direct friend was recommending the title.
-Saves are not yet followed to Watching, Caught up, or Finished (#188).
+
+Those saves later marked Watching, Caught up, or Finished
+Week of     Saves  Observed  Inferred
+2026-10-26      1         1         1
+2026-11-02      0         0         0
+Each save counts in its own week once the same member marks that title.
+Stopped watching alone does not count.
 
 Conversations with at least two people
 Week of     Conversations  Back-and-forth  Repeat commenters
@@ -465,7 +598,7 @@ Week of     Conversations  Back-and-forth  Repeat commenters
     assert.ok(!stdout.includes(value));
 });
 
-test("worker cleanup deletes active days and saves older than 12 months and keeps conversations", async () => {
+test("worker cleanup deletes active days and saves, with their follow-through, older than 12 months and keeps conversations", async () => {
   const { alice, ben, conversation } = await setup();
   await friend(alice, ben);
   await addComment(ben, conversation, "Old talk", false);
@@ -481,8 +614,8 @@ test("worker cleanup deletes active days and saves older than 12 months and keep
       [ben, cutoff, offset],
     );
     await db.query(
-      `INSERT INTO want_to_watch_save(user_id,title_id,saved_on,surface,friend_recommending)
-      VALUES($1,'movie:1',$2::date+$3::int,'title',true)`,
+      `INSERT INTO want_to_watch_save(user_id,title_id,saved_on,surface,friend_recommending,followed_through)
+      VALUES($1,'movie:1',$2::date+$3::int,'title',true,true)`,
       [ben, cutoff, offset],
     );
   }
@@ -490,7 +623,7 @@ test("worker cleanup deletes active days and saves older than 12 months and keep
   const kept = (
     await db.query(
       `SELECT (SELECT array_agg(day-$1::date ORDER BY day) FROM member_active_day) AS days,
-        (SELECT array_agg(saved_on-$1::date ORDER BY saved_on) FROM want_to_watch_save) AS saves,
+        (SELECT array_agg(saved_on-$1::date ORDER BY saved_on) FROM want_to_watch_save WHERE followed_through) AS saves,
         (SELECT count(*)::int FROM comment) AS comments`,
       [cutoff],
     )

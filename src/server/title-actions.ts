@@ -82,6 +82,14 @@ export async function updateWatchStatus(
         [randomUUID(), viewer, titleId, status, finishedOn ?? null],
       )
     ).rows[0];
+    // Usage telemetry: the member's earlier saves of this title now count as
+    // followed through. Stopped watching alone does not.
+    if (status !== "stopped")
+      await client.query(
+        `UPDATE want_to_watch_save SET followed_through=true
+        WHERE user_id=$1 AND title_id=$2 AND NOT followed_through`,
+        [viewer, titleId],
+      );
     return row.id as string;
   });
 }

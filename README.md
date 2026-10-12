@@ -57,9 +57,10 @@ test flow, and [Testing Screenr](docs/testing.md) for the automated suites.
 - **Home screen:** Members can add Screenr to a phone's home screen and open
   it as a standalone app. Offline page loads show a plain offline page; there
   is no offline content.
-- **Usage measures:** Screenr records members' active days and where Want to
-  watch saves come from in its own database, with no third-party analytics.
-  The owner's `npm run report:usage` prints weekly totals for the
+- **Usage measures:** Screenr records members' active days, where Want to
+  watch saves come from, and whether members later watch those titles, in its
+  own database, with no third-party analytics. The owner's
+  `npm run report:usage` prints weekly totals for the
   [initial success measures](docs/usage-telemetry.md).
 
 ## Not built yet
