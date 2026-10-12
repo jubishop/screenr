@@ -19,8 +19,10 @@ const {
   listInvitations,
   activeInvitation,
 } = await import("../../src/server/invitations");
-const { changeRelationship, thread, profileFor, people } =
-  await import("../../src/server/social");
+const { profileFor } = await import("../../src/server/profiles");
+const { changeRelationship, people } =
+  await import("../../src/server/relationships");
+const { thread } = await import("../../src/server/feed");
 const { AppError, domainLock } = await import("../../src/server/db");
 const { GET, POST } = await import("../../src/app/api/screenr/[action]/route");
 

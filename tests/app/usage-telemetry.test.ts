@@ -12,13 +12,10 @@ import {
   cookieFor,
 } from "./social-fixture";
 const { POST, GET } = await import("../../src/app/api/screenr/[action]/route");
-const {
-  addComment,
-  changeRelationship,
-  createTitleComment,
-  updateTitleActivity,
-  removeComment,
-} = await import("../../src/server/social");
+const { changeRelationship } = await import("../../src/server/relationships");
+const { updateTitleActivity } = await import("../../src/server/title-actions");
+const { addComment, createTitleComment, removeComment } =
+  await import("../../src/server/comments");
 const { pruneUsage, usageReport } = await import("../../src/server/usage");
 
 useDatabase();

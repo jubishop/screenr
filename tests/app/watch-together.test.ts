@@ -2,8 +2,9 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { useDatabase, db, friend, setup } from "./social-fixture";
 const { loadScreen } = await import("../../src/server/screens");
-const { changeRelationship, updateTitleActivity, addComment } =
-  await import("../../src/server/social");
+const { changeRelationship } = await import("../../src/server/relationships");
+const { updateTitleActivity } = await import("../../src/server/title-actions");
+const { addComment } = await import("../../src/server/comments");
 
 useDatabase();
 

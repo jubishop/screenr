@@ -31,8 +31,8 @@ const { createAuth } = await import("../../src/server/auth");
 const { migrate } = await import("../../scripts/migrate");
 const { createInvitation, invitationHash, completeSignup } =
   await import("../../src/server/invitations");
-const { changeRelationship, updateTitleActivity } =
-  await import("../../src/server/social");
+const { changeRelationship } = await import("../../src/server/relationships");
+const { updateTitleActivity } = await import("../../src/server/title-actions");
 
 // Call once in each feature suite. Node runs test files in separate processes;
 // npm test keeps those files serial because they reset the same test database.

@@ -97,7 +97,9 @@ in Cloudflare R2. See the [application stack](docs/application-stack.md) and
 
 Member screens share one catch-all route in `src/app/(member)/`. It loads
 screen data through `src/server/` and renders views from `src/components/`;
-member actions post to the handler in `src/app/api/screenr/`. The page, the
+background reads and member actions go to the handler in
+`src/app/api/screenr/`, which serves the actions declared in
+`src/server/actions.ts`. The page, the
 screen loader, and the browser shell all read paths through
 `src/member-routes.ts`, which names each screen and the query parameters it
 keeps.

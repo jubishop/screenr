@@ -4,14 +4,12 @@ import { db } from "./social-fixture";
 
 const { migrate } = await import("../../scripts/migrate");
 const { loadScreen } = await import("../../src/server/screens");
-const {
-  changeRelationship,
-  updateTitleActivity,
-  addComment,
-  createTitleComment,
-  thread,
-  profileFor,
-} = await import("../../src/server/social");
+const { profileFor } = await import("../../src/server/profiles");
+const { changeRelationship } = await import("../../src/server/relationships");
+const { thread } = await import("../../src/server/feed");
+const { updateTitleActivity } = await import("../../src/server/title-actions");
+const { addComment, createTitleComment } =
+  await import("../../src/server/comments");
 
 before(migrate);
 beforeEach(async () => {

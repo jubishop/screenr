@@ -2,8 +2,8 @@ import { expect } from "@playwright/test";
 import { test } from "./member-fixture";
 import { db } from "./database-fixture";
 
-const { updateTitleActivity, addComment } =
-  await import("../../src/server/social");
+const { updateTitleActivity } = await import("../../src/server/title-actions");
+const { addComment } = await import("../../src/server/comments");
 const { createInvitation } = await import("../../src/server/invitations");
 
 for (const [index, timezoneId] of ["UTC", "America/Los_Angeles"].entries()) {

@@ -4,7 +4,7 @@ import { db } from "./database-fixture";
 import { test } from "./monitored-test";
 import { prepareFriendship } from "./member-fixture";
 
-const { changeRelationship } = await import("../../src/server/social");
+const { changeRelationship } = await import("../../src/server/relationships");
 
 async function person(username: string, displayName: string) {
   const id = randomUUID();

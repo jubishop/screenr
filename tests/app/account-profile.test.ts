@@ -4,8 +4,9 @@ import { useDatabase, db, pending, person, cookieFor } from "./social-fixture";
 const { loadScreen } = await import("../../src/server/screens");
 const { createInvitation, completeSignup, listInvitations } =
   await import("../../src/server/invitations");
-const { updateTitleActivity, addComment, profileFor } =
-  await import("../../src/server/social");
+const { profileFor } = await import("../../src/server/profiles");
+const { updateTitleActivity } = await import("../../src/server/title-actions");
+const { addComment } = await import("../../src/server/comments");
 
 useDatabase();
 

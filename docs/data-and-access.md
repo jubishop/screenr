@@ -15,11 +15,32 @@ the conventions this code follows.
 
 The [shared-feed implementation and migration](title-feed.md#shared-feed-implementation)
 describe item identity, old-link redirects, and compatibility with the previous
-release. `src/server/social.ts` owns shared reads and writes. PostgreSQL functions
+release. Shared reads and writes live in `src/server/` by area: `profiles.ts`,
+`relationships.ts`, `feed.ts` (the shared feed read path), `title-actions.ts`,
+`comments.ts`, and `reactions.ts`. PostgreSQL functions
 `screenr_can_read` and `screenr_blocked` apply the same current relationship
 rules to threads, cards, and comments. Friendship pairs are ordered by
 PostgreSQL, including mixed-case auth IDs. No private feed or permission
 result is persistently cached.
+
+## API actions
+
+`/api/screenr/[action]` serves the actions declared in
+`src/server/actions.ts`. Each entry names its HTTP method, reads its fields
+from the query or JSON body, and calls the services that validate them. Its
+result becomes the JSON response; an action without one responds
+`{ ok: true }`. The route applies the shared rules in this order:
+
+1. A POST must come from the app's origin (403).
+2. The request needs a session (401).
+3. Every action except profile setup needs a completed profile (403).
+4. An unknown action, or a known one with another method, returns 404.
+5. Usage telemetry records the day for member POST actions and title searches
+   ([active days](usage-telemetry.md#active-days)).
+6. A POST body must be a JSON object of at most 16,000 bytes (400 or 413).
+
+Add an action as one entry, using `read` for a member GET, `write` for a
+member POST, or `signup` for a POST that runs before profile setup.
 
 ## Display names
 

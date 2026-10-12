@@ -1,4 +1,6 @@
-import { conversations, people, profileFor, conversationURL } from "./social";
+import { profileFor } from "./profiles";
+import { people } from "./relationships";
+import { conversations, conversationURL } from "./feed";
 import { getTitle, getTitleTrailer, getTitleAvailability } from "./catalog";
 import { listInvitations } from "./invitations";
 import { AppError, db } from "./db";

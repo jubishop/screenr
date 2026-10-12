@@ -1,11 +1,8 @@
 import { test, beforeEach, afterEach, mock } from "node:test";
 import assert from "node:assert/strict";
 import { useDatabase, setup, friend, db } from "./social-fixture";
-import {
-  addComment,
-  changeRelationship,
-  removeComment,
-} from "../../src/server/social";
+import { changeRelationship } from "../../src/server/relationships";
+import { addComment, removeComment } from "../../src/server/comments";
 import {
   notifications,
   readNotification,

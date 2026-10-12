@@ -4,8 +4,9 @@ import { readFile } from "node:fs/promises";
 import { test, db } from "./database-fixture";
 import { browserConfig } from "../../scripts/browser-config";
 
-const { updateTitleActivity, changeRelationship, addComment } =
-  await import("../../src/server/social");
+const { changeRelationship } = await import("../../src/server/relationships");
+const { updateTitleActivity } = await import("../../src/server/title-actions");
+const { addComment } = await import("../../src/server/comments");
 
 async function person(username: string) {
   const id = randomUUID();

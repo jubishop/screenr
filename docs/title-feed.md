@@ -463,7 +463,7 @@ interview if they preserve these decisions:
 
 ## Shared feed implementation
 
-`src/server/social.ts` reads each eligible action or standalone comment and
+`src/server/feed.ts` reads each eligible action or standalone comment and
 its replies in one PostgreSQL snapshot. The friends, title, and profile screens use this same
 read path. Items sort by the latest eligible activity at millisecond precision,
 then by item UUID for a stable tie. A removed or inaccessible direct comment
@@ -628,6 +628,13 @@ feed hides a deleted entry when no live reply is visible to that reader.
 The preceding release can still create and read entries after migration;
 on rollback, it shows the stored **[removed]** marker and may display empty
 deleted entries. Deleted text is not restored.
+
+Action writes withdraw the other action's entry themselves, so they no longer
+depend on the `conversation_sync_actions` trigger
+([issue #131](https://github.com/jubishop/screenr/issues/131)). They still
+save the legacy `conversation` flags, because the preceding release relies on
+that trigger during activation or rollback. A later migration removes the
+legacy triggers once the release in the rollback window no longer needs them.
 
 ## Decisions deferred to future features
 

@@ -4,8 +4,10 @@ import { db } from "./database-fixture";
 import { expectTextContrast } from "./contrast";
 import { test } from "./monitored-test";
 
-const { addComment, changeRelationship, updateProfile, updateTitleActivity } =
-  await import("../../src/server/social");
+const { updateProfile } = await import("../../src/server/profiles");
+const { changeRelationship } = await import("../../src/server/relationships");
+const { updateTitleActivity } = await import("../../src/server/title-actions");
+const { addComment } = await import("../../src/server/comments");
 
 async function person(username: string, displayName: string) {
   const id = randomUUID();

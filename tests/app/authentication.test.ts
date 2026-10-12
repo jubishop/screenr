@@ -5,7 +5,7 @@ const { createAuth } = await import("../../src/server/auth");
 const { loadScreen } = await import("../../src/server/screens");
 const { createInvitation, completeSignup, revokeInvitation } =
   await import("../../src/server/invitations");
-const { profileFor } = await import("../../src/server/social");
+const { profileFor } = await import("../../src/server/profiles");
 
 useDatabase();
 

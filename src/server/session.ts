@@ -2,7 +2,7 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { auth } from "./auth";
 import { AppError } from "./db";
-import { member } from "./social";
+import { member } from "./profiles";
 import { recordActiveDay } from "./usage";
 
 export async function signedIn() {

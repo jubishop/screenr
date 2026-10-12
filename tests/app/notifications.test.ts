@@ -1,15 +1,15 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { useDatabase, setup, friend, db, pending } from "./social-fixture";
+import { updateProfile } from "../../src/server/profiles";
+import { changeRelationship } from "../../src/server/relationships";
+import { updateTitleActivity } from "../../src/server/title-actions";
 import {
   addComment,
-  changeRelationship,
   removeComment,
   createTitleComment,
-  updateProfile,
-  updateTitleActivity,
-  setReaction,
-} from "../../src/server/social";
+} from "../../src/server/comments";
+import { setReaction } from "../../src/server/reactions";
 import { loadScreen } from "../../src/server/screens";
 import {
   notifications,

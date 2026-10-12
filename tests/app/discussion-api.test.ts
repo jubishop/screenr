@@ -7,8 +7,9 @@ const { migrate } = await import("../../scripts/migrate");
 const { POST, GET } = await import("../../src/app/api/screenr/[action]/route");
 const { createInvitation, invitationHash, completeSignup } =
   await import("../../src/server/invitations");
-const { changeRelationship, updateTitleActivity, thread } =
-  await import("../../src/server/social");
+const { changeRelationship } = await import("../../src/server/relationships");
+const { thread } = await import("../../src/server/feed");
+const { updateTitleActivity } = await import("../../src/server/title-actions");
 
 before(migrate);
 beforeEach(async () => {

@@ -3,14 +3,11 @@ import assert from "node:assert/strict";
 import { db } from "./social-fixture";
 
 const { migrate } = await import("../../scripts/migrate");
-const {
-  updateTitleActivity,
-  changeRelationship,
-  addComment,
-  thread,
-  conversations,
-  setReaction,
-} = await import("../../src/server/social");
+const { changeRelationship } = await import("../../src/server/relationships");
+const { thread, conversations } = await import("../../src/server/feed");
+const { updateTitleActivity } = await import("../../src/server/title-actions");
+const { addComment } = await import("../../src/server/comments");
+const { setReaction } = await import("../../src/server/reactions");
 
 before(migrate);
 beforeEach(async () => {
@@ -110,6 +107,53 @@ for (const first of ["recommended", "want_to_watch"] as const) {
     }
   });
 }
+
+// A later migration retires the legacy trigger, so action writes must keep
+// the entries exclusive themselves.
+test("switching actions withdraws the other entry without the legacy conversation trigger", async () => {
+  await db.query(
+    "ALTER TABLE conversation DISABLE TRIGGER conversation_sync_actions",
+  );
+  try {
+    const ids = {
+      recommended: await updateTitleActivity(
+        "owner",
+        "movie:78",
+        "recommended",
+        true,
+      ),
+      want_to_watch: await updateTitleActivity(
+        "owner",
+        "movie:78",
+        "want_to_watch",
+        true,
+      ),
+    };
+    for (const field of ["recommended", "want_to_watch"] as const) {
+      assert.equal(
+        await updateTitleActivity("owner", "movie:78", field, true),
+        ids[field],
+      );
+      assert.deepEqual(
+        (
+          await db.query(
+            "SELECT id,item_type FROM feed_item WHERE owner_id='owner' AND active",
+          )
+        ).rows,
+        [{ id: ids[field], item_type: field }],
+      );
+    }
+    await updateTitleActivity("owner", "movie:78", "want_to_watch", false);
+    assert.equal(
+      (await conversations("owner")).some((item) => item.active),
+      false,
+    );
+  } finally {
+    await db.query(
+      "ALTER TABLE conversation ENABLE TRIGGER conversation_sync_actions",
+    );
+  }
+});
 
 test("concurrent and repeated action writes leave one active entry without duplicating or bumping it", async () => {
   const ids = await Promise.all(

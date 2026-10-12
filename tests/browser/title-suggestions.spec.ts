@@ -4,8 +4,8 @@ import { test } from "./member-fixture";
 import { randomUUID } from "node:crypto";
 import { browserConfig } from "../../scripts/browser-config";
 
-const { changeRelationship, updateTitleActivity } =
-  await import("../../src/server/social");
+const { changeRelationship } = await import("../../src/server/relationships");
+const { updateTitleActivity } = await import("../../src/server/title-actions");
 
 const errors: string[] = [];
 test.beforeEach(({ page }) => {

@@ -4,8 +4,8 @@ import { db } from "./database-fixture";
 import { test } from "./monitored-test";
 import { nextAccountRefreshForPath } from "./refresh-helpers";
 
-const { changeRelationship, updateTitleActivity } =
-  await import("../../src/server/social");
+const { changeRelationship } = await import("../../src/server/relationships");
+const { updateTitleActivity } = await import("../../src/server/title-actions");
 
 async function person(username: string) {
   const id = randomUUID();

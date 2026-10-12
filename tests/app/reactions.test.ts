@@ -2,16 +2,12 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { useDatabase, db, friend, setup } from "./social-fixture";
-const {
-  changeRelationship,
-  updateTitleActivity,
-  thread,
-  addComment,
-  createTitleComment,
-  removeComment,
-  conversations,
-  setReaction,
-} = await import("../../src/server/social");
+const { changeRelationship } = await import("../../src/server/relationships");
+const { thread, conversations } = await import("../../src/server/feed");
+const { updateTitleActivity } = await import("../../src/server/title-actions");
+const { addComment, createTitleComment, removeComment } =
+  await import("../../src/server/comments");
+const { setReaction } = await import("../../src/server/reactions");
 
 useDatabase();
 

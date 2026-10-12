@@ -136,15 +136,16 @@ columns. Recording inserts the row only when it is missing, outside the shared
 domain lock. Each member page render records the day through `currentMember`
 in `src/server/session.ts`. That covers loading a signed-in page and client
 navigation, which renders the page on the server. The action route in
-`src/app/api/screenr/[action]/route.ts` records the day for every POST action,
-including rejected ones, and for title searches. Screen and notification
+`src/app/api/screenr/[action]/route.ts` records the day for every member POST
+action declared in `src/server/actions.ts`, including rejected ones, and for
+title searches. Screen and notification
 reads, which clients repeat in the background while a page or the
 notification panel stays open, never record activity. Profile setup records
 nothing; the member page that follows it does.
 
 ### Save attribution
 
-`updateTitleActivity` in `src/server/social.ts` adds a `want_to_watch_save` row
+`updateTitleActivity` in `src/server/title-actions.ts` adds a `want_to_watch_save` row
 in the same transaction when Want to watch turns on. It adds nothing when the
 title was already saved, when Want to watch turns off, or for Recommend. The
 row holds the member, title, Pacific date, surface, and

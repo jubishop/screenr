@@ -8,7 +8,7 @@ const { findTitles } = await import("../../src/server/title-viewing");
 const { getTitle, getTitleAvailability } =
   await import("../../src/server/catalog");
 const { loadScreen } = await import("../../src/server/screens");
-const { updateTitleActivity } = await import("../../src/server/social");
+const { updateTitleActivity } = await import("../../src/server/title-actions");
 useDatabase();
 
 let items: { id: number; title: string; name: string; media_type: string }[];

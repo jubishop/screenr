@@ -2,8 +2,8 @@ import { expect } from "@playwright/test";
 import { db } from "./database-fixture";
 import { test } from "./member-fixture";
 import { randomUUID } from "node:crypto";
-const { changeRelationship, updateTitleActivity } =
-  await import("../../src/server/social");
+const { changeRelationship } = await import("../../src/server/relationships");
+const { updateTitleActivity } = await import("../../src/server/title-actions");
 
 async function person(username: string, name: string) {
   const id = randomUUID();
