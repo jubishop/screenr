@@ -27,21 +27,28 @@ export const db =
   });
 if (process.env.NODE_ENV !== "production") globalDB.screenrPool = db;
 
+// All domain mutations share this lock. This small invite-only app favors a
+// clear ordering between permission changes and content writes.
+export const domainLock = 713934201;
+
 export async function transaction<T>(
   work: (client: PoolClient) => Promise<T>,
-  // All domain mutations share the default lock. This small invite-only app
-  // favors a clear ordering between permission changes and content writes.
-  lock = 713934201,
+  lock = domainLock,
 ): Promise<T> {
   const client = await db.connect();
   try {
-    await client.query("BEGIN");
+    // Bound every lock wait, including the shared lock held during activity
+    // email sends, so queued writes return their pool connections well before
+    // the five-second connection timeout that session lookups also use.
+    await client.query("BEGIN; SET LOCAL lock_timeout = '2s'");
     await client.query("SELECT pg_advisory_xact_lock($1)", [lock]);
     const result = await work(client);
     await client.query("COMMIT");
     return result;
   } catch (error) {
     await client.query("ROLLBACK");
+    if ((error as { code?: string }).code === "55P03")
+      throw new AppError("Screenr is busy. Please try again.", 503);
     throw error;
   } finally {
     client.release();

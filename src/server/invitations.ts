@@ -114,34 +114,42 @@ export async function completeSignup(
 }
 
 export async function listInvitations(userId: string) {
-  return transaction(async (client) => {
-    const { rows } = await client.query(
-      `SELECT i.id,i.max_uses,i.uses,i.expires_at,i.token_hash,i.share_token_hash,
-      coalesce((SELECT jsonb_agg(jsonb_build_object('username',p.username,'display_name',p.display_name))
-        FROM invitation_signup s JOIN profile p ON p.user_id=s.user_id
-        WHERE s.invitation_id=i.id AND NOT screenr_blocked($1,p.user_id)), '[]') AS joined
-     FROM invitation i WHERE creator_id=$1 AND revoked_at IS NULL
-     AND expires_at>now() AND uses<max_uses ORDER BY created_at DESC, id DESC`,
-      [userId],
-    );
-    const invitations = [];
-    for (const { token_hash, share_token_hash, ...invitation } of rows) {
+  // Invites refreshes poll, so this read must not wait for the shared write
+  // lock. One statement keeps the list in a single snapshot.
+  const { rows } = await db.query(
+    `SELECT i.id,i.max_uses,i.uses,i.expires_at,i.token_hash,i.share_token_hash,
+    coalesce((SELECT jsonb_agg(jsonb_build_object('username',p.username,'display_name',p.display_name))
+      FROM invitation_signup s JOIN profile p ON p.user_id=s.user_id
+      WHERE s.invitation_id=i.id AND NOT screenr_blocked($1,p.user_id)), '[]') AS joined
+   FROM invitation i WHERE creator_id=$1 AND revoked_at IS NULL
+   AND expires_at>now() AND uses<max_uses ORDER BY created_at DESC, id DESC`,
+    [userId],
+  );
+  const missing: { id: string; hash: string }[] = [];
+  const invitations = rows.map(
+    ({ token_hash, share_token_hash, ...invitation }) => {
       const token = shareToken(invitation.id);
       const hash = invitationHash(token);
       // Legacy tokens cannot be recovered. Add a second URL for the same row,
       // preserving the original URL, pending signups, usage, and expiry.
       if (hash !== token_hash && hash !== share_token_hash)
-        await client.query(
-          "UPDATE invitation SET share_token_hash=$1 WHERE id=$2",
-          [hash, invitation.id],
-        );
-      invitations.push({
+        missing.push({ id: invitation.id, hash });
+      return {
         ...invitation,
         url: new URL(`/join/${token}`, process.env.BETTER_AUTH_URL!).href,
-      });
-    }
-    return invitations;
-  });
+      };
+    },
+  );
+  // Only old links and links after a secret rotation take the lock, once.
+  if (missing.length)
+    await transaction(async (client) => {
+      for (const { id, hash } of missing)
+        await client.query(
+          "UPDATE invitation SET share_token_hash=$1 WHERE id=$2",
+          [hash, id],
+        );
+    });
+  return invitations;
 }
 
 export async function revokeInvitation(userId: string, id: string) {

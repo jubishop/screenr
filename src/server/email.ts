@@ -7,7 +7,7 @@ import {
 } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { db } from "./db";
+import { db, domainLock } from "./db";
 import { notificationEmail, queueNotificationEmails } from "./notifications";
 
 type Mail = { to: string; subject: string; text: string };
@@ -104,7 +104,7 @@ export async function deliverOne(): Promise<boolean> {
       // Take the domain lock before locking activity jobs, matching opt-out's
       // lock order. Codes need no content-access check and keep their old path.
       // No private activity is sent after a block or opt-out has committed.
-      await client.query("SELECT pg_advisory_xact_lock(713934201)");
+      await client.query("SELECT pg_advisory_xact_lock($1)", [domainLock]);
       job = (await due(true)).rows[0];
       if (!job) {
         await queueNotificationEmails(client);

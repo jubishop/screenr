@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { randomBytes, randomUUID } from "node:crypto";
+import { setTimeout } from "node:timers/promises";
 import {
   useDatabase,
   db,
@@ -8,6 +9,7 @@ import {
   person,
   friend,
   setup,
+  cookieFor,
 } from "./social-fixture";
 const {
   createInvitation,
@@ -19,8 +21,116 @@ const {
 } = await import("../../src/server/invitations");
 const { changeRelationship, thread, profileFor, people } =
   await import("../../src/server/social");
+const { AppError, domainLock } = await import("../../src/server/db");
+const { GET, POST } = await import("../../src/app/api/screenr/[action]/route");
 
 useDatabase();
+
+// Holds the shared write lock from another connection, as an activity email
+// send does, while `work` runs. Blocked work finishes after the release.
+async function whileLocked<T>(work: () => Promise<T>) {
+  const holder = await db.connect();
+  await holder.query("BEGIN");
+  await holder.query("SELECT pg_advisory_xact_lock($1)", [domainLock]);
+  const started = performance.now();
+  const settled = work().then(
+    (value) => ({ value, elapsed: performance.now() - started }),
+    (error: unknown) => ({ error, elapsed: performance.now() - started }),
+  );
+  const limit = new AbortController();
+  try {
+    return await Promise.race([
+      settled,
+      setTimeout(5000, "still waiting" as const, { signal: limit.signal }),
+    ]);
+  } finally {
+    limit.abort();
+    await holder.query("ROLLBACK");
+    holder.release();
+    await settled;
+  }
+}
+
+const invitesScreen = (cookie: string) =>
+  GET(
+    new Request("http://localhost:3000/api/screenr/screen?path=/invites", {
+      headers: { Cookie: cookie },
+    }),
+    { params: Promise.resolve({ action: "screen" }) },
+  );
+
+const revoke = (cookie: string, id: string) =>
+  POST(
+    new Request("http://localhost:3000/api/screenr/revoke-invite", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Origin: "http://localhost:3000",
+        Cookie: cookie,
+      },
+      body: JSON.stringify({ id }),
+    }),
+    { params: Promise.resolve({ action: "revoke-invite" }) },
+  );
+
+test("Invites refreshes do not wait for the shared write lock", async () => {
+  const owner = await person("owner");
+  const invitation = await createInvitation(owner, 2);
+  const cookie = await cookieFor(owner);
+  const outcome = await whileLocked(() => invitesScreen(cookie));
+  assert.ok(outcome !== "still waiting" && "value" in outcome);
+  assert.equal(outcome.value.status, 200);
+  const screen = await outcome.value.json();
+  assert.deepEqual(
+    screen.invitations.map((item: { url: string }) => item.url),
+    [`http://localhost:3000/join/${invitation.token}`],
+  );
+});
+
+test("shared write lock waits end with a retryable error that changes nothing", async () => {
+  const owner = await person("owner");
+  const invitation = await createInvitation(owner);
+  const cookie = await cookieFor(owner);
+  const outcome = await whileLocked(() => revoke(cookie, invitation.id));
+  assert.ok(outcome !== "still waiting" && "value" in outcome);
+  assert.equal(outcome.value.status, 503);
+  assert.deepEqual(await outcome.value.json(), {
+    error: "Screenr is busy. Please try again.",
+  });
+  // The wait ends near two seconds, before the pool's five-second limit.
+  assert.ok(
+    outcome.elapsed > 1500 && outcome.elapsed < 4000,
+    `${outcome.elapsed}`,
+  );
+  assert.deepEqual(
+    (await listInvitations(owner)).map((item) => item.id),
+    [invitation.id],
+  );
+  assert.equal((await revoke(cookie, invitation.id)).status, 200);
+  assert.deepEqual(await listInvitations(owner), []);
+});
+
+test("old invitations add their share link under the bounded shared lock", async () => {
+  const owner = await person("owner");
+  const id = randomUUID();
+  await db.query(
+    "INSERT INTO invitation(id,token_hash,creator_id) VALUES($1,$2,$3)",
+    [id, invitationHash(randomBytes(32).toString("base64url")), owner],
+  );
+  const outcome = await whileLocked(() => listInvitations(owner));
+  assert.ok(outcome !== "still waiting" && "error" in outcome);
+  assert.ok(outcome.error instanceof AppError);
+  assert.equal(outcome.error.status, 503);
+  const stored = () =>
+    db
+      .query("SELECT share_token_hash FROM invitation WHERE id=$1", [id])
+      .then(({ rows }) => rows[0].share_token_hash);
+  assert.equal(await stored(), null);
+  const shared = new URL((await listInvitations(owner))[0].url).pathname
+    .split("/")
+    .at(-1)!;
+  assert.equal(await stored(), invitationHash(shared));
+});
 
 test("concurrent completed signups cannot exceed invitation capacity", async () => {
   const owner = await person("owner");

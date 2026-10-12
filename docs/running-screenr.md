@@ -508,7 +508,9 @@ username conflicts, expiry, code/account identity, explicit Google linking,
 one-level reply grouping, host removal, and encrypted email delivery retries.
 They verify automatic inviter friendships for email and Google signup, legacy
 links, and replacement invitations. Retrying setup does not consume another
-use or restore a friendship after unfriending or blocking.
+use or restore a friendship after unfriending or blocking. Invites refreshes
+don't wait for the shared write lock, and writes stop waiting for it with a
+retryable error.
 Operational tests check activation rollback after a stalled health request or
 a web or worker service that crashes on startup, and rejection of incorrectly
 named SQL migrations before schema changes begin.
@@ -695,12 +697,21 @@ grant access to private activity or change anonymous title suggestions.
 
 All domain writes take one transaction advisory lock. This makes invitation
 capacity and permission changes ordered with content writes. It is a deliberate
-small-app simplification; measure lock waits before replacing it. Signup commits
-the profile, invitation use, signup record, and accepted inviter friendship in
-one transaction. A replacement link connects the new member to the creator of
-the invitation actually used to finish signup. Existing accounts are not
-backfilled. Thread reads use one database snapshot. Open pages poll every three
-seconds while visible,
+small-app simplification; measure lock waits before replacing it. A domain
+write waits at most two seconds for this lock or any other lock it needs. It
+then changes nothing and returns HTTP 503 with "Screenr is busy. Please try
+again." Waiting requests therefore release database connections before the
+pool's five-second connection timeout, which session lookups share. The email
+worker holds the lock during each activity email send, so a write during a slow
+send may need a retry. Page loads and refreshes don't take the lock. Listing
+invitations takes it only to store a missing share link, for an old invitation
+or after a secret rotation
+([issue #130](https://github.com/jubishop/screenr/issues/130)). Signup
+commits the profile, invitation use, signup record, and accepted inviter
+friendship in one transaction. A replacement link connects the new member to
+the creator of the invitation actually used to finish signup. Existing accounts
+are not backfilled. Thread reads use one database snapshot. Open pages poll
+every three seconds while visible,
 waiting for any active refresh to finish, and refresh on focus. Each refresh
 has a ten-second deadline; failure clears server content until a successful
 refresh. Writes and other requests stop waiting after fifteen seconds, which
