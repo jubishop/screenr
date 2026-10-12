@@ -82,7 +82,7 @@ both memory and design documents.
 - [Profile top 10](profile-top-ten.md): accepted ranked list, rank-based
   recommendation weight, and member-visible exception for issue #99.
 - [Application stack](application-stack.md): selected core stack, alternatives,
-  tradeoffs, and proposed implementation approach.
+  tradeoffs, and implementation conventions.
 - [Development workflow](development-workflow.md): local setup, Git hooks,
   worktree preparation, and QMD search.
 - [Browser runtime measurement](research/browser-runtime.md): setup and coverage
@@ -92,6 +92,6 @@ both memory and design documents.
 - [Test organization](research/test-organization.md): feature-suite map, fixture
   lifecycle, and complete before/after coverage inventory for #70.
 - [Running Screenr](running-screenr.md): app setup, provider configuration,
-  repeatable milestone verification, and access rules.
+  repeatable verification, and access rules.
 - [Shared VPS deployment](deployment.md): release packaging, isolated services,
   acceptance, encrypted backups, and restore checks.

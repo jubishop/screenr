@@ -2,12 +2,92 @@
 
 A social app for TV and movies, centered on people you know.
 
-The first milestone is a mobile-friendly Next.js app with invited signup,
-Google or email-code sign-in, friendships, movie and show discovery,
-recommendations, Want to watch, and private conversations. Start with
-[Running Screenr](docs/running-screenr.md) for app setup and a repeatable test
-flow. The [product brief](docs/product-brief.md) defines the larger release;
-its remaining features are outside this milestone.
+Screenr is a mobile-friendly web app for phone and computer browsers, live at
+<https://screenr.club> for invited members. The
+[product brief](docs/product-brief.md) defines the agreed product. Features
+ship continuously as their issues are completed; there is
+[no release gate](docs/product-brief.md#no-release-gate--2026-10-12). Start
+with [Running Screenr](docs/running-screenr.md) for app setup and a repeatable
+test flow.
+
+## What Screenr does today
+
+- **Joining:** People sign up through an invitation link with Google or an
+  emailed code, then choose a display name and username. Signup makes the
+  inviter an accepted friend. Members create, share, and revoke their own
+  invitation links, which show rich previews in messaging apps.
+- **Friends:** Members find people by profile link or exact username, through
+  People you may know with named mutual friends, and through friend lists on
+  profiles. They can send, accept, and decline requests, unfriend, block, and
+  unblock. Current friendship and blocking rules decide what each person sees.
+- **Titles:** Find a title searches the TMDB catalog and suggests titles from
+  friends' Recommend and Want to watch choices, with anonymous counts from
+  friends of friends. Title pages show details, a trailer, US viewing options
+  under Subs and Free, and the title's feed. Saved streaming services mark
+  matching titles and enable a My services filter.
+- **Feeds and conversations:** Members recommend titles or add them to Want to
+  watch, which are mutually exclusive, and post standalone comments on title
+  pages. The friends, profile, and title feeds show the same entries. Members
+  reply inline with one level of nested replies, flag spoilers, react with
+  emoji, and delete their comments; hosts can remove others' comments.
+- **Watch together:** A friend's profile links to a page that compares both
+  people's Want to watch choices, listing titles on either person's services
+  first.
+- **Notifications and account:** An in-app panel covers friend requests,
+  acceptances, comments, and replies, with optional activity email. Account
+  settings edit the display name and username, connect Google, and save
+  streaming services.
+
+## Not built yet
+
+Remaining product features are tracked as
+[open feature issues](https://github.com/jubishop/screenr/issues?q=is%3Aissue%20state%3Aopen%20label%3Afeature):
+
+- Watch statuses and a last-finished date
+  ([#100](https://github.com/jubishop/screenr/issues/100))
+- Star ratings and written reviews
+  ([#101](https://github.com/jubishop/screenr/issues/101))
+- The Friends recommend view
+  ([#102](https://github.com/jubishop/screenr/issues/102)), hiding Finished
+  titles by default ([#172](https://github.com/jubishop/screenr/issues/172))
+- Title-less discussion posts and season or episode labels
+  ([#103](https://github.com/jubishop/screenr/issues/103))
+- Optional profile photos
+  ([#104](https://github.com/jubishop/screenr/issues/104))
+- A ranked top 10 on each profile
+  ([#99](https://github.com/jubishop/screenr/issues/99))
+- Usage telemetry for the initial success measures
+  ([#105](https://github.com/jubishop/screenr/issues/105))
+- A dark theme that follows the system setting
+  ([#171](https://github.com/jubishop/screenr/issues/171))
+
+## Stack and code map
+
+Screenr is one TypeScript application: Next.js and React for pages and request
+handling, PostgreSQL through `pg` with owned SQL migrations, and Better Auth
+for Google and email-code sign-in with database sessions. A worker process
+sends email through Resend from a PostgreSQL job queue. TMDB supplies catalog
+data, trailers, and JustWatch-backed US availability. Production runs as
+systemd services behind Caddy on a shared Hetzner VPS, with encrypted backups
+in Cloudflare R2. See the [application stack](docs/application-stack.md) and
+[deployment guide](docs/deployment.md).
+
+| Path | Contents |
+| --- | --- |
+| `src/app/` | Next.js routes: sign-in, profile setup, invitation links, credits, member screens, API handlers, and stylesheets |
+| `src/components/` | React views and controls for feeds, titles, people, invitations, notifications, and account settings |
+| `src/server/` | Server-only domain code: authentication, access rules, social reads and writes, invitations, catalog and availability, suggestions, notifications, and email |
+| `src/shared.ts`, `src/viewing.ts` | Types and helpers shared by browser and server code |
+| `db/` | Numbered SQL migrations |
+| `scripts/` | Migration, bootstrap invitation, email worker, release packaging, and browser-test harness commands |
+| `tests/` | Application and PostgreSQL tests in `app/`, Playwright suites in `browser/`, and Python tests for operations and check scripts |
+| `ops/` | VPS provisioning, release activation, systemd units, Caddy and PostgreSQL configuration, backups, and restore checks |
+| `bin/` | Repository setup, checks, knowledge search, deployment helpers, and Git hooks |
+| `docs/`, `memory/` | Design documents, decisions, and durable guidance |
+
+Member screens share one catch-all route in `src/app/(member)/`. It loads
+screen data through `src/server/` and renders views from `src/components/`;
+member actions post to the handler in `src/app/api/screenr/`.
 
 ## Run and deploy
 

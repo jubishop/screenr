@@ -4,11 +4,10 @@ status: current
 
 # Running Screenr
 
-The first milestone implements invited signup, Google or email-code sign-in,
-required profiles, accepted friendships, TMDB discovery, recommendations,
-Want to watch, standalone title comments, and shared interactive feeds. The
-remaining first-release features in the [product brief](product-brief.md) are
-outside this milestone.
+This guide covers local setup, provider configuration, verification, and the
+running app's data and access rules. The
+[README](../README.md#what-screenr-does-today) summarizes what Screenr does
+today and links the features that are not built yet.
 
 ## Local setup
 

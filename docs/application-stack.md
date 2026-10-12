@@ -4,8 +4,8 @@ status: current
 
 # Application stack
 
-Screenr will use TypeScript, Next.js, and PostgreSQL. This document records
-the choice and its tradeoffs. Product behavior remains defined in the
+Screenr uses TypeScript, Next.js, and PostgreSQL. This document records the
+choice and its tradeoffs. Product behavior remains defined in the
 [product brief](product-brief.md).
 
 ## Core stack decision — 2026-09-05
@@ -21,11 +21,11 @@ based solely on Screenr's requirements. The assessment retained it for the
 mobile web interface, related social data, and self-hosting requirements.
 The technical rationale below is the engineering assessment.
 
-The first milestone implements this stack. The authentication library
-decision appears below. Database access uses `pg` and owned SQL; email jobs
-use a small PostgreSQL queue. See [Running Screenr](running-screenr.md) for
-implementation and verification, and [deployment](deployment.md) for the live
-setup requirements. This assessment does not establish measured capacity.
+Screenr implements this stack. The authentication library decision appears
+below. Database access uses `pg` and owned SQL; email jobs use a small
+PostgreSQL queue. See [Running Screenr](running-screenr.md) for implementation
+and verification, and [deployment](deployment.md) for the live setup
+requirements. This assessment does not establish measured capacity.
 
 ## What matters for Screenr
 
@@ -190,7 +190,7 @@ checked on 2026-09-05. No backup service or storage resource is configured yet.
 
 ## Implementation approach
 
-The first milestone follows these conventions. The
+The application follows these conventions. The
 [application guide](running-screenr.md#data-and-access-rules) describes the
 implemented data boundaries and current refresh behavior.
 
