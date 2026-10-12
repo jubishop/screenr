@@ -71,13 +71,20 @@
     margin-top: 0;
   }
 }
+.title-trailer .inline-actions a {
+  text-decoration: underline;
+}
 .trailer-player {
   display: block;
+  margin-top: 16px;
   width: 100%;
   aspect-ratio: 16 / 9;
   min-height: 200px;
   border: 0;
   background: #000;
+}
+.trailer-player + p {
+  margin: 8px 0 0;
 }
 .overview {
   color: var(--muted);

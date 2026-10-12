@@ -268,6 +268,12 @@ also disputed, while not loading the player before Play already provides
 the main privacy gain. The user chose `youtube.com` after reviewing this
 tradeoff for [issue #112](https://github.com/jubishop/screenr/issues/112).
 
+**Implementation note:** The collapsed row holds the Play trailer button and
+the Watch on YouTube link, under a "Trailer" heading kept for screen readers.
+Opening the player moves focus to it. `src/components/title-trailer.tsx`
+implements the section, and
+[Title trailers](running-screenr.md#title-trailers) lists its checks.
+
 ### Start a conversation from the section heading — 2026-10-12
 
 **Decision:** Remove the card that holds only the Start a conversation

@@ -219,10 +219,16 @@ test("title watch availability shows US categories, empty results, failures, and
   await page.context().close();
 });
 
-test("title trailers fit desktop and mobile, send an origin referrer, and omit unavailable players", async ({
+test("title trailers load YouTube only after Play trailer, fit desktop and mobile, send an origin referrer, and omit unavailable players", async ({
   member,
 }) => {
   const page = await member("trailerviewer");
+  const youtube: string[] = [];
+  page.on("request", (request) => {
+    const host = new URL(request.url()).hostname;
+    if (/(^|\.)(youtube|youtube-nocookie|ytimg|googlevideo)\.com$/.test(host))
+      youtube.push(request.url());
+  });
   const embeds: string[] = [];
   await page.route("https://www.youtube.com/embed/**", async (route) => {
     embeds.push((await route.request().allHeaders()).referer);
@@ -231,20 +237,65 @@ test("title trailers fit desktop and mobile, send an origin referrer, and omit u
       body: "Trailer player fixture",
     });
   });
+  const backgroundRefresh = () =>
+    page.waitForResponse(
+      (response) =>
+        response.url().includes("/api/screenr/screen?") &&
+        response.status() === 200,
+    );
   const response = await page.goto("/titles/movie/987654");
   expect(response?.headers()["referrer-policy"]).toBe("no-referrer");
+  const trailer = page.getByRole("region", { name: "Trailer" });
+  const play = trailer.getByRole("button", {
+    name: "Play trailer",
+    exact: true,
+  });
+  const link = trailer.getByRole("link", { name: "Watch on YouTube" });
+  const fallback = trailer.getByText(
+    "If the trailer cannot play here, watch it on YouTube.",
+  );
+  await expect(play).toBeEnabled();
+  await expect(link).toHaveAttribute(
+    "href",
+    "https://www.youtube.com/watch?v=Abcdef_1234",
+  );
+  await expect(page.locator("iframe")).toHaveCount(0);
+  await expect(fallback).toHaveCount(0);
+  for (const width of [1440, 390, 320]) {
+    await page.setViewportSize({ width, height: 900 });
+    const button = (await play.boundingBox())!;
+    const anchor = (await link.boundingBox())!;
+    // The collapsed trailer is one line: the link sits beside the button.
+    expect(anchor.y).toBeLessThan(button.y + button.height);
+    expect(button.y).toBeLessThan(anchor.y + anchor.height);
+    expect(anchor.x + anchor.width).toBeLessThanOrEqual(width);
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth),
+    ).toBe(width);
+  }
+  await backgroundRefresh();
+  expect(youtube).toEqual([]);
+  await play.focus();
+  await page.keyboard.press("Enter");
   const player = page.getByTitle("The Lantern Room trailer: Official trailer", {
     exact: true,
   });
-  await expect(player).toBeVisible();
+  await expect(player).toBeFocused();
   await expect(player).toHaveAttribute(
     "src",
-    "https://www.youtube.com/embed/Abcdef_1234?autoplay=0&playsinline=1",
+    "https://www.youtube.com/embed/Abcdef_1234?autoplay=1&playsinline=1",
   );
-  await expect(
-    page.getByRole("link", { name: "Watch on YouTube" }),
-  ).toHaveAttribute("href", "https://www.youtube.com/watch?v=Abcdef_1234");
+  await expect(player).toHaveAttribute(
+    "allow",
+    "autoplay; encrypted-media; fullscreen; picture-in-picture",
+  );
+  await expect(play).toHaveCount(0);
+  await expect(link).toBeVisible();
+  await expect(fallback).toBeVisible();
   await expect.poll(() => embeds).toEqual([`${browserConfig.baseURL}/`]);
+  expect(youtube).toEqual([
+    "https://www.youtube.com/embed/Abcdef_1234?autoplay=1&playsinline=1",
+  ]);
   for (const width of [1440, 390, 320]) {
     await page.setViewportSize({ width, height: 900 });
     await expectTextContrast(page.locator(".title-hero .overview"));
@@ -260,12 +311,10 @@ test("title trailers fit desktop and mobile, send an origin referrer, and omit u
       await page.evaluate(() => document.documentElement.scrollWidth),
     ).toBe(width);
   }
-  await page.waitForResponse(
-    (response) =>
-      response.url().includes("/api/screenr/screen?") &&
-      response.status() === 200,
-  );
-  expect(embeds).toHaveLength(1); // Background refresh must not reload playback.
+  await backgroundRefresh();
+  // Background refresh must keep the player open without reloading playback.
+  await expect(player).toBeVisible();
+  expect(embeds).toHaveLength(1);
   for (const path of ["/movie/987655", "/movie/987656", "/tv/987657"]) {
     await page.goto(`/titles${path}`);
     await expect(
@@ -274,6 +323,7 @@ test("title trailers fit desktop and mobile, send an origin referrer, and omit u
     await expect(
       page.getByRole("heading", { name: "Around this title" }),
     ).toBeVisible();
+    await expect(page.getByRole("region", { name: "Trailer" })).toHaveCount(0);
     await expect(page.locator("iframe")).toHaveCount(0);
     await expect(
       page.getByRole("link", { name: "Watch on YouTube" }),

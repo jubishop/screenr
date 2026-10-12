@@ -21,9 +21,6 @@ export async function join(
     hasTouch: options.hasTouch,
   });
   const page = await context.newPage();
-  await page.route("https://www.youtube.com/embed/**", (route) =>
-    route.fulfill({ contentType: "text/html", body: "Trailer player fixture" }),
-  );
   monitorErrors(page);
   const token = options.token ?? (await createInvitation(null, 1)).token;
   const email = `${name}.browser@example.test`;

@@ -125,12 +125,6 @@ export const test = databaseTest.extend<{ signIn: SignIn; member: Member }>({
         });
         contexts.push(context);
         const page = await context.newPage();
-        await page.route("https://www.youtube.com/embed/**", (route) =>
-          route.fulfill({
-            contentType: "text/html",
-            body: "Trailer player fixture",
-          }),
-        );
         await signIn(page, username, options);
         return page;
       });

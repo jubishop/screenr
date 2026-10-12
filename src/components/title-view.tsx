@@ -5,6 +5,7 @@ import { useInteractive } from "./client";
 import { Poster } from "./poster";
 import { TitleAvailability } from "./title-availability";
 import { TitleCommentComposer } from "./title-comment";
+import { TitleTrailer } from "./title-trailer";
 export function TitleView({
   data,
   user,
@@ -80,32 +81,11 @@ export function TitleView({
             kind={data.title.kind}
           />
           {data.trailer && (
-            <section
-              className="title-trailer"
-              aria-labelledby="trailer-heading"
-            >
-              <div className="section-heading">
-                <h2 id="trailer-heading">Trailer</h2>
-                <a
-                  href={`https://www.youtube.com/watch?v=${data.trailer.key}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  Watch on YouTube
-                </a>
-              </div>
-              <iframe
-                className="trailer-player"
-                src={`https://www.youtube.com/embed/${data.trailer.key}?autoplay=0&playsinline=1`}
-                title={`${data.title.name} trailer: ${data.trailer.name}`}
-                referrerPolicy="strict-origin-when-cross-origin"
-                allow="encrypted-media; fullscreen; picture-in-picture"
-                allowFullScreen
-              />
-              <p className="small muted">
-                If the trailer cannot play here, watch it on YouTube.
-              </p>
-            </section>
+            <TitleTrailer
+              key={`${data.title.id}/${data.trailer.key}`}
+              name={data.title.name}
+              trailer={data.trailer}
+            />
           )}
           <div className="section-heading">
             <h2>Around this title</h2>

@@ -51,9 +51,6 @@ test("title and feed actions switch exclusively and restore each original discus
 }) => {
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
-  await page.route("https://www.youtube.com/embed/**", (route) =>
-    route.fulfill({ contentType: "text/html", body: "Trailer fixture" }),
-  );
   const owner = await person("exclusiveowner");
   const viewer = await person("exclusiveviewer");
   await changeRelationship(owner, viewer, "request");

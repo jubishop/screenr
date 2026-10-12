@@ -18,9 +18,6 @@ test.beforeEach(({ page }) => {
     )
       errors.push(message.text());
   });
-  return page.route("https://www.youtube.com/embed/**", (route) =>
-    route.fulfill({ contentType: "text/html", body: "Trailer fixture" }),
-  );
 });
 test.afterEach(() => expect(errors).toEqual([]));
 

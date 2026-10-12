@@ -110,9 +110,6 @@ test("an unavailable legacy link navigates after friendship restores access", as
   );
   const waiting = await reader.context().newPage();
   monitorErrors(waiting);
-  await waiting.route("https://www.youtube.com/embed/**", (route) =>
-    route.fulfill({ contentType: "text/html", body: "Trailer player fixture" }),
-  );
   await waiting.goto(`/conversations/${entry.conversation_id}`);
   await expect(waiting.getByRole("main").getByRole("alert")).toContainText(
     "Conversation not found.",

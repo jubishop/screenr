@@ -648,19 +648,33 @@ malformed responses are retried after five minutes. Trailer requests time out
 after two seconds. A failure leaves the title details and conversations
 available and shows no player. TMDB credentials stay on the server.
 
-The responsive player starts only after interaction and always includes a
-direct YouTube link for restricted, removed, or otherwise unavailable embeds.
-It uses [YouTube's inline playback parameters](https://developers.google.com/youtube/player_parameters)
-and a minimum height of 200 pixels. Its iframe explicitly uses
-`strict-origin-when-cross-origin` to satisfy
+Title pages show a one-line Play trailer button beside a direct YouTube link
+and load nothing from YouTube until the viewer activates the button
+([collapsed trailer decision](interface-design.md#trailer-collapsed-until-played--2026-10-12)).
+Activating it opens the responsive 16:9 player inline, moves focus to it, and
+requests autoplay, which some browsers block until the viewer presses play
+in the player. The open player stays open through background refreshes and
+shows fallback text below it. The direct link remains for restricted,
+removed, or otherwise unavailable embeds.
+
+The player uses the `www.youtube.com` embed domain,
+[YouTube's inline playback parameters](https://developers.google.com/youtube/player_parameters),
+and a minimum height of 200 pixels. It delegates autoplay, encrypted media,
+fullscreen, and picture-in-picture to that frame, so a page
+`Content-Security-Policy` must allow `https://www.youtube.com` frames and a
+`Permissions-Policy` must not deny those features to it. Its iframe
+explicitly uses `strict-origin-when-cross-origin` to satisfy
 [YouTube's referrer requirement](https://developers.google.com/youtube/terms/required-minimum-functionality#embedded-youtube-player-and-player-api-clients).
 This sends the site origin without the title path. The site's default
 `no-referrer` policy still applies to other requests.
 
 The catalog tests exercise real HTTP and PostgreSQL boundaries. Browser tests
-replace YouTube at the network boundary and check conditional rendering,
-desktop and mobile dimensions, the actual outgoing referrer, and persistence
-of the iframe during page refresh. Also verify an available real trailer in
-a local browser before release: confirm that it is initially paused, click
-Play, check advancing playback on desktop and mobile, and check the provider
-link. Automated provider fixtures do not establish live YouTube availability.
+replace YouTube at the network boundary. They check that a title page sends
+no YouTube request before Play trailer, the one-line collapsed layout, focus
+on the opened player, conditional rendering, desktop and mobile dimensions,
+the actual outgoing referrer, and that background refreshes keep the iframe
+without reloading it. Also verify an available real trailer in a local
+browser before release: confirm in the network panel that the title page
+contacts no YouTube domain before Play trailer, press Play trailer, check
+advancing playback on desktop and mobile, and check the provider link.
+Automated provider fixtures do not establish live YouTube availability.
