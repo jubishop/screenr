@@ -580,17 +580,23 @@ class RemoteDeploymentTests(unittest.TestCase):
             printf 'host-config %s\n' "$*" >> "$FIXTURE/systemctl"
             [ "${HOST_DRIFT:-}" != yes ]
         }
-        sh() (
+        sh() {
             # Release files are untrusted. Record and refuse any script file;
             # run only the checked script text passed by the CI helper.
-            if [ "$1" != -c ]; then
-                printf 'ran %s\n' "$1" >> "$FIXTURE/events"
-                exit 1
-            fi
-            script=$2
-            shift 3
-            eval "$script"
-        )
+            # Deployment tests the activation status, so dash ignores set -e in
+            # a plain subshell. Like the host's new sh process, a background
+            # subshell stops at the first failing command.
+            (
+                if [ "$1" != -c ]; then
+                    printf 'ran %s\n' "$1" >> "$FIXTURE/events"
+                    exit 1
+                fi
+                script=$2
+                shift 3
+                eval "$script"
+            ) &
+            wait "$!"
+        }
         set -- "$REVISION" "$CHECKSUM" /tmp/screenr-release.fixture "$ACTIVATION_SCRIPT" \
             "$HOST_CONFIG_SCRIPT" "$HOST_FILES"
         . "$DEPLOY"
