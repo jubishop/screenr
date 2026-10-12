@@ -17,7 +17,9 @@ run scripts/migrate.ts
 mkdir -p "$release/.next/cache"
 chown -R screenr:screenr "$release/.next/cache"
 previous=$(readlink /opt/screenr/current || true)
-ln -s "$release" /opt/screenr/current.new
+# -fT replaces a link left by an interrupted run instead of creating the new
+# link inside the release it points to.
+ln -sfT "$release" /opt/screenr/current.new
 mv -Tf /opt/screenr/current.new /opt/screenr/current
 systemctl restart screenr-web screenr-worker || true
 local_get() {
@@ -55,7 +57,7 @@ stays_healthy() {
     return 1
 }
 restore_previous() {
-    ln -s "$previous" /opt/screenr/current.rollback &&
+    ln -sfT "$previous" /opt/screenr/current.rollback &&
         mv -Tf /opt/screenr/current.rollback /opt/screenr/current || return 1
     # A crash loop can reach the start limit, which also refuses this restart.
     systemctl reset-failed screenr-web screenr-worker || true

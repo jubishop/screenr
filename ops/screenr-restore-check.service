@@ -1,6 +1,7 @@
 [Unit]
 Description=Screenr backup restore verification
 After=network-online.target screenr-db.service
+Wants=network-online.target
 Requires=screenr-db.service
 OnFailure=screenr-alert@%n.service
 

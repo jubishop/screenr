@@ -1,4 +1,4 @@
-"""Exercise the backup age check and weekly restore check with fake restic and PostgreSQL."""
+"""Exercise the backup, backup age check, and weekly restore check with fake restic and PostgreSQL."""
 import datetime
 import io
 import json
@@ -95,6 +95,37 @@ class BackupAgeTests(unittest.TestCase):
                 self.assertEqual(code, 1)
                 self.assertEqual(output, '')
                 self.assertIn('Backup age check failed', errors)
+
+
+class BackupScriptTests(unittest.TestCase):
+    DUMP = '/var/lib/screenr-backup/screenr.dump'
+
+    def execute(self, dump=':'):
+        # External commands are the boundary; ops/backup.sh runs unchanged.
+        wrapper = '''
+pg_dump() { echo "pg_dump"; eval "$DUMP"; }
+restic() { echo "restic $1"; }
+rm() { echo "rm $*"; }
+. "$SCRIPT"
+'''
+        environment = {**os.environ, 'SCRIPT': str(ROOT / 'ops/backup.sh'), 'DUMP': dump}
+        return subprocess.run(['sh', '-c', wrapper], text=True, capture_output=True,
+                              env=environment, timeout=10)
+
+    def test_backup_uploads_prunes_and_removes_the_dump(self):
+        result = self.execute()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout.splitlines(),
+                         ['pg_dump', 'restic backup', 'restic forget', f'rm -f {self.DUMP}'])
+
+    def test_stopped_backup_fails_and_removes_the_dump_once(self):
+        # The signal can arrive while a command that still succeeds runs. The
+        # script must stop there instead of uploading or pruning.
+        for signal in ('HUP', 'INT', 'TERM'):
+            with self.subTest(signal=signal):
+                result = self.execute(f'kill -{signal} $$')
+                self.assertNotEqual(result.returncode, 0)
+                self.assertEqual(result.stdout.splitlines(), ['pg_dump', f'rm -f {self.DUMP}'])
 
 
 class RestoreCheckTests(unittest.TestCase):

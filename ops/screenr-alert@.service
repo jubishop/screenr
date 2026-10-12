@@ -1,6 +1,7 @@
 [Unit]
 Description=Screenr failure alert for %i
 After=network-online.target
+Wants=network-online.target
 
 [Service]
 Type=oneshot

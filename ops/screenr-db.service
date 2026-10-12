@@ -6,6 +6,12 @@ StartLimitBurst=5
 OnFailure=screenr-alert@%n.service
 
 [Service]
+# PostgreSQL tells systemd when it accepts connections, so the units that
+# require this one start only then. Crash recovery can outlast systemd's
+# 90-second default, and a start timeout would restart recovery from the
+# beginning.
+Type=notify
+TimeoutStartSec=infinity
 User=screenr-db
 Group=screenr-db
 RuntimeDirectory=screenr-db

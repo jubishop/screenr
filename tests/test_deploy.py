@@ -530,8 +530,22 @@ class RemoteDeploymentTests(unittest.TestCase):
         }
         alias systemd-run=':'
         chown() { :; }
-        ln() { printf '%s\n' "$2" > "$FIXTURE/pending"; }
-        mv() { command cp "$FIXTURE/pending" "$FIXTURE/current"; }
+        # GNU ln and mv for the links beside /opt/screenr/current. The link
+        # files in the fixture hold their targets.
+        ln() {
+            options=
+            while [ "$#" -gt 2 ]; do options="$options$1"; shift; done
+            link="$FIXTURE/link.${2##*/}"
+            if [ -e "$link" ]; then
+                # An interrupted run left this link to a release directory.
+                # Without -T or -n, ln creates the new link inside that
+                # release and succeeds; with either, it needs -f to replace.
+                case "$options" in *[Tn]*) ;; *) return 0 ;; esac
+                case "$options" in *f*) ;; *) return 1 ;; esac
+            fi
+            printf '%s\n' "$1" > "$link"
+        }
+        mv() { command mv "$FIXTURE/link.${2##*/}" "$FIXTURE/current"; }
         sleep() { printf '%s\n' "$1" >> "$FIXTURE/sleeps"; }
         curl() {
             if [ "${FAIL_HEALTH:-}" = yes ] && broken; then return 22; fi
@@ -579,6 +593,9 @@ class RemoteDeploymentTests(unittest.TestCase):
             target = '/opt/screenr/releases/' + REVISION
             initial = '' if environment.get('NO_PREVIOUS') else '/opt/screenr/releases/previous'
             (base / 'current').write_text(target if environment.get('ALREADY_ACTIVE') else initial)
+            if environment.get('STALE_LINKS'):
+                for name in ('current.new', 'current.rollback'):
+                    (base / f'link.{name}').write_text('/opt/screenr/releases/stale\n')
             result = subprocess.run(['sh', '-c', harness], cwd=base, capture_output=True, text=True,
                                     env={**os.environ, 'FIXTURE': directory, 'REVISION': REVISION,
                                          'CHECKSUM': 'b' * 64,
@@ -655,7 +672,8 @@ class RemoteDeploymentTests(unittest.TestCase):
 
     def test_activation_runs_checked_script_not_release_copy(self):
         result, events, current = self.execute_remote(
-            ACTIVATION_SCRIPT='echo checked-activation\nln -s "$1" /opt/screenr/current.new\nmv\n')
+            ACTIVATION_SCRIPT='echo checked-activation\nln -s "$1" /opt/screenr/current.new\n'
+                              'mv -Tf /opt/screenr/current.new /opt/screenr/current\n')
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn('checked-activation', result.stdout)
         self.assertNotIn('ran ', events)
@@ -745,6 +763,14 @@ class RemoteDeploymentTests(unittest.TestCase):
         # Activation then creates the release's cache directory.
         self.assertEqual(events, 'removed\ncreated\ncreated\n')
         self.assertEqual(current, '/opt/screenr/releases/' + REVISION)
+
+    def test_links_left_by_an_interrupted_activation_are_replaced(self):
+        # Moving a leftover current.new or current.rollback link into place
+        # would activate or restore that stale release instead.
+        result, events, current = self.execute_remote(STALE_LINKS='yes')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(current, '/opt/screenr/releases/' + REVISION)
+        self.assert_verified_rollback(*self.execute_remote(STALE_LINKS='yes', FAIL_HEALTH='yes'))
 
     def test_activation_waits_longer_than_a_restart_cycle(self):
         # A unit that crashes on startup is active between its restarts. A

@@ -1,5 +1,7 @@
 services:
   postgres:
+    # Production's PostgreSQL major; the tag follows its minor releases.
+    # See docs/development-workflow.md#ci-postgresql.
     image: postgres:18
     environment:
       POSTGRES_USER: screenr

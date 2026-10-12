@@ -2,6 +2,7 @@
 Description=Screenr backup storage size check
 # A run that starts during a backup waits until its upload and prune finish.
 After=network-online.target screenr-backup.service
+Wants=network-online.target
 OnFailure=screenr-alert@%n.service
 
 [Service]

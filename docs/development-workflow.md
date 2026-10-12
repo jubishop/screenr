@@ -354,6 +354,19 @@ Before [#122](https://github.com/jubishop/screenr/issues/122), CI installed
 Ubuntu's Caddy 2.6.2 package. Its post-install script started an unused system
 service and made the install take 30 to 70 seconds.
 
+### CI PostgreSQL
+
+CI and the local Compose database use the `postgres:18` image tag, not a
+digest pin. Production runs PostgreSQL 18 from the PostgreSQL APT repository
+and [installs each minor release](restore-and-patching.md#postgresql), and
+the tag follows the same minor releases without anyone bumping it, as the
+[toolchain policy](foundation/engineering-policy.md#runtime-and-toolchain-versions)
+prefers. Unlike [CI Caddy](#ci-caddy), the checks depend only on the major
+version, so a pinned digest and its update pull requests would add work
+without catching a production difference. Change the tag in `compose.yml` and
+`.github/workflows/check.yml` with production's major version
+([#124](https://github.com/jubishop/screenr/issues/124)).
+
 ## Main branch delivery
 
 **Decision — 2026-09-28:** Direct pushes to `main` are allowed. A PR and its

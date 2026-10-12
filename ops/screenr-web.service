@@ -1,6 +1,7 @@
 [Unit]
 Description=Screenr web application
 After=network-online.target screenr-db.service
+Wants=network-online.target
 Requires=screenr-db.service
 StartLimitIntervalSec=60
 StartLimitBurst=5

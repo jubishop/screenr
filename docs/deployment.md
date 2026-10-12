@@ -130,8 +130,14 @@ owned by that login. Application connections use that role and loopback port
 5439. Keep the administrative role for local database administration only.
 
 Install the `ops/screenr-*.service` and `.timer` files under
-`/etc/systemd/system`, then reload systemd. Enable the database first. Later
-deployments install changed units; see
+`/etc/systemd/system`, then reload systemd. Enable the database first.
+`screenr-db.service` uses `Type=notify`: PostgreSQL tells systemd when it
+accepts connections, so starting or restarting it returns only then, and the
+units that require it start afterwards. It has no start timeout, because crash
+recovery can outlast systemd's default, and a timeout would restart recovery
+from the beginning. Units ordered after `network-online.target` also pull it
+in with `Wants=`, so systemd starts that target and waits for the network.
+Later deployments install changed units; see
 [host configuration drift](#host-configuration-drift). Build the app outside
 the VPS; do not run Next's production build on this host.
 
@@ -552,7 +558,9 @@ systemctl enable screenr-web screenr-worker
 ```
 
 Activation validates settings, applies migrations, switches the symlink and
-restarts the two application services. The migration command rejects
+restarts the two application services. It replaces a `current.new` or
+`current.rollback` link that an interrupted run left behind, rather than
+moving that stale link into place. The migration command rejects
 migrations that are out of order, share a number, or changed after they ran,
 before it changes the database
 ([migration rules](data-and-access.md#schema-migrations)). Activation
@@ -753,6 +761,8 @@ hold the deploy lock indefinitely:
   for this backup under the deploy lock, so the limit stays well inside the
   deploy job's 20-minute limit, after the upload. A timed-out backup fails
   the deploy with systemd's timeout error. Backups currently take seconds.
+  A stopped backup exits at once and removes its dump, without uploading or
+  pruning.
 - `screenr-restore-check.service` sets `TimeoutStartSec=30min`. When it is
   stopped, the restore check drops its temporary database with
   `dropdb --force`, because the restore's server connection can briefly

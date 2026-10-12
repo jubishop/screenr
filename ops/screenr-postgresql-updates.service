@@ -1,6 +1,7 @@
 [Unit]
 Description=Screenr pending PostgreSQL update check
 After=network-online.target
+Wants=network-online.target
 OnFailure=screenr-alert@%n.service
 
 [Service]
