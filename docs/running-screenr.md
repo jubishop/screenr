@@ -253,11 +253,14 @@ domain or new sender DNS. Verify actual inbox delivery before opening signup.
 No paid-plan upgrade is part of this deployment.
 
 The email worker stores encrypted, expiring jobs in PostgreSQL. Failed sends
-retry with the same Resend idempotency key. Requesting a new code replaces an
-older pending retry for that address and verification type, with a new key.
-Successful sends clear their
-payload. Expired jobs are discarded. Unknown addresses without a valid invite
-do not queue email.
+retry with backoff and the same Resend idempotency key until the job expires.
+Resend 4xx replies other than 408, 409, and 429 expire the job at once, since
+a retry cannot fix invalid input, a missing or revoked key, or an unverified
+sender. The worker [logs](deployment.md#failure-logs) every failed send.
+Requesting a new code replaces an older pending retry or rejected code for
+that address and verification type, with a new key. Successful sends clear
+their payload. Expired jobs are discarded. Unknown addresses without a valid
+invite do not queue email.
 
 Screenr applies the
 [login-code limits](product-brief.md#sign-in-methods--2026-09-05) over rolling

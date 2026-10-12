@@ -8,7 +8,9 @@ import {
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { db, domainLock } from "./db";
+import { logFailure } from "./log";
 import { notificationEmail, queueNotificationEmails } from "./notifications";
+import { pruneUsage } from "./usage";
 
 type Mail = { to: string; subject: string; text: string };
 function encryptionKey() {
@@ -87,6 +89,36 @@ export async function queueCode({
   );
 }
 
+// A non-2xx reply from Resend. Its error name, such as
+// `daily_quota_exceeded`, comes from a fixed list; its message can quote the
+// request, so it is not kept.
+class ResendRejection extends Error {
+  constructor(
+    public status: number,
+    public provider?: string,
+  ) {
+    super(`Resend HTTP ${status}`);
+  }
+  // A retry cannot fix invalid input, a missing or revoked key, or an
+  // unverified sender. A timeout (408), a concurrent request with the same
+  // idempotency key (409), rate and quota limits (429), and server errors can
+  // pass later.
+  get final() {
+    return (
+      this.status >= 400 &&
+      this.status < 500 &&
+      ![408, 409, 429].includes(this.status)
+    );
+  }
+}
+async function providerError(response: Response) {
+  const name = ((await response.json().catch(() => null)) as { name?: unknown })
+    ?.name;
+  return typeof name === "string" && /^[a-z][a-z0-9_]{0,63}$/.test(name)
+    ? name
+    : undefined;
+}
+
 export async function deliverOne(): Promise<boolean> {
   const client = await db.connect();
   try {
@@ -151,20 +183,41 @@ export async function deliverOne(): Promise<boolean> {
           text: mail.text,
         }),
       });
-      if (!response.ok) throw new Error(`Resend HTTP ${response.status}`);
+      if (!response.ok)
+        throw new ResendRejection(
+          response.status,
+          await providerError(response),
+        );
       await client.query(
         "UPDATE email_job SET sent_at=now(),payload='',last_error=NULL WHERE id=$1",
         [job.id],
       );
     } catch (error) {
+      const rejection = error instanceof ResendRejection ? error : undefined;
+      const final = rejection?.final ?? false;
+      logFailure(
+        "email delivery failed",
+        {
+          job: job.id,
+          kind: job.notification_recipient ? "activity" : "code",
+          attempt: job.attempts + 1,
+          status: rejection?.status,
+          provider: rejection?.provider,
+          final,
+        },
+        rejection ? undefined : error,
+      );
       const message =
         error instanceof Error
           ? error.message.slice(0, 120)
           : "Delivery failed";
+      // A final failure expires the job, which cleanup then deletes. A new
+      // code request for the same address replaces it.
       await client.query(
         `UPDATE email_job SET attempts=attempts+1,last_error=$2,
-        available_at=now()+least(60,power(2,least(attempts+1,6))) * interval '1 second' WHERE id=$1`,
-        [job.id, message],
+        available_at=now()+least(60,power(2,least(attempts+1,6))) * interval '1 second',
+        expires_at=CASE WHEN $3 THEN now() ELSE expires_at END WHERE id=$1`,
+        [job.id, message, final],
       );
     }
     await client.query("COMMIT");
@@ -174,5 +227,19 @@ export async function deliverOne(): Promise<boolean> {
     throw error;
   } finally {
     client.release();
+  }
+}
+
+// One pass of screenr-worker: send at most one due email. The first pass and
+// every 60th also delete expired jobs and old usage telemetry.
+export async function runWorkerPass(pass: number) {
+  try {
+    await deliverOne();
+    if (pass % 60 === 0) {
+      await db.query("DELETE FROM email_job WHERE expires_at < now()");
+      await pruneUsage();
+    }
+  } catch (error) {
+    logFailure("worker failed", {}, error);
   }
 }

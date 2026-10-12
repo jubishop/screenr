@@ -1,7 +1,6 @@
 import { redirect } from "next/navigation";
 import { currentMember } from "../../../server/session";
-import { loadScreen } from "../../../server/screens";
-import { AppError } from "../../../server/db";
+import { initialScreen } from "../../../server/screens";
 import { Screen } from "../../../components/screen";
 import { memberPath, parseMemberRoute } from "../../../member-routes";
 export const dynamic = "force-dynamic";
@@ -30,18 +29,8 @@ export default async function Page({
           ? "Choose the Google account with the same email address as your Screenr account."
           : "Google could not be connected. Please try again.";
   const requestedPath = memberPath(route);
-  let initialData = null,
-    initialError = "";
-  try {
-    initialData = JSON.parse(
-      JSON.stringify(await loadScreen(user.user_id, requestedPath)),
-    );
-  } catch (error) {
-    initialError =
-      error instanceof AppError
-        ? error.message
-        : "This page could not load. Please try again.";
-  }
+  const screen = await initialScreen(user.user_id, requestedPath);
+  const initialData = screen.data && JSON.parse(JSON.stringify(screen.data));
   if (initialData?.kind === "redirect") redirect(initialData.url);
   return (
     <Screen
@@ -49,7 +38,7 @@ export default async function Page({
       user={user}
       path={requestedPath}
       initialData={initialData}
-      initialError={initialError}
+      initialError={screen.error}
       initialGoogleError={initialGoogleError}
     />
   );

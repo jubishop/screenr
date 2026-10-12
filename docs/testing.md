@@ -340,6 +340,11 @@ links, and replacement invitations. Retrying setup does not consume another
 use or restore a friendship after unfriending or blocking. Invites refreshes
 don't wait for the shared write lock, and writes stop waiting for it with a
 retryable error.
+`tests/app/failure-logs.test.ts` and `tests/app/email.test.ts` capture the
+[failure logs](deployment.md#failure-logs) of request, page, worker, and
+Resend failures. They compare the logged fields exactly, check that comment
+text, search terms, addresses, codes, cookies, keys, and error messages stay
+out, and confirm that permanent Resend rejections are not retried.
 Operational tests check activation rollback after a stalled health request, a
 failed signed-out session request, or a web or worker service that crashes on
 startup. They also check a production-down report when the restored release

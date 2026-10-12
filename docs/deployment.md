@@ -532,6 +532,45 @@ journalctl -u screenr-web -u screenr-worker --since '30 minutes ago' --no-pager
 curl --fail https://screenr.club/api/health
 ```
 
+### Failure logs
+
+The web and worker services print each unexpected failure as one JSON line
+on standard error, which the journal keeps
+([issue #126](https://github.com/jubishop/screenr/issues/126)). The host has
+no `jq`; filter with `grep`:
+
+```sh
+journalctl -u screenr-web -u screenr-worker --since '1 day ago' --no-pager | grep '"event":'
+journalctl -u screenr-worker --since '1 day ago' --no-pager | grep '"event":"email delivery failed"'
+```
+
+| `event` | Service | Fields |
+| --- | --- | --- |
+| `request failed` | web | `action` (known names only), `method`, and `status` 500 |
+| `page failed` | web | `route`, the member route kind, such as `search` or `profile` |
+| `worker failed` | worker | Error fields only |
+| `email delivery failed` | worker | `job` ID, `kind` (`code` or `activity`), `attempt`, and `final` |
+
+For a Resend reply, `email delivery failed` adds the HTTP `status` and the
+`provider` error name, such as `daily_quota_exceeded` or `invalid_api_key`.
+Its other failures, and the other events, add error fields:
+
+- `error`: the class, such as `DatabaseError`, `TypeError`, or
+  `DOMException`, and `name` when it differs, such as `TimeoutError`.
+- `code`: a PostgreSQL SQLSTATE, such as `23505`, or a Node system error
+  code, such as `ECONNREFUSED`. Look up SQLSTATEs in the
+  [PostgreSQL error codes](https://www.postgresql.org/docs/current/errcodes-appendix.html).
+- `constraint`, `table`, and `column` when PostgreSQL reports them.
+- `stack`: up to 12 frames. Web frames point into the release's compiled
+  `.next/server` files. Fetch failures have none.
+- `cause`: the class and code of the underlying error, such as the network
+  error behind a failed fetch.
+
+Logs never include error messages, PostgreSQL details, page paths, request
+bodies, email addresses, email content, cookies, or keys. Messages and details
+can quote the values that failed. `email_job.last_error` keeps a short
+message until cleanup deletes the expired job.
+
 ## Old hostname redirect
 
 The `screenr.jubishop.com` site in `ops/Caddyfile` answers every request with

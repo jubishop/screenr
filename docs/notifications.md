@@ -121,5 +121,6 @@ membership during retries. Identical retries reuse a provider idempotency key;
 changes in visible content use a new key. As with any ambiguous network failure,
 provider acceptance cannot always be determined locally. The worker serializes
 delivery with access, preference, and read changes and prioritizes sign-in codes.
-Activity jobs expire after 24 hours; their notifications remain in the app.
+Activity jobs expire after 24 hours, or at once when Resend rejects them
+permanently; their notifications remain in the app.
 The current worker and Resend configuration need no new service or credentials.

@@ -1,6 +1,7 @@
-import { before, beforeEach, after } from "node:test";
+import { before, beforeEach, after, mock } from "node:test";
 import assert from "node:assert/strict";
 import { randomBytes } from "node:crypto";
+import { format } from "node:util";
 
 // Every application suite that uses the test database or server modules
 // imports this module first, so this setup runs before any server module loads.
@@ -47,6 +48,16 @@ export function useDatabase() {
   after(async () => {
     await db.end();
   });
+}
+
+// Replaces console.error until mock.restoreAll() and returns what each call
+// would have printed, so tests can read failure logs.
+export function captureFailures() {
+  const printed: string[] = [];
+  mock.method(console, "error", (...args: unknown[]) => {
+    printed.push(format(...args));
+  });
+  return printed;
 }
 
 export async function pending(name: string, token: string, verified = true) {

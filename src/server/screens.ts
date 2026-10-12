@@ -9,6 +9,7 @@ import { titleSuggestions } from "./title-suggestions";
 import { savedServices, streamingServices } from "./streaming-services";
 import { withViewingOptions } from "./title-viewing";
 import { activityEmail, unreadNotifications } from "./notifications";
+import { logFailure } from "./log";
 import { parseMemberRoute, type MemberRoute } from "../member-routes";
 
 export async function loadScreen(userId: string, requestedPath: string) {
@@ -19,6 +20,27 @@ export async function loadScreen(userId: string, requestedPath: string) {
   return content.kind === "redirect"
     ? content
     : { ...content, unreadNotifications: unread };
+}
+
+// The member page loads its first screen on the server. A failure shows its
+// message in the page instead of an error page. Unexpected failures are
+// logged with the route kind, not the path, which can name people or
+// search terms.
+export async function initialScreen(userId: string, requestedPath: string) {
+  try {
+    return { data: await loadScreen(userId, requestedPath), error: "" };
+  } catch (error) {
+    if (error instanceof AppError) return { data: null, error: error.message };
+    logFailure(
+      "page failed",
+      { route: parseMemberRoute(requestedPath).kind },
+      error,
+    );
+    return {
+      data: null,
+      error: "This page could not load. Please try again.",
+    };
+  }
 }
 
 async function loadContent(userId: string, route: MemberRoute) {

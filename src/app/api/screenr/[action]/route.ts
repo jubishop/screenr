@@ -1,6 +1,7 @@
 import { auth } from "../../../../server/auth";
 import { findAction } from "../../../../server/actions";
 import { AppError } from "../../../../server/db";
+import { logFailure } from "../../../../server/log";
 import { member } from "../../../../server/profiles";
 import { recordActiveDay } from "../../../../server/usage";
 
@@ -38,6 +39,7 @@ async function handle(
   { params }: { params: Promise<{ action: string }> },
 ) {
   const { action: name } = await params;
+  const action = findAction(name, request.method);
   try {
     if (
       request.method === "POST" &&
@@ -48,7 +50,6 @@ async function handle(
     const session = await auth().api.getSession({ headers: request.headers });
     if (!session) throw new AppError("Sign in to continue.", 401);
     const context = { userId: session.user.id, headers: request.headers };
-    const action = findAction(name, request.method);
     if (action && !action.profile)
       return json(
         (await action.respond(await body(request), context)) ?? { ok: true },
@@ -67,10 +68,12 @@ async function handle(
   } catch (error) {
     if (error instanceof AppError)
       return json({ error: error.message }, error.status);
-    console.error("Screenr request failed", {
-      action: name,
-      error: error instanceof Error ? error.name : "unknown",
-    });
+    // The path segment is client input; only a known action is named.
+    logFailure(
+      "request failed",
+      { action: action && name, method: request.method, status: 500 },
+      error,
+    );
     return json({ error: "Something went wrong. Please try again." }, 500);
   }
 }
