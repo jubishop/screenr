@@ -68,14 +68,14 @@ jobs:
       - name: Package Linux release
         if: steps.release.outputs.deploy == 'true' && github.repository == 'jubishop/screenr'
         run: npm run release:package
-      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: failure()
         with:
           name: browser-failure-${{ github.run_id }}
           path: test-results/
           retention-days: 7
           if-no-files-found: ignore
-      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: steps.release.outputs.deploy == 'true' && github.repository == 'jubishop/screenr'
         with:
           name: screenr-linux-x64-${{ github.sha }}
