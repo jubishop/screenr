@@ -71,10 +71,11 @@ This sends the site origin without the title path. The site's default
 The catalog tests exercise real HTTP and PostgreSQL boundaries. Browser tests
 replace YouTube at the network boundary. They check that a title page sends
 no YouTube request before Play trailer, the one-line collapsed layout, focus
-on the opened player, conditional rendering, desktop and mobile dimensions,
-the actual outgoing referrer, and that background refreshes keep the iframe
-without reloading it. Also verify an available real trailer in a local
-browser before release: confirm in the network panel that the title page
-contacts no YouTube domain before Play trailer, press Play trailer, check
-advancing playback on desktop and mobile, and check the provider link.
+on the opened player, its delegated features under the page's policy,
+conditional rendering, desktop and mobile dimensions, the actual outgoing
+referrer, and that background refreshes keep the iframe without reloading it.
+Also verify an available real trailer in a local browser before release:
+confirm in the network panel that the title page contacts no YouTube domain
+before Play trailer, press Play trailer, check advancing playback on desktop
+and mobile, and check the provider link.
 Automated provider fixtures do not establish live YouTube availability.

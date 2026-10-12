@@ -169,3 +169,67 @@ test('subsequent test remains monitored', async ({page}) => { await page.goto('/
     },
   );
 });
+
+test("browser policy reports fail the test in default and manual contexts", async (t) => {
+  await mkdir(resolve(".cache"), { recursive: true });
+  const directory = await mkdtemp(resolve(".cache/script-guard-test-"));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const server = createServer((req, res) => {
+    res.setHeader("Content-Type", "text/html");
+    if (req.url === "/script")
+      res.setHeader("Content-Security-Policy", "script-src 'none'");
+    if (req.url === "/feature")
+      res.setHeader("Permissions-Policy", "unknown-feature=()");
+    res.end("<p>ok</p><script>document.title = 'ran'</script>");
+  });
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  t.after(() => {
+    server.closeAllConnections();
+    server.close();
+  });
+  const address = server.address();
+  assert.ok(address && typeof address !== "string");
+  await writeFile(
+    join(directory, "playwright.config.ts"),
+    `import config from ${JSON.stringify(resolve("playwright.config.ts"))};
+export default {...config, testDir: '.', outputDir: './results', webServer: undefined, workers: 1,
+  reporter: [['list']], timeout: 3000, use: {...config.use, baseURL:'http://127.0.0.1:${address.port}'}};`,
+  );
+  await writeFile(
+    join(directory, "policy.spec.ts"),
+    `import {expect} from '@playwright/test';
+import {test} from ${JSON.stringify(resolve("scripts/browser-test.ts"))};
+test('blocked script', async ({page}) => { await page.goto('/script'); await expect(page.getByText('ok')).toBeVisible(); });
+test('unrecognized feature', async ({browser}) => {
+  const context = await browser.newContext(); const page = await context.newPage();
+  await page.goto('/feature'); await expect(page).toHaveTitle('ran'); await context.close();
+});
+test('clean page', async ({page}) => { await page.goto('/clean'); await expect(page).toHaveTitle('ran'); });`,
+  );
+  await assert.rejects(
+    execute(
+      process.execPath,
+      [
+        "node_modules/playwright/cli.js",
+        "test",
+        "--config",
+        join(directory, "playwright.config.ts"),
+      ],
+      { timeout: 20_000, env: { ...process.env, CI: "" } },
+    ),
+    (error: Error & { stdout?: string }) => {
+      assert.match(error.stdout!, /2 failed/);
+      assert.match(error.stdout!, /1 passed/);
+      assert.match(
+        error.stdout!,
+        /Browser policy report: Executing inline script violates the following Content Security Policy directive 'script-src 'none''/,
+      );
+      assert.match(
+        error.stdout!,
+        /Browser policy report: Error with Permissions-Policy header: Unrecognized feature: 'unknown-feature'/,
+      );
+      return true;
+    },
+  );
+});

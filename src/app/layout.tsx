@@ -8,6 +8,10 @@ import "./styles/titles.css";
 import "./styles/feeds.css";
 import "./styles/notifications.css";
 import { OfflineWorker } from "../components/offline-worker";
+// The Content-Security-Policy in src/proxy.ts runs only scripts that carry the
+// request's nonce, which Next adds when it renders. Render every page per
+// request; a prerendered page's scripts would be blocked.
+export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
   title: "Screenr · Better with friends",
   description: "Find your next movie or show through your friends.",

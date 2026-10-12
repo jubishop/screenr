@@ -397,6 +397,25 @@ column can also list a few nonexecutable lines, such as leading comments,
 imports, or exported function declarations. Check listed lines against the
 source.
 
+## Security policy reports
+
+Browser tests run under the production security headers from the
+[deployment decision](deployment.md#provisioning). The shared fixture in
+`scripts/browser-test.ts` fails a test when any of its browser contexts
+reports a `Content-Security-Policy` violation, a feature blocked by the
+permissions policy, or a `Permissions-Policy` header error, and lists each
+report. A new cross-origin image, frame, or script, or a newly used browser
+feature, therefore needs a policy change. `tests/app/browser-script-guard.test.ts`
+covers these reports.
+
+`tests/browser/security-headers.spec.ts` checks the exact headers on pages,
+redirects, API responses, and static files. Every script a page renders
+carries that response's new nonce, even when the request supplies its own
+policy, and the browser reports unused features as denied.
+`tests/app/content-security-policy.test.ts` covers the nonce and the
+development-only `'unsafe-eval'`. The trailer test checks that the open
+player keeps its delegated features.
+
 ## Failed script loads
 
 The shared fixture in `scripts/browser-test.ts` monitors essential local script

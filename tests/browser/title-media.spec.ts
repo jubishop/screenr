@@ -289,6 +289,27 @@ test("title trailers load YouTube only after Play trailer, fit desktop and mobil
     "allow",
     "autoplay; encrypted-media; fullscreen; picture-in-picture",
   );
+  // The page's Permissions-Policy must leave these features to the player.
+  const delegated = [
+    "autoplay",
+    "encrypted-media",
+    "fullscreen",
+    "picture-in-picture",
+  ];
+  expect(
+    await player.evaluate(
+      (
+        frame: HTMLIFrameElement & {
+          featurePolicy?: { allowsFeature(feature: string): boolean };
+        },
+        features,
+      ) =>
+        features.filter((feature) =>
+          frame.featurePolicy?.allowsFeature(feature),
+        ),
+      delegated,
+    ),
+  ).toEqual(delegated);
   await expect(play).toHaveCount(0);
   await expect(link).toBeVisible();
   await expect(fallback).toBeVisible();

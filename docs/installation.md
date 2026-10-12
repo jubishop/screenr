@@ -38,7 +38,9 @@ loads to the network with navigation preload and returns its built-in
 and stores nothing in Cache Storage, so it never shows stale feeds, titles, or
 member data. The page is part of the worker script, so browsers pick up an
 edited page with the changed worker at their next update check. Browsers
-without service workers keep their own offline error.
+without service workers keep their own offline error. The
+[Content-Security-Policy](deployment.md#provisioning) allows workers only from
+Screenr.
 
 ## Tests
 

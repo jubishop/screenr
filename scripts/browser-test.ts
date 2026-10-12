@@ -21,7 +21,8 @@ function scriptPath(value: string) {
 }
 
 // A failed local script closes the test's contexts with the browser error, so
-// actions stop promptly; Playwright keeps the failure trace.
+// actions stop promptly; Playwright keeps the failure trace. Any browser report
+// of a Content-Security-Policy or Permissions-Policy problem fails the test.
 export const test = base.extend<{
   expectedScriptFailures: string[];
   scriptGuard: void;
@@ -34,6 +35,7 @@ export const test = base.extend<{
       let failure: Promise<unknown> | undefined;
       let reason: string | undefined;
       let stopping = false;
+      const policyReports: string[] = [];
       const createContext = browser.newContext;
       const port = new URL(baseURL!).port;
       function failed(request: Request, error: string) {
@@ -83,6 +85,13 @@ export const test = base.extend<{
           if (!closing.has(context) && response.status() >= 400)
             failed(response.request(), `HTTP ${response.status()}`);
         });
+        context.on("console", (message) => {
+          if (
+            ["error", "warning"].includes(message.type()) &&
+            /content security policy|permissions.policy/i.test(message.text())
+          )
+            policyReports.push(`Browser policy report: ${message.text()}`);
+        });
         context.once("close", () => contexts.delete(context));
         return context;
       };
@@ -93,6 +102,7 @@ export const test = base.extend<{
         browser.newContext = createContext;
         await failure;
         if (reason) throw new Error(reason);
+        if (policyReports.length) throw new Error(policyReports.join("\n"));
       }
     },
     { auto: true },

@@ -176,6 +176,25 @@ page already renders per request, so per-request nonces add no cost.
 **Rejected alternatives:** Only the CSP rules that need no nonces, and a
 report-only rollout that needs a report endpoint and a later step to enforce.
 
+The app sends these headers itself, so the shared Caddyfile is unchanged.
+`next.config.ts` adds `Strict-Transport-Security: max-age=31536000;
+includeSubDomains` and the `Permissions-Policy` to every response. Cloudflare
+sent no HSTS header on 2026-10-12; keep its HSTS setting off so that it
+cannot send a conflicting value. The permissions policy lets trailers use
+autoplay, encrypted media, fullscreen, and picture-in-picture from
+`https://www.youtube.com`, and denies camera, microphone, location, payment,
+sensors, device access, and similar features. Clipboard access and sharing,
+which Screenr uses, keep browser defaults; browsers already ask before a page
+reads the clipboard.
+
+`src/proxy.ts` sets the `Content-Security-Policy` on every response except
+build assets and optimized images, with a new 128-bit nonce for each request.
+Next adds that nonce to the scripts it renders, so the root layout renders
+every page per request. Resources the decision does not name load only from
+Screenr, and forms submit only to Screenr. Styles also allow the inline style
+attributes that Next's image layout and React use. Development serving adds `'unsafe-eval'` for React's error stacks. The
+[testing guide](testing.md#security-policy-reports) describes the checks.
+
 ### Host configuration drift
 
 **Decision — 2026-10-12:** During deployment, under the deploy lock and
