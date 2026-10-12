@@ -1,61 +1,20 @@
-import { expect, type Page, type Locator } from "@playwright/test";
-import { createHash, randomUUID } from "node:crypto";
-import { readFile } from "node:fs/promises";
-import { test, db } from "./database-fixture";
-import { browserConfig } from "../../scripts/browser-config";
+import { expect, type Locator } from "@playwright/test";
+import { db } from "./database-fixture";
+import { test } from "./monitored-test";
+import { friend, userId } from "./member-fixture";
 
-const { changeRelationship } = await import("../../src/server/relationships");
 const { updateTitleActivity } = await import("../../src/server/title-actions");
 const { addComment } = await import("../../src/server/comments");
 
-async function person(username: string) {
-  const id = randomUUID();
-  await db.query(
-    `INSERT INTO "user"(id,name,email,"emailVerified","createdAt","updatedAt")
-    VALUES($1,$2,$3,true,now(),now())`,
-    [id, username, `${username}@example.test`],
-  );
-  await db.query(
-    "INSERT INTO profile(user_id,username,display_name) VALUES($1,$2,$2)",
-    [id, username],
-  );
-  return id;
-}
-
-async function signIn(page: Page, username: string) {
-  const email = `${username}@example.test`;
-  const headers = { Origin: browserConfig.baseURL };
-  expect(
-    (
-      await page.request.post("/api/auth/email-otp/send-verification-otp", {
-        headers,
-        data: { email, type: "sign-in" },
-      })
-    ).ok(),
-  ).toBe(true);
-  const filename = createHash("sha256").update(email).digest("hex");
-  const { otp } = JSON.parse(
-    await readFile(`.cache/mail/${filename}.json`, "utf8"),
-  );
-  expect(
-    (
-      await page.request.post("/api/auth/sign-in/email-otp", {
-        headers,
-        data: { email, otp },
-      })
-    ).ok(),
-  ).toBe(true);
-}
-
 test("title and feed actions switch exclusively and restore each original discussion", async ({
   page,
+  member,
+  signIn,
 }) => {
-  const errors: string[] = [];
-  page.on("pageerror", (error) => errors.push(error.message));
-  const owner = await person("exclusiveowner");
-  const viewer = await person("exclusiveviewer");
-  await changeRelationship(owner, viewer, "request");
-  await changeRelationship(viewer, owner, "accept");
+  const ownerPage = await member("exclusiveowner");
+  const owner = await userId(ownerPage);
+  const viewer = await signIn(page, "exclusiveviewer");
+  await friend(owner, viewer);
   await db.query(`INSERT INTO title(id,kind,tmdb_id,name) VALUES
     ('movie:987654','movie',987654,'The Lantern Room') ON CONFLICT DO NOTHING`);
   const friendItem = await updateTitleActivity(
@@ -89,7 +48,6 @@ test("title and feed actions switch exclusively and restore each original discus
     false,
   );
   await updateTitleActivity(viewer, "movie:987654", "recommended", true);
-  await signIn(page, "exclusiveviewer");
   await page.setViewportSize({ width: 390, height: 900 });
 
   const button = (scope: Locator, name: string) =>
@@ -200,8 +158,10 @@ test("title and feed actions switch exclusively and restore each original discus
     });
   }
   // The friend's own choice is unaffected by the viewer's changes.
-  await signIn(page, "exclusiveowner");
-  await page.goto("/people/exclusiveviewer");
-  await states(page.locator(`[data-item-id="${recommendation}"]`), true, false);
-  expect(errors).toEqual([]);
+  await ownerPage.goto("/people/exclusiveviewer");
+  await states(
+    ownerPage.locator(`[data-item-id="${recommendation}"]`),
+    true,
+    false,
+  );
 });

@@ -1,29 +1,10 @@
 import { expect, type Locator, type Page } from "@playwright/test";
-import { randomUUID } from "node:crypto";
-import { db } from "./database-fixture";
 import { test } from "./monitored-test";
-import { prepareFriendship } from "./member-fixture";
+import { person, friend, prepareFriendship } from "./member-fixture";
 import { expectErrorBeside, failAction, press } from "./action-errors";
 
 const { changeRelationship } = await import("../../src/server/relationships");
 
-async function person(username: string, displayName: string) {
-  const id = randomUUID();
-  await db.query(
-    `INSERT INTO "user"(id,name,email,"emailVerified","createdAt","updatedAt")
-    VALUES($1,$2,$3,true,now(),now())`,
-    [id, displayName, `${username}@example.test`],
-  );
-  await db.query(
-    "INSERT INTO profile(user_id,username,display_name) VALUES($1,$2,$3)",
-    [id, username, displayName],
-  );
-  return id;
-}
-async function friend(a: string, b: string) {
-  await changeRelationship(a, b, "request");
-  await changeRelationship(b, a, "accept");
-}
 async function box(locator: Locator) {
   const bounds = await locator.boundingBox();
   if (!bounds) throw new Error(`${locator} has no layout box`);

@@ -1,25 +1,10 @@
 import { expect } from "@playwright/test";
-import { randomUUID } from "node:crypto";
 import { db } from "./database-fixture";
 import { test } from "./monitored-test";
+import { person, friend } from "./member-fixture";
 import { nextAccountRefreshForPath } from "./refresh-helpers";
 
-const { changeRelationship } = await import("../../src/server/relationships");
 const { updateTitleActivity } = await import("../../src/server/title-actions");
-
-async function person(username: string) {
-  const id = randomUUID();
-  await db.query(
-    `INSERT INTO "user"(id,name,email,"emailVerified","createdAt","updatedAt")
-    VALUES($1,$2,$3,true,now(),now())`,
-    [id, username, `${username}@example.test`],
-  );
-  await db.query(
-    "INSERT INTO profile(user_id,username,display_name) VALUES($1,$2,$2)",
-    [id, username],
-  );
-  return id;
-}
 
 test("page loads and navigation count as active days, background refreshes do not, and saves report their surface", async ({
   page,
@@ -54,11 +39,10 @@ test("page loads and navigation count as active days, background refreshes do no
     ('movie:987654','movie',987654,'The Lantern Room','A fictional coastal story.'),
     ('tv:998001','tv',998001,'The Harbor Signal','A fictional mystery.')
     ON CONFLICT(id) DO NOTHING`);
-  const friend = await person("usagefriend");
-  await changeRelationship(viewer, friend, "request");
-  await changeRelationship(friend, viewer, "accept");
-  await updateTitleActivity(friend, "movie:987654", "recommended", true);
-  await updateTitleActivity(friend, "tv:998001", "want_to_watch", true);
+  const recommender = await person("usagefriend");
+  await friend(viewer, recommender);
+  await updateTitleActivity(recommender, "movie:987654", "recommended", true);
+  await updateTitleActivity(recommender, "tv:998001", "want_to_watch", true);
   await page.goto("/");
   for (const action of ["recommends", "wants to watch"]) {
     const entry = page

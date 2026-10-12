@@ -166,6 +166,10 @@ Only email delivery is replaced with an in-memory code capture. The browser
 and application still use normal sessions and access checks. `member` creates
 a mobile browser context; `signIn` prepares the test's existing page.
 `prepareFriendship` sends and accepts requests through the authenticated API.
+For people a test never signs in as, `person` creates a completed profile
+without a session, and `friend` accepts a friendship between two user IDs
+through the relationship rules. `userId` reads the user behind a page's
+session. Specs import these helpers instead of defining their own copies.
 
 - Every application suite that uses the test database or server modules
   imports [social-fixture.ts](../tests/app/social-fixture.ts) first. Before
@@ -192,15 +196,20 @@ a mobile browser context; `signIn` prepares the test's existing page.
   status and JSON error. A bare rejection, a status alone, or a loose pattern
   such as `/not found/` would also accept a SQL error, another denial, or a
   different 4xx.
-- Browser suites that import `test` from
-  [monitored-test.ts](../tests/browser/monitored-test.ts) get its automatic
-  per-test fixture, which resets and checks page and hydration errors in every
-  spec. Extra tabs and complete signup pages are monitored explicitly.
+- Every browser spec imports `test` from
+  [monitored-test.ts](../tests/browser/monitored-test.ts). Its automatic
+  per-test fixture resets and checks page and hydration errors in every spec.
+  Extra tabs and complete signup pages are monitored explicitly with
+  `monitorErrors`. `tests/app/browser-harness.test.ts` fails when a spec takes
+  `test` from Playwright, the script guard, or the database or member fixture
+  instead ([#154](https://github.com/jubishop/screenr/issues/154)).
 - That fixture extends the
   [member fixture](../tests/browser/member-fixture.ts), which owns real signed
   sessions, independent member contexts, cleanup, and member-page error
-  checks. The [database fixture](../tests/browser/database-fixture.ts) closes
-  the shared pool only at worker shutdown.
+  checks. Its `watchErrors` holds the one page and hydration error filter that
+  both fixtures use. The
+  [database fixture](../tests/browser/database-fixture.ts) closes the shared
+  pool only at worker shutdown.
 - [Journey helpers](../tests/browser/journey-helpers.ts) retain complete
   email signup and browser friendship setup for scenarios that test those
   journeys. [Refresh helpers](../tests/browser/refresh-helpers.ts) wait for

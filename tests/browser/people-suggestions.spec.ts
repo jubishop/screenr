@@ -1,42 +1,14 @@
 import { expect } from "@playwright/test";
 import { db } from "./database-fixture";
-import { test } from "./member-fixture";
-import { randomUUID } from "node:crypto";
+import { test } from "./monitored-test";
+import { person, friend } from "./member-fixture";
 const { changeRelationship } = await import("../../src/server/relationships");
 const { updateTitleActivity } = await import("../../src/server/title-actions");
-
-async function person(username: string, name: string) {
-  const id = randomUUID();
-  await db.query(
-    `INSERT INTO "user"(id,name,email,"emailVerified","createdAt","updatedAt")
-     VALUES($1,$2,$3,true,now(),now())`,
-    [id, name, `${username}@example.test`],
-  );
-  await db.query(
-    "INSERT INTO profile(user_id,username,display_name) VALUES($1,$2,$3)",
-    [id, username, name],
-  );
-  return id;
-}
-
-async function friend(a: string, b: string) {
-  await changeRelationship(a, b, "request");
-  await changeRelationship(b, a, "accept");
-}
 
 test("People suggestions show mutual friends, send requests, and refresh safely on desktop and mobile", async ({
   page,
   signIn,
 }) => {
-  const errors: string[] = [];
-  page.on("pageerror", (error) => errors.push(error.message));
-  page.on("console", (message) => {
-    if (
-      message.type() === "error" &&
-      /hydration|didn.t match/i.test(message.text())
-    )
-      errors.push(message.text());
-  });
   const viewer = await signIn(page, "suggestedviewer", {
     displayName: "Viewer",
   });
@@ -171,5 +143,4 @@ test("People suggestions show mutual friends, send requests, and refresh safely 
   await expect(danaRow).toHaveCount(0);
   await changeRelationship(viewer, ellis, "block");
   await expect(section.getByText("No friend suggestions yet.")).toBeVisible();
-  expect(errors).toEqual([]);
 });

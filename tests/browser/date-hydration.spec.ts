@@ -1,5 +1,5 @@
 import { expect } from "@playwright/test";
-import { test } from "./member-fixture";
+import { test } from "./monitored-test";
 import { db } from "./database-fixture";
 
 const { updateTitleActivity } = await import("../../src/server/title-actions");
@@ -208,8 +208,8 @@ for (const [index, timezoneId] of ["UTC", "America/Los_Angeles"].entries()) {
       );
       expect(serverInvite).toContain("Expires");
       expect(serverInvite).toContain(String(year));
-      // signIn's teardown asserts no hydration console errors or page errors
-      // across every document load above, including both repeated reloads.
+      // The monitored fixture asserts no hydration console errors or page
+      // errors across every document load above, including both reloads.
     });
   });
 }

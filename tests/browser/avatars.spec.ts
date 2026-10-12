@@ -1,31 +1,14 @@
 import { expect, type Locator } from "@playwright/test";
-import { randomUUID } from "node:crypto";
 import { db } from "./database-fixture";
 import { expectTextContrast } from "./contrast";
 import { test } from "./monitored-test";
+import { person, friend } from "./member-fixture";
 
 const { updateProfile } = await import("../../src/server/profiles");
 const { changeRelationship } = await import("../../src/server/relationships");
 const { updateTitleActivity } = await import("../../src/server/title-actions");
 const { addComment } = await import("../../src/server/comments");
 
-async function person(username: string, displayName: string) {
-  const id = randomUUID();
-  await db.query(
-    `INSERT INTO "user"(id,name,email,"emailVerified","createdAt","updatedAt")
-    VALUES($1,$2,$3,true,now(),now())`,
-    [id, displayName, `${username}@example.test`],
-  );
-  await db.query(
-    "INSERT INTO profile(user_id,username,display_name) VALUES($1,$2,$3)",
-    [id, username, displayName],
-  );
-  return id;
-}
-async function friend(a: string, b: string) {
-  await changeRelationship(a, b, "request");
-  await changeRelationship(b, a, "accept");
-}
 const background = (avatar: Locator) =>
   avatar.evaluate((element) => getComputedStyle(element).backgroundColor);
 async function box(locator: Locator) {

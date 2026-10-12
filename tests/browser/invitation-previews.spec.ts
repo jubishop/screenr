@@ -1,5 +1,5 @@
 import { expect } from "@playwright/test";
-import { test } from "./database-fixture";
+import { test } from "./monitored-test";
 import { createHash } from "node:crypto";
 import { Pool } from "pg";
 import { browserConfig } from "../../scripts/browser-config";

@@ -6,6 +6,7 @@ import { browserConfig } from "../../scripts/browser-config";
 const { createAuth } = await import("../../src/server/auth");
 const { createInvitation, invitationHash, completeSignup } =
   await import("../../src/server/invitations");
+const { changeRelationship } = await import("../../src/server/relationships");
 
 type MemberOptions = {
   displayName?: string;
@@ -23,6 +24,18 @@ export type Member = (
   options?: MemberOptions,
 ) => Promise<Page>;
 
+// Record page errors and React hydration mismatches that the page reports.
+export function watchErrors(page: Page, errors: string[]) {
+  page.on("pageerror", (error) => errors.push(error.message));
+  page.on("console", (message) => {
+    if (
+      message.type() === "error" &&
+      /hydration|didn.t match/i.test(message.text())
+    )
+      errors.push(message.text());
+  });
+}
+
 // Each test uses distinct users, invitations, contexts, and in-memory email codes.
 // Rows live for one harness run; browser-server resets its locked, checkout-local
 // database before any test starts. No test resets or deletes shared data.
@@ -33,14 +46,7 @@ export const test = databaseTest.extend<{ signIn: SignIn; member: Member }>({
     const errors: string[] = [];
     try {
       await use(async (page, username, options = {}) => {
-        page.on("pageerror", (error) => errors.push(error.message));
-        page.on("console", (message) => {
-          if (
-            message.type() === "error" &&
-            /hydration|didn.t match/i.test(message.text())
-          )
-            errors.push(message.text());
-        });
+        watchErrors(page, errors);
         const id = randomUUID();
         const email = `${username}.browser@example.test`;
         let token = options.token;
@@ -134,13 +140,36 @@ export const test = databaseTest.extend<{ signIn: SignIn; member: Member }>({
   },
 });
 
+// A completed profile with no session, for someone the test never signs in as.
+export async function person(username: string, displayName = username) {
+  const id = randomUUID();
+  await db.query(
+    `INSERT INTO "user"(id,name,email,"emailVerified","createdAt","updatedAt")
+    VALUES($1,$2,$3,true,now(),now())`,
+    [id, displayName, `${username}@example.test`],
+  );
+  await db.query(
+    "INSERT INTO profile(user_id,username,display_name) VALUES($1,$2,$3)",
+    [id, username, displayName],
+  );
+  return id;
+}
+
+// Accept a friendship between two user IDs through the relationship rules.
+export async function friend(a: string, b: string) {
+  await changeRelationship(a, b, "request");
+  await changeRelationship(b, a, "accept");
+}
+
+// The user ID behind a page's signed session.
+export async function userId(page: Page) {
+  const response = await page.request.get("/api/auth/get-session");
+  expect(response.status()).toBe(200);
+  return (await response.json()).user.id as string;
+}
+
 export async function prepareFriendship(a: Page, b: Page) {
-  const session = async (page: Page) => {
-    const response = await page.request.get("/api/auth/get-session");
-    expect(response.status()).toBe(200);
-    return (await response.json()).user.id as string;
-  };
-  const [aId, bId] = await Promise.all([session(a), session(b)]);
+  const [aId, bId] = await Promise.all([userId(a), userId(b)]);
   for (const [page, target, action] of [
     [a, bId, "request"],
     [b, aId, "accept"],

@@ -1,6 +1,6 @@
 import { nextAccountRefresh } from "./refresh-helpers";
 import { expect, type Page } from "@playwright/test";
-import { test } from "./monitored-test";
+import { test, monitorErrors } from "./monitored-test";
 import { prepareFriendship } from "./member-fixture";
 
 async function earlyAnimationFrames(page: Page) {
@@ -259,6 +259,7 @@ test("profile display name editing preserves drafts, saves, and updates existing
   await expect(edit).not.toBeFocused();
   await expect(owner.getByText("Friends (1)", { exact: true })).toBeVisible();
   const otherTab = await owner.context().newPage();
+  monitorErrors(otherTab);
   await otherTab.goto("/account");
   await owner.bringToFront();
   let writes = 0;

@@ -1,5 +1,6 @@
 import { expect } from "@playwright/test";
-import { test, prepareFriendship } from "./member-fixture";
+import { test } from "./monitored-test";
+import { prepareFriendship } from "./member-fixture";
 import { browserConfig } from "../../scripts/browser-config";
 
 test("prepared member sessions keep concurrent setup, access, and sign-out independent", async ({

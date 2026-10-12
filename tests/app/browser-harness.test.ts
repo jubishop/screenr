@@ -5,6 +5,7 @@ import {
   copyFile,
   mkdir,
   mkdtemp,
+  readdir,
   readFile,
   rm,
   symlink,
@@ -264,4 +265,60 @@ test("the browser command rejects focused tests", async (t) => {
       },
     );
   }
+});
+
+// Modules that supply a spec's runtime `test` binding, including a whole
+// Playwright import that could reach `test` through a namespace or default.
+function testSources(source: string) {
+  const modules: string[] = [];
+  for (const [, clause, module] of source.matchAll(
+    /^import\s+(?!type\s)([^;]*?)\s+from\s+["']([^"']+)["']/gm,
+  )) {
+    const named = (clause.match(/\{([^}]*)\}/)?.[1] ?? "")
+      .split(",")
+      .map((part) => part.trim())
+      .filter((part) => part && !part.startsWith("type "))
+      .map((part) => part.split(/\s+as\s+/)[0]);
+    const whole = clause
+      .replace(/\{[^}]*\}/, "")
+      .replace(/,/g, "")
+      .trim();
+    if (named.includes("test") || (whole && module === "@playwright/test"))
+      modules.push(module);
+  }
+  return modules;
+}
+
+test("every browser spec takes test from the monitored fixture", async () => {
+  // Playwright's test, the script guard, and the database or member fixtures
+  // would skip the per-test page and hydration error check.
+  const directory = resolve("tests/browser");
+  const monitored = join(directory, "monitored-test");
+  const specs = (await readdir(directory, { recursive: true }))
+    .filter((path) => /\.(spec|test)\.[cm]?[jt]sx?$/.test(path))
+    .sort();
+  assert.ok(specs.length > 0);
+  const unmonitored: string[] = [];
+  for (const spec of specs) {
+    const file = join(directory, spec);
+    const sources = testSources(await readFile(file, "utf8"));
+    if (
+      sources.length !== 1 ||
+      resolve(dirname(file), sources[0]) !== monitored
+    )
+      unmonitored.push(`${spec}: ${sources.join(", ") || "no test import"}`);
+  }
+  assert.deepEqual(unmonitored, []);
+  assert.deepEqual(
+    testSources(
+      [
+        'import { expect, type Page } from "@playwright/test";',
+        'import { test as base } from "./member-fixture";',
+        'import type { test } from "./database-fixture";',
+        'import * as playwright from "@playwright/test";',
+        'import {\n  monitorErrors,\n  test,\n} from "./monitored-test";',
+      ].join("\n"),
+    ),
+    ["./member-fixture", "@playwright/test", "./monitored-test"],
+  );
 });

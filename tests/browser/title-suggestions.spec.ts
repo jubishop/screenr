@@ -1,43 +1,12 @@
 import { expect } from "@playwright/test";
 import { db } from "./database-fixture";
-import { test } from "./member-fixture";
-import { randomUUID } from "node:crypto";
+import { test } from "./monitored-test";
+import { person, friend } from "./member-fixture";
 import { browserConfig } from "../../scripts/browser-config";
 
 const { changeRelationship } = await import("../../src/server/relationships");
 const { updateTitleActivity } = await import("../../src/server/title-actions");
 
-const errors: string[] = [];
-test.beforeEach(({ page }) => {
-  errors.length = 0;
-  page.on("pageerror", (error) => errors.push(error.message));
-  page.on("console", (message) => {
-    if (
-      message.type() === "error" &&
-      /hydration|didn.t match/i.test(message.text())
-    )
-      errors.push(message.text());
-  });
-});
-test.afterEach(() => expect(errors).toEqual([]));
-
-async function person(username: string, displayName = username) {
-  const id = randomUUID();
-  await db.query(
-    `INSERT INTO "user"(id,name,email,"emailVerified","createdAt","updatedAt")
-    VALUES($1,$2,$3,true,now(),now())`,
-    [id, displayName, `${username}@example.test`],
-  );
-  await db.query(
-    "INSERT INTO profile(user_id,username,display_name) VALUES($1,$2,$3)",
-    [id, username, displayName],
-  );
-  return id;
-}
-async function friend(a: string, b: string) {
-  await changeRelationship(a, b, "request");
-  await changeRelationship(b, a, "accept");
-}
 async function setup(viewer: string, prefix: string) {
   const direct = await person(
     `${prefix}direct`,

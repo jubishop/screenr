@@ -1,6 +1,7 @@
 import { expect } from "@playwright/test";
 import { test } from "./monitored-test";
-import { befriend, confirmProfileAction } from "./journey-helpers";
+import { prepareFriendship } from "./member-fixture";
+import { confirmProfileAction } from "./journey-helpers";
 
 test("watch together opens from a friend profile, filters shared titles, and refreshes choices and access", async ({
   member,
@@ -16,7 +17,7 @@ test("watch together opens from a friend profile, filters shared titles, and ref
   ).toHaveCount(0);
   expect((await owner.request.get(apiPath)).status()).toBe(404);
   expect((await page.request.get(apiPath)).status()).toBe(401);
-  await befriend(owner, friend, "watchfriend", "watchowner");
+  await prepareFriendship(owner, friend);
   await owner.goto("/people/watchowner");
   await expect(
     owner.getByRole("link", { name: "Watch together", exact: true }),

@@ -1,5 +1,5 @@
 import { expect, type Page } from "@playwright/test";
-import { test } from "./member-fixture";
+import { test } from "./monitored-test";
 import { expectErrorBeside, failAction, press } from "./action-errors";
 
 const screenRead = "**/api/screenr/screen?**";
