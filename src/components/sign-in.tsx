@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import { codeLimitMessage } from "../shared";
 import { authClient, api, signOut, useInteractive } from "./client";
 
 export function SignIn({
@@ -29,7 +30,12 @@ export function SignIn({
             type: "sign-in",
           });
       if (result.error)
-        throw new Error(result.error.message ?? "Could not sign in.");
+        throw new Error(
+          // Better Auth's per-IP limit has a generic message.
+          !sent && result.error.status === 429
+            ? codeLimitMessage
+            : (result.error.message ?? "Could not sign in."),
+        );
       if (sent) window.location.assign("/setup");
       else setSent(true);
     } catch (error) {

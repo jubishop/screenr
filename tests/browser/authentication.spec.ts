@@ -30,6 +30,29 @@ test("server-rendered signup controls wait for their event handlers", async ({
   await expect(page.getByLabel("Email address")).toBeEditable();
 });
 
+test("a limited code request explains how to continue", async ({ page }) => {
+  // The per-IP limit returns Better Auth's generic message; Screenr's caps
+  // return this one. Either way the form explains the alternatives.
+  await page.route("**/api/auth/email-otp/send-verification-otp", (route) =>
+    route.fulfill({
+      status: 429,
+      json: { message: "Too many requests. Please try again later." },
+    }),
+  );
+  await page.goto("/login");
+  await page.getByLabel("Email address").fill("limited.browser@example.test");
+  const send = page.getByRole("button", {
+    name: "Send sign-in code",
+    exact: true,
+  });
+  await send.click();
+  await expect(page.getByRole("main").getByRole("alert")).toHaveText(
+    "Too many codes requested. Try again later, or continue with Google.",
+  );
+  await expect(page.getByLabel("Sign-in code", { exact: true })).toHaveCount(0);
+  await expect(send).toBeEnabled();
+});
+
 async function useTestGoogle(page: Page) {
   // The harness owns the provider boundary. Never fall through to real Google
   // when running with test credentials.

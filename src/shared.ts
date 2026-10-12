@@ -13,6 +13,8 @@ export type Title = {
   release_date: string;
 };
 export type Trailer = { key: string; name: string };
+export const codeLimitMessage =
+  "Too many codes requested. Try again later, or continue with Google.";
 export const watchCategories = [
   "flatrate",
   "free",

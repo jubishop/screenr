@@ -29,13 +29,14 @@ if (process.env.NODE_ENV !== "production") globalDB.screenrPool = db;
 
 export async function transaction<T>(
   work: (client: PoolClient) => Promise<T>,
+  // All domain mutations share the default lock. This small invite-only app
+  // favors a clear ordering between permission changes and content writes.
+  lock = 713934201,
 ): Promise<T> {
   const client = await db.connect();
   try {
     await client.query("BEGIN");
-    // All domain mutations share this lock. This small invite-only app favors
-    // a clear ordering between permission changes and content writes.
-    await client.query("SELECT pg_advisory_xact_lock(713934201)");
+    await client.query("SELECT pg_advisory_xact_lock($1)", [lock]);
     const result = await work(client);
     await client.query("COMMIT");
     return result;

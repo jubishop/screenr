@@ -98,13 +98,17 @@ test("Better Auth requires an invite for a new email identity and preserves the 
   );
 });
 
-test("email rate limits return a usable retry delay from PostgreSQL timestamps", async () => {
-  await db.query('TRUNCATE "rateLimit"');
-  const auth = createAuth({
-    sendCode: async () => assert.fail("Uninvited email must not be sent"),
-  });
-  const request = () =>
-    auth.handler(
+const codeLimitMessage =
+  "Too many codes requested. Try again later, or continue with Google.";
+
+function codeRequests(auth: ReturnType<typeof createAuth>) {
+  let requests = 0;
+  return (
+    email: string,
+    { token, ip }: { token?: string; ip?: string } = {},
+  ) => {
+    requests++;
+    return auth.handler(
       new Request(
         "http://localhost:3000/api/auth/email-otp/send-verification-otp",
         {
@@ -112,18 +116,45 @@ test("email rate limits return a usable retry delay from PostgreSQL timestamps",
           headers: {
             "Content-Type": "application/json",
             Origin: "http://localhost:3000",
-            "X-Forwarded-For": "192.0.2.10",
+            // A new client address per request isolates the per-recipient
+            // and Screenr-wide caps from the per-IP limit.
+            "X-Forwarded-For":
+              ip ??
+              `10.0.${Math.floor(requests / 250)}.${(requests % 250) + 1}`,
+            ...(token ? { Cookie: `screenr-invite=${token}` } : {}),
           },
-          body: JSON.stringify({
-            email: "rate-limit@example.test",
-            type: "sign-in",
-          }),
+          body: JSON.stringify({ email, type: "sign-in" }),
         },
       ),
     );
-  for (let index = 0; index < 10; index++)
-    assert.equal((await request()).status, 200);
-  const limited = await request();
+  };
+}
+
+async function moveCodeRequestsBack(interval: string) {
+  await db.query(
+    "UPDATE login_code_request SET created_at=created_at-$1::interval",
+    [interval],
+  );
+}
+
+async function assertCodeLimited(response: Response) {
+  assert.equal(response.status, 429);
+  assert.equal((await response.json()).message, codeLimitMessage);
+}
+
+test("email code requests are limited to three per IP each minute", async () => {
+  await db.query('TRUNCATE "rateLimit", login_code_request');
+  const request = codeRequests(
+    createAuth({
+      sendCode: async () => assert.fail("Uninvited email must not be sent"),
+    }),
+  );
+  let address = 0;
+  const fromOneIP = () =>
+    request(`rate-limit-${address++}@example.test`, { ip: "192.0.2.10" });
+  for (let index = 0; index < 3; index++)
+    assert.equal((await fromOneIP()).status, 200);
+  const limited = await fromOneIP();
   assert.equal(limited.status, 429);
   const retry = Number(limited.headers.get("X-Retry-After"));
   assert.ok(
@@ -133,7 +164,142 @@ test("email rate limits return a usable retry delay from PostgreSQL timestamps",
   await db.query('UPDATE "rateLimit" SET "lastRequest"=$1', [
     Date.now() - 61_000,
   ]);
-  assert.equal((await request()).status, 200);
+  assert.equal((await fromOneIP()).status, 200);
+});
+
+test("login codes are limited to three per address each 15 minutes and ten each day", async () => {
+  await db.query('TRUNCATE "rateLimit", login_code_request');
+  await person("capped");
+  const sent: string[] = [];
+  const request = codeRequests(
+    createAuth({
+      sendCode: async ({ email }) => {
+        sent.push(email);
+      },
+    }),
+  );
+  const member = "capped@example.test";
+  for (const email of [member, "Capped@Example.test", member])
+    assert.equal((await request(email)).status, 200);
+  assert.equal(sent.length, 3);
+  await assertCodeLimited(await request(member));
+  assert.equal(sent.length, 3, "A capped request must not send a code");
+  // Unknown addresses reach the same cap, so it cannot reveal membership.
+  for (let index = 0; index < 3; index++)
+    assert.equal((await request("stranger@example.test")).status, 200);
+  await assertCodeLimited(await request("stranger@example.test"));
+  for (const expected of [6, 9, 10]) {
+    await moveCodeRequestsBack("15 minutes");
+    while (sent.length < expected)
+      assert.equal((await request(member)).status, 200);
+  }
+  await moveCodeRequestsBack("15 minutes");
+  await assertCodeLimited(await request(member));
+  assert.equal(sent.length, 10);
+  await moveCodeRequestsBack("1 day");
+  assert.equal((await request(member)).status, 200);
+  assert.equal(sent.length, 11);
+});
+
+test("the Screenr-wide cap allows 40 login-code emails a day across addresses and IPs", async () => {
+  await db.query('TRUNCATE "rateLimit", login_code_request');
+  const sent: string[] = [];
+  const request = codeRequests(
+    createAuth({
+      sendCode: async ({ email }) => {
+        sent.push(email);
+      },
+    }),
+  );
+  const { token } = await createInvitation(null);
+  // Requests that send nothing leave the shared allowance unchanged.
+  for (let index = 0; index < 5; index++)
+    assert.equal((await request(`uninvited${index}@example.test`)).status, 200);
+  for (let index = 0; index < 37; index++)
+    assert.equal(
+      (await request(`guest${index}@example.test`, { token })).status,
+      200,
+    );
+  assert.equal(sent.length, 37);
+  const racing = await Promise.all(
+    Array.from({ length: 6 }, (_, index) =>
+      request(`racing${index}@example.test`, { token }),
+    ),
+  );
+  for (const response of racing)
+    if (response.status !== 200) await assertCodeLimited(response);
+  assert.equal(sent.length, 40, "Concurrent requests must not exceed the cap");
+  await assertCodeLimited(await request("late@example.test", { token }));
+  await person("member");
+  await assertCodeLimited(await request("member@example.test"));
+  assert.equal(sent.length, 40);
+  await moveCodeRequestsBack("1 day");
+  assert.equal((await request("member@example.test")).status, 200);
+  assert.equal(sent.length, 41);
+});
+
+test("Better Auth password routes are disabled", async () => {
+  const sent: string[] = [];
+  const auth = createAuth({
+    rateLimit: false,
+    sendCode: async ({ type }) => {
+      sent.push(type ?? "");
+    },
+  });
+  await person("member");
+  const body = {
+    email: "member@example.test",
+    otp: "123456",
+    password: "unused-password",
+    newPassword: "unused-password",
+    currentPassword: "unused-password",
+    name: "Member",
+    token: "unused-token",
+  };
+  const post = (path: string, data: unknown = body) =>
+    auth.handler(
+      new Request(`http://localhost:3000/api/auth${path}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Origin: "http://localhost:3000",
+        },
+        body: JSON.stringify(data),
+      }),
+    );
+  for (const path of [
+    "/email-otp/request-password-reset",
+    "/forget-password/email-otp",
+    "/email-otp/reset-password",
+    "/email-otp/reset-password/",
+    "/request-password-reset",
+    "/reset-password",
+    "/sign-up/email",
+    "/sign-in/email",
+    "/change-password",
+    "/verify-password",
+  ])
+    assert.equal((await post(path)).status, 404, path);
+  assert.equal(
+    (
+      await post("/email-otp/send-verification-otp", {
+        email: body.email,
+        type: "forget-password",
+      })
+    ).status,
+    200,
+  );
+  assert.deepEqual(sent, [], "Screenr has no passwords to reset");
+  assert.equal(
+    (
+      await post("/email-otp/send-verification-otp", {
+        email: body.email,
+        type: "sign-in",
+      })
+    ).status,
+    200,
+  );
+  assert.deepEqual(sent, ["sign-in"]);
 });
 
 test("Google and email retain one account; linking requires the existing account session and a verified matching email", async () => {

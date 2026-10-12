@@ -156,9 +156,23 @@ retry with the same Resend idempotency key. Requesting a new code replaces an
 older pending retry for that address and verification type, with a new key.
 Successful sends clear their
 payload. Expired jobs are discarded. Unknown addresses without a valid invite
-do not queue email. Better Auth also limits requests and code attempts. The
-shared Resend free allowance can still be exhausted by other applications;
-inspect Resend delivery activity if codes do not arrive.
+do not queue email.
+
+Screenr applies the
+[login-code limits](product-brief.md#sign-in-methods--2026-09-05) over rolling
+windows: 3 requests per address in 15 minutes, 10 per address in a day, and 40
+code emails across Screenr in a day. The per-address limits count every
+request, including those that send nothing, so a limited response does not
+reveal membership. Requests that send nothing do not use the Screenr-wide
+allowance. Better Auth separately allows 3 code requests per IP each minute
+and five attempts per code. A limited request leaves the last delivered code
+usable, and the sign-in page shows "Too many codes requested. Try again later,
+or continue with Google." Migration `011-login-code-limits.sql` stores hashed
+recipients for a day. Because Screenr has no passwords, it sends no
+password-reset codes, and Better Auth's password routes, such as
+`/api/auth/email-otp/reset-password`, return 404. The shared Resend free
+allowance can still be exhausted by other applications; inspect Resend
+delivery activity if codes do not arrive.
 
 ### Notifications and activity email
 
@@ -374,6 +388,7 @@ recipients. A full run checks:
   canceled consent, and a mismatched Google email. Error messages survive the
   account refresh. Successful linking persists after reload, and subsequent
   Google sign-in returns to the existing profile.
+- A limited code request shows the limit message and allows retry.
 - Failed sign-out and Google sign-in requests show an error and allow retry.
   A pending member can finish signup through a replacement invitation.
 - Reply drafts survive failed refreshes and typing during a pending post.

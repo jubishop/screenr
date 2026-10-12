@@ -1,7 +1,9 @@
+import { createHash } from "node:crypto";
 import { betterAuth } from "better-auth";
-import { APIError } from "better-auth/api";
+import { APIError, createAuthMiddleware } from "better-auth/api";
 import { emailOTP } from "better-auth/plugins";
-import { db } from "./db";
+import { codeLimitMessage } from "../shared";
+import { db, transaction } from "./db";
 import { activeInvitation, invitationHash } from "./invitations";
 import { queueCode } from "./email";
 
@@ -15,15 +17,92 @@ export function tokenFromCookie(headers?: Headers) {
   return token && /^[a-zA-Z0-9_-]{43}$/.test(token) ? token : undefined;
 }
 
+// Login-code email limits over rolling windows. They keep most of the shared
+// Resend allowance for activity email and other applications.
+const codeLimits = { recipient15Minutes: 3, recipientDay: 10, screenrDay: 40 };
+const codeLock = 713934203;
+const codeRecipient = (email: string) =>
+  createHash("sha256")
+    .update(`login-code:${email.toLowerCase()}`)
+    .digest("hex");
+
+// Count every request for an address, sent or not, so a limited response
+// never reveals whether the address belongs to a member.
+async function acceptCodeRequest(email: string) {
+  const recipient = codeRecipient(email);
+  return transaction(async (client) => {
+    const { rows } = await client.query(
+      `SELECT count(*) FILTER (WHERE recipient_hash=$1
+          AND created_at>now()-interval '15 minutes') AS recent,
+        count(*) FILTER (WHERE recipient_hash=$1) AS today,
+        count(*) FILTER (WHERE sent) AS sent
+      FROM login_code_request WHERE created_at>now()-interval '1 day'`,
+      [recipient],
+    );
+    if (
+      rows[0].recent >= codeLimits.recipient15Minutes ||
+      rows[0].today >= codeLimits.recipientDay ||
+      rows[0].sent >= codeLimits.screenrDay
+    )
+      return false;
+    await client.query(
+      "DELETE FROM login_code_request WHERE created_at<=now()-interval '1 day'",
+    );
+    await client.query(
+      "INSERT INTO login_code_request(recipient_hash) VALUES($1)",
+      [recipient],
+    );
+    return true;
+  }, codeLock);
+}
+
+// Recheck the Screenr-wide cap at send time; concurrent requests may all have
+// been accepted before any of them sent.
+async function reserveCodeEmail(email: string) {
+  const recipient = codeRecipient(email);
+  return transaction(async (client) => {
+    const { rows } = await client.query(
+      "SELECT count(*) AS sent FROM login_code_request WHERE sent AND created_at>now()-interval '1 day'",
+    );
+    if (rows[0].sent >= codeLimits.screenrDay) return false;
+    const marked = await client.query(
+      `UPDATE login_code_request SET sent=true WHERE id=(SELECT id
+        FROM login_code_request WHERE recipient_hash=$1 AND NOT sent
+        ORDER BY id DESC LIMIT 1)`,
+      [recipient],
+    );
+    if (!marked.rowCount)
+      await client.query(
+        "INSERT INTO login_code_request(recipient_hash,sent) VALUES($1,true)",
+        [recipient],
+      );
+    return true;
+  }, codeLock);
+}
+
 export function createAuth(
   options: { sendCode?: typeof queueCode; rateLimit?: boolean } = {},
 ) {
+  // Tests and fixtures that disable rate limits also skip the code caps.
+  const limited = options.rateLimit ?? true;
   return betterAuth({
     appName: "Screenr",
     baseURL: process.env.BETTER_AUTH_URL,
     secret: process.env.BETTER_AUTH_SECRET,
     database: db,
     telemetry: { enabled: false },
+    // Screenr has no passwords. Better Auth registers these routes anyway.
+    disabledPaths: [
+      "/sign-up/email",
+      "/sign-in/email",
+      "/request-password-reset",
+      "/reset-password",
+      "/change-password",
+      "/verify-password",
+      "/email-otp/request-password-reset",
+      "/forget-password/email-otp",
+      "/email-otp/reset-password",
+    ],
     socialProviders:
       process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET
         ? {
@@ -56,10 +135,29 @@ export function createAuth(
       cookieCache: { enabled: false },
     },
     rateLimit: {
-      enabled: options.rateLimit ?? true,
+      enabled: limited,
       storage: "database",
       window: 60,
       max: 100,
+      customRules: {
+        "/email-otp/send-verification-otp": { window: 60, max: 3 },
+      },
+    },
+    hooks: {
+      // Runs before Better Auth replaces the address's current code, so a
+      // limited request leaves an already delivered code usable.
+      before: createAuthMiddleware(async (ctx) => {
+        const email = ctx.body?.email;
+        if (
+          limited &&
+          ctx.path === "/email-otp/send-verification-otp" &&
+          typeof email === "string" &&
+          !(await acceptCodeRequest(email))
+        )
+          throw new APIError("TOO_MANY_REQUESTS", {
+            message: codeLimitMessage,
+          });
+      }),
     },
     plugins: [
       emailOTP({
@@ -68,6 +166,8 @@ export function createAuth(
         rateLimit: { window: 60, max: 10 },
         storeOTP: "hashed",
         sendVerificationOTP: async (data, context) => {
+          // Password reset codes would be unusable.
+          if (data.type === "forget-password") return;
           const token = tokenFromCookie(
             context?.headers ?? context?.request?.headers,
           );
@@ -82,6 +182,9 @@ export function createAuth(
             (!token || !(await activeInvitation(invitationHash(token))))
           )
             return;
+          // Better Auth ignores this callback's errors, so a request that
+          // loses a race for the last daily slot returns success unsent.
+          if (limited && !(await reserveCodeEmail(data.email))) return;
           await (options.sendCode ?? queueCode)(data);
         },
       }),
