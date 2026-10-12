@@ -102,6 +102,44 @@ export async function cookieFor(userId: string) {
     .join("; ");
 }
 
+// The exact errors that denied access raises. Rejection tests match status and
+// message, so a different failure, such as a SQL error or another resource's
+// 404, cannot pass for the denial a test expects.
+export const denied = {
+  conversation: { status: 404, message: "Conversation not found." },
+  replyTarget: { status: 404, message: "Reply target not found." },
+  comment: { status: 404, message: "Comment not found." },
+  person: { status: 404, message: "Person not found." },
+  friendRequest: { status: 404, message: "Friend request not found." },
+  pendingRequest: {
+    status: 404,
+    message: "This friend request is no longer pending.",
+  },
+  notification: {
+    status: 404,
+    message: "Notification is no longer available.",
+  },
+  watchTogether: { status: 404, message: "Watch together not found." },
+  invitation: { status: 404, message: "Invitation not found." },
+  unavailableInvitation: {
+    status: 403,
+    message: "This invitation is no longer available. Ask for a new link.",
+  },
+  unverified: { status: 403, message: "Verify your email before joining." },
+  incompleteProfile: { status: 403, message: "Complete your profile first." },
+  origin: { status: 403, message: "Invalid request origin." },
+  signedOut: { status: 401, message: "Sign in to continue." },
+} as const;
+
+// Asserts the exact JSON error that an API route returns.
+export async function assertRouteError(
+  response: Response,
+  expected: { status: number; message: string },
+) {
+  assert.equal(response.status, expected.status);
+  assert.deepEqual(await response.json(), { error: expected.message });
+}
+
 export async function friend(a: string, b: string) {
   await changeRelationship(a, b, "request");
   await changeRelationship(b, a, "accept");

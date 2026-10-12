@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { useDatabase, db, person } from "./social-fixture";
+import { useDatabase, db, denied, person } from "./social-fixture";
 const { createAuth } = await import("../../src/server/auth");
 const { loadScreen } = await import("../../src/server/screens");
 const { createInvitation, completeSignup, revokeInvitation } =
@@ -8,6 +8,22 @@ const { createInvitation, completeSignup, revokeInvitation } =
 const { profileFor } = await import("../../src/server/profiles");
 
 useDatabase();
+
+// Better Auth rejections name their reason in the body: Screenr's own hooks
+// by message, and Better Auth's checks by code.
+async function assertAuthError(
+  response: Response,
+  status: number,
+  reason: { message: string } | { code: string },
+) {
+  assert.equal(response.status, status);
+  const body = await response.json();
+  for (const [key, value] of Object.entries(reason))
+    assert.equal(body[key], value);
+}
+const invitationRequired = {
+  message: "A valid invitation is required to join Screenr.",
+};
 
 async function accountScreen(userId: string) {
   const screen = await loadScreen(userId, "/account");
@@ -63,7 +79,7 @@ test("Better Auth requires an invite for a new email identity and preserves the 
     email: "auth@example.test",
     otp: await code(token),
   });
-  assert.equal(first.status, 403);
+  await assertAuthError(first, 403, invitationRequired);
   assert.equal(
     (await db.query('SELECT count(*)::int AS n FROM "user"')).rows[0].n,
     0,
@@ -82,7 +98,10 @@ test("Better Auth requires an invite for a new email identity and preserves the 
     0,
   );
   await completeSignup(data.user.id, "Auth user", "authuser");
-  await revokeInvitation(await person("owner"), id).catch(() => {});
+  await assert.rejects(
+    revokeInvitation(await person("owner"), id),
+    denied.invitation,
+  );
   await db.query("UPDATE invitation SET revoked_at=now() WHERE id=$1", [id]);
   const signin = await post(
     "sign-in/email-otp",
@@ -374,7 +393,11 @@ test("Google and email retain one account; linking requires the existing account
     provider: "google",
     idToken: { token: "test-verified-token" },
   };
-  assert.equal((await post("sign-in/social", social)).status, 403);
+  await assertAuthError(
+    await post("sign-in/social", social),
+    403,
+    invitationRequired,
+  );
   const inviter = await person("inviter");
   const { token } = await createInvitation(inviter, 2);
   const inviteCookie = `screenr-invite=${token}`;
@@ -425,17 +448,22 @@ test("Google and email retain one account; linking requires the existing account
     name: "Email user",
     emailVerified: true,
   };
-  assert.equal(
-    (await post("sign-in/social", social)).status,
-    401,
-    "Matching email alone must not link accounts",
-  );
-  assert.equal((await post("link-social", social)).status, 401);
+  // Matching email alone must not link accounts.
+  await assertAuthError(await post("sign-in/social", social), 401, {
+    code: "OAUTH_LINK_ERROR",
+  });
+  await assertAuthError(await post("link-social", social), 401, {
+    code: "UNAUTHORIZED",
+  });
   identity.emailVerified = false;
-  assert.equal((await post("link-social", social, sessionCookie)).status, 401);
+  await assertAuthError(await post("link-social", social, sessionCookie), 401, {
+    code: "LINKING_NOT_ALLOWED",
+  });
   identity.emailVerified = true;
   identity.email = "different@example.test";
-  assert.equal((await post("link-social", social, sessionCookie)).status, 401);
+  await assertAuthError(await post("link-social", social, sessionCookie), 401, {
+    code: "LINKING_DIFFERENT_EMAILS_NOT_ALLOWED",
+  });
   identity.email = email;
   const linked = await post("link-social", social, sessionCookie);
   assert.equal(linked.status, 200, await linked.clone().text());

@@ -1,6 +1,13 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { useDatabase, db, person, friend, setup } from "./social-fixture";
+import {
+  useDatabase,
+  db,
+  denied,
+  person,
+  friend,
+  setup,
+} from "./social-fixture";
 const { loadScreen } = await import("../../src/server/screens");
 const { changeRelationship } = await import("../../src/server/relationships");
 const { thread } = await import("../../src/server/feed");
@@ -69,7 +76,7 @@ test("people suggestions list distinct friends of friends and all mutual friends
   assert.ok(profile.kind === "profile");
   assert.equal(profile.profile.can_read, false);
   assert.deepEqual(profile.conversations, []);
-  await assert.rejects(thread(alice, privateItem), /not found/i);
+  await assert.rejects(thread(alice, privateItem), denied.conversation);
 });
 
 test("people suggestions follow requests, acceptance, and loss of each mutual friendship", async () => {
@@ -189,8 +196,8 @@ test("profile friends hide blocked people in both directions and reject blocked 
   assert.ok(owner.kind === "profile");
   assert.equal(owner.profile.friends.length, 2);
   await changeRelationship(outsider, alice, "block");
-  await assert.rejects(loadScreen(outsider, "/people/alice"), /not found/i);
-  await assert.rejects(loadScreen(alice, "/people/outsider"), /not found/i);
+  await assert.rejects(loadScreen(outsider, "/people/alice"), denied.person);
+  await assert.rejects(loadScreen(alice, "/people/outsider"), denied.person);
 });
 
 test("profile friends follow acceptance, removal, and blocking on each read", async () => {

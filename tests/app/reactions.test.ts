@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { useDatabase, db, friend, setup } from "./social-fixture";
+import { useDatabase, db, denied, friend, setup } from "./social-fixture";
 const { changeRelationship } = await import("../../src/server/relationships");
 const { thread, conversations } = await import("../../src/server/feed");
 const { updateTitleActivity } = await import("../../src/server/title-actions");
@@ -98,12 +98,12 @@ test("reaction reads and writes enforce current friendship, blocks, target membe
   for (const target of [undefined, reply]) {
     await assert.rejects(
       setReaction(outsider, conversation, target, "like"),
-      /not found/i,
+      denied.conversation,
     );
     await changeRelationship(outsider, alice, "request");
     await assert.rejects(
       setReaction(outsider, conversation, target, "like"),
-      /not found/i,
+      denied.conversation,
     );
     await setReaction(ben, conversation, target, "love");
   }
@@ -124,7 +124,7 @@ test("reaction reads and writes enforce current friendship, blocks, target membe
   ]);
   await assert.rejects(
     setReaction(ben, conversation, reply, "haha"),
-    /not found/i,
+    denied.replyTarget,
   );
   await changeRelationship(cam, ben, "unblock");
   await changeRelationship(alice, ben, "remove");
@@ -135,7 +135,7 @@ test("reaction reads and writes enforce current friendship, blocks, target membe
   assert.deepEqual((await thread(cam, conversation)).comments[0].reactions, []);
   await assert.rejects(
     setReaction(ben, conversation, undefined, null),
-    /not found/i,
+    denied.conversation,
   );
   await friend(alice, ben);
   assert.equal(
@@ -152,17 +152,20 @@ test("reaction reads and writes enforce current friendship, blocks, target membe
     "Different entry",
     false,
   );
-  await assert.rejects(setReaction(ben, other, reply, "like"), /not found/i);
+  await assert.rejects(
+    setReaction(ben, other, reply, "like"),
+    denied.replyTarget,
+  );
   await removeComment(alice, reply);
   assert.deepEqual((await thread(cam, conversation)).comments[0].reactions, []);
   await assert.rejects(
     setReaction(ben, conversation, reply, "like"),
-    /not found/i,
+    denied.replyTarget,
   );
   await changeRelationship(alice, ben, "block");
   await assert.rejects(
     setReaction(ben, conversation, undefined, "like"),
-    /not found/i,
+    denied.conversation,
   );
 });
 
@@ -194,7 +197,7 @@ test("reactions exclude deleted standalone entries while preserving their live r
     for (const kind of ["like", null]) {
       await assert.rejects(
         setReaction(viewer, item, undefined, kind),
-        /not found/i,
+        denied.conversation,
       );
     }
   }
@@ -234,7 +237,7 @@ test("reactions exclude unavailable parent placeholders while keeping eligible c
     for (const kind of ["like", null])
       await assert.rejects(
         setReaction(ben, conversation, parent, kind),
-        /not found/i,
+        denied.replyTarget,
       );
     await setReaction(ben, conversation, child, "care");
     assert.deepEqual(
@@ -280,7 +283,7 @@ test("reactions share feed snapshots without changing activity, notifications, o
   assert.deepEqual(await conversations(ben), []);
   await assert.rejects(
     setReaction(ben, conversation, undefined, "like"),
-    /not found/i,
+    denied.conversation,
   );
   await updateTitleActivity(alice, "movie:1", "recommended", true);
   assert.deepEqual((await thread(ben, conversation)).conversation.reactions, [
@@ -303,11 +306,11 @@ test("reactions reject unsupported values and invalid or missing targets without
     );
   await assert.rejects(
     setReaction(alice, randomUUID(), undefined, "like"),
-    /not found/i,
+    denied.conversation,
   );
   await assert.rejects(
     setReaction(alice, conversation, "9999999999999999999999999", "like"),
-    /not found/i,
+    denied.replyTarget,
   );
   assert.deepEqual((await thread(alice, conversation)).conversation.reactions, [
     { kind: "like", count: 1, reacted: true },

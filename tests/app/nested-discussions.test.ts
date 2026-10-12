@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { useDatabase, db, friend, setup } from "./social-fixture";
+import { useDatabase, db, denied, friend, setup } from "./social-fixture";
 const { loadScreen } = await import("../../src/server/screens");
 const { changeRelationship } = await import("../../src/server/relationships");
 const { thread, conversations } = await import("../../src/server/feed");
@@ -32,7 +32,7 @@ for (const kind of ["action", "standalone"] as const) {
       parent,
     );
     for (const viewer of [cam, outsider])
-      await assert.rejects(removeComment(viewer, parent), /not found/);
+      await assert.rejects(removeComment(viewer, parent), denied.comment);
     assert.equal(
       (await thread(ben, conversation)).comments[0].body,
       "My comment",
@@ -58,7 +58,7 @@ for (const kind of ["action", "standalone"] as const) {
     assert.deepEqual((await thread(alice, conversation)).comments, []);
     await assert.rejects(
       addComment(ben, conversation, "Reply to removed", false, parent),
-      /not found/,
+      denied.replyTarget,
     );
   });
 
@@ -81,11 +81,11 @@ for (const kind of ["action", "standalone"] as const) {
       false,
     );
     await changeRelationship(alice, ben, "remove");
-    await assert.rejects(removeComment(ben, comment), /not found/);
-    await assert.rejects(removeComment(alice, comment), /not found/);
+    await assert.rejects(removeComment(ben, comment), denied.comment);
+    await assert.rejects(removeComment(alice, comment), denied.comment);
     await friend(alice, ben);
     await changeRelationship(alice, ben, "block");
-    await assert.rejects(removeComment(ben, comment), /not found/);
+    await assert.rejects(removeComment(ben, comment), denied.comment);
     await changeRelationship(alice, ben, "unblock");
     await friend(alice, ben);
     assert.equal(
@@ -117,7 +117,7 @@ test("nested replies stay in one group; the host can remove others' comments and
     [null, parent, parent],
   );
   assert.equal(before.comments[2].addressed_username, "cam");
-  await assert.rejects(removeComment(cam, parent));
+  await assert.rejects(removeComment(cam, parent), denied.comment);
   await removeComment(alice, parent);
   const after = await thread(cam, conversation);
   assert.equal(after.comments[0].body, "");
@@ -176,13 +176,13 @@ test("nested groups retain only safe parent context through blocking, removal, a
   }
   await assert.rejects(
     addComment(ben, conversation, "No hidden targets", false, parent),
-    /not found/,
+    denied.replyTarget,
   );
   await assert.rejects(
     addComment(ben, conversation, "No removed targets", false, removedChild),
-    /not found/,
+    denied.replyTarget,
   );
-  await assert.rejects(thread(outsider, conversation), /not found/);
+  await assert.rejects(thread(outsider, conversation), denied.conversation);
   const sibling = await addComment(
     ben,
     conversation,
@@ -219,7 +219,7 @@ test("nested groups retain only safe parent context through blocking, removal, a
   await removeComment(alice, sibling);
   assert.deepEqual((await thread(ben, conversation)).comments, []);
   await changeRelationship(alice, ben, "remove");
-  await assert.rejects(thread(ben, conversation), /not found/);
+  await assert.rejects(thread(ben, conversation), denied.conversation);
 });
 
 test("nested reply links reject unavailable parents and preserve stored groups on every feed", async () => {

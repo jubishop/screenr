@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { useDatabase, db, friend, setup } from "./social-fixture";
+import { useDatabase, db, denied, friend, setup } from "./social-fixture";
 const { loadScreen } = await import("../../src/server/screens");
 const { profileFor } = await import("../../src/server/profiles");
 const { changeRelationship } = await import("../../src/server/relationships");
@@ -14,14 +14,17 @@ test("pending and nonfriends cannot read or write a thread; accepted friends use
   const { alice, ben, outsider, conversation } = await setup();
   await changeRelationship(ben, alice, "request");
   for (const viewer of [ben, outsider]) {
-    await assert.rejects(thread(viewer, conversation), /not found/);
+    await assert.rejects(thread(viewer, conversation), denied.conversation);
     await assert.rejects(
       addComment(viewer, conversation, "No access", false),
-      /not found/,
+      denied.conversation,
     );
     assert.deepEqual(await conversations(viewer), []);
   }
-  await assert.rejects(changeRelationship(ben, alice, "accept"), /not found/);
+  await assert.rejects(
+    changeRelationship(ben, alice, "accept"),
+    denied.friendRequest,
+  );
   await changeRelationship(alice, ben, "accept");
   const comment = await addComment(ben, conversation, "Looks great", true);
   assert.equal((await thread(alice, conversation)).comments[0].id, comment);
@@ -46,8 +49,11 @@ test("unfriending revokes historical access, hides comments for remaining reader
   await addComment(ben, conversation, "Historical reply", false);
   assert.equal((await thread(cam, conversation)).comments.length, 1);
   await changeRelationship(alice, ben, "remove");
-  await assert.rejects(thread(ben, conversation));
-  await assert.rejects(addComment(ben, conversation, "Forbidden", false));
+  await assert.rejects(thread(ben, conversation), denied.conversation);
+  await assert.rejects(
+    addComment(ben, conversation, "Forbidden", false),
+    denied.conversation,
+  );
   assert.equal((await thread(alice, conversation)).comments.length, 0);
   assert.equal((await thread(cam, conversation)).comments.length, 0);
   await friend(alice, ben);
@@ -84,8 +90,8 @@ test("blocking hides the pair on mutual threads, prevents requests, and excludes
       (await conversations(ben, { title: "movie:1" }))[0].visible_activity,
     ) < new Date(visible),
   );
-  await assert.rejects(changeRelationship(cam, ben, "request"));
-  await assert.rejects(profileFor(ben, "cam"));
+  await assert.rejects(changeRelationship(cam, ben, "request"), denied.person);
+  await assert.rejects(profileFor(ben, "cam"), denied.person);
   await changeRelationship(ben, cam, "unblock");
   assert.equal((await thread(ben, conversation)).comments.length, 2);
 });
@@ -162,7 +168,7 @@ test("screen reads and legacy links preserve item identity and filter reply targ
   );
   await assert.rejects(
     loadScreen(outsider, `/conversations/${legacy}`),
-    /not found/,
+    denied.conversation,
   );
   await changeRelationship(alice, ben, "remove");
   for (const path of ["/", "/titles/movie/1", "/people/alice"]) {

@@ -1,6 +1,13 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { useDatabase, setup, friend, db, pending } from "./social-fixture";
+import {
+  useDatabase,
+  setup,
+  friend,
+  db,
+  denied,
+  pending,
+} from "./social-fixture";
 import { updateProfile } from "../../src/server/profiles";
 import { changeRelationship } from "../../src/server/relationships";
 import { updateTitleActivity } from "../../src/server/title-actions";
@@ -74,7 +81,7 @@ test("read ownership, id validation, and the bulk-read boundary preserve unseen 
   const page = await notifications(alice);
   await assert.rejects(
     readNotification(outsider, page.items[0].id),
-    /no longer available/,
+    denied.notification,
   );
   for (const invalid of [null, 1, "-1", "1.2", "9223372036854775808", "oops"])
     await assert.rejects(
@@ -142,7 +149,7 @@ test("current access removes notices and counts, and restored comments retain th
   assert.equal((await notifications(ben)).items.length, 0);
   await assert.rejects(
     readNotification(ben, benNotice.id),
-    /no longer available/,
+    denied.notification,
   );
   await changeRelationship(ben, cam, "unblock");
   assert.equal((await notifications(ben)).items[0].read, true);
@@ -164,7 +171,7 @@ test("withdrawn requests and previous friendships never become notifications for
   assert.equal(await unread(alice), 0);
   await friend(ben, alice);
   assert.equal((await notifications(alice)).items.length, 0);
-  await assert.rejects(readNotification(alice, old.id), /no longer available/);
+  await assert.rejects(readNotification(alice, old.id), denied.notification);
   assert.equal((await notifications(ben)).items.length, 1);
   await changeRelationship(ben, alice, "remove");
   await friend(ben, alice);
@@ -251,7 +258,7 @@ test("friend-request notifications identify the requester and answer only that p
   assert.equal((await readAt(request.id)).email_pending, true);
   await assert.rejects(
     respondToFriendRequest(outsider, request.id, "accept"),
-    /no longer pending/,
+    denied.pendingRequest,
   );
   await assert.rejects(
     respondToFriendRequest(alice, request.id, "remove"),
@@ -272,7 +279,7 @@ test("friend-request notifications identify the requester and answer only that p
   // A stale Decline never ends the friendship the request became.
   await assert.rejects(
     respondToFriendRequest(alice, request.id, "decline"),
-    /no longer pending/,
+    denied.pendingRequest,
   );
   assert.deepEqual(await friendship(alice, ben), { accepted: true });
 
@@ -284,7 +291,7 @@ test("friend-request notifications identify the requester and answer only that p
   assert.equal(await unread(alice), 0);
   await assert.rejects(
     respondToFriendRequest(alice, declined.id, "accept"),
-    /no longer pending/,
+    denied.pendingRequest,
   );
   assert.equal(await friendship(alice, cam), undefined);
 
@@ -294,17 +301,17 @@ test("friend-request notifications identify the requester and answer only that p
   assert.equal(comment.kind, "comment");
   await assert.rejects(
     respondToFriendRequest(alice, comment.id, "accept"),
-    /no longer pending/,
+    denied.pendingRequest,
   );
   await changeRelationship(outsider, alice, "request");
   const [sent] = (await notifications(alice)).items;
   await assert.rejects(
     respondToFriendRequest(outsider, sent.id, "accept"),
-    /no longer pending/,
+    denied.pendingRequest,
   );
   await changeRelationship(alice, outsider, "block");
   await assert.rejects(
     respondToFriendRequest(alice, sent.id, "accept"),
-    /no longer pending/,
+    denied.pendingRequest,
   );
 });

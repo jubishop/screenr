@@ -1,6 +1,6 @@
 import { test, before, beforeEach, after } from "node:test";
 import assert from "node:assert/strict";
-import { db } from "./social-fixture";
+import { db, denied } from "./social-fixture";
 
 const { migrate } = await import("../../scripts/migrate");
 const { loadScreen } = await import("../../src/server/screens");
@@ -90,7 +90,7 @@ test("find a title suggests direct and anonymous second-degree choices before se
   assert.equal(result[1].second_degree_recommended, 0);
   for (const value of [...hidden, ...privateItems])
     assert.ok(!JSON.stringify(result).includes(value));
-  await assert.rejects(thread("alice", privateItems[0]), /not found/);
+  await assert.rejects(thread("alice", privateItems[0]), denied.conversation);
   assert.equal((await profileFor("alice", "secretone")).can_read, false);
 });
 

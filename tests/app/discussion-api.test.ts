@@ -1,7 +1,7 @@
 import { test, before, beforeEach, after } from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { db, cookieFor } from "./social-fixture";
+import { db, cookieFor, denied, assertRouteError } from "./social-fixture";
 
 const { migrate } = await import("../../scripts/migrate");
 const { POST, GET } = await import("../../src/app/api/screenr/[action]/route");
@@ -66,7 +66,7 @@ test("notification API enforces authentication, origin, ownership, read actions,
       }),
       { params: Promise.resolve({ action: "notifications" }) },
     );
-  assert.equal((await get("")).status, 401);
+  await assertRouteError(await get(""), denied.signedOut);
   const listed = await get(owner.cookie);
   assert.equal(listed.status, 200);
   assert.match(listed.headers.get("Cache-Control")!, /no-store/);
@@ -74,21 +74,18 @@ test("notification API enforces authentication, origin, ownership, read actions,
   assert.equal(page.items.length, 1);
   assert.equal((await get(owner.cookie, "?before=bad")).status, 400);
   assert.equal((await get(owner.cookie, "?through=bad")).status, 400);
-  assert.equal(
-    (await post("read-notification", stranger.cookie, { id: page.items[0].id }))
-      .status,
-    404,
+  await assertRouteError(
+    await post("read-notification", stranger.cookie, { id: page.items[0].id }),
+    denied.notification,
   );
-  assert.equal(
-    (
-      await post(
-        "read-notification",
-        owner.cookie,
-        { id: page.items[0].id },
-        "https://outside.example",
-      )
-    ).status,
-    403,
+  await assertRouteError(
+    await post(
+      "read-notification",
+      owner.cookie,
+      { id: page.items[0].id },
+      "https://outside.example",
+    ),
+    denied.origin,
   );
   const selected = await post("read-notification", owner.cookie, {
     id: page.items[0].id,
@@ -131,10 +128,10 @@ test("reaction API rejects anonymous, cross-origin, and invalid requests without
   );
   const data = { item, kind: "like" };
   assert.equal((await post("reaction", cookie, data)).status, 200);
-  assert.equal((await post("reaction", "", data)).status, 401);
-  assert.equal(
-    (await post("reaction", cookie, data, "https://untrusted.example")).status,
-    403,
+  await assertRouteError(await post("reaction", "", data), denied.signedOut);
+  await assertRouteError(
+    await post("reaction", cookie, data, "https://untrusted.example"),
+    denied.origin,
   );
   assert.equal(
     (await post("reaction", cookie, { ...data, kind: "invalid" })).status,
@@ -148,11 +145,13 @@ test("reaction API rejects anonymous, cross-origin, and invalid requests without
 test("title-comment API rejects anonymous and cross-origin writes without creating entries", async () => {
   const { cookie } = await member();
   const data = { title: "movie:1", body: "A thought", spoiler: false };
-  assert.equal((await post("title-comment", "", data)).status, 401);
-  assert.equal(
-    (await post("title-comment", cookie, data, "http://untrusted.example.test"))
-      .status,
-    403,
+  await assertRouteError(
+    await post("title-comment", "", data),
+    denied.signedOut,
+  );
+  await assertRouteError(
+    await post("title-comment", cookie, data, "http://untrusted.example.test"),
+    denied.origin,
   );
   assert.equal((await db.query("SELECT * FROM feed_item")).rowCount, 0);
   assert.equal((await post("title-comment", cookie, data)).status, 200);

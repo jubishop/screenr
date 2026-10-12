@@ -1,6 +1,14 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { useDatabase, db, person, friend, cookieFor } from "./social-fixture";
+import {
+  useDatabase,
+  db,
+  denied,
+  assertRouteError,
+  person,
+  friend,
+  cookieFor,
+} from "./social-fixture";
 
 const { loadScreen } = await import("../../src/server/screens");
 const { changeRelationship } = await import("../../src/server/relationships");
@@ -121,16 +129,16 @@ test("invalid, cross-origin, and signed-out preference writes preserve both memb
     Array(300).fill("service:netflix"),
   ])
     assert.equal((await save(cookie, invalid)).status, 400);
-  assert.equal(
-    (await save(cookie, [], {}, "https://untrusted.example")).status,
-    403,
+  await assertRouteError(
+    await save(cookie, [], {}, "https://untrusted.example"),
+    denied.origin,
   );
-  assert.equal((await save("", [])).status, 401);
+  await assertRouteError(await save("", []), denied.signedOut);
   const read = await GET(
     new Request("http://localhost:3000/api/screenr/screen?path=/account"),
     { params: Promise.resolve({ action: "screen" }) },
   );
-  assert.equal(read.status, 401);
+  await assertRouteError(read, denied.signedOut);
   assert.deepEqual((await account(alice)).serviceIds, ["service:netflix"]);
   assert.deepEqual((await account(ben)).serviceIds, []);
 });
@@ -210,5 +218,5 @@ test("Watch together combines either member's services, preserves other picks, a
     "unmatched",
   );
   await changeRelationship(alice, ben, "block");
-  await assert.rejects(read, /not found/i);
+  await assert.rejects(read, denied.watchTogether);
 });

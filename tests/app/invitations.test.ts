@@ -5,6 +5,7 @@ import { setTimeout } from "node:timers/promises";
 import {
   useDatabase,
   db,
+  denied,
   pending,
   person,
   friend,
@@ -188,12 +189,15 @@ test("invitation lifetime, revocation, ownership, limits, and email verification
   const owner = await person("owner"),
     other = await person("other");
   for (const limit of [0, 13, 1.5, "2"])
-    await assert.rejects(createInvitation(owner, limit));
+    await assert.rejects(createInvitation(owner, limit), {
+      status: 400,
+      message: "Choose between 1 and 12 signups.",
+    });
   const { token, id } = await createInvitation(owner);
   const a = await pending("alice", token, false);
-  await assert.rejects(completeSignup(a, "Alice", "alice"), /Verify/);
+  await assert.rejects(completeSignup(a, "Alice", "alice"), denied.unverified);
   await db.query('UPDATE "user" SET "emailVerified"=true WHERE id=$1', [a]);
-  await assert.rejects(revokeInvitation(other, id), /not found/);
+  await assert.rejects(revokeInvitation(other, id), denied.invitation);
   const span = (
     await db.query(
       "SELECT extract(epoch FROM expires_at-created_at)::int AS seconds FROM invitation WHERE id=$1",
@@ -205,13 +209,19 @@ test("invitation lifetime, revocation, ownership, limits, and email verification
     "UPDATE invitation SET expires_at=now()-interval '1 second' WHERE id=$1",
     [id],
   );
-  await assert.rejects(completeSignup(a, "Alice", "alice"), /no longer/);
+  await assert.rejects(
+    completeSignup(a, "Alice", "alice"),
+    denied.unavailableInvitation,
+  );
   await db.query(
     "UPDATE invitation SET expires_at=now()+interval '1 day' WHERE id=$1",
     [id],
   );
   await revokeInvitation(owner, id);
-  await assert.rejects(completeSignup(a, "Alice", "alice"), /no longer/);
+  await assert.rejects(
+    completeSignup(a, "Alice", "alice"),
+    denied.unavailableInvitation,
+  );
   assert.deepEqual((await people(owner)).connections, []);
 });
 
@@ -264,12 +274,12 @@ test("completed signups become accepted friends with only their inviter and reta
   await changeRelationship(a, owner, "remove");
   await completeSignup(a, "Guest A", "guesta", token);
   assert.equal((await profileFor(a, "alice")).can_read, false);
-  await assert.rejects(thread(a, conversation), /not found/i);
+  await assert.rejects(thread(a, conversation), denied.conversation);
   await friend(a, owner);
   await changeRelationship(a, owner, "block");
   await completeSignup(a, "Guest A", "guesta", token);
-  await assert.rejects(profileFor(a, "alice"), /not found/i);
-  await assert.rejects(thread(a, conversation), /not found/i);
+  await assert.rejects(profileFor(a, "alice"), denied.person);
+  await assert.rejects(thread(a, conversation), denied.conversation);
   assert.deepEqual((await people(a)).connections, []);
   assert.deepEqual(
     (await listInvitations(owner))[0].joined.map(
@@ -386,7 +396,7 @@ for (const condition of ["revoked", "expired"]) {
       assert.equal(await activeInvitation(invitationHash(token)), undefined);
       await assert.rejects(
         completeSignup(guest, "Guest", "guest", token),
-        /no longer/,
+        denied.unavailableInvitation,
       );
     }
   });
@@ -457,7 +467,9 @@ test("replacement invitations preserve verification, availability, and rollback 
       ]);
     await assert.rejects(
       completeSignup(user, condition, condition, replacement.token),
-      /Verify|no longer/,
+      condition === "unverified"
+        ? denied.unverified
+        : denied.unavailableInvitation,
     );
     assert.equal(
       (await db.query("SELECT uses FROM invitation WHERE id=$1", [original.id]))

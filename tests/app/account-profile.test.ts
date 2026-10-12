@@ -1,6 +1,14 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { useDatabase, db, pending, person, cookieFor } from "./social-fixture";
+import {
+  useDatabase,
+  db,
+  denied,
+  assertRouteError,
+  pending,
+  person,
+  cookieFor,
+} from "./social-fixture";
 const { loadScreen } = await import("../../src/server/screens");
 const { createInvitation, completeSignup, listInvitations } =
   await import("../../src/server/invitations");
@@ -68,7 +76,7 @@ test("account profile edits update both names across existing social views and p
   assert.equal(profile.user_id, alice);
   assert.equal(profile.display_name, "Renée Movie Fan 🎬");
   assert.ok(profile.accepted_at);
-  await assert.rejects(profileFor(ben, "alice"), /Person not found/);
+  await assert.rejects(profileFor(ben, "alice"), denied.person);
   for (const path of ["/", "/titles/movie/1", "/people/alice_new"]) {
     const data = await loadScreen(ben, path);
     assert.ok("conversations" in data && data.conversations);
@@ -165,16 +173,16 @@ test("account profile edits require membership and only update the signed-in mem
     user_id: ben,
     target: ben,
   };
-  assert.equal((await editProfile("", data)).status, 401);
-  assert.equal(
-    (await editProfile(cookie, data, "https://other.example")).status,
-    403,
+  await assertRouteError(await editProfile("", data), denied.signedOut);
+  await assertRouteError(
+    await editProfile(cookie, data, "https://other.example"),
+    denied.origin,
   );
   const invite = await createInvitation(null);
   const incomplete = await pending("incomplete", invite.token);
-  assert.equal(
-    (await editProfile(await cookieFor(incomplete), data)).status,
-    403,
+  await assertRouteError(
+    await editProfile(await cookieFor(incomplete), data),
+    denied.incompleteProfile,
   );
   assert.equal((await editProfile(cookie, data)).status, 200);
   assert.equal((await profileFor(alice, "changed")).user_id, alice);
@@ -373,16 +381,19 @@ test("display name edits require membership and only update the signed-in member
   const alice = await person("alice"),
     ben = await person("ben");
   const cookie = await cookieFor(alice);
-  assert.equal((await rename("", { name: "Changed" })).status, 401);
-  assert.equal(
-    (await rename(cookie, { name: "Changed" }, "https://other.example")).status,
-    403,
+  await assertRouteError(
+    await rename("", { name: "Changed" }),
+    denied.signedOut,
+  );
+  await assertRouteError(
+    await rename(cookie, { name: "Changed" }, "https://other.example"),
+    denied.origin,
   );
   const invite = await createInvitation(null);
   const incomplete = await pending("incomplete", invite.token);
-  assert.equal(
-    (await rename(await cookieFor(incomplete), { name: "Changed" })).status,
-    403,
+  await assertRouteError(
+    await rename(await cookieFor(incomplete), { name: "Changed" }),
+    denied.incompleteProfile,
   );
   const response = await rename(cookie, {
     name: "Changed",

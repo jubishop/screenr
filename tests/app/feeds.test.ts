@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { useDatabase, db, friend, setup } from "./social-fixture";
+import { useDatabase, db, denied, friend, setup } from "./social-fixture";
 const { changeRelationship } = await import("../../src/server/relationships");
 const { thread, conversations } = await import("../../src/server/feed");
 const { updateTitleActivity } = await import("../../src/server/title-actions");
@@ -78,10 +78,10 @@ test("action items persist independently, removal does not bump activity, and re
   );
   await changeRelationship(cam, ben, "block");
   assert.deepEqual(await conversations(cam), []);
-  await assert.rejects(thread(cam, recommendation), /not found/);
+  await assert.rejects(thread(cam, recommendation), denied.conversation);
   await assert.rejects(
     addComment(cam, recommendation, "Invisible item", false),
-    /not found/,
+    denied.conversation,
   );
   assert.equal(
     await updateTitleActivity(alice, "movie:1", "recommended", true),
@@ -135,16 +135,16 @@ test("all feeds share entries and order by only visible replies without promotin
   assert.deepEqual(await conversations(outsider), []);
   await assert.rejects(
     addComment(outsider, first, "No access", false),
-    /not found/,
+    denied.conversation,
   );
   await assert.rejects(
     addComment(ben, second, "Wrong item", false, reply),
-    /not found/,
+    denied.replyTarget,
   );
   await changeRelationship(ben, cam, "block");
   await assert.rejects(
     addComment(ben, first, "Blocked target", false, reply),
-    /not found/,
+    denied.replyTarget,
   );
   await db.query(
     "UPDATE comment SET created_at=now()+interval '1 day' WHERE id::text=$1",
@@ -171,7 +171,7 @@ test("clearing activity hides empty items while preserving eligible discussions"
   await updateTitleActivity(alice, "movie:1", "recommended", false);
   for (const filter of [{}, { title: "movie:1" }, { owner: alice }])
     assert.deepEqual(await conversations(ben, filter), []);
-  await assert.rejects(thread(alice, conversation), /not found/);
+  await assert.rejects(thread(alice, conversation), denied.conversation);
   const saved = await updateTitleActivity(
     alice,
     "movie:1",

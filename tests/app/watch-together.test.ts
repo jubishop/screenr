@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { useDatabase, db, friend, setup } from "./social-fixture";
+import { useDatabase, db, denied, friend, setup } from "./social-fixture";
 const { loadScreen } = await import("../../src/server/screens");
 const { changeRelationship } = await import("../../src/server/relationships");
 const { updateTitleActivity } = await import("../../src/server/title-actions");
@@ -98,9 +98,9 @@ test("watch together lists every current shared choice, newest shared first", as
 test("watch together requires one current accepted friend and revokes access after unfriend or block", async () => {
   const { alice, ben, cam } = await setup();
   const path = "/watch-together?with=ben";
-  await assert.rejects(loadScreen(alice, path), /not found/i);
+  await assert.rejects(loadScreen(alice, path), denied.watchTogether);
   await changeRelationship(alice, ben, "request");
-  await assert.rejects(loadScreen(alice, path), /not found/i);
+  await assert.rejects(loadScreen(alice, path), denied.watchTogether);
   await changeRelationship(ben, alice, "accept");
   const empty = await loadScreen(alice, path);
   assert.equal(empty.kind, "watch-together");
@@ -109,19 +109,23 @@ test("watch together requires one current accepted friend and revokes access aft
   assert.deepEqual(empty.titles, []);
   await updateTitleActivity(alice, "movie:1", "want_to_watch", true);
   await updateTitleActivity(ben, "movie:1", "want_to_watch", true);
-  for (const invalid of [
-    "/watch-together",
-    "/watch-together?with=",
-    "/watch-together?with=alice",
-    "/watch-together?with=missing",
-    "/watch-together?with=ben&with=cam",
-    "/watch-together?with=ben&with=ben",
-  ])
-    await assert.rejects(loadScreen(alice, invalid));
+  const oneFriend = {
+    status: 400,
+    message: "Choose one friend from their profile.",
+  };
+  for (const [invalid, error] of [
+    ["/watch-together", oneFriend],
+    ["/watch-together?with=", oneFriend],
+    ["/watch-together?with=alice", denied.watchTogether],
+    ["/watch-together?with=missing", denied.watchTogether],
+    ["/watch-together?with=ben&with=cam", oneFriend],
+    ["/watch-together?with=ben&with=ben", oneFriend],
+  ] as const)
+    await assert.rejects(loadScreen(alice, invalid), error);
   await friend(alice, cam);
-  await assert.rejects(loadScreen(cam, path), /not found/i);
+  await assert.rejects(loadScreen(cam, path), denied.watchTogether);
   await changeRelationship(ben, alice, "remove");
-  await assert.rejects(loadScreen(alice, path), /not found/i);
+  await assert.rejects(loadScreen(alice, path), denied.watchTogether);
   await friend(alice, ben);
   const restored = await loadScreen(alice, path);
   assert.equal(restored.kind, "watch-together");
@@ -132,10 +136,10 @@ test("watch together requires one current accepted friend and revokes access aft
     ["movie:1"],
   );
   await changeRelationship(ben, alice, "block");
-  await assert.rejects(loadScreen(alice, path), /not found/i);
+  await assert.rejects(loadScreen(alice, path), denied.watchTogether);
   await assert.rejects(
     loadScreen(ben, "/watch-together?with=alice"),
-    /not found/i,
+    denied.watchTogether,
   );
 });
 

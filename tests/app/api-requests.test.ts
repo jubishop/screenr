@@ -1,6 +1,13 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { useDatabase, db, person, cookieFor } from "./social-fixture";
+import {
+  useDatabase,
+  db,
+  denied,
+  assertRouteError,
+  person,
+  cookieFor,
+} from "./social-fixture";
 
 const { POST, GET } = await import("../../src/app/api/screenr/[action]/route");
 useDatabase();
@@ -39,10 +46,7 @@ function get(action: string, cookie: string) {
   );
 }
 
-async function rejected(response: Response, status: number, error: string) {
-  assert.equal(response.status, status);
-  assert.deepEqual(await response.json(), { error });
-}
+const tooLarge = { status: 413, message: "Request too large." };
 
 // A JSON object for activity-email whose UTF-8 encoding has exactly `bytes`.
 function sized(bytes: number, enabled: boolean) {
@@ -62,17 +66,15 @@ async function activityEmail(user: string) {
 
 test("API route rejects missing, malformed, and non-object JSON bodies", async () => {
   const cookie = await cookieFor(await person("alice"));
-  await rejected(
-    await send("activity-email", cookie),
-    400,
-    "A request body is required.",
-  );
+  await assertRouteError(await send("activity-email", cookie), {
+    status: 400,
+    message: "A request body is required.",
+  });
   for (const body of ["", "{", "enabled=true", "[]", "null", '"on"', "1"])
-    await rejected(
-      await send("activity-email", cookie, body),
-      400,
-      "Invalid request.",
-    );
+    await assertRouteError(await send("activity-email", cookie, body), {
+      status: 400,
+      message: "Invalid request.",
+    });
 });
 
 test("API route accepts 16,000-byte bodies and rejects larger ones with 413", async () => {
@@ -85,10 +87,9 @@ test("API route accepts 16,000-byte bodies and rejects larger ones with 413", as
   const multibyte = JSON.stringify({ enabled: true, pad: "é".repeat(8_000) });
   assert.ok(multibyte.length < 16_000);
   for (const body of [sized(16_001, true), multibyte])
-    await rejected(
+    await assertRouteError(
       await send("activity-email", cookie, body),
-      413,
-      "Request too large.",
+      tooLarge,
     );
   assert.equal(await activityEmail(alice), false);
 });
@@ -107,11 +108,7 @@ test("API route stops reading a streamed body once it passes the limit", async (
       cancelled = true;
     },
   });
-  await rejected(
-    await send("activity-email", cookie, body),
-    413,
-    "Request too large.",
-  );
+  await assertRouteError(await send("activity-email", cookie, body), tooLarge);
   assert.equal(cancelled, true);
   assert.ok(sent <= 18_000, `read ${sent} bytes`);
 });
@@ -124,26 +121,26 @@ test("API route returns 404 for unknown actions and for actions sent with the wr
     await get("reaction", cookie),
     await send("search", cookie, "{}"),
   ])
-    await rejected(response, 404, "Action not found.");
+    await assertRouteError(response, {
+      status: 404,
+      message: "Action not found.",
+    });
 });
 
 test("API route checks origin and session before reading request bodies", async () => {
   const cookie = await cookieFor(await person("alice"));
   for (const body of [sized(16_001, true), "{"]) {
-    await rejected(
+    await assertRouteError(
       await send("activity-email", cookie, body, "https://outside.example"),
-      403,
-      "Invalid request origin.",
+      denied.origin,
     );
-    await rejected(
+    await assertRouteError(
       await send("activity-email", cookie, body, null),
-      403,
-      "Invalid request origin.",
+      denied.origin,
     );
-    await rejected(
+    await assertRouteError(
       await send("activity-email", "", body),
-      401,
-      "Sign in to continue.",
+      denied.signedOut,
     );
   }
 });

@@ -186,6 +186,12 @@ a mobile browser context; `signIn` prepares the test's existing page.
   a signed session cookie for route tests (`cookieFor`), and a small
   discussion fixture. Feature-specific setup and assertions stay in their
   feature files. No suite imports another test file.
+- Authorization tests assert the exact error: status and message for
+  Screenr's errors, or status and code for Better Auth's. The helper's
+  `denied` lists each access denial, and `assertRouteError` checks a route's
+  status and JSON error. A bare rejection, a status alone, or a loose pattern
+  such as `/not found/` would also accept a SQL error, another denial, or a
+  different 4xx.
 - Browser suites that import `test` from
   [monitored-test.ts](../tests/browser/monitored-test.ts) get its automatic
   per-test fixture, which resets and checks page and hydration errors in every

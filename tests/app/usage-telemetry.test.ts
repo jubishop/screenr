@@ -6,6 +6,8 @@ import { promisify } from "node:util";
 import {
   useDatabase,
   db,
+  denied,
+  assertRouteError,
   friend,
   person,
   setup,
@@ -114,9 +116,9 @@ test("actions record one Pacific day per member with no page or time; background
 
   // Requests without a member session record nothing.
   await db.query("DELETE FROM member_active_day");
-  assert.equal(
-    (await post("reaction", "", { item: conversation })).status,
-    401,
+  await assertRouteError(
+    await post("reaction", "", { item: conversation }),
+    denied.signedOut,
   );
   assert.deepEqual(await activeDays(), []);
 });
@@ -263,8 +265,12 @@ test("weekly returns use Monday-to-Sunday Pacific weeks and count the week befor
     (await usageReport({ weeks: 1, through: "2026-10-28" })).map((w) => w.week),
     ["2026-10-26"],
   );
-  await assert.rejects(usageReport({ weeks: 0 }));
-  await assert.rejects(usageReport({ weeks: 1, through: "next week" }));
+  await assert.rejects(usageReport({ weeks: 0 }), {
+    message: "Choose 1 to 104 weeks.",
+  });
+  await assert.rejects(usageReport({ weeks: 1, through: "next week" }), {
+    message: "Give the last week as a date, such as 2026-10-12.",
+  });
 });
 
 test("saves report observed and inferred lines once per member and title each week", async () => {

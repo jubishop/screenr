@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { useDatabase, db, friend, setup } from "./social-fixture";
+import { useDatabase, db, denied, friend, setup } from "./social-fixture";
 const { loadScreen } = await import("../../src/server/screens");
 const { changeRelationship } = await import("../../src/server/relationships");
 const { thread, conversations } = await import("../../src/server/feed");
@@ -68,7 +68,7 @@ test("standalone comments persist for movies and TV without changing structured 
   assert.equal((await thread(alice, tv)).conversation.recommended, false);
   assert.equal((await thread(alice, tv)).conversation.want_to_watch, false);
   const reply = await addComment(ben, first, "Only on the first", false);
-  await assert.rejects(thread(alice, recommendation), /not found/);
+  await assert.rejects(thread(alice, recommendation), denied.conversation);
   for (const id of [second, tv, saved])
     assert.deepEqual((await thread(alice, id)).comments, []);
   for (const path of ["/", "/titles/movie/1", "/people/alice"]) {
@@ -115,10 +115,10 @@ test("standalone discussions enforce current access, independent replies, remova
   );
   await changeRelationship(ben, alice, "request");
   for (const viewer of [ben, outsider]) {
-    await assert.rejects(thread(viewer, first), /not found/);
+    await assert.rejects(thread(viewer, first), denied.conversation);
     await assert.rejects(
       addComment(viewer, first, "No access", false),
-      /not found/,
+      denied.conversation,
     );
     assert.deepEqual(await conversations(viewer), []);
   }
@@ -153,19 +153,22 @@ test("standalone discussions enforce current access, independent replies, remova
   assert.deepEqual(await conversations(outsider), []);
   await assert.rejects(
     addComment(outsider, first, "No access through Ben", false),
-    /not found/,
+    denied.conversation,
   );
   await assert.rejects(
     addComment(ben, second, "Wrong group", false, child),
-    /not found/,
+    denied.replyTarget,
   );
-  await assert.rejects(removeComment(ben, child), /not found/);
+  await assert.rejects(removeComment(ben, child), denied.comment);
   await removeComment(alice, parent);
   assert.equal((await thread(ben, first)).comments[0].removed, true);
   assert.equal((await thread(ben, first)).comments.length, 3);
   await changeRelationship(alice, ben, "remove");
-  await assert.rejects(thread(ben, first), /not found/);
-  await assert.rejects(addComment(ben, first, "Revoked", false), /not found/);
+  await assert.rejects(thread(ben, first), denied.conversation);
+  await assert.rejects(
+    addComment(ben, first, "Revoked", false),
+    denied.conversation,
+  );
   assert.deepEqual(
     (await thread(cam, first)).comments.map((c) => c.id),
     [parent, child, grandchild],
@@ -191,12 +194,15 @@ test("standalone discussions enforce current access, independent replies, remova
   );
   await assert.rejects(
     addComment(ben, first, "Hidden target", false, child),
-    /not found/,
+    denied.replyTarget,
   );
   assert.equal((await thread(alice, first)).comments.length, 3);
   await changeRelationship(ben, alice, "block");
-  await assert.rejects(thread(ben, first), /not found/);
-  await assert.rejects(addComment(ben, first, "Blocked", false), /not found/);
+  await assert.rejects(thread(ben, first), denied.conversation);
+  await assert.rejects(
+    addComment(ben, first, "Blocked", false),
+    denied.conversation,
+  );
 });
 
 test("standalone deletion erases only the author's starting text and preserves eligible replies in every feed", async () => {
@@ -225,8 +231,8 @@ test("standalone deletion erases only the author's starting text and preserves e
   );
   const before = (await thread(alice, id)).conversation;
   for (const viewer of [ben, cam, outsider])
-    await assert.rejects(removeComment(viewer, id), /not found/);
-  await assert.rejects(removeComment(alice, action), /not found/);
+    await assert.rejects(removeComment(viewer, id), denied.comment);
+  await assert.rejects(removeComment(alice, action), denied.comment);
   assert.equal(
     (await thread(alice, id)).conversation.body,
     "Delete this spoiler",
@@ -292,12 +298,12 @@ test("standalone deletion erases only the author's starting text and preserves e
     parent,
   );
   await changeRelationship(alice, ben, "remove");
-  await assert.rejects(thread(ben, id), /not found/);
-  await assert.rejects(removeComment(ben, parent), /not found/);
+  await assert.rejects(thread(ben, id), denied.conversation);
+  await assert.rejects(removeComment(ben, parent), denied.comment);
   await friend(alice, ben);
   assert.equal((await thread(ben, id)).conversation.body, "");
   await changeRelationship(alice, ben, "block");
-  await assert.rejects(thread(ben, id), /not found/);
+  await assert.rejects(thread(ben, id), denied.conversation);
 });
 
 test("deleted standalone entries disappear when no live reply is visible to the reader", async () => {
@@ -307,10 +313,10 @@ test("deleted standalone entries disappear when no live reply is visible to the 
   const empty = await createTitleComment(alice, "movie:1", "No replies", false);
   await removeComment(alice, empty);
   await removeComment(alice, empty);
-  await assert.rejects(thread(alice, empty), /not found/);
+  await assert.rejects(thread(alice, empty), denied.conversation);
   await assert.rejects(
     addComment(alice, empty, "Cannot revive an empty deleted entry", false),
-    /not found/,
+    denied.conversation,
   );
   const linked = await loadScreen(alice, `/titles/movie/1?item=${empty}`);
   assert.equal(linked.kind, "title");
@@ -331,14 +337,14 @@ test("deleted standalone entries disappear when no live reply is visible to the 
       (await conversations(alice, filter)).some((entry) => entry.id === id),
     );
   }
-  await assert.rejects(thread(ben, id), /not found/);
+  await assert.rejects(thread(ben, id), denied.conversation);
   await changeRelationship(ben, cam, "unblock");
   assert.equal((await thread(ben, id)).conversation.body, "");
   await changeRelationship(alice, cam, "remove");
-  await assert.rejects(thread(alice, id), /not found/);
+  await assert.rejects(thread(alice, id), denied.conversation);
   await friend(alice, cam);
   assert.equal((await thread(ben, id)).comments[0].id, reply);
   await removeComment(cam, reply);
   for (const viewer of [alice, ben, cam])
-    await assert.rejects(thread(viewer, id), /not found/);
+    await assert.rejects(thread(viewer, id), denied.conversation);
 });
