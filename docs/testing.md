@@ -371,12 +371,19 @@ with the previous release's writes.
 Resend failures. They compare the logged fields exactly, check that comment
 text, search terms, addresses, codes, cookies, keys, and error messages stay
 out, and confirm that permanent Resend rejections are not retried.
+`tests/app/email.test.ts` also runs `scripts/worker.ts` with fetch disabled. The
+worker refuses to start without the Resend settings, deletes expired jobs on its
+first pass, and exits cleanly on SIGTERM.
 Operational tests check activation rollback after a stalled health request, a
 failed signed-out session request, or a web or worker service that crashes on
 startup. They also check a production-down report when the restored release
 also fails its checks, and rejection of incorrectly named SQL migrations before
-schema changes begin. An authentication test confirms that a Better Auth schema
-mismatch fails that session request.
+schema changes begin. A failed configuration check or migration stops
+activation before the release link switches. The restore check fails, and drops
+any temporary database, when restic cannot check or read the backup,
+`pg_restore` fails, the restore has no profiles, or its access query fails.
+An authentication test confirms that a Better Auth schema mismatch fails that
+session request.
 The proxy test runs the production Caddy routes on loopback with a temporary
 certificate and a fixture upstream that sends the app's security headers from
 `next.config.ts` and `src/proxy.ts`. It verifies the `screenr.club` site,

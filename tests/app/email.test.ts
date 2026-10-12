@@ -1,5 +1,9 @@
 import { test, before, beforeEach, after, afterEach, mock } from "node:test";
 import assert from "node:assert/strict";
+import { execFile, spawn } from "node:child_process";
+import { once } from "node:events";
+import { setTimeout } from "node:timers/promises";
+import { promisify } from "node:util";
 import { db, captureFailures } from "./social-fixture";
 
 process.env.EMAIL_TRANSPORT = "resend";
@@ -231,4 +235,69 @@ test("permanent Resend rejections are not retried; timeouts, conflicts, limits, 
   assert.equal(await deliverOne(), true);
   assert.equal(sent.length, 1);
   assert.match(sent[0], /975310/);
+});
+
+// The worker runs as its own process with the suite's database and Resend
+// settings. Its fetch always fails, so it can never reach Resend.
+const worker = [
+  "--import",
+  "tsx",
+  "--import",
+  "data:text/javascript,globalThis.fetch=()=>Promise.reject(new Error('No network in worker tests'))",
+  "scripts/worker.ts",
+];
+
+test("the worker refuses to start without the Resend transport, key, and sender", async () => {
+  await Promise.all(
+    ["EMAIL_TRANSPORT", "RESEND_API_KEY", "EMAIL_FROM"].map(async (name) => {
+      const { stderr } = await promisify(execFile)(process.execPath, worker, {
+        env: { ...process.env, [name]: "" },
+        timeout: 15_000,
+      }).then(
+        () => assert.fail(`The worker must not start without ${name}.`),
+        (error: Error & { stderr: string }) => error,
+      );
+      assert.match(
+        stderr,
+        /Configure the Resend transport, API key, and sender before starting the worker\./,
+      );
+    }),
+  );
+});
+
+test("the worker deletes expired jobs on its first pass and exits cleanly on SIGTERM", async () => {
+  // No member left by another suite can queue activity email for the worker.
+  await db.query('TRUNCATE "user" CASCADE');
+  await queueCode({ email: "stale@example.test", otp: "000000" });
+  await db.query("UPDATE email_job SET expires_at=now()-interval '1 second'");
+  const child = spawn(process.execPath, worker, {
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  let output = "";
+  child.stdout.on("data", (data) => (output += data));
+  child.stderr.on("data", (data) => (output += data));
+  const exited = once(child, "exit");
+  try {
+    // The worker handles SIGTERM before its first pass, which deletes
+    // expired jobs.
+    const deadline = Date.now() + 15_000;
+    while ((await db.query("SELECT 1 FROM email_job")).rowCount) {
+      assert.equal(child.exitCode, null, output);
+      assert.ok(Date.now() < deadline, `No expired job cleanup. ${output}`);
+      await setTimeout(50);
+    }
+    child.kill("SIGTERM");
+    // A stopping worker finishes its pass and its one-second pause, then
+    // closes the database pool and exits.
+    const [code, signal] = await Promise.race([
+      exited,
+      setTimeout(5_000).then(() => assert.fail("The worker did not stop.")),
+    ]);
+    assert.deepEqual(
+      { code, signal, output },
+      { code: 0, signal: null, output: "" },
+    );
+  } finally {
+    child.kill("SIGKILL");
+  }
 });

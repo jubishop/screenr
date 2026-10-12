@@ -528,7 +528,14 @@ class RemoteDeploymentTests(unittest.TestCase):
             fi
             command test "$@"
         }
-        alias systemd-run=':'
+        # Activation runs its configuration check and migrations through
+        # systemd-run. Record each script; the one in FAIL_STEP exits 1.
+        run_step() {
+            for fixture_step do :; done
+            printf '%s\n' "$fixture_step" >> "$FIXTURE/steps"
+            [ "$fixture_step" != "${FAIL_STEP:-}" ]
+        }
+        alias systemd-run=run_step
         chown() { :; }
         # GNU ln and mv for the links beside /opt/screenr/current. The link
         # files in the fixture hold their targets.
@@ -604,8 +611,8 @@ class RemoteDeploymentTests(unittest.TestCase):
                                          'HOST_FILES': json.dumps({'Caddyfile': "site {\n    # it's checked\n}\n"}),
                                          'DEPLOY': str(ROOT / 'ops/deploy-release.sh'), **environment}, timeout=5)
             log = {name: (base / name).read_text().splitlines() if (base / name).exists() else []
-                   for name in ('systemctl', 'sleeps')}
-            self.systemctl_calls, self.sleeps = log['systemctl'], log['sleeps']
+                   for name in ('systemctl', 'sleeps', 'steps')}
+            self.systemctl_calls, self.sleeps, self.steps = log['systemctl'], log['sleeps'], log['steps']
             events = (base / 'events').read_text() if (base / 'events').exists() else ''
             current = (base / 'current').read_text().strip()
             return result, events, current
@@ -696,6 +703,20 @@ class RemoteDeploymentTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertEqual(events, 'created\nremoved\n')
         self.assertEqual(current, '/opt/screenr/releases/previous')
+
+    def test_failed_configuration_check_or_migration_keeps_active_release(self):
+        # Both steps run before the release link switches. A failure leaves the
+        # active release serving and removes the candidate.
+        check, migrate = 'scripts/validate-config.ts', 'scripts/migrate.ts'
+        for step, ran in ((check, [check]), (migrate, [check, migrate])):
+            with self.subTest(step=step):
+                result, events, current = self.execute_remote(FAIL_STEP=step)
+                self.assertEqual(result.returncode, 1, result.stderr)
+                self.assertEqual(self.steps, ran)
+                self.assertEqual(current, '/opt/screenr/releases/previous')
+                self.assertFalse([call for call in self.systemctl_calls if call.startswith('restart')])
+                self.assertNotIn('Activated', result.stdout)
+                self.assertEqual(events, 'created\nremoved\n')
 
     def assert_verified_rollback(self, result, events, current):
         self.assertEqual(result.returncode, 1)

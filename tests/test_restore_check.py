@@ -129,7 +129,7 @@ rm() { echo "rm $*"; }
 
 
 class RestoreCheckTests(unittest.TestCase):
-    def execute(self, *, age, profiles='3', restore=':'):
+    def execute(self, *, age, profiles='3', restore=':', fail=''):
         # External commands are the boundary. The restore and age check scripts run.
         directory = tempfile.TemporaryDirectory()
         self.addCleanup(directory.cleanup)
@@ -145,19 +145,24 @@ python3() {
     [ "$1" = /opt/screenr/current/ops/check-backup-age.py ] || return 97
     PATH="$FIXTURE/bin:$PATH" "$PYTHON" "$AGE_CHECK"
 }
-restic() { echo "restic $1"; }
+# FAIL names the step that exits non-zero, as for a damaged repository, an
+# unreadable dump, or a restored schema without the core tables or function.
+restic() { echo "restic $1"; [ "restic $1" != "$FAIL" ]; }
 mktemp() { echo "$FIXTURE/restore.dump"; }
 createdb() { echo "createdb $*"; }
 dropdb() { echo "dropdb $*"; }
-pg_restore() { eval "$RESTORE"; }
+pg_restore() { eval "$RESTORE"; [ "$FAIL" != pg_restore ]; }
 psql() {
-    case "$*" in *'SELECT count(*) FROM profile'*) echo "$PROFILES" ;; esac
+    case "$*" in
+    *'SELECT count(*) FROM profile'*) echo "$PROFILES" ;;
+    *screenr_can_read*) [ "$FAIL" != 'access query' ] ;;
+    esac
 }
 . "$SCRIPT"
 '''
         environment = {**os.environ, 'FIXTURE': str(base), 'PYTHON': sys.executable,
                        'AGE_CHECK': str(AGE_CHECK), 'SCRIPT': str(ROOT / 'ops/restore-check.sh'),
-                       'PROFILES': profiles, 'RESTORE': restore,
+                       'PROFILES': profiles, 'RESTORE': restore, 'FAIL': fail,
                        'SNAPSHOTS': json.dumps([{'time': stamp.isoformat().replace('+00:00', 'Z'),
                                                  'short_id': 'fixture'}])}
         return subprocess.run(['sh', '-c', wrapper], text=True, capture_output=True,
@@ -191,6 +196,17 @@ psql() {
                 self.assertNotIn('restore passed', result.stdout)
                 created = self.temporary_databases(result.stdout, 'createdb')
                 self.assertEqual(len(created), 1)
+                self.assertEqual(self.temporary_databases(result.stdout, 'dropdb'), created)
+
+    def test_restore_errors_fail_and_drop_any_temporary_database(self):
+        for failure, databases in (('restic check', 0), ('restic dump', 0), ('pg_restore', 1),
+                                   ('access query', 1)):
+            with self.subTest(failure=failure):
+                result = self.execute(age=HOUR, fail=failure)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertNotIn('restore passed', result.stdout)
+                created = self.temporary_databases(result.stdout, 'createdb')
+                self.assertEqual(len(created), databases)
                 self.assertEqual(self.temporary_databases(result.stdout, 'dropdb'), created)
 
     def test_stopped_restore_fails_and_drops_temporary_database_once(self):
