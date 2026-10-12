@@ -7,7 +7,8 @@ const { loadScreen } = await import("../../src/server/screens");
 const { profileFor } = await import("../../src/server/profiles");
 const { changeRelationship } = await import("../../src/server/relationships");
 const { thread } = await import("../../src/server/feed");
-const { updateTitleActivity } = await import("../../src/server/title-actions");
+const { updateTitleActivity, updateWatchStatus } =
+  await import("../../src/server/title-actions");
 const { addComment, createTitleComment } =
   await import("../../src/server/comments");
 
@@ -309,6 +310,201 @@ test("only current viewer and source actions affect eligibility, not comments or
   assert.deepEqual(await suggestions(), []);
   await updateTitleActivity("ben", "movie:1", "want_to_watch", true);
   assert.equal((await suggestions())[0].wanted_by.length, 1);
+});
+
+test("friends' Watching and Caught up suggest titles; Finished, Stopped, and cleared statuses do not", async () => {
+  for (const name of ["alice", "ben", "cam"]) await person(name);
+  await friend("alice", "ben");
+  await friend("alice", "cam");
+  for (const [id, name] of [
+    ["movie:1", "Watching"],
+    ["tv:1", "Caught up"],
+    ["movie:2", "Finished"],
+    ["movie:3", "Stopped"],
+    ["movie:4", "Cleared"],
+  ])
+    await title(id, name);
+  await updateWatchStatus("ben", "movie:1", "watching");
+  await updateWatchStatus("cam", "movie:1", "watching");
+  await updateWatchStatus("cam", "tv:1", "caught_up");
+  await updateWatchStatus("ben", "movie:2", "finished");
+  await updateWatchStatus("cam", "movie:3", "stopped");
+  await updateWatchStatus("ben", "movie:4", "watching");
+  await updateWatchStatus("ben", "movie:4", null);
+
+  const result = await suggestions();
+  assert.deepEqual(
+    result.map((entry) => entry.id),
+    ["movie:1", "tv:1"],
+  );
+  assert.deepEqual(result[0].watching_by, [
+    { username: "ben", display_name: "ben" },
+    { username: "cam", display_name: "cam" },
+  ]);
+  assert.deepEqual(result[1].watching_by, [
+    { username: "cam", display_name: "cam" },
+  ]);
+  for (const entry of result) {
+    assert.deepEqual(entry.recommended_by, []);
+    assert.deepEqual(entry.wanted_by, []);
+    assert.equal(entry.second_degree_watching, 0);
+  }
+
+  // Finishing a show moves it out; watching it again brings it back.
+  await updateWatchStatus("cam", "tv:1", "finished");
+  assert.deepEqual(
+    (await suggestions()).map((entry) => entry.id),
+    ["movie:1"],
+  );
+  await updateWatchStatus("cam", "tv:1", "watching");
+  assert.equal((await suggestions()).length, 2);
+});
+
+test("any current viewer status excludes a title until the viewer clears it", async () => {
+  for (const name of ["alice", "ben"]) await person(name);
+  await friend("alice", "ben");
+  await title("movie:1");
+  await title("tv:1");
+  await updateTitleActivity("ben", "movie:1", "recommended", true);
+  await updateWatchStatus("ben", "tv:1", "watching");
+  const shown = async () => (await suggestions()).map((entry) => entry.id);
+  assert.deepEqual(await shown(), ["movie:1", "tv:1"]);
+  for (const status of [
+    "want_to_watch",
+    "watching",
+    "caught_up",
+    "finished",
+    "stopped",
+  ]) {
+    await updateWatchStatus("alice", "tv:1", status);
+    assert.deepEqual(await shown(), ["movie:1"], status);
+    await updateWatchStatus(
+      "alice",
+      "movie:1",
+      status === "caught_up" ? "watching" : status,
+    );
+    assert.deepEqual(await shown(), [], status);
+    await updateWatchStatus("alice", "tv:1", null);
+    await updateWatchStatus("alice", "movie:1", null);
+    assert.deepEqual(await shown(), ["movie:1", "tv:1"], status);
+  }
+  // Recommend alongside a cleared status still excludes the title.
+  await updateWatchStatus("alice", "tv:1", "finished");
+  await updateTitleActivity("alice", "tv:1", "recommended", true);
+  await updateWatchStatus("alice", "tv:1", null);
+  assert.deepEqual(await shown(), ["movie:1"]);
+});
+
+test("Watching ranks after Recommend and Want to watch with 3:1 weights and its own latest activity", async () => {
+  for (const name of ["alice", "ben", "cam", "dee", "eli", "fay", "gia"])
+    await person(name);
+  await friend("alice", "ben");
+  await friend("alice", "cam");
+  for (const name of ["dee", "eli", "fay", "gia"]) {
+    await friend("ben", name);
+    await friend("cam", name); // Two paths must not count anyone twice.
+  }
+  for (const [id, name] of [
+    [1, "Direct watching"],
+    [2, "Four watching"],
+    [3, "Wanted"],
+    [4, "Second-degree recommendation"],
+    [5, "Older tie"],
+    [6, "Newer tie"],
+    [7, "Wanted and watching"],
+  ] as const)
+    await title(`movie:${id}`, name);
+  await updateWatchStatus("ben", "movie:1", "watching");
+  for (const name of ["dee", "eli", "fay", "gia"])
+    await updateWatchStatus(name, "movie:2", "watching");
+  await updateTitleActivity("cam", "movie:3", "want_to_watch", true);
+  for (const name of ["dee", "eli", "fay"])
+    await updateTitleActivity(name, "movie:4", "recommended", true);
+  // Three second-degree watchers score 3, tying one direct watcher.
+  for (const name of ["eli", "fay", "gia"])
+    await updateWatchStatus(name, "movie:5", "watching");
+  await updateWatchStatus("cam", "movie:6", "watching");
+  await updateTitleActivity("ben", "movie:7", "want_to_watch", true);
+  await updateWatchStatus("cam", "movie:7", "watching");
+  await db.query(`UPDATE feed_item SET activity_at='2026-01-01'`);
+  await db.query(`UPDATE watch_progress SET activity_at=CASE
+    WHEN title_id='movie:6' THEN '2026-01-04'::timestamptz
+    WHEN title_id='movie:1' THEN '2026-01-03'::timestamptz
+    ELSE '2026-01-02'::timestamptz END`);
+
+  const result = await suggestions();
+  assert.deepEqual(
+    result.map((entry) => entry.id),
+    [4, 7, 3, 2, 6, 1, 5].map((n) => `movie:${n}`),
+  );
+  const byId = new Map(result.map((entry) => [entry.id, entry]));
+  assert.equal(byId.get("movie:2")!.second_degree_watching, 4);
+  assert.equal(byId.get("movie:5")!.second_degree_watching, 3);
+  assert.deepEqual(byId.get("movie:7")!.wanted_by, [
+    { username: "ben", display_name: "ben" },
+  ]);
+  assert.deepEqual(byId.get("movie:7")!.watching_by, [
+    { username: "cam", display_name: "cam" },
+  ]);
+  assert.deepEqual(byId.get("movie:1")!.watching_by, [
+    { username: "ben", display_name: "ben" },
+  ]);
+});
+
+test("second-degree Watching needs three people of its own and stays anonymous", async () => {
+  for (const name of ["alice", "ben"]) await person(name);
+  await friend("alice", "ben");
+  const [dee, eli, fay, gia] = await friendsOf(
+    "ben",
+    "dee",
+    "eli",
+    "fay",
+    "gia",
+  );
+  await title("movie:1", "Two watching");
+  await title("movie:2", "Split groups");
+  await title("tv:1", "Three watching");
+  await title("movie:3", "Direct recommendation");
+  for (const name of [dee, eli])
+    await updateWatchStatus(name, "movie:1", "watching");
+  // Four people, but neither group reaches three on its own.
+  for (const name of [dee, eli])
+    await updateTitleActivity(name, "movie:2", "want_to_watch", true);
+  for (const name of [fay, gia])
+    await updateWatchStatus(name, "movie:2", "watching");
+  await updateWatchStatus(dee, "tv:1", "watching");
+  await updateWatchStatus(eli, "tv:1", "caught_up");
+  await updateWatchStatus(fay, "tv:1", "watching");
+  await updateWatchStatus(gia, "tv:1", "finished");
+  await updateTitleActivity("ben", "movie:3", "recommended", true);
+  // Two second-degree watchers add no count to a title direct activity qualifies.
+  for (const name of [dee, eli])
+    await updateWatchStatus(name, "movie:3", "watching");
+
+  const shown = async () =>
+    (await suggestions()).map((entry) => [
+      entry.id,
+      entry.second_degree_watching,
+      entry.second_degree_wanted,
+    ]);
+  assert.deepEqual(await shown(), [
+    ["movie:3", 0, 0],
+    ["tv:1", 3, 0],
+  ]);
+  const result = await suggestions();
+  assert.deepEqual(result[1].watching_by, []);
+  for (const name of [dee, eli, fay, gia])
+    assert.ok(!JSON.stringify(result).includes(`"${name}"`));
+
+  // The newest Watching entry breaks the tie between equal Watching scores.
+  await updateWatchStatus(fay, "movie:1", "watching");
+  assert.deepEqual(await shown(), [
+    ["movie:3", 0, 0],
+    ["movie:1", 3, 0],
+    ["tv:1", 3, 0],
+  ]);
+  await changeRelationship("alice", fay, "block");
+  assert.deepEqual(await shown(), [["movie:3", 0, 0]]);
 });
 
 test("pending edges, self, outsiders, and more distant people cannot supply suggestions", async () => {

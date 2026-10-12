@@ -10,37 +10,40 @@ import { api, useInteractive } from "./client";
 import { Poster } from "./poster";
 import { TitleCard } from "./title-card";
 
+type ReasonAction = "recommended" | "want_to_watch" | "watching";
+
+// "recommends this", "are also watching", and the like.
+function phrase(action: ReasonAction, singular: boolean, also: boolean) {
+  const extra = also ? "also " : "";
+  if (action === "watching")
+    return `${singular ? "is" : "are"} ${extra}watching`;
+  return action === "recommended"
+    ? `${extra}${singular ? "recommends" : "recommend"} this`
+    : `${extra}${singular ? "wants" : "want"} to watch this`;
+}
+
 function Reason({
   people,
   secondDegree,
-  recommended,
+  action,
 }: {
   people: TitleSuggestion["recommended_by"];
   secondDegree: number;
-  recommended: boolean;
+  action: ReasonAction;
 }) {
-  const action = (singular: boolean) =>
-    recommended
-      ? singular
-        ? "recommends this"
-        : "recommend this"
-      : singular
-        ? "wants to watch this"
-        : "want to watch this";
   return (
     <>
       {people.length > 0 && (
         <p>
           {people.map((person) => person.display_name).join(", ")}{" "}
-          {action(people.length === 1)}.
+          {phrase(action, people.length === 1, false)}.
         </p>
       )}
       {secondDegree > 0 && (
         <p>
           {secondDegree}{" "}
-          {secondDegree === 1 ? "friend of a friend" : "friends of friends"}
-          {people.length > 0 ? " also " : " "}
-          {action(secondDegree === 1)}.
+          {secondDegree === 1 ? "friend of a friend" : "friends of friends"}{" "}
+          {phrase(action, secondDegree === 1, people.length > 0)}.
         </p>
       )}
     </>
@@ -279,12 +282,17 @@ export function TitleSearch({
                     <Reason
                       people={title.recommended_by}
                       secondDegree={title.second_degree_recommended}
-                      recommended
+                      action="recommended"
                     />
                     <Reason
                       people={title.wanted_by}
                       secondDegree={title.second_degree_wanted}
-                      recommended={false}
+                      action="want_to_watch"
+                    />
+                    <Reason
+                      people={title.watching_by}
+                      secondDegree={title.second_degree_watching}
+                      action="watching"
                     />
                   </div>
                 </Link>

@@ -25,6 +25,11 @@ ship without expanding this issue into watch-status tracking.
 
 **Tradeoff:** The first implementation cannot use Watching activity.
 
+**Updated — 2026-10-12:**
+[Watch statuses in suggestions](#watch-statuses-in-suggestions--2026-10-12)
+adds Watching and Caught up as sources and every current status as a viewer
+exclusion.
+
 ### Viewer exclusions follow current choices — 2026-09-07
 
 **Decision:** Exclude a title while the viewer currently marks either
@@ -34,6 +39,10 @@ does not permanently exclude a title.
 
 **Why:** The user accepted using current choices for exclusions and making
 a title eligible again after both choices are removed.
+
+**Updated — 2026-10-12:** Any current
+[watch status](#watch-statuses-in-suggestions--2026-10-12) also
+excludes a title, and clearing it follows the same rule.
 
 **Tradeoff:** A title the viewer previously removed can return. Removal
 does not act as a permanent dismissal from suggestions.
@@ -76,6 +85,10 @@ reason for the exact ratio was stated.
 multiplies the person's recommendation weight by 1.5 at #10, up to 1.95 at
 #1, in both social groups. Direct-friend explanations show the rank and list
 top 10 recommenders first; friend-of-friend counts do not mention it.
+
+**Updated — 2026-10-12:** Weighted
+[Watching totals](#watch-statuses-in-suggestions--2026-10-12) come after
+Want to watch totals and before the most recent action.
 
 **Tradeoff:** This extends discovery beyond direct friends. The anonymous
 count decision below defines what can be revealed about second-degree
@@ -144,6 +157,35 @@ friend-of-friend group size would still let one person's action on a title be
 inferred. Keeping below-minimum titles without labels or ranking boosts
 would still disclose that someone acted.
 
+**Updated — 2026-10-12:** Second-degree
+[Watching](#watch-statuses-in-suggestions--2026-10-12) needs its own three
+people.
+
+### Watch statuses in suggestions — 2026-10-12
+
+**Decision:** Leave a title out of the viewer's suggestions while the viewer
+has any current status on it: Want to watch, Watching, Caught up, Finished,
+or Stopped watching. A current Recommend still excludes it as well. Count
+friends' current Watching and Caught up statuses as suggestion sources;
+Finished and Stopped watching do not count. Compare the weighted Recommend
+total first, then Want to watch, then Watching, keeping the 3:1
+direct-to-second-degree weighting and the
+[three-person second-degree minimum](#minimum-friends-of-friends-per-signal--2026-10-12)
+for each action. Explain Watching signals next to the existing explanations,
+for example "Maya Chen is watching" and "3 friends of friends are watching".
+This resolves [issue #192](https://github.com/jubishop/screenr/issues/192)
+and supersedes the Recommend and Want to watch–only sources and exclusions
+above.
+
+**Why:** The user accepted the recommended answers. A viewer with a current
+status already knows the title. Watching and Caught up both mean the friend
+is still watching. No separate reason was stated for leaving out Finished and
+Stopped watching or for ranking Watching after Want to watch.
+
+**Tradeoff:** A friend who finished a title suggests it only by also
+recommending it. A title the viewer finished or stopped watching stays out of
+suggestions until the viewer clears that status.
+
 ### Switching between suggestions and search — 2026-09-07
 
 **Decision:** While browsing suggestions, keep them visible as the viewer
@@ -201,9 +243,12 @@ behavior. It describes engineering choices, not additional interview answers.
 
 ### Sources and access
 
-- Use active Recommend and Want to watch records. Removed actions do not
+- Use active Recommend and Want to watch records and active Watching or
+  Caught up progress entries. Removed actions and cleared statuses do not
   qualify or rank a title, even when replies keep their feed entries visible.
   Comments and replies are not recommendation signals or viewer exclusions.
+- Exclude titles the viewer currently recommends or holds any current status
+  for: Want to watch or an active progress entry, Stopped watching included.
 - Derive direct friends from current accepted friendships, subject to
   blocking. Derive friends of friends through two current accepted,
   unblocked friendship edges. Exclude the viewer, direct friends, anyone
@@ -211,15 +256,16 @@ behavior. It describes engineering choices, not additional interview answers.
   friendships away. A pending request does not establish an eligible edge.
 - Deduplicate each person within their social group and each title by its
   catalog identity. Multiple connecting friends must not multiply a signal.
-  A person can contribute once to each action total when both are active.
+  A person can contribute once to each of the Recommend, Want to watch, and
+  Watching totals; Recommend can go with Watching or Caught up.
 - Read eligibility, current actions, viewer exclusions, and aggregates in
   one consistent database snapshot. Return named direct-friend contributors
   and ordinary second-degree person counts for each action. The 3:1 scores
   determine order; they are not the person counts shown in explanations.
 - Apply the
   [three-person minimum](#minimum-friends-of-friends-per-signal--2026-10-12)
-  to each title's second-degree Recommend and Want to watch groups after
-  these rules. Drop a smaller group before eligibility, scoring, the
+  to each title's second-degree Recommend, Want to watch, and Watching groups
+  after these rules. Drop a smaller group before eligibility, scoring, the
   latest-action tie-break, and the returned counts, so a second-degree count
   is either zero or at least three.
 - Do not widen `screenr_can_read` or load second-degree private feed entries
@@ -238,14 +284,16 @@ behavior. It describes engineering choices, not additional interview answers.
 ### Ordering and presentation
 
 - Sort descending by `3 * direct_recommenders + second_degree_recommenders`,
-  then `3 * direct_want_to_watch + second_degree_want_to_watch`, then the
-  latest activation of an eligible, currently active action. Second-degree
+  then `3 * direct_want_to_watch + second_degree_want_to_watch`, then
+  `3 * direct_watching + second_degree_watching`, then the latest activation
+  of an eligible, currently active action or Watching status. Second-degree
   terms and actions come only from groups that meet the minimum. Replies do
   not affect this time. Use title name and catalog ID as stable final
   tie-breaks.
 - Use a responsive poster grid with the title and social explanations
   beneath each image. Handle missing posters and singular/plural counts.
-  Explain Recommend and Want to watch separately and omit zero-count claims.
+  Explain Recommend, Want to watch, and Watching separately and omit
+  zero-count claims. A friend who is Caught up reads as watching.
   Keep the tile link keyboard-accessible and readable on phone and desktop.
 - Preserve the current screen refresh conventions and the viewer's search
   text and display mode during refreshes. Returning from a title page reads
@@ -267,9 +315,10 @@ behavior. It describes engineering choices, not additional interview answers.
 
 `src/server/title-suggestions.ts` implements the single-snapshot query.
 It separates current direct friends from unique eligible second-degree
-people, then filters active actions, drops second-degree groups below the
-minimum, and aggregates the rest. It reads names only for direct-friend
-attribution. Its explicit response fields contain public title metadata,
+people, then filters active actions and Watching or Caught up entries in
+`watch_progress`, drops titles the viewer has a current choice for, drops
+second-degree groups below the minimum, and aggregates the rest. It reads
+names only for direct-friend attribution. Its explicit response fields contain public title metadata,
 direct-friend names/usernames, and anonymous second-degree counts. Ranking scores, second-degree identities, and connecting paths are
 not returned. `src/server/screens.ts` includes these suggestions for `/search`
 and adds viewing options and the viewer's saved service identities.
@@ -301,20 +350,21 @@ returning from a result restores its query and results
 
 `tests/app/title-suggestions.test.ts` exercises the public screen loader
 against PostgreSQL, including weighting, unique connections, current choices,
-blocking, the second-degree minimum, preserved discussions, and 205 eligible
-titles. Browser coverage in `tests/browser/title-suggestions.spec.ts` uses the
-real app and the local catalog fixture to check identity privacy in initial
-page data and API responses, tile layout/navigation, search transitions,
-the search URL through history and reloads, delayed responses, and recovery
-from network failures. The issue owns the acceptance checklist.
+blocking, the second-degree minimum, preserved discussions, 205 eligible
+titles, and watch statuses as sources, exclusions, and a ranking tier.
+Browser coverage in `tests/browser/title-suggestions.spec.ts` uses the real
+app and the local catalog fixture to check identity privacy in initial page
+data and API responses, Watching explanations, tile layout/navigation, search
+transitions, the search URL through history and reloads, delayed responses,
+and recovery from network failures. The issue owns the acceptance checklist.
 
 ## Scope boundary
 
 Watching and the other
-[watch statuses](title-feed.md#watch-progress-entries) shipped in #100;
-using them in suggestions is tracked in
-[#192](https://github.com/jubishop/screenr/issues/192). The original suggestion issue
-does not build that tracking, the separately planned Friends recommend view,
+[watch statuses](title-feed.md#watch-progress-entries) shipped in #100, and
+[#192](https://github.com/jubishop/screenr/issues/192) added them to
+suggestions as [decided](#watch-statuses-in-suggestions--2026-10-12). The
+original suggestion issue does not build that tracking, the separately planned Friends recommend view,
 inline title actions, permanent dismissals, or global recommendations.
 Issue #93 adds the optional service filter described above; title-type filters
 remain outside this suggestion view.

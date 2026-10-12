@@ -6,7 +6,8 @@ import { browserConfig } from "../../scripts/browser-config";
 import { chooseStatus } from "./watch-status";
 
 const { changeRelationship } = await import("../../src/server/relationships");
-const { updateTitleActivity } = await import("../../src/server/title-actions");
+const { updateTitleActivity, updateWatchStatus } =
+  await import("../../src/server/title-actions");
 
 async function setup(viewer: string, prefix: string) {
   const direct = await person(
@@ -153,6 +154,69 @@ test("suggestion tiles explain the circle without revealing second-degree identi
   await updateTitleActivity(viewer, "movie:987654", "want_to_watch", false);
   await page.evaluate(() => window.dispatchEvent(new Event("focus")));
   await expect(grid.getByRole("link")).toHaveCount(2);
+});
+
+test("suggestion tiles explain Watching by friends and anonymous friends of friends", async ({
+  page,
+  signIn,
+}) => {
+  const viewer = await signIn(page, "watchtileviewer");
+  const direct = await person("watchtiledirect", "Maya Chen");
+  await friend(viewer, direct);
+  await db.query(`INSERT INTO title(id,kind,tmdb_id,name,overview) VALUES
+    ('movie:987654','movie',987654,'The Lantern Room','A fictional coastal story.'),
+    ('tv:998001','tv',998001,'The Harbor Signal','A fictional mystery.')
+    ON CONFLICT(id) DO NOTHING`);
+  await updateWatchStatus(direct, "movie:987654", "watching");
+  // Caught up counts as watching, and the count needs three people.
+  const hidden: string[] = [];
+  for (const [suffix, status] of [
+    ["one", "watching"],
+    ["two", "caught_up"],
+    ["three", "watching"],
+  ]) {
+    const username = `watchtilehidden${suffix}`;
+    const second = await person(username);
+    await friend(direct, second);
+    await updateWatchStatus(second, "tv:998001", status);
+    hidden.push(second, username);
+  }
+  await page.goto("/search");
+  const grid = page.getByRole("region", {
+    name: "Title suggestions",
+    exact: true,
+  });
+  const tile = (name: string) =>
+    grid.getByRole("link").filter({
+      has: page.getByRole("heading", { name, exact: true }),
+    });
+  const movie = tile("The Lantern Room");
+  const show = tile("The Harbor Signal");
+  await expect(grid.getByRole("link")).toHaveCount(2);
+  await expect(movie.locator(".suggestion-reasons p")).toHaveText([
+    "Maya Chen is watching.",
+  ]);
+  await expect(show.locator(".suggestion-reasons p")).toHaveText([
+    "3 friends of friends are watching.",
+  ]);
+  const payload = await (
+    await page.request.get("/api/screenr/screen?path=%2Fsearch")
+  ).text();
+  for (const value of hidden) expect(payload).not.toContain(value);
+
+  await updateTitleActivity(direct, "tv:998001", "recommended", true);
+  await updateWatchStatus(direct, "tv:998001", "caught_up");
+  await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+  await expect(show.locator(".suggestion-reasons p")).toHaveText([
+    "Maya Chen recommends this.",
+    "Maya Chen is watching.",
+    "3 friends of friends are also watching.",
+  ]);
+  // The viewer's own status removes the title from suggestions.
+  await updateWatchStatus(viewer, "movie:987654", "stopped");
+  await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+  await expect(grid.getByRole("link")).toHaveCount(1);
+  await expect(movie).toHaveCount(0);
 });
 
 test("search submission and clearing switch modes without applying suggestion exclusions to search", async ({

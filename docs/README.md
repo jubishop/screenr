@@ -81,7 +81,7 @@ both memory and design documents.
   data acquisition, cache behavior, and title-page scope for issue #7.
 - [Find a title suggestions](title-suggestions.md): accepted discovery
   decisions, anonymous second-degree counts, and 3:1 social weighting for
-  issue #39.
+  issue #39, and watch-status signals for issue #192.
 - [Usage telemetry](usage-telemetry.md): accepted storage, measure definitions,
   attribution, and reporting for issue #105, and their implementation.
 - [Profile top 10](profile-top-ten.md): accepted ranked list, rank-based

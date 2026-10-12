@@ -57,8 +57,11 @@ export type ViewingAccess = "available" | "unmatched" | "unknown";
 export type TitleSuggestion = Title & {
   recommended_by: Pick<Person, "username" | "display_name">[];
   wanted_by: Pick<Person, "username" | "display_name">[];
+  // Direct friends Watching or Caught up.
+  watching_by: Pick<Person, "username" | "display_name">[];
   second_degree_recommended: number;
   second_degree_wanted: number;
+  second_degree_watching: number;
 };
 export const reactionOptions = [
   { kind: "like", label: "Like", emoji: "👍" },
