@@ -1,4 +1,4 @@
-"""Check how the Screenr systemd units order themselves and report readiness."""
+"""Check how the Screenr systemd units order themselves, report readiness, and stop."""
 from pathlib import Path
 import unittest
 
@@ -37,6 +37,17 @@ class UnitDependencyTests(unittest.TestCase):
         for unit in dependents:
             with self.subTest(unit=unit):
                 self.assertIn('screenr-db.service', words(unit, 'After'))
+
+    def test_postgresql_stops_its_own_processes_in_order(self):
+        service = unit_file('screenr-db.service')['Service']
+        # Only the postmaster receives SIGINT, PostgreSQL's fast shutdown, and
+        # it stops its child processes in order. The default control-group
+        # mode would send the signal to every PostgreSQL process at once.
+        self.assertEqual(service.get('KillMode'), ['mixed'])
+        self.assertEqual(service.get('KillSignal'), ['SIGINT'])
+        # systemd kills the processes that remain after a finite stop timeout.
+        self.assertNotIn('SendSIGKILL', service)
+        self.assertRegex(service['TimeoutStopSec'][0], r'^[1-9][0-9]*$')
 
 
 if __name__ == '__main__':

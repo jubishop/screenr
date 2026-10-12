@@ -135,7 +135,10 @@ Install the `ops/screenr-*.service` and `.timer` files under
 accepts connections, so starting or restarting it returns only then, and the
 units that require it start afterwards. It has no start timeout, because crash
 recovery can outlast systemd's default, and a timeout would restart recovery
-from the beginning. Units ordered after `network-online.target` also pull it
+from the beginning. Stopping it sends SIGINT, PostgreSQL's fast shutdown, only
+to the postmaster (`KillMode=mixed`), which stops its child processes in order
+and writes a shutdown checkpoint. systemd kills any process that remains after
+two minutes. Units ordered after `network-online.target` also pull it
 in with `Wants=`, so systemd starts that target and waits for the network.
 Later deployments install changed units; see
 [host configuration drift](#host-configuration-drift). Build the app outside

@@ -18,6 +18,10 @@ RuntimeDirectory=screenr-db
 RuntimeDirectoryMode=0750
 ExecStart=/usr/lib/postgresql/18/bin/postgres -D /var/lib/screenr/postgres
 ExecReload=/bin/kill -HUP $MAINPID
+# Stopping sends SIGINT, PostgreSQL's fast shutdown, only to the postmaster,
+# which stops its child processes in order. systemd kills any that remain
+# after the stop timeout.
+KillMode=mixed
 KillSignal=SIGINT
 TimeoutStopSec=120
 Restart=on-failure
