@@ -78,8 +78,20 @@ class FailureAlertTests(unittest.TestCase):
         self.assertIn('backup failed', message['subject'])
         self.assertIn('journalctl -u screenr-backup.service', message['text'])
         self.assertIn('exit-code', message['text'])
+        self.assertNotIn('time limit', message['text'])
         self.assertIn('accepted by Resend', output)
         self.assertNotIn('fixture-email-secret', output + errors)
+
+    def test_timed_out_job_says_it_ran_past_its_time_limit(self):
+        # A hung backup or restore check ends when its TimeoutStartSec expires.
+        for unit in ['screenr-backup.service', 'screenr-restore-check.service']:
+            with self.subTest(unit=unit):
+                self.requests.clear()
+                code, _, errors = self.execute(unit, state={**FAILED, 'Result': 'timeout'})
+                self.assertEqual(code, 0, errors)
+                text = self.message()['text']
+                self.assertIn('Result: timeout', text)
+                self.assertIn('ran past its time limit, so systemd stopped it', text)
 
     def test_failed_restore_check_emails_the_owner(self):
         code, _, errors = self.execute('screenr-restore-check.service')

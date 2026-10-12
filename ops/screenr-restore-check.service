@@ -6,6 +6,8 @@ OnFailure=screenr-alert@%n.service
 
 [Service]
 Type=oneshot
+# Stop a hung run, which also releases its exclusive restic lock.
+TimeoutStartSec=30min
 User=screenr-db
 Group=screenr-db
 EnvironmentFile=/etc/screenr/backup.env

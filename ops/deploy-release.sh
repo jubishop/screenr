@@ -18,7 +18,10 @@ case "$archive" in /tmp/screenr-release.*) ;; *) exit 1 ;; esac
 release=/opt/screenr/releases/$revision
 cd /opt/screenr
 exec 9>deploy.lock
-flock -n 9
+if ! flock -n 9; then
+    echo 'Another deployment, release cleanup, or restore holds /opt/screenr/deploy.lock. Wait for it to finish, then rerun the deploy job.' >&2
+    exit 1
+fi
 printf '%s  %s\n' "$checksum" "$archive" | sha256sum --check
 # Confirm the provisioned services before changing anything.
 systemctl is-active --quiet screenr-db

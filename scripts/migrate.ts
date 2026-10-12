@@ -19,7 +19,13 @@ const disposable =
 // directory use migrateFrom.
 export const migrate = () => migrateFrom(new URL("../db/", import.meta.url));
 
-export async function migrateFrom(directory: URL) {
+// Activation holds the deploy lock while migrations run. Bound each lock wait,
+// including the migration lock, and each statement, so a stuck run fails
+// with a clear error instead.
+export async function migrateFrom(
+  directory: URL,
+  { lockTimeout = "30s", statementTimeout = "5min" } = {},
+) {
   const files = (await readdir(directory))
     .filter((name) => name.endsWith(".sql"))
     .sort();
@@ -52,6 +58,10 @@ export async function migrateFrom(directory: URL) {
   );
   const client = await db.connect();
   try {
+    await client.query(
+      "SELECT set_config('lock_timeout', $1, false), set_config('statement_timeout', $2, false)",
+      [lockTimeout, statementTimeout],
+    );
     await client.query("SELECT pg_advisory_lock(713934202)");
     // Check what this database applied before changing anything. Releases
     // before checksums existed, and rollbacks to them, record no checksum.
@@ -103,9 +113,25 @@ export async function migrateFrom(directory: URL) {
     await client.query("COMMIT");
   } catch (error) {
     await client.query("ROLLBACK");
+    // Every SQL migration runs in the transaction that was just rolled back.
+    const unapplied = "No SQL migration was applied.";
+    const { code, message } = error as { code?: string; message?: string };
+    if (code === "55P03")
+      throw new Error(
+        `Database migrations waited ${lockTimeout} for a database lock and stopped. Another migration run or a long transaction holds it. ${unapplied} Retry after it finishes.`,
+        { cause: error },
+      );
+    if (code === "57014" && message?.includes("statement timeout"))
+      throw new Error(
+        `A database migration statement ran longer than ${statementTimeout} and was canceled. ${unapplied}`,
+        { cause: error },
+      );
     throw error;
   } finally {
-    await client.query("SELECT pg_advisory_unlock(713934202)");
+    // The pool reuses this connection, so restore its default limits.
+    await client.query(
+      "SELECT pg_advisory_unlock(713934202); RESET lock_timeout; RESET statement_timeout",
+    );
     client.release();
   }
 }

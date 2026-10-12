@@ -66,6 +66,8 @@ def unit_state(unit):
 
 def compose(unit, state):
     details = f'Unit: {unit}\nResult: {state.get("Result") or "unknown"}\n'
+    if state.get('Result') == 'timeout':
+        details += 'It ran past its time limit, so systemd stopped it.\n'
     if unit in SERVICES:
         name = SERVICES[unit]
         subject = f'{name} stopped'

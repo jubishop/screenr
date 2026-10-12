@@ -12,6 +12,8 @@ import tarfile
 import tempfile
 import unittest
 
+from test_failure_alert import unit_file
+
 ROOT = Path(__file__).resolve().parents[1]
 REVISION = 'a' * 40
 # Scripts that run as root on the host. Only their checked Git copies may run.
@@ -766,9 +768,13 @@ class RemoteDeploymentTests(unittest.TestCase):
         # Host units still converge on the active release's copies.
         self.assertEqual(self.systemctl_calls.count(HOST_CONFIG), 1)
 
-    def test_lock_failure_does_not_extract_or_activate(self):
+    def test_lock_failure_explains_and_does_not_extract_or_activate(self):
         result, events, current = self.execute_remote(FAIL_LOCK='yes')
         self.assertNotEqual(result.returncode, 0)
+        # A held lock must not fail with a bare exit status.
+        self.assertIn('holds /opt/screenr/deploy.lock', result.stderr)
+        self.assertIn('rerun the deploy job', result.stderr)
+        self.assertNotIn('start screenr-backup.service', self.systemctl_calls)
         self.assertEqual(events, '')
         self.assertEqual(current, '/opt/screenr/releases/previous')
 
@@ -787,3 +793,42 @@ class RemoteDeploymentTests(unittest.TestCase):
         result, events, current = self.execute_remote(FAILED_UNIT='trading')
         self.assertNotEqual(result.returncode, 0)
         self.assertEqual(events, '')
+
+
+def seconds(duration):
+    """Convert a systemd or restic duration such as 15min, 5m, 90s, or 1h to seconds."""
+    match = re.fullmatch(r'(\d+)(s|m|min|h)', duration)
+    if not match:
+        raise AssertionError(f'Unsupported duration {duration!r}')
+    return int(match[1]) * {'s': 1, 'm': 60, 'min': 60, 'h': 3600}[match[2]]
+
+
+class RunTimeBoundTests(unittest.TestCase):
+    """Hung backup steps end with an error instead of holding the deploy lock."""
+
+    def time_limit(self, unit):
+        limits = unit_file(unit)['Service'].get('TimeoutStartSec', [])
+        self.assertEqual(len(limits), 1, f'{unit} needs one TimeoutStartSec')
+        return seconds(limits[0])
+
+    def test_backup_fails_before_github_cancels_the_deploy_job(self):
+        # Deployment waits for this backup under the deploy lock. A hung backup
+        # must fail with systemd's error inside the job, after the upload.
+        workflow = (ROOT / '.github/workflows/check.yml').read_text()
+        job = re.search(r'^  deploy:\n(?:    .*\n)*?    timeout-minutes: (\d+)$', workflow, re.M)
+        self.assertLessEqual(self.time_limit('screenr-backup.service'), int(job[1]) * 60 - 5 * 60)
+
+    def test_restic_waits_for_another_runs_lock_within_the_unit_limit(self):
+        # The weekly restore check holds an exclusive repository lock, so a
+        # deployment backup at that time waits for it instead of failing.
+        for script, unit in (('ops/backup.sh', 'screenr-backup.service'),
+                             ('ops/restore-check.sh', 'screenr-restore-check.service')):
+            with self.subTest(script=script):
+                commands = [line.split() for line in (ROOT / script).read_text().splitlines()
+                            if line.startswith('restic ')]
+                self.assertTrue(commands)
+                waits = []
+                for command in commands:
+                    self.assertIn('--retry-lock', command)
+                    waits.append(seconds(command[command.index('--retry-lock') + 1]))
+                self.assertLess(sum(waits), self.time_limit(unit))

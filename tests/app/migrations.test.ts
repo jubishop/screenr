@@ -34,8 +34,11 @@ async function migrations(extra: Record<string, string>) {
   return directory;
 }
 
-async function rejection(directory: string) {
-  const error = await migrateFrom(pathToFileURL(`${directory}/`)).then(
+async function rejection(
+  directory: string,
+  limits?: Parameters<typeof migrateFrom>[1],
+) {
+  const error = await migrateFrom(pathToFileURL(`${directory}/`), limits).then(
     () => assert.fail("The migration run must be rejected."),
     (error: Error) => error,
   );
@@ -139,4 +142,89 @@ test("migrations applied before checksums existed get checksums without running 
         .digest("hex"),
       name,
     );
+});
+
+test(
+  "a migration run stops with a clear error while another run holds the migration lock",
+  { timeout: 10_000 },
+  async () => {
+    const pending = `${number(1)}-pending.sql`;
+    const directory = await migrations({ [pending]: fails });
+    const holder = await db.connect();
+    try {
+      await holder.query("SELECT pg_advisory_lock(713934202)");
+      const message = await rejection(directory, { lockTimeout: "200ms" });
+      assert.match(message, /waited 200ms for a database lock/);
+      assert.match(message, /No SQL migration was applied/);
+      assert.equal(
+        (
+          await db.query("SELECT 1 FROM screenr_migration WHERE name=$1", [
+            pending,
+          ])
+        ).rowCount,
+        0,
+      );
+    } finally {
+      await holder.query("SELECT pg_advisory_unlock(713934202)");
+      holder.release();
+      await rm(directory, { recursive: true, force: true });
+    }
+  },
+);
+
+test(
+  "a migration statement that runs too long is canceled and rolled back",
+  { timeout: 10_000 },
+  async () => {
+    const slow = `${number(1)}-slow.sql`;
+    const directory = await migrations({
+      [slow]:
+        "CREATE TABLE migration_timeout_probe (id int); SELECT pg_sleep(5);",
+    });
+    try {
+      const message = await rejection(directory, { statementTimeout: "200ms" });
+      assert.match(message, /ran longer than 200ms/);
+      assert.match(message, /No SQL migration was applied/);
+      assert.equal(
+        (
+          await db.query(
+            "SELECT to_regclass('migration_timeout_probe') AS name",
+          )
+        ).rows[0].name,
+        null,
+      );
+    } finally {
+      await db.query("DELETE FROM screenr_migration WHERE name=$1", [slow]);
+      await db.query("DROP TABLE IF EXISTS migration_timeout_probe");
+      await rm(directory, { recursive: true, force: true });
+    }
+  },
+);
+
+test("migration runs bound lock waits and statements by default, then restore the connection", async () => {
+  const name = `${number(1)}-limits.sql`;
+  const directory = await migrations({
+    [name]:
+      "CREATE TABLE migration_limit_probe AS SELECT current_setting('lock_timeout') AS lock_timeout, current_setting('statement_timeout') AS statement_timeout;",
+  });
+  try {
+    await migrateFrom(pathToFileURL(`${directory}/`));
+    assert.deepEqual(
+      (await db.query("SELECT * FROM migration_limit_probe")).rows,
+      [{ lock_timeout: "30s", statement_timeout: "5min" }],
+    );
+    // The pool hands out the connection the migration released last.
+    assert.deepEqual(
+      (
+        await db.query(
+          "SELECT current_setting('lock_timeout') AS lock_timeout, current_setting('statement_timeout') AS statement_timeout",
+        )
+      ).rows,
+      [{ lock_timeout: "0", statement_timeout: "0" }],
+    );
+  } finally {
+    await db.query("DELETE FROM screenr_migration WHERE name=$1", [name]);
+    await db.query("DROP TABLE IF EXISTS migration_limit_probe");
+    await rm(directory, { recursive: true, force: true });
+  }
 });

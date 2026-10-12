@@ -214,6 +214,8 @@ systemd also starts `OnFailure=` units before each automatic restart. The
 script emails only when the unit is still `failed`: a failed job, or a
 service that reached its restart limit of five starts in 60 seconds. The
 email names the unit, its result, and the commands to inspect and restart it.
+A job that systemd stopped at its [time limit](#run-time-limits) reports the
+result `timeout`, and the email says that it ran past its time limit.
 For a service it also reports the automatic restart count. At the restart
 limit, systemd 255 reports the last crash's result, such as `exit-code`,
 rather than `start-limit-hit`.
@@ -331,6 +333,11 @@ activation, except on a [new host](#first-release-on-a-new-host). A skip
 trailer on a later push cannot strand a refused or failed release: skipping
 requires every commit since the last successful production deployment to
 skip. The host also locks deployment so two activations cannot run together.
+A deployment that finds `/opt/screenr/deploy.lock` held fails at once with a
+message naming it; rerun the deploy job after the other deployment, release
+cleanup, or restore finishes. The steps that run under the lock have
+[time limits](#run-time-limits), so a hung backup or migration fails with an
+error and releases the lock, even after GitHub cancels the job.
 
 The workflow stores release artifacts with one-day retention. After downloading
 and verifying an archive, the deployment job deletes its GitHub artifact. Build
@@ -610,6 +617,33 @@ storage and request usage before enabling backups and as they grow. Keep this
 deployment within the existing allowance; do not enable a paid upgrade or buy
 more VPS capacity without a new decision. Restic retention does not itself
 enforce an account-wide spending cap.
+
+### Run time limits
+
+[Issue #119](https://github.com/jubishop/screenr/issues/119) bounds the
+backup jobs and migrations, so a stalled R2 connection or a stuck lock cannot
+hold the deploy lock indefinitely:
+
+- `screenr-backup.service` sets `TimeoutStartSec=15min`. Deployment waits
+  for this backup under the deploy lock, so the limit stays well inside the
+  deploy job's 20-minute limit, after the upload. A timed-out backup fails
+  the deploy with systemd's timeout error. Backups currently take seconds.
+- `screenr-restore-check.service` sets `TimeoutStartSec=30min`. When it is
+  stopped, the restore check drops its temporary database with
+  `dropdb --force`, because the restore's server connection can briefly
+  outlive `pg_restore`.
+- Each restic command that locks the repository waits up to five minutes
+  for another run's lock with `--retry-lock 5m`. A deployment during the
+  weekly restore check therefore waits for that check's exclusive lock
+  instead of failing, and the waits in each script fit inside its unit's
+  limit.
+- [Migrations](data-and-access.md#schema-migrations) bound their lock waits
+  and statements.
+
+systemd stops a job that passes its limit and marks it failed with the result
+`timeout`, which starts the [failure alert](#failure-alerts).
+`tests/test_deploy.py` checks that these limits stay consistent with the
+deploy job.
 
 ### Backup storage warning
 

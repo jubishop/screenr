@@ -98,7 +98,7 @@ class BackupAgeTests(unittest.TestCase):
 
 
 class RestoreCheckTests(unittest.TestCase):
-    def execute(self, *, age, profiles='3'):
+    def execute(self, *, age, profiles='3', restore=':'):
         # External commands are the boundary. The restore and age check scripts run.
         directory = tempfile.TemporaryDirectory()
         self.addCleanup(directory.cleanup)
@@ -118,7 +118,7 @@ restic() { echo "restic $1"; }
 mktemp() { echo "$FIXTURE/restore.dump"; }
 createdb() { echo "createdb $*"; }
 dropdb() { echo "dropdb $*"; }
-pg_restore() { :; }
+pg_restore() { eval "$RESTORE"; }
 psql() {
     case "$*" in *'SELECT count(*) FROM profile'*) echo "$PROFILES" ;; esac
 }
@@ -126,7 +126,7 @@ psql() {
 '''
         environment = {**os.environ, 'FIXTURE': str(base), 'PYTHON': sys.executable,
                        'AGE_CHECK': str(AGE_CHECK), 'SCRIPT': str(ROOT / 'ops/restore-check.sh'),
-                       'PROFILES': profiles,
+                       'PROFILES': profiles, 'RESTORE': restore,
                        'SNAPSHOTS': json.dumps([{'time': stamp.isoformat().replace('+00:00', 'Z'),
                                                  'short_id': 'fixture'}])}
         return subprocess.run(['sh', '-c', wrapper], text=True, capture_output=True,
@@ -161,6 +161,17 @@ psql() {
                 created = self.temporary_databases(result.stdout, 'createdb')
                 self.assertEqual(len(created), 1)
                 self.assertEqual(self.temporary_databases(result.stdout, 'dropdb'), created)
+
+    def test_stopped_restore_fails_and_drops_temporary_database_once(self):
+        # A timeout makes systemd send SIGTERM to the script and to pg_restore,
+        # whose server connection can outlive it briefly.
+        result = self.execute(age=HOUR, restore='kill -TERM $$; return 143')
+        self.assertNotEqual(result.returncode, 0)
+        self.assertNotIn('restore passed', result.stdout)
+        created = self.temporary_databases(result.stdout, 'createdb')
+        self.assertEqual(len(created), 1)
+        self.assertEqual(self.temporary_databases(result.stdout, 'dropdb'), created)
+        self.assertIn('dropdb --force ' + created[0], result.stdout)
 
 
 if __name__ == '__main__':

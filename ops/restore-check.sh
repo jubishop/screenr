@@ -9,12 +9,17 @@ dump=$(mktemp /var/lib/screenr-backup/restore.XXXXXX)
 created=false
 cleanup() {
     rm -f "$dump"
-    if test "$created" = true; then dropdb "$database"; fi
+    # A stopped restore's server connection can briefly outlive pg_restore.
+    if test "$created" = true; then dropdb --force "$database"; fi
 }
-trap cleanup EXIT HUP INT TERM
+trap cleanup EXIT
+# systemd sends SIGTERM when the run passes its time limit. Exit, so cleanup
+# runs once.
+trap 'exit 1' HUP INT TERM
 python3 /opt/screenr/current/ops/check-backup-age.py
-restic check --read-data
-restic dump --host bishop --tag screenr latest /var/lib/screenr-backup/screenr.dump >"$dump"
+# Wait for a backup's repository lock instead of failing.
+restic check --retry-lock 5m --read-data
+restic dump --retry-lock 5m --host bishop --tag screenr latest /var/lib/screenr-backup/screenr.dump >"$dump"
 createdb --owner=screenr "$database"
 created=true
 pg_restore --exit-on-error --no-owner --no-acl --role=screenr --dbname="$database" "$dump"

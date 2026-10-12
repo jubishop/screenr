@@ -6,6 +6,9 @@ OnFailure=screenr-alert@%n.service
 
 [Service]
 Type=oneshot
+# Deployments wait for this backup while holding the deploy lock. Stop a
+# hung run inside the 20-minute deploy job; the timeout fails the unit.
+TimeoutStartSec=15min
 User=screenr-db
 Group=screenr-db
 EnvironmentFile=/etc/screenr/backup.env
