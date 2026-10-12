@@ -25,3 +25,14 @@ updates:
         patterns: ["*"]
         update-types: [minor, patch]
     labels: [improvement, "area: tooling"]
+
+  # The Caddy image CI copies (docs/development-workflow.md#ci-caddy). Propose
+  # releases on production's Tuesday update day, after its seven-day soak.
+  - package-ecosystem: docker
+    directory: /.github/caddy
+    schedule:
+      interval: weekly
+      day: tuesday
+    cooldown:
+      default-days: 7
+    labels: [improvement, "area: tooling"]

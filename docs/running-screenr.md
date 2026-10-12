@@ -18,6 +18,8 @@ Use the latest Node.js LTS release, npm, Python 3.9+, ShellCheck, Caddy,
 OpenSSL, and a Docker-compatible engine. Caddy and OpenSSL are used by the local proxy test;
 do not start a system Caddy service. On macOS, install the test tools with
 `brew install caddy openssl`; the existing Colima installation can provide Docker.
+CI tests with production's Caddy release instead; see
+[CI Caddy](development-workflow.md#ci-caddy).
 To run several checkouts at once, give each its own database and development
 port as described in [several checkouts at once](#several-checkouts-at-once).
 QMD search is described in [knowledge search](foundation/knowledge-search.md).

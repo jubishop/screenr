@@ -83,7 +83,8 @@ group per ecosystem collects minor and patch updates; every major update
 opens its own pull request. Update pull requests use only existing labels:
 `improvement`, plus `area: tooling` for Actions. Without configured labels,
 including with an empty list, Dependabot creates and applies its own default
-labels.
+labels. A third, `docker` entry updates the Caddy image that CI copies; see
+[CI Caddy](#ci-caddy).
 
 Dependabot pull requests run [the check workflow](../.github/workflows/check.yml),
 including `bin/check --full`, like any other pull request. GitHub gives them
@@ -299,11 +300,14 @@ full CI requirements when changing the check commands.
 ### CI dependency sources
 
 The Ubuntu 24.04 check job installs [.github/ci-apt.conf](../.github/ci-apt.conf)
-before either Playwright or the check tools run APT. It selects only the runner's
+before Playwright or the ShellCheck step runs APT. It selects only the runner's
 `/etc/apt/sources.list.d/ubuntu.sources`. That file retains Ubuntu's mirrors,
-suites, components (including `universe` for Caddy), and signing key. Other
+suites, components (including `universe` for ShellCheck), and signing key. Other
 runner sources, such as Google Chrome, do not participate. The job fails if
-the Ubuntu source file is missing or empty.
+the Ubuntu source file is missing or empty. Playwright's `--with-deps` install
+refreshes the package index under this policy, and the ShellCheck step reuses
+it instead of running `apt-get update` again. The runner image already
+includes ShellCheck, so that step normally changes nothing.
 
 The configuration applies only to the disposable check runner. It does not
 change developer machines, the deploy job, or production. APT signature and
@@ -320,6 +324,35 @@ Ubuntu 24.04 system with Python, GnuPG, and dpkg installed:
 ```sh
 python3 -B tests/test_ci_apt.py -v
 ```
+
+### CI Caddy
+
+The proxy test validates `ops/Caddyfile` against the Caddy release production
+runs. Production's host updater installs Caddy's newest stable release once it
+has been public for seven days, checking each Tuesday; see vps-infra's
+[Caddy updates](https://github.com/jubishop/vps-infra/blob/main/docs/caddy.md).
+The check job copies `/usr/bin/caddy` from the official `caddy` Docker image
+that [`.github/caddy/Dockerfile`](../.github/caddy/Dockerfile) pins by release
+tag and digest. The digest fixes the image contents, and that image holds the
+same release binary as production's package. On 2026-10-12, CI and production
+both ran Caddy 2.11.7, and the two binaries had the same SHA-256 checksum. In
+CI, the proxy test fails unless `caddy version` reports the pinned release, so
+a digest that disagrees with its tag cannot pass. As #122 decided, CI follows
+production's release rather than Caddy's newest, and Dependabot moves the pin,
+so nobody has to remember to bump it.
+
+Dependabot's `docker` entry proposes each new release on Tuesdays, after the
+same seven-day soak as production, and merging that pull request moves CI to
+the release production adopts at about the same time. The image appears a few
+days after the GitHub release, so CI can trail production by up to a week.
+Check production with `caddy version` on the server, or with
+`/var/lib/caddy-update/status.json`. When production holds a different release
+for longer, such as after a rollback or an early install, set the tag to
+production's release and the digest that `docker pull caddy:<version>` prints.
+
+Before [#122](https://github.com/jubishop/screenr/issues/122), CI installed
+Ubuntu's Caddy 2.6.2 package. Its post-install script started an unused system
+service and made the install take 30 to 70 seconds.
 
 ## Main branch delivery
 

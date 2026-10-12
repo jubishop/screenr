@@ -11,6 +11,23 @@ import { promisify } from "node:util";
 
 const execute = promisify(execFile);
 
+test(
+  "CI runs the Caddy release pinned to match production",
+  {
+    skip:
+      process.env.GITHUB_ACTIONS !== "true" &&
+      "only CI installs the pinned release",
+  },
+  async () => {
+    const pin = /^FROM caddy:(\d+\.\d+\.\d+)@sha256:[0-9a-f]{64}$/m.exec(
+      await readFile(".github/caddy/Dockerfile", "utf8"),
+    );
+    assert.ok(pin, "Pin the Caddy image by release tag and digest");
+    const { stdout } = await execute("caddy", ["version"]);
+    assert.equal(stdout.split(" ")[0], `v${pin[1]}`);
+  },
+);
+
 test("production proxy serves screenr.club and preserves old shared links", async (t) => {
   await execute("caddy", ["version"]);
   const directory = await mkdtemp(join(tmpdir(), "screenr-proxy-"));

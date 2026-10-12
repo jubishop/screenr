@@ -53,8 +53,18 @@ jobs:
           test -s /etc/apt/sources.list.d/ubuntu.sources
           sudo install -m 0644 .github/ci-apt.conf /etc/apt/apt.conf.d/99-screenr-ci
       - run: npx playwright install --with-deps chromium
-      - name: Install check tools
-        run: sudo apt-get update && sudo apt-get install --yes shellcheck caddy
+      - name: Install ShellCheck
+        # Playwright's --with-deps step just refreshed the isolated APT index.
+        run: sudo apt-get install --yes shellcheck
+      - name: Install Caddy
+        # Production's Caddy release, from the image .github/caddy/Dockerfile pins.
+        run: |
+          image=$(sed -n 's/^FROM //p' .github/caddy/Dockerfile)
+          container=$(docker create --quiet "$image")
+          docker cp --quiet "$container:/usr/bin/caddy" "$RUNNER_TEMP/caddy"
+          docker rm "$container"
+          sudo install -m 0755 "$RUNNER_TEMP/caddy" /usr/local/bin/caddy
+          caddy version
       - name: Check repository
         run: ./bin/check --full
       - name: Decide whether to deploy

@@ -365,7 +365,9 @@ certificate and a fixture upstream. It verifies the `screenr.club` site, client 
 forwarding, security headers, and old invitation/title redirects with their
 paths and queries intact. Run it alone with
 `node --import tsx --test tests/app/proxy.test.ts`. It does not verify public DNS,
-Cloudflare certificates, or real provider configuration.
+Cloudflare certificates, or real provider configuration. Locally it uses any
+installed Caddy. In CI it also requires `caddy version` to report the release
+pinned to match production; see [CI Caddy](development-workflow.md#ci-caddy).
 The browser test writes mobile and desktop screenshots to `.cache/` and
 keeps failure traces in `test-results/`.
 
