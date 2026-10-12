@@ -74,6 +74,8 @@ select {
   background: var(--white);
   padding: 11px 13px;
   color: var(--ink);
+  /* iOS Safari zooms into focused fields with text smaller than 16px. */
+  font-size: 16px;
   margin-top: 6px;
 }
 input:disabled {

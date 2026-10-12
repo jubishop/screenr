@@ -132,7 +132,6 @@
 }
 .invitation-created input {
   cursor: pointer;
-  font-size: 16px;
 }
 .invitation-created [role="status"] {
   margin-bottom: 0;
