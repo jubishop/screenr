@@ -10,6 +10,7 @@ import {
 import { useRouter } from "next/navigation";
 import type { NotificationPage } from "../server/notifications";
 import { api, dateLabel, useInteractive } from "./client";
+import { initial } from "./initial";
 
 export function Notifications({
   count,
@@ -270,7 +271,7 @@ export function Notifications({
                         onClick={() => void select(item.id)}
                       >
                         <span className="avatar" aria-hidden="true">
-                          {item.actor.slice(0, 1)}
+                          {initial(item.actor)}
                         </span>
                         <span className="notification-copy">
                           <span>{item.message}</span>

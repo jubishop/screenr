@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { ScreenData } from "../server/screens";
 import type { Person } from "../shared";
 import { api, signOut } from "./client";
+import { initial } from "./initial";
 import { FeedView } from "./feed";
 import { WatchTogether } from "./watch-together";
 import { TitleSearch } from "./title-search";
@@ -183,7 +184,7 @@ export function Screen({
         </nav>
         <div className="sidebar-bottom">
           <Link href={`/people/${user.username}`} prefetch={false}>
-            <span className="avatar">{user.display_name.slice(0, 1)}</span>
+            <span className="avatar">{initial(user.display_name)}</span>
             <span>
               {user.display_name}
               <small>@{user.username}</small>

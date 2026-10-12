@@ -310,6 +310,11 @@ the sidebar and notifications. The spaced label made usernames read as
 would leave feeds and comments without them. Waiting for photos leaves the
 current gap until a separate feature ships.
 
+**Implementation note:** The first letter is the first whole character a
+reader sees, so a leading emoji, flag, or accented letter stays intact.
+`src/components/initial.ts` takes it for every initial, including the poster
+placeholder ([issue #144](https://github.com/jubishop/screenr/issues/144)).
+
 ### Sectioned Friends page — 2026-10-12
 
 **Decision:** Order the Friends page sections as follows, omitting any empty

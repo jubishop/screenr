@@ -1,4 +1,5 @@
 import Image from "next/image";
+import { initial } from "./initial";
 
 export function Poster({
   path,
@@ -21,7 +22,7 @@ export function Poster({
           sizes={sizes ?? (large ? "180px" : "72px")}
         />
       ) : (
-        <span aria-hidden="true">{name.slice(0, 1)}</span>
+        <span aria-hidden="true">{initial(name)}</span>
       )}
     </div>
   );
