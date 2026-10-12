@@ -168,8 +168,29 @@ and paths, and verifies the transfer checksum. It takes a backup, activates the
 release, and checks Screenr services, the public health endpoint, and the login
 page. It also checks that Caddy, Health, KidsBank, and Trading retain their running
 service state. [`bin/deploy-ci`](../bin/deploy-ci) is the internal Actions helper;
-[`ops/deploy-release.sh`](../ops/deploy-release.sh) runs the remote steps. The
-remote script comes from the checked Git revision, not a mutable local file.
+[`ops/deploy-release.sh`](../ops/deploy-release.sh) runs the remote steps.
+
+**Decision — 2026-10-12:** Send `ops/activate.sh` and `ops/prune-releases.py`
+from the checked Git revision with `git show`, the same way as
+`ops/deploy-release.sh`, so no script that root runs comes from the release
+archive. [Issue #110](https://github.com/jubishop/screenr/issues/110) tracks
+the work.
+
+**Why:** The check job packages `ops/` after `npm ci` runs third-party code. A
+compromised dependency could change the archive's copies and gain root on the
+shared host, even though build jobs hold no production secrets.
+
+**Rejected alternative:** Comparing the archive's `ops/` hashes with Git
+before uploading.
+
+The helper reads all three scripts from Git before contacting the host. It
+passes the activation script to `deploy-release.sh` as an argument and runs
+cleanup with `python3 -c`, so the archive's copies and the checkout's working
+files are never used. The archive still includes `ops/` because the backup and
+restore-check services run their scripts from the active release as
+`screenr-db`, not root. Apply the same rule to anything else deployment runs or
+installs as root, such as unit files for
+[host configuration drift](#host-configuration-drift).
 
 A new push does not cancel a running main workflow or interrupt activation.
 GitHub keeps the latest pending run when pushes arrive quickly. Before uploading
@@ -189,7 +210,7 @@ restarting it. A failed extraction or startup removes only a new candidate after
 successful rollback. Failures in later verification require inspection and,
 when necessary, manual recovery. Database migrations are not reversed.
 
-After the public health and login checks pass, deployment runs
+After the public health and login checks pass, deployment runs the checked
 `ops/prune-releases.py` with the verified release path. Cleanup takes the same
 host lock as activation and confirms that this release is still active. It
 keeps the active release and the two most recent successful releases, then
@@ -255,10 +276,12 @@ ends in `_test`; the default is the local test database from `bin/check --full`.
 This check also verifies that Next's generated dependency aliases are present.
 Inspect the archive manifest before transferring it. Extract into a new revision directory as root and
 keep application source and runtime packages read-only to the service users.
-Run on the VPS:
+Copy `ops/activate.sh` from a checkout of the same revision, not from the
+archive, to `/root/screenr-activate.sh`. Then run on the VPS:
 
 ```sh
-sh /opt/screenr/releases/REVISION/ops/activate.sh /opt/screenr/releases/REVISION
+sh /root/screenr-activate.sh /opt/screenr/releases/REVISION
+rm /root/screenr-activate.sh
 systemctl enable screenr-web screenr-worker
 ```
 

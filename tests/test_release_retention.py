@@ -1,4 +1,8 @@
-"""Run the release cleanup CLI against real, disposable release directories."""
+"""Run the release cleanup CLI against real, disposable release directories.
+
+Deployment sends the checked source with `python3 -c`, so the tests run it the
+same way rather than from a file path.
+"""
 import fcntl
 import os
 from pathlib import Path
@@ -37,7 +41,8 @@ class ReleaseRetentionTests(unittest.TestCase):
         (self.root / 'current').symlink_to(path)
 
     def execute(self, active):
-        return subprocess.run([sys.executable, str(ROOT / 'ops/prune-releases.py'), str(active)],
+        source = (ROOT / 'ops/prune-releases.py').read_text()
+        return subprocess.run([sys.executable, '-c', source, str(active)],
                               text=True, capture_output=True, timeout=5)
 
     def test_retry_finishes_deletion_after_dependency_removal_fails(self):

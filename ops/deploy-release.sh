@@ -1,9 +1,12 @@
 #!/bin/sh
 # Executed remotely by the CI deployment job with a verified release archive.
+# The job sends this script and the activation script from the checked Git
+# revision. Root never runs scripts from the archive.
 set -eu
 revision=${1:?Missing revision}
 checksum=${2:?Missing archive checksum}
 archive=${3:?Missing uploaded archive}
+activate=${4:?Missing checked activation script}
 case "$revision" in *[!0-9a-f]*|'') exit 1 ;; esac
 [ "${#revision}" -eq 40 ]
 case "$checksum" in *[!0-9a-f]*|'') exit 1 ;; esac
@@ -40,7 +43,7 @@ else
     tar -xzf "$archive" -C "$release" --no-same-owner
     touch "$release/.deployment-pending"
     test "$(cat "$release/REVISION")" = "$revision"
-    sh "$release/ops/activate.sh" "$release"
+    sh -c "$activate" activate "$release"
 fi
 test "$(cat /opt/screenr/current/REVISION)" = "$revision"
 for service in screenr-db screenr-web screenr-worker; do

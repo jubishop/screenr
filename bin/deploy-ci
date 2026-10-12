@@ -71,7 +71,7 @@ def main():
                 combined = posixpath.normpath(str(path.parent / target) if member.issym() else str(target))
                 if target.is_absolute() or combined == '..' or combined.startswith('../'):
                     raise ValueError('Escaping archive link.')
-        for required in ('REVISION', 'server.js', 'ops/activate.sh', 'ops/prune-releases.py'):
+        for required in ('REVISION', 'server.js'):
             if not any(str(PurePosixPath(m.name)) == required and m.isfile() for m in members):
                 raise ValueError(f'Missing release file: {required}')
         manifest = next(m for m in members if str(PurePosixPath(m.name)) == 'REVISION')
@@ -82,17 +82,19 @@ def main():
         if artifact['name'] == artifact_name:
             run('gh', 'api', '--method', 'DELETE', f"repos/{REPO}/actions/artifacts/{artifact['id']}")
     checksum = hashlib.sha256(archive.read_bytes()).hexdigest()
+    # Root runs these scripts. The build job packages ops/ after third-party
+    # install scripts run, so never send the archive's copies.
+    deploy, activate, prune = (run('git', 'show', f'{revision}:ops/{name}', capture=True)
+                               for name in ('deploy-release.sh', 'activate.sh', 'prune-releases.py'))
     remote = run('ssh', host, 'mktemp /tmp/screenr-release.XXXXXXXX', capture=True).strip()
     if not re.fullmatch(r'/tmp/screenr-release\.[A-Za-z0-9]+', remote):
         raise ValueError('Unexpected remote temporary path.')
     try:
         run('scp', str(archive), f'{host}:{remote}')
-        command = run('git', 'show', f'{revision}:ops/deploy-release.sh', capture=True)
         current = json.loads(run('gh', 'api', f'repos/{REPO}/commits/main', capture=True))['sha']
         if current != revision:
             raise ValueError('Main changed during packaging. The newer push will deploy its release.')
-        run('ssh', host, 'sh -c ' + shlex.quote(command) + ' deploy-release ' +
-            ' '.join(shlex.quote(value) for value in (revision, checksum, remote)))
+        run('ssh', host, shlex.join(('sh', '-c', deploy, 'deploy-release', revision, checksum, remote, activate)))
     finally:
         try:
             run('ssh', host, f'rm -f {remote}')
@@ -105,8 +107,7 @@ def main():
             raise ValueError('Public health check failed.')
         if path == 'login' and 'Send sign-in code' not in body:
             raise ValueError('Public login check failed.')
-    run('ssh', host, f'python3 /opt/screenr/releases/{revision}/ops/prune-releases.py '
-        f'/opt/screenr/releases/{revision}')
+    run('ssh', host, shlex.join(('python3', '-c', prune, f'/opt/screenr/releases/{revision}')))
     print(f'DEPLOY SUCCEEDED: {revision}\nhttps://screenr.club')
     print('Verify changed user flows and the other shared-host applications before closing the release.')
 

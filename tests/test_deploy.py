@@ -1,4 +1,5 @@
 """Exercise deployment commands with fake OS, GitHub, and SSH boundaries."""
+import hashlib
 import io
 import json
 import os
@@ -12,6 +13,8 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 REVISION = 'a' * 40
+# Scripts that run as root on the host. Only their checked Git copies may run.
+ROOT_SCRIPTS = ('ops/deploy-release.sh', 'ops/activate.sh', 'ops/prune-releases.py')
 
 FAKE_COMMAND = r'''#!/usr/bin/env python3
 import json, os, sys, shutil
@@ -23,12 +26,16 @@ with (base / 'calls').open('a') as log:
 if name == 'git':
     if args[0] == 'rev-parse': print(os.environ.get('CHECKOUT_SHA', 'a'*40))
     elif args[0] == 'show':
-        if args[1] != 'a'*40 + ':ops/deploy-release.sh': sys.exit(99)
-        print((base / 'checked-deploy.sh').read_text(), end='')
+        revision, _, path = args[1].partition(':')
+        if revision != 'a'*40 or path not in ('ops/deploy-release.sh', 'ops/activate.sh', 'ops/prune-releases.py'):
+            sys.exit(99)
+        if path == os.environ.get('MISSING_CHECKED'): sys.exit(128)
+        print((base / 'checked' / path).read_text(), end='')
 elif name == 'gh':
     if args[:2] == ['run', 'download']:
         if os.environ.get('WORKTREE_DRIFT'):
-            (base / 'ops/deploy-release.sh').write_text('echo unchecked-deployment\n')
+            for path in ('ops/deploy-release.sh', 'ops/activate.sh', 'ops/prune-releases.py'):
+                (base / path).write_text('echo unchecked-deployment\n')
         shutil.copyfile(base / 'release.tar.gz', Path(args[-1]) / ('screenr-' + 'a'*40 + '.tar.gz'))
     elif args[-1].endswith('/artifacts'):
         print(json.dumps(dict(artifacts=[dict(name='screenr-linux-x64-'+'a'*40, id=456)])))
@@ -63,9 +70,11 @@ class DeploymentFixture(unittest.TestCase):
         self.base = Path(self.temporary.name)
         (self.base / 'bin').mkdir()
         (self.base / 'ops').mkdir()
+        (self.base / 'checked/ops').mkdir(parents=True)
         shutil.copy2(ROOT / 'bin/deploy-ci', self.base / 'bin/deploy-ci')
-        shutil.copy2(ROOT / 'ops/deploy-release.sh', self.base / 'ops/deploy-release.sh')
-        shutil.copy2(ROOT / 'ops/deploy-release.sh', self.base / 'checked-deploy.sh')
+        for path in ROOT_SCRIPTS:
+            shutil.copy2(ROOT / path, self.base / path)
+            shutil.copy2(ROOT / path, self.base / 'checked' / path)
         self.commands = self.base / 'commands'
         self.commands.mkdir()
         fake = self.commands / 'command'
@@ -85,10 +94,16 @@ class DeploymentFixture(unittest.TestCase):
         self.environment['SCREENR_DEPLOY_KNOWN_HOSTS_FILE'] = str(self.base / 'known-hosts')
         self.make_archive()
 
-    def make_archive(self, revision=REVISION, extra=None):
+    def make_archive(self, revision=REVISION, extra=None, root_scripts=True):
+        files = [('REVISION', revision), ('server.js', '// server')]
+        if root_scripts:
+            # The build job packages ops/ after third-party install scripts
+            # run, so treat every archive copy of a root script as tampered.
+            files += [('ops/deploy-release.sh', '#!/bin/sh\necho tampered-deployment\n'),
+                      ('ops/activate.sh', '#!/bin/sh\necho tampered-activation\n'),
+                      ('ops/prune-releases.py', 'print("tampered-cleanup")\n')]
         with tarfile.open(self.base / 'release.tar.gz', 'w:gz') as archive:
-            for name, content in [('REVISION', revision), ('server.js', '// server'),
-                                  ('ops/activate.sh', '#!/bin/sh\n'), ('ops/prune-releases.py', '# fixture\n')]:
+            for name, content in files:
                 data = content.encode()
                 member = tarfile.TarInfo('./' + name)
                 member.size = len(data)
@@ -148,12 +163,45 @@ class CIDeploymentTests(DeploymentFixture):
                 self.assertNotEqual(result.returncode, 0, result.stdout)
                 self.assertFalse(any(call[0] in ('ssh', 'scp') for call in self.calls()))
 
-    def test_checkout_changes_cannot_change_remote_script(self):
+    def remote_commands(self):
+        return [shlex.split(call[-1]) for call in self.calls() if call[0] == 'ssh']
+
+    def assert_only_checked_root_scripts(self):
+        checked = {path: (self.base / 'checked' / path).read_text() for path in ROOT_SCRIPTS}
+        checksum = hashlib.sha256((self.base / 'release.tar.gz').read_bytes()).hexdigest()
+        commands = self.remote_commands()
+        self.assertFalse([command for command in commands
+                          if any('tampered' in part or 'unchecked' in part for part in command)])
+        self.assertEqual([command for command in commands if command[0] == 'sh'],
+                         [['sh', '-c', checked['ops/deploy-release.sh'], 'deploy-release', REVISION,
+                           checksum, '/tmp/screenr-release.ABC123', checked['ops/activate.sh']]])
+        self.assertEqual([command for command in commands if command[0] == 'python3'],
+                         [['python3', '-c', checked['ops/prune-releases.py'],
+                           '/opt/screenr/releases/' + REVISION]])
+
+    def test_checkout_changes_cannot_change_remote_scripts(self):
         result = self.execute(WORKTREE_DRIFT='yes')
         self.assertEqual(result.returncode, 0, result.stderr)
-        remote_commands = [shlex.split(call[-1])[2] for call in self.calls()
-                           if call[0] == 'ssh' and call[-1].startswith('sh -c')]
-        self.assertEqual(remote_commands, [(self.base / 'checked-deploy.sh').read_text()])
+        self.assert_only_checked_root_scripts()
+
+    def test_tampered_archive_root_scripts_never_run(self):
+        result = self.execute()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assert_only_checked_root_scripts()
+
+    def test_archive_without_root_scripts_still_deploys_checked_copies(self):
+        self.make_archive(root_scripts=False)
+        result = self.execute()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assert_only_checked_root_scripts()
+
+    def test_unreadable_checked_script_never_contacts_host(self):
+        for path in ROOT_SCRIPTS:
+            with self.subTest(path=path):
+                (self.base / 'calls').unlink(missing_ok=True)
+                result = self.execute(MISSING_CHECKED=path)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertFalse(any(call[0] in ('ssh', 'scp') for call in self.calls()))
 
     def test_changed_main_never_contacts_host(self):
         result = self.execute(REMOTE_SHA='b' * 40)
@@ -245,11 +293,17 @@ class RemoteDeploymentTests(unittest.TestCase):
         sleep() { :; }
         curl() { [ "${FAIL_HEALTH:-}" != yes ]; }
         sh() (
-            script=$1
-            shift
-            . "$ACTIVATE"
+            # Release files are untrusted. Record and refuse any script file;
+            # run only the checked script text passed by the CI helper.
+            if [ "$1" != -c ]; then
+                printf 'ran %s\n' "$1" >> "$FIXTURE/events"
+                exit 1
+            fi
+            script=$2
+            shift 3
+            eval "$script"
         )
-        set -- "$REVISION" "$CHECKSUM" /tmp/screenr-release.fixture
+        set -- "$REVISION" "$CHECKSUM" /tmp/screenr-release.fixture "$ACTIVATION_SCRIPT"
         . "$DEPLOY"
         '''
         with tempfile.TemporaryDirectory() as directory:
@@ -258,7 +312,8 @@ class RemoteDeploymentTests(unittest.TestCase):
             (base / 'current').write_text(target if environment.get('ALREADY_ACTIVE') else '/opt/screenr/releases/previous')
             result = subprocess.run(['sh', '-c', harness], cwd=base, capture_output=True, text=True,
                                     env={**os.environ, 'FIXTURE': directory, 'REVISION': REVISION,
-                                         'CHECKSUM': 'b' * 64, 'ACTIVATE': str(ROOT / 'ops/activate.sh'),
+                                         'CHECKSUM': 'b' * 64,
+                                         'ACTIVATION_SCRIPT': (ROOT / 'ops/activate.sh').read_text(),
                                          'DEPLOY': str(ROOT / 'ops/deploy-release.sh'), **environment}, timeout=5)
             events = (base / 'events').read_text() if (base / 'events').exists() else ''
             current = (base / 'current').read_text().strip()
@@ -269,6 +324,20 @@ class RemoteDeploymentTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(current, '/opt/screenr/releases/' + REVISION)
         self.assertNotIn('removed', events)
+
+    def test_activation_runs_checked_script_not_release_copy(self):
+        result, events, current = self.execute_remote(
+            ACTIVATION_SCRIPT='echo checked-activation\nln -s "$1" /opt/screenr/current.new\nmv\n')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('checked-activation', result.stdout)
+        self.assertNotIn('ran ', events)
+        self.assertEqual(current, '/opt/screenr/releases/' + REVISION)
+
+    def test_missing_activation_script_does_not_extract_or_activate(self):
+        result, events, current = self.execute_remote(ACTIVATION_SCRIPT='')
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(events, '')
+        self.assertEqual(current, '/opt/screenr/releases/previous')
 
     def test_backup_failure_does_not_extract_or_activate(self):
         result, events, current = self.execute_remote(FAIL_BACKUP='yes')
