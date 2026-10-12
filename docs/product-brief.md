@@ -1139,9 +1139,9 @@ for the underlying VPS. This replaces the proposed managed-services approach.
 The existing TMDB catalog and Google sign-in choices remain in place.
 The [application stack](application-stack.md) and
 [initial single-server layout](application-stack.md#initial-hosting-layout--2026-09-05)
-are selected. Initially use the existing shared VPS; deployment setup and
-backup details remain implementation choices. The outbound email delivery
-boundary is defined below.
+are selected. Initially use the existing shared VPS; the
+[deployment guide](deployment.md) records the deployment and backup setup.
+The outbound email delivery boundary is defined below.
 
 ### External email relay — 2026-09-05
 
@@ -1220,5 +1220,7 @@ issue #9 closed on 2026-09-07; the completed
 
 ## Open decisions
 
-- Deployment configuration; routine backup settings can be chosen during
-  implementation under the [initial backup scope](application-stack.md#initial-backup-scope--2026-09-05).
+None. Deployment configuration and the backup schedule were chosen during
+implementation and are recorded in the [deployment guide](deployment.md).
+Backup retention follows the accepted
+[backup storage decision](deployment.md#backup-storage-warning).

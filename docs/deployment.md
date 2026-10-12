@@ -360,11 +360,15 @@ the encrypted repository, restores a consistent dump into a uniquely named
 temporary database, queries core tables and an access function, and drops only
 that temporary database.
 
-Backups run daily around 05:00 PDT / 04:00 PST. Keep seven daily and four weekly
-snapshots. The restore check runs weekly around 07:00 PDT / 06:00 PST. Timers
+Backups run daily around 05:00 PDT / 04:00 PST. After each successful backup,
+`ops/backup.sh` forgets snapshots outside the
+[accepted retention](#backup-storage-warning) and prunes their data. The
+restore check runs weekly on Saturdays around 07:00 PDT / 06:00 PST. Timers
 catch up after downtime. Dumps are private temporary files and are removed
-after each run; encrypted remote objects remain. These schedules and retention
-are implementation defaults, not formal recovery targets.
+after each run; encrypted remote objects remain. The schedules were chosen
+during implementation under the
+[initial backup scope](application-stack.md#initial-backup-scope--2026-09-05);
+formal recovery targets remain deferred.
 
 R2's free allowance is shared with other account usage. Check total account
 storage and request usage before enabling backups and as they grow. Keep this

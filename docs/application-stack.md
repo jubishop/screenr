@@ -150,8 +150,10 @@ buy extra capacity in anticipation of growth.
 with the other applications. Measure Screenr's resource use and protect
 those applications when deploying. Build release artifacts outside the VPS
 and use conservative application and database settings. The initial design
-does not include redundant servers or automatic failover. Deployment,
-backup schedule, and retention remain implementation choices.
+does not include redundant servers or automatic failover. Deployment and the
+backup schedule were left to implementation; the [deployment guide](deployment.md)
+records them. Backup retention is an accepted
+[later decision](deployment.md#backup-storage-warning).
 
 **Engineering assessment — 2026-09-05:** A read-only check found 2 virtual
 CPUs, about 2 GB of RAM, about 1.3 GB of available memory, and 28 GB of free
@@ -186,7 +188,13 @@ existing account usage; it is not a fixed 10 GB allocation for Screenr or a
 hard spending limit. Backup size, frequency, and retention determine whether
 Screenr stays within it. See [R2 pricing](https://developers.cloudflare.com/r2/pricing/)
 and PostgreSQL's [consistent dump guidance](https://www.postgresql.org/docs/current/backup-dump.html),
-checked on 2026-09-05. No backup service or storage resource is configured yet.
+checked on 2026-09-05.
+
+**Current state:** Daily encrypted backups to a private R2 bucket and a weekly
+restore check run on the VPS, as described in
+[encrypted backups and restore check](deployment.md#encrypted-backups-and-restore-check).
+The [backup storage decision](deployment.md#backup-storage-warning) of
+2026-09-25 sets retention. Formal recovery targets remain deferred.
 
 ## Implementation approach
 
