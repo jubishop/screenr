@@ -4,6 +4,7 @@ import io
 import json
 import os
 from pathlib import Path
+import re
 import shlex
 import shutil
 import subprocess
@@ -341,10 +342,24 @@ class RemoteDeploymentTests(unittest.TestCase):
         flock() { [ "${FAIL_LOCK:-}" != yes ]; }
         sha256sum() { command cat >/dev/null; [ "${FAIL_CHECKSUM:-}" != yes ]; }
         systemctl() {
+            printf '%s\n' "$*" >> "$FIXTURE/systemctl"
             # systemctl is-active with multiple units succeeds if ANY is active.
             if [ "$1" = is-active ] && [ "$#" -eq 3 ] && [ "$3" = "${FAILED_UNIT:-}" ]; then return 1; fi
             if [ "$1" = start ] && [ "${FAIL_BACKUP:-}" = yes ]; then return 1; fi
-            if [ "$1" = show ]; then printf 'Id=fixture\nActiveState=active\n'; fi
+            # A crash loop can use up the start limit, which refuses even a
+            # manual restart until reset-failed clears it.
+            if [ "$1" = reset-failed ]; then command rm -f "$FIXTURE/start-limit"; fi
+            if [ "$1" = restart ] && [ -e "$FIXTURE/start-limit" ]; then return 1; fi
+            if [ "$1" = show ]; then
+                printf 'Id=fixture\nActiveState=active\n'
+                # A crash-looping unit looks active at every check but
+                # restarts between them.
+                case " $* " in *" ${CRASHING_UNIT:-none} "*)
+                    printf x >> "$FIXTURE/restarts"
+                    : > "$FIXTURE/start-limit"
+                    printf 'NRestarts=%s\n' "$(wc -c < "$FIXTURE/restarts")" ;;
+                esac
+            fi
         }
         readlink() { command cat "$FIXTURE/current"; }
         mkdir() { printf 'created\n' >> "$FIXTURE/events"; }
@@ -357,7 +372,7 @@ class RemoteDeploymentTests(unittest.TestCase):
         chown() { :; }
         ln() { printf '%s\n' "$2" > "$FIXTURE/pending"; }
         mv() { command cp "$FIXTURE/pending" "$FIXTURE/current"; }
-        sleep() { :; }
+        sleep() { printf '%s\n' "$1" >> "$FIXTURE/sleeps"; }
         curl() { [ "${FAIL_HEALTH:-}" != yes ]; }
         sh() (
             # Release files are untrusted. Record and refuse any script file;
@@ -382,6 +397,9 @@ class RemoteDeploymentTests(unittest.TestCase):
                                          'CHECKSUM': 'b' * 64,
                                          'ACTIVATION_SCRIPT': (ROOT / 'ops/activate.sh').read_text(),
                                          'DEPLOY': str(ROOT / 'ops/deploy-release.sh'), **environment}, timeout=5)
+            log = {name: (base / name).read_text().splitlines() if (base / name).exists() else []
+                   for name in ('systemctl', 'sleeps')}
+            self.systemctl_calls, self.sleeps = log['systemctl'], log['sleeps']
             events = (base / 'events').read_text() if (base / 'events').exists() else ''
             current = (base / 'current').read_text().strip()
             return result, events, current
@@ -424,6 +442,36 @@ class RemoteDeploymentTests(unittest.TestCase):
         self.assertIn('Activation failed', result.stderr)
         self.assertIn('removed', events)
         self.assertEqual(current, '/opt/screenr/releases/previous')
+
+    def test_crash_looping_service_fails_activation_and_rolls_back(self):
+        # Health and is-active pass at every check; only the restart record
+        # shows that the unit keeps crashing on startup.
+        for unit in ('screenr-worker', 'screenr-web'):
+            with self.subTest(unit=unit):
+                result, events, current = self.execute_remote(CRASHING_UNIT=unit)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertNotIn('Activated', result.stdout)
+                self.assertIn('Activation failed', result.stderr)
+                self.assertIn('removed', events)
+                self.assertEqual(current, '/opt/screenr/releases/previous')
+                # The rollback restart must not be refused by the start limit.
+                restarts = [call for call in self.systemctl_calls if call.startswith(('restart', 'reset-failed'))]
+                self.assertEqual(restarts[-2:], ['reset-failed screenr-web screenr-worker',
+                                                 'restart screenr-web screenr-worker'])
+
+    def test_activation_waits_longer_than_a_restart_cycle(self):
+        # A unit that crashes on startup is active between its restarts. A
+        # cycle is the restart delay plus startup; allow startup as long as
+        # the delay itself.
+        delays = [int(re.search(r'^RestartSec=(\d+)$', (ROOT / f'ops/{unit}.service').read_text(), re.M)[1])
+                  for unit in ('screenr-web', 'screenr-worker')]
+        result, events, current = self.execute_remote()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertGreater(max((int(seconds) for seconds in self.sleeps), default=0), 2 * max(delays))
+        snapshots = [call for call in self.systemctl_calls if call.startswith('show screenr-web screenr-worker')]
+        self.assertGreaterEqual(len(snapshots), 2)
+        for field in ('ActiveState', 'NRestarts', 'ActiveEnterTimestampMonotonic'):
+            self.assertIn(f'-p {field}', snapshots[0])
 
     def test_repeated_deploy_verifies_without_extracting(self):
         result, events, current = self.execute_remote(ALREADY_ACTIVE='yes')

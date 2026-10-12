@@ -506,8 +506,9 @@ one-level reply grouping, host removal, and encrypted email delivery retries.
 They verify automatic inviter friendships for email and Google signup, legacy
 links, and replacement invitations. Retrying setup does not consume another
 use or restore a friendship after unfriending or blocking.
-Operational tests check activation rollback after a stalled health request and
-rejection of incorrectly named SQL migrations before schema changes begin.
+Operational tests check activation rollback after a stalled health request or
+a web or worker service that crashes on startup, and rejection of incorrectly
+named SQL migrations before schema changes begin.
 The proxy test runs the production Caddy routes on loopback with a temporary
 certificate and a fixture upstream. It verifies the `screenr.club` site, client IP
 forwarding, security headers, and old invitation/title redirects with their

@@ -353,10 +353,18 @@ systemctl enable screenr-web screenr-worker
 ```
 
 Activation validates settings, applies migrations, switches the symlink and
-restarts the two application services. Failed health checks return to the
-previous release when one exists. Database changes are not reversed. Preserve
-compatible migrations and take a backup before upgrades. Keep the previous
-release until the new one has passed independent acceptance.
+restarts the two application services. After the health endpoint responds and
+both services are active, it waits 15 seconds, longer than one startup plus
+the 5-second restart delay. It then requires both services to still be active,
+with unchanged `NRestarts` and `ActiveEnterTimestampMonotonic`. A service that
+crashes on startup looks active between restarts, so this catches what a
+single check can miss
+([issue #115](https://github.com/jubishop/screenr/issues/115)). A failed health
+or stability check returns to the previous release when one exists. Rollback
+first clears any start limit the crash loop reached, so systemd accepts the
+restart. Database changes are not reversed. Preserve compatible migrations and
+take a backup before upgrades. Keep the previous release until the new one has
+passed independent acceptance.
 
 Create the first private invitation using a one-off process with the same
 private environment, rather than opening a public bootstrap endpoint:
