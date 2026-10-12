@@ -681,8 +681,8 @@ themselves, and every reply names its entry. A reply without one fails the
 existing one-entry constraint instead of attaching to an earlier discussion.
 Action writes still create the `conversation` row that anchors items and old
 links, but no longer update its `recommended`, `want_to_watch`, or
-`activity_at` columns. Those columns keep their last values and are not read.
-The migration changes no rows.
+`activity_at` columns. Those columns kept their last values, unread, until
+migration 020 dropped them. The migration changes no rows.
 
 The removal shipped in two releases. The first made action writes independent
 of the triggers while still saving the legacy flags; the release before it
@@ -704,6 +704,21 @@ when Want to watch turns on. This release withdraws it itself, so a later
 migration can drop the trigger once the preceding release does too
 ([#195](https://github.com/jubishop/screenr/issues/195)). Statuses saved
 before a rollback reappear with this release.
+
+Migration `020-drop-legacy-conversation-columns.sql` drops the
+`conversation_exclusive_actions` check and the `recommended`, `want_to_watch`,
+and `activity_at` columns
+([issue #190](https://github.com/jubishop/screenr/issues/190)). Each
+`conversation` row keeps its `id`, `owner_id`, `title_id`, and `created_at`,
+and the identity constraint that entries and replies reference. Feed items,
+standalone comments, progress entries, replies, reactions, and notifications
+are unchanged. Databases without the columns are left as they are. It shipped
+once every retained release included aa8796a, the release that added
+migration 017. Those releases create conversation rows without these columns
+and never read them, so activation and rollback both work with the new
+schema. A release before aa8796a saves the flags and can no longer run
+against a migrated database. Take the normal pre-upgrade backup; no manual
+step is needed.
 
 ## Decisions deferred to future features
 

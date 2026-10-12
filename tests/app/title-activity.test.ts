@@ -108,19 +108,18 @@ for (const first of ["recommended", "want_to_watch"] as const) {
   });
 }
 
-// Feed items are the only action model; the conversation row anchors them.
-test("action writes share one conversation anchor without updating its legacy flags", async () => {
+// Feed items are the only action model; the conversation row anchors them
+// and holds no action state.
+test("action writes share one conversation anchor that holds only its identity", async () => {
   await updateTitleActivity("owner", "movie:78", "recommended", true);
   await updateTitleActivity("owner", "movie:78", "want_to_watch", true);
   const anchors = (
-    await db.query(
-      "SELECT id,recommended,want_to_watch,created_at,activity_at FROM conversation WHERE owner_id='owner'",
-    )
+    await db.query("SELECT * FROM conversation WHERE owner_id='owner'")
   ).rows;
   assert.equal(anchors.length, 1);
-  const [{ id, created_at, activity_at, ...flags }] = anchors;
-  assert.deepEqual(flags, { recommended: false, want_to_watch: false });
-  assert.deepEqual(activity_at, created_at);
+  const [{ id, created_at, ...identity }] = anchors;
+  assert.ok(created_at instanceof Date);
+  assert.deepEqual(identity, { owner_id: "owner", title_id: "movie:78" });
   assert.deepEqual(
     (
       await db.query(
@@ -164,12 +163,7 @@ test("concurrent and repeated action writes leave one active entry without dupli
   );
 });
 
-test("database rejects conflicting conversation flags and active feed items on inserts and updates", async () => {
-  await assert.rejects(
-    db.query(`INSERT INTO conversation(id,owner_id,title_id,recommended,want_to_watch)
-    VALUES(gen_random_uuid(),'owner','movie:78',true,true)`),
-    { code: "23514" },
-  );
+test("database rejects conflicting active feed items on inserts and updates", async () => {
   const recommendation = await updateTitleActivity(
     "owner",
     "movie:78",

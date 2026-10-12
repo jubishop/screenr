@@ -105,3 +105,172 @@ test("legacy trigger migration keeps every conversation, entry, and reply", asyn
     await pool.end();
   }
 });
+
+// Every retained release creates conversation rows without the legacy action
+// flags and activity date and never reads them, so migration 020 drops them.
+const dropLegacyColumns = "db/020-drop-legacy-conversation-columns.sql";
+
+test("legacy column migration drops the conversation flags and keeps every row and reference", async () => {
+  const pool = new Pool({ connectionString: testDatabaseURL });
+  const client = await pool.connect();
+  const rows = async (sql: string) => (await client.query(sql)).rows;
+  try {
+    await client.query("BEGIN");
+    await client.query("CREATE SCHEMA legacy_column_migration_test");
+    await client.query("SET LOCAL search_path=legacy_column_migration_test");
+    await client.query('CREATE TABLE "user" (id text PRIMARY KEY)');
+    for (const name of [
+      "001-domain",
+      "004-feed-items",
+      "005-title-comments",
+      "006-reactions",
+      "006-remove-title-comments",
+      "008-exclusive-title-actions",
+      "010-notifications",
+    ])
+      await client.query(await readFile(`db/${name}.sql`, "utf8"));
+    // Pre-feed writes saved the flags and a shared activity date, which the
+    // triggers turned into entries until migration 017.
+    await client.query(`INSERT INTO "user" VALUES ('alice'),('ben');
+      INSERT INTO profile(user_id,username,display_name) SELECT id,id,id FROM "user";
+      INSERT INTO friendship(low_id,high_id,requested_by,accepted_at) VALUES ('alice','ben','ben',now());
+      INSERT INTO title(id,kind,tmdb_id,name) VALUES ('movie:1','movie',1,'Film'),('tv:2','tv',2,'Show');
+      INSERT INTO conversation(id,owner_id,title_id,recommended,want_to_watch,created_at,activity_at) VALUES
+        (gen_random_uuid(),'alice','movie:1',false,true,'2020-01-01','2020-02-01'),
+        (gen_random_uuid(),'ben','tv:2',true,false,'2020-03-01','2020-04-01');
+      INSERT INTO comment(conversation_id,author_id,body)
+        SELECT id,'ben','Earlier discussion' FROM conversation WHERE owner_id='alice';
+      INSERT INTO comment(conversation_id,feed_item_id,author_id,body)
+        SELECT conversation_id,id,'alice','Action reply' FROM feed_item WHERE item_type<>'earlier'`);
+    for (const name of ["017-retire-legacy-triggers", "018-watch-statuses"])
+      await client.query(await readFile(`db/${name}.sql`, "utf8"));
+    // Later writes create anchors without flags and add standalone comments,
+    // progress entries, replies, and reactions on every kind of target.
+    await client.query(`INSERT INTO conversation(id,owner_id,title_id) VALUES (gen_random_uuid(),'alice','tv:2');
+      INSERT INTO title_comment(id,conversation_id,owner_id,title_id,body)
+        SELECT gen_random_uuid(),id,owner_id,title_id,'Standalone' FROM conversation WHERE owner_id='alice' AND title_id='tv:2';
+      INSERT INTO watch_progress(id,conversation_id,owner_id,title_id,status)
+        SELECT gen_random_uuid(),id,owner_id,title_id,'caught_up' FROM conversation WHERE owner_id='ben';
+      INSERT INTO comment(conversation_id,title_comment_id,author_id,body)
+        SELECT conversation_id,id,'ben','Standalone reply' FROM title_comment;
+      INSERT INTO comment(conversation_id,watch_progress_id,author_id,body)
+        SELECT conversation_id,id,'alice','Progress reply' FROM watch_progress;
+      INSERT INTO reaction(user_id,feed_item_id,kind) SELECT 'ben',id,'love' FROM feed_item;
+      INSERT INTO reaction(user_id,title_comment_id,kind) SELECT 'ben',id,'haha' FROM title_comment;
+      INSERT INTO reaction(user_id,watch_progress_id,kind) SELECT 'alice',id,'wow' FROM watch_progress;
+      INSERT INTO reaction(user_id,comment_id,kind) SELECT 'alice',id,'like' FROM comment WHERE author_id='ben'`);
+
+    const legacy = ["recommended", "want_to_watch", "activity_at"];
+    const tables = [
+      "conversation",
+      "feed_item",
+      "title_comment",
+      "watch_progress",
+      "comment",
+      "reaction",
+      "notification",
+    ];
+    // Each row's text starts with its unique ID where it has one, so the
+    // order holds when columns are dropped.
+    const snapshot = async () => {
+      const result: Record<string, Record<string, unknown>[]> = {};
+      for (const table of tables)
+        result[table] = (
+          await rows(`SELECT * FROM ${table} t ORDER BY t::text`)
+        ).map((row) =>
+          Object.fromEntries(
+            Object.entries(row).filter(
+              ([column]) =>
+                table !== "conversation" || !legacy.includes(column),
+            ),
+          ),
+        );
+      return result;
+    };
+    const shape = async () => ({
+      columns: (
+        await rows(`SELECT column_name FROM information_schema.columns
+          WHERE table_schema=current_schema() AND table_name='conversation'
+          ORDER BY ordinal_position`)
+      ).map((row) => row.column_name),
+      constraints: (
+        await rows(`SELECT conname FROM pg_constraint
+          WHERE conrelid='conversation'::regclass AND contype<>'n' ORDER BY conname`)
+      ).map((row) => row.conname),
+      indexes: (
+        await rows(`SELECT indexname FROM pg_indexes
+          WHERE schemaname=current_schema() AND tablename='conversation'
+          ORDER BY indexname`)
+      ).map((row) => row.indexname),
+    });
+    const notifications = await rows(
+      "SELECT id,item_id,title_id FROM visible_notification ORDER BY id",
+    );
+    const before = await snapshot();
+    const shapeBefore = await shape();
+    assert.deepEqual(shapeBefore.columns, [
+      "id",
+      "owner_id",
+      "title_id",
+      "recommended",
+      "want_to_watch",
+      "created_at",
+      "activity_at",
+    ]);
+    assert.equal(before.conversation.length, 3);
+    assert.deepEqual(
+      before.feed_item.map((item) => `${item.item_type}:${item.active}`).sort(),
+      ["earlier:false", "recommended:true", "want_to_watch:true"],
+    );
+    assert.equal(before.comment.length, 5);
+    assert.equal(before.reaction.length, 7);
+    // The friendship and the four replies to another person's entry.
+    assert.deepEqual(
+      (await rows("SELECT kind FROM notification ORDER BY id")).map(
+        (row) => row.kind,
+      ),
+      ["friend_accepted", "comment", "comment", "comment", "comment"],
+    );
+    assert.equal(notifications.length, 5);
+    assert.ok(
+      shapeBefore.constraints.includes("conversation_exclusive_actions"),
+    );
+
+    // It drops only the legacy check and columns; running it again changes
+    // nothing.
+    for (let run = 0; run < 2; run++) {
+      await client.query(await readFile(dropLegacyColumns, "utf8"));
+      assert.deepEqual(await shape(), {
+        columns: ["id", "owner_id", "title_id", "created_at"],
+        constraints: shapeBefore.constraints.filter(
+          (name) => name !== "conversation_exclusive_actions",
+        ),
+        indexes: shapeBefore.indexes,
+      });
+      assert.deepEqual(await snapshot(), before);
+      assert.deepEqual(
+        await rows(
+          "SELECT id,item_id,title_id FROM visible_notification ORDER BY id",
+        ),
+        notifications,
+      );
+    }
+
+    // Retained releases' anchor, entry, and reply writes still work.
+    await client.query(`INSERT INTO conversation(id,owner_id,title_id) VALUES (gen_random_uuid(),'ben','movie:1')
+        ON CONFLICT(owner_id,title_id) DO NOTHING;
+      INSERT INTO feed_item(id,conversation_id,owner_id,title_id,item_type,active)
+        SELECT gen_random_uuid(),id,owner_id,title_id,'recommended',true FROM conversation WHERE owner_id='ben' AND title_id='movie:1';
+      INSERT INTO comment(conversation_id,feed_item_id,author_id,body)
+        SELECT conversation_id,id,'alice','New reply' FROM feed_item WHERE owner_id='ben' AND title_id='movie:1'`);
+    assert.deepEqual(
+      await rows(`SELECT v.item_id=c.feed_item_id AS linked FROM visible_notification v
+        JOIN comment c ON c.id=v.comment_id WHERE c.body='New reply'`),
+      [{ linked: true }],
+    );
+  } finally {
+    await client.query("ROLLBACK");
+    client.release();
+    await pool.end();
+  }
+});
