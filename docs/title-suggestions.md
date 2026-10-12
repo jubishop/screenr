@@ -291,13 +291,22 @@ off; when it is on, a notice explains how to see titles with unknown options.
 These additions follow the
 [saved-service decision](product-brief.md#saved-streaming-services-and-discovery--2026-09-10).
 
+The submitted query is the `q` parameter of `/search`, which
+`src/member-routes.ts` parses and builds like other member parameters. A
+new query adds a history entry, resubmitting the current one retries it, and
+clearing the box replaces the current entry with `/search`. Draft edits stay
+out of the URL. Reloading, Back, and Forward run the URL's search again, so
+returning from a result restores its query and results
+([#135](https://github.com/jubishop/screenr/issues/135)).
+
 `tests/app/title-suggestions.test.ts` exercises the public screen loader
 against PostgreSQL, including weighting, unique connections, current choices,
 blocking, the second-degree minimum, preserved discussions, and 205 eligible
 titles. Browser coverage in `tests/browser/title-suggestions.spec.ts` uses the
 real app and the local catalog fixture to check identity privacy in initial
 page data and API responses, tile layout/navigation, search transitions,
-delayed responses, and recovery from network failures. The issue owns the acceptance checklist.
+the search URL through history and reloads, delayed responses, and recovery
+from network failures. The issue owns the acceptance checklist.
 
 ## Scope boundary
 

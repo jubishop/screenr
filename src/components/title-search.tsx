@@ -1,7 +1,9 @@
 "use client";
 import Link from "next/link";
+import { usePathname, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import type { TitleSuggestion, ViewingTitle } from "../shared";
+import { memberPath, parseMemberRoute } from "../member-routes";
 import { viewingAccess } from "../viewing";
 import { TitleServices, ViewingAttribution } from "./title-services";
 import { api, useInteractive } from "./client";
@@ -45,6 +47,8 @@ function Reason({
   );
 }
 
+const tooShort = "Enter at least two characters to search.";
+
 export function TitleSearch({
   suggestions,
   serviceIds,
@@ -53,46 +57,78 @@ export function TitleSearch({
   serviceIds: string[] | null;
 }) {
   const interactive = useInteractive();
-  const [query, setQuery] = useState("");
-  const [results, setResults] = useState<ViewingTitle[] | null>(null);
+  // The URL holds the submitted query, so Back, Forward, and reloads restore
+  // a search. Typing edits a draft until the viewer submits or clears it.
+  const route = parseMemberRoute(`${usePathname()}?${useSearchParams()}`);
+  const submitted = (route.kind === "search" && route.q) || "";
+  const [query, setQuery] = useState(submitted);
+  const [results, setResults] = useState<ViewingTitle[] | null>(
+    submitted.length < 2 ? null : [],
+  );
   const [myServices, setMyServices] = useState(false);
-  const [searching, setSearching] = useState(false);
+  const [searching, setSearching] = useState(submitted.length >= 2);
   const [error, setError] = useState("");
   const pending = useRef<AbortController | null>(null);
+  // The query this view last searched for, or "" after clearing.
+  const shown = useRef<string | null>(null);
   useEffect(
     () => () => {
       pending.current?.abort();
       pending.current = null;
+      shown.current = null;
     },
     [],
   );
+  useEffect(() => {
+    if (shown.current === submitted) return;
+    setQuery(submitted);
+    void search(submitted);
+  }, [submitted]);
 
   function changeQuery(value: string) {
     setQuery(value);
-    if (!value.trim()) {
-      pending.current?.abort();
-      pending.current = null;
-      setResults(null);
-      setSearching(false);
-      setError("");
-    }
+    if (value.trim()) return;
+    // Clearing isn't a new search, so it replaces the current history entry.
+    if (submitted)
+      window.history.replaceState(null, "", memberPath({ kind: "search" }));
+    void search("");
   }
 
-  async function search() {
-    if (query.trim().length < 2) {
-      setError("Enter at least two characters to search.");
+  function submit() {
+    const text = query.trim();
+    if (text.length < 2) {
+      setError(tooShort);
       return;
     }
+    // Each new search adds a history entry; repeating one retries it.
+    if (text !== submitted)
+      window.history.pushState(
+        null,
+        "",
+        memberPath({ kind: "search", q: text }),
+      );
+    void search(text);
+  }
+
+  async function search(text: string) {
+    shown.current = text;
     pending.current?.abort();
+    pending.current = null;
+    setError("");
+    if (text.length < 2) {
+      setResults(null);
+      setSearching(false);
+      if (text) setError(tooShort);
+      return;
+    }
     const controller = new AbortController();
     const timeout = AbortSignal.timeout(10_000);
     pending.current = controller;
     setSearching(true);
     setResults([]);
-    setError("");
     try {
       const titles = await api<ViewingTitle[]>(
-        `search?q=${encodeURIComponent(query.trim())}`,
+        `search?q=${encodeURIComponent(text)}`,
         undefined,
         AbortSignal.any([controller.signal, timeout]),
       );
@@ -132,7 +168,7 @@ export function TitleSearch({
         role="search"
         onSubmit={(event) => {
           event.preventDefault();
-          void search();
+          submit();
         }}
       >
         <label className="sr-only" htmlFor="title-search">

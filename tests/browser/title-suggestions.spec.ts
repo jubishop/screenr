@@ -237,6 +237,70 @@ test("search submission and clearing switch modes without applying suggestion ex
   await expect(grid).toHaveCount(0);
 });
 
+test("the submitted search stays in the URL through Back, Forward, reload, and navigation", async ({
+  page,
+  signIn,
+}) => {
+  await setup(await signIn(page, "urlviewer"), "url");
+  await page.goto("/search");
+  const input = page.getByLabel("Movie or show title");
+  const grid = page.getByRole("region", {
+    name: "Title suggestions",
+    exact: true,
+  });
+  const results = page.getByRole("region", {
+    name: "Search results",
+    exact: true,
+  });
+  const result = (name: string) =>
+    results.getByRole("heading", { name, exact: true });
+  const searchURL = (query = "") =>
+    new RegExp(`/search${query && `\\?q=${query.replaceAll(" ", "\\+")}`}$`);
+  async function expectSearch(query: string, title: string) {
+    await expect(page).toHaveURL(searchURL(query));
+    await expect(input).toHaveValue(query);
+    await expect(result(title)).toBeVisible();
+    await expect(results.getByRole("heading")).toHaveCount(1);
+  }
+  await input.fill("first suggestion fixture");
+  await input.press("Enter");
+  await expectSearch("first suggestion fixture", "The First Signal");
+  await input.fill("second suggestion fixture");
+  await input.press("Enter");
+  await expectSearch("second suggestion fixture", "The Second Signal");
+  await input.fill("An unsubmitted draft");
+  await expect(page).toHaveURL(searchURL("second suggestion fixture"));
+  await results.getByRole("link").click();
+  await expect(page).toHaveURL(/\/titles\/movie\/998012$/);
+  await page.goBack();
+  await expectSearch("second suggestion fixture", "The Second Signal");
+  await page.goBack();
+  await expectSearch("first suggestion fixture", "The First Signal");
+  await page.goBack();
+  await expect(page).toHaveURL(searchURL());
+  await expect(input).toHaveValue("");
+  await expect(results).toHaveCount(0);
+  await expect(grid.getByRole("link")).toHaveCount(2);
+  await page.goForward();
+  await expectSearch("first suggestion fixture", "The First Signal");
+  await page.reload();
+  await expectSearch("first suggestion fixture", "The First Signal");
+  // Clearing replaces the current entry, so Forward still reaches later ones.
+  await input.fill("");
+  await expect(page).toHaveURL(searchURL());
+  await expect(grid.getByRole("link")).toHaveCount(2);
+  await page.goForward();
+  await expectSearch("second suggestion fixture", "The Second Signal");
+  await page
+    .getByRole("navigation", { name: "Main navigation" })
+    .getByRole("link", { name: "Find a title" })
+    .click();
+  await expect(page).toHaveURL(searchURL());
+  await expect(input).toHaveValue("");
+  await expect(results).toHaveCount(0);
+  await expect(grid.getByRole("link")).toHaveCount(2);
+});
+
 function deferred() {
   let resolve!: () => void;
   const promise = new Promise<void>((done) => {

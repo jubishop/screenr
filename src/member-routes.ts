@@ -4,7 +4,7 @@
 type ItemTarget = { item?: string; reply?: string };
 export type MemberRoute =
   | ({ kind: "feed" } & ItemTarget)
-  | { kind: "search" }
+  | { kind: "search"; q?: string }
   | { kind: "people" }
   | { kind: "invites" }
   | { kind: "account" }
@@ -14,7 +14,7 @@ export type MemberRoute =
   | { kind: "conversation"; id: string; reply?: string }
   | { kind: "not-found"; path: string };
 
-const pages = ["search", "people", "invites", "account"] as const;
+const pages = ["people", "invites", "account"] as const;
 
 /** Parses a member path and its query, such as `/titles/movie/1?item=…`. */
 export function parseMemberRoute(path: string): MemberRoute {
@@ -30,6 +30,9 @@ export function parseMemberRoute(path: string): MemberRoute {
   const [section, ...rest] = parts;
   if (!parts.length) return { kind: "feed", ...target() };
   if (!rest.length) {
+    // Search trims its query, so whitespace alone names no search.
+    if (section === "search")
+      return { kind: section, q: param("q")?.trim() || undefined };
     if (section === "watch-together")
       return { kind: section, with: url.searchParams.getAll("with") };
     const page = pages.find((name) => name === section);
@@ -53,6 +56,8 @@ export function memberPath(route: MemberRoute): string {
       const [kind, ...tmdbId] = route.id.split(":");
       return withQuery(`/titles/${segments(kind, tmdbId.join(":"))}`, route);
     }
+    case "search":
+      return withQuery("/search", { q: route.q });
     case "watch-together":
       return withQuery("/watch-together", { with: route.with });
     case "profile":
@@ -70,11 +75,17 @@ export function memberPath(route: MemberRoute): string {
 
 function withQuery(
   path: string,
-  { item, reply, with: usernames = [] }: ItemTarget & { with?: string[] },
+  {
+    item,
+    reply,
+    q,
+    with: usernames = [],
+  }: ItemTarget & { q?: string; with?: string[] },
 ) {
   const query = new URLSearchParams();
   if (item) query.set("item", item);
   if (reply) query.set("reply", reply);
+  if (q) query.set("q", q);
   for (const username of usernames) query.append("with", username);
   return query.size ? `${path}?${query}` : path;
 }

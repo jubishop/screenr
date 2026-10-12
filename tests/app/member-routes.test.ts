@@ -16,6 +16,8 @@ test("member routes name each screen and its parameters", () => {
       { kind: "feed", item: "post", reply: "answer" },
     ],
     ["/search", { kind: "search" }],
+    ["/search?q=Severance", { kind: "search", q: "Severance" }],
+    ["/search?q=+The%20Office+", { kind: "search", q: "The Office" }],
     ["/people", { kind: "people" }],
     ["/invites", { kind: "invites" }],
     ["/account?error=access_denied", { kind: "account" }],
@@ -38,6 +40,7 @@ test("member routes name each screen and its parameters", () => {
   ] as const;
   for (const [path, route] of cases) assert.deepEqual(parse(path), route, path);
   assert.deepEqual(parse("/?item=&reply="), { kind: "feed" });
+  assert.deepEqual(parse("/search?q=%20%20"), { kind: "search" });
   assert.deepEqual(parse("/titles/movie/42?item="), {
     kind: "title",
     id: "movie:42",
@@ -63,6 +66,10 @@ test("member paths keep only each screen's parameters and round-trip", () => {
     ["/?item=post&reply=answer&utm=x", "/?item=post&reply=answer"],
     ["/?item=", "/"],
     ["/search?item=post", "/search"],
+    ["/search?item=post&q=The%20Office", "/search?q=The+Office"],
+    ["/search?q=+Lost+", "/search?q=Lost"],
+    ["/search?q=", "/search"],
+    ["/?q=Lost", "/"],
     ["/account?error=access_denied", "/account"],
     ["/people/alice?item=post", "/people/alice"],
     ["/people/a%20b", "/people/a%20b"],
