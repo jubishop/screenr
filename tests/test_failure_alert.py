@@ -73,7 +73,7 @@ class FailureAlertTests(unittest.TestCase):
         code, output, errors = self.execute('screenr-backup.service')
         self.assertEqual(code, 0, errors)
         self.assertEqual(self.commands, [['systemctl', 'show', 'screenr-backup.service',
-                                          '--property=ActiveState,SubState,Result']])
+                                          '--property=ActiveState,SubState,Result,NRestarts']])
         message = self.message()
         self.assertIn('backup failed', message['subject'])
         self.assertIn('journalctl -u screenr-backup.service', message['text'])
@@ -102,11 +102,13 @@ class FailureAlertTests(unittest.TestCase):
                            ('screenr-db.service', 'database')]:
             with self.subTest(unit=unit):
                 self.requests.clear()
-                code, _, errors = self.execute(unit, state={**FAILED, 'Result': 'start-limit-hit'})
+                # systemd 255 keeps the last crash's result when the start limit stops restarts.
+                code, _, errors = self.execute(unit, state={**FAILED, 'NRestarts': '5'})
                 self.assertEqual(code, 0, errors)
                 message = self.message()
                 self.assertIn(name, message['subject'])
                 self.assertIn('restart limit', message['text'])
+                self.assertIn('Automatic restarts: 5', message['text'])
                 self.assertIn(f'systemctl reset-failed {unit}', message['text'])
 
     def test_failure_before_an_automatic_restart_sends_nothing(self):

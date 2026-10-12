@@ -166,6 +166,9 @@ systemd also starts `OnFailure=` units before each automatic restart. The
 script emails only when the unit is still `failed`: a failed job, or a
 service that reached its restart limit of five starts in 60 seconds. The
 email names the unit, its result, and the commands to inspect and restart it.
+For a service it also reports the automatic restart count. At the restart
+limit, systemd 255 reports the last crash's result, such as `exit-code`,
+rather than `start-limit-hit`.
 It includes no journal lines. Delivery makes up to three attempts with one
 idempotency key, and has no saved state. Every failure sends a new email, so
 each deployment blocked by a failing backup sends one.
@@ -211,7 +214,9 @@ systemd-run --unit=screenr-alert-probe -p Restart=on-failure -p RestartSec=3 \
     -p OnFailure=screenr-alert@screenr-alert-probe.service.service /bin/false
 ```
 
-Then run `systemctl reset-failed screenr-alert-probe.service`.
+Then run `systemctl reset-failed screenr-alert-probe.service`. This check
+passed on 2026-10-12: Resend accepted one email after two `no alert`
+entries.
 
 ## Build and activate a release
 

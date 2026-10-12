@@ -48,28 +48,27 @@ def setting(name):
 
 
 def unit_state(unit):
-    output = subprocess.run(['systemctl', 'show', unit, '--property=ActiveState,SubState,Result'],
+    output = subprocess.run(['systemctl', 'show', unit,
+                             '--property=ActiveState,SubState,Result,NRestarts'],
                             check=True, stdout=subprocess.PIPE, text=True, timeout=30).stdout
     return dict(line.split('=', 1) for line in output.splitlines() if '=' in line)
 
 
-def compose(unit, result):
+def compose(unit, state):
+    details = f'Unit: {unit}\nResult: {state.get("Result") or "unknown"}\n'
     if unit in SERVICES:
         name = SERVICES[unit]
-        if result == 'start-limit-hit':
-            subject = f'{name} reached its restart limit'
-            summary = (f'The Screenr {name} ({unit}) kept failing and reached its restart limit. '
-                       'systemd will not restart it again.')
-        else:
-            subject = f'{name} failed'
-            summary = f'The Screenr {name} ({unit}) failed, and systemd will not restart it.'
+        subject = f'{name} stopped'
+        # At the start limit, systemd 255 reports the last crash's result, not start-limit-hit.
+        summary = (f'The Screenr {name} ({unit}) failed, and systemd will not restart it again. '
+                   'Usually it kept failing and reached its restart limit.')
+        details += f'Automatic restarts: {state.get("NRestarts") or "unknown"}\n'
         recovery = (f'After fixing the cause, run: systemctl reset-failed {unit} && '
                     f'systemctl start {unit}')
     else:
         subject, summary = JOBS.get(unit, (f'{unit} failed', f'{unit} failed.'))
         recovery = f'After fixing the cause, rerun it: systemctl start {unit}'
-    text = (f'{summary}\n\n'
-            f'Unit: {unit}\nResult: {result or "unknown"}\nHost: {socket.gethostname()}\n\n'
+    text = (f'{summary}\n\n{details}Host: {socket.gethostname()}\n\n'
             f'Inspect: journalctl -u {unit} -n 100\n{recovery}\n\n'
             'This alert is sent once each time systemd stops retrying the unit.')
     return 'Screenr alert: ' + subject, text
@@ -120,7 +119,7 @@ def main():
         if (active, sub) != ('failed', 'failed'):
             print(f'{unit} is {active or "unknown"} ({sub or "unknown"}); no alert')
             return 0
-        subject, text = compose(unit, state.get('Result', ''))
+        subject, text = compose(unit, state)
         if arguments.dry_run:
             print(f'Dry run; would email the owner:\nSubject: {subject}\n\n{text}')
             return 0
