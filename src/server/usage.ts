@@ -76,9 +76,10 @@ export async function usageReport({
       SELECT id, owner_id, created_at FROM feed_item
       UNION ALL SELECT id, owner_id, created_at FROM title_comment
       UNION ALL SELECT id, owner_id, created_at FROM watch_progress
+      UNION ALL SELECT id, owner_id, created_at FROM review
     ), comments AS (
       -- Removed comments still count as activity when they were posted.
-      SELECT coalesce(feed_item_id, title_comment_id, watch_progress_id) AS entry, author_id, created_at FROM comment
+      SELECT coalesce(feed_item_id, title_comment_id, watch_progress_id, review_id) AS entry, author_id, created_at FROM comment
     ), posts AS (
       -- An entry's owner posts the entry itself; everyone else posts comments.
       SELECT e.id AS entry, e.owner_id AS author, e.created_at FROM entries e

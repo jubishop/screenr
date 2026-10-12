@@ -108,7 +108,12 @@ export type Conversation = {
   owner_id: string;
   title_id: string;
   item_type:
-    "recommended" | "want_to_watch" | "earlier" | "comment" | "progress";
+    | "recommended"
+    | "want_to_watch"
+    | "earlier"
+    | "comment"
+    | "progress"
+    | "review";
   body: string | null;
   spoiler: boolean;
   active: boolean;
@@ -117,6 +122,10 @@ export type Conversation = {
   // A progress entry's status and last-finished date (YYYY-MM-DD).
   status: ProgressStatus | null;
   finished_on: string | null;
+  // A review's whole-star rating from 1 to 5, and whether a later save
+  // changed it. A removed review has neither rating nor text.
+  rating: number | null;
+  edited: boolean;
   viewer_want_to_watch: boolean;
   viewer_recommended: boolean;
   // The reader's own current status for the entry's title.

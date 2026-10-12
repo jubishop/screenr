@@ -1,0 +1,68 @@
+/* Review ratings in feed entries and the review form on title pages. */
+.review-stars {
+  margin: 2px 0 8px;
+  font-size: 18px;
+  line-height: 1.3;
+  letter-spacing: 2px;
+}
+.review-stars-empty {
+  color: var(--muted);
+}
+/* The form opens beneath the title header's buttons. */
+.review-form {
+  max-width: 560px;
+  margin-top: 16px;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+}
+.star-rating {
+  min-width: 0;
+  margin: 0 0 10px;
+  padding: 0;
+  border: 0;
+}
+.star-rating legend {
+  padding: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+.star-choices {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.star-choices label {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  margin: 0;
+  font-size: 28px;
+  font-weight: 400;
+  line-height: 1;
+}
+/* Each radio covers its star. It draws nothing itself but keeps the shared
+   focus ring around the star. */
+.star-choices input,
+.star-choices input:disabled {
+  appearance: none;
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  cursor: pointer;
+}
+.star-choices .text-button {
+  margin-left: 10px;
+}
+.review-form textarea {
+  min-height: 0;
+}

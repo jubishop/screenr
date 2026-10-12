@@ -6,6 +6,7 @@ import "./styles/auth.css";
 import "./styles/people.css";
 import "./styles/titles.css";
 import "./styles/feeds.css";
+import "./styles/reviews.css";
 import "./styles/notifications.css";
 import { OfflineWorker } from "../components/offline-worker";
 // The Content-Security-Policy in src/proxy.ts runs only scripts that carry the

@@ -20,9 +20,12 @@ export async function setReaction(
     const item: FeedItem | undefined = (
       await client.query(`${itemQuery} AND c.id::text=$2`, [viewer, itemId])
     ).rows[0];
+    // Deleted standalone comments and removed reviews accept no reactions.
     if (
       !item ||
-      (replyId == null && item.item_type === "comment" && !item.active)
+      (replyId == null &&
+        (item.item_type === "comment" || item.item_type === "review") &&
+        !item.active)
     )
       throw new AppError("Conversation not found.", 404);
     if (

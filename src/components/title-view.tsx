@@ -11,6 +11,7 @@ import { TitleTrailer } from "./title-trailer";
 import { useActionError } from "./action-error";
 import { ActionButton } from "./action-button";
 import { localToday, WatchStatusMenu } from "./watch-status";
+import { useReviewEditor } from "./review";
 // Suggestion tiles and Watch together open title pages with ?from=<surface>,
 // so a Want to watch status chosen here reports where the member found the
 // title.
@@ -57,6 +58,18 @@ export function TitleView({
   const own = (data?.conversations ?? []).filter(
     (c) => c.owner_id === user.user_id,
   );
+  const ownReview = own.find((c) => c.item_type === "review" && c.active);
+  const review = useReviewEditor({
+    titleId: data?.title.id ?? null,
+    saved: ownReview
+      ? {
+          rating: ownReview.rating,
+          body: ownReview.body ?? "",
+          spoiler: ownReview.spoiler,
+        }
+      : null,
+    refresh,
+  });
   return (
     <>
       {data && (
@@ -119,8 +132,10 @@ export function TitleView({
                     )
                   }
                 />
+                {review.button}
               </div>
               {failure.alert}
+              {review.panel}
               <TitleFriends friends={data.friends} showEntry={showEntry} />
             </div>
           </div>

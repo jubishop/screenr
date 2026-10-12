@@ -142,6 +142,9 @@ requires its newer edit date to move it up in the feed. This replaces
 the proposed ordering by original posting date for edited reviews.
 Existing replies may refer to an earlier version of the review.
 
+Implemented in [#101](https://github.com/jubishop/screenr/issues/101); see
+[reviews](#reviews).
+
 ### Order items by recent visible activity — 2026-09-06
 
 **Decision:** Order top-level title-feed items by their most recent
@@ -466,8 +469,8 @@ interview if they preserve these decisions:
 
 ## Shared feed implementation
 
-`src/server/feed.ts` reads each eligible action, progress entry, or standalone
-comment and its replies in one PostgreSQL snapshot. The friends, title, and profile screens use this same
+`src/server/feed.ts` reads each eligible action, progress entry, review, or
+standalone comment and its replies in one PostgreSQL snapshot. The friends, title, and profile screens use this same
 read path. Items sort by the latest eligible activity at millisecond precision,
 then by item UUID for a stable tie. A removed or inaccessible direct comment
 remains as parent context only while it has eligible nested replies. It does
@@ -619,6 +622,47 @@ date appears when none is set. A cleared entry kept for its replies reads
 Status changes create no notifications. Each entry's `viewer_status` is the
 reader's own status for its title.
 
+### Reviews
+
+[Issue #101](https://github.com/jubishop/screenr/issues/101) adds star ratings
+and written reviews. Each member has at most one `review` row per title, which
+is that person's review entry in the shared read path. It holds an optional
+whole-star rating from 1 to 5, optional text of 1–2,000 characters after
+trimming outer whitespace, and a spoiler flag. A current review needs a
+rating, text, or both; the database checks this.
+
+The title header's **Rate or review** button, which reads **Edit your
+review** once a review exists, opens a form beneath the header buttons. The
+form has five star radio buttons with **Clear rating**, an optional text field,
+**Contains spoilers**, **Cancel**, and **Save review**. Opening focuses the
+chosen star or the first one. The form starts from the saved review, and
+Cancel discards changes. Save stays unavailable without a rating or text, and
+a failed save keeps the form and its draft with the error.
+
+`saveReview` in `src/server/reviews.ts` creates the entry or updates it in
+place. Changing the rating, text, or spoiler flag moves the entry up with a
+new activity date and marks it **Edited**; saving the same review changes
+nothing. Replies and reactions stay with the entry through edits.
+
+**Remove review** asks for the
+[in-page confirmation](interface-design.md#confirm-other-destructive-actions--2026-10-12)
+"Remove your review? Its rating and text will be erased." `removeReview`
+erases both and withdraws the entry under the
+[removal rule](#removing-an-action-does-not-move-it-up--2026-09-06): it is
+hidden from readers without visible replies, otherwise kept as "removed their
+review", and the removal does not move it up. Like a deleted standalone
+comment, a removed review shows no reactions and accepts none, while its
+replies stay open under the original spoiler flag. Reviewing again reuses the
+entry with its replies and stored reactions, marked Edited.
+
+Entries read "reviewed" with text or "rated" with only stars, followed by the
+stars and the text, in the full friends and profile entries and the compact
+title page entries. The spoiler flag hides the text, reactions, and discussion
+behind the spoiler control, but not the stars. Reviews and their edits create
+no notifications. Comments on a review notify its author like comments on
+other entries and open the review. Replies and reactions use their
+`review_id` columns.
+
 ### Migration and rollback compatibility
 
 The nested layout uses the existing `comment.root_id` and `addressed_id`
@@ -721,6 +765,15 @@ and never read them, so activation and rollback both work with the new
 schema. A release before aa8796a saves the flags and can no longer run
 against a migrated database. Take the normal pre-upgrade backup; no manual
 step is needed.
+
+Migration `022-reviews.sql` adds `review`, reply and reaction columns for it,
+one-target checks that include it, and its item ID in the notification view.
+It changes no existing rows and adds no trigger. The preceding release reads
+only `feed_item`, `title_comment`, and `watch_progress`, so it shows neither
+reviews nor their replies, and notifications for those replies open an
+unavailable target. It writes no reviews, and its replies and reactions still
+pass the new checks. Reviews saved before a rollback reappear with this
+release.
 
 ## Decisions deferred to future features
 

@@ -161,7 +161,7 @@ The client sends one of these surfaces with the Want to watch action:
 | Surface | Save made from | Observed |
 | --- | --- | --- |
 | `friend_recommendation` | A friend's active Recommend entry in any feed | Yes |
-| `friend_entry` | Any other friend's entry, such as Want to watch or a comment | No |
+| `friend_entry` | Any other friend's entry, such as Want to watch, a review, or a comment | No |
 | `suggestion_recommendation` | A title page opened from a suggestion tile naming a recommending friend | Yes |
 | `suggestion` | A title page opened from another suggestion tile | No |
 | `watch_together` | A title page opened from Watch together | No |
@@ -230,8 +230,8 @@ one for saves, with one row per week and an asterisk on the week in progress:
   two by the week's end; how many of those had back-and-forth by the week's
   end, counting the entry as its owner's first post; and members who
   commented that week and in any earlier week. Entries include Recommend,
-  Want to watch, watch progress, earlier discussion, and standalone comment
-  entries. Posting a
+  Want to watch, watch progress, review, earlier discussion, and standalone
+  comment entries. Posting a
   standalone comment starts a conversation and does not count as commenting.
   Removed comments count when they were posted.
 

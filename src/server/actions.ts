@@ -22,6 +22,7 @@ import {
 import { updateDisplayName, updateProfile } from "./profiles";
 import { setReaction } from "./reactions";
 import { changeRelationship } from "./relationships";
+import { removeReview, saveReview } from "./reviews";
 import { loadScreen } from "./screens";
 import { saveServices } from "./streaming-services";
 import {
@@ -252,6 +253,27 @@ const actions: Record<string, Action> = {
     input: ({ title, date }) => ({ title: id(title), date }),
     run: async ({ title, date }, { userId }) =>
       setFinishedDate(userId, await ensureTitle(title), date),
+  }),
+  review: write({
+    input: ({ title, rating, body, spoiler }) => ({
+      title: id(title),
+      rating,
+      body,
+      spoiler,
+    }),
+    run: async ({ title, rating, body, spoiler }, { userId }) => ({
+      id: await saveReview(
+        userId,
+        await ensureTitle(title),
+        rating,
+        body,
+        spoiler,
+      ),
+    }),
+  }),
+  "remove-review": write({
+    input: ({ title }) => id(title),
+    run: (title, { userId }) => removeReview(userId, title),
   }),
   "title-comment": write({
     input: ({ title, body, spoiler }) => ({ title: id(title), body, spoiler }),

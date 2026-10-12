@@ -18,7 +18,8 @@ describe item identity, old-link redirects, and compatibility with the previous
 release. Shared reads and writes live in `src/server/` by area: `profiles.ts`,
 `relationships.ts`, `feed.ts` (the shared feed read path), `title-actions.ts`
 (Recommend and [watch statuses](title-feed.md#watch-progress-entries)),
-`comments.ts`, and `reactions.ts`. PostgreSQL functions
+`reviews.ts` ([ratings and reviews](title-feed.md#reviews)), `comments.ts`,
+and `reactions.ts`. PostgreSQL functions
 `screenr_can_read` and `screenr_blocked` apply the same current relationship
 rules to threads, cards, and comments. The title page friend line comes
 from the viewer's title feed read, so it names only friends whose entries

@@ -381,6 +381,12 @@ recipients. A full run checks:
   phone and desktop widths. A friend sees one progress entry, saves its title
   with one tap, and then sees their own status as a link. Clearing keeps an
   entry with replies, marked as removed.
+- The title page's review form rates by pointer and keyboard, saves text, and
+  fits phone and desktop widths. A failed save keeps the draft. A friend reads
+  the review in the friends, profile, and title feeds, replies, and reacts, and
+  the comment notification opens the review. Edits update the same entry with
+  an Edited label; a spoiler flag hides the text and discussion but not the
+  stars. Removal asks first and keeps an entry with replies.
 
 Database tests additionally cover concurrent signup limits, rollback after
 username conflicts, expiry, code/account identity, explicit Google linking,
@@ -392,7 +398,10 @@ don't wait for the shared write lock, and writes stop waiting for it with a
 retryable error. Watch status tests cover each status and transition, its
 interplay with Recommend and Want to watch, the progress entry lifecycle,
 date validation, audience and blocking, notifications, and migration 018
-with the previous release's writes.
+with the previous release's writes. Review tests cover validation, edits,
+removal and reuse, reactions on removed reviews, audience and blocking,
+notifications, the conversation measure, and migration 022 with the previous
+release's writes.
 `tests/app/failure-logs.test.ts` and `tests/app/email.test.ts` capture the
 [failure logs](deployment.md#failure-logs) of request, page, worker, and
 Resend failures. They compare the logged fields exactly, check that comment

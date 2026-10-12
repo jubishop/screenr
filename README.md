@@ -40,6 +40,10 @@ test flow, and [Testing Screenr](docs/testing.md) for the automated suites.
   with an optional last-finished date. Watching through Stopped watching share
   one feed entry per person and title that updates as the status changes.
   Recommend can go with any status except Want to watch.
+- **Reviews:** A title page's Rate or review button saves one review per
+  title: a rating from 1 to 5 stars, written text, or both, with an optional
+  spoiler flag. The review is a feed entry with replies and reactions; edits
+  update it in place with an Edited label, and removal asks first.
 - **Feeds and conversations:** Members recommend titles or add them to Want to
   watch, which are mutually exclusive, and post standalone comments on title
   pages. The friends, profile, and title feeds show the same entries. Members
@@ -68,8 +72,6 @@ test flow, and [Testing Screenr](docs/testing.md) for the automated suites.
 Remaining product features are tracked as
 [open feature issues](https://github.com/jubishop/screenr/issues?q=is%3Aissue%20state%3Aopen%20label%3Afeature):
 
-- Star ratings and written reviews
-  ([#101](https://github.com/jubishop/screenr/issues/101))
 - The Friends recommend view
   ([#102](https://github.com/jubishop/screenr/issues/102)), hiding Finished
   titles by default ([#172](https://github.com/jubishop/screenr/issues/172))

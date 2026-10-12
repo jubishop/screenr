@@ -16,6 +16,7 @@ import { ActionButton } from "./action-button";
 import { progressPhrase, statusLabels } from "./watch-status";
 import { ConfirmAction } from "./confirmation";
 import { around, useRemovalFocus, type FocusTarget } from "./removal-focus";
+import { ReviewStars, reviewPhrase } from "./review";
 
 type Known = Map<string, { activity: string; comments: Set<string> }>;
 function capture(items: FeedItem[]): Known {
@@ -294,6 +295,10 @@ function FeedEntry({
       </span>
     </span>
   );
+  // Deleted standalone comments and removed reviews show no reactions.
+  const erased =
+    (item?.item_type === "comment" || item?.item_type === "review") &&
+    !item.active;
   const canDelete =
     item?.item_type === "comment" &&
     item.active &&
@@ -386,25 +391,28 @@ function FeedEntry({
             : "commented on"
           : item.item_type === "earlier"
             ? "· Earlier discussion"
-            : item.item_type === "progress"
-              ? progressPhrase(
-                  item.status!,
-                  item.finished_on,
-                  item.active,
-                  interactive,
-                )
-              : item.item_type === "recommended"
-                ? item.active
-                  ? "recommends"
-                  : "removed their recommendation"
-                : item.active
-                  ? "wants to watch"
-                  : "removed Want to watch"}
+            : item.item_type === "review"
+              ? reviewPhrase(item)
+              : item.item_type === "progress"
+                ? progressPhrase(
+                    item.status!,
+                    item.finished_on,
+                    item.active,
+                    interactive,
+                  )
+                : item.item_type === "recommended"
+                  ? item.active
+                    ? "recommends"
+                    : "removed their recommendation"
+                  : item.active
+                    ? "wants to watch"
+                    : "removed Want to watch"}
       </span>
       {/* Non-breaking spaces keep the time beside the action. */}
       <span className="muted">
         {"\u00a0·\u00a0"}
         <ActivityTime value={item.visible_activity} interactive={interactive} />
+        {item.edited && "\u00a0·\u00a0Edited"}
       </span>
     </p>
   );
@@ -463,6 +471,8 @@ function FeedEntry({
                   Comment removed
                 </p>
               )}
+              {/* A spoiler flag covers the text, not the rating. */}
+              {item.rating != null && <ReviewStars rating={item.rating} />}
               {hiddenSpoiler ? (
                 <button className="spoiler" onClick={() => setRevealed(true)}>
                   Contains spoilers · Reveal discussion
@@ -472,7 +482,7 @@ function FeedEntry({
               )}
             </div>
           </div>
-          {!hiddenSpoiler && (item.item_type !== "comment" || item.active) ? (
+          {!hiddenSpoiler && !erased ? (
             <Reactions
               item={item.id}
               summary={item.reactions}
