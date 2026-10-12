@@ -2,7 +2,6 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { useDatabase, db, person } from "./social-fixture";
-const { migrate } = await import("../../scripts/migrate");
 const { createAuth } = await import("../../src/server/auth");
 const { createInvitation, completeSignup } =
   await import("../../src/server/invitations");
@@ -60,8 +59,7 @@ test("sign-in, sessions, and Google linking work after migrating a database crea
   await db.query(`ALTER TABLE account ADD COLUMN IF NOT EXISTS issuer text;
     ALTER TABLE account ALTER COLUMN issuer SET NOT NULL;
     CREATE UNIQUE INDEX IF NOT EXISTS "account_issuer_accountId_uidx"
-      ON account (issuer, "accountId");
-    DELETE FROM screenr_migration WHERE name = '${migration}'`);
+      ON account (issuer, "accountId")`);
   // A Google account that Better Auth 1.7.2 wrote with its issuer.
   const existingId = await person("existing");
   await db.query(
@@ -71,7 +69,9 @@ test("sign-in, sessions, and Google linking work after migrating a database crea
       'google', $1, now(), now())`,
     [existingId],
   );
-  await migrate();
+  // Run the file directly. Removing its record would leave it out of order
+  // once later migrations exist, and the migration command would refuse it.
+  await db.query(await readFile(`db/${migration}`, "utf8"));
   assert.deepEqual(
     (
       await db.query(

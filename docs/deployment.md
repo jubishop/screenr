@@ -378,7 +378,11 @@ systemctl enable screenr-web screenr-worker
 ```
 
 Activation validates settings, applies migrations, switches the symlink and
-restarts the two application services. After the health endpoint responds and
+restarts the two application services. The migration command rejects
+migrations that are out of order, share a number, or changed after they ran,
+before it changes the database
+([migration rules](data-and-access.md#schema-migrations)). Activation
+then stops without switching releases. After the health endpoint responds and
 both services are active, it waits 15 seconds, longer than one startup plus
 the 5-second restart delay. It then requires both services to still be active,
 with unchanged `NRestarts` and `ActiveEnterTimestampMonotonic`. A service that

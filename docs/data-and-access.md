@@ -100,12 +100,28 @@ title, friends, and author-profile feeds, including open-page refreshes.
 ## Schema migrations
 
 The migration command applies Better Auth's schema and numbered SQL files in
-`db/`. It takes a migration lock and records applied files in
-`screenr_migration`. Future schema changes must use new numbered files;
-changing a previously applied file does not alter an installed database.
-SQL filenames must match `NNN-name.sql`, with lowercase letters and hyphens in
-the name. Invalid SQL filenames fail the release instead of being ignored.
-Back up before deploying schema changes.
+`db/`, in filename order. It takes a migration lock and records each applied
+file with a SHA-256 checksum in `screenr_migration`. Future schema changes must
+use new numbered files. SQL filenames must match `NNN-name.sql`, with
+lowercase letters and hyphens in the name. Each number must be unique, except
+for the existing `004` and `006` pairs, which databases applied in different
+orders. Before changing anything, the command fails the release when:
+
+- An SQL filename is invalid.
+- Two SQL files share a number.
+- A pending file sorts before the latest file the database already applied.
+- An applied file no longer matches its recorded checksum.
+
+When another branch lands a migration first, rebase and renumber yours after
+the latest one on `main`. Otherwise a shared number fails every migration run,
+and production rejects a pending file numbered below one it already applied.
+Restore an edited applied file and put the change in a new migration. A
+disposable development or test database that ran an outdated migration can be
+dropped instead; `npm test` and the browser harness create missing databases.
+Files applied before checksums existed receive checksums from their current
+contents on the next run, without running again. The checksum column stays
+nullable so an older release's migration command can still record files; the
+next run fills in their checksums. Back up before deploying schema changes.
 
 Better Auth's migrations add tables, columns, and indexes but never relax or
 remove them. Its 1.7.3 and later releases validate the schema on every
