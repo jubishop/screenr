@@ -108,51 +108,30 @@ for (const first of ["recommended", "want_to_watch"] as const) {
   });
 }
 
-// A later migration retires the legacy trigger, so action writes must keep
-// the entries exclusive themselves.
-test("switching actions withdraws the other entry without the legacy conversation trigger", async () => {
-  await db.query(
-    "ALTER TABLE conversation DISABLE TRIGGER conversation_sync_actions",
-  );
-  try {
-    const ids = {
-      recommended: await updateTitleActivity(
-        "owner",
-        "movie:78",
-        "recommended",
-        true,
-      ),
-      want_to_watch: await updateTitleActivity(
-        "owner",
-        "movie:78",
-        "want_to_watch",
-        true,
-      ),
-    };
-    for (const field of ["recommended", "want_to_watch"] as const) {
-      assert.equal(
-        await updateTitleActivity("owner", "movie:78", field, true),
-        ids[field],
-      );
-      assert.deepEqual(
-        (
-          await db.query(
-            "SELECT id,item_type FROM feed_item WHERE owner_id='owner' AND active",
-          )
-        ).rows,
-        [{ id: ids[field], item_type: field }],
-      );
-    }
-    await updateTitleActivity("owner", "movie:78", "want_to_watch", false);
-    assert.equal(
-      (await conversations("owner")).some((item) => item.active),
-      false,
-    );
-  } finally {
+// Feed items are the only action model; the conversation row anchors them.
+test("action writes share one conversation anchor without updating its legacy flags", async () => {
+  await updateTitleActivity("owner", "movie:78", "recommended", true);
+  await updateTitleActivity("owner", "movie:78", "want_to_watch", true);
+  const anchors = (
     await db.query(
-      "ALTER TABLE conversation ENABLE TRIGGER conversation_sync_actions",
-    );
-  }
+      "SELECT id,recommended,want_to_watch,created_at,activity_at FROM conversation WHERE owner_id='owner'",
+    )
+  ).rows;
+  assert.equal(anchors.length, 1);
+  const [{ id, created_at, activity_at, ...flags }] = anchors;
+  assert.deepEqual(flags, { recommended: false, want_to_watch: false });
+  assert.deepEqual(activity_at, created_at);
+  assert.deepEqual(
+    (
+      await db.query(
+        "SELECT conversation_id,item_type,active FROM feed_item WHERE owner_id='owner' ORDER BY item_type",
+      )
+    ).rows,
+    [
+      { conversation_id: id, item_type: "recommended", active: false },
+      { conversation_id: id, item_type: "want_to_watch", active: true },
+    ],
+  );
 });
 
 test("concurrent and repeated action writes leave one active entry without duplicating or bumping it", async () => {
@@ -175,12 +154,14 @@ test("concurrent and repeated action writes leave one active entry without dupli
     (await thread("owner", active.id)).conversation.activity_at,
     active.activity_at,
   );
-  const flags = (
-    await db.query(
-      "SELECT recommended,want_to_watch FROM conversation WHERE owner_id='owner'",
-    )
-  ).rows[0];
-  assert.notEqual(flags.recommended, flags.want_to_watch);
+  assert.equal(
+    (
+      await db.query(
+        "SELECT count(*)::int AS active FROM feed_item WHERE owner_id='owner' AND active",
+      )
+    ).rows[0].active,
+    1,
+  );
 });
 
 test("database rejects conflicting conversation flags and active feed items on inserts and updates", async () => {
@@ -194,12 +175,6 @@ test("database rejects conflicting conversation flags and active feed items on i
     "movie:78",
     "recommended",
     true,
-  );
-  await assert.rejects(
-    db.query(
-      "UPDATE conversation SET want_to_watch=true WHERE owner_id='owner'",
-    ),
-    { code: "23514" },
   );
   await assert.rejects(
     db.query(

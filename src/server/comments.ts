@@ -87,7 +87,7 @@ export async function createTitleComment(
         .rowCount
     )
       throw new AppError("Title not found.", 404);
-    // The compatibility record carries no new structured activity.
+    // The conversation row anchors entries and old links; add it when absent.
     await client.query(
       `INSERT INTO conversation(id,owner_id,title_id) VALUES($1,$2,$3)
        ON CONFLICT(owner_id,title_id) DO NOTHING`,

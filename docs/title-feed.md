@@ -299,6 +299,9 @@ Database constraints reject conflicting legacy flags and active feed items.
 The synchronization trigger deactivates the old action before activating the
 new one. Application writes save both flags in one transaction, and the
 existing UI refresh updates both controls after the save.
+Since [#131](https://github.com/jubishop/screenr/issues/131), action writes
+withdraw the old action themselves and the trigger is gone; see
+[migration and rollback compatibility](#migration-and-rollback-compatibility).
 
 The preceding application release can still read the migrated data and remove
 an active action. Its attempt to activate the other action while one is active
@@ -592,10 +595,11 @@ available historical timestamp; the migration does not infer separate past
 action dates.
 
 The original `conversation` rows remain as the title-state and old-link record.
-New action writes update them in the same transaction. Database triggers also
-synchronize action changes made by the previous app version. Old-version
-comments, which have no action identity, attach to an earlier discussion;
-new-version comments supply their item ID. A composite foreign key prevents a
+New action writes updated them in the same transaction. Until migration
+`017-retire-legacy-triggers.sql`, database triggers also synchronized action
+changes made by the previous app version. Old-version comments, which have no
+action identity, attached to an earlier discussion; new-version comments
+supply their item ID. A composite foreign key prevents a
 reply from crossing between person/title conversations. This additive design
 keeps the preceding release usable during activation or rollback, as required
 by the [deployment procedure](deployment.md#build-and-activate-a-release).
@@ -629,12 +633,25 @@ The preceding release can still create and read entries after migration;
 on rollback, it shows the stored **[removed]** marker and may display empty
 deleted entries. Deleted text is not restored.
 
-Action writes withdraw the other action's entry themselves, so they no longer
-depend on the `conversation_sync_actions` trigger
-([issue #131](https://github.com/jubishop/screenr/issues/131)). They still
-save the legacy `conversation` flags, because the preceding release relies on
-that trigger during activation or rollback. A later migration removes the
-legacy triggers once the release in the rollback window no longer needs them.
+Migration `017-retire-legacy-triggers.sql` drops the `conversation_sync_actions`
+and `comment_attach_item` triggers and their functions
+([issue #131](https://github.com/jubishop/screenr/issues/131)). Feed items are
+the only action model: action writes withdraw the other action's entry
+themselves, and every reply names its entry. A reply without one fails the
+existing one-entry constraint instead of attaching to an earlier discussion.
+Action writes still create the `conversation` row that anchors items and old
+links, but no longer update its `recommended`, `want_to_watch`, or
+`activity_at` columns. Those columns keep their last values and are not read.
+The migration changes no rows.
+
+The removal shipped in two releases. The first made action writes independent
+of the triggers while still saving the legacy flags; the release before it
+relied on `conversation_sync_actions` to withdraw the other action when
+switching. The migration ran only once that first release was the preceding
+one, so activation and rollback never pair it with a release that needs the
+triggers. On rollback, the preceding release saves the flags, which no longer
+affect feed items. Take the normal pre-upgrade backup; no manual step is
+needed.
 
 ## Decisions deferred to future features
 

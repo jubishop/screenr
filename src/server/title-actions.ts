@@ -37,18 +37,12 @@ export async function updateTitleActivity(
             AND own.item_type='want_to_watch' AND own.active)`,
         [viewer, titleId, surface ?? null],
       );
-    // The person/title conversation row anchors feed items. This release
-    // never reads its flags; they keep the previous release's
-    // synchronization trigger correct during activation or rollback.
-    const legacy = (
-      await client.query(
-        `INSERT INTO conversation(id,owner_id,title_id,${field}) VALUES($1,$2,$3,$4)
-      ON CONFLICT(owner_id,title_id) DO UPDATE SET ${field}=$4,
-      ${other}=CASE WHEN $4 THEN false ELSE conversation.${other} END,
-      activity_at=CASE WHEN $4 AND NOT conversation.${field} THEN now() ELSE conversation.activity_at END RETURNING id`,
-        [randomUUID(), viewer, titleId, value],
-      )
-    ).rows[0];
+    // The person/title conversation row anchors feed items and old links.
+    await client.query(
+      `INSERT INTO conversation(id,owner_id,title_id) VALUES($1,$2,$3)
+      ON CONFLICT(owner_id,title_id) DO NOTHING`,
+      [randomUUID(), viewer, titleId],
+    );
     // Recommend and Want to watch are exclusive. Withdraw the other entry
     // first so the unique active-action index holds; it keeps its replies
     // and activity date for a later switch back.
@@ -60,10 +54,11 @@ export async function updateTitleActivity(
       );
     const row = (
       await client.query(
-        `INSERT INTO feed_item(id,conversation_id,owner_id,title_id,item_type,active) VALUES($1,$2,$3,$4,$5,$6)
-      ON CONFLICT(owner_id,title_id,item_type) DO UPDATE SET active=$6,
-      activity_at=CASE WHEN $6 AND NOT feed_item.active THEN now() ELSE feed_item.activity_at END RETURNING id`,
-        [randomUUID(), legacy.id, viewer, titleId, field, value],
+        `INSERT INTO feed_item(id,conversation_id,owner_id,title_id,item_type,active)
+        SELECT $1,id,owner_id,title_id,$4,$5 FROM conversation WHERE owner_id=$2 AND title_id=$3
+        ON CONFLICT(owner_id,title_id,item_type) DO UPDATE SET active=$5,
+        activity_at=CASE WHEN $5 AND NOT feed_item.active THEN now() ELSE feed_item.activity_at END RETURNING id`,
+        [randomUUID(), viewer, titleId, field, value],
       )
     ).rows[0];
     return row.id as string;

@@ -77,8 +77,10 @@ beforeEach(async () => {
   );
   await db.query(`INSERT INTO title(id,kind,tmdb_id,name) VALUES
     ('movie:42','movie',42,'Test Movie'), ('tv:42','tv',42,'Test Show')`);
-  await db.query(`INSERT INTO conversation(id,owner_id,title_id,recommended)
-    VALUES('00000000-0000-4000-8000-000000000006','viewer','movie:42',true)`);
+  await db.query(`INSERT INTO conversation(id,owner_id,title_id)
+    VALUES('00000000-0000-4000-8000-000000000006','viewer','movie:42');
+    INSERT INTO feed_item(id,conversation_id,owner_id,title_id,item_type,active)
+    VALUES('00000000-0000-4000-8000-000000000007','00000000-0000-4000-8000-000000000006','viewer','movie:42','recommended',true)`);
 });
 after(async () => {
   catalog.closeAllConnections();

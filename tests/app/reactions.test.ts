@@ -328,7 +328,11 @@ test("earlier discussions and retained withdrawn actions support independent rea
   ).rows[0].id;
   const reply = (
     await db.query(
-      "INSERT INTO comment(conversation_id,author_id,body) VALUES($1,$2,'Earlier reply') RETURNING id::text",
+      `WITH earlier AS (
+        INSERT INTO feed_item(id,conversation_id,owner_id,title_id,item_type)
+        SELECT id,id,owner_id,title_id,'earlier' FROM conversation WHERE id=$1 RETURNING id)
+      INSERT INTO comment(conversation_id,feed_item_id,author_id,body)
+      SELECT id,id,$2,'Earlier reply' FROM earlier RETURNING id::text`,
       [legacy, ben],
     )
   ).rows[0].id;
