@@ -64,18 +64,21 @@ owned by that login. Application connections use that role and loopback port
 5439. Keep the administrative role for local database administration only.
 
 Install the `ops/screenr-*.service` and `.timer` files under
-`/etc/systemd/system`, then reload systemd. Enable the database first. Build
-the app outside the VPS; do not run Next's production build on this host.
+`/etc/systemd/system`, then reload systemd. Enable the database first. Later
+deployments install changed units; see
+[host configuration drift](#host-configuration-drift). Build the app outside
+the VPS; do not run Next's production build on this host.
 
 Populate `app.env` using `.env.example`. Set production HTTPS and Resend values,
 Google credentials, and the TMDB read token. The activation command checks all
 required values without printing them. The provider setup and callback URLs
 are in [Running Screenr](running-screenr.md#provider-configuration).
 
-Add only the Screenr blocks from `ops/Caddyfile` to the existing Caddyfile.
-The template uses a per-host origin certificate, following this server's
-existing Cloudflare setup. Verify the zone's origin TLS mode and certificate
-compatibility; do not weaken a zone-wide setting. Keep the origin key private.
+Add only the Screenr blocks from `ops/Caddyfile` to the existing Caddyfile;
+each deployment checks that they still match. The template uses a per-host
+origin certificate, following this server's existing Cloudflare setup. Verify
+the zone's origin TLS mode and certificate compatibility; do not weaken a
+zone-wide setting. Keep the origin key private.
 Validate Caddy before reloading it. Add a **proxied** A record for
 `screenr.club` pointing to this VPS. Keep the old proxied `screenr.jubishop.com`
 record and its certificate for the [old hostname redirect](#old-hostname-redirect).
@@ -128,6 +131,50 @@ host.
 
 **Rejected alternatives:** Failing on any drift, and applying every
 configuration automatically.
+
+`ops/host-config.py` performs the step. `bin/deploy-ci` reads it with
+`git show`, and the units, `ops/Caddyfile`, and `ops/postgresql.conf` with
+`git archive`, from the checked revision. The release archive and the
+checkout's working files never supply what root installs or compares.
+`ops/deploy-release.sh` runs the step after the pre-activation backup, so the
+backup still runs under the active release's units. A repeat deployment of the
+active revision runs it too.
+
+The step first compares the shared files, and changes nothing when either
+differs:
+
+- **Caddy:** each site in `ops/Caddyfile` needs a site with the same address
+  in `/etc/caddy/Caddyfile` and the same lines, ignoring comments, blank
+  lines, and indentation. Other sites are not compared, and a comment change
+  in `ops/Caddyfile` needs no host edit.
+- **PostgreSQL:** each setting in `ops/postgresql.conf` needs the same value
+  in `/var/lib/screenr/postgres/postgresql.conf`. As in PostgreSQL, the last
+  assignment of a setting applies, and quoting does not change a value.
+  Settings that `ops/postgresql.conf` no longer lists are not compared.
+
+The failure starts with `HOST CONFIGURATION DRIFT:`, names the file and the
+differing sites or settings, and says how to apply them. For Caddy, copy the
+sites, run `caddy validate --config /etc/caddy/Caddyfile`, and reload Caddy.
+For PostgreSQL, edit the Screenr settings at the end of the file and restart
+`screenr-db`. Then rerun the deployment. Output never includes host values,
+because anyone can read the Actions logs of this public repository.
+
+Then each `ops/screenr-*.service` and `.timer` that is missing from
+`/etc/systemd/system` or differs from the host copy is written there
+atomically with mode 0644, and systemd reloads. A new timer is also enabled
+and started; existing timers keep their enabled state. Units that are links
+on the host, such as masked units, stay unchanged. Host units that the
+release no longer defines are listed in the log but not removed.
+
+systemd applies timer changes when it reloads, but a running service keeps
+its old settings until it restarts. Activation restarts `screenr-web` and
+`screenr-worker`, and services that timers start use their new unit at the
+next run. A changed `screenr-db.service` applies after a manual
+`systemctl restart screenr-db`, and a new long-running service needs enabling
+by hand. Rollback after a failed activation restores the previous release but
+not its units, so keep unit changes compatible with the previous release, as
+with migrations. A unit change that stops the services also stops the
+restored release, until a fix deploys.
 
 ### Failure alerts
 
@@ -189,14 +236,8 @@ around 09:00 PDT / 08:00 PST. It sends its own one-time notice through
 `failure-alert.py`'s Resend delivery when an update has been pending for three
 days, and its failure starts the alert.
 
-Until [#117](https://github.com/jubishop/screenr/issues/117) installs unit
-changes during deployment, install Screenr's changed units by hand after the
-release that contains them is active. Copy only `ops/screenr-*.service` and
-`ops/screenr-*.timer` from a Git checkout of that revision, not from the
-release directory, to `/etc/systemd/system`. Run
-`systemctl daemon-reload`, and enable the stale-backup, backup storage, and
-PostgreSQL update checks with
-`systemctl enable --now screenr-backup-age.timer screenr-backup-size.timer screenr-postgresql-updates.timer`.
+Deployment installs changed and new units, and enables new timers, as
+described under [host configuration drift](#host-configuration-drift).
 
 Verify the alert path without sending email:
 
@@ -245,8 +286,9 @@ forces a checked deployment when needed. There is no local deployment command.
 
 The deployment job downloads the archive from its own run, checks its revision
 and paths, and verifies the transfer checksum. It takes a backup unless the
-host has [no active release](#first-release-on-a-new-host), activates the
-release, and checks Screenr services, the public health endpoint, the login
+host has [no active release](#first-release-on-a-new-host), applies
+[host configuration](#host-configuration-drift), activates the release, and
+checks Screenr services, the public health endpoint, the login
 page, and the sign-in route: a signed-out `/api/auth/get-session` must return
 `null`. It also checks that Caddy, Health, KidsBank, and Trading retain their
 running service state. [`bin/deploy-ci`](../bin/deploy-ci) is the internal Actions helper;
@@ -265,14 +307,14 @@ shared host, even though build jobs hold no production secrets.
 **Rejected alternative:** Comparing the archive's `ops/` hashes with Git
 before uploading.
 
-The helper reads all three scripts from Git before contacting the host. It
+The helper reads these scripts from Git before contacting the host. It
 passes the activation script to `deploy-release.sh` as an argument and runs
 cleanup with `python3 -c`, so the archive's copies and the checkout's working
 files are never used. The archive still includes `ops/` because the backup and
 restore-check services run their scripts from the active release as
-`screenr-db`, not root. Apply the same rule to anything else deployment runs or
-installs as root, such as unit files for
-[host configuration drift](#host-configuration-drift).
+`screenr-db`, not root. The same rule covers the script and files for
+[host configuration drift](#host-configuration-drift), and applies to anything
+else deployment runs or installs as root.
 
 A new push does not cancel a running main workflow or interrupt activation.
 The workflow's concurrency group runs one main workflow at a time and keeps

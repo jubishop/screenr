@@ -1,5 +1,5 @@
-# Install both sites together after the domain cutover prerequisites in
-# docs/deployment.md are complete. Preserve all unrelated sites.
+# Screenr's sites in the host's shared Caddyfile. Apply changes there by hand,
+# keeping every other site; deployment stops while these sites differ.
 screenr.club {
     tls /etc/caddy/certs/screenr-club.pem /etc/caddy/certs/screenr-club.key
     encode zstd gzip

@@ -15,10 +15,16 @@ import unittest
 ROOT = Path(__file__).resolve().parents[1]
 REVISION = 'a' * 40
 # Scripts that run as root on the host. Only their checked Git copies may run.
-ROOT_SCRIPTS = ('ops/deploy-release.sh', 'ops/activate.sh', 'ops/prune-releases.py')
+ROOT_SCRIPTS = ('ops/deploy-release.sh', 'ops/activate.sh', 'ops/prune-releases.py', 'ops/host-config.py')
+# The remote deployment's host configuration step and the host files it reads.
+HOST_CONFIG = 'host-config /etc/systemd/system /etc/caddy/Caddyfile /var/lib/screenr/postgres/postgresql.conf'
+# Host configuration that deployment installs or compares as root.
+HOST_FILES = ('ops/screenr-web.service', 'ops/screenr-backup.timer', 'ops/Caddyfile', 'ops/postgresql.conf')
+# Checked configuration that deployment requires; 'ops/' fails the whole archive.
+REQUIRED_CHECKED = ('ops/Caddyfile', 'ops/postgresql.conf', 'ops/')
 
 FAKE_COMMAND = r'''#!/usr/bin/env python3
-import json, os, subprocess, sys, shutil
+import json, os, subprocess, sys, shutil, tarfile
 from pathlib import Path
 name, args = Path(sys.argv[0]).name, sys.argv[1:]
 base = Path(os.environ['FIXTURE'])
@@ -26,16 +32,25 @@ with (base / 'calls').open('a') as log:
     log.write(json.dumps([name, *args]) + '\n')
 if name == 'git':
     if args[0] == 'rev-parse': print(os.environ.get('CHECKOUT_SHA', 'a'*40))
+    elif args[0] == 'archive':
+        if args[1:] != ['--format=tar', 'a'*40, 'ops/'] or os.environ.get('MISSING_CHECKED') == 'ops/':
+            sys.exit(128)
+        with tarfile.open(fileobj=sys.stdout.buffer, mode='w|') as tree:
+            for path in sorted((base / 'checked/ops').iterdir()):
+                if 'ops/' + path.name != os.environ.get('MISSING_CHECKED'):
+                    tree.add(path, arcname='ops/' + path.name)
     elif args[0] == 'show':
         revision, _, path = args[1].partition(':')
-        if revision != 'a'*40 or path not in ('ops/deploy-release.sh', 'ops/activate.sh', 'ops/prune-releases.py'):
+        if revision != 'a'*40 or path not in ('ops/deploy-release.sh', 'ops/activate.sh',
+                                              'ops/prune-releases.py', 'ops/host-config.py'):
             sys.exit(99)
         if path == os.environ.get('MISSING_CHECKED'): sys.exit(128)
         print((base / 'checked' / path).read_text(), end='')
 elif name == 'gh':
     if args[:2] == ['run', 'download']:
         if os.environ.get('WORKTREE_DRIFT'):
-            for path in ('ops/deploy-release.sh', 'ops/activate.sh', 'ops/prune-releases.py'):
+            for path in ('ops/deploy-release.sh', 'ops/activate.sh', 'ops/prune-releases.py',
+                         'ops/host-config.py', 'ops/screenr-web.service', 'ops/Caddyfile'):
                 (base / path).write_text('echo unchecked-deployment\n')
         shutil.copyfile(base / 'release.tar.gz', Path(args[-1]) / ('screenr-' + 'a'*40 + '.tar.gz'))
     elif args[-1].endswith('/artifacts'):
@@ -98,9 +113,11 @@ class DeploymentFixture(unittest.TestCase):
         (self.base / 'ops').mkdir()
         (self.base / 'checked/ops').mkdir(parents=True)
         shutil.copy2(ROOT / 'bin/deploy-ci', self.base / 'bin/deploy-ci')
-        for path in ROOT_SCRIPTS:
-            shutil.copy2(ROOT / path, self.base / path)
-            shutil.copy2(ROOT / path, self.base / 'checked' / path)
+        # The checked revision's ops/ directory, and a working copy beside it.
+        for path in (ROOT / 'ops').iterdir():
+            if path.is_file():
+                shutil.copy2(path, self.base / 'ops' / path.name)
+                shutil.copy2(path, self.base / 'checked/ops' / path.name)
         self.commands = self.base / 'commands'
         self.commands.mkdir()
         fake = self.commands / 'command'
@@ -136,7 +153,10 @@ class DeploymentFixture(unittest.TestCase):
             # run, so treat every archive copy of a root script as tampered.
             files += [('ops/deploy-release.sh', '#!/bin/sh\necho tampered-deployment\n'),
                       ('ops/activate.sh', '#!/bin/sh\necho tampered-activation\n'),
-                      ('ops/prune-releases.py', 'print("tampered-cleanup")\n')]
+                      ('ops/prune-releases.py', 'print("tampered-cleanup")\n'),
+                      ('ops/host-config.py', 'print("tampered-host-config")\n'),
+                      ('ops/screenr-web.service', '[Service]\nExecStart=/bin/echo tampered-unit\n'),
+                      ('ops/Caddyfile', 'tampered.example.test {\n}\n')]
         with tarfile.open(self.base / 'release.tar.gz', 'w:gz') as archive:
             for name, content in files:
                 data = content.encode()
@@ -202,15 +222,28 @@ class CIDeploymentTests(DeploymentFixture):
     def remote_commands(self):
         return [shlex.split(call[-1]) for call in self.calls() if call[0] == 'ssh']
 
+    def host_files(self, command):
+        """Return the checked host configuration files sent with a remote deployment."""
+        return json.loads(command[-1])
+
     def assert_only_checked_root_scripts(self):
         checked = {path: (self.base / 'checked' / path).read_text() for path in ROOT_SCRIPTS}
         checksum = hashlib.sha256((self.base / 'release.tar.gz').read_bytes()).hexdigest()
         commands = self.remote_commands()
         self.assertFalse([command for command in commands
                           if any('tampered' in part or 'unchecked' in part for part in command)])
-        self.assertEqual([command for command in commands if command[0] == 'sh'],
+        deployments = [command for command in commands if command[0] == 'sh']
+        self.assertEqual([command[:-1] for command in deployments],
                          [['sh', '-c', checked['ops/deploy-release.sh'], 'deploy-release', REVISION,
-                           checksum, '/tmp/screenr-release.ABC123', checked['ops/activate.sh']]])
+                           checksum, '/tmp/screenr-release.ABC123', checked['ops/activate.sh'],
+                           checked['ops/host-config.py']]])
+        # Every Screenr unit and the shared configuration, from Git only.
+        checked_ops = self.base / 'checked/ops'
+        self.assertEqual(self.host_files(deployments[0]),
+                         {path.name: path.read_text() for path in checked_ops.iterdir()
+                          if re.fullmatch(r'screenr-.+\.(service|timer)|Caddyfile|postgresql\.conf', path.name)})
+        for path in HOST_FILES:
+            self.assertIn(Path(path).name, self.host_files(deployments[0]))
         self.assertEqual([command for command in commands if command[0] == 'python3'],
                          [['python3', '-c', checked['ops/prune-releases.py'],
                            '/opt/screenr/releases/' + REVISION]])
@@ -231,8 +264,18 @@ class CIDeploymentTests(DeploymentFixture):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assert_only_checked_root_scripts()
 
-    def test_unreadable_checked_script_never_contacts_host(self):
-        for path in ROOT_SCRIPTS:
+    def test_every_checked_unit_is_sent_but_no_other_ops_file(self):
+        (self.base / 'checked/ops/screenr-retention.timer').write_text('[Timer]\nOnCalendar=daily\n')
+        result = self.execute()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assert_only_checked_root_scripts()
+        sent = self.host_files(next(command for command in self.remote_commands() if command[0] == 'sh'))
+        self.assertEqual(sent['screenr-retention.timer'], '[Timer]\nOnCalendar=daily\n')
+        for name in ('backup.sh', 'activate.sh', 'backup.env.example'):
+            self.assertNotIn(name, sent)
+
+    def test_unreadable_checked_files_never_contact_host(self):
+        for path in ROOT_SCRIPTS + REQUIRED_CHECKED:
             with self.subTest(path=path):
                 (self.base / 'calls').unlink(missing_ok=True)
                 result = self.execute(MISSING_CHECKED=path)
@@ -503,6 +546,17 @@ class RemoteDeploymentTests(unittest.TestCase):
                 printf 'null' ;;
             esac
         }
+        # The host configuration step has its own tests. Record it in order
+        # with systemctl; HOST_DRIFT stands for a reported difference.
+        python3() {
+            if [ "$1" != -c ] || [ "$2" != "$HOST_CONFIG_SCRIPT" ] || [ "$3" != "$HOST_FILES" ]; then
+                printf 'ran unchecked host configuration\n' >> "$FIXTURE/events"
+                return 1
+            fi
+            shift 3
+            printf 'host-config %s\n' "$*" >> "$FIXTURE/systemctl"
+            [ "${HOST_DRIFT:-}" != yes ]
+        }
         sh() (
             # Release files are untrusted. Record and refuse any script file;
             # run only the checked script text passed by the CI helper.
@@ -514,7 +568,8 @@ class RemoteDeploymentTests(unittest.TestCase):
             shift 3
             eval "$script"
         )
-        set -- "$REVISION" "$CHECKSUM" /tmp/screenr-release.fixture "$ACTIVATION_SCRIPT"
+        set -- "$REVISION" "$CHECKSUM" /tmp/screenr-release.fixture "$ACTIVATION_SCRIPT" \
+            "$HOST_CONFIG_SCRIPT" "$HOST_FILES"
         . "$DEPLOY"
         '''
         with tempfile.TemporaryDirectory() as directory:
@@ -526,6 +581,8 @@ class RemoteDeploymentTests(unittest.TestCase):
                                     env={**os.environ, 'FIXTURE': directory, 'REVISION': REVISION,
                                          'CHECKSUM': 'b' * 64,
                                          'ACTIVATION_SCRIPT': (ROOT / 'ops/activate.sh').read_text(),
+                                         'HOST_CONFIG_SCRIPT': (ROOT / 'ops/host-config.py').read_text(),
+                                         'HOST_FILES': json.dumps({'Caddyfile': "site {\n    # it's checked\n}\n"}),
                                          'DEPLOY': str(ROOT / 'ops/deploy-release.sh'), **environment}, timeout=5)
             log = {name: (base / name).read_text().splitlines() if (base / name).exists() else []
                    for name in ('systemctl', 'sleeps')}
@@ -551,7 +608,38 @@ class RemoteDeploymentTests(unittest.TestCase):
         self.assertIn('No active release', result.stdout)
         self.assertIn('Activated ' + REVISION, result.stdout)
         self.assertNotIn('start screenr-backup.service', self.systemctl_calls)
+        self.assertLess(self.systemctl_calls.index(HOST_CONFIG), self.first_restart())
         self.assertEqual(current, '/opt/screenr/releases/' + REVISION)
+
+    def first_restart(self):
+        return next(i for i, call in enumerate(self.systemctl_calls) if call.startswith('restart'))
+
+    def test_host_configuration_applies_after_backup_and_before_activation(self):
+        # The backup runs the active release's script under its own units;
+        # activation restarts the services under the release's units.
+        result, events, current = self.execute_remote()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.systemctl_calls.count(HOST_CONFIG), 1)
+        self.assertLess(self.systemctl_calls.index('start screenr-backup.service'),
+                        self.systemctl_calls.index(HOST_CONFIG))
+        self.assertLess(self.systemctl_calls.index(HOST_CONFIG), self.first_restart())
+        self.assertNotIn('unchecked', events)
+
+    def test_host_configuration_drift_does_not_extract_or_activate(self):
+        result, events, current = self.execute_remote(HOST_DRIFT='yes')
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(events, '')
+        self.assertEqual(current, '/opt/screenr/releases/previous')
+        self.assertFalse([call for call in self.systemctl_calls if call.startswith('restart')])
+
+    def test_missing_host_configuration_changes_nothing(self):
+        for environment in ({'HOST_CONFIG_SCRIPT': ''}, {'HOST_FILES': ''}):
+            with self.subTest(environment=environment):
+                result, events, current = self.execute_remote(**environment)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertEqual(events, '')
+                self.assertEqual(self.systemctl_calls, [])
+                self.assertEqual(current, '/opt/screenr/releases/previous')
 
     def test_missing_active_release_beside_other_releases_changes_nothing(self):
         for releases in ('d' * 40, 'bootstrap'):
@@ -675,6 +763,8 @@ class RemoteDeploymentTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(events, '')
         self.assertEqual(current, '/opt/screenr/releases/' + REVISION)
+        # Host units still converge on the active release's copies.
+        self.assertEqual(self.systemctl_calls.count(HOST_CONFIG), 1)
 
     def test_lock_failure_does_not_extract_or_activate(self):
         result, events, current = self.execute_remote(FAIL_LOCK='yes')

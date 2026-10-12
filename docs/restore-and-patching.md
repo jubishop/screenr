@@ -223,7 +223,9 @@ other applications that it checks to be running.
    - Add Screenr's blocks from `ops/Caddyfile` with new Cloudflare origin
      certificates for both hostnames, and point both proxied DNS records at
      the new host, as in [provisioning](deployment.md#provisioning). The old
-     certificate keys were only on the lost host.
+     certificate keys were only on the lost host. Keep the certificate paths
+     in `ops/Caddyfile`: deployment
+     [stops](deployment.md#host-configuration-drift) while the blocks differ.
    - Install a deploy key and update the host secrets of the `production`
      environment, as in
      [production environment setup](deployment.md#production-environment-setup).

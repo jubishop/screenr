@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Deploy the checked main revision from the GitHub Actions production job."""
 import hashlib
+import io
 import json
 import os
 import posixpath
@@ -15,22 +16,40 @@ REPO = 'jubishop/screenr'
 ROOT = Path(__file__).resolve().parents[1]
 # The remote scripts exit with this status when no healthy release is running.
 PRODUCTION_DOWN = 69
+# Screenr's systemd units; deployment installs the checked copies as root.
+UNIT = re.compile(r'screenr-[A-Za-z0-9@_.-]+\.(service|timer)')
 # Succeeds only on a provisioned host that has never activated a release.
 # ops/deploy-release.sh repeats the check under the deploy lock.
 NEW_HOST_CHECK = ('test ! -e /opt/screenr/current && test ! -L /opt/screenr/current && '
                   'test -d /opt/screenr/releases && test -z "$(ls -A /opt/screenr/releases)"')
 
 
-def run(*args, capture=False):
+def run(*args, capture=False, text=True):
     if args[0] in ('ssh', 'scp'):
         args = (args[0], '-i', os.environ['SCREENR_DEPLOY_KEY_FILE'],
                 '-o', 'UserKnownHostsFile=' + os.environ['SCREENR_DEPLOY_KNOWN_HOSTS_FILE'],
                 '-o', 'StrictHostKeyChecking=yes', '-o', 'IdentitiesOnly=yes',
                 '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=10',
                 '-o', 'ServerAliveInterval=15', '-o', 'ServerAliveCountMax=3', *args[1:])
-    return subprocess.run(args, check=True, text=True,
+    return subprocess.run(args, check=True, text=text,
                           cwd=ROOT, stdout=subprocess.PIPE if capture else None,
                           stdin=subprocess.DEVNULL).stdout
+
+
+def checked_host_files(revision):
+    """Return Screenr's units and the shared Caddy and PostgreSQL configuration from Git."""
+    files = {}
+    with tarfile.open(fileobj=io.BytesIO(run('git', 'archive', '--format=tar', revision, 'ops/',
+                                             capture=True, text=False))) as tree:
+        for member in tree.getmembers():
+            path = PurePosixPath(member.name)
+            if member.isfile() and path.parent == PurePosixPath('ops') and (
+                    UNIT.fullmatch(path.name) or path.name in ('Caddyfile', 'postgresql.conf')):
+                files[path.name] = tree.extractfile(member).read().decode()
+    for name in ('Caddyfile', 'postgresql.conf'):
+        if name not in files:
+            raise ValueError(f'Missing checked configuration: ops/{name}')
+    return files
 
 
 def contains(older, newer):
@@ -99,10 +118,13 @@ def main():
         raise ValueError('The release checks must pass before deployment.')
     if run('git', 'rev-parse', 'HEAD', capture=True).strip() != revision:
         raise ValueError('Checkout does not match the checked revision.')
-    # Root runs these scripts. The build job packages ops/ after third-party
-    # install scripts run, so never send the archive's copies.
-    deploy, activate, prune = (run('git', 'show', f'{revision}:ops/{name}', capture=True)
-                               for name in ('deploy-release.sh', 'activate.sh', 'prune-releases.py'))
+    # Root runs these scripts and installs or compares these files. The build
+    # job packages ops/ after third-party install scripts run, so never send
+    # the archive's copies.
+    deploy, activate, prune, host_config = (
+        run('git', 'show', f'{revision}:ops/{name}', capture=True)
+        for name in ('deploy-release.sh', 'activate.sh', 'prune-releases.py', 'host-config.py'))
+    host_files = json.dumps(checked_host_files(revision))
     check_release(revision, host)
     artifact_name = f'screenr-linux-x64-{revision}'
     print(f'Deploying {revision} from run {run_id}', flush=True)
@@ -139,7 +161,10 @@ def main():
         run('scp', str(archive), f'{host}:{remote}')
         check_release(revision, host)
         try:
-            run('ssh', host, shlex.join(('sh', '-c', deploy, 'deploy-release', revision, checksum, remote, activate)))
+            # The remote shell receives this command as one argument, which
+            # Linux limits to 128 KiB.
+            run('ssh', host, shlex.join(('sh', '-c', deploy, 'deploy-release', revision, checksum, remote,
+                                         activate, host_config, host_files)))
         except subprocess.CalledProcessError as error:
             # The remote output above explains the failure. Omit the script text.
             if error.returncode == PRODUCTION_DOWN:

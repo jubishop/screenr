@@ -1,12 +1,15 @@
 #!/bin/sh
 # Executed remotely by the CI deployment job with a verified release archive.
-# The job sends this script and the activation script from the checked Git
-# revision. Root never runs scripts from the archive.
+# The job sends this script, the activation and host configuration scripts,
+# and the unit and shared configuration files from the checked Git revision.
+# Root never runs scripts or installs units from the archive.
 set -eu
 revision=${1:?Missing revision}
 checksum=${2:?Missing archive checksum}
 archive=${3:?Missing uploaded archive}
 activate=${4:?Missing checked activation script}
+host_config=${5:?Missing checked host configuration script}
+host_files=${6:?Missing checked host configuration files}
 case "$revision" in *[!0-9a-f]*|'') exit 1 ;; esac
 [ "${#revision}" -eq 40 ]
 case "$checksum" in *[!0-9a-f]*|'') exit 1 ;; esac
@@ -34,21 +37,27 @@ cleanup() {
     fi
 }
 trap cleanup EXIT
+already_active=false
 if [ "$(readlink /opt/screenr/current)" = "$release" ]; then
+    already_active=true
     echo "Revision $revision is already active; verifying health."
+elif test -e /opt/screenr/current || test -L /opt/screenr/current; then
+    # Back up before replacing a release. A missing backup script fails.
+    systemctl start screenr-backup.service
+elif test -z "$(ls -A /opt/screenr/releases)"; then
+    # A new host's backup script arrives with its first release. Its
+    # database is empty or was just restored from a backup.
+    echo 'No active release: skipping the backup for this first deployment.'
 else
-    if test -e /opt/screenr/current || test -L /opt/screenr/current; then
-        # Back up before replacing a release. A missing backup script fails.
-        systemctl start screenr-backup.service
-    elif test -z "$(ls -A /opt/screenr/releases)"; then
-        # A new host's backup script arrives with its first release. Its
-        # database is empty or was just restored from a backup.
-        echo 'No active release: skipping the backup for this first deployment.'
-    else
-        echo "No active release, but /opt/screenr/releases is not empty. \
+    echo "No active release, but /opt/screenr/releases is not empty. \
 Restore the /opt/screenr/current link before deploying." >&2
-        exit 1
-    fi
+    exit 1
+fi
+# After the backup runs under the active release's units: stop on shared Caddy
+# or PostgreSQL drift, or install changed Screenr units for activation.
+python3 -c "$host_config" "$host_files" /etc/systemd/system \
+    /etc/caddy/Caddyfile /var/lib/screenr/postgres/postgresql.conf
+if [ "$already_active" = false ]; then
     # A failed rollback kept this revision's candidate; a retry replaces it.
     if test -e "$release/.deployment-pending"; then rm -rf "$release"; fi
     mkdir "$release"
