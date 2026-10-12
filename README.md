@@ -15,7 +15,8 @@ test flow, and [Testing Screenr](docs/testing.md) for the automated suites.
 - **Joining:** People sign up through an invitation link with Google or an
   emailed code, then choose a display name and username. Signup makes the
   inviter an accepted friend. Members create, share, and revoke their own
-  invitation links, which show rich previews in messaging apps.
+  invitation links, which show rich previews in messaging apps. Signing in
+  from a link returns to the linked page.
 - **Friends:** Members find people by profile link or exact username, through
   People you may know with named mutual friends, and through friend lists on
   profiles. The Friends page groups requests, friends, sent requests,
@@ -108,7 +109,8 @@ background reads and member actions go to the handler in
 `src/server/actions.ts`. The page, the
 screen loader, and the browser shell all read paths through
 `src/member-routes.ts`, which names each screen and the query parameters it
-keeps.
+keeps. Sign-in accepts only these paths as
+[return paths](docs/data-and-access.md#sign-in-return-path).
 
 ## Run and deploy
 

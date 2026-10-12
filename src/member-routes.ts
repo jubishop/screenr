@@ -1,6 +1,7 @@
 // Member pages share one catch-all route. The page, the screen loader, and the
 // browser shell read requested paths through this parser, so they agree on
-// which screen a URL names and which of its query parameters matter.
+// which screen a URL names and which of its query parameters matter. Sign-in
+// accepts only these paths as return paths.
 type ItemTarget = { item?: string; reply?: string };
 export type MemberRoute =
   | ({ kind: "feed" } & ItemTarget)
@@ -15,10 +16,11 @@ export type MemberRoute =
   | { kind: "not-found"; path: string };
 
 const pages = ["people", "invites", "account"] as const;
+const origin = "http://screenr.local";
 
 /** Parses a member path and its query, such as `/titles/movie/1?item=…`. */
 export function parseMemberRoute(path: string): MemberRoute {
-  const url = new URL(path, "http://screenr.local");
+  const url = new URL(path, origin);
   const param = (key: string) => url.searchParams.get(key) || undefined;
   const target = () => ({ item: param("item"), reply: param("reply") });
   let parts: string[];
@@ -92,4 +94,40 @@ function withQuery(
 
 function segments(...parts: string[]) {
   return parts.map(encodeURIComponent).join("/");
+}
+
+/**
+ * Returns the canonical member path for a requested return path, or undefined
+ * unless it is a root-relative path naming a member screen. Rejecting
+ * protocol-relative, backslash, control-character, and unknown paths keeps
+ * sign-in redirects on Screenr.
+ */
+export function returnPath(next: unknown): string | undefined {
+  if (
+    typeof next !== "string" ||
+    !next.startsWith("/") ||
+    /^\/\/|[\\\u0000-\u001f\u007f]/.test(next)
+  )
+    return undefined;
+  const url = new URL(next, origin);
+  if (url.origin !== origin) return undefined;
+  const route = parseMemberRoute(url.pathname + url.search);
+  return route.kind === "not-found" ? undefined : memberPath(route);
+}
+
+/** The sign-in page, returning to a valid member path other than the feed. */
+export function loginPath(next?: string) {
+  return withReturn("/login", next);
+}
+
+/** The setup page, which continues to a valid member path afterward. */
+export function setupPath(next?: string) {
+  return withReturn("/setup", next);
+}
+
+function withReturn(page: string, next?: string) {
+  const path = returnPath(next);
+  return path && path !== "/"
+    ? `${page}?next=${encodeURIComponent(path)}`
+    : page;
 }

@@ -1,6 +1,12 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { memberPath, parseMemberRoute } from "../../src/member-routes";
+import {
+  loginPath,
+  memberPath,
+  parseMemberRoute,
+  returnPath,
+  setupPath,
+} from "../../src/member-routes";
 
 // Absent and empty parameters both parse as missing.
 const parse = (path: string) =>
@@ -91,5 +97,71 @@ test("member paths keep only each screen's parameters and round-trip", () => {
       parseMemberRoute(path),
       canonical,
     );
+  }
+});
+
+test("return paths keep same-origin member pages in canonical form", () => {
+  for (const [next, path] of [
+    ["/", "/"],
+    ["/?item=post&reply=answer", "/?item=post&reply=answer"],
+    [
+      "/titles/movie/42?item=post&reply=answer&utm=x",
+      "/titles/movie/42?item=post&reply=answer",
+    ],
+    ["/search?q=The%20Office", "/search?q=The+Office"],
+    ["/people/alice#friends", "/people/alice"],
+    ["/people/%2F%2Fevil.example", "/people/%2F%2Fevil.example"],
+    ["/conversations/legacy?reply=old", "/conversations/legacy?reply=old"],
+    ["/watch-together?with=ben", "/watch-together?with=ben"],
+    ["/account?error=access_denied", "/account"],
+  ])
+    assert.equal(returnPath(next), path, next);
+});
+
+test("return paths ignore external, ambiguous, and non-member values", () => {
+  for (const next of [
+    undefined,
+    null,
+    "",
+    ["/people"],
+    "people",
+    "https://evil.example/people",
+    "http://screenr.local/people",
+    "//evil.example/people",
+    "///evil.example/people",
+    "/\\evil.example/people",
+    "\\/evil.example/people",
+    "/\tevil.example",
+    "/\t/evil.example/people",
+    "/\n/evil.example/people",
+    "javascript:alert(1)",
+    "%2F%2Fevil.example",
+    "/%2F%2Fevil.example",
+    "/%5Cevil.example",
+    "/login",
+    "/login?next=%2Fpeople",
+    "/setup",
+    "/join/token",
+    "/api/screenr/screen",
+    "/credits",
+    "/titles/movie",
+    "/unknown",
+    "/%E0%A4%A",
+  ])
+    assert.equal(returnPath(next), undefined, JSON.stringify(next));
+});
+
+test("sign-in and setup links carry only a valid return path", () => {
+  const reply = "/titles/movie/42?item=post&reply=answer";
+  const encoded = "%2Ftitles%2Fmovie%2F42%3Fitem%3Dpost%26reply%3Danswer";
+  assert.equal(loginPath(reply), `/login?next=${encoded}`);
+  assert.equal(setupPath(reply), `/setup?next=${encoded}`);
+  assert.equal(
+    new URL(loginPath(reply), "http://screenr.local").searchParams.get("next"),
+    reply,
+  );
+  for (const next of [undefined, "/", "//evil.example/", "/login"]) {
+    assert.equal(loginPath(next), "/login", String(next));
+    assert.equal(setupPath(next), "/setup", String(next));
   }
 });

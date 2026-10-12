@@ -3,9 +3,13 @@ import { expect, type Page } from "@playwright/test";
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { browserConfig } from "../../scripts/browser-config";
+import { db } from "./database-fixture";
 import { test } from "./monitored-test";
-import { join } from "./journey-helpers";
+import { join, signInWithCode } from "./journey-helpers";
+import { friend, person } from "./member-fixture";
 const { createInvitation } = await import("../../src/server/invitations");
+const { addComment, createTitleComment } =
+  await import("../../src/server/comments");
 
 const timedOut = "The request timed out. Please try again.";
 const unreachable =
@@ -313,7 +317,9 @@ for (const complete of [true, false]) {
       await (await page.request.get("/api/auth/get-session")).json(),
     ).toBeNull();
     await page.goto(complete ? "/account" : "/setup");
-    await expect(page).toHaveURL(/\/login$/);
+    await expect(page).toHaveURL(
+      complete ? /\/login\?next=%2Faccount$/ : /\/login$/,
+    );
     await page.context().close();
   });
 }
@@ -452,4 +458,103 @@ test("a signed-out pending member can finish with one visit to a replacement inv
   ).toBeVisible();
   await owner.context().close();
   await pending.context().close();
+});
+
+// A friend's title discussion and its reply, linked as activity email links
+// them, below newer discussions.
+async function linkedReply(owner: string, tmdbId: number) {
+  const title = `movie:${tmdbId}`;
+  await db.query(
+    "INSERT INTO title(id,kind,tmdb_id,name) VALUES($1,'movie',$2,'The Lantern Room') ON CONFLICT DO NOTHING",
+    [title, tmdbId],
+  );
+  const item = await createTitleComment(owner, title, "Who is in?", false);
+  const reply = await addComment(owner, item, "The linked reply", false);
+  for (let index = 0; index < 3; index++)
+    await createTitleComment(owner, title, `Newer discussion ${index}`, false);
+  const path = `/titles/movie/${tmdbId}?item=${item}&reply=${reply}`;
+  return {
+    path,
+    login: `/login?next=${encodeURIComponent(path)}`,
+    setup: `/setup?next=${encodeURIComponent(path)}`,
+    reply: `#comment-${reply}`,
+  };
+}
+
+async function expectReply(page: Page, link: { path: string; reply: string }) {
+  await expect(page).toHaveURL(link.path);
+  const reply = page.locator(link.reply);
+  await expect(reply).toBeInViewport();
+  await expect(
+    reply.getByText("The linked reply", { exact: true }),
+  ).toBeVisible();
+}
+
+test("a signed-out member returns to a linked reply after email sign-in and session expiry", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await useTestGoogle(page);
+  const reader = await person("returnreader");
+  const owner = await person("returnowner");
+  await friend(owner, reader);
+  const link = await linkedReply(owner, 996134);
+  await page.goto(link.setup);
+  await expect(page).toHaveURL(link.login);
+  await page.goto(link.path);
+  await expect(page).toHaveURL(link.login);
+  // A failed Google attempt keeps the return path for the next method.
+  await page.getByRole("button", { name: "Continue with Google" }).click();
+  await page.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(page).toHaveURL(`${link.login}&error=access_denied`);
+  await expect(page.getByRole("main").getByRole("alert")).toBeVisible();
+  await signInWithCode(page, "returnreader@example.test");
+  await expectReply(page, link);
+
+  // The next background refresh after the session ends returns here too.
+  await db.query('DELETE FROM session WHERE "userId"=$1', [reader]);
+  await expect(page).toHaveURL(link.login);
+  await signInWithCode(page, "returnreader@example.test");
+  await expectReply(page, link);
+});
+
+test("an invited Google signup returns to a linked reply, and sign-in ignores external return paths", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await useTestGoogle(page);
+  const owner = await person("googlereturnowner");
+  const { token } = await createInvitation(owner, 1);
+  const link = await linkedReply(owner, 996135);
+  await page.goto(`/join/${token}`);
+  await expect(page).toHaveURL(/\/login$/);
+  await page.goto(link.path);
+  await expect(page).toHaveURL(link.login);
+  await page.getByRole("button", { name: "Continue with Google" }).click();
+  await approveGoogle(page, "googlereturn.browser@example.test");
+  await expect(page).toHaveURL(link.setup);
+  // A signed-in account without a profile finishes setup first.
+  await page.goto(link.path);
+  await expect(page).toHaveURL(link.setup);
+  await page.getByLabel("Display name").fill("Google Return");
+  await page.getByLabel("Username", { exact: true }).fill("googlereturn");
+  await page.getByRole("button", { name: "Join Screenr", exact: true }).click();
+  await expectReply(page, link);
+
+  for (const next of [
+    "https://evil.example/titles/movie/996135",
+    "//evil.example/titles/movie/996135",
+    "/\\evil.example/titles/movie/996135",
+  ]) {
+    await page.goto("/account");
+    await page.getByRole("button", { name: "Sign out", exact: true }).click();
+    await expect(page).toHaveURL(/\/login$/);
+    await page.goto(`/login?next=${encodeURIComponent(next)}`);
+    await page.getByRole("button", { name: "Continue with Google" }).click();
+    await approveGoogle(page, "googlereturn.browser@example.test");
+    await expect(
+      page.getByRole("heading", { name: "Your circle", exact: true }),
+    ).toBeVisible();
+    await expect(page).toHaveURL(`${browserConfig.baseURL}/`);
+  }
 });

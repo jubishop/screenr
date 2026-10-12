@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { createAuthClient } from "better-auth/react";
 import { emailOTPClient } from "better-auth/client/plugins";
+import { loginPath, returnPath } from "../member-routes";
 // `status` is the HTTP status, or undefined when no response arrived.
 export class ApiError extends Error {
   constructor(
@@ -75,7 +76,14 @@ export async function api<T = Record<string, unknown>>(
     body: data === undefined ? undefined : JSON.stringify(data),
   });
   if (response.status === 401) {
-    window.location.replace("/login");
+    // Return to this member page, or to the one setup was continuing to.
+    const { pathname, search } = window.location;
+    window.location.replace(
+      loginPath(
+        returnPath(pathname + search) ??
+          returnPath(new URLSearchParams(search).get("next")),
+      ),
+    );
     throw new ApiError("Sign in to continue.", 401);
   }
   // Proxies can answer with HTML or an empty body, such as during a restart.

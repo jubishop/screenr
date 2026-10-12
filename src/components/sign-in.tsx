@@ -1,17 +1,21 @@
 "use client";
 import { useState } from "react";
 import { codeLimitMessage } from "../shared";
+import { loginPath, setupPath } from "../member-routes";
 import { authClient, api, signOut, useInteractive } from "./client";
 import { ActionButton } from "./action-button";
 
+// `next` is the validated member path to return to after sign-in.
 export function SignIn({
   invited,
   googleEnabled,
   initialError,
+  next,
 }: {
   invited: boolean;
   googleEnabled: boolean;
   initialError: string;
+  next?: string;
 }) {
   const interactive = useInteractive();
   const [email, setEmail] = useState(""),
@@ -37,7 +41,7 @@ export function SignIn({
             ? codeLimitMessage
             : (result.error.message ?? "Could not sign in."),
         );
-      if (sent) window.location.assign("/setup");
+      if (sent) window.location.assign(setupPath(next));
       else setSent(true);
     } catch (error) {
       setError((error as Error).message);
@@ -73,8 +77,8 @@ export function SignIn({
               try {
                 const result = await authClient.signIn.social({
                   provider: "google",
-                  callbackURL: "/setup",
-                  errorCallbackURL: "/login",
+                  callbackURL: setupPath(next),
+                  errorCallbackURL: loginPath(next),
                   disableRedirect: true,
                 });
                 if (result.error)
@@ -165,10 +169,12 @@ export function Setup({
   email,
   name,
   verified,
+  next,
 }: {
   email: string;
   name: string;
   verified: boolean;
+  next?: string;
 }) {
   const interactive = useInteractive();
   const [displayName, setName] = useState(name),
@@ -194,7 +200,7 @@ export function Setup({
         else setSent(true);
       } else {
         await api("setup", { name: displayName, username });
-        window.location.assign("/");
+        window.location.assign(next ?? "/");
       }
     } catch (error) {
       setError((error as Error).message);

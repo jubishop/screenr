@@ -30,17 +30,7 @@ export async function join(
   const token = options.token ?? (await createInvitation(null, 1)).token;
   const email = `${name}.browser@example.test`;
   await page.goto(`/join/${token}`);
-  await page.getByLabel("Email address").fill(email);
-  await page
-    .getByRole("button", { name: "Send sign-in code", exact: true })
-    .click();
-  await expect(page.getByLabel("Sign-in code", { exact: true })).toBeVisible();
-  const filename = createHash("sha256").update(email).digest("hex");
-  const { otp } = JSON.parse(
-    await readFile(`.cache/mail/${filename}.json`, "utf8"),
-  );
-  await page.getByLabel("Sign-in code", { exact: true }).fill(otp);
-  await page.getByRole("button", { name: "Sign in", exact: true }).click();
+  await signInWithCode(page, email);
   if (options.complete === false) {
     await expect(page.getByLabel("Username", { exact: true })).toBeVisible();
     return page;
@@ -61,6 +51,21 @@ export async function join(
     page.getByRole("heading", { name: "Your circle", exact: true }),
   ).toBeVisible();
   return page;
+}
+
+// Sign in on the sign-in page with the code the file transport delivered.
+export async function signInWithCode(page: Page, email: string) {
+  await page.getByLabel("Email address").fill(email);
+  await page
+    .getByRole("button", { name: "Send sign-in code", exact: true })
+    .click();
+  await expect(page.getByLabel("Sign-in code", { exact: true })).toBeVisible();
+  const filename = createHash("sha256").update(email).digest("hex");
+  const { otp } = JSON.parse(
+    await readFile(`.cache/mail/${filename}.json`, "utf8"),
+  );
+  await page.getByLabel("Sign-in code", { exact: true }).fill(otp);
+  await page.getByRole("button", { name: "Sign in", exact: true }).click();
 }
 
 export async function befriend(a: Page, b: Page, bName: string, aName: string) {

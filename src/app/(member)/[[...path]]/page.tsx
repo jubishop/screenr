@@ -11,7 +11,6 @@ export default async function Page({
   params: Promise<{ path?: string[] }>;
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const user = await currentMember();
   const segments = (await params).path ?? [];
   const query = await searchParams;
   const search = new URLSearchParams();
@@ -20,6 +19,8 @@ export default async function Page({
   const route = parseMemberRoute(
     `/${segments.map(encodeURIComponent).join("/")}?${search}`,
   );
+  const requestedPath = memberPath(route);
+  const user = await currentMember(requestedPath);
   const initialGoogleError =
     route.kind !== "account" || !query.error
       ? ""
@@ -28,7 +29,6 @@ export default async function Page({
         : query.error === "email_does_not_match"
           ? "Choose the Google account with the same email address as your Screenr account."
           : "Google could not be connected. Please try again.";
-  const requestedPath = memberPath(route);
   const screen = await initialScreen(user.user_id, requestedPath);
   const initialData = screen.data && JSON.parse(JSON.stringify(screen.data));
   if (initialData?.kind === "redirect") redirect(initialData.url);

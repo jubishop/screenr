@@ -341,6 +341,10 @@ recipients. A full run checks:
 - A limited code request shows the limit message and allows retry.
 - Failed sign-out and Google sign-in requests show an error and allow retry.
   A pending member can finish signup through a replacement invitation.
+- A signed-out visitor to a title reply link returns to that reply after an
+  email code at phone width, after a canceled Google attempt, and after the
+  session ends during a refresh. An invited Google signup at desktop width
+  returns there after setup. External return paths lead to the friends feed.
 - Stalled email code, Google link, and sign-out requests time out after
   fifteen seconds with a retry message and re-enable their controls.
 - Reply drafts survive failed refreshes and typing during a pending post.

@@ -171,3 +171,39 @@ test("network failures produce a connection message", async () => {
   );
   assert.equal(error.status, undefined);
 });
+
+test("an expired session sends the reader to sign in and back to the same page", async (t) => {
+  const visits: string[] = [];
+  const at = (path: string) => {
+    const url = new URL(path, "http://screenr.local");
+    Object.assign(globalThis, {
+      window: {
+        location: {
+          pathname: url.pathname,
+          search: url.search,
+          replace: (target: string) => visits.push(target),
+        },
+      },
+    });
+  };
+  t.after(() => Reflect.deleteProperty(globalThis, "window"));
+  reply(JSON.stringify({ error: "Sign in to continue." }), { status: 401 });
+  for (const path of [
+    "/titles/movie/42?item=post&reply=answer",
+    "/setup?next=%2Fpeople%2Falice",
+    "/",
+    "/setup?next=https%3A%2F%2Fevil.example",
+    "/unknown",
+  ]) {
+    at(path);
+    const error = await failure(api("screen?path=%2F"));
+    assert.equal(error.status, 401);
+  }
+  assert.deepEqual(visits, [
+    "/login?next=%2Ftitles%2Fmovie%2F42%3Fitem%3Dpost%26reply%3Danswer",
+    "/login?next=%2Fpeople%2Falice",
+    "/login",
+    "/login",
+    "/login",
+  ]);
+});

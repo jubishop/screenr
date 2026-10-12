@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import { SignIn } from "../../components/sign-in";
+import { returnPath } from "../../member-routes";
 import { activeInvitation, invitationHash } from "../../server/invitations";
 export const dynamic = "force-dynamic";
 // Invite links redirect here. Keep previews public and independent of cookies,
@@ -18,7 +19,7 @@ export const metadata: Metadata = {
 export default async function Login({
   searchParams,
 }: {
-  searchParams: Promise<Record<string, string | undefined>>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const token = (await cookies()).get("screenr-invite")?.value;
   const query = await searchParams;
@@ -35,6 +36,7 @@ export default async function Login({
         !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET)
       }
       initialError={initialError}
+      next={returnPath(query.next)}
     />
   );
 }

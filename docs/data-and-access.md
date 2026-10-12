@@ -45,6 +45,21 @@ result becomes the JSON response; an action without one responds
 Add an action as one entry, using `read` for a member GET, `write` for a
 member POST, or `signup` for a POST that runs before profile setup.
 
+## Sign-in return path
+
+A signed-out visit to a member page redirects to `/login?next=` with that
+page's path, and a 401 API reply sends the open page there the same way, so
+links in activity email and shared discussion links survive sign-in
+([issue #134](https://github.com/jubishop/screenr/issues/134)). Email-code
+sign-in and the Google callback continue to `/setup?next=`, which sends a
+member with a profile on to the path and sends a new member there after
+signup. A failed Google attempt returns to the sign-in page with the same
+path. `returnPath` in `src/member-routes.ts` accepts only a root-relative path
+that names a member screen, and rewrites it in canonical form. Absolute,
+protocol-relative, backslash, control-character, and other paths, including
+`/login` and `/setup`, fall back to the friends feed. Invitation links and
+sign-out go to `/login` without a return path. Unsent drafts are not kept.
+
 ## Display names
 
 Display names contain 1–60 characters after trimming. Signup and both name
