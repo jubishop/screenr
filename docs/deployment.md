@@ -355,10 +355,17 @@ independent of the Mac and the home repository.
 
 Initialize the Restic repository once, using the backup service's user and
 environment. Start `screenr-backup.service`, then `screenr-restore-check.service`
-and inspect both journals before enabling their timers. A restore check reads
-the encrypted repository, restores a consistent dump into a uniquely named
-temporary database, queries core tables and an access function, and drops only
-that temporary database.
+and inspect both journals before enabling their timers. A restore check first
+fails when the newest snapshot is more than 30 hours old, so stopped backups
+cannot pass by restoring an older snapshot. It then reads the encrypted
+repository, restores a consistent dump into a uniquely named temporary
+database, and fails if the restore has no profiles. It queries core tables and
+an access function, and drops only that temporary database.
+
+`ops/check-backup-age.py` performs the age check. It lists snapshot metadata
+without locking the repository and exits non-zero when the newest snapshot is
+stale or cannot be read. The daily stale-backup alert planned in
+[issue #113](https://github.com/jubishop/screenr/issues/113) will reuse it.
 
 Backups run daily around 05:00 PDT / 04:00 PST. After each successful backup,
 `ops/backup.sh` forgets snapshots outside the
