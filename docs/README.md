@@ -77,6 +77,8 @@ both memory and design documents.
 - [Find a title suggestions](title-suggestions.md): accepted discovery
   decisions, anonymous second-degree counts, and 3:1 social weighting for
   issue #39.
+- [Profile top 10](profile-top-ten.md): accepted ranked list, rank-based
+  recommendation weight, and member-visible exception for issue #99.
 - [Application stack](application-stack.md): selected core stack, alternatives,
   tradeoffs, and proposed implementation approach.
 - [Development workflow](development-workflow.md): local setup, Git hooks,

@@ -71,6 +71,12 @@ and requested a lower-weight contribution from friends of friends. The
 user selected 3:1 rather than the proposed 4:1 weighting. No additional
 reason for the exact ratio was stated.
 
+**Updated — 2026-10-12:** A
+[top 10 Recommend](profile-top-ten.md#rank-based-weight--2026-10-12)
+multiplies the person's recommendation weight by 1.5 at #10, up to 1.95 at
+#1, in both social groups. Direct-friend explanations show the rank and list
+top 10 recommenders first; friend-of-friend counts do not mention it.
+
 **Tradeoff:** This extends discovery beyond direct friends. The anonymous
 count decision below defines what can be revealed about second-degree
 signals. It does not grant access to another person's posts or discussions.

@@ -36,7 +36,9 @@ applies to every feature.
   owner and the owner's current accepted friends. Title suggestions can
   use only the explicitly allowed
   [anonymous second-degree signals](title-suggestions.md#anonymous-friends-of-friends-explanations--2026-09-07)
-  outside that audience.
+  outside that audience. A member's
+  [profile top 10](profile-top-ten.md#visible-to-every-signed-in-member--2026-10-12)
+  is visible to every signed-in member.
 - Users can see what their friends are watching or recommend.
 - Each movie or show has a standalone page with one unified feed below
   the title details. The [title-feed decisions](title-feed.md) define its
@@ -80,9 +82,12 @@ applies to every feature.
   original entry and replies, following the [action lifecycle](title-feed.md#exclusive-recommend-and-want-to-watch--2026-09-09).
 - A dedicated Friends recommend view shows titles recommended by direct
   friends, who recommends each title, and an Add to Want to watch action.
-- Friends recommend sorts by the number of recommending friends, then the
-  most recent recommendation. It has a Movies/TV filter and hides Finished
-  titles by default, with a switch to show them.
+- Friends recommend sorts by recommending friends, weighting
+  [top 10 Recommends](profile-top-ten.md#friends-recommend-uses-the-weights--2026-10-12)
+  by rank, then the most recent recommendation. It has a Movies/TV filter and
+  hides Finished titles by default, with a switch to show them.
+- Each member can pin a ranked top 10 of their Recommends to their profile,
+  following the [profile top 10 decisions](profile-top-ten.md).
 - Users can contribute to discussion threads about any show.
 - TV discussion posts can optionally identify a season or episode. The
   label is visible before revealing spoilers; reviews, ratings, and watch
@@ -164,6 +169,12 @@ This supersedes the initial proposal for optional global discovery and
 global visibility controls, including the later suggestion to defer them.
 They are not planned future features.
 
+**Updated — 2026-10-12:** The
+[profile top 10](profile-top-ten.md#visible-to-every-signed-in-member--2026-10-12)
+is a narrow exception: any signed-in, unblocked member can see a person's
+ranked list on their profile. It adds no browsing, searching, or app-wide
+ranking of lists, and the Recommend entries behind it stay friends-only.
+
 ### Privacy and the known-people circle — 2026-09-07
 
 **Decision:** Screenr is oriented around privacy and a close circle of
@@ -196,6 +207,12 @@ mutual-friend connections, or link to their activity. This exception does
 not permit named second-degree discovery or establish an exception for
 other features. Aggregation is a limited disclosure, not evidence that
 private activity is public.
+
+**Profile top 10 exception — 2026-10-12:** A member's
+[profile top 10](profile-top-ten.md#visible-to-every-signed-in-member--2026-10-12)
+is visible to every signed-in member they have not blocked. The owner
+chooses each listed title. The exception covers only the list's ranks and
+titles, not the Recommend entries, their discussions, or other activity.
 
 **Why:** The user explicitly emphasized privacy and known personal circles,
 and limited encounters with friends of friends to comments on a shared
@@ -551,6 +568,20 @@ default, with a switch to show them.
 **Why:** The user accepted the proposed ordering and filters; no additional
 rationale was given.
 
+**Updated — 2026-10-12:** The view sorts by the sum of recommending
+friends' weights instead of a plain count. A Recommend outside the top 10
+counts 1, and a
+[top 10 Recommend](profile-top-ten.md#friends-recommend-uses-the-weights--2026-10-12)
+counts 1.5 at #10, up to 1.95 at #1. Each recommender's rank appears beside
+their name, top 10 recommenders first. The tie-break and filters are
+unchanged.
+
+### Profile top 10 — 2026-10-12
+
+The [profile top 10 decisions](profile-top-ten.md) define a ranked,
+member-visible list of up to 10 Recommends on each profile and its
+rank-based weight in Find a title and Friends recommend, for issue #99.
+
 ### One editable review per title — 2026-09-04
 
 **Decision:** Each person can have one review and one rating per movie or
@@ -771,6 +802,11 @@ a pending friend request does not grant access to that content.
 [anonymous suggestion-count decision](title-suggestions.md#anonymous-friends-of-friends-explanations--2026-09-07)
 defines a limited exception for aggregate second-degree activity in Find a
 title. It does not expand profile or activity-entry access.
+
+**Updated — 2026-10-12:** Signed-in members who are not friends also see
+the person's
+[profile top 10](profile-top-ten.md#visible-to-every-signed-in-member--2026-10-12).
+Its Recommend entries and all other activity stay friends-only.
 
 **Why:** The user accepted a minimal profile for finding friends while
 keeping viewing activity and opinions within accepted friendships.
