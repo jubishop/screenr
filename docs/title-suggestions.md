@@ -216,6 +216,12 @@ behavior. It describes engineering choices, not additional interview answers.
   one consistent database snapshot. Return named direct-friend contributors
   and ordinary second-degree person counts for each action. The 3:1 scores
   determine order; they are not the person counts shown in explanations.
+- Apply the
+  [three-person minimum](#minimum-friends-of-friends-per-signal--2026-10-12)
+  to each title's second-degree Recommend and Want to watch groups after
+  these rules. Drop a smaller group before eligibility, scoring, the
+  latest-action tie-break, and the returned counts, so a second-degree count
+  is either zero or at least three.
 - Do not widen `screenr_can_read` or load second-degree private feed entries
   into browser data to calculate anonymous counts. Existing activity and
   discussion endpoints keep their access rules. Apply the same restriction
@@ -233,8 +239,10 @@ behavior. It describes engineering choices, not additional interview answers.
 
 - Sort descending by `3 * direct_recommenders + second_degree_recommenders`,
   then `3 * direct_want_to_watch + second_degree_want_to_watch`, then the
-  latest activation of an eligible, currently active action. Replies do not
-  affect this time. Use title name and catalog ID as stable final tie-breaks.
+  latest activation of an eligible, currently active action. Second-degree
+  terms and actions come only from groups that meet the minimum. Replies do
+  not affect this time. Use title name and catalog ID as stable final
+  tie-breaks.
 - Use a responsive poster grid with the title and social explanations
   beneath each image. Handle missing posters and singular/plural counts.
   Explain Recommend and Want to watch separately and omit zero-count claims.
@@ -259,10 +267,10 @@ behavior. It describes engineering choices, not additional interview answers.
 
 `src/server/title-suggestions.ts` implements the single-snapshot query.
 It separates current direct friends from unique eligible second-degree
-people, then filters and aggregates active actions. It reads names only
-for direct-friend attribution. Its explicit response fields contain public
-title metadata, direct-friend names/usernames, and anonymous second-degree
-counts. Ranking scores, second-degree identities, and connecting paths are
+people, then filters active actions, drops second-degree groups below the
+minimum, and aggregates the rest. It reads names only for direct-friend
+attribution. Its explicit response fields contain public title metadata,
+direct-friend names/usernames, and anonymous second-degree counts. Ranking scores, second-degree identities, and connecting paths are
 not returned. `src/server/screens.ts` includes these suggestions for `/search`
 and adds viewing options and the viewer's saved service identities.
 
@@ -283,11 +291,11 @@ These additions follow the
 
 `tests/app/title-suggestions.test.ts` exercises the public screen loader
 against PostgreSQL, including weighting, unique connections, current choices,
-blocking, preserved discussions, and 205 eligible titles. Browser coverage
-in `tests/browser/title-suggestions.spec.ts` uses the real app and the local
-catalog fixture to check identity privacy in initial page data and API
-responses, tile layout/navigation, search transitions, delayed responses,
-and recovery from network failures. The issue owns the acceptance checklist.
+blocking, the second-degree minimum, preserved discussions, and 205 eligible
+titles. Browser coverage in `tests/browser/title-suggestions.spec.ts` uses the
+real app and the local catalog fixture to check identity privacy in initial
+page data and API responses, tile layout/navigation, search transitions,
+delayed responses, and recovery from network failures. The issue owns the acceptance checklist.
 
 ## Scope boundary
 

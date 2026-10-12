@@ -1,6 +1,10 @@
 import { db } from "./db";
 import type { TitleSuggestion } from "../shared";
 
+// Fewer friends of friends sharing an action could identify them, so their
+// signal is ignored entirely: no eligibility, ranking, or count.
+const minimumSecondDegreePeople = 3;
+
 export async function titleSuggestions(
   viewer: string,
 ): Promise<TitleSuggestion[]> {
@@ -32,6 +36,13 @@ export async function titleSuggestions(
           SELECT 1 FROM feed_item own WHERE own.owner_id=$1 AND own.title_id=f.title_id
             AND own.active AND own.item_type IN ('recommended','want_to_watch')
         )
+    ), sized AS (
+      -- circle lists each person once and feed_item holds one row per person,
+      -- title, and action, so group_size counts distinct people.
+      SELECT *,count(*) OVER (PARTITION BY title_id,item_type,weight) AS group_size
+      FROM signals
+    ), qualified AS (
+      SELECT * FROM sized WHERE weight=3 OR group_size>=$2
     ), totals AS (
       SELECT title_id,max(activity_at) AS latest,
         coalesce(sum(weight) FILTER (WHERE item_type='recommended'),0) AS recommendation_score,
@@ -42,7 +53,7 @@ export async function titleSuggestions(
           ORDER BY username) FILTER (WHERE weight=3 AND item_type='want_to_watch'),'[]'::jsonb) AS wanted_by,
         count(*) FILTER (WHERE weight=1 AND item_type='recommended') AS second_degree_recommended,
         count(*) FILTER (WHERE weight=1 AND item_type='want_to_watch') AS second_degree_wanted
-      FROM signals GROUP BY title_id
+      FROM qualified GROUP BY title_id
     )
     SELECT jsonb_build_object(
       'id',t.id,'kind',t.kind,'tmdb_id',t.tmdb_id,'name',t.name,
@@ -53,7 +64,7 @@ export async function titleSuggestions(
     ) AS suggestion
     FROM totals s JOIN title t ON t.id=s.title_id
     ORDER BY s.recommendation_score DESC,s.want_score DESC,s.latest DESC,lower(t.name),t.id`,
-    [viewer],
+    [viewer, minimumSecondDegreePeople],
   );
   return rows.map((row) => row.suggestion);
 }

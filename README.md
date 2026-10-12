@@ -21,10 +21,11 @@ test flow.
   profiles. They can send, accept, and decline requests, unfriend, block, and
   unblock. Current friendship and blocking rules decide what each person sees.
 - **Titles:** Find a title searches the TMDB catalog and suggests titles from
-  friends' Recommend and Want to watch choices, with anonymous counts from
-  friends of friends. Title pages show details, a trailer, US viewing options
-  under Subs and Free, and the title's feed. Saved streaming services mark
-  matching titles and enable a My services filter.
+  friends' Recommend and Want to watch choices, with anonymous counts once
+  at least three friends of friends share a choice. Title pages show details,
+  a trailer, US viewing options under Subs and Free, and the title's feed.
+  Saved streaming services mark matching titles and enable a My services
+  filter.
 - **Feeds and conversations:** Members recommend titles or add them to Want to
   watch, which are mutually exclusive, and post standalone comments on title
   pages. The friends, profile, and title feeds show the same entries. Members

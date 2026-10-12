@@ -43,33 +43,37 @@ async function setup(viewer: string, prefix: string) {
     `${prefix}direct`,
     "Alexandria With A Particularly Long Display Name For Testing",
   );
-  const hiddenName = `${prefix}hidden`;
-  const second = await person(hiddenName);
   await friend(viewer, direct);
-  await friend(direct, second);
   await db.query(`INSERT INTO title(id,kind,tmdb_id,name,overview) VALUES
     ('movie:987654','movie',987654,'The Lantern Room','A fictional coastal story.'),
     ('tv:998001','tv',998001,'The Harbor Signal','A fictional mystery.')
     ON CONFLICT(id) DO NOTHING`);
   await updateTitleActivity(direct, "movie:987654", "recommended", true);
-  await updateTitleActivity(second, "movie:987654", "recommended", true);
-  const privateItem = await updateTitleActivity(
-    second,
-    "tv:998001",
-    "want_to_watch",
-    true,
-  );
-  return { viewer, direct, second, hiddenName, privateItem };
+  // Second-degree signals need at least three friends of friends per action.
+  const hidden: string[] = [];
+  const privateItems: string[] = [];
+  for (const suffix of ["one", "two", "three"]) {
+    const hiddenName = `${prefix}hidden${suffix}`;
+    const second = await person(hiddenName);
+    await friend(direct, second);
+    await updateTitleActivity(second, "movie:987654", "recommended", true);
+    privateItems.push(
+      await updateTitleActivity(second, "tv:998001", "want_to_watch", true),
+    );
+    hidden.push(second, hiddenName);
+  }
+  return { viewer, direct, second: hidden[0], hidden, privateItems };
 }
 
 test("suggestion tiles explain the circle without revealing second-degree identities", async ({
   page,
   signIn,
 }) => {
-  const { viewer, direct, second, hiddenName, privateItem } = await setup(
+  const { viewer, direct, hidden, privateItems } = await setup(
     await signIn(page, "tileviewer"),
     "tile",
   );
+  const [privateItem] = privateItems;
   const response = await page.goto("/search");
   const initialHTML = await response!.text();
   const grid = page.getByRole("region", {
@@ -78,12 +82,12 @@ test("suggestion tiles explain the circle without revealing second-degree identi
   });
   await expect(grid.getByRole("link")).toHaveCount(2);
   await expect(
-    grid.getByText("1 friend of a friend also recommends this.", {
+    grid.getByText("3 friends of friends also recommend this.", {
       exact: true,
     }),
   ).toBeVisible();
   await expect(
-    grid.getByText("1 friend of a friend wants to watch this.", {
+    grid.getByText("3 friends of friends want to watch this.", {
       exact: true,
     }),
   ).toBeVisible();
@@ -98,9 +102,9 @@ test("suggestion tiles explain the circle without revealing second-degree identi
   );
   expect(apiResponse.status()).toBe(200);
   const payload = await apiResponse.text();
-  for (const hidden of [second, hiddenName, privateItem]) {
-    expect(initialHTML).not.toContain(hidden);
-    expect(payload).not.toContain(hidden);
+  for (const value of [...hidden, ...privateItems]) {
+    expect(initialHTML).not.toContain(value);
+    expect(payload).not.toContain(value);
   }
   expect(
     (
@@ -124,12 +128,12 @@ test("suggestion tiles explain the circle without revealing second-degree identi
   await updateTitleActivity(another, "tv:998001", "want_to_watch", true);
   await page.evaluate(() => window.dispatchEvent(new Event("focus")));
   await expect(
-    grid.getByText("2 friends of friends also recommend this.", {
+    grid.getByText("4 friends of friends also recommend this.", {
       exact: true,
     }),
   ).toBeVisible();
   await expect(
-    grid.getByText("2 friends of friends want to watch this.", { exact: true }),
+    grid.getByText("4 friends of friends want to watch this.", { exact: true }),
   ).toBeVisible();
   const updatedPayload = await (
     await page.request.get("/api/screenr/screen?path=%2Fsearch")
@@ -330,7 +334,7 @@ test("relationship refreshes and failures clear social data while preserving usa
   await changeRelationship(second, viewer, "block");
   await page.evaluate(() => window.dispatchEvent(new Event("focus")));
   await expect(grid.getByRole("link")).toHaveCount(1);
-  await expect(grid.getByText(/friend of a friend/)).toHaveCount(0);
+  await expect(grid.getByText(/friends? of (a )?friends?/)).toHaveCount(0);
   await expect(input).toHaveValue("A draft search");
   await page.route("**/api/screenr/screen?**", (route) =>
     route.abort("failed"),
