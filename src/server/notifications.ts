@@ -30,7 +30,9 @@ function present(row: NotificationRow) {
           : "commented on your post";
   return {
     id: row.id,
+    kind: row.kind,
     actor: row.display_name,
+    actorId: row.actor_id,
     message: `${row.display_name} ${action}${row.title_name ? ` about ${row.title_name}` : ""}.`,
     href: row.title_id
       ? `/titles/${row.title_id.replace(":", "/")}?item=${row.item_id}&reply=${row.comment_id}`
@@ -114,6 +116,41 @@ export async function readNotification(viewer: string, id: unknown) {
       [notificationId],
     );
     return { href: present(row).href };
+  });
+}
+
+// The visible view lists a friend request only while it is pending, so a stale
+// Decline cannot end the friendship that an earlier Accept created.
+export async function respondToFriendRequest(
+  viewer: string,
+  id: unknown,
+  action: unknown,
+) {
+  const notificationId = identifier(id);
+  if (action !== "accept" && action !== "decline")
+    throw new AppError("Unknown friend request action.");
+  await transaction(async (client) => {
+    const row = (
+      await client.query<NotificationRow>(
+        `SELECT ${columns} FROM visible_notification
+         WHERE recipient_id=$1 AND id=$2 AND kind='friend_request'`,
+        [viewer, notificationId],
+      )
+    ).rows[0];
+    if (!row)
+      throw new AppError("This friend request is no longer pending.", 404);
+    await client.query(
+      "UPDATE notification SET read_at=coalesce(read_at,now()),email_pending=false WHERE id=$1",
+      [notificationId],
+    );
+    const pair = `low_id=least($1,$2) AND high_id=greatest($1,$2)
+      AND requested_by=$2 AND accepted_at IS NULL`;
+    await client.query(
+      action === "accept"
+        ? `UPDATE friendship SET accepted_at=now() WHERE ${pair}`
+        : `DELETE FROM friendship WHERE ${pair}`,
+      [viewer, row.actor_id],
+    );
   });
 }
 

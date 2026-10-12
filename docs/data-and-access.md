@@ -52,7 +52,7 @@ requests in either direction, and blocked people or paths. One query reads
 the candidates and mutual friends in one snapshot. Candidates appear once,
 ordered by most mutual friends and then username; mutual friends use username
 order. The section has an empty state when nobody qualifies. Sending a request
-moves the person to the existing pending-request list. Polling, focus changes,
+moves the person to Sent requests. Polling, focus changes,
 and relationship actions refresh the section. This discovery route does not
 grant access to private activity or change anonymous title suggestions.
 

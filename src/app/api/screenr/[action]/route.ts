@@ -25,6 +25,7 @@ import {
   notifications,
   readNotification,
   readAllNotifications,
+  respondToFriendRequest,
   saveActivityEmail,
 } from "../../../../server/notifications";
 
@@ -114,6 +115,10 @@ async function handle(
         return json(await readNotification(userId, data.id));
       if (action === "read-notifications") {
         await readAllNotifications(userId, data.through);
+        return json({ ok: true });
+      }
+      if (action === "respond-friend-request") {
+        await respondToFriendRequest(userId, data.id, data.action);
         return json({ ok: true });
       }
       if (action === "streaming-services")

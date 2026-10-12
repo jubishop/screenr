@@ -229,3 +229,101 @@ test("mark all on a polled older page preserves new arrivals until Latest is dis
   await panel.getByRole("button", { name: "Mark all as read" }).click();
   await expect(bell(owner)).toHaveAccessibleName("Notifications");
 });
+
+test("pending friend-request notifications accept or confirm Decline in the panel by keyboard", async ({
+  member,
+}) => {
+  const owner = await member("requestowner");
+  const maya = await member("requestmaya", { displayName: "Maya Chen" });
+  const sam = await member("requestsam", { displayName: "Sam Okafor" });
+  const ownerId = (
+    await (await owner.request.get("/api/auth/get-session")).json()
+  ).user.id;
+  for (const requester of [maya, sam])
+    await post(requester, "relationship", {
+      target: ownerId,
+      action: "request",
+    });
+  await owner.goto("/people");
+  const requests = owner.getByRole("region", { name: "Requests", exact: true });
+  await expect(requests.getByRole("article")).toHaveCount(2);
+  await bell(owner).click();
+  const panel = owner.getByRole("dialog", { name: "Notifications" });
+  const item = (text: string) =>
+    panel.locator(".notification-item").filter({ hasText: text });
+  const mayaItem = item("Maya Chen sent you a friend request.");
+  const samItem = item("Sam Okafor sent you a friend request.");
+  for (const request of [mayaItem, samItem])
+    await expect(
+      request.getByRole("button", { name: /^(Accept|Decline)$/ }),
+    ).toHaveText(["Accept", "Decline"]);
+  await expect(bell(owner)).toHaveAccessibleName("Notifications, 2 unread");
+  for (const width of [390, 1440]) {
+    await owner.setViewportSize({ width, height: 844 });
+    expect(
+      await owner.evaluate(() => document.documentElement.scrollWidth),
+    ).toBe(width);
+    await owner.screenshot({
+      path: `.cache/notification-requests-${width}.png`,
+    });
+  }
+
+  // Accept by keyboard: the result replaces the buttons and takes focus.
+  await mayaItem.getByRole("button", { name: "Accept", exact: true }).focus();
+  await owner.keyboard.press("Enter");
+  const accepted = mayaItem.getByText("Friend request accepted.", {
+    exact: true,
+  });
+  await expect(accepted).toBeFocused();
+  await expect(
+    mayaItem.getByRole("button", { name: /^(Accept|Decline)$/ }),
+  ).toHaveCount(0);
+  await expect(mayaItem.getByRole("img", { name: "Unread" })).toHaveCount(0);
+  await expect(bell(owner)).toHaveAccessibleName("Notifications, 1 unread");
+  await expect(requests.getByRole("article")).toHaveCount(1);
+  // The answered request stays with its result through the panel's polling.
+  await owner.waitForResponse((response) =>
+    response.url().includes("/api/screenr/notifications?"),
+  );
+  await expect(accepted).toBeVisible();
+
+  // Decline asks first; Cancel returns to Decline with the request intact.
+  const decline = samItem.getByRole("button", { name: "Decline", exact: true });
+  await decline.click();
+  const confirm = samItem.getByRole("group", {
+    name: "Decline Sam Okafor’s friend request? The request will be removed.",
+    exact: true,
+  });
+  await expect(confirm.getByRole("button", { name: "Cancel" })).toBeFocused();
+  await owner.keyboard.press("Enter");
+  await expect(confirm).toHaveCount(0);
+  await expect(decline).toBeFocused();
+  await expect(bell(owner)).toHaveAccessibleName("Notifications, 1 unread");
+  await owner.keyboard.press("Enter");
+  await owner.keyboard.press("Shift+Tab");
+  await expect(
+    confirm.getByRole("button", { name: "Decline", exact: true }),
+  ).toBeFocused();
+  await owner.keyboard.press("Enter");
+  await expect(
+    samItem.getByText("Friend request declined.", { exact: true }),
+  ).toBeFocused();
+  await expect(bell(owner)).toHaveAccessibleName("Notifications");
+  await expect(requests).toHaveCount(0);
+
+  // Selecting the rest of an answered notification still opens the person.
+  await mayaItem
+    .getByRole("button", { name: /Maya Chen sent you a friend request/ })
+    .click();
+  await expect(owner).toHaveURL(/\/people\/requestmaya$/);
+  await expect(
+    owner.getByRole("link", { name: "Watch together", exact: true }),
+  ).toBeVisible();
+  await sam.goto("/people/requestowner");
+  await expect(
+    sam.getByRole("button", { name: "Send friend request", exact: true }),
+  ).toBeVisible();
+  // Reopened, the panel lists neither answered request.
+  await bell(owner).click();
+  await expect(panel.getByText("No notifications yet.")).toBeVisible();
+});

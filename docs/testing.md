@@ -259,6 +259,13 @@ recipients. A full run checks:
   remaining readers; refriending restores them.
 - A blocked pair cannot see each other in a mutual friend's conversation,
   while the host retains visibility.
+- The profile's More actions menu opens and moves by keyboard, closes on
+  Escape, focus loss, or an outside click, and Unfriend and Block need the
+  in-page confirmation. Pending friend-request notifications accept, or
+  decline after confirmation, by keyboard.
+- The Friends page orders its relationship sections and keeps row actions on
+  the person's line at phone and desktop widths. Avatars keep their color
+  after a rename and show a whole emoji initial.
 - Invitations can be created and revoked.
 - Cookie-free preview requests follow invitation redirects and receive metadata
   in the HTML head for mobile, desktop, and social crawler user agents. The

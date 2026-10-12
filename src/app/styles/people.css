@@ -1,4 +1,67 @@
 /* Account and profile editors, people lists, and member invitations. */
+.profile-heading {
+  --avatar-size: 72px;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+.profile-identity {
+  min-width: 0;
+}
+.profile-identity h1,
+.profile-identity .profile-name {
+  margin-bottom: 0;
+}
+.profile-identity h1 {
+  overflow-wrap: anywhere;
+}
+.profile-username {
+  margin: 4px 0 0;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.profile-actions {
+  margin-top: 20px;
+}
+.more-actions {
+  position: relative;
+}
+.more-actions .more-button {
+  width: 44px;
+  height: 44px;
+  border: 1px solid #b2c1b4;
+  background: var(--white);
+}
+.more-actions .more-button[aria-expanded="true"] {
+  background: var(--accent);
+}
+/* Opens toward the page's inline start from the button's end, which always
+   follows a wider action on the same line. */
+.action-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 3;
+  display: grid;
+  min-width: 180px;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--white);
+  box-shadow: 0 10px 30px #163c3424;
+}
+.action-menu button {
+  text-align: left;
+  padding: 10px 12px;
+  border-radius: 6px;
+}
+.action-menu button:hover,
+.action-menu button:focus-visible {
+  background: var(--paper);
+}
+.action-menu button:focus-visible {
+  outline-offset: -3px;
+}
 .profile-name {
   display: flex;
   flex-wrap: wrap;
@@ -26,25 +89,57 @@
 .account-profile > [role="status"]:not(:empty) {
   margin-top: 16px;
 }
+/* A person and their actions share one line at every width. Notes, such as
+   mutual friends, take the next line under the name. */
 .person-row {
   display: flex;
-  justify-content: space-between;
-  gap: 15px;
+  flex-wrap: wrap;
   align-items: center;
-  padding: 22px 0;
+  gap: 6px 16px;
+  padding: 14px 0;
   border-bottom: 1px solid var(--line);
 }
-.people-list {
-  margin-bottom: 40px;
-}
-.people-list .person-row > a,
-.people-suggestions .person-row > div {
+.person {
+  --avatar-size: 40px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1 1 0;
   min-width: 0;
-  max-width: 100%;
   overflow-wrap: anywhere;
 }
-.people-suggestions .person-row > button {
+a.person:hover {
+  text-decoration: none;
+}
+a.person:hover strong {
+  text-decoration: underline;
+}
+.person-name {
+  min-width: 0;
+}
+/* A friend row is one link, so the whole row opens the profile. */
+.link-row {
+  padding: 0;
+}
+.link-row > .person {
+  padding: 14px 0;
+}
+.person-actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
   flex-shrink: 0;
+}
+.person-note {
+  flex-basis: 100%;
+  margin: 0 0 0 52px;
+  overflow-wrap: anywhere;
+}
+.people-list {
+  margin-bottom: 36px;
+}
+.people-list > h2 {
+  margin-bottom: 4px;
 }
 .profile-friends {
   margin-bottom: 28px;
@@ -54,12 +149,6 @@
   cursor: pointer;
   padding: 12px 0;
   font-weight: 600;
-}
-.badge {
-  font-size: 11px;
-  background: #e8efdc;
-  padding: 4px 9px;
-  border-radius: 5px;
 }
 .invite-form {
   display: flex;
@@ -137,10 +226,18 @@
   margin-bottom: 0;
 }
 @media (max-width: 560px) {
+  .profile-heading {
+    --avatar-size: 56px;
+    gap: 14px;
+  }
   .person-row {
-    align-items: flex-start;
-    flex-direction: column;
+    column-gap: 10px;
+  }
+  .person-actions {
     gap: 10px;
+  }
+  .person-actions .primary {
+    padding: 8px 12px;
   }
   .invite-form {
     gap: 14px;

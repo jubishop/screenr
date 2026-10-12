@@ -1,6 +1,6 @@
 import { expect } from "@playwright/test";
 import { test } from "./monitored-test";
-import { befriend } from "./journey-helpers";
+import { befriend, confirmProfileAction } from "./journey-helpers";
 
 test("watch together opens from a friend profile, filters shared titles, and refreshes choices and access", async ({
   member,
@@ -129,7 +129,7 @@ test("watch together opens from a friend profile, filters shared titles, and ref
     "The Lantern Room",
   ]);
   await friend.goto("/people/watchowner");
-  await friend.getByRole("button", { name: "Unfriend", exact: true }).click();
+  await confirmProfileAction(friend, "Unfriend");
   await expect(
     owner.getByRole("alert").filter({ hasText: "Watch together not found." }),
   ).toBeVisible();

@@ -128,8 +128,9 @@ The current item has `aria-current="page"`, and Friends has
 `aria-current="true"` on the invitations page. Phone pages pad their content
 and give it scroll margins, so the 56px header and the 60px bar never cover
 content, focused controls, or the New activity button. Focusing the header or
-bar keeps the scroll position. Both clear the device's safe areas. #170 adds
-the header avatar.
+bar keeps the scroll position. Both clear the device's safe areas.
+[Issue #170](https://github.com/jubishop/screenr/issues/170) adds the header
+avatar link, shown only on phones beside the bell.
 
 ### Friends recommend as a Find a title tab — 2026-10-12
 
@@ -348,6 +349,14 @@ reader sees, so a leading emoji, flag, or accented letter stays intact.
 placeholder ([issue #144](https://github.com/jubishop/screenr/issues/144)).
 Browsers without `Intl.Segmenter` fall back to the first code point.
 
+**Implementation note:** `src/components/avatar.tsx` is the shared avatar
+([issue #170](https://github.com/jubishop/screenr/issues/170)). A hash of the
+user ID picks one of eight theme colors, `--avatar-0` to `--avatar-7`, and
+each context sets the size through `--avatar-size`. The avatar also appears
+in the profile's Friends list and every Friends page row. A profile photo
+from [issue #104](https://github.com/jubishop/screenr/issues/104) replaces
+the initial inside this component.
+
 ### Sectioned Friends page — 2026-10-12
 
 **Decision:** Order the Friends page sections as follows, omitting any empty
@@ -374,6 +383,12 @@ friend row also exposed Unfriend, which takes effect on a single tap.
 **Rejected alternatives:** Keeping Unfriend on friend rows would leave a
 one-tap removal beside every friend. Keeping one list would only fix the
 layout problems.
+
+**Implementation note:** [Issue #170](https://github.com/jubishop/screenr/issues/170)
+shows People you may know with its empty state at every count. Blocked rows
+show the name without a profile link, since blocking hides the profile.
+Decline on this page still acts on one tap until
+[#132](https://github.com/jubishop/screenr/issues/132) adds its confirmation.
 
 ### Profile actions menu with confirmation — 2026-10-12
 
@@ -407,6 +422,15 @@ This resolves the blocking result in
 [issue #132](https://github.com/jubishop/screenr/issues/132). The user chose
 this over keeping the viewer on a minimal blocked profile, which would need a
 server change to profile access.
+
+**Implementation note:** [Issue #170](https://github.com/jubishop/screenr/issues/170)
+follows the menu button pattern: Enter, Space, or the arrow keys open the
+menu and focus an item; arrow keys, Home, and End move between items.
+`src/components/confirmation.tsx` is the shared confirmation. Cancel takes
+focus when it opens, so the reader hears the question and Enter changes
+nothing. The Block message adds "This ends your friendship." or "This
+removes the pending friend request." when either applies. Until #132 ships,
+a confirmed Block leaves the profile showing "Person not found.".
 
 ### Confirm other destructive actions — 2026-10-12
 
@@ -457,6 +481,10 @@ otherwise required leaving the panel for the Friends page.
 [Issue #166](https://github.com/jubishop/screenr/issues/166) added the link
 icon and [#167](https://github.com/jubishop/screenr/issues/167) the
 navigation icons; later stages add theirs to the same module.
+[Issue #170](https://github.com/jubishop/screenr/issues/170) added the more
+actions and placeholder person icons. It also added the notification Accept
+and Decline actions. An answered request leaves the server's list, so the
+open panel keeps that row with its result.
 
 ### Dark theme follows the system setting — 2026-10-12
 

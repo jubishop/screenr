@@ -8,6 +8,7 @@ import { ThreadView } from "./thread";
 import { preservePosition } from "./position";
 import { Reactions } from "./reactions";
 import { Icon } from "./icons";
+import { Avatar } from "./avatar";
 
 type Known = Map<string, { activity: string; comments: Set<string> }>;
 function capture(items: FeedItem[]): Known {
@@ -318,6 +319,12 @@ function FeedEntry({
             </Link>
             <div className="activity-content">
               <p className="activity-by">
+                <Avatar
+                  person={{
+                    user_id: item.owner_id,
+                    display_name: item.display_name,
+                  }}
+                />
                 <Link href={`/people/${item.username}`} prefetch={false}>
                   {item.display_name}
                 </Link>{" "}

@@ -5,6 +5,7 @@ import type { Person, Title } from "../shared";
 import type { ScreenData } from "../server/screens";
 import { TitleCard } from "./title-card";
 import { ViewingAttribution } from "./title-services";
+import { Avatar } from "./avatar";
 
 export function WatchTogether({
   participants,
@@ -21,13 +22,16 @@ export function WatchTogether({
     <>
       <div className="page-heading">
         <h1 className="page-title">Watch together</h1>
-        <p>
+        <p className="participants">
           {participants.map((person, index) => (
             <span key={person.user_id}>
               {index > 0 && " & "}
-              <Link href={`/people/${person.username}`} prefetch={false}>
-                {person.display_name}
-              </Link>
+              <span className="participant">
+                <Avatar person={person} />
+                <Link href={`/people/${person.username}`} prefetch={false}>
+                  {person.display_name}
+                </Link>
+              </span>
             </span>
           ))}
         </p>

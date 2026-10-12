@@ -1,9 +1,58 @@
 "use client";
 import Link from "next/link";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import type { ScreenData } from "../server/screens";
 import type { Person } from "../shared";
 import { useInteractive } from "./client";
+import { Avatar } from "./avatar";
+
+// One person: avatar, display name, and @username, linking to the profile.
+// The username may wrap beneath the name; actions stay on the same line.
+function PersonRow({
+  person,
+  note,
+  children,
+}: {
+  person: Person;
+  note?: ReactNode;
+  children?: ReactNode;
+}) {
+  return (
+    <article className={`person-row${children ? "" : " link-row"}`}>
+      <Link
+        className="person"
+        href={`/people/${person.username}`}
+        prefetch={false}
+      >
+        <Avatar person={person} />
+        <span className="person-name">
+          <strong>{person.display_name}</strong>
+          <span className="muted"> @{person.username}</span>
+        </span>
+      </Link>
+      {children && <div className="person-actions">{children}</div>}
+      {note}
+    </article>
+  );
+}
+
+function PeopleSection({
+  id,
+  heading,
+  children,
+}: {
+  id: string;
+  heading: string;
+  children: ReactNode;
+}) {
+  return (
+    <section className="people-list" aria-labelledby={id}>
+      <h2 id={id}>{heading}</h2>
+      {children}
+    </section>
+  );
+}
+
 export function PeopleView({
   data,
   user,
@@ -19,6 +68,14 @@ export function PeopleView({
   const [query, setQuery] = useState("");
   // Retain the draft while failed reads hide the protected snapshot.
   if (!data) return null;
+  const disabled = busy || !interactive;
+  const requests = data.connections.filter(
+    (p) => !p.accepted_at && p.requested_by !== user.user_id,
+  );
+  const friends = data.connections.filter((p) => p.accepted_at);
+  const sent = data.connections.filter(
+    (p) => !p.accepted_at && p.requested_by === user.user_id,
+  );
   return (
     <>
       <div className="page-heading heading-row">
@@ -48,66 +105,59 @@ export function PeopleView({
           pattern="[a-zA-Z0-9_]{3,24}"
           onChange={(e) => setQuery(e.target.value)}
         />
-        <button className="primary">Find person</button>
+        <button className="primary">Find</button>
       </form>
-      <div className="people-list">
-        {data.connections.map((p) => (
-          <article className="person-row" key={p.user_id}>
-            <Link href={`/people/${p.username}`} prefetch={false}>
-              <strong>{p.display_name}</strong>
-              <span className="muted"> @{p.username}</span>
-            </Link>
-            <div className="inline-actions">
-              {p.accepted_at ? (
-                <>
-                  <span className="badge">Friends</span>
-                  <button
-                    className="text-button"
-                    disabled={busy || !interactive}
-                    onClick={() => void relationship(p.user_id, "remove")}
-                  >
-                    Unfriend
-                  </button>
-                </>
-              ) : p.requested_by === user.user_id ? (
-                <>
-                  <span className="small muted">Request sent</span>
-                  <button
-                    className="text-button"
-                    disabled={busy || !interactive}
-                    onClick={() => void relationship(p.user_id, "remove")}
-                  >
-                    Cancel
-                  </button>
-                </>
-              ) : (
-                <>
-                  <button
-                    className="primary"
-                    disabled={busy || !interactive}
-                    onClick={() => void relationship(p.user_id, "accept")}
-                  >
-                    Accept
-                  </button>
-                  <button
-                    className="text-button"
-                    disabled={busy || !interactive}
-                    onClick={() => void relationship(p.user_id, "remove")}
-                  >
-                    Decline
-                  </button>
-                </>
-              )}
-            </div>
-          </article>
-        ))}
-        {!data.connections.length && (
-          <p className="empty">
-            Start with someone you know. Find their username or send an
-            invitation.
-          </p>
-        )}
-      </div>
+      {!data.connections.length && (
+        <p className="empty">
+          Start with someone you know. Find their username or send an
+          invitation.
+        </p>
+      )}
+      {requests.length > 0 && (
+        <PeopleSection id="people-requests-heading" heading="Requests">
+          {requests.map((person) => (
+            <PersonRow key={person.user_id} person={person}>
+              <button
+                className="primary"
+                disabled={disabled}
+                onClick={() => void relationship(person.user_id, "accept")}
+              >
+                Accept
+              </button>
+              <button
+                className="text-button"
+                disabled={disabled}
+                onClick={() => void relationship(person.user_id, "remove")}
+              >
+                Decline
+              </button>
+            </PersonRow>
+          ))}
+        </PeopleSection>
+      )}
+      {friends.length > 0 && (
+        <PeopleSection id="people-friends-heading" heading="Friends">
+          {friends.map((person) => (
+            <PersonRow key={person.user_id} person={person} />
+          ))}
+        </PeopleSection>
+      )}
+      {sent.length > 0 && (
+        <PeopleSection id="people-sent-heading" heading="Sent requests">
+          {sent.map((person) => (
+            <PersonRow key={person.user_id} person={person}>
+              <span className="small muted">Request sent</span>
+              <button
+                className="text-button"
+                disabled={disabled}
+                onClick={() => void relationship(person.user_id, "remove")}
+              >
+                Cancel
+              </button>
+            </PersonRow>
+          ))}
+        </PeopleSection>
+      )}
       <section
         className="people-suggestions people-list"
         aria-labelledby="people-suggestions-heading"
@@ -115,13 +165,11 @@ export function PeopleView({
         <h2 id="people-suggestions-heading">People you may know</h2>
         <p className="muted">Meet people through your mutual friends.</p>
         {data.suggestions.map((person) => (
-          <article className="person-row" key={person.user_id}>
-            <div>
-              <Link href={`/people/${person.username}`} prefetch={false}>
-                <strong>{person.display_name}</strong>
-                <span className="muted"> @{person.username}</span>
-              </Link>
-              <p className="small muted">
+          <PersonRow
+            key={person.user_id}
+            person={person}
+            note={
+              <p className="person-note small muted">
                 {person.mutual_friends.length === 1
                   ? "Mutual friend: "
                   : "Mutual friends: "}
@@ -134,36 +182,47 @@ export function PeopleView({
                   </span>
                 ))}
               </p>
-            </div>
+            }
+          >
             <button
               className="primary"
-              disabled={busy || !interactive}
+              disabled={disabled}
               onClick={() => void relationship(person.user_id, "request")}
             >
               Send friend request
             </button>
-          </article>
+          </PersonRow>
         ))}
         {!data.suggestions.length && (
           <p className="empty">No friend suggestions yet.</p>
         )}
       </section>
       {data.blocked.length > 0 && (
-        <>
-          <h2>Blocked people</h2>
-          {data.blocked.map((p) => (
-            <div className="person-row" key={p.user_id}>
-              <span>{p.display_name}</span>
-              <button
-                className="text-button"
-                disabled={busy || !interactive}
-                onClick={() => void relationship(p.user_id, "unblock")}
-              >
-                Unblock
-              </button>
-            </div>
+        <section
+          className="people-list"
+          aria-labelledby="people-blocked-heading"
+        >
+          <h2 id="people-blocked-heading">Blocked people</h2>
+          {data.blocked.map((person) => (
+            <article className="person-row" key={person.user_id}>
+              <span className="person">
+                <Avatar person={person} />
+                <span className="person-name">
+                  <strong>{person.display_name}</strong>
+                </span>
+              </span>
+              <div className="person-actions">
+                <button
+                  className="text-button"
+                  disabled={disabled}
+                  onClick={() => void relationship(person.user_id, "unblock")}
+                >
+                  Unblock
+                </button>
+              </div>
+            </article>
           ))}
-        </>
+        </section>
       )}
     </>
   );

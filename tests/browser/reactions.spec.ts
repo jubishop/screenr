@@ -2,6 +2,7 @@ import { expect, type Locator } from "@playwright/test";
 import { browserConfig } from "../../scripts/browser-config";
 import { test } from "./monitored-test";
 import { prepareFriendship } from "./member-fixture";
+import { confirmProfileAction } from "./journey-helpers";
 
 test("emoji reactions persist across feeds on entries and replies, with change, removal, and retry", async ({
   member,
@@ -296,7 +297,7 @@ test("emoji reactions persist across feeds on entries and replies, with change, 
   const data = { item: recommended, kind: "like" };
   const headers = { Origin: browserConfig.baseURL };
   await reader.goto("/people/reactionowner");
-  await reader.getByRole("button", { name: "Unfriend", exact: true }).click();
+  await confirmProfileAction(reader, "Unfriend");
   await expect(
     reader.locator(`[data-item-id="${recommended}"]`),
   ).not.toBeVisible();

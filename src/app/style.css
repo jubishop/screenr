@@ -8,6 +8,16 @@
   --accent: #d9eb85;
   --white: #fffef9;
   --red: #9b3838;
+  /* Muted avatar backgrounds, chosen by user ID. Ink text meets 4.5:1 on each. */
+  --avatar-0: #dce6cf;
+  --avatar-1: #e9dfc9;
+  --avatar-2: #d3e4e3;
+  --avatar-3: #ecd9d3;
+  --avatar-4: #dfdbec;
+  --avatar-5: #e4e8c4;
+  --avatar-6: #d6e0ec;
+  --avatar-7: #eedcc0;
+  --avatar-placeholder: #e6e8e3;
 }
 * {
   box-sizing: border-box;
@@ -142,6 +152,13 @@ hr {
   border: 1px solid #b2c1b4;
   background: var(--white);
 }
+.danger {
+  background: var(--red);
+  color: var(--white);
+}
+.danger:hover {
+  background: #812c2c;
+}
 .wide {
   width: 100%;
 }
@@ -180,14 +197,51 @@ hr {
 .brand:hover {
   text-decoration: none;
 }
+/* Each context sets --avatar-size; the initial scales with it. */
 .avatar {
+  display: inline-grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: var(--avatar-size, 36px);
+  height: var(--avatar-size, 36px);
   border-radius: 50%;
-  background: #dce6cf;
-  width: 36px;
-  height: 36px;
-  text-align: center;
-  line-height: 36px;
+  overflow: hidden;
+  background: var(--avatar-0);
+  color: var(--ink);
+  font-size: calc(var(--avatar-size, 36px) * 0.44);
   font-weight: 600;
+  line-height: 1;
+  letter-spacing: 0;
+  user-select: none;
+}
+.avatar[data-tone="1"] {
+  background: var(--avatar-1);
+}
+.avatar[data-tone="2"] {
+  background: var(--avatar-2);
+}
+.avatar[data-tone="3"] {
+  background: var(--avatar-3);
+}
+.avatar[data-tone="4"] {
+  background: var(--avatar-4);
+}
+.avatar[data-tone="5"] {
+  background: var(--avatar-5);
+}
+.avatar[data-tone="6"] {
+  background: var(--avatar-6);
+}
+.avatar[data-tone="7"] {
+  background: var(--avatar-7);
+}
+.avatar-placeholder {
+  background: var(--avatar-placeholder);
+  color: var(--muted);
+}
+.avatar-placeholder .icon {
+  width: 62%;
+  height: 62%;
 }
 .poster {
   position: relative;
@@ -254,6 +308,28 @@ hr {
 .search-form input {
   margin: 0;
   min-width: 0;
+}
+.search-form button {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+/* In-page confirmation for destructive actions. */
+.confirmation {
+  max-width: 520px;
+  margin-top: 16px;
+  padding: 16px;
+  border: 1px solid #e9c9be;
+  border-radius: 10px;
+  background: var(--white);
+}
+.confirmation p {
+  margin-bottom: 12px;
+  overflow-wrap: anywhere;
+}
+.confirmation-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
 }
 .checkbox {
   display: flex;

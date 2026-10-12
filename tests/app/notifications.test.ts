@@ -15,6 +15,7 @@ import {
   notifications,
   readNotification,
   readAllNotifications,
+  respondToFriendRequest,
   saveActivityEmail,
 } from "../../src/server/notifications";
 import { createInvitation, completeSignup } from "../../src/server/invitations";
@@ -219,4 +220,91 @@ test("comments notify the content owner and addressed commenter without self-ale
   assert.equal(await unread(alice), 4);
   await addComment(ben, conversation, "Reply to owner", false, own);
   assert.equal(await unread(alice), 5);
+});
+
+async function friendship(a: string, b: string) {
+  return (
+    await db.query<{ accepted: boolean }>(
+      `SELECT accepted_at IS NOT NULL AS accepted FROM friendship
+       WHERE low_id=least($1,$2) AND high_id=greatest($1,$2)`,
+      [a, b],
+    )
+  ).rows[0];
+}
+
+async function readAt(id: string) {
+  return (
+    await db.query<{ read: boolean; email_pending: boolean }>(
+      "SELECT read_at IS NOT NULL AS read,email_pending FROM notification WHERE id=$1",
+      [id],
+    )
+  ).rows[0];
+}
+
+test("friend-request notifications identify the requester and answer only that pending request", async () => {
+  const { alice, ben, cam, outsider, conversation } = await setup();
+  await saveActivityEmail(alice, true);
+  await changeRelationship(ben, alice, "request");
+  const [request] = (await notifications(alice)).items;
+  assert.equal(request.kind, "friend_request");
+  assert.equal(request.actorId, ben);
+  assert.equal((await readAt(request.id)).email_pending, true);
+  await assert.rejects(
+    respondToFriendRequest(outsider, request.id, "accept"),
+    /no longer pending/,
+  );
+  await assert.rejects(
+    respondToFriendRequest(alice, request.id, "remove"),
+    /Unknown friend request action/,
+  );
+  await assert.rejects(
+    respondToFriendRequest(alice, "oops", "accept"),
+    /Invalid notification/,
+  );
+  await respondToFriendRequest(alice, request.id, "accept");
+  assert.deepEqual(await friendship(alice, ben), { accepted: true });
+  assert.deepEqual(await readAt(request.id), {
+    read: true,
+    email_pending: false,
+  });
+  assert.equal(await unread(alice), 0);
+  assert.equal((await notifications(ben)).items[0].kind, "friend_accepted");
+  // A stale Decline never ends the friendship the request became.
+  await assert.rejects(
+    respondToFriendRequest(alice, request.id, "decline"),
+    /no longer pending/,
+  );
+  assert.deepEqual(await friendship(alice, ben), { accepted: true });
+
+  await changeRelationship(cam, alice, "request");
+  const [declined] = (await notifications(alice)).items;
+  await respondToFriendRequest(alice, declined.id, "decline");
+  assert.equal(await friendship(alice, cam), undefined);
+  assert.equal((await readAt(declined.id)).read, true);
+  assert.equal(await unread(alice), 0);
+  await assert.rejects(
+    respondToFriendRequest(alice, declined.id, "accept"),
+    /no longer pending/,
+  );
+  assert.equal(await friendship(alice, cam), undefined);
+
+  // Other notification kinds and the requester's own copy cannot answer.
+  await addComment(ben, conversation, "Not a request", false);
+  const [comment] = (await notifications(alice)).items;
+  assert.equal(comment.kind, "comment");
+  await assert.rejects(
+    respondToFriendRequest(alice, comment.id, "accept"),
+    /no longer pending/,
+  );
+  await changeRelationship(outsider, alice, "request");
+  const [sent] = (await notifications(alice)).items;
+  await assert.rejects(
+    respondToFriendRequest(outsider, sent.id, "accept"),
+    /no longer pending/,
+  );
+  await changeRelationship(alice, outsider, "block");
+  await assert.rejects(
+    respondToFriendRequest(alice, sent.id, "accept"),
+    /no longer pending/,
+  );
 });

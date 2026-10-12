@@ -38,6 +38,21 @@ const icons = {
       <path d="M6.2 18.4a6.5 6.5 0 0 1 11.6 0" />
     </>
   ),
+  // More actions menu button.
+  more: (
+    <>
+      <circle cx="5" cy="12" r="1.2" />
+      <circle cx="12" cy="12" r="1.2" />
+      <circle cx="19" cy="12" r="1.2" />
+    </>
+  ),
+  // Placeholder avatar for a person who is not available.
+  person: (
+    <>
+      <circle cx="12" cy="9" r="3.5" />
+      <path d="M5.5 19.5a6.5 6.5 0 0 1 13 0" />
+    </>
+  ),
 } satisfies Record<string, ReactNode>;
 
 export type IconName = keyof typeof icons;

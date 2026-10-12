@@ -1,13 +1,16 @@
 "use client";
-import { useRef, useState } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import { useInteractive } from "./client";
 
+// Children render under the name, above the form while editing.
 export function DisplayNameEditor({
   name,
   save,
+  children,
 }: {
   name: string;
   save: (name: string) => Promise<void>;
+  children?: ReactNode;
 }) {
   const interactive = useInteractive();
   const [editing, setEditing] = useState(false);
@@ -58,6 +61,7 @@ export function DisplayNameEditor({
           </button>
         )}
       </div>
+      {children}
       {editing && (
         <form
           className="display-name-editor"

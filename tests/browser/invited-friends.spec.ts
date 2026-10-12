@@ -1,7 +1,7 @@
 import { expect, type Page } from "@playwright/test";
 import { browserConfig } from "../../scripts/browser-config";
 import { test } from "./monitored-test";
-import { join, befriend } from "./journey-helpers";
+import { join, befriend, confirmProfileAction } from "./journey-helpers";
 
 test("invited friends discover, save, and share inline discussions with live access enforcement", async ({
   browser,
@@ -118,7 +118,7 @@ test("invited friends discover, save, and share inline discussions with live acc
     item(cam).getByRole("button", { name: /^(Delete|Remove)$/ }),
   ).toHaveCount(0);
   await alice.goto("/people/ben");
-  await alice.getByRole("button", { name: "Unfriend", exact: true }).click();
+  await confirmProfileAction(alice, "Unfriend");
   await expect(item(ben)).toHaveCount(0);
   await expect(
     item(cam).getByText("This looks like our kind of movie.", { exact: true }),
@@ -129,7 +129,7 @@ test("invited friends discover, save, and share inline discussions with live acc
     item(ben).getByText("This looks like our kind of movie.", { exact: true }),
   ).toBeVisible();
   await ben.goto("/people/cam");
-  await ben.getByRole("button", { name: "Block", exact: true }).click();
+  await confirmProfileAction(ben, "Block");
   await item(cam).getByRole("button", { name: "Comment", exact: true }).click();
   await item(cam).getByLabel("Add your reply").fill("Cam’s view of the film.");
   await item(cam)

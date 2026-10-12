@@ -90,7 +90,12 @@
   margin: 0;
   padding: 0;
 }
+/* The notification itself is one button. Friend-request actions and their
+   results follow it in the same row, aligned with the message. */
 .notification-item {
+  --avatar-size: 40px;
+}
+.notification-select {
   display: flex;
   align-items: center;
   gap: 12px;
@@ -100,13 +105,27 @@
   font-weight: 400;
   line-height: 1.45;
 }
-.notification-item:hover,
-.notification-item:focus-visible {
+.notification-select:hover,
+.notification-select:focus-visible {
   background: var(--paper);
 }
-.notification-item .avatar {
-  flex: 0 0 40px;
-  height: 40px;
+.notification-actions,
+.notification-item .confirmation,
+.notification-result {
+  margin: -4px 12px 12px 64px;
+}
+.notification-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.notification-actions button {
+  padding: 7px 14px;
+}
+.notification-item .confirmation {
+  padding: 12px;
+}
+.notification-result {
   font-weight: 600;
 }
 .notification-copy {

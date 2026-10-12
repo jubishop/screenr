@@ -71,6 +71,19 @@ export async function befriend(a: Page, b: Page, bName: string, aName: string) {
     .getByRole("button", { name: "Accept friend request", exact: true })
     .click();
   await expect(
-    b.getByRole("button", { name: "Unfriend", exact: true }),
+    b.getByRole("link", { name: "Watch together", exact: true }),
   ).toBeVisible();
+}
+
+// Unfriend and Block sit in a profile's More actions menu and need confirming.
+export async function confirmProfileAction(
+  page: Page,
+  action: "Unfriend" | "Block",
+) {
+  await page.getByRole("button", { name: /^More actions for / }).click();
+  await page.getByRole("menuitem", { name: action, exact: true }).click();
+  await page
+    .getByRole("group", { name: new RegExp(`^${action} `) })
+    .getByRole("button", { name: action, exact: true })
+    .click();
 }

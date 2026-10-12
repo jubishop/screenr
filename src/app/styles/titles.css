@@ -135,6 +135,15 @@
     font-size: 17px;
   }
 }
+.participants {
+  --avatar-size: 24px;
+}
+.participant {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  vertical-align: middle;
+}
 .watch-together-count {
   margin-top: 18px;
 }

@@ -5,7 +5,7 @@ import { browserConfig } from "../../scripts/browser-config";
 import { expectTextContrast } from "./contrast";
 import { test } from "./monitored-test";
 import { prepareFriendship } from "./member-fixture";
-import { befriend } from "./journey-helpers";
+import { befriend, confirmProfileAction } from "./journey-helpers";
 
 test("unified feeds show separate entries and support inline replies on title, friends, and profile", async ({
   member,
@@ -558,7 +558,7 @@ test("slow and failed refreshes enforce access while preserving reply drafts", a
   });
   await page.goto("/people/slowviewer");
   await expect(
-    page.getByRole("button", { name: "Unfriend", exact: true }),
+    page.getByRole("link", { name: "Watch together", exact: true }),
   ).toBeVisible();
   await viewer.goto(`/conversations/${id}`);
   await viewer.getByRole("button", { name: "Comment", exact: true }).click();
@@ -580,7 +580,7 @@ test("slow and failed refreshes enforce access while preserving reply drafts", a
   await expect(
     viewer.getByText("A slow incoming reply", { exact: true }),
   ).toBeVisible();
-  await page.getByRole("button", { name: "Unfriend", exact: true }).click();
+  await confirmProfileAction(page, "Unfriend");
   await expect(viewer.getByRole("status")).toContainText(
     "This activity is unavailable.",
   );

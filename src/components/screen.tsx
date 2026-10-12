@@ -5,7 +5,7 @@ import type { ScreenData } from "../server/screens";
 import type { Person, SaveSurface } from "../shared";
 import { parseMemberRoute, type MemberRoute } from "../member-routes";
 import { api, signOut } from "./client";
-import { initial } from "./initial";
+import { Avatar } from "./avatar";
 import { Icon, type IconName } from "./icons";
 import { FeedView } from "./feed";
 import { WatchTogether } from "./watch-together";
@@ -178,14 +178,25 @@ export function Screen({
           <Link href="/" className="brand" prefetch={false}>
             screenr<span>●</span>
           </Link>
-          <Notifications
-            count={
-              data && "unreadNotifications" in data
-                ? data.unreadNotifications
-                : null
-            }
-            refreshScreen={refresh}
-          />
+          <div className="header-actions">
+            <Notifications
+              count={
+                data && "unreadNotifications" in data
+                  ? data.unreadNotifications
+                  : null
+              }
+              refreshScreen={refresh}
+            />
+            {/* Phones hide the sidebar link, so the header links the profile. */}
+            <Link
+              href={`/people/${user.username}`}
+              className="header-profile"
+              aria-label="Your profile"
+              prefetch={false}
+            >
+              <Avatar person={user} />
+            </Link>
+          </div>
         </div>
         <nav className="main-nav" aria-label="Main navigation">
           {sections.map(({ href, label, short, icon }) => (
@@ -211,7 +222,7 @@ export function Screen({
         </nav>
         <div className="sidebar-bottom">
           <Link href={`/people/${user.username}`} prefetch={false}>
-            <span className="avatar">{initial(user.display_name)}</span>
+            <Avatar person={user} />
             <span>
               {user.display_name}
               <small>@{user.username}</small>

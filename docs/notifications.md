@@ -84,7 +84,14 @@ dropdown on desktop and a full-screen panel on phones. Close or Escape returns
 to the underlying page without losing its scroll position or comment drafts.
 The panel has All and Unread filters and controls for earlier notifications.
 Opening it does not mark notifications read. Selecting a notification marks
-it read and opens its person or exact title reply. **Mark all as read** applies
+it read and opens its person or exact title reply. A pending friend request
+also shows Accept and Decline; Decline asks for the
+[in-page confirmation](interface-design.md#confirm-other-destructive-actions--2026-10-12)
+first. Either action marks that notification read and answers only that
+request while it is still pending, so a stale Decline cannot end a friendship.
+The answered row keeps its result in place of the buttons until the panel
+closes or changes view, and selecting it still opens the person.
+**Mark all as read** applies
 through the newest notification in the displayed snapshot, leaving later
 arrivals unread. Older pages and their refreshes keep that boundary; returning
 to **Latest notifications** displays new arrivals and updates the boundary.

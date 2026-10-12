@@ -199,11 +199,11 @@ test("active invitation cards retain links across reloads and disappear after us
   ] as const) {
     await guestPage.goto("/people/invitationowner");
     await expect(
-      guestPage.getByRole("button", { name: "Unfriend", exact: true }),
+      guestPage.getByRole("link", { name: "Watch together", exact: true }),
     ).toBeVisible();
     await owner.goto(`/people/${username}`);
     await expect(
-      owner.getByRole("button", { name: "Unfriend", exact: true }),
+      owner.getByRole("link", { name: "Watch together", exact: true }),
     ).toBeVisible();
   }
   await guest.goto("/people/invitationlast");

@@ -10,7 +10,10 @@ import {
 import { useRouter } from "next/navigation";
 import type { NotificationPage } from "../server/notifications";
 import { api, dateLabel, useInteractive } from "./client";
-import { initial } from "./initial";
+import { Avatar } from "./avatar";
+import { Confirmation } from "./confirmation";
+
+type Item = NotificationPage["items"][number];
 
 export function Notifications({
   count,
@@ -35,6 +38,13 @@ export function Notifications({
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [position, setPosition] = useState({ top: 0, left: 0 });
+  // Answered requests leave the server's list, so the panel keeps each one
+  // with its result until the reader changes the view or closes the panel.
+  const [answered, setAnswered] = useState(
+    new Map<string, { item: Item; result: string }>(),
+  );
+  const [declining, setDeclining] = useState<string | null>(null);
+  const focusTarget = useRef<string | null>(null);
 
   const refresh = useCallback(async () => {
     pending.current?.abort();
@@ -107,33 +117,132 @@ export function Notifications({
     };
   }, [open]);
 
+  function changeView() {
+    setPage(null);
+    setAnswered(new Map());
+    setDeclining(null);
+  }
+
   function show() {
     setCursor(null);
     setUnreadOnly(false);
-    setPage(null);
+    changeView();
     setError("");
     setOpen(true);
   }
 
-  async function select(id: string) {
+  function visit(href: string) {
+    setOpen(false);
+    // Reopening the same destination must rerun its reply positioning, which
+    // otherwise stays completed in the mounted feed during client navigation.
+    if (window.location.pathname + window.location.search === href)
+      window.location.assign(href);
+    else router.push(href);
+  }
+
+  async function select(item: Item) {
     if (busy) return;
+    // An answered request is already read and no longer listed by the server.
+    if (answered.has(item.id)) return visit(item.href);
     pending.current?.abort();
     setBusy(true);
     try {
-      const result = await api<{ href: string }>("read-notification", { id });
-      setOpen(false);
+      const result = await api<{ href: string }>("read-notification", {
+        id: item.id,
+      });
       void refreshScreen();
-      // Reopening the same destination must rerun its reply positioning, which
-      // otherwise stays completed in the mounted feed during client navigation.
-      if (window.location.pathname + window.location.search === result.href)
-        window.location.assign(result.href);
-      else router.push(result.href);
+      visit(result.href);
     } catch (failure) {
       setPage(null);
       setError((failure as Error).message);
     } finally {
       setBusy(false);
     }
+  }
+
+  async function respond(item: Item, action: "accept" | "decline") {
+    if (busy) return;
+    pending.current?.abort();
+    setBusy(true);
+    try {
+      await api("respond-friend-request", { id: item.id, action });
+      focusTarget.current = `result-${item.id}`;
+      setDeclining(null);
+      setAnswered((current) =>
+        new Map(current).set(item.id, {
+          item: { ...item, read: true },
+          result:
+            action === "accept"
+              ? "Friend request accepted."
+              : "Friend request declined.",
+        }),
+      );
+      await Promise.all([refresh(), refreshScreen()]);
+    } catch (failure) {
+      setPage(null);
+      setError((failure as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // Focus follows the reader to the result or back to Decline after Cancel.
+  function focusWhen(key: string) {
+    return (element: HTMLElement | null) => {
+      if (element && focusTarget.current === key) {
+        focusTarget.current = null;
+        element.focus();
+      }
+    };
+  }
+
+  // A pending friend request offers Accept and Decline; Decline confirms
+  // first. Answering replaces both with the result.
+  function requestControls(item: Item) {
+    const answer = answered.get(item.id);
+    if (answer)
+      return (
+        <p
+          className="notification-result small"
+          tabIndex={-1}
+          ref={focusWhen(`result-${item.id}`)}
+        >
+          {answer.result}
+        </p>
+      );
+    if (item.kind !== "friend_request") return null;
+    if (declining === item.id)
+      return (
+        <Confirmation
+          message={`Decline ${item.actor}’s friend request? The request will be removed.`}
+          action="Decline"
+          busy={busy}
+          onConfirm={() => void respond(item, "decline")}
+          onCancel={() => {
+            focusTarget.current = `decline-${item.id}`;
+            setDeclining(null);
+          }}
+        />
+      );
+    return (
+      <div className="notification-actions">
+        <button
+          className="primary"
+          disabled={busy}
+          onClick={() => void respond(item, "accept")}
+        >
+          Accept
+        </button>
+        <button
+          className="secondary"
+          disabled={busy}
+          ref={focusWhen(`decline-${item.id}`)}
+          onClick={() => setDeclining(item.id)}
+        >
+          Decline
+        </button>
+      </div>
+    );
   }
 
   async function markAll() {
@@ -152,6 +261,14 @@ export function Notifications({
   }
 
   const unread = open ? (page?.unread ?? count) : count;
+  const items = page
+    ? [
+        ...page.items,
+        ...[...answered.values()]
+          .map(({ item }) => item)
+          .filter((item) => !page.items.some(({ id }) => id === item.id)),
+      ].sort((a, b) => (BigInt(b.id) > BigInt(a.id) ? 1 : -1))
+    : [];
   return (
     <>
       <button
@@ -230,7 +347,7 @@ export function Notifications({
                 disabled={busy}
                 onClick={() => {
                   if (unreadOnly === onlyUnread && cursor === null) return;
-                  setPage(null);
+                  changeView();
                   setCursor(null);
                   setUnreadOnly(onlyUnread);
                 }}
@@ -261,18 +378,24 @@ export function Notifications({
             </p>
           ) : (
             <>
-              {page.items.length ? (
+              {items.length ? (
                 <ul className="notification-list">
-                  {page.items.map((item) => (
-                    <li key={item.id}>
+                  {items.map((item) => (
+                    <li
+                      key={item.id}
+                      className={`notification-item${item.read ? "" : " unread"}`}
+                    >
                       <button
-                        className={`notification-item${item.read ? "" : " unread"}`}
+                        className="notification-select"
                         disabled={busy}
-                        onClick={() => void select(item.id)}
+                        onClick={() => void select(item)}
                       >
-                        <span className="avatar" aria-hidden="true">
-                          {initial(item.actor)}
-                        </span>
+                        <Avatar
+                          person={{
+                            user_id: item.actorId,
+                            display_name: item.actor,
+                          }}
+                        />
                         <span className="notification-copy">
                           <span>{item.message}</span>
                           <time dateTime={item.createdAt}>
@@ -292,6 +415,7 @@ export function Notifications({
                           />
                         )}
                       </button>
+                      {requestControls(item)}
                     </li>
                   ))}
                 </ul>
@@ -317,7 +441,7 @@ export function Notifications({
                     className="secondary"
                     disabled={busy}
                     onClick={() => {
-                      setPage(null);
+                      changeView();
                       setCursor(null);
                     }}
                   >
@@ -330,7 +454,7 @@ export function Notifications({
                     disabled={busy}
                     onClick={() => {
                       if (!page.next || !page.through) return;
-                      setPage(null);
+                      changeView();
                       setCursor({ before: page.next, through: page.through });
                     }}
                   >

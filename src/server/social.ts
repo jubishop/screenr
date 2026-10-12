@@ -87,7 +87,7 @@ export async function profileFor(viewer: string, username: string) {
 }
 export async function people(viewer: string) {
   const connections = (
-    await db.query(
+    await db.query<Person & { requested_by: string; accepted_at: Date | null }>(
       `SELECT p.user_id,p.username,p.display_name,f.requested_by,f.accepted_at
     FROM friendship f JOIN profile p ON p.user_id=CASE WHEN f.low_id=$1 THEN f.high_id ELSE f.low_id END
     WHERE $1 IN (f.low_id,f.high_id) AND NOT screenr_blocked($1,p.user_id) ORDER BY p.username`,
@@ -95,7 +95,7 @@ export async function people(viewer: string) {
     )
   ).rows;
   const blocked = (
-    await db.query(
+    await db.query<Person>(
       `SELECT p.user_id,p.username,p.display_name FROM block b
     JOIN profile p ON p.user_id=b.blocked_id WHERE b.blocker_id=$1 ORDER BY p.username`,
       [viewer],

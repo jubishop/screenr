@@ -103,8 +103,13 @@
   min-width: 0;
 }
 .activity-by {
+  --avatar-size: 24px;
   font-size: 12px;
   margin-bottom: 5px;
+}
+.activity-by .avatar {
+  margin-right: 6px;
+  vertical-align: middle;
 }
 .activity-by a {
   font-weight: 600;
@@ -137,8 +142,17 @@
 .comment-heading {
   display: flex;
   justify-content: space-between;
+  align-items: center;
   gap: 12px;
   font-size: 12px;
+}
+.comment-author {
+  --avatar-size: 24px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 .comment-heading + .small {
   margin: 5px 0;

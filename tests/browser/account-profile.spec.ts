@@ -222,7 +222,7 @@ test("account profile editing saves both names, preserves drafts, and updates pr
     .getByRole("link", { name: "Renée Movie Fan 🎬 @account_new", exact: true })
     .click();
   await expect(
-    friend.getByRole("button", { name: "Unfriend", exact: true }),
+    friend.getByRole("link", { name: "Watch together", exact: true }),
   ).toBeVisible();
   await expect(
     friend.getByRole("button", { name: "Edit profile", exact: true }),
@@ -360,7 +360,7 @@ test("profile display name editing preserves drafts, saves, and updates existing
   await expect(owner.locator(".sidebar-bottom")).toContainText(
     "Renée Movie Fan 🎬",
   );
-  await expect(owner.locator(".avatar")).toHaveText("R");
+  await expect(owner.locator(".sidebar-bottom .avatar")).toHaveText("R");
   await expect(owner.locator(".activity-by")).toContainText(
     "Renée Movie Fan 🎬",
   );
@@ -386,7 +386,7 @@ test("profile display name editing preserves drafts, saves, and updates existing
     friend.getByRole("heading", { name: "Renée Movie Fan 🎬", exact: true }),
   ).toBeVisible();
   await expect(
-    friend.getByRole("button", { name: "Unfriend", exact: true }),
+    friend.getByRole("link", { name: "Watch together", exact: true }),
   ).toBeVisible();
   await expect(friend.locator(".activity-by")).toContainText(
     "Renée Movie Fan 🎬",

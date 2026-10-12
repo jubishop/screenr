@@ -338,11 +338,11 @@ test("a signed-out pending member can finish with one visit to a replacement inv
   expect(screen.invitations).toEqual([]);
   await pending.goto("/people/replacementowner");
   await expect(
-    pending.getByRole("button", { name: "Unfriend", exact: true }),
+    pending.getByRole("link", { name: "Watch together", exact: true }),
   ).toBeVisible();
   await owner.goto("/people/replacementpending");
   await expect(
-    owner.getByRole("button", { name: "Unfriend", exact: true }),
+    owner.getByRole("link", { name: "Watch together", exact: true }),
   ).toBeVisible();
   await owner.context().close();
   await pending.context().close();

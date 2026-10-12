@@ -18,8 +18,11 @@ test flow, and [Testing Screenr](docs/testing.md) for the automated suites.
   invitation links, which show rich previews in messaging apps.
 - **Friends:** Members find people by profile link or exact username, through
   People you may know with named mutual friends, and through friend lists on
-  profiles. They can send, accept, and decline requests, unfriend, block, and
-  unblock. Current friendship and blocking rules decide what each person sees.
+  profiles. The Friends page groups requests, friends, sent requests,
+  suggestions, and blocked people. Members accept and decline requests there
+  or in notifications. A profile's More actions menu holds Unfriend and Block,
+  each with an in-page confirmation. Current friendship and blocking rules
+  decide what each person sees. Avatars mark every person.
 - **Titles:** Find a title searches the TMDB catalog and suggests titles from
   friends' Recommend and Want to watch choices, with anonymous counts once
   at least three friends of friends share a choice. Title pages show details,

@@ -1,7 +1,7 @@
 import { expect } from "@playwright/test";
 import { browserConfig } from "../../scripts/browser-config";
 import { test, monitorErrors } from "./monitored-test";
-import { befriend } from "./journey-helpers";
+import { befriend, confirmProfileAction } from "./journey-helpers";
 
 test("profile friends support discovery and refresh accepted friendships and blocks", async ({
   member,
@@ -26,7 +26,7 @@ test("profile friends support discovery and refresh accepted friendships and blo
     owner
       .getByRole("region", { name: "Friends", exact: true })
       .getByRole("link"),
-  ).toHaveText(`${displayName} @circlefriend`);
+  ).toHaveAccessibleName(`${displayName} @circlefriend`);
 
   await viewer.goto("/people/circleowner");
   await viewer.getByText("Friends (1)", { exact: true }).click();
@@ -70,7 +70,7 @@ test("profile friends support discovery and refresh accepted friendships and blo
   ).toBeVisible();
 
   await friend.goto("/people/circleowner");
-  await friend.getByRole("button", { name: "Unfriend", exact: true }).click();
+  await confirmProfileAction(friend, "Unfriend");
   await expect(viewer.getByText("Friends (0)", { exact: true })).toBeVisible();
   await expect(list.getByRole("link")).toHaveCount(0);
   await expect(list.getByText("No friends to show yet.")).toBeVisible();
@@ -78,11 +78,11 @@ test("profile friends support discovery and refresh accepted friendships and blo
   await befriend(owner, friend, "circlefriend", "circleowner");
   await expect(list.getByRole("link")).toHaveCount(1);
   await friend.goto("/people/circleviewer");
-  await friend.getByRole("button", { name: "Block", exact: true }).click();
+  await confirmProfileAction(friend, "Block");
   await expect(list.getByRole("link")).toHaveCount(0);
 
   await owner.goto("/people/circleviewer");
-  await owner.getByRole("button", { name: "Block", exact: true }).click();
+  await confirmProfileAction(owner, "Block");
   await expect(
     viewer.getByRole("alert").filter({ hasText: "Person not found." }),
   ).toBeVisible();

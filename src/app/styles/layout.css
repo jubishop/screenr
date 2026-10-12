@@ -23,6 +23,15 @@
   justify-content: space-between;
   gap: 8px;
 }
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+/* Desktop keeps the profile link at the bottom of the sidebar. */
+.header-profile {
+  display: none;
+}
 .main-nav {
   display: grid;
   gap: 8px;
@@ -142,6 +151,16 @@
   }
   .sidebar-bottom {
     display: none;
+  }
+  .header-profile {
+    display: grid;
+    place-items: center;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+  }
+  .header-profile:focus-visible {
+    outline-offset: 0;
   }
   .main-nav {
     position: fixed;

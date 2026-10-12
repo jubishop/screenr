@@ -5,6 +5,7 @@ import type { Comment, Person, Thread } from "../shared";
 import { api, useInteractive, dateLabel } from "./client";
 import { preservePosition } from "./position";
 import { Reactions } from "./reactions";
+import { Avatar } from "./avatar";
 import {
   CommentComposer,
   type CommentDraft as Draft,
@@ -216,34 +217,47 @@ export function ThreadView({
     );
   }
   function renderComment(comment: Comment) {
+    // Comments without an available author show a neutral placeholder.
+    const author =
+      !comment.unavailable && comment.author_id
+        ? {
+            user_id: comment.author_id,
+            display_name: comment.display_name ?? "",
+          }
+        : null;
     return (
       <article
         className="comment"
         data-comment-id={comment.id}
         id={`comment-${comment.id}`}
       >
-        {!comment.unavailable && (
-          <div className="comment-heading">
-            <Link href={`/people/${comment.username}`} prefetch={false}>
-              <strong>{comment.display_name}</strong>{" "}
-              <span className="muted">@{comment.username}</span>
-            </Link>
+        <div className="comment-heading">
+          <span className="comment-author">
+            <Avatar person={author} />
+            {author ? (
+              <Link href={`/people/${comment.username}`} prefetch={false}>
+                <strong>{comment.display_name}</strong>{" "}
+                <span className="muted">@{comment.username}</span>
+              </Link>
+            ) : (
+              <span className="muted">Comment unavailable</span>
+            )}
+          </span>
+          {!comment.unavailable && (
             <time className="small muted" dateTime={comment.created_at}>
               {dateLabel(comment.created_at, interactive, {
                 month: "short",
                 day: "numeric",
               })}
             </time>
-          </div>
-        )}
+          )}
+        </div>
         {!comment.unavailable && comment.addressed_username && (
           <p className="small muted">
             Replying to @{comment.addressed_username}
           </p>
         )}
-        {comment.unavailable ? (
-          <p className="muted">Comment unavailable</p>
-        ) : comment.removed ? (
+        {comment.unavailable ? null : comment.removed ? (
           <p className="muted">Comment removed</p>
         ) : comment.spoiler && !revealed.has(comment.id) ? (
           <button
