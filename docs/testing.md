@@ -350,6 +350,32 @@ Cloudflare certificates, or real provider configuration.
 The browser test writes mobile and desktop screenshots to `.cache/` and
 keeps failure traces in `test-results/`.
 
+### Line and branch coverage
+
+Measure how much of `src/` the application tests exercise:
+
+```sh
+npm run test:coverage
+npm run test:coverage -- tests/app/catalog.test.ts
+```
+
+The command prepares the test database like `npm test`, honors
+`TEST_DATABASE_URL`, and runs every application test serially, or only the
+named files. Node's built-in test coverage then prints line, branch, and
+function percentages and uncovered line numbers for each `src/` file those
+tests load. A failing test fails the command. It sets no thresholds and is
+opt-in: `bin/check --full` and CI do not run it. Use it to find untested paths
+before writing tests. `tests/app/test-coverage.test.ts` covers its scope and
+exit status; [#156](https://github.com/jubishop/screenr/issues/156) added it.
+
+The report reflects application tests only. Files that no application test
+loads, such as pages and most components that the browser suite exercises,
+do not appear. Browser runs and `scripts/` are not measured. Source maps
+translate tsx's compiled output back to TypeScript lines, so the uncovered
+column can also list a few nonexecutable lines, such as leading comments,
+imports, or exported function declarations. Check listed lines against the
+source.
+
 ## Failed script loads
 
 The shared fixture in `scripts/browser-test.ts` monitors essential local script

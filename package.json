@@ -18,6 +18,7 @@
     "build": "next build",
     "typecheck": "tsc --noEmit",
     "test": "tsx scripts/test-database.ts && tsx --test --test-concurrency=1 tests/app/*.test.ts",
+    "test:coverage": "tsx scripts/test-database.ts && tsx scripts/test-coverage.ts",
     "db:migrate": "tsx --env-file=.env scripts/migrate.ts",
     "bootstrap": "tsx --env-file=.env scripts/bootstrap.ts",
     "test:browser": "SCREENR_BROWSER_MODE=production playwright test",
