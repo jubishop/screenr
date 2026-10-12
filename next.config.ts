@@ -16,6 +16,13 @@ const config: NextConfig = {
       },
     ];
   },
+  // Some clients request Apple's conventional icon paths without reading the
+  // page. Serve the app/apple-icon.png image instead of the member route.
+  async rewrites() {
+    return ["/apple-touch-icon.png", "/apple-touch-icon-precomposed.png"].map(
+      (source) => ({ source, destination: "/apple-icon.png" }),
+    );
+  },
   images: {
     remotePatterns: [
       { protocol: "https", hostname: "image.tmdb.org", pathname: "/t/p/**" },

@@ -335,6 +335,10 @@ iOS home screen, and Android, including a maskable version that keeps the
 mark inside the safe zone. The user chose this over a lime dot alone and over
 a green "s" on cream.
 
+**Implementation note:** [Issue #145](https://github.com/jubishop/screenr/issues/145)
+added the manifest, icons, and offline page; see
+[installation and offline page](running-screenr.md#installation-and-offline-page).
+
 ### Interface design — 2026-10-12
 
 The [interface design decisions](interface-design.md) define the layout and

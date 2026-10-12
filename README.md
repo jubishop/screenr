@@ -38,6 +38,9 @@ test flow.
   acceptances, comments, and replies, with optional activity email. Account
   settings edit the display name and username, connect Google, and save
   streaming services.
+- **Home screen:** Members can add Screenr to a phone's home screen and open
+  it as a standalone app. Offline page loads show a plain offline page; there
+  is no offline content.
 
 ## Not built yet
 
@@ -75,12 +78,13 @@ in Cloudflare R2. See the [application stack](docs/application-stack.md) and
 
 | Path | Contents |
 | --- | --- |
-| `src/app/` | Next.js routes: sign-in, profile setup, invitation links, credits, member screens, API handlers, and stylesheets |
+| `src/app/` | Next.js routes: sign-in, profile setup, invitation links, credits, member screens, API handlers, app icons, the web manifest, and stylesheets |
 | `src/components/` | React views and controls for feeds, titles, people, invitations, notifications, and account settings |
 | `src/server/` | Server-only domain code: authentication, access rules, social reads and writes, invitations, catalog and availability, suggestions, notifications, and email |
 | `src/shared.ts`, `src/viewing.ts`, `src/member-routes.ts` | Types, helpers, and the member route parser shared by browser and server code |
+| `public/` | Static files: the TMDB logo, manifest icons, and the offline-page service worker |
 | `db/` | Numbered SQL migrations |
-| `scripts/` | Migration, bootstrap invitation, email worker, release packaging, and browser-test harness commands |
+| `scripts/` | Migration, bootstrap invitation, email worker, release packaging, icon generation, and browser-test harness commands |
 | `tests/` | Application and PostgreSQL tests in `app/`, Playwright suites in `browser/`, and Python tests for operations and check scripts |
 | `ops/` | VPS provisioning, release activation, systemd units, Caddy and PostgreSQL configuration, backups, restore checks, and failure alerts |
 | `bin/` | Repository setup, checks, knowledge search, deployment helpers, and Git hooks |
