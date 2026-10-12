@@ -293,8 +293,14 @@ recipients. A full run checks:
   while the host retains visibility.
 - The profile's More actions menu opens and moves by keyboard, closes on
   Escape, focus loss, or an outside click, and Unfriend and Block need the
-  in-page confirmation. Pending friend-request notifications accept, or
-  decline after confirmation, by keyboard.
+  in-page confirmation. A confirmed Block opens the Friends page with a
+  focused, dismissible notice and never reloads the hidden profile. Pending
+  friend-request notifications accept, or decline after confirmation, by
+  keyboard.
+- Delete and Remove on comments, Decline on the Friends page, and Revoke
+  invitation open the in-page confirmation, by keyboard and pointer at phone
+  and desktop widths. Cancel keeps the item and returns focus; no browser
+  dialog opens and no write is sent until the action is confirmed.
 - The Friends page orders its relationship sections and keeps row actions on
   the person's line at phone and desktop widths. Avatars keep their color
   after a rename and show a whole emoji initial.

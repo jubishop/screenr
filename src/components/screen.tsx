@@ -1,5 +1,6 @@
 "use client";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ScreenData } from "../server/screens";
 import type { Person, SaveSurface, WatchStatus } from "../shared";
@@ -16,6 +17,7 @@ import { PeopleView } from "./people-view";
 import { ProfileView } from "./profile-view";
 import { TitleView } from "./title-view";
 import { Notifications } from "./notifications";
+import { leaveNotice } from "./page-notice";
 
 // The phone bottom bar shows the short labels; the sidebar shows full names.
 const sections: {
@@ -55,8 +57,12 @@ export function Screen({
   const [data, setData] = useState(initialData),
     [loadError, setLoadError] = useState(initialError),
     [busy, setBusy] = useState(false);
+  const router = useRouter();
   const pending = useRef<AbortController | null>(null);
+  // Set while a write makes this page unreadable, so no refresh reads it.
+  const leaving = useRef(false);
   const refresh = useCallback(async () => {
+    if (leaving.current) return;
     pending.current?.abort();
     const controller = new AbortController();
     const timeout = AbortSignal.timeout(10_000);
@@ -123,6 +129,23 @@ export function Screen({
   }
   async function relationship(target: string, action: string) {
     await mutate("relationship", { target, action });
+  }
+  // Blocking hides the profile, so a confirmed Block opens Friends with its
+  // result instead of refreshing a page that no longer loads. The page stays
+  // busy until it changes.
+  async function block(person: Person) {
+    leaving.current = true;
+    pending.current?.abort();
+    setBusy(true);
+    try {
+      await api("relationship", { target: person.user_id, action: "block" });
+    } catch (error) {
+      leaving.current = false;
+      setBusy(false);
+      throw error;
+    }
+    leaveNotice("/people", `You blocked ${person.display_name}.`);
+    router.push("/people");
   }
   async function saveDisplayName(name: string) {
     pending.current?.abort();
@@ -288,6 +311,7 @@ export function Screen({
             ownProfile={ownProfile}
             busy={busy}
             relationship={relationship}
+            block={block}
             saveDisplayName={saveDisplayName}
           />
         )}

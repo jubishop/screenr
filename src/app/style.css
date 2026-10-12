@@ -337,6 +337,32 @@ hr {
   flex-wrap: wrap;
   gap: 10px;
 }
+/* A dismissible result beneath a page heading, such as after Block. */
+.page-notice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0 16px;
+  max-width: 650px;
+  margin-bottom: 24px;
+  padding: 6px 8px 6px 16px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--white);
+}
+.page-notice p {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  padding: 6px 0;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.page-notice button {
+  min-height: 44px;
+  padding: 0 8px;
+}
 .checkbox {
   display: flex;
   gap: 8px;

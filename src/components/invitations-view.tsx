@@ -1,12 +1,13 @@
 "use client";
 import Link from "next/link";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import type { ScreenData } from "../server/screens";
 import type { Person } from "../shared";
 import { dateLabel, useInteractive } from "./client";
 import { InvitationLink } from "./invitation-link";
 import { useActionError } from "./action-error";
 import { ActionButton } from "./action-button";
+import { ConfirmAction } from "./confirmation";
 
 type Invitation = Extract<
   ScreenData,
@@ -99,24 +100,36 @@ function InvitationCard({
   revoke: () => Promise<unknown>;
 }) {
   const interactive = useInteractive();
-  const failure = useActionError();
+  const [confirming, setConfirming] = useState(false);
+  const trigger = useRef<HTMLButtonElement>(null);
   return (
     <article className="invite-card">
       <div className="section-heading">
         <strong>
           {invite.uses} of {invite.max_uses} signups
         </strong>
-        <ActionButton
+        <button
           className="text-button"
+          ref={trigger}
           disabled={disabled}
-          unavailable={busy}
-          aria-describedby={failure.describedBy("revoke")}
-          onClick={() => void failure.run("revoke", revoke)}
+          onClick={() => setConfirming(true)}
         >
           Revoke
-        </ActionButton>
+        </button>
       </div>
-      {failure.alert}
+      {confirming && (
+        <ConfirmAction
+          message="Revoke this invitation? Its link will stop working."
+          action="Revoke"
+          busy={busy}
+          run={revoke}
+          onDone={() => setConfirming(false)}
+          onCancel={() => {
+            setConfirming(false);
+            trigger.current?.focus();
+          }}
+        />
+      )}
       <p className="small muted">
         Expires {dateLabel(invite.expires_at, interactive)}
       </p>

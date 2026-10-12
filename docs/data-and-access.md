@@ -113,7 +113,9 @@ keyboard focus stays on the pressed control
 `src/components/action-button.tsx` is the shared button; `disabled` remains
 only before hydration. Focus stays there after the write, or moves to the
 control that replaced it: Watch together after accepting on a profile, the
-notification's result, or More actions after a confirmation closes. Where a
+notification's result, More actions after a profile confirmation closes, or
+the Friends page notice after Block. Cancel in a confirmation returns focus to
+the action that opened it. Where a
 successful write removes its button, such as Delete,
 [issue #191](https://github.com/jubishop/screenr/issues/191) tracks where
 focus goes. Proxy error pages, empty bodies, and other
@@ -122,8 +124,8 @@ parser errors. A failed write shows its message as an alert beneath the
 control that started it, in the same entry, comment, person row, invitation,
 or settings card, and the message describes that control
 ([issue #141](https://github.com/jubishop/screenr/issues/141)). Refreshes
-keep it, and the next action in that place replaces it. A failed Unfriend or
-Block keeps its confirmation open with the message until Cancel. Only refresh
+keep it, and the next action in that place replaces it. A failed confirmed
+action keeps its confirmation open with the message until Cancel. Only refresh
 failures appear at the top of the page. Access changes clear content on the
 next refresh without waiting for the New activity button. Previously
 delivered content cannot be retracted from a user's device.
@@ -132,7 +134,9 @@ delivered content cannot be retracted from a user's device.
 
 Members can **Delete** their own comments in any feed where the conversation
 is accessible. Conversation hosts can also **Remove** other participants'
-comments. Both actions erase the stored text and show a **Comment removed**
+comments. Both actions ask for an
+[in-page confirmation](interface-design.md#confirm-other-destructive-actions--2026-10-12),
+then erase the stored text and show a **Comment removed**
 placeholder, preserving replies and their addressed-person context. The server
 checks ownership and current conversation access on every removal request.
 Standalone comment authors can also **Delete** the top-level entry. Its text

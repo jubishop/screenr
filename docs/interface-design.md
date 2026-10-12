@@ -433,8 +433,8 @@ layout problems.
 **Implementation note:** [Issue #170](https://github.com/jubishop/screenr/issues/170)
 shows People you may know with its empty state at every count. Blocked rows
 show the name without a profile link, since blocking hides the profile.
-Decline on this page still acts on one tap until
-[#132](https://github.com/jubishop/screenr/issues/132) adds its confirmation.
+[Issue #132](https://github.com/jubishop/screenr/issues/132) added the
+Decline confirmation and the notice that Block leaves on this page.
 
 ### Profile actions menu with confirmation — 2026-10-12
 
@@ -475,8 +475,14 @@ menu and focus an item; arrow keys, Home, and End move between items.
 `src/components/confirmation.tsx` is the shared confirmation. Cancel takes
 focus when it opens, so the reader hears the question and Enter changes
 nothing. The Block message adds "This ends your friendship." or "This
-removes the pending friend request." when either applies. Until #132 ships,
-a confirmed Block leaves the profile showing "Person not found.".
+removes the pending friend request." when either applies.
+
+**Implementation note:** A confirmed Block stays open and busy until the
+Friends page replaces the profile, and the profile stops refreshing once the
+request starts ([issue #132](https://github.com/jubishop/screenr/issues/132)).
+`src/components/page-notice.tsx` carries the notice through that client
+navigation only, so a reload or later visit omits it. The notice sits beneath
+the Friends heading and takes focus. Dismiss moves focus to the heading.
 
 ### Confirm other destructive actions — 2026-10-12
 
@@ -500,6 +506,17 @@ destructive action.
 **Rejected alternatives:** An undo window would need delayed deletion or
 restore support on the server. Leaving Decline as a single tap would make the
 pattern inconsistent.
+
+**Implementation note:** `ConfirmAction` in `src/components/confirmation.tsx`
+runs the confirmed action and keeps a failure's message in the confirmation
+([issue #132](https://github.com/jubishop/screenr/issues/132)). Each
+confirmation opens beneath its action's line, in the comment, entry, Friends
+row, or invitation card, while the action stays in place. Cancel returns
+focus to that action. Remove asks "Remove this comment? Its text will be
+erased.", Decline uses the notification's question, and Revoke asks "Revoke
+this invitation? Its link will stop working." Where focus goes after a
+confirmed action removes its control is tracked in
+[issue #191](https://github.com/jubishop/screenr/issues/191).
 
 ### Interface polish — 2026-10-12
 

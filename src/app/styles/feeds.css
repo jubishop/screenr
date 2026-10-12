@@ -128,7 +128,8 @@
 .activity-content > :last-child {
   margin-bottom: 0;
 }
-.activity-card > .error {
+.activity-card > .error,
+.activity-card > .confirmation {
   margin: 12px 0 0;
 }
 /* Compact title page entries: the author line ends with the copy link. The

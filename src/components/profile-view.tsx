@@ -7,7 +7,7 @@ import { useInteractive } from "./client";
 import { DisplayNameEditor } from "./display-name-editor";
 import { Avatar } from "./avatar";
 import { Icon } from "./icons";
-import { Confirmation } from "./confirmation";
+import { ConfirmAction } from "./confirmation";
 import { useActionError } from "./action-error";
 import { ActionButton } from "./action-button";
 
@@ -20,6 +20,7 @@ export function ProfileView({
   ownProfile,
   busy,
   relationship,
+  block,
   saveDisplayName,
 }: {
   data: Extract<ScreenData, { kind: "profile" }> | null;
@@ -27,6 +28,7 @@ export function ProfileView({
   ownProfile: boolean;
   busy: boolean;
   relationship: (target: string, action: string) => Promise<void>;
+  block: (person: Person) => Promise<void>;
   saveDisplayName: (name: string) => Promise<void>;
 }) {
   return (
@@ -56,6 +58,7 @@ export function ProfileView({
               user={user}
               busy={busy}
               relationship={relationship}
+              block={block}
             />
           )}
         </div>
@@ -97,17 +100,20 @@ export function ProfileView({
 }
 
 // Watch together and friend-request actions stay visible. Unfriend and Block
-// sit in More actions, and each needs an in-page confirmation.
+// sit in More actions, and each needs an in-page confirmation. A confirmed
+// Block opens the Friends page.
 function ProfileActions({
   profile,
   user,
   busy,
   relationship,
+  block,
 }: {
   profile: Profile;
   user: Person;
   busy: boolean;
   relationship: (target: string, action: string) => Promise<void>;
+  block: (person: Person) => Promise<void>;
 }) {
   const interactive = useInteractive();
   const row = useRef<HTMLDivElement>(null);
@@ -120,7 +126,6 @@ function ProfileActions({
   // The visible actions share one message beneath their row. The open
   // confirmation keeps its own until it closes.
   const failure = useActionError();
-  const guarded = useActionError();
   // Pending actions keep focus. Once a focused action finishes, focus moves
   // to the control that replaced it, such as Watch together after Accept.
   // It returns to More actions when a confirmation closes.
@@ -143,19 +148,9 @@ function ProfileActions({
       void failure.run(action, () => relationship(profile.user_id, action));
     },
   });
-  function choose(value: Guarded | null) {
-    guarded.clear();
-    setChoice(value);
-  }
   function close() {
     restoreFocus.current = "more";
-    choose(null);
-  }
-  async function confirm() {
-    if (!confirming) return;
-    const action = confirming;
-    if (await guarded.run(action, () => relationship(profile.user_id, action)))
-      close();
+    setChoice(null);
   }
   const blockEffect = profile.accepted_at
     ? "This ends your friendship. "
@@ -197,26 +192,32 @@ function ProfileActions({
               : []),
             { label: "Block", value: "block" as const },
           ]}
-          onSelect={choose}
+          onSelect={setChoice}
         />
       </div>
       {failure.alert}
-      {confirming && (
-        <Confirmation
-          key={confirming}
-          message={
-            confirming === "remove"
-              ? `Unfriend ${name}? You’ll both lose access to each other’s posts and discussions.`
-              : `Block ${name}? ${blockEffect}You won’t see each other’s profiles, posts, or comments, and neither of you can send a friend request until you unblock them.`
-          }
-          action={confirming === "remove" ? "Unfriend" : "Block"}
+      {confirming === "remove" && (
+        <ConfirmAction
+          key="remove"
+          message={`Unfriend ${name}? You’ll both lose access to each other’s posts and discussions.`}
+          action="Unfriend"
           busy={busy}
-          onConfirm={() => void confirm()}
+          run={() => relationship(profile.user_id, "remove")}
+          onDone={close}
           onCancel={close}
-          describedBy={guarded.describedBy(confirming)}
-        >
-          {guarded.alert}
-        </Confirmation>
+        />
+      )}
+      {/* Block stays open, busy, until the Friends page replaces it. */}
+      {confirming === "block" && (
+        <ConfirmAction
+          key="block"
+          message={`Block ${name}? ${blockEffect}You won’t see each other’s profiles, posts, or comments, and neither of you can send a friend request until you unblock them.`}
+          action="Block"
+          busy={busy}
+          run={() => block(profile)}
+          onDone={() => {}}
+          onCancel={close}
+        />
       )}
     </>
   );

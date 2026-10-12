@@ -248,11 +248,10 @@ test("the profile More actions menu works by keyboard and pointer and confirms U
   await confirmBlock
     .getByRole("button", { name: "Block", exact: true })
     .click();
-  // #132 opens the Friends page after Block; the profile no longer loads.
+  await expect(viewer).toHaveURL(/\/people$/);
   await expect(
-    viewer.getByRole("alert").filter({ hasText: "Person not found." }),
-  ).toBeVisible();
-  await viewer.goto("/people");
+    viewer.getByText("You blocked Maya Chen.", { exact: true }),
+  ).toBeFocused();
   const blockedRow = region(viewer, "Blocked people").getByRole("article");
   await expect(blockedRow).toContainText("Maya Chen");
   await blockedRow
@@ -260,6 +259,93 @@ test("the profile More actions menu works by keyboard and pointer and confirms U
     .click();
   await expect(region(viewer, "Blocked people")).toHaveCount(0);
   expect(dialogs).toEqual([]);
+});
+
+test("a confirmed Block opens the Friends page with a dismissible notice", async ({
+  member,
+}) => {
+  const viewer = await member("noticeviewer");
+  // After Block, the page never reads the hidden profile again.
+  let blocking = false;
+  const hidden: string[] = [];
+  viewer.on("response", (response) => {
+    if (blocking && response.status() === 404) hidden.push(response.url());
+  });
+  for (const [index, [width, name]] of (
+    [
+      [390, "Maya Chen"],
+      [1366, "Noor Patel"],
+    ] as const
+  ).entries()) {
+    const username = `noticeblocked${index}`;
+    const other = await member(username, { displayName: name });
+    await prepareFriendship(viewer, other);
+    await viewer.setViewportSize({ width, height: 844 });
+    await viewer.goto(`/people/${username}`);
+    // Keyboard: More actions, End reaches Block, Shift+Tab reaches its action.
+    await viewer
+      .getByRole("button", { name: `More actions for ${name}`, exact: true })
+      .focus();
+    await viewer.keyboard.press("Enter");
+    await viewer.keyboard.press("End");
+    await viewer.keyboard.press("Enter");
+    await expect(
+      viewer.getByRole("group", { name: new RegExp(`^Block ${name}\\?`) }),
+    ).toBeVisible();
+    await viewer.keyboard.press("Shift+Tab");
+    blocking = true;
+    await viewer.keyboard.press("Enter");
+
+    // The Friends page opens with the notice focused and the person blocked.
+    await expect(viewer).toHaveURL(/\/people$/);
+    const notice = viewer.getByText(`You blocked ${name}.`, { exact: true });
+    await expect(notice).toBeFocused();
+    await expect(
+      viewer.getByRole("heading", { level: 1, name: "Friends" }),
+    ).toBeVisible();
+    const blocked = region(viewer, "Blocked people")
+      .getByRole("article")
+      .filter({ hasText: name });
+    await expect(
+      blocked.getByRole("button", { name: "Unblock", exact: true }),
+    ).toBeVisible();
+    await expect(viewer.getByRole("main").getByRole("alert")).toHaveCount(0);
+    expect(hidden).toEqual([]);
+    blocking = false;
+    // The notice fits beneath the page heading and survives a refresh.
+    const noticeBox = await box(notice);
+    expect(noticeBox.x + noticeBox.width).toBeLessThanOrEqual(width);
+    expect(noticeBox.y).toBeGreaterThan(
+      (await box(viewer.getByRole("heading", { level: 1 }))).y,
+    );
+    expect(
+      await viewer.evaluate(() => document.documentElement.scrollWidth),
+    ).toBe(width);
+    await viewer.screenshot({ path: `.cache/block-notice-${width}.png` });
+    await viewer.evaluate(() => window.dispatchEvent(new Event("focus")));
+    await expect(notice).toBeVisible();
+
+    // Dismiss removes the notice and leaves focus on the page heading.
+    await viewer.keyboard.press("Tab");
+    const dismiss = viewer.getByRole("button", {
+      name: "Dismiss",
+      exact: true,
+    });
+    await expect(dismiss).toBeFocused();
+    await viewer.keyboard.press("Enter");
+    await expect(notice).toHaveCount(0);
+    await expect(dismiss).toHaveCount(0);
+    await expect(
+      viewer.getByRole("heading", { level: 1, name: "Friends" }),
+    ).toBeFocused();
+    await expect(blocked).toBeVisible();
+  }
+  // The notice shows once; reloading the Friends page omits it.
+  await viewer.reload();
+  await expect(
+    region(viewer, "Blocked people").getByRole("article"),
+  ).toHaveCount(2);
+  await expect(viewer.getByText(/^You blocked /)).toHaveCount(0);
 });
 
 test("a failed Friends page action shows its error on that person's row", async ({

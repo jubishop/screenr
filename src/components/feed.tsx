@@ -14,6 +14,7 @@ import { ActivityTime } from "./activity-time";
 import { titleDetails } from "./title-card";
 import { ActionButton } from "./action-button";
 import { progressPhrase, statusLabels } from "./watch-status";
+import { ConfirmAction } from "./confirmation";
 
 type Known = Map<string, { activity: string; comments: Set<string> }>;
 function capture(items: FeedItem[]): Known {
@@ -237,20 +238,12 @@ function FeedEntry({
   }, [shown, item]);
   const [copying, setCopying] = useState(false);
   const [copyMessage, setCopyMessage] = useState("");
-  const [deleting, setDeleting] = useState(false);
+  // Delete waits for its confirmation beneath the entry's action line.
+  const [confirming, setConfirming] = useState(false);
+  const deleteButton = useRef<HTMLButtonElement>(null);
   // The title actions share one message beneath the entry's action line.
   const failure = useActionError();
   const titleURL = item ? `/titles/${item.title_id.replace(":", "/")}` : "";
-
-  async function deleteComment() {
-    if (!item || deleting) return;
-    setDeleting(true);
-    await failure.run("delete", async () => {
-      await api("remove-comment", { id: item.id });
-      await refresh();
-    });
-    setDeleting(false);
-  }
 
   async function copyDiscussion() {
     if (!item || copying) return;
@@ -295,16 +288,15 @@ function FeedEntry({
   const titleActions = item && (!compact || canDelete) && (
     <div className="title-actions">
       {canDelete && (
-        <ActionButton
+        <button
           type="button"
           className="text-button muted"
+          ref={deleteButton}
           disabled={!interactive}
-          unavailable={busy || deleting}
-          aria-describedby={failure.describedBy("delete")}
-          onClick={() => void deleteComment()}
+          onClick={() => setConfirming(true)}
         >
-          {deleting ? "Deleting…" : "Delete"}
-        </ActionButton>
+          Delete
+        </button>
       )}
       {!compact && item.owner_id !== user.user_id && (
         <>
@@ -466,6 +458,21 @@ function FeedEntry({
             titleActions && <div className="item-actions">{titleActions}</div>
           )}
           {failure.alert}
+          {canDelete && confirming && (
+            <ConfirmAction
+              message="Delete this comment? Its text will be erased."
+              action="Delete"
+              run={async () => {
+                await api("remove-comment", { id: item.id });
+                await refresh();
+              }}
+              onDone={() => setConfirming(false)}
+              onCancel={() => {
+                setConfirming(false);
+                deleteButton.current?.focus();
+              }}
+            />
+          )}
         </header>
       )}
       <ThreadView

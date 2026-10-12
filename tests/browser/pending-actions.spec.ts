@@ -127,15 +127,21 @@ test("feed entry and title actions keep keyboard focus while their writes are pe
   await expect(pending.pressed).toBeFocused();
   expect(pending.requests()).toBe(1);
 
-  // Delete keeps focus while pending and after a failure, with its message.
+  // A confirmed Delete keeps focus while pending and after a failure, with
+  // its message in the confirmation.
   const mine = reader.locator(`[data-item-heading="${own}"]`);
-  const remove = mine.getByRole("button", { name: /^(Delete|Deleting…)$/ });
-  const message = "Removal unavailable.";
-  pending = await pressWhilePending(reader, remove, "remove-comment", {
-    fail: message,
+  await mine.getByRole("button", { name: "Delete", exact: true }).click();
+  const confirmation = mine.getByRole("group", {
+    name: /^Delete this comment\?/,
   });
-  await expect(mine.getByRole("alert")).toHaveText(message);
-  await expect(remove).toHaveText("Delete");
+  const message = "Removal unavailable.";
+  pending = await pressWhilePending(
+    reader,
+    confirmation.getByRole("button", { name: "Delete", exact: true }),
+    "remove-comment",
+    { fail: message, screenshot: "pending-confirm-delete" },
+  );
+  await expect(confirmation.getByRole("alert")).toHaveText(message);
   await expect(pending.pressed).toBeFocused();
   await expect(pending.pressed).toHaveAccessibleDescription(message);
   expect(pending.requests()).toBe(1);

@@ -2,6 +2,7 @@ import { expect, type Page } from "@playwright/test";
 import { browserConfig } from "../../scripts/browser-config";
 import { test } from "./monitored-test";
 import { prepareFriendship } from "./member-fixture";
+import { confirmAction } from "./journey-helpers";
 
 test("standalone title comments persist and share replies across all three mobile feeds", async ({
   member,
@@ -285,6 +286,10 @@ test("standalone deletion preserves discussions across feeds, keeps spoilers hid
       exact: true,
     });
     await expect(button).toBeVisible();
+    const confirmDelete = heading(owner, id)
+      .getByRole("group", { name: /^Delete / })
+      .getByRole("button", { name: "Delete", exact: true });
+    await button.click();
     if (index === 0) {
       await owner.route(
         "**/api/screenr/remove-comment",
@@ -295,7 +300,7 @@ test("standalone deletion preserves discussions across feeds, keeps spoilers hid
           }),
         { times: 1 },
       );
-      await button.click();
+      await confirmDelete.click();
       await expect(heading(owner, id).getByRole("alert")).toHaveText(
         "Deletion failed. Please try again.",
       );
@@ -303,7 +308,7 @@ test("standalone deletion preserves discussions across feeds, keeps spoilers hid
         heading(owner, id).getByText(body, { exact: true }),
       ).toBeVisible();
     }
-    await button.click();
+    await confirmDelete.click();
     for (const page of [owner, reader]) {
       await expect(
         heading(page, id).getByText("Comment removed", { exact: true }),
@@ -342,10 +347,10 @@ test("standalone deletion preserves discussions across feeds, keeps spoilers hid
         await owner.evaluate(() => document.documentElement.scrollWidth),
       ).toBe(390);
     } else {
-      await item(reader, id)
-        .locator(`[data-comment-id="${replyId}"]`)
-        .getByRole("button", { name: "Delete", exact: true })
-        .click();
+      await confirmAction(
+        item(reader, id).locator(`[data-comment-id="${replyId}"]`),
+        "Delete",
+      );
       await expect(item(reader, id)).toHaveCount(0);
       await expect(item(owner, id)).toHaveCount(0);
     }
@@ -354,9 +359,7 @@ test("standalone deletion preserves discussions across feeds, keeps spoilers hid
   await reply(spoilerId, "Still protected by the discussion spoiler");
   for (const page of [owner, reader])
     await page.goto(`/titles/tv/987654?item=${spoilerId}`);
-  await heading(owner, spoilerId)
-    .getByRole("button", { name: "Delete", exact: true })
-    .click();
+  await confirmAction(heading(owner, spoilerId), "Delete");
   await expect(
     heading(reader, spoilerId).getByText("Comment removed", { exact: true }),
   ).toBeVisible();
@@ -389,9 +392,7 @@ test("standalone deletion preserves discussions across feeds, keeps spoilers hid
   const emptyId = await create("Remove this empty entry");
   for (const page of [owner, reader])
     await page.goto(`/titles/tv/987654?item=${emptyId}`);
-  await heading(owner, emptyId)
-    .getByRole("button", { name: "Delete", exact: true })
-    .click();
+  await confirmAction(heading(owner, emptyId), "Delete");
   for (const page of [owner, reader]) {
     await expect(item(page, emptyId)).toHaveCount(0);
     await expect(

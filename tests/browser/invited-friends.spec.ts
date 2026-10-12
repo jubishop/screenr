@@ -1,7 +1,12 @@
 import { expect, type Page } from "@playwright/test";
 import { browserConfig } from "../../scripts/browser-config";
 import { test } from "./monitored-test";
-import { join, befriend, confirmProfileAction } from "./journey-helpers";
+import {
+  join,
+  befriend,
+  confirmAction,
+  confirmProfileAction,
+} from "./journey-helpers";
 
 test("invited friends discover, save, and share inline discussions with live access enforcement", async ({
   browser,
@@ -147,7 +152,7 @@ test("invited friends discover, save, and share inline discussions with live acc
   const reply = await write(alice, "The host can reply to Cam", camReply!);
   expect(reply.status()).toBe(200);
   await alice.reload();
-  await camComment.getByRole("button", { name: "Remove", exact: true }).click();
+  await confirmAction(camComment, "Remove");
   await expect(
     item(alice)
       .locator(`[data-comment-id="${camReply}"]`)
@@ -193,14 +198,14 @@ test("invited friends discover, save, and share inline discussions with live acc
       }),
     { times: 1 },
   );
-  await ownComment(ben)
-    .getByRole("button", { name: "Delete", exact: true })
-    .click();
+  await confirmAction(ownComment(ben), "Delete");
   await expect(item(ben).getByRole("alert")).toHaveText(
     "Deletion failed. Please try again.",
   );
   await expect(ownComment(ben)).toBeVisible();
+  // A failed deletion keeps its confirmation open for another try.
   await ownComment(ben)
+    .getByRole("group", { name: /^Delete / })
     .getByRole("button", { name: "Delete", exact: true })
     .click();
   await expect(item(ben).getByRole("alert")).toHaveCount(0);
@@ -241,7 +246,7 @@ test("invited friends discover, save, and share inline discussions with live acc
     .getByRole("button", { name: "Create invitation", exact: true })
     .click();
   await expect(alice.getByLabel("Invitation link")).toHaveValue(/\/join\//);
-  await alice.getByRole("button", { name: "Revoke", exact: true }).click();
+  await confirmAction(alice, "Revoke");
   await expect(alice.getByLabel("Invitation link")).toHaveCount(0);
   await expect(
     alice.getByText("No active invitations.", { exact: true }),

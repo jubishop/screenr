@@ -1,20 +1,29 @@
 "use client";
 import Link from "next/link";
-import { useState, type ReactNode } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import type { ScreenData } from "../server/screens";
 import type { Person } from "../shared";
 import { useInteractive } from "./client";
 import { Avatar } from "./avatar";
 import { useActionError } from "./action-error";
 import { ActionButton } from "./action-button";
+import { ConfirmAction } from "./confirmation";
+import { PageNotice } from "./page-notice";
 
-type Action = { label: string; run: () => Promise<void>; primary?: boolean };
+// A destructive action names its `confirm` question and waits for the
+// in-page confirmation.
+type Action = {
+  label: string;
+  run: () => Promise<void>;
+  primary?: boolean;
+  confirm?: string;
+};
 
 // One person: avatar, display name, and @username, linking to the profile.
 // The username may wrap beneath the name; actions stay on the same line.
-// Notes, then a failed action's message, take the lines beneath. Blocked
-// people show only the name, since blocking hides the profile. Pending
-// actions keep focus but ignore presses.
+// Notes, a failed action's message, then an open confirmation take the
+// lines beneath. Blocked people show only the name, since blocking hides the
+// profile. Pending actions keep focus but ignore presses.
 function PersonRow({
   person,
   note,
@@ -33,6 +42,11 @@ function PersonRow({
   blocked?: boolean;
 }) {
   const failure = useActionError();
+  const [confirming, setConfirming] = useState<string | null>(null);
+  const open = actions.find(
+    (action) => action.confirm && action.label === confirming,
+  );
+  const trigger = useRef<HTMLButtonElement | null>(null);
   const name = (
     <>
       <Avatar person={person} />
@@ -58,22 +72,41 @@ function PersonRow({
       {actions.length > 0 && (
         <div className="person-actions">
           {status && <span className="small muted">{status}</span>}
-          {actions.map(({ label, run, primary }) => (
+          {actions.map((action) => (
             <ActionButton
-              key={label}
-              className={primary ? "primary" : "text-button"}
+              key={action.label}
+              className={action.primary ? "primary" : "text-button"}
               disabled={disabled}
               unavailable={busy}
-              aria-describedby={failure.describedBy(label)}
-              onClick={() => void failure.run(label, run)}
+              aria-describedby={failure.describedBy(action.label)}
+              onClick={(event) => {
+                if (!action.confirm)
+                  return void failure.run(action.label, action.run);
+                trigger.current = event.currentTarget;
+                setConfirming(action.label);
+              }}
             >
-              {label}
+              {action.label}
             </ActionButton>
           ))}
         </div>
       )}
       {note}
       {failure.alert}
+      {open?.confirm && (
+        <ConfirmAction
+          key={open.label}
+          message={open.confirm}
+          action={open.label}
+          busy={busy}
+          run={open.run}
+          onDone={() => setConfirming(null)}
+          onCancel={() => {
+            setConfirming(null);
+            trigger.current?.focus();
+          }}
+        />
+      )}
     </article>
   );
 }
@@ -108,6 +141,7 @@ export function PeopleView({
 }) {
   const interactive = useInteractive();
   const [query, setQuery] = useState("");
+  const heading = useRef<HTMLHeadingElement>(null);
   // Retain the draft while failed reads hide the protected snapshot.
   if (!data) return null;
   const act = (person: Person, action: string) => () =>
@@ -122,11 +156,15 @@ export function PeopleView({
   return (
     <>
       <div className="page-heading heading-row">
-        <h1 className="page-title">Friends</h1>
+        <h1 className="page-title" ref={heading} tabIndex={-1}>
+          Friends
+        </h1>
         <Link className="primary button" href="/invites" prefetch={false}>
           Invite friends
         </Link>
       </div>
+      {/* Block opens this page with its result. */}
+      <PageNotice path="/people" onDismiss={() => heading.current?.focus()} />
       <form
         className="search-form"
         onSubmit={(e) => {
@@ -164,7 +202,11 @@ export function PeopleView({
               person={person}
               actions={[
                 { label: "Accept", run: act(person, "accept"), primary: true },
-                { label: "Decline", run: act(person, "remove") },
+                {
+                  label: "Decline",
+                  run: act(person, "remove"),
+                  confirm: `Decline ${person.display_name}’s friend request? The request will be removed.`,
+                },
               ]}
               disabled={!interactive}
               busy={busy}

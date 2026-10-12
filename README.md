@@ -20,8 +20,10 @@ test flow, and [Testing Screenr](docs/testing.md) for the automated suites.
   People you may know with named mutual friends, and through friend lists on
   profiles. The Friends page groups requests, friends, sent requests,
   suggestions, and blocked people. Members accept and decline requests there
-  or in notifications. A profile's More actions menu holds Unfriend and Block,
-  each with an in-page confirmation. Current friendship and blocking rules
+  or in notifications. A profile's More actions menu holds Unfriend and Block;
+  Block then opens the Friends page with a notice. Declining, unfriending,
+  blocking, deleting or removing a comment, and revoking an invitation each
+  ask for an in-page confirmation. Current friendship and blocking rules
   decide what each person sees. Avatars mark every person.
 - **Titles:** Find a title searches the TMDB catalog and suggests titles from
   friends' Recommend and Want to watch choices, with anonymous counts once

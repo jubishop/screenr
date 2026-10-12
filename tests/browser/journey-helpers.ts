@@ -1,4 +1,9 @@
-import { expect, type Page, type Browser } from "@playwright/test";
+import {
+  expect,
+  type Browser,
+  type Locator,
+  type Page,
+} from "@playwright/test";
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { monitorErrors } from "./monitored-test";
@@ -76,6 +81,7 @@ export async function befriend(a: Page, b: Page, bName: string, aName: string) {
 }
 
 // Unfriend and Block sit in a profile's More actions menu and need confirming.
+// Block then opens the Friends page with its notice.
 export async function confirmProfileAction(
   page: Page,
   action: "Unfriend" | "Block",
@@ -83,6 +89,18 @@ export async function confirmProfileAction(
   await page.getByRole("button", { name: /^More actions for / }).click();
   await page.getByRole("menuitem", { name: action, exact: true }).click();
   await page
+    .getByRole("group", { name: new RegExp(`^${action} `) })
+    .getByRole("button", { name: action, exact: true })
+    .click();
+  if (action === "Block")
+    await expect(page.getByText(/^You blocked .+\.$/)).toBeFocused();
+}
+
+// Presses a destructive action within `scope`, then confirms it in the
+// in-page confirmation that opens there.
+export async function confirmAction(scope: Page | Locator, action: string) {
+  await scope.getByRole("button", { name: action, exact: true }).click();
+  await scope
     .getByRole("group", { name: new RegExp(`^${action} `) })
     .getByRole("button", { name: action, exact: true })
     .click();

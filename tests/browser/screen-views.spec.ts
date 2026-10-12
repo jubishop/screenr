@@ -169,15 +169,26 @@ test("invitation and sign-out failures show their errors beside the control", as
   const card = page.locator(".invite-card");
   await expect(card).toContainText("0 of 1 signups");
   await expect(main.getByRole("alert")).toHaveCount(0);
-  const revoke = card.getByRole("button", { name: "Revoke", exact: true });
+  // A failed Revoke keeps its confirmation open with the message.
+  const confirmation = card.getByRole("group", {
+    name: /^Revoke this invitation\?/,
+  });
+  const revoke = confirmation.getByRole("button", {
+    name: "Revoke",
+    exact: true,
+  });
   await failAction(page, "revoke-invite", "Revoking unavailable.");
+  await press(card.getByRole("button", { name: "Revoke", exact: true }));
   await press(revoke);
   for (const width of [390, 1366]) {
     await page.setViewportSize({ width, height: 844 });
     await expectErrorBeside(page, {
-      container: card,
+      container: confirmation,
       failed: revoke,
-      controls: [revoke],
+      controls: [
+        revoke,
+        confirmation.getByRole("button", { name: "Cancel", exact: true }),
+      ],
       message: "Revoking unavailable.",
       screenshot: "action-error-revoke",
     });

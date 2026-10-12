@@ -7,7 +7,7 @@ import { ActivityTime } from "./activity-time";
 import { preservePosition } from "./position";
 import { Reactions } from "./reactions";
 import { Avatar } from "./avatar";
-import { ActionButton } from "./action-button";
+import { ConfirmAction } from "./confirmation";
 import {
   CommentComposer,
   type CommentDraft as Draft,
@@ -39,6 +39,8 @@ export function ThreadView({
   const [replyTo, setReplyTo] = useState<string | null>(null);
   const [busy, setBusy] = useState(new Set<string>());
   const [errors, setErrors] = useState<Record<string, string>>({});
+  // The comment whose Delete or Remove waits for confirmation.
+  const [confirming, setConfirming] = useState<string | null>(null);
   const area = useRef<HTMLTextAreaElement>(null);
   const directArea = useRef<HTMLTextAreaElement>(null);
   // Focus only when a reader opens a destination, not when a failed refresh
@@ -170,8 +172,12 @@ export function ThreadView({
       </CommentComposer>
     );
   }
+  const removable = (comment: Comment) =>
+    comment.author_id === user.user_id ||
+    currentSnapshot.conversation.owner_id === user.user_id;
+  const removal = (comment: Comment) =>
+    comment.author_id === user.user_id ? "Delete" : "Remove";
   function commentActions(comment: Comment) {
-    const key = `remove-${comment.id}`;
     return (
       <>
         <button
@@ -187,35 +193,15 @@ export function ThreadView({
         >
           Reply
         </button>
-        {(comment.author_id === user.user_id ||
-          currentSnapshot.conversation.owner_id === user.user_id) && (
-          <ActionButton
+        {removable(comment) && (
+          <button
             className="text-button muted"
+            id={`remove-action-${comment.id}`}
             disabled={!interactive}
-            unavailable={busy.has(key)}
-            aria-describedby={errors[key] ? `${key}-error` : undefined}
-            onClick={async () => {
-              setBusy((current) => new Set([...current, key]));
-              setErrors((current) => ({ ...current, [key]: "" }));
-              try {
-                await api("remove-comment", { id: comment.id });
-                await refresh();
-              } catch (error) {
-                setErrors((current) => ({
-                  ...current,
-                  [key]: (error as Error).message,
-                }));
-              } finally {
-                setBusy((current) => {
-                  const next = new Set(current);
-                  next.delete(key);
-                  return next;
-                });
-              }
-            }}
+            onClick={() => setConfirming(comment.id)}
           >
-            {comment.author_id === user.user_id ? "Delete" : "Remove"}
-          </ActionButton>
+            {removal(comment)}
+          </button>
         )}
       </>
     );
@@ -285,14 +271,20 @@ export function ThreadView({
           ) : (
             <div className="item-actions">{commentActions(comment)}</div>
           ))}
-        {errors[`remove-${comment.id}`] && (
-          <div
-            id={`remove-${comment.id}-error`}
-            className="error action-error"
-            role="alert"
-          >
-            {errors[`remove-${comment.id}`]}
-          </div>
+        {live(comment) && removable(comment) && confirming === comment.id && (
+          <ConfirmAction
+            message={`${removal(comment)} this comment? Its text will be erased.`}
+            action={removal(comment)}
+            run={async () => {
+              await api("remove-comment", { id: comment.id });
+              await refresh();
+            }}
+            onDone={() => setConfirming(null)}
+            onCancel={() => {
+              setConfirming(null);
+              document.getElementById(`remove-action-${comment.id}`)?.focus();
+            }}
+          />
         )}
       </article>
     );

@@ -445,19 +445,29 @@ test("a failed entry, comment, or title action shows its error beside that contr
   await expect(header.getByRole("alert")).toHaveCount(0);
   await expect(want).toHaveAccessibleDescription("");
 
-  // A comment's removal error stays with that comment.
+  // A comment's removal error stays in its confirmation, inside the comment.
   const comment = reader.locator(`[data-comment-id="${ownComment}"]`);
-  const remove = comment.getByRole("button", { name: "Delete", exact: true });
+  const confirmation = comment.getByRole("group", {
+    name: /^Delete this comment\?/,
+  });
+  const remove = confirmation.getByRole("button", {
+    name: "Delete",
+    exact: true,
+  });
   await failAction(reader, "remove-comment", "Removal unavailable.");
+  await press(comment.getByRole("button", { name: "Delete", exact: true }));
   await press(remove);
   for (const width of [390, 1366]) {
     await reader.setViewportSize({ width, height: 844 });
+    await expect(comment).toContainText(
+      "Delete this comment? Its text will be erased.",
+    );
     await expectErrorBeside(reader, {
-      container: comment,
+      container: confirmation,
       failed: remove,
       controls: [
         remove,
-        comment.getByRole("button", { name: "React", exact: true }),
+        confirmation.getByRole("button", { name: "Cancel", exact: true }),
       ],
       message: "Removal unavailable.",
       screenshot: "action-error-comment",

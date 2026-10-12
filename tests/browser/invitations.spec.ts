@@ -3,7 +3,7 @@ import { Pool } from "pg";
 import { browserConfig } from "../../scripts/browser-config";
 import { test } from "./monitored-test";
 import { type Member } from "./member-fixture";
-import { join } from "./journey-helpers";
+import { confirmAction, join } from "./journey-helpers";
 
 async function invitationCreator(member: Member, name: string) {
   const page = await member(name, {
@@ -170,7 +170,7 @@ test("active invitation cards retain links across reloads and disappear after us
   });
   await expect(links).toHaveCount(1);
   await expect(links).toHaveValue(newerURL);
-  await owner.getByRole("button", { name: "Revoke", exact: true }).click();
+  await confirmAction(owner, "Revoke");
   await expect(links).toHaveCount(0);
   await expect(
     owner.getByText("No active invitations.", { exact: true }),

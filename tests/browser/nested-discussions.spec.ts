@@ -2,6 +2,7 @@ import { expect, type Page } from "@playwright/test";
 import { browserConfig } from "../../scripts/browser-config";
 import { test, monitorErrors } from "./monitored-test";
 import { prepareFriendship, type Member } from "./member-fixture";
+import { confirmAction } from "./journey-helpers";
 
 async function nestedDiscussion(member: Member, suffix: string) {
   const owner = await member(`nestowner${suffix}`);
@@ -221,11 +222,10 @@ test("nested discussions group stored replies, preview direct comments, and keep
   await reader.route("**/api/screenr/remove-comment", (route) =>
     route.fulfill({ status: 503, json: { error: "Removal unavailable" } }),
   );
-  await item
-    .locator("[data-comment-id]")
-    .filter({ hasText: "Direct draft" })
-    .getByRole("button", { name: "Delete", exact: true })
-    .click();
+  await confirmAction(
+    item.locator("[data-comment-id]").filter({ hasText: "Direct draft" }),
+    "Delete",
+  );
   await expect(direct).toHaveCount(0);
   await expect(
     item.getByRole("alert").filter({ hasText: "Removal unavailable" }),
