@@ -658,6 +658,19 @@ rules to threads, cards, and comments. Friendship pairs are ordered by
 PostgreSQL, including mixed-case auth IDs. No private feed or permission
 result is persistently cached.
 
+Display names contain 1–60 characters after trimming. Signup and both name
+editors reject control characters (Unicode `Cc`), the line and paragraph
+separators U+2028 and U+2029, and the bidirectional controls U+202A–U+202E and
+U+2066–U+2069. The form shows "Remove line breaks and hidden control characters
+from your display name." This keeps a name from adding lines to plain-text
+activity emails or reversing text to imitate another member. Zero-width joiners
+remain allowed for emoji sequences, as do accents and every script. Migration
+`012-display-name-characters.sql` adds the same database check; production had
+no such names when it was added
+([issue #108](https://github.com/jubishop/screenr/issues/108)). After a
+rollback, the previous release also cannot store these names, but shows a
+server error instead of that message.
+
 Profiles include an expandable Friends list for signed-in members, including
 when the viewer is not a friend of the profile owner. Each entry links to its
 profile. The list contains accepted friends only, filters blocks in either

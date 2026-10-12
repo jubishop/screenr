@@ -317,6 +317,93 @@ test("display name edits validate input and allow duplicate names", async () => 
   assert.notEqual(alice, ben);
 });
 
+// Every \p{Cc} control boundary, both Unicode line separators, and every
+// bidirectional embedding, override, and isolate control (#108).
+const hiddenCharacters = [
+  ...["\u0000", "\t", "\n", "\r", "\u001b", "\u001f"],
+  ...["\u007f", "\u0085", "\u009f", "\u2028", "\u2029"],
+  ...["\u202a", "\u202b", "\u202c", "\u202d", "\u202e"],
+  ...["\u2066", "\u2067", "\u2068", "\u2069"],
+];
+// Accents, CJK, emoji with skin tones, ZWJ and variation sequences, RTL
+// scripts, and Indic conjuncts that use zero-width joiners.
+const legitimateNames = [
+  "Zoë Saldaña",
+  "北野武",
+  "김지운",
+  "Sam 🎬",
+  "\u{1f469}\u200d\u{1f469}\u200d\u{1f467}\u200d\u{1f466} family",
+  "\u{1f469}\u{1f3fd}\u200d\u{1f4bb} coder",
+  "\u{1f3f3}\ufe0f\u200d\u{1f308}",
+  "مريم",
+  "עִבְרִית",
+  "Sam מרים",
+  "\u0915\u094d\u200d\u0937 \u0915\u094d\u200c\u0937",
+];
+const hiddenCharacterError =
+  "Remove line breaks and hidden control characters from your display name.";
+
+test("display names reject control and bidirectional override characters in every form", async () => {
+  const alice = await person("alice");
+  const cookie = await sessionCookie(alice);
+  const { token } = await createInvitation(null);
+  const newcomer = await pending("newcomer", token);
+  for (const character of hiddenCharacters) {
+    const name = `Sam${character}Verify your account`;
+    for (const response of [
+      await rename(cookie, { name }),
+      await editProfile(cookie, { name, username: "new_name" }),
+    ]) {
+      assert.equal(response.status, 400);
+      assert.equal((await response.json()).error, hiddenCharacterError);
+    }
+    await assert.rejects(completeSignup(newcomer, name, "newcomer"), {
+      message: hiddenCharacterError,
+    });
+    assert.equal((await profileFor(alice, "alice")).display_name, "alice");
+  }
+  assert.equal(
+    (await db.query("SELECT 1 FROM profile WHERE user_id=$1", [newcomer]))
+      .rowCount,
+    0,
+  );
+  for (const name of legitimateNames) {
+    assert.equal((await rename(cookie, { name })).status, 200);
+    assert.equal((await profileFor(alice, "alice")).display_name, name);
+    assert.equal(
+      (await editProfile(cookie, { name, username: "alice" })).status,
+      200,
+    );
+    assert.equal((await profileFor(alice, "alice")).display_name, name);
+  }
+  await completeSignup(newcomer, legitimateNames[4], "newcomer");
+  assert.equal(
+    (await profileFor(alice, "newcomer")).display_name,
+    legitimateNames[4],
+  );
+});
+
+test("the database rejects stored display names with hidden characters", async () => {
+  const alice = await person("alice");
+  // PostgreSQL text cannot store NUL at all.
+  for (const character of hiddenCharacters.filter((c) => c !== "\u0000")) {
+    await assert.rejects(
+      db.query("UPDATE profile SET display_name=$2 WHERE user_id=$1", [
+        alice,
+        `Sam${character}Evil`,
+      ]),
+      { code: "23514", constraint: "profile_display_name_characters" },
+    );
+  }
+  for (const name of legitimateNames) {
+    await db.query("UPDATE profile SET display_name=$2 WHERE user_id=$1", [
+      alice,
+      name,
+    ]);
+    assert.equal((await profileFor(alice, "alice")).display_name, name);
+  }
+});
+
 test("display name edits require membership and only update the signed-in member", async () => {
   const alice = await person("alice"),
     ben = await person("ben");

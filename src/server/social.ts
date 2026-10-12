@@ -1,5 +1,12 @@
 import { randomUUID } from "node:crypto";
-import { AppError, db, text, transaction, usernameText } from "./db";
+import {
+  AppError,
+  db,
+  displayNameText,
+  text,
+  transaction,
+  usernameText,
+} from "./db";
 import type { FeedItem, Person, Thread } from "../shared";
 import { reactionOptions } from "../shared";
 
@@ -17,7 +24,7 @@ export async function updateDisplayName(
   userId: string,
   name: unknown,
 ): Promise<Person> {
-  const displayName = text(name, "Display name", 60);
+  const displayName = displayNameText(name);
   return transaction(async (client) => {
     const { rows } = await client.query<Person>(
       "UPDATE profile SET display_name=$2 WHERE user_id=$1 RETURNING user_id,username,display_name",
@@ -32,7 +39,7 @@ export async function updateProfile(
   name: unknown,
   username: unknown,
 ): Promise<Person> {
-  const displayName = text(name, "Display name", 60);
+  const displayName = displayNameText(name);
   const handle = usernameText(username);
   return transaction(async (client) => {
     try {

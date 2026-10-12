@@ -1,5 +1,5 @@
 import { createHash, createHmac, randomUUID } from "node:crypto";
-import { db, transaction, AppError, text, usernameText } from "./db";
+import { db, transaction, AppError, displayNameText, usernameText } from "./db";
 
 export const invitationHash = (token: string) =>
   createHash("sha256").update(token).digest("hex");
@@ -54,7 +54,7 @@ export async function completeSignup(
   username: unknown,
   currentToken?: string,
 ) {
-  const displayName = text(name, "Display name", 60);
+  const displayName = displayNameText(name);
   const handle = usernameText(username);
   return transaction(async (client) => {
     if (

@@ -64,6 +64,20 @@ export function text(value: unknown, label: string, max = 2000): string {
   return value.trim();
 }
 
+// Control characters, Unicode line and paragraph separators, and bidirectional
+// embedding, override, and isolate controls. Zero-width joiners stay allowed
+// for emoji sequences. db/012-display-name-characters.sql enforces the same set.
+const hiddenCharacters = /[\p{Cc}\u2028\u2029\u202a-\u202e\u2066-\u2069]/u;
+
+export function displayNameText(value: unknown): string {
+  const name = text(value, "Display name", 60);
+  if (hiddenCharacters.test(name))
+    throw new AppError(
+      "Remove line breaks and hidden control characters from your display name.",
+    );
+  return name;
+}
+
 export function usernameText(value: unknown): string {
   const username = text(value, "Username", 24).toLowerCase();
   if (!/^[a-z0-9_]{3,24}$/.test(username))
