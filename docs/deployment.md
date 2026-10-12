@@ -155,6 +155,63 @@ UptimeRobot's free plan has no heartbeat monitors.
 **Rejected alternative:** A separate third-party heartbeat service for
 backups.
 
+The backup, restore check, stale-backup check, web, worker, and database
+units each set `OnFailure=screenr-alert@%n.service`. That template runs
+`ops/failure-alert.py` with the failed unit's name. It sends through the
+Resend settings in `/etc/screenr/backup.env` described under
+[backup storage warning](#backup-storage-warning). It uses a dynamic
+unprivileged user, so root never runs the release's copy of the script.
+systemd also starts `OnFailure=` units before each automatic restart. The
+script emails only when the unit is still `failed`: a failed job, or a
+service that reached its restart limit of five starts in 60 seconds. The
+email names the unit, its result, and the commands to inspect and restart it.
+It includes no journal lines. Delivery makes up to three attempts with one
+idempotency key, and has no saved state. Every failure sends a new email, so
+each deployment blocked by a failing backup sends one.
+
+`screenr-backup-age.timer` runs the stale-backup check daily around
+12:00 PDT / 11:00 PST, seven hours after backups. `screenr-backup-age.service`
+runs `ops/check-backup-age.py`; its failure starts the alert. A single missed
+backup is over 30 hours old at the next check.
+
+Until [#117](https://github.com/jubishop/screenr/issues/117) installs unit
+changes during deployment, install Screenr's changed units by hand after the
+release that contains them is active. Copy only `ops/screenr-*.service` and
+`ops/screenr-*.timer` from a Git checkout of that revision, not from the
+release directory, to `/etc/systemd/system`. Run
+`systemctl daemon-reload`, and enable the stale-backup check with
+`systemctl enable --now screenr-backup-age.timer`.
+
+Verify the alert path without sending email:
+
+- `systemctl start screenr-alert@screenr-web.service.service` runs the real
+  alert unit. With a healthy web service, its journal reports
+  `screenr-web.service is active (running); no alert`.
+- `systemctl start screenr-backup-age.service` passes while backups are
+  current.
+- For a deliberately failed transient unit, `failure-alert.py --dry-run`
+  prints the email instead of sending it:
+
+  ```sh
+  systemd-run --unit=screenr-alert-probe --wait /bin/false
+  systemd-run --quiet --wait --pipe --collect -p DynamicUser=yes \
+      -p EnvironmentFile=/etc/screenr/backup.env /usr/bin/python3 \
+      /opt/screenr/current/ops/failure-alert.py --dry-run screenr-alert-probe.service
+  systemctl reset-failed screenr-alert-probe.service
+  ```
+
+After installing the alert unit, verify delivery once with a transient unit
+that reaches its restart limit. Expect exactly one email, and two
+`no alert` entries in `journalctl -u screenr-alert@screenr-alert-probe.service.service`:
+
+```sh
+systemd-run --unit=screenr-alert-probe -p Restart=on-failure -p RestartSec=3 \
+    -p StartLimitIntervalSec=60 -p StartLimitBurst=2 \
+    -p OnFailure=screenr-alert@screenr-alert-probe.service.service /bin/false
+```
+
+Then run `systemctl reset-failed screenr-alert-probe.service`.
+
 ## Build and activate a release
 
 Follow the [main branch workflow](development-workflow.md#main-branch-delivery).
@@ -388,7 +445,8 @@ independent of the Mac and the home repository.
 
 Initialize the Restic repository once, using the backup service's user and
 environment. Start `screenr-backup.service`, then `screenr-restore-check.service`
-and inspect both journals before enabling their timers. A restore check first
+and `screenr-backup-age.service`, and inspect their journals before enabling
+their timers. A restore check first
 fails when the newest snapshot is more than 30 hours old, so stopped backups
 cannot pass by restoring an older snapshot. It then reads the encrypted
 repository, restores a consistent dump into a uniquely named temporary
@@ -399,13 +457,14 @@ production itself, follow the
 
 `ops/check-backup-age.py` performs the age check. It lists snapshot metadata
 without locking the repository and exits non-zero when the newest snapshot is
-stale or cannot be read. The daily stale-backup alert planned in
-[issue #113](https://github.com/jubishop/screenr/issues/113) will reuse it.
+stale or cannot be read. The restore check and the daily
+[stale-backup check](#failure-alerts) both run it.
 
 Backups run daily around 05:00 PDT / 04:00 PST. After each successful backup,
 `ops/backup.sh` forgets snapshots outside the
 [accepted retention](#backup-storage-warning) and prunes their data. The
-restore check runs weekly on Saturdays around 07:00 PDT / 06:00 PST. Timers
+restore check runs weekly on Saturdays around 07:00 PDT / 06:00 PST, and the
+stale-backup check daily around 12:00 PDT / 11:00 PST. Timers
 catch up after downtime. Dumps are private temporary files and are removed
 after each run; encrypted remote objects remain. The schedules were chosen
 during implementation under the

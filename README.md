@@ -82,7 +82,7 @@ in Cloudflare R2. See the [application stack](docs/application-stack.md) and
 | `db/` | Numbered SQL migrations |
 | `scripts/` | Migration, bootstrap invitation, email worker, release packaging, and browser-test harness commands |
 | `tests/` | Application and PostgreSQL tests in `app/`, Playwright suites in `browser/`, and Python tests for operations and check scripts |
-| `ops/` | VPS provisioning, release activation, systemd units, Caddy and PostgreSQL configuration, backups, and restore checks |
+| `ops/` | VPS provisioning, release activation, systemd units, Caddy and PostgreSQL configuration, backups, restore checks, and failure alerts |
 | `bin/` | Repository setup, checks, knowledge search, deployment helpers, and Git hooks |
 | `docs/`, `memory/` | Design documents, decisions, and durable guidance |
 

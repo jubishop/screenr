@@ -2,6 +2,7 @@
 Description=Screenr backup restore verification
 After=network-online.target screenr-db.service
 Requires=screenr-db.service
+OnFailure=screenr-alert@%n.service
 
 [Service]
 Type=oneshot

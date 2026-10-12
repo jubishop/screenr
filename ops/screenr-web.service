@@ -4,6 +4,7 @@ After=network-online.target screenr-db.service
 Requires=screenr-db.service
 StartLimitIntervalSec=60
 StartLimitBurst=5
+OnFailure=screenr-alert@%n.service
 
 [Service]
 User=screenr

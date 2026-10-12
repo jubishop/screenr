@@ -3,6 +3,7 @@ Description=Screenr isolated PostgreSQL cluster
 After=network.target
 StartLimitIntervalSec=60
 StartLimitBurst=5
+OnFailure=screenr-alert@%n.service
 
 [Service]
 User=screenr-db
