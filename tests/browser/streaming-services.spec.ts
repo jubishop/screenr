@@ -146,6 +146,9 @@ test("Find a title filters catalog results and suggestions using current service
   await expect(results.getByRole("heading")).toHaveText(
     fixtures.map((t) => t.name),
   );
+  // These fixtures have no release date, so cards show only the kind.
+  await expect(results.getByText("Movie", { exact: true })).toHaveCount(3);
+  await expect(results.getByText("TV show", { exact: true })).toHaveCount(2);
   await expect(filter).toHaveAttribute("aria-pressed", "false");
   await expect(results.getByText("On AMC+", { exact: true })).toBeVisible();
   await expect(

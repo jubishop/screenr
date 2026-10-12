@@ -275,7 +275,9 @@ not returned. `src/server/screens.ts` includes these suggestions for `/search`
 and adds viewing options and the viewer's saved service identities.
 
 `src/components/title-search.tsx` owns the search input, results, and tiled
-suggestions. `src/components/screen.tsx` keeps it mounted when suggestion
+suggestions. Results use the title card in `src/components/title-card.tsx`,
+shared with Watch together; a title without a release date shows only its
+kind. `src/components/screen.tsx` keeps search mounted when suggestion
 reads fail, clearing social data through the existing screen refresh logic
 while preserving search text and submitted results. Search requests have a
 timeout and an abort controller. Clearing, submitting a newer query, or

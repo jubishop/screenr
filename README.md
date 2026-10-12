@@ -78,7 +78,7 @@ in Cloudflare R2. See the [application stack](docs/application-stack.md) and
 | `src/app/` | Next.js routes: sign-in, profile setup, invitation links, credits, member screens, API handlers, and stylesheets |
 | `src/components/` | React views and controls for feeds, titles, people, invitations, notifications, and account settings |
 | `src/server/` | Server-only domain code: authentication, access rules, social reads and writes, invitations, catalog and availability, suggestions, notifications, and email |
-| `src/shared.ts`, `src/viewing.ts` | Types and helpers shared by browser and server code |
+| `src/shared.ts`, `src/viewing.ts`, `src/member-routes.ts` | Types, helpers, and the member route parser shared by browser and server code |
 | `db/` | Numbered SQL migrations |
 | `scripts/` | Migration, bootstrap invitation, email worker, release packaging, and browser-test harness commands |
 | `tests/` | Application and PostgreSQL tests in `app/`, Playwright suites in `browser/`, and Python tests for operations and check scripts |
@@ -88,7 +88,10 @@ in Cloudflare R2. See the [application stack](docs/application-stack.md) and
 
 Member screens share one catch-all route in `src/app/(member)/`. It loads
 screen data through `src/server/` and renders views from `src/components/`;
-member actions post to the handler in `src/app/api/screenr/`.
+member actions post to the handler in `src/app/api/screenr/`. The page, the
+screen loader, and the browser shell all read paths through
+`src/member-routes.ts`, which names each screen and the query parameters it
+keeps.
 
 ## Run and deploy
 

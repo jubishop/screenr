@@ -3,8 +3,8 @@ import Link from "next/link";
 import { useState } from "react";
 import type { Person, Title } from "../shared";
 import type { ScreenData } from "../server/screens";
-import { Poster } from "./poster";
-import { TitleServices, ViewingAttribution } from "./title-services";
+import { TitleCard } from "./title-card";
+import { ViewingAttribution } from "./title-services";
 
 export function WatchTogether({
   participants,
@@ -90,31 +90,13 @@ export function WatchTogether({
               <p className="small muted">{description}</p>
               <div className="search-results">
                 {matches.map((title) => (
-                  <Link
-                    className="search-result"
+                  <TitleCard
                     key={title.id}
-                    href={`/titles/${title.id.replace(":", "/")}`}
-                    prefetch={false}
-                  >
-                    <Poster path={title.poster_path} name={title.name} />
-                    <div>
-                      <h3>{title.name}</h3>
-                      <p className="muted">
-                        {title.kind === "movie" ? "Movie" : "TV show"}
-                        {title.release_date &&
-                          ` · ${title.release_date.slice(0, 4)}`}
-                      </p>
-                      <p className="small overview">
-                        {title.overview.slice(0, 150)}
-                      </p>
-                      <TitleServices
-                        viewing={title.viewing}
-                        serviceIds={title.matchingServiceIds}
-                        shared
-                      />
-                    </div>
-                    <span aria-hidden="true">↗</span>
-                  </Link>
+                    title={title}
+                    heading="h3"
+                    serviceIds={title.matchingServiceIds}
+                    shared
+                  />
                 ))}
               </div>
             </section>

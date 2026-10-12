@@ -7,10 +7,11 @@ import { titleSuggestions } from "./title-suggestions";
 import { savedServices, streamingServices } from "./streaming-services";
 import { withViewingOptions } from "./title-viewing";
 import { activityEmail, unreadNotifications } from "./notifications";
+import { parseMemberRoute, type MemberRoute } from "../member-routes";
 
 export async function loadScreen(userId: string, requestedPath: string) {
   const [content, unread] = await Promise.all([
-    loadContent(userId, requestedPath),
+    loadContent(userId, parseMemberRoute(requestedPath)),
     unreadNotifications(userId),
   ]);
   return content.kind === "redirect"
@@ -18,24 +19,22 @@ export async function loadScreen(userId: string, requestedPath: string) {
     : { ...content, unreadNotifications: unread };
 }
 
-async function loadContent(userId: string, requestedPath: string) {
-  const url = new URL(requestedPath, "http://screenr.local");
-  const path = url.pathname;
-  if (path === "/")
+async function loadContent(userId: string, route: MemberRoute) {
+  if (route.kind === "feed")
     return {
       kind: "feed" as const,
       conversations: await conversations(userId),
     };
-  if (path === "/search")
+  if (route.kind === "search")
     return {
       kind: "search" as const,
       suggestions: await withViewingOptions(await titleSuggestions(userId)),
       serviceIds: await savedServices(userId),
     };
-  if (path === "/people")
+  if (route.kind === "people")
     return { kind: "people" as const, ...(await people(userId)) };
-  if (path === "/watch-together") {
-    const usernames = url.searchParams.getAll("with");
+  if (route.kind === "watch-together") {
+    const usernames = route.with;
     if (usernames.length !== 1 || !usernames[0])
       throw new AppError("Choose one friend from their profile.");
     return {
@@ -43,12 +42,12 @@ async function loadContent(userId: string, requestedPath: string) {
       ...(await watchTogether(userId, usernames)),
     };
   }
-  if (path === "/invites")
+  if (route.kind === "invites")
     return {
       kind: "invites" as const,
       invitations: await listInvitations(userId),
     };
-  if (path === "/account")
+  if (route.kind === "account")
     return {
       kind: "account" as const,
       activityEmail: await activityEmail(userId),
@@ -64,9 +63,8 @@ async function loadContent(userId: string, requestedPath: string) {
         )
       ).rowCount,
     };
-  const parts = path.split("/").filter(Boolean);
-  if (parts[0] === "titles" && parts.length === 3) {
-    const id = `${parts[1]}:${parts[2]}`;
+  if (route.kind === "title") {
+    const { id, item, reply } = route;
     // Catalog requests run together to fit the client's refresh deadline.
     const stored = getTitle(id);
     const [title, threads, trailer, availability] = await Promise.all([
@@ -82,27 +80,25 @@ async function loadContent(userId: string, requestedPath: string) {
       availability,
       conversations: threads,
       target: (() => {
-        const item = threads.find((c) => c.id === url.searchParams.get("item"));
-        if (!item) return null;
-        const reply = item.comments.find(
-          (c) => c.id === url.searchParams.get("reply") && !c.unavailable,
+        const targeted = threads.find((c) => c.id === item);
+        if (!targeted) return null;
+        const targetReply = targeted.comments.find(
+          (c) => c.id === reply && !c.unavailable,
         );
-        return { item: item.id, reply: reply?.id };
+        return { item: targeted.id, reply: targetReply?.id };
       })(),
       targetUnavailable:
-        !!url.searchParams.get("item") &&
+        !!item &&
         !threads.some(
           (c) =>
-            c.id === url.searchParams.get("item") &&
-            (!url.searchParams.get("reply") ||
-              c.comments.some(
-                (r) => r.id === url.searchParams.get("reply") && !r.unavailable,
-              )),
+            c.id === item &&
+            (!reply ||
+              c.comments.some((r) => r.id === reply && !r.unavailable)),
         ),
     };
   }
-  if (parts[0] === "people" && parts.length === 2) {
-    const profile = await profileFor(userId, parts[1]);
+  if (route.kind === "profile") {
+    const profile = await profileFor(userId, route.username);
     return {
       kind: "profile" as const,
       profile,
@@ -111,14 +107,10 @@ async function loadContent(userId: string, requestedPath: string) {
         : [],
     };
   }
-  if (parts[0] === "conversations" && parts.length === 2)
+  if (route.kind === "conversation")
     return {
       kind: "redirect" as const,
-      url: await conversationURL(
-        userId,
-        parts[1],
-        url.searchParams.get("reply") ?? undefined,
-      ),
+      url: await conversationURL(userId, route.id, route.reply),
     };
   throw new AppError("Page not found.", 404);
 }

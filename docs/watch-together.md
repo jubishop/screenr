@@ -129,14 +129,15 @@ identities and reads viewing options through the existing availability cache.
 It returns only the services matching each shared title, not either person's
 full settings or whose service matched.
 
-The page reuses the existing title-result layout and poster component. Its
-All / Movies / TV filter stays selected during successful background refreshes;
-opening or reloading the page starts with All. Empty states distinguish no
-shared choices from no matches for the selected title type. **Ready to watch**
-contains titles with a matching saved service or a free option. **Not on your
-services** keeps other known shared choices below. **Availability unknown**
-keeps failed lookups separate. Each section preserves newest-shared-first
-ordering. Service notes use broad identities without plan or reseller labels.
+The page shares the search result title card in
+`src/components/title-card.tsx`. Its All / Movies / TV filter stays selected
+during successful background refreshes; opening or reloading the page starts
+with All. Empty states distinguish no shared choices from no matches for the
+selected title type. **Ready to watch** contains titles with a matching saved
+service or a free option. **Not on your services** keeps other known shared
+choices below. **Availability unknown** keeps failed lookups separate. Each
+section preserves newest-shared-first ordering. Service notes use broad
+identities without plan or reseller labels.
 
 The existing screen refresh checks choices and access every three seconds
 while visible and on focus. A failed refresh clears private results until a

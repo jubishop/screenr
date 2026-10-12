@@ -3,6 +3,7 @@ import { currentMember } from "../../../server/session";
 import { loadScreen } from "../../../server/screens";
 import { AppError } from "../../../server/db";
 import { Screen } from "../../../components/screen";
+import { memberPath, parseMemberRoute } from "../../../member-routes";
 export const dynamic = "force-dynamic";
 export default async function Page({
   params,
@@ -12,27 +13,23 @@ export default async function Page({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const user = await currentMember();
-  const path = "/" + ((await params).path ?? []).join("/");
+  const segments = (await params).path ?? [];
   const query = await searchParams;
+  const search = new URLSearchParams();
+  for (const [key, value] of Object.entries(query))
+    for (const entry of [value ?? []].flat()) search.append(key, entry);
+  const route = parseMemberRoute(
+    `/${segments.map(encodeURIComponent).join("/")}?${search}`,
+  );
   const initialGoogleError =
-    path !== "/account" || !query.error
+    route.kind !== "account" || !query.error
       ? ""
       : query.error === "access_denied"
         ? "Google connection was canceled. You can try again."
         : query.error === "email_does_not_match"
           ? "Choose the Google account with the same email address as your Screenr account."
           : "Google could not be connected. Please try again.";
-  const target = new URLSearchParams();
-  for (const key of ["item", "reply"])
-    if (typeof query[key] === "string") target.set(key, query[key]);
-  if (path === "/watch-together") {
-    const usernames = query.with;
-    for (const username of typeof usernames === "string"
-      ? [usernames]
-      : (usernames ?? []))
-      target.append("with", username);
-  }
-  const requestedPath = path + (target.size ? `?${target}` : "");
+  const requestedPath = memberPath(route);
   let initialData = null,
     initialError = "";
   try {

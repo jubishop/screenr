@@ -3,6 +3,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ScreenData } from "../server/screens";
 import type { Person } from "../shared";
+import { parseMemberRoute, type MemberRoute } from "../member-routes";
 import { api, signOut } from "./client";
 import { initial } from "./initial";
 import { Icon, type IconName } from "./icons";
@@ -30,9 +31,10 @@ const sections: {
 ];
 
 // Invitations open from the Friends page, so Friends stays the current section.
-function currentSection(pathname: string, href: string) {
-  if (pathname === href) return "page";
-  if (href === "/people" && pathname === "/invites") return "true";
+function currentSection(route: MemberRoute, href: string) {
+  const section = parseMemberRoute(href).kind;
+  if (route.kind === section) return "page";
+  if (section === "people" && route.kind === "invites") return "true";
   return undefined;
 }
 
@@ -158,8 +160,9 @@ export function Screen({
     );
     await refresh();
   }
-  const pathname = path.split("?")[0];
-  const ownProfile = pathname.toLowerCase() === `/people/${user.username}`;
+  const route = parseMemberRoute(path);
+  const ownProfile =
+    route.kind === "profile" && route.username.toLowerCase() === user.username;
   function activity(title: string, field: string, value: boolean) {
     return mutate("activity", { title, field, value });
   }
@@ -185,7 +188,7 @@ export function Screen({
               key={href}
               href={href}
               prefetch={false}
-              aria-current={currentSection(pathname, href)}
+              aria-current={currentSection(route, href)}
             >
               <span className="nav-icon">
                 <Icon name={icon} />
@@ -237,7 +240,7 @@ export function Screen({
           </div>
         )}
         {/* Keep draft-owning views mounted while failed reads clear their data. */}
-        {path.startsWith("/titles/") && (
+        {route.kind === "title" && (
           <TitleView
             data={data?.kind === "title" ? data : null}
             user={user}
@@ -246,13 +249,13 @@ export function Screen({
             refresh={refresh}
           />
         )}
-        {pathname === "/search" && (
+        {route.kind === "search" && (
           <TitleSearch
             suggestions={data?.kind === "search" ? data.suggestions : null}
             serviceIds={data?.kind === "search" ? data.serviceIds : null}
           />
         )}
-        {pathname === "/people" && (
+        {route.kind === "people" && (
           <PeopleView
             data={data?.kind === "people" ? data : null}
             user={user}
@@ -266,7 +269,7 @@ export function Screen({
             titles={data.titles}
           />
         )}
-        {(ownProfile || data?.kind === "profile") && (
+        {route.kind === "profile" && (
           <ProfileView
             data={data?.kind === "profile" ? data : null}
             user={user}
@@ -276,9 +279,9 @@ export function Screen({
             saveDisplayName={saveDisplayName}
           />
         )}
-        {(path === "/" ||
-          path.startsWith("/titles/") ||
-          /^\/people\/[^/?]+/.test(path)) && (
+        {(route.kind === "feed" ||
+          route.kind === "title" ||
+          route.kind === "profile") && (
           <FeedView
             snapshot={
               data && "conversations" in data
@@ -294,14 +297,14 @@ export function Screen({
             showEmpty={data?.kind !== "profile" || data.profile.can_read}
           />
         )}
-        {pathname === "/invites" && (
+        {route.kind === "invites" && (
           <InvitationsView
             data={data?.kind === "invites" ? data : null}
             busy={busy}
             mutate={mutate}
           />
         )}
-        {pathname === "/account" && (
+        {route.kind === "account" && (
           <AccountView
             data={data?.kind === "account" ? data : null}
             user={user}

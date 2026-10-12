@@ -248,3 +248,42 @@ test("feed poster links name their titles and support keyboard navigation with a
   await reader.context().close();
   await owner.context().close();
 });
+
+test("an item link on the friends feed renders the feed through refreshes", async ({
+  member,
+}) => {
+  const owner = await member("itemlinkowner");
+  const reader = await member("itemlinkreader");
+  await prepareFriendship(owner, reader);
+  const posted = await owner.request.post("/api/screenr/title-comment", {
+    headers: { Origin: browserConfig.baseURL },
+    data: {
+      title: "movie:987654",
+      body: "Linked from the friends feed",
+      spoiler: false,
+    },
+  });
+  expect(posted.status()).toBe(200);
+  const id = (await posted.json()).id as string;
+  await reader.goto(`/?item=${id}`);
+  await expect(
+    reader.getByRole("heading", { name: "Your circle", exact: true }),
+  ).toBeVisible();
+  const item = reader.locator(`[data-item-id="${id}"]`);
+  await expect(item).toContainText("Linked from the friends feed");
+  await expect(
+    reader
+      .getByRole("navigation", { name: "Main navigation" })
+      .getByRole("link", { name: "Circle", exact: true }),
+  ).toHaveAttribute("aria-current", "page");
+  const refreshed = reader.waitForResponse(
+    (response) =>
+      response.url().includes("/api/screenr/screen?") &&
+      new URL(response.url()).searchParams.get("path") === `/?item=${id}`,
+  );
+  await reader.evaluate(() => window.dispatchEvent(new Event("focus")));
+  await (await refreshed).finished();
+  await expect(item).toContainText("Linked from the friends feed");
+  await reader.context().close();
+  await owner.context().close();
+});

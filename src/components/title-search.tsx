@@ -6,6 +6,7 @@ import { viewingAccess } from "../viewing";
 import { TitleServices, ViewingAttribution } from "./title-services";
 import { api, useInteractive } from "./client";
 import { Poster } from "./poster";
+import { TitleCard } from "./title-card";
 
 function Reason({
   people,
@@ -190,27 +191,12 @@ export function TitleSearch({
           aria-busy={searching}
         >
           {visibleResults?.map((title) => (
-            <Link
-              className="search-result"
+            <TitleCard
               key={title.id}
-              href={`/titles/${title.id.replace(":", "/")}`}
-              prefetch={false}
-            >
-              <Poster path={title.poster_path} name={title.name} />
-              <div>
-                <h2>{title.name}</h2>
-                <p className="muted">
-                  {title.kind === "movie" ? "Movie" : "TV show"} ·{" "}
-                  {title.release_date.slice(0, 4)}
-                </p>
-                <p className="small overview">{title.overview.slice(0, 150)}</p>
-                <TitleServices
-                  viewing={title.viewing}
-                  serviceIds={serviceIds ?? []}
-                />
-              </div>
-              <span aria-hidden="true">↗</span>
-            </Link>
+              title={title}
+              heading="h2"
+              serviceIds={serviceIds ?? []}
+            />
           ))}
           {!searching && !error && results.length === 0 && (
             <p className="empty">No matches. Try a different title.</p>
