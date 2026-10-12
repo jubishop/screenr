@@ -4,6 +4,8 @@ import { fileURLToPath } from "node:url";
 
 export default defineConfig({
   testDir: "tests/browser",
+  // A focused test would let the full gate pass after running only that test.
+  forbidOnly: true,
   fullyParallel: true,
   workers: 2,
   timeout: 90_000,

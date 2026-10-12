@@ -284,6 +284,15 @@ Use `npm run test:browser -- --workers=1` for serial execution. The
 [runtime measurement report](research/browser-runtime.md) records the speed
 comparison, retained coverage, and shared-resource audit.
 
+Every browser run, including CI and local full checks, rejects `test.only`
+and `test.describe.only` through Playwright's `forbidOnly` setting. A focused
+test therefore fails the gate instead of passing after running only part of
+the suite. Focus a local run with a spec path, `path:line`, or `--grep`, for
+example `npm run test:browser -- tests/browser/feeds.spec.ts`.
+`tests/app/browser-harness.test.ts` covers the rejection. Application tests
+need no equivalent setting: `node:test` ignores `only` unless `--test-only`
+is passed, and `npm test` does not pass it.
+
 Complete signup, Google sign-in, friendship, invitation, and access-restoration
 journeys retain browser interaction. Request-only reaction and title-comment
 validation is covered through the real HTTP handler in

@@ -1,9 +1,17 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import {
+  copyFile,
+  mkdir,
+  mkdtemp,
+  readFile,
+  rm,
+  symlink,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { promisify } from "node:util";
 
 const execute = promisify(execFile);
@@ -201,5 +209,62 @@ test("standard and diagnostic browser commands select their mode despite inherit
       timeout: 10000,
     });
     assert.ok(stdout.includes(`selected-mode=${expected}`), stdout);
+  }
+});
+
+test("the browser command rejects focused tests", async (t) => {
+  const directory = await mkdtemp(join(tmpdir(), "screenr-browser-focus-"));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  for (const path of [
+    "package.json",
+    "playwright.config.ts",
+    "scripts/browser-config.ts",
+    "scripts/browser-reporter.ts",
+    "scripts/browser-transport.ts",
+    "scripts/browser-evidence.ts",
+  ]) {
+    await mkdir(dirname(join(directory, path)), { recursive: true });
+    await copyFile(path, join(directory, path));
+  }
+  await symlink(resolve("node_modules"), join(directory, "node_modules"));
+  const spec = join(directory, "tests/browser/focus.spec.ts");
+  await mkdir(dirname(spec), { recursive: true });
+  // Listing loads the real command and configuration without a build.
+  const list = () =>
+    execute("npm", ["run", "test:browser", "--", "--list"], {
+      cwd: directory,
+      env: {
+        ...process.env,
+        SCREENR_BROWSER_PORT: undefined,
+        SCREENR_BROWSER_DATABASE: undefined,
+      },
+      timeout: 30_000,
+    });
+  const header = 'import { test } from "@playwright/test";\n';
+  await writeFile(spec, `${header}test("ordinary", async () => {});\n`);
+  assert.match((await list()).stdout, /Total: 1 test in 1 file/);
+  for (const [focused, title] of [
+    ['test.only("focused", async () => {});', "focused"],
+    [
+      'test.describe.only("focused group", () => {\n  test("inside", async () => {});\n});',
+      "focused group",
+    ],
+  ]) {
+    await writeFile(
+      spec,
+      `${header}test("ordinary", async () => {});\n${focused}\n`,
+    );
+    await assert.rejects(
+      list(),
+      (error: Error & { stdout?: string; stderr?: string }) => {
+        const output = `${error.stdout}${error.stderr}`;
+        assert.match(
+          output,
+          /focused with '\.only' is not allowed due to the 'forbidOnly' option in '[^']*playwright\.config\.ts'/,
+        );
+        assert.ok(output.includes(`"focus.spec.ts ${title}"`), output);
+        return true;
+      },
+    );
   }
 });
