@@ -309,6 +309,23 @@ class CIDeploymentTests(DeploymentFixture):
         self.assertNotIn('DEPLOY SUCCEEDED', result.stdout)
         self.assertTrue(any(call[0] == 'ssh' and call[-1].startswith('rm -f') for call in self.calls()))
 
+    def test_failed_rollback_reports_production_down(self):
+        # The remote scripts exit 69 only when no healthy release is running.
+        for status, message in (('69', 'production is down'), ('1', 'Remote deployment exited with status 1')):
+            with self.subTest(status=status):
+                (self.base / 'calls').unlink(missing_ok=True)
+                result = self.execute(SSH_EXIT=status)
+                self.assertEqual(result.returncode, 1)
+                self.assertIn(message, result.stderr)
+                if status != '69':
+                    self.assertNotIn('production is down', result.stderr)
+                # Report the outcome, not the remote script text.
+                self.assertNotIn('Executed remotely', result.stderr)
+                self.assertNotIn('DEPLOY SUCCEEDED', result.stdout)
+                calls = self.calls()
+                self.assertTrue(any(call[0] == 'ssh' and call[-1].startswith('rm -f') for call in calls))
+                self.assertFalse(any(call[0] == 'ssh' and call[-1].startswith('python3 ') for call in calls))
+
     def test_failed_public_health_is_not_success(self):
         result = self.execute(HEALTH='{"ok":false}')
         self.assertNotEqual(result.returncode, 0)
@@ -355,6 +372,11 @@ class RemoteDeploymentTests(unittest.TestCase):
         cd() { :; }
         flock() { [ "${FAIL_LOCK:-}" != yes ]; }
         sha256sum() { command cat >/dev/null; [ "${FAIL_CHECKSUM:-}" != yes ]; }
+        # Faults affect the candidate, and also the restored release when
+        # its migrations already broke it.
+        broken() {
+            [ "${ROLLBACK_BROKEN:-}" = yes ] || [ "$(command cat "$FIXTURE/current")" = "/opt/screenr/releases/$REVISION" ]
+        }
         systemctl() {
             printf '%s\n' "$*" >> "$FIXTURE/systemctl"
             # systemctl is-active with multiple units succeeds if ANY is active.
@@ -369,8 +391,11 @@ class RemoteDeploymentTests(unittest.TestCase):
                 # A crash-looping unit looks active at every check but
                 # restarts between them.
                 case " $* " in *" ${CRASHING_UNIT:-none} "*)
-                    printf x >> "$FIXTURE/restarts"
-                    : > "$FIXTURE/start-limit"
+                    if broken; then
+                        printf x >> "$FIXTURE/restarts"
+                        : > "$FIXTURE/start-limit"
+                    fi
+                    : >> "$FIXTURE/restarts"
                     printf 'NRestarts=%s\n' "$(wc -c < "$FIXTURE/restarts")" ;;
                 esac
             fi
@@ -381,13 +406,20 @@ class RemoteDeploymentTests(unittest.TestCase):
         touch() { :; }
         rm() { printf 'removed\n' >> "$FIXTURE/events"; }
         cat() { printf '%s\n' "$REVISION"; }
-        test() { if [ "$1" = -f ]; then return 0; fi; command test "$@"; }
+        test() {
+            if [ "$1" = -f ]; then return 0; fi
+            # An earlier failed rollback kept this revision's candidate.
+            if [ "$1" = -e ] && [ "$2" = "/opt/screenr/releases/$REVISION/.deployment-pending" ]; then
+                [ "${KEPT_CANDIDATE:-}" = yes ]; return
+            fi
+            command test "$@"
+        }
         alias systemd-run=':'
         chown() { :; }
         ln() { printf '%s\n' "$2" > "$FIXTURE/pending"; }
         mv() { command cp "$FIXTURE/pending" "$FIXTURE/current"; }
         sleep() { printf '%s\n' "$1" >> "$FIXTURE/sleeps"; }
-        curl() { [ "${FAIL_HEALTH:-}" != yes ]; }
+        curl() { ! { [ "${FAIL_HEALTH:-}" = yes ] && broken; }; }
         sh() (
             # Release files are untrusted. Record and refuse any script file;
             # run only the checked script text passed by the CI helper.
@@ -405,7 +437,8 @@ class RemoteDeploymentTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory)
             target = '/opt/screenr/releases/' + REVISION
-            (base / 'current').write_text(target if environment.get('ALREADY_ACTIVE') else '/opt/screenr/releases/previous')
+            initial = '' if environment.get('NO_PREVIOUS') else '/opt/screenr/releases/previous'
+            (base / 'current').write_text(target if environment.get('ALREADY_ACTIVE') else initial)
             result = subprocess.run(['sh', '-c', harness], cwd=base, capture_output=True, text=True,
                                     env={**os.environ, 'FIXTURE': directory, 'REVISION': REVISION,
                                          'CHECKSUM': 'b' * 64,
@@ -421,6 +454,8 @@ class RemoteDeploymentTests(unittest.TestCase):
     def test_remote_activation_runs_and_preserves_active_release(self):
         result, events, current = self.execute_remote()
         self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('stayed active for 15 seconds without restarting.\nActivated ' + REVISION, result.stdout)
+        self.assertNotIn('Rolled back', result.stdout + result.stderr)
         self.assertEqual(current, '/opt/screenr/releases/' + REVISION)
         self.assertNotIn('removed', events)
 
@@ -450,28 +485,64 @@ class RemoteDeploymentTests(unittest.TestCase):
         self.assertEqual(events, 'created\nremoved\n')
         self.assertEqual(current, '/opt/screenr/releases/previous')
 
-    def test_activation_failure_rolls_back_and_cleans_candidate(self):
-        result, events, current = self.execute_remote(FAIL_HEALTH='yes')
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn('Activation failed', result.stderr)
+    def assert_verified_rollback(self, result, events, current):
+        self.assertEqual(result.returncode, 1)
+        self.assertNotIn('Activated', result.stdout)
+        self.assertIn('Activation failed. Rolled back to /opt/screenr/releases/previous', result.stderr)
+        self.assertNotIn('ROLLBACK FAILED', result.stderr)
         self.assertIn('removed', events)
         self.assertEqual(current, '/opt/screenr/releases/previous')
+        # The restored release passes the same health and stability checks.
+        restart = max(i for i, call in enumerate(self.systemctl_calls) if call.startswith('restart'))
+        snapshots = [call for call in self.systemctl_calls[restart:]
+                     if call.startswith('show screenr-web screenr-worker')]
+        self.assertGreaterEqual(len(snapshots), 2)
+
+    def test_activation_failure_rolls_back_and_cleans_candidate(self):
+        self.assert_verified_rollback(*self.execute_remote(FAIL_HEALTH='yes'))
 
     def test_crash_looping_service_fails_activation_and_rolls_back(self):
         # Health and is-active pass at every check; only the restart record
         # shows that the unit keeps crashing on startup.
         for unit in ('screenr-worker', 'screenr-web'):
             with self.subTest(unit=unit):
-                result, events, current = self.execute_remote(CRASHING_UNIT=unit)
-                self.assertNotEqual(result.returncode, 0)
-                self.assertNotIn('Activated', result.stdout)
-                self.assertIn('Activation failed', result.stderr)
-                self.assertIn('removed', events)
-                self.assertEqual(current, '/opt/screenr/releases/previous')
+                self.assert_verified_rollback(*self.execute_remote(CRASHING_UNIT=unit))
                 # The rollback restart must not be refused by the start limit.
                 restarts = [call for call in self.systemctl_calls if call.startswith(('restart', 'reset-failed'))]
                 self.assertEqual(restarts[-2:], ['reset-failed screenr-web screenr-worker',
                                                  'restart screenr-web screenr-worker'])
+
+    def test_unhealthy_rollback_reports_production_down_and_keeps_candidate(self):
+        # Migrations already ran, so the restored release can fail too.
+        for fault, reason in (({'FAIL_HEALTH': 'yes'}, 'did not pass the health check within 20 attempts'),
+                              ({'CRASHING_UNIT': 'screenr-worker'}, 'stopped or restarted within 15 seconds')):
+            with self.subTest(fault=fault):
+                result, events, current = self.execute_remote(ROLLBACK_BROKEN='yes', **fault)
+                self.assertEqual(result.returncode, 69)
+                # The candidate and then the restored release fail the same checks.
+                self.assertEqual(result.stderr.count(reason), 2)
+                self.assertIn('Checking the restored release /opt/screenr/releases/previous.', result.stderr)
+                self.assertIn('ROLLBACK FAILED: production is down.', result.stderr)
+                self.assertNotIn('Rolled back to', result.stderr + result.stdout)
+                self.assertNotIn('Activated', result.stdout)
+                # The candidate already migrated the database; keep it for recovery.
+                self.assertNotIn('removed', events)
+                self.assertEqual(current, '/opt/screenr/releases/previous')
+
+    def test_failed_activation_without_previous_release_reports_production_down(self):
+        result, events, current = self.execute_remote(NO_PREVIOUS='yes', FAIL_HEALTH='yes')
+        self.assertEqual(result.returncode, 69)
+        self.assertIn('production is down', result.stderr)
+        self.assertNotIn('Rolled back to', result.stderr)
+        self.assertNotIn('removed', events)
+        self.assertEqual(current, '/opt/screenr/releases/' + REVISION)
+
+    def test_retry_replaces_candidate_kept_by_failed_rollback(self):
+        result, events, current = self.execute_remote(KEPT_CANDIDATE='yes')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        # Activation then creates the release's cache directory.
+        self.assertEqual(events, 'removed\ncreated\ncreated\n')
+        self.assertEqual(current, '/opt/screenr/releases/' + REVISION)
 
     def test_activation_waits_longer_than_a_restart_cycle(self):
         # A unit that crashes on startup is active between its restarts. A

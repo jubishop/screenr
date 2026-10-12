@@ -512,8 +512,9 @@ use or restore a friendship after unfriending or blocking. Invites refreshes
 don't wait for the shared write lock, and writes stop waiting for it with a
 retryable error.
 Operational tests check activation rollback after a stalled health request or
-a web or worker service that crashes on startup, and rejection of incorrectly
-named SQL migrations before schema changes begin.
+a web or worker service that crashes on startup, a production-down report when
+the restored release also fails its checks, and rejection of incorrectly named
+SQL migrations before schema changes begin.
 The proxy test runs the production Caddy routes on loopback with a temporary
 certificate and a fixture upstream. It verifies the `screenr.club` site, client IP
 forwarding, security headers, and old invitation/title redirects with their

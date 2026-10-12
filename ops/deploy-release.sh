@@ -28,7 +28,7 @@ done
 created=false
 cleanup() {
     # Remove only a directory created by this attempt, after failure before
-    # activation or a completed rollback. Preserve a possibly active release.
+    # activation or a verified rollback. Preserve a possibly active release.
     if [ "$created" = true ] && [ "$(readlink /opt/screenr/current)" != "$release" ]; then
         rm -rf "$release"
     fi
@@ -38,12 +38,19 @@ if [ "$(readlink /opt/screenr/current)" = "$release" ]; then
     echo "Revision $revision is already active; verifying health."
 else
     systemctl start screenr-backup.service
+    # A failed rollback kept this revision's candidate; a retry replaces it.
+    if test -e "$release/.deployment-pending"; then rm -rf "$release"; fi
     mkdir "$release"
     created=true
     tar -xzf "$archive" -C "$release" --no-same-owner
     touch "$release/.deployment-pending"
     test "$(cat "$release/REVISION")" = "$revision"
-    sh -c "$activate" activate "$release"
+    status=0
+    sh -c "$activate" activate "$release" || status=$?
+    # Status 69: no healthy release is running. The candidate already
+    # migrated the database, so keep it for recovery.
+    if [ "$status" -eq 69 ]; then created=false; fi
+    [ "$status" -eq 0 ] || exit "$status"
 fi
 test "$(cat /opt/screenr/current/REVISION)" = "$revision"
 for service in screenr-db screenr-web screenr-worker; do

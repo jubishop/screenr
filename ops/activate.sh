@@ -1,5 +1,6 @@
 #!/bin/sh
 # Run as root on the provisioned host with a verified unpacked release path.
+# Exit status 69 means that activation failed and no healthy release is running.
 set -eu
 release=${1:?Usage: ops/activate.sh /opt/screenr/releases/REVISION}
 case "$release" in /opt/screenr/releases/*) ;; *) echo 'Unexpected release path' >&2; exit 1 ;; esac
@@ -27,29 +28,47 @@ healthy() {
 service_state() {
     systemctl show screenr-web screenr-worker -p Id -p ActiveState -p NRestarts -p ActiveEnterTimestampMonotonic
 }
-attempt=0
-while test "$attempt" -lt 20; do
-    if healthy; then
-        # A unit that crashes on startup looks active between restarts. Wait
-        # longer than its startup plus the 5-second RestartSec delay.
-        if before=$(service_state) && sleep 15 && healthy && test "$before" = "$(service_state)"; then
-            echo 'Screenr web and worker stayed active for 15 seconds without restarting.'
-            echo "Activated $(cat "$release/REVISION")"
-            exit 0
+# Wait for health, then require both services to stay up without restarting.
+stays_healthy() {
+    attempt=0
+    while test "$attempt" -lt 20; do
+        if healthy; then
+            # A unit that crashes on startup looks active between restarts. Wait
+            # longer than its startup plus the 5-second RestartSec delay.
+            if before=$(service_state) && sleep 15 && healthy && test "$before" = "$(service_state)"; then
+                echo 'Screenr web and worker stayed active for 15 seconds without restarting.'
+                return 0
+            fi
+            echo 'A Screenr service stopped or restarted within 15 seconds of starting:' >&2
+            service_state >&2 || true
+            return 1
         fi
-        echo 'A Screenr service stopped or restarted within 15 seconds of starting:' >&2
-        service_state >&2 || true
-        break
-    fi
-    attempt=$((attempt + 1))
-    sleep 1
-done
-if test -n "$previous"; then
-    ln -s "$previous" /opt/screenr/current.rollback
-    mv -Tf /opt/screenr/current.rollback /opt/screenr/current
+        attempt=$((attempt + 1))
+        sleep 1
+    done
+    echo 'Screenr web and worker did not pass the health check within 20 attempts.' >&2
+    return 1
+}
+restore_previous() {
+    ln -s "$previous" /opt/screenr/current.rollback &&
+        mv -Tf /opt/screenr/current.rollback /opt/screenr/current || return 1
     # A crash loop can reach the start limit, which also refuses this restart.
-    systemctl reset-failed screenr-web screenr-worker
-    systemctl restart screenr-web screenr-worker
+    systemctl reset-failed screenr-web screenr-worker || true
+    systemctl restart screenr-web screenr-worker || true
+    echo "Checking the restored release $previous." >&2
+    stays_healthy
+}
+if stays_healthy; then
+    echo "Activated $(cat "$release/REVISION")"
+    exit 0
 fi
-echo 'Activation failed. Inspect the Screenr service journals; the database migration was not reversed.' >&2
-exit 1
+if test -z "$previous"; then
+    echo 'ACTIVATION FAILED: production is down. No previous release exists to restore; inspect the Screenr service journals.' >&2
+    exit 69
+fi
+if restore_previous; then
+    echo "Activation failed. Rolled back to $previous, which passed the same health checks. Inspect the Screenr service journals; the database migration was not reversed." >&2
+    exit 1
+fi
+echo "ROLLBACK FAILED: production is down. $previous did not pass the health checks after rollback, and the database migration was not reversed. The candidate $release is kept for recovery; inspect the Screenr service journals." >&2
+exit 69

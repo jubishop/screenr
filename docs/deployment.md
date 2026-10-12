@@ -280,9 +280,21 @@ jobs have no production secrets. To retry a failed deploy job, use
 artifact. The retry is refused once production runs a newer revision, which
 already contains the change. A repeat deployment of the active revision
 verifies health without extracting or restarting it. A failed extraction or
-startup removes only a new candidate after successful rollback. Failures in
+startup removes only a new candidate after a verified rollback. Failures in
 later verification require inspection and, when necessary, manual recovery.
 Database migrations are not reversed.
+
+When activation fails and no healthy release is running, the job ends with
+`DEPLOY FAILED: Activation failed and no healthy release is running, so
+production is down.` Deployment keeps the candidate, whose migrations
+already ran, with its `.deployment-pending` marker. `current` points at the
+restored release that failed its checks. Recover at once: read the service
+journals, then push a fix or, after a transient failure, use
+**Re-run all jobs**. A retry of the same revision replaces the kept
+candidate. If a migration damaged data, restore the backup taken before
+activation with the
+[restore runbook](restore-and-patching.md#restore-on-the-existing-host).
+Cleanup after the next successful deployment removes the kept candidate.
 
 After the public health, login, and sign-in checks pass, deployment runs the checked
 `ops/prune-releases.py` with the verified release path. Cleanup takes the same
@@ -375,9 +387,16 @@ single check can miss
 ([issue #115](https://github.com/jubishop/screenr/issues/115)). A failed health
 or stability check returns to the previous release when one exists. Rollback
 first clears any start limit the crash loop reached, so systemd accepts the
-restart. Database changes are not reversed. Preserve compatible migrations and
-take a backup before upgrades. Keep the previous release until the new one has
-passed independent acceptance.
+restart. Database changes are not reversed, so the restored release can fail
+too. Rollback therefore repeats the same health and stability checks
+([issue #120](https://github.com/jubishop/screenr/issues/120)). When they
+pass, activation prints `Activation failed. Rolled back to` the previous
+release and exits with status 1. When they fail, it prints
+`ROLLBACK FAILED: production is down.` and exits with status 69. Without a
+previous release, a failed check prints
+`ACTIVATION FAILED: production is down.` and also exits with status 69.
+Preserve compatible migrations and take a backup before upgrades. Keep the
+previous release until the new one has passed independent acceptance.
 
 Create the first private invitation using a one-off process with the same
 private environment, rather than opening a public bootstrap endpoint:

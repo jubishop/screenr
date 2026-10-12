@@ -13,6 +13,8 @@ import tarfile
 
 REPO = 'jubishop/screenr'
 ROOT = Path(__file__).resolve().parents[1]
+# The remote scripts exit with this status when no healthy release is running.
+PRODUCTION_DOWN = 69
 
 
 def run(*args, capture=False):
@@ -116,7 +118,15 @@ def main():
     try:
         run('scp', str(archive), f'{host}:{remote}')
         check_release(revision, host)
-        run('ssh', host, shlex.join(('sh', '-c', deploy, 'deploy-release', revision, checksum, remote, activate)))
+        try:
+            run('ssh', host, shlex.join(('sh', '-c', deploy, 'deploy-release', revision, checksum, remote, activate)))
+        except subprocess.CalledProcessError as error:
+            # The remote output above explains the failure. Omit the script text.
+            if error.returncode == PRODUCTION_DOWN:
+                raise ValueError('Activation failed and no healthy release is running, so production is down. '
+                                 'Follow the recovery steps in docs/deployment.md.') from error
+            raise ValueError(f'Remote deployment exited with status {error.returncode}; '
+                             'see its output above.') from error
     finally:
         try:
             run('ssh', host, f'rm -f {remote}')

@@ -57,12 +57,13 @@ test("activation reaches rollback when its health request stalls", async () => {
     false,
     "Activation must reach its own failure path.",
   );
-  assert.equal(result.code, 1, result.stderr);
+  // Every health request stalls, so the restored release fails its checks too.
+  assert.equal(result.code, 69, result.stderr);
   assert.match(
     result.stdout,
     /link \/opt\/screenr\/releases\/previous \/opt\/screenr\/current.rollback/,
   );
-  assert.match(result.stderr, /Activation failed/);
+  assert.match(result.stderr, /ROLLBACK FAILED: production is down\./);
 });
 
 test("migration rejects an invalid SQL filename before applying domain changes", async () => {
