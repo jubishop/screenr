@@ -5,6 +5,7 @@ import { promisify } from "node:util";
 import { cp, mkdtemp, mkdir, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import "./social-fixture";
 
 const execute = promisify(execFile);
 
@@ -67,10 +68,6 @@ test("activation reaches rollback when its health request stalls", async () => {
 });
 
 test("migration rejects an invalid SQL filename before applying domain changes", async () => {
-  const database =
-    process.env.TEST_DATABASE_URL ??
-    "postgresql://screenr:screenr-local-only@127.0.0.1:5439/screenr_test";
-  assert.ok(new URL(database).pathname.endsWith("_test"));
   const directory = await mkdtemp(join(tmpdir(), "screenr-migration-"));
   try {
     await mkdir(join(directory, "scripts"));
@@ -86,18 +83,13 @@ test("migration rejects an invalid SQL filename before applying domain changes",
     // A valid pending migration must not run before the filename check.
     await writeFile(join(directory, "db/999-review-probe.sql"), "SELECT 1/0;");
     await writeFile(join(directory, "db/invalid.sql"), "SELECT 1;");
-    const environment = {
-      ...process.env,
-      DATABASE_URL: database,
-      BETTER_AUTH_SECRET: "screenr-test-secret-only-32-characters-long",
-      BETTER_AUTH_URL: "http://localhost:3000",
-    };
+    // Each migration run inherits the test database and auth settings from the
+    // shared fixture.
     const result = await execute(
       process.execPath,
       ["--import", "tsx", "scripts/migrate.ts"],
       {
         cwd: directory,
-        env: environment,
         timeout: 15000,
       },
     ).then(
@@ -113,7 +105,6 @@ test("migration rejects an invalid SQL filename before applying domain changes",
       ["--import", "tsx", "scripts/migrate.ts"],
       {
         cwd: directory,
-        env: environment,
         timeout: 15000,
       },
     );

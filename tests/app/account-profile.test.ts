@@ -1,7 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { useDatabase, db, pending, person } from "./social-fixture";
-const { createAuth } = await import("../../src/server/auth");
+import { useDatabase, db, pending, person, cookieFor } from "./social-fixture";
 const { loadScreen } = await import("../../src/server/screens");
 const { createInvitation, completeSignup, listInvitations } =
   await import("../../src/server/invitations");
@@ -9,41 +8,6 @@ const { updateTitleActivity, addComment, profileFor } =
   await import("../../src/server/social");
 
 useDatabase();
-
-async function sessionCookie(userId: string) {
-  const email = (
-    await db.query('SELECT email FROM "user" WHERE id=$1', [userId])
-  ).rows[0].email;
-  let code = "";
-  const auth = createAuth({
-    rateLimit: false,
-    sendCode: async ({ otp }) => {
-      code = otp;
-    },
-  });
-  const post = (path: string, body: unknown) =>
-    auth.handler(
-      new Request(`http://localhost:3000/api/auth/${path}`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Origin: "http://localhost:3000",
-        },
-        body: JSON.stringify(body),
-      }),
-    );
-  assert.equal(
-    (await post("email-otp/send-verification-otp", { email, type: "sign-in" }))
-      .status,
-    200,
-  );
-  const response = await post("sign-in/email-otp", { email, otp: code });
-  assert.equal(response.status, 200);
-  return response.headers
-    .getSetCookie()
-    .map((value) => value.split(";")[0])
-    .join("; ");
-}
 
 async function rename(
   cookie: string,
@@ -88,7 +52,7 @@ test("account profile edits update both names across existing social views and p
   );
   await updateTitleActivity(alice, "movie:1", "want_to_watch", true);
   await updateTitleActivity(ben, "movie:1", "want_to_watch", true);
-  const cookie = await sessionCookie(alice);
+  const cookie = await cookieFor(alice);
   const response = await editProfile(cookie, {
     name: "  Renée Movie Fan 🎬  ",
     username: "  Alice_New  ",
@@ -135,7 +99,7 @@ test("account profile edits update both names across existing social views and p
     (await editProfile(cookie, { name: "ben", username: "ALICE_NEW" })).status,
     200,
   );
-  const signedInAgain = await sessionCookie(alice);
+  const signedInAgain = await cookieFor(alice);
   assert.equal(
     (await editProfile(signedInAgain, { name: "ben", username: "alice_new" }))
       .status,
@@ -147,7 +111,7 @@ test("account profile edits update both names across existing social views and p
 test("account profile edits validate signup rules and roll back both fields on conflicts", async () => {
   const alice = await person("alice");
   await person("taken");
-  const cookie = await sessionCookie(alice);
+  const cookie = await cookieFor(alice);
   for (const username of [
     "",
     "  ",
@@ -193,7 +157,7 @@ test("account profile edits validate signup rules and roll back both fields on c
 test("account profile edits require membership and only update the signed-in member", async () => {
   const alice = await person("alice"),
     ben = await person("ben");
-  const cookie = await sessionCookie(alice);
+  const cookie = await cookieFor(alice);
   const data = {
     name: "Changed",
     username: "changed",
@@ -208,7 +172,7 @@ test("account profile edits require membership and only update the signed-in mem
   const invite = await createInvitation(null);
   const incomplete = await pending("incomplete", invite.token);
   assert.equal(
-    (await editProfile(await sessionCookie(incomplete), data)).status,
+    (await editProfile(await cookieFor(incomplete), data)).status,
     403,
   );
   assert.equal((await editProfile(cookie, data)).status, 200);
@@ -219,7 +183,7 @@ test("account profile edits require membership and only update the signed-in mem
 test("account profile edits cannot claim the same username concurrently", async () => {
   const alice = await person("alice"),
     ben = await person("ben");
-  const cookies = [await sessionCookie(alice), await sessionCookie(ben)];
+  const cookies = [await cookieFor(alice), await cookieFor(ben)];
   const responses = await Promise.all(
     cookies.map((cookie) =>
       editProfile(cookie, { name: "Updated", username: "shared_handle" }),
@@ -251,7 +215,7 @@ test("display name edits update existing social views without changing identity"
   const comment = await addComment(alice, item, "An existing reply", false);
   await updateTitleActivity(alice, "movie:1", "want_to_watch", true);
   await updateTitleActivity(ben, "movie:1", "want_to_watch", true);
-  const response = await rename(await sessionCookie(alice), {
+  const response = await rename(await cookieFor(alice), {
     name: "  Renée Movie Fan 🎬  ",
   });
   assert.equal(response.status, 200, await response.clone().text());
@@ -289,7 +253,7 @@ test("display name edits update existing social views without changing identity"
     together.participants.find((p) => p.user_id === alice)?.display_name,
     "Renée Movie Fan 🎬",
   );
-  await sessionCookie(alice);
+  await cookieFor(alice);
   assert.equal(
     (await profileFor(alice, "alice")).display_name,
     "Renée Movie Fan 🎬",
@@ -299,7 +263,7 @@ test("display name edits update existing social views without changing identity"
 test("display name edits validate input and allow duplicate names", async () => {
   const alice = await person("alice"),
     ben = await person("ben");
-  const cookie = await sessionCookie(alice);
+  const cookie = await cookieFor(alice);
   for (const name of ["", " \n ", "x".repeat(61), null, 42, {}]) {
     const response = await rename(cookie, { name });
     assert.equal(response.status, 400);
@@ -345,7 +309,7 @@ const hiddenCharacterError =
 
 test("display names reject control and bidirectional override characters in every form", async () => {
   const alice = await person("alice");
-  const cookie = await sessionCookie(alice);
+  const cookie = await cookieFor(alice);
   const { token } = await createInvitation(null);
   const newcomer = await pending("newcomer", token);
   for (const character of hiddenCharacters) {
@@ -407,7 +371,7 @@ test("the database rejects stored display names with hidden characters", async (
 test("display name edits require membership and only update the signed-in member", async () => {
   const alice = await person("alice"),
     ben = await person("ben");
-  const cookie = await sessionCookie(alice);
+  const cookie = await cookieFor(alice);
   assert.equal((await rename("", { name: "Changed" })).status, 401);
   assert.equal(
     (await rename(cookie, { name: "Changed" }, "https://other.example")).status,
@@ -416,7 +380,7 @@ test("display name edits require membership and only update the signed-in member
   const invite = await createInvitation(null);
   const incomplete = await pending("incomplete", invite.token);
   assert.equal(
-    (await rename(await sessionCookie(incomplete), { name: "Changed" })).status,
+    (await rename(await cookieFor(incomplete), { name: "Changed" })).status,
     403,
   );
   const response = await rename(cookie, {

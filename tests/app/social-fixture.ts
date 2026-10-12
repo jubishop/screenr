@@ -2,16 +2,30 @@ import { before, beforeEach, after } from "node:test";
 import assert from "node:assert/strict";
 import { randomBytes } from "node:crypto";
 
-process.env.DATABASE_URL =
+// Every application suite that uses the test database or server modules
+// imports this module first, so this setup runs before any server module loads.
+export const testDatabaseURL =
   process.env.TEST_DATABASE_URL ??
   "postgresql://screenr:screenr-local-only@127.0.0.1:5439/screenr_test";
-
-if (!new URL(process.env.DATABASE_URL).pathname.endsWith("_test"))
+if (!new URL(testDatabaseURL).pathname.endsWith("_test"))
   throw new Error("Tests require a dedicated database ending in _test.");
-
+process.env.DATABASE_URL = testDatabaseURL;
 process.env.BETTER_AUTH_SECRET = "screenr-test-secret-only-32-characters-long";
-
 process.env.BETTER_AUTH_URL = "http://localhost:3000";
+// A developer shell may export real provider credentials. Clear them so no
+// application test reaches TMDB, Resend, or Google. Suites that exercise a
+// provider set fake values and use a loopback server or a replaced fetch.
+for (const name of [
+  "TMDB_READ_TOKEN",
+  "SCREENR_TEST_TMDB_URL",
+  "EMAIL_TRANSPORT",
+  "RESEND_API_KEY",
+  "EMAIL_FROM",
+  "GOOGLE_CLIENT_ID",
+  "GOOGLE_CLIENT_SECRET",
+])
+  delete process.env[name];
+
 export const { db } = await import("../../src/server/db");
 const { createAuth } = await import("../../src/server/auth");
 const { migrate } = await import("../../scripts/migrate");

@@ -2,15 +2,10 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { Pool } from "pg";
-
-const url =
-  process.env.TEST_DATABASE_URL ??
-  "postgresql://screenr:screenr-local-only@127.0.0.1:5439/screenr_test";
-if (!new URL(url).pathname.endsWith("_test"))
-  throw new Error("Use a test database.");
+import { testDatabaseURL } from "./social-fixture";
 
 test("exclusive action migration retains latest choices and all discussion history", async () => {
-  const pool = new Pool({ connectionString: url });
+  const pool = new Pool({ connectionString: testDatabaseURL });
   const client = await pool.connect();
   try {
     await client.query("BEGIN");

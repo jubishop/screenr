@@ -1,17 +1,9 @@
 import { test, before, beforeEach, after } from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
+import { db, cookieFor } from "./social-fixture";
 
-process.env.DATABASE_URL =
-  process.env.TEST_DATABASE_URL ??
-  "postgresql://screenr:screenr-local-only@127.0.0.1:5439/screenr_test";
-if (!new URL(process.env.DATABASE_URL).pathname.endsWith("_test"))
-  throw new Error("Tests require a dedicated database ending in _test.");
-process.env.BETTER_AUTH_SECRET = "screenr-test-secret-only-32-characters-long";
-process.env.BETTER_AUTH_URL = "http://localhost:3000";
-const { db } = await import("../../src/server/db");
 const { migrate } = await import("../../scripts/migrate");
-const { createAuth } = await import("../../src/server/auth");
 const { POST, GET } = await import("../../src/app/api/screenr/[action]/route");
 const { createInvitation, invitationHash, completeSignup } =
   await import("../../src/server/invitations");
@@ -39,42 +31,7 @@ async function member(username = "member") {
     [id, email, invitationHash(token)],
   );
   await completeSignup(id, "Member", username);
-  let code = "";
-  const auth = createAuth({
-    rateLimit: false,
-    sendCode: async ({ otp }) => {
-      code = otp;
-    },
-  });
-  const authPost = (path: string, body: unknown) =>
-    auth.handler(
-      new Request(`http://localhost:3000/api/auth/${path}`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Origin: "http://localhost:3000",
-        },
-        body: JSON.stringify(body),
-      }),
-    );
-  assert.equal(
-    (
-      await authPost("email-otp/send-verification-otp", {
-        email,
-        type: "sign-in",
-      })
-    ).status,
-    200,
-  );
-  const response = await authPost("sign-in/email-otp", { email, otp: code });
-  assert.equal(response.status, 200);
-  return {
-    id,
-    cookie: response.headers
-      .getSetCookie()
-      .map((value) => value.split(";")[0])
-      .join("; "),
-  };
+  return { id, cookie: await cookieFor(id) };
 }
 function post(
   action: string,

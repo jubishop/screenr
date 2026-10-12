@@ -167,16 +167,25 @@ and application still use normal sessions and access checks. `member` creates
 a mobile browser context; `signIn` prepares the test's existing page.
 `prepareFriendship` sends and accepts requests through the authenticated API.
 
-- Application suites call `useDatabase()` from
-  [social-fixture.ts](../tests/app/social-fixture.ts) once at file scope.
-  The module validates the test database and sets authentication configuration
-  before importing server modules. Each suite registers its own migration,
-  per-test user/verification reset, and final pool shutdown. Node isolates
-  files in separate processes; keep `--test-concurrency=1` when running them
-  together against one database.
+- Every application suite that uses the test database or server modules
+  imports [social-fixture.ts](../tests/app/social-fixture.ts) first. Before
+  server modules load, the module validates the test database, exported as
+  `testDatabaseURL`, and sets authentication configuration. It also clears
+  provider settings inherited from the shell: the TMDB token and catalog URL,
+  the email transport, Resend key and sender, and the Google client. Tests
+  therefore never call TMDB, Resend, or Google, even when a developer shell
+  exports real credentials. A suite that exercises a provider sets fake values
+  after the import and answers with a loopback server or a replaced `fetch`.
+  `tests/app/social-fixture.test.ts` covers the clearing.
+- Suites call `useDatabase()` once at file scope to register the migration,
+  per-test user/verification reset, and final pool shutdown. A suite that
+  resets other tables imports `db` and registers its own hooks instead. Node
+  isolates files in separate processes; keep `--test-concurrency=1` when
+  running them together against one database.
 - The same helper contains pending/completed members, accepted friendship,
-  and a small discussion fixture. Feature-specific setup and assertions stay
-  in their feature files. No suite imports another test file.
+  a signed session cookie for route tests (`cookieFor`), and a small
+  discussion fixture. Feature-specific setup and assertions stay in their
+  feature files. No suite imports another test file.
 - Browser suites that import `test` from
   [monitored-test.ts](../tests/browser/monitored-test.ts) get its automatic
   per-test fixture, which resets and checks page and hydration errors in every

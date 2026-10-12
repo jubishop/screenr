@@ -1,17 +1,10 @@
 import { test, before, beforeEach, after, afterEach, mock } from "node:test";
 import assert from "node:assert/strict";
+import { db } from "./social-fixture";
 
-process.env.DATABASE_URL =
-  process.env.TEST_DATABASE_URL ??
-  "postgresql://screenr:screenr-local-only@127.0.0.1:5439/screenr_test";
-if (!new URL(process.env.DATABASE_URL).pathname.endsWith("_test"))
-  throw new Error("Tests require a dedicated database ending in _test.");
-process.env.BETTER_AUTH_SECRET = "screenr-test-secret-only-32-characters-long";
-process.env.BETTER_AUTH_URL = "http://localhost:3000";
 process.env.EMAIL_TRANSPORT = "resend";
 process.env.RESEND_API_KEY = "test-key-never-used-on-the-network";
 process.env.EMAIL_FROM = "Screenr <screenr@example.test>";
-const { db } = await import("../../src/server/db");
 const { migrate } = await import("../../scripts/migrate");
 const { queueCode, deliverOne } = await import("../../src/server/email");
 before(migrate);
