@@ -318,10 +318,34 @@ is central to its purpose.
 The [application stack](application-stack.md) is selected. Features such as
 installation or offline support remain open.
 
+**Updated — 2026-10-12:** Screenr is installable to the home screen
+through a web manifest and app icons. It has no offline mode. When a page
+cannot load because the device is offline, show a plain "You're
+offline" page instead of a browser error, using a minimal service worker that
+caches only that page. The user chose this because feeds, comments, and
+catalog data are live, and stale offline content would mislead.
+[Issue #145](https://github.com/jubishop/screenr/issues/145) tracks the
+work. Rejected alternatives: staying a regular website without installation,
+and caching recent feeds and titles for offline reading.
+
 ### Interface design — 2026-10-12
 
 The [interface design decisions](interface-design.md) define the layout and
 presentation changes accepted after the 2026-10-12 design review.
+
+### No release gate — 2026-10-12
+
+**Decision:** Screenr rolls out continuously. There is no first-release
+scope, feature gate, or step-function launch moment. The user invites people
+whenever they choose, and features ship as their issues are completed, in
+whatever order the user prioritizes.
+
+**Why:** The user said: "ill invite people when i want" and "we will just
+roll out constantly all the time, theres no specific gate or step-function
+moment." This closes
+[issue #164](https://github.com/jubishop/screenr/issues/164), which asked
+which features must ship before a wider invite, and removes the open
+first-release scope question.
 
 ### Invite-only launch — 2026-09-04
 
@@ -923,6 +947,9 @@ inferences about recommendation influence or viewing outside the app.
 **Why:** The user accepted these measures for the agreed success criteria
 of repeat use, choosing titles through friends, and sustained conversation.
 
+**Updated — 2026-10-12:** The [usage telemetry decisions](usage-telemetry.md)
+define storage, measure definitions, attribution, and reporting.
+
 ### Movie and TV catalog source — 2026-09-05
 
 **Decision:** Use The Movie Database (TMDB) for the movie and TV catalog,
@@ -1062,6 +1089,9 @@ agreed access rules.
 be tried early. The remaining agreed features follow in later development
 milestones before the first release; this does not reduce the release scope.
 
+**Updated — 2026-10-12:** There is no separate first-release gate; see
+[No release gate](#no-release-gate--2026-10-12).
+
 [GitHub issue #1](https://github.com/jubishop/screenr/issues/1) owns the
 implementation work and acceptance criteria.
 
@@ -1099,5 +1129,3 @@ mean that DNS, provider settings, or production have already changed.
 
 - Deployment configuration; routine backup settings can be chosen during
   implementation under the [initial backup scope](application-stack.md#initial-backup-scope--2026-09-05).
-- Telemetry event definitions, attribution, and implementation.
-- The detailed first-release delivery scope.

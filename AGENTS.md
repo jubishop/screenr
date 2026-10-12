@@ -84,7 +84,8 @@ browser-specific behavior and complete user journeys. Follow the
 Screenr is a social app for TV and movies. Read
 [`docs/product-brief.md`](docs/product-brief.md) before product work and
 [`docs/application-stack.md`](docs/application-stack.md) for the selected
-core stack. The detailed first-release scope remains open.
+core stack. Screenr rolls out continuously with no first-release gate; the
+user invites people when they choose.
 For dependency choices, apply the
 [development preference](memory/development-preferences.md#third-party-dependencies).
 Do not treat an interview recommendation as an accepted decision.

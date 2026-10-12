@@ -6,10 +6,9 @@ type: user
 
 # Development preferences
 
-Use Story Archive and PodHaven as references for repository memory,
-documentation, and worktree setup. Keep the shared conventions consistent,
-but carry over application-specific build steps only after Screenr's stack
-is selected.
+Project Starter provides Screenr's shared repository conventions for
+memory, documentation, worktrees, and checks. On 2026-10-12 the user retired
+Story Archive and PodHaven as convention references.
 
 The user requested the `grill-me` interview to resolve material product
 decisions before implementation. Ask one question at a time and provide a

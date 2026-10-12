@@ -489,6 +489,24 @@ capture the next occurrence. The tradeoff is that the intermittent fault remains
 unresolved after this delivery; evidence and a verified correction are still
 required before closing #83.
 
+**Decision — 2026-10-12:** Keep the prompt-failure guard in
+`scripts/browser-test.ts`, which fails a test as soon as an essential local
+script fails to load. Retire the transport capture: the proxy socket ring,
+the original-transport snapshot, comparison probes, `script-diagnostics.json`
+reports, the `.cache/browser-failures/` archive, and their tests.
+[Issue #157](https://github.com/jubishop/screenr/issues/157) tracks the
+removal and replaces this section with a short outcome summary. This
+supersedes the 2026-09-08 decision to keep these diagnostics permanently.
+
+**Why:** #83 closed after its IPv6 self-connection correction, and browser
+tests now default to production serving. The guard still prevents hung tests
+and keeps the browser error and trace, while the capture added socket
+wrapping to every run for a fault that no longer occurs. Git history retains
+the recorder if the failure returns.
+
+**Rejected alternatives:** Keeping the full recorder as insurance, and
+removing the guard as well.
+
 **Decision — 2026-09-08:** Issue #69 is complete when permanent failure
 diagnostics are delivered and another investigation of at most 30 minutes has
 a recorded outcome. Reproduction of the original error is not required for

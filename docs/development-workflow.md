@@ -45,6 +45,25 @@ they can briefly run different LTS releases. Full CI on each push and the
 production health checks with rollback limit that risk. Raise the minimum when
 the application starts relying on a newer release.
 
+## Dependency updates
+
+**Decision — 2026-10-12:** Enable GitHub vulnerability alerts and Dependabot
+security updates. Add weekly Dependabot version updates for the `npm` and
+`github-actions` ecosystems. They keep exact npm versions and commit-SHA
+Action pins. Group minor and patch updates into one pull request per
+ecosystem, and open major updates separately. Every update pull request runs
+the full CI gate and merges only after review and passing CI. Implementation
+is tracked in [issue #111](https://github.com/jubishop/screenr/issues/111).
+
+**Why:** The user chose automatic update pull requests so security fixes and
+routine releases do not depend on someone noticing them. This follows the
+[toolchain policy](foundation/engineering-policy.md#runtime-and-toolchain-versions)
+preference against versions that someone must remember to bump, while
+keeping the lockfile.
+
+**Rejected alternatives:** Security updates only, alerts only, and fully
+manual updates.
+
 ## Checks
 
 Follow the [check schedule](foundation/engineering-policy.md#checks).

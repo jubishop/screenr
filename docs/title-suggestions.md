@@ -114,6 +114,36 @@ withholding attribution to individual people. This is a limited aggregate
 exception to the existing direct-friend activity audience, not a broader
 change to content access.
 
+### Minimum friends of friends per signal — 2026-10-12
+
+**Decision:** Use a title's second-degree Recommend signal only when at least
+three different friends of friends currently recommend it. Apply the same
+minimum separately to second-degree Want to watch. Count distinct people
+after the existing access, blocking, and viewer-exclusion rules.
+
+Ignore a signal below the minimum entirely: it does not make a title
+eligible, does not add to its ranking score (including profile top 10
+weights), and does not produce a count label. A title that direct friends'
+signals qualify still appears, ranked by those signals alone. This resolves
+[issue #107](https://github.com/jubishop/screenr/issues/107).
+
+**Why:** A count of one could identify a person when the viewer's
+friend-of-friend group is small, because members can see accepted friends on
+profiles. A title that appears without any explanation would also reveal
+that someone in the extended circle acted, so signals below the minimum
+cannot affect eligibility either. The user first chose a minimum of two, then
+changed it to three.
+
+**Tradeoff:** Fewer second-degree suggestions appear while the circle is
+small. Per-action minimums keep a label such as "3 friends of friends
+recommend this" from describing a smaller group.
+
+**Rejected alternatives:** A minimum of two can still reveal both people when
+a viewer knows exactly two friends of friends. A minimum overall
+friend-of-friend group size would still let one person's action on a title be
+inferred. Keeping below-minimum titles without labels or ranking boosts
+would still disclose that someone acted.
+
 ### Switching between suggestions and search — 2026-09-07
 
 **Decision:** While browsing suggestions, keep them visible as the viewer
