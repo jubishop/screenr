@@ -8,8 +8,20 @@ import { request } from "node:https";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
+import { NextRequest } from "next/server";
+import config from "../../next.config";
+import { proxy } from "../../src/proxy";
 
 const execute = promisify(execFile);
+
+// Every value a response carries for a header, without Node's merging.
+function values(rawHeaders: string[], name: string) {
+  const found: string[] = [];
+  for (let index = 0; index < rawHeaders.length; index += 2)
+    if (rawHeaders[index].toLowerCase() === name.toLowerCase())
+      found.push(rawHeaders[index + 1]);
+  return found;
+}
 
 test(
   "CI runs the Caddy release pinned to match production",
@@ -34,7 +46,22 @@ test("production proxy serves screenr.club and preserves old shared links", asyn
   t.after(() => rm(directory, { recursive: true, force: true }));
   // Only the external application and TLS certificate are fixtures. Run the
   // actual Caddy routes, security headers, and forwarded-address configuration.
+  // The fixture sends the app's own security headers: next.config.ts and the
+  // policy src/proxy.ts adds.
+  const routes = await config.headers!();
+  const app = [
+    ...routes
+      .find(({ source }) => source === "/:path*")!
+      .headers.map(({ key, value }) => [key, value]),
+    [
+      "Content-Security-Policy",
+      proxy(new NextRequest("https://screenr.club/login")).headers.get(
+        "Content-Security-Policy",
+      )!,
+    ],
+  ];
   const upstream = createServer((req, res) => {
+    for (const [name, value] of app) res.setHeader(name, value);
     res.setHeader("Content-Type", "application/json");
     res.end(JSON.stringify({ path: req.url, headers: req.headers }));
   });
@@ -112,6 +139,7 @@ ${configuration}`,
     return new Promise<{
       status: number | undefined;
       headers: import("node:http").IncomingHttpHeaders;
+      rawHeaders: string[];
       body: string;
     }>((resolve, reject) => {
       const req = request(
@@ -138,6 +166,7 @@ ${configuration}`,
             resolve({
               status: response.statusCode,
               headers: response.headers,
+              rawHeaders: response.rawHeaders,
               body,
             }),
           );
@@ -164,12 +193,15 @@ ${configuration}`,
   assert.ok(ready, `Caddy did not start: ${logs}`);
 
   await t.test(
-    "new host reaches the app with its security and client IP headers",
+    "new host reaches the app with each security header once and client IP headers",
     async () => {
       const response = await get("screenr.club", "/api/health");
       assert.equal(response.status, 200);
-      assert.equal(response.headers["referrer-policy"], "no-referrer");
-      assert.equal(response.headers["x-frame-options"], "DENY");
+      for (const [name, value] of [
+        ...app,
+        ["X-Robots-Tag", "noindex, nofollow, noarchive"],
+      ])
+        assert.deepEqual(values(response.rawHeaders, name), [value], name);
       const body = JSON.parse(response.body);
       assert.equal(body.path, "/api/health");
       assert.equal(body.headers.host, "screenr.club");
@@ -188,8 +220,12 @@ ${configuration}`,
         const response = await get("screenr.jubishop.com", path);
         assert.equal(response.status, 308);
         assert.equal(response.headers.location, `https://screenr.club${path}`);
-        assert.equal(response.headers["referrer-policy"], "no-referrer");
-        assert.equal(response.headers["cache-control"], "no-store");
+        for (const [name, value] of [
+          ["Referrer-Policy", "no-referrer"],
+          ["Cache-Control", "no-store"],
+          ["X-Robots-Tag", "noindex, nofollow, noarchive"],
+        ])
+          assert.deepEqual(values(response.rawHeaders, name), [value], name);
       }
     },
   );

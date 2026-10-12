@@ -370,10 +370,11 @@ also fails its checks, and rejection of incorrectly named SQL migrations before
 schema changes begin. An authentication test confirms that a Better Auth schema
 mismatch fails that session request.
 The proxy test runs the production Caddy routes on loopback with a temporary
-certificate and a fixture upstream. It verifies the `screenr.club` site, client IP
-forwarding, security headers, and old invitation/title redirects with their
-paths and queries intact. Run it alone with
-`node --import tsx --test tests/app/proxy.test.ts`. It does not verify public DNS,
+certificate and a fixture upstream that sends the app's security headers from
+`next.config.ts` and `src/proxy.ts`. It verifies the `screenr.club` site,
+client IP forwarding, that each security header reaches the client exactly
+once, and old invitation/title redirects with their paths and queries intact.
+Run it alone with `node --import tsx --test tests/app/proxy.test.ts`. It does not verify public DNS,
 Cloudflare certificates, or real provider configuration. Locally it uses any
 installed Caddy. In CI it also requires `caddy version` to report the release
 pinned to match production; see [CI Caddy](development-workflow.md#ci-caddy).

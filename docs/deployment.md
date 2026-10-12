@@ -182,9 +182,9 @@ page already renders per request, so per-request nonces add no cost.
 **Rejected alternatives:** Only the CSP rules that need no nonces, and a
 report-only rollout that needs a report endpoint and a later step to enforce.
 
-The app sends these headers itself, so the shared Caddyfile is unchanged.
-`next.config.ts` adds `Strict-Transport-Security: max-age=31536000;
-includeSubDomains` and the `Permissions-Policy` to every response. Cloudflare
+The app sends these headers itself. `next.config.ts` adds
+`Strict-Transport-Security: max-age=31536000; includeSubDomains` and the
+`Permissions-Policy` to every response. Cloudflare
 sent no HSTS header on 2026-10-12; keep its HSTS setting off so that it
 cannot send a conflicting value. The permissions policy lets trailers use
 autoplay, encrypted media, fullscreen, and picture-in-picture from
@@ -200,6 +200,15 @@ every page per request. Resources the decision does not name load only from
 Screenr, and forms submit only to Screenr. Styles also allow the inline style
 attributes that Next's image layout and React use. Development serving adds `'unsafe-eval'` for React's error stacks. The
 [testing guide](testing.md#security-policy-reports) describes the checks.
+
+The app is the only source of its security headers. `next.config.ts` also
+sends `Referrer-Policy: no-referrer`, `X-Content-Type-Options: nosniff`, and
+`X-Frame-Options: DENY`, so the `screenr.club` Caddy site adds only
+`X-Robots-Tag`; a Caddy copy would repeat the app's header
+([#194](https://github.com/jubishop/screenr/issues/194)). Browser tests,
+which reach the app directly, therefore run under every production security
+header. The old hostname's redirect site sets its own `Referrer-Policy`,
+because no app response passes through it.
 
 ### Host configuration drift
 
