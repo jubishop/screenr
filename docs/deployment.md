@@ -391,10 +391,17 @@ restarts the two application services. The migration command rejects
 migrations that are out of order, share a number, or changed after they ran,
 before it changes the database
 ([migration rules](data-and-access.md#schema-migrations)). Activation
-then stops without switching releases. After the health endpoint responds and
-both services are active, it waits 15 seconds, longer than one startup plus
-the 5-second restart delay. It then requires both services to still be active,
-with unchanged `NRestarts` and `ActiveEnterTimestampMonotonic`. A service that
+then stops without switching releases. After the restart, its health checks
+require the health endpoint to respond, a signed-out `GET /api/auth/get-session`
+on loopback port 3060 to return HTTP 200 with `null`, and both services to be
+active. Better Auth 1.7.3 and later check the database schema before each
+request. When the schema cannot hold what Better Auth writes, every auth
+request fails, while the health endpoint's `SELECT 1` still passes. The session
+request therefore makes such a release fail activation
+([issue #186](https://github.com/jubishop/screenr/issues/186)). After the
+health checks pass, activation waits 15 seconds, longer than one startup plus
+the 5-second restart delay. It then repeats the health checks and requires
+unchanged `NRestarts` and `ActiveEnterTimestampMonotonic`. A service that
 crashes on startup looks active between restarts, so this catches what a
 single check can miss
 ([issue #115](https://github.com/jubishop/screenr/issues/115)). A failed health

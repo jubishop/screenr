@@ -419,7 +419,21 @@ class RemoteDeploymentTests(unittest.TestCase):
         ln() { printf '%s\n' "$2" > "$FIXTURE/pending"; }
         mv() { command cp "$FIXTURE/pending" "$FIXTURE/current"; }
         sleep() { printf '%s\n' "$1" >> "$FIXTURE/sleeps"; }
-        curl() { ! { [ "${FAIL_HEALTH:-}" = yes ] && broken; }; }
+        curl() {
+            if [ "${FAIL_HEALTH:-}" = yes ] && broken; then return 22; fi
+            case "$*" in *' http://127.0.0.1:3060/api/auth/get-session')
+                # Better Auth rejects each request while it cannot use the
+                # database schema, so the route answers HTTP 500 and curl
+                # exits 22. Also reject any answer other than null.
+                if broken; then
+                    case "${FAIL_SESSION:-}" in
+                    error) return 22 ;;
+                    body) printf '<!DOCTYPE html><title>Error</title>'; return ;;
+                    esac
+                fi
+                printf 'null' ;;
+            esac
+        }
         sh() (
             # Release files are untrusted. Record and refuse any script file;
             # run only the checked script text passed by the CI helper.
@@ -501,6 +515,13 @@ class RemoteDeploymentTests(unittest.TestCase):
     def test_activation_failure_rolls_back_and_cleans_candidate(self):
         self.assert_verified_rollback(*self.execute_remote(FAIL_HEALTH='yes'))
 
+    def test_failed_sign_in_route_fails_activation_and_rolls_back(self):
+        # Database health passes, but Better Auth cannot use the schema. A
+        # signed-out session request must answer HTTP 200 with null.
+        for fault in ('error', 'body'):
+            with self.subTest(fault=fault):
+                self.assert_verified_rollback(*self.execute_remote(FAIL_SESSION=fault))
+
     def test_crash_looping_service_fails_activation_and_rolls_back(self):
         # Health and is-active pass at every check; only the restart record
         # shows that the unit keeps crashing on startup.
@@ -514,7 +535,8 @@ class RemoteDeploymentTests(unittest.TestCase):
 
     def test_unhealthy_rollback_reports_production_down_and_keeps_candidate(self):
         # Migrations already ran, so the restored release can fail too.
-        for fault, reason in (({'FAIL_HEALTH': 'yes'}, 'did not pass the health check within 20 attempts'),
+        for fault, reason in (({'FAIL_HEALTH': 'yes'}, 'did not pass the health checks within 20 attempts'),
+                              ({'FAIL_SESSION': 'error'}, 'did not pass the health checks within 20 attempts'),
                               ({'CRASHING_UNIT': 'screenr-worker'}, 'stopped or restarted within 15 seconds')):
             with self.subTest(fault=fault):
                 result, events, current = self.execute_remote(ROLLBACK_BROKEN='yes', **fault)

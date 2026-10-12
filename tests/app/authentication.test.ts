@@ -302,6 +302,27 @@ test("Better Auth password routes are disabled", async () => {
   assert.deepEqual(sent, ["sign-in"]);
 });
 
+test("a signed-out session request fails while Better Auth cannot use the database schema", async () => {
+  // Activation keeps a release only when this request returns null.
+  const session = () =>
+    createAuth({ rateLimit: false }).handler(
+      new Request("http://127.0.0.1:3060/api/auth/get-session"),
+    );
+  const intact = await session();
+  assert.equal(intact.status, 200);
+  assert.equal(await intact.text(), "null");
+  // Like the issuer column in issue #181: required, but Better Auth never
+  // writes it, so its inserts would fail.
+  await db.query(`ALTER TABLE account ADD COLUMN schema_probe text NOT NULL DEFAULT '';
+    ALTER TABLE account ALTER COLUMN schema_probe DROP DEFAULT`);
+  try {
+    // The route handler answers HTTP 500 when Better Auth throws.
+    await assert.rejects(session(), { code: "SCHEMA_MISMATCH" });
+  } finally {
+    await db.query("ALTER TABLE account DROP COLUMN schema_probe");
+  }
+});
+
 test("Google and email retain one account; linking requires the existing account session and a verified matching email", async () => {
   process.env.GOOGLE_CLIENT_ID = "test-google-client";
   process.env.GOOGLE_CLIENT_SECRET = "test-google-secret";

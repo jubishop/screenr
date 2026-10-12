@@ -20,8 +20,13 @@ previous=$(readlink /opt/screenr/current || true)
 ln -s "$release" /opt/screenr/current.new
 mv -Tf /opt/screenr/current.new /opt/screenr/current
 systemctl restart screenr-web screenr-worker || true
+local_get() {
+    curl --fail --silent --connect-timeout 1 --max-time 2 "http://127.0.0.1:3060/api/$1"
+}
+# Better Auth checks its database schema before each request, so a signed-out
+# session request fails while Better Auth cannot use the database.
 healthy() {
-    curl --fail --silent --connect-timeout 1 --max-time 2 http://127.0.0.1:3060/api/health >/dev/null &&
+    local_get health >/dev/null && test "$(local_get auth/get-session)" = null &&
         systemctl is-active --quiet screenr-web && systemctl is-active --quiet screenr-worker
 }
 # Restart counts and active-entry times change whenever systemd restarts a unit.
@@ -46,7 +51,7 @@ stays_healthy() {
         attempt=$((attempt + 1))
         sleep 1
     done
-    echo 'Screenr web and worker did not pass the health check within 20 attempts.' >&2
+    echo 'Screenr web and worker did not pass the health checks within 20 attempts.' >&2
     return 1
 }
 restore_previous() {
