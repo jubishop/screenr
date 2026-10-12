@@ -1107,6 +1107,10 @@ Screenr's login codes and, when implemented, enabled email alerts.
 **Why:** The user accepted reusing the existing service while avoiding new
 costs. If its limits become a problem, decide how to proceed at that time.
 
+Implemented in [#92](https://github.com/jubishop/screenr/issues/92): the
+email worker sends opt-in [activity email](notifications.md#activity-email)
+through the same Resend account.
+
 Configure a verified sender domain for Screenr. Keep sending credentials
 private and use only the permissions required to send email. The application
 must handle delivery errors and provider limits without silently upgrading

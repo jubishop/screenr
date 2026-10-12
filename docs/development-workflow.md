@@ -23,6 +23,13 @@ Complete [app setup](running-screenr.md#local-setup) before running
 project-specific environment settings to it deliberately; search does not
 need it.
 
+For clones created before the 2026-09-04 knowledge foundation, copy any
+existing local `screenr.homeMemoryPath` value to `knowledge.homeMemoryPath`
+before rerunning setup. Preserve an already configured
+`knowledge.homeMemoryPath`. After verifying search, remove the old key. Review
+the updated `.envrc` and run `direnv allow` again if you use direnv; QMD no
+longer exports shell settings.
+
 ## Node runtime
 
 **Decision — 2026-10-09:** Use the latest Node.js LTS release for local
@@ -102,12 +109,6 @@ the foundation checks. See [running checks](testing.md#running-checks)
 for requirements. GitHub issues track shared work; [td](foundation/task-tracking.md)
 records local progress and handoffs.
 
-For clones created before this foundation upgrade, copy any existing local
-`screenr.homeMemoryPath` value to `knowledge.homeMemoryPath` before rerunning
-setup. Preserve an already configured `knowledge.homeMemoryPath`. After
-verifying search, remove the old key. Review the updated `.envrc` and run
-`direnv allow` again if you use direnv; QMD no longer exports shell settings.
-
 ## TypeScript checkout isolation
 
 **Decision — 2026-09-08:** Scope project source discovery for builds,
@@ -127,7 +128,7 @@ continued coverage of all intended source, tests, scripts, and configuration.
 Keep mutable validation output specific to each checkout and check warm as
 well as fresh-cache behavior when changing discovery or cache configuration.
 
-Implementation tracking: [scope validation to the active checkout, #74](https://github.com/jubishop/screenr/issues/74).
+Implemented in [scope validation to the active checkout, #74](https://github.com/jubishop/screenr/issues/74).
 
 TypeScript inputs are the `.ts` and `.tsx` files under `src/`, `scripts/`,
 and `tests/`, plus `next.config.ts`, `playwright.config.ts`, `next-env.d.ts`,
@@ -174,7 +175,7 @@ behavior, and retain focus, drafts, and access updates across refreshes.
 Avoid moving complexity into a replacement catch-all component or a generic
 framework created only for this refactor.
 
-Implementation tracking: [extract cohesive Screen feature views, #75](https://github.com/jubishop/screenr/issues/75).
+Implemented in [extract cohesive Screen feature views, #75](https://github.com/jubishop/screenr/issues/75).
 
 ## Testing
 
@@ -239,7 +240,7 @@ This expands the earlier same-day decision, which deferred parallel execution
 to a later proposal. The agent now owns both the decision and any justified
 implementation, with its evidence recorded in the issue or related PR.
 
-Implementation tracking: [browser runtime improvements and measurement, #72](https://github.com/jubishop/screenr/issues/72).
+Implemented in [browser runtime improvements and measurement, #72](https://github.com/jubishop/screenr/issues/72).
 
 The archived [September 9 measurement report](archive/browser-runtime.md)
 records the implemented setup changes, coverage mapping, and evidence for two

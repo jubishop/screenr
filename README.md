@@ -127,9 +127,9 @@ search does not need shell-wide exports. Missing optional tools produce notices.
 
 Setup activates the tracked Git hooks without displacing another hook manager,
 prepares local caches, and builds the QMD index when QMD is available. Run
-`bin/doctor` to inspect setup and search freshness. See the
-[development workflow](docs/development-workflow.md) for details and worktree
-commands.
+`bin/doctor` to inspect setup and search freshness.
+[Knowledge search](docs/foundation/knowledge-search.md) covers worktree
+commands, existing hook managers, and search recovery.
 
 Home-memory search is optional and uses a local Git setting. Follow the
 [search configuration instructions](docs/foundation/knowledge-search.md#optional-home-memory)

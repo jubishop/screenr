@@ -20,7 +20,7 @@ do not start a system Caddy service. On macOS, install the test tools with
 `brew install caddy openssl`; the existing Colima installation can provide Docker.
 To run several checkouts at once, give each its own database and development
 port as described in [several checkouts at once](#several-checkouts-at-once).
-QMD setup is described in the [development workflow](development-workflow.md).
+QMD search is described in [knowledge search](foundation/knowledge-search.md).
 
 Select the latest Node LTS release in your shell before running `npm ci` or
 application commands. Use its bundled npm or a newer compatible npm that

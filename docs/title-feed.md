@@ -98,6 +98,9 @@ about a show independently of their structured activity. The user noted
 that this capability is not implemented yet. It is deferred from issue #5
 under the delivery-scope decision below.
 
+Implemented in [#8](https://github.com/jubishop/screenr/issues/8); see
+[standalone title comments](#standalone-title-comments).
+
 ### Deleting standalone comments preserves replies — 2026-09-07
 
 **Decision:** Authors can delete their own standalone top-level comments.
@@ -359,6 +362,8 @@ their agreed feed behavior without requiring their implementation.
 **Why:** The user wants to keep the current pull request's scope small
 and explicitly requested a follow-up issue for standalone comments.
 
+Implemented in [#8](https://github.com/jubishop/screenr/issues/8).
+
 ### Read and reply in friends and profile feeds too — 2026-09-06
 
 **Decision:** The friends feed and profile pages also show interactive
@@ -513,8 +518,9 @@ Item links use `/titles/<kind>/<tmdb-id>?item=<item-id>`. A targeted reply adds
 the browser exposes earlier direct comments, expands the target's parent
 group, and scrolls to an eligible target without revealing its spoilers. Old `/conversations/<id>` links redirect to the preserved discussion,
 an eligible action, or the title feed. Inaccessible targets reveal no private
-content. Existing notification features are unchanged; these same title links
-are available to future notification work.
+content. [Comment notifications](notifications.md#current-implementation),
+added in [#92](https://github.com/jubishop/screenr/issues/92), open their exact
+reply through these same title links.
 
 ### Standalone title comments
 
@@ -625,8 +631,8 @@ deleted entries. Deleted text is not restored.
 
 ## Decisions deferred to future features
 
-- How edits to future freeform comments affect existing items. Standalone
-  comment creation is tracked in #8; comment editing is not required there.
+- How edits to freeform comments affect existing items. Standalone comments
+  shipped in #8 without editing.
 - Implementation of future watch statuses and combinations of review,
   rating, or watch changes saved together. The existing
   [grouped-update rule](product-brief.md#friends-feed--2026-09-04) for those

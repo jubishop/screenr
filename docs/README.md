@@ -64,12 +64,15 @@ both memory and design documents.
 
 ## Product and development
 
-- [Project Starter foundation](foundation/README.md): shared engineering,
-  knowledge search, and task tracking policy.
-- [Product brief](product-brief.md): confirmed requirements and open design choices.
-- [Unified title feed](title-feed.md): confirmed shared feed decisions for
-  issue #5, shared implementation and migration, and standalone comment scope
-  for follow-up issue #8.
+- [Project Starter foundation](foundation/README.md): shared engineering
+  policy, knowledge search with its Git hooks and worktree preparation, and
+  task tracking.
+- [Product brief](product-brief.md): confirmed requirements, accepted product
+  decisions, and open design choices.
+- [Unified title feed](title-feed.md): accepted shared feed decisions from
+  issue #5, standalone comments (#8), nested replies (#32), emoji reactions
+  (#18), and comment deletion (#29), with the shared implementation and
+  migrations.
 - [Watch together](watch-together.md): accepted shared-choice behavior and
   implementation for issue #26.
 - [Interface design](interface-design.md): accepted layout and presentation
@@ -85,13 +88,15 @@ both memory and design documents.
   recommendation weight, and member-visible exception for issue #99.
 - [Application stack](application-stack.md): selected core stack, alternatives,
   tradeoffs, and implementation conventions.
-- [Development workflow](development-workflow.md): local setup, Git hooks,
-  worktree preparation, and QMD search.
+- [Development workflow](development-workflow.md): repository setup, the
+  Node runtime and dependency update decisions, checks, TypeScript checkout
+  isolation, Screen component organization, testing and validation decisions,
+  CI APT sources, main-branch delivery, and Project Starter updates.
 - [Running Screenr](running-screenr.md): local setup, invitations, several
   checkouts, the email worker, production builds, and provider configuration.
 - [Testing Screenr](testing.md): test commands, running one suite, the browser
-  harness, fixtures, resource ownership rules, coverage, and script-failure
-  diagnostics.
+  harness, fixtures, resource ownership rules, coverage, and the failed
+  script load guard.
 - [Notifications](notifications.md): accepted trigger, delivery, panel, read
   state, and activity email decisions, with their implementation.
 - [Data and access rules](data-and-access.md): shared-feed access checks,
@@ -101,8 +106,11 @@ both memory and design documents.
   cache, attribution, and trailers.
 - [Installation and offline page](installation.md): home-screen manifest, app
   icon generation, and the service worker's offline page.
-- [Shared VPS deployment](deployment.md): release packaging, isolated services,
-  acceptance, encrypted backups, and restore checks.
+- [Shared VPS deployment](deployment.md): host layout and isolated services,
+  the Node runtime, provisioning, drift checks and failure alerts, release
+  packaging and activation, acceptance, the old hostname redirect, production
+  secret copies, and encrypted backups with retention, size warnings, and
+  restore checks.
 - [Production restore and patching](restore-and-patching.md): secret copies,
-  database restore on the existing or a replacement host, and PostgreSQL,
-  restic, and reboot patching.
+  backup commands, database restore on the existing or a replacement host, and
+  automatic update, restic, PostgreSQL, and reboot patching.
