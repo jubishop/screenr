@@ -38,6 +38,12 @@ indented row in every entry and comment.
 because that column is about 250px wide on phone. Fixing only the alignment
 and spacing would keep the vertical stack.
 
+**Implementation note:** [Issue #166](https://github.com/jubishop/screenr/issues/166)
+places the reaction counts and React after the other actions on the same
+line. The reaction picker and errors open beneath the whole line. The copy
+status wraps in the space beside the icon, so it adds no row. Phones narrower
+than 390px can wrap the title actions onto a second line.
+
 ### Copy link as an icon button — 2026-10-12
 
 **Decision:** Show **Copy link to discussion** as a link icon button at the
@@ -426,6 +432,10 @@ pattern inconsistent.
 **Why:** The user selected all four items from the design review. The
 navigation symbols rendered at mismatched sizes, and accepting a request
 otherwise required leaving the panel for the Friends page.
+
+**Implementation note:** The shared icon set lives in `src/components/icons.tsx`.
+[Issue #166](https://github.com/jubishop/screenr/issues/166) added the link
+icon; later stages add theirs to the same module.
 
 ### Dark theme follows the system setting — 2026-10-12
 

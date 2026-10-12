@@ -1,5 +1,5 @@
 import { nextAccountRefreshForPath } from "./refresh-helpers";
-import { expect } from "@playwright/test";
+import { expect, type Locator, type Page } from "@playwright/test";
 import { setTimeout as delay } from "node:timers/promises";
 import { browserConfig } from "../../scripts/browser-config";
 import { expectTextContrast } from "./contrast";
@@ -108,11 +108,13 @@ test("unified feeds show separate entries and support inline replies on title, f
       item.getByText(`Reply from surface ${index}`, { exact: true }),
     ).toBeVisible();
     await expect(
-      item.getByRole("heading", { name: "Conversation", exact: true }),
+      item.getByText(index === 0 ? "1 reply" : `${index + 1} replies`, {
+        exact: true,
+      }),
     ).toBeVisible();
     await expect(
-      item.getByText(`${index + 1} replies`, { exact: true }),
-    ).toBeVisible();
+      item.getByRole("heading", { name: "Conversation", exact: true }),
+    ).toHaveCount(0);
     await reader.reload();
     await expect(
       item.getByText(`Reply from surface ${index}`, { exact: true }),
@@ -142,6 +144,173 @@ test("unified feeds show separate entries and support inline replies on title, f
   await reader.screenshot({ path: ".cache/feed-desktop.png", fullPage: true });
   await reader.context().close();
   await owner.context().close();
+});
+
+test("feed entries lay out actions in full-width rows with an icon copy link and a reply count", async ({
+  member,
+}) => {
+  const owner = await member("actionsowner");
+  const reader = await member("actionsreader");
+  await prepareFriendship(owner, reader);
+  await reader
+    .context()
+    .grantPermissions(["clipboard-read", "clipboard-write"]);
+  const post = async (page: Page, action: string, data: object) => {
+    const response = await page.request.post(`/api/screenr/${action}`, {
+      headers: { Origin: browserConfig.baseURL },
+      data,
+    });
+    expect(response.status()).toBe(200);
+    return (await response.json()).id as string;
+  };
+  const id = await post(owner, "activity", {
+    title: "movie:987654",
+    field: "recommended",
+    value: true,
+  });
+  const parent = await post(owner, "comment", {
+    conversation: id,
+    body: "Worth a weekend",
+    spoiler: false,
+  });
+  const nested = await post(reader, "comment", {
+    conversation: id,
+    body: "Agreed",
+    spoiler: false,
+    replyTo: parent,
+  });
+  await post(reader, "reaction", { item: id, kind: "like" });
+  await post(reader, "reaction", { item: id, reply: parent, kind: "love" });
+  await post(owner, "reaction", { item: id, reply: nested, kind: "haha" });
+  const box = async (locator: Locator) => (await locator.boundingBox())!;
+  const center = (bounds: { y: number; height: number }) =>
+    bounds.y + bounds.height / 2;
+  // Count distinct visual lines by vertical center, allowing subpixel rounding.
+  const lines = (boxes: { y: number; height: number }[]) =>
+    boxes
+      .map(center)
+      .sort((a, b) => a - b)
+      .filter((value, index, all) => index === 0 || value - all[index - 1] > 3)
+      .length;
+  const entry = reader.locator(`[data-item-id="${id}"]`);
+  const header = reader.locator(`[data-item-heading="${id}"]`);
+  const want = header.getByRole("button", {
+    name: "+ Want to watch",
+    exact: true,
+  });
+  const recommend = header.getByRole("button", {
+    name: "+ Recommend",
+    exact: true,
+  });
+  const copy = header.getByRole("button", {
+    name: "Copy link to discussion",
+    exact: true,
+  });
+  const like = header.getByRole("button", { name: "Like: 1", exact: true });
+  const react = header.getByRole("button", { name: "React", exact: true });
+  for (const path of ["/", "/people/actionsowner", "/titles/movie/987654"]) {
+    await reader.goto(path);
+    await expect(want).toBeEnabled();
+    await entry
+      .getByRole("button", { name: "View 1 reply", exact: true })
+      .click();
+    for (const width of [390, 1366]) {
+      await reader.setViewportSize({ width, height: 844 });
+      const poster = await box(header.locator(".poster-link"));
+      const actions = await Promise.all(
+        [want, recommend, copy, like, react].map(box),
+      );
+      const [wantBox, recommendBox, copyBox, likeBox, reactBox] = actions;
+      // Actions sit beneath the poster block and start at the card's edge.
+      for (const action of actions)
+        expect(action.y).toBeGreaterThanOrEqual(poster.y + poster.height);
+      expect(Math.abs(wantBox.x - poster.x)).toBeLessThanOrEqual(1);
+      expect(lines(actions)).toBe(width === 390 ? 2 : 1);
+      expect(lines([wantBox, recommendBox, copyBox])).toBe(1);
+      expect(copyBox.x).toBeGreaterThan(recommendBox.x);
+      expect(lines([likeBox, reactBox])).toBe(1);
+      expect(center(likeBox)).toBeGreaterThanOrEqual(center(wantBox));
+      // No empty status line is reserved beneath the actions.
+      const card = await box(header);
+      const padding = await header.evaluate((element) =>
+        parseFloat(getComputedStyle(element).paddingBottom),
+      );
+      expect(
+        card.y +
+          card.height -
+          Math.max(...actions.map((action) => action.y + action.height)),
+      ).toBeLessThanOrEqual(padding + 1);
+      for (const [comment, names] of [
+        [parent, ["Reply", "Love: 1", "React"]],
+        [nested, ["Reply", "Delete", "Haha: 1", "React"]],
+      ] as const) {
+        const scope = entry.locator(`[data-comment-id="${comment}"]`);
+        const controls = await Promise.all(
+          names.map((name) =>
+            box(scope.getByRole("button", { name, exact: true })),
+          ),
+        );
+        expect(lines(controls)).toBe(1);
+      }
+      await expect(entry.getByText("2 replies", { exact: true })).toBeVisible();
+      await expectTextContrast(entry.getByText("2 replies", { exact: true }));
+      await expect(
+        entry.getByRole("heading", { name: "Conversation" }),
+      ).toHaveCount(0);
+      await expect(
+        entry.getByRole("region", { name: "Conversation", exact: true }),
+      ).toBeVisible();
+      await reader.evaluate(() => window.scrollTo(0, 0));
+      await reader.screenshot({
+        path: `.cache/feed-actions-${width}${path.replaceAll("/", "-")}.png`,
+        fullPage: true,
+      });
+    }
+  }
+  await reader.setViewportSize({ width: 390, height: 844 });
+  await expect(copy).toHaveAttribute("title", "Copy link to discussion");
+  await expect(copy).toHaveText("");
+  await expect(copy.locator("svg")).toHaveCount(1);
+  // Keyboard order follows the visual order of both rows.
+  await want.focus();
+  for (const next of [recommend, copy, like, react]) {
+    await reader.keyboard.press("Tab");
+    await expect(next).toBeFocused();
+  }
+  await copy.focus();
+  await reader.keyboard.press("Enter");
+  const status = header.getByRole("status");
+  await expect(status).toHaveText("Link copied.");
+  await expect(copy).toBeFocused();
+  await expect(reader).toHaveURL(/\/titles\/movie\/987654$/);
+  const copied = new URL(
+    await reader.evaluate(() => navigator.clipboard.readText()),
+  );
+  expect(copied.origin).toBe(browserConfig.baseURL);
+  expect(copied.pathname + copied.search).toBe(
+    `/titles/movie/987654?item=${id}`,
+  );
+  const statusBox = await box(status);
+  const copyBox = await box(copy);
+  expect(statusBox.x).toBeGreaterThanOrEqual(copyBox.x + copyBox.width);
+  expect(lines([statusBox, copyBox])).toBe(1);
+  // The reaction picker opens beneath the whole comment line.
+  const reply = entry.locator(`[data-comment-id="${nested}"]`);
+  const trigger = reply.getByRole("button", { name: "React", exact: true });
+  await trigger.click();
+  const picker = reply.getByRole("group", {
+    name: "Choose a reaction",
+    exact: true,
+  });
+  const pickerBox = await box(picker);
+  const replyBox = await box(
+    reply.getByRole("button", { name: "Reply", exact: true }),
+  );
+  expect(Math.abs(pickerBox.x - replyBox.x)).toBeLessThanOrEqual(1);
+  expect(pickerBox.y).toBeGreaterThan(replyBox.y + replyBox.height);
+  await reader.keyboard.press("Escape");
+  await expect(picker).toHaveCount(0);
+  await expect(trigger).toBeFocused();
 });
 
 test("every feed holds incoming activity, preserves drafts and position, and expands reply links safely", async ({

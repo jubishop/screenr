@@ -81,6 +81,7 @@ export function ThreadView({
   const target = comments.find((c) => c.id === targetReply);
   const targetRoot = target?.root_id ?? target?.id;
   const activeReply = comments.find((c) => c.id === replyTo && live(c));
+  const replyCount = comments.filter(live).length;
 
   async function post(
     event: React.SubmitEvent<HTMLFormElement>,
@@ -166,6 +167,54 @@ export function ThreadView({
       </CommentComposer>
     );
   }
+  function commentActions(comment: Comment) {
+    return (
+      <>
+        <button
+          className="text-button"
+          id={`reply-action-${comment.id}`}
+          aria-expanded={replyTo === comment.id}
+          aria-controls={`reply-${currentSnapshot.conversation.id}-${comment.id}-form`}
+          disabled={!interactive}
+          onClick={() => {
+            setReplyTo(comment.id);
+            if (replyTo === comment.id) area.current?.focus();
+          }}
+        >
+          Reply
+        </button>
+        {(comment.author_id === user.user_id ||
+          currentSnapshot.conversation.owner_id === user.user_id) && (
+          <button
+            className="text-button muted"
+            disabled={busy.has(`remove-${comment.id}`) || !interactive}
+            onClick={async () => {
+              const key = `remove-${comment.id}`;
+              setBusy((current) => new Set([...current, key]));
+              setErrors((current) => ({ ...current, remove: "" }));
+              try {
+                await api("remove-comment", { id: comment.id });
+                await refresh();
+              } catch (error) {
+                setErrors((current) => ({
+                  ...current,
+                  remove: (error as Error).message,
+                }));
+              } finally {
+                setBusy((current) => {
+                  const next = new Set(current);
+                  next.delete(key);
+                  return next;
+                });
+              }
+            }}
+          >
+            {comment.author_id === user.user_id ? "Delete" : "Remove"}
+          </button>
+        )}
+      </>
+    );
+  }
   function renderComment(comment: Comment) {
     return (
       <article
@@ -206,60 +255,19 @@ export function ThreadView({
         ) : (
           <p className="comment-body">{comment.body}</p>
         )}
-        {live(comment) && (
-          <div className="inline-actions">
-            <button
-              className="text-button"
-              id={`reply-action-${comment.id}`}
-              aria-expanded={replyTo === comment.id}
-              aria-controls={`reply-${currentSnapshot.conversation.id}-${comment.id}-form`}
-              disabled={!interactive}
-              onClick={() => {
-                setReplyTo(comment.id);
-                if (replyTo === comment.id) area.current?.focus();
-              }}
+        {live(comment) &&
+          (!comment.spoiler || revealed.has(comment.id) ? (
+            <Reactions
+              item={currentSnapshot.conversation.id}
+              reply={comment.id}
+              summary={comment.reactions}
+              refresh={refresh}
             >
-              Reply
-            </button>
-            {(comment.author_id === user.user_id ||
-              currentSnapshot.conversation.owner_id === user.user_id) && (
-              <button
-                className="text-button muted"
-                disabled={busy.has(`remove-${comment.id}`) || !interactive}
-                onClick={async () => {
-                  const key = `remove-${comment.id}`;
-                  setBusy((current) => new Set([...current, key]));
-                  setErrors((current) => ({ ...current, remove: "" }));
-                  try {
-                    await api("remove-comment", { id: comment.id });
-                    await refresh();
-                  } catch (error) {
-                    setErrors((current) => ({
-                      ...current,
-                      remove: (error as Error).message,
-                    }));
-                  } finally {
-                    setBusy((current) => {
-                      const next = new Set(current);
-                      next.delete(key);
-                      return next;
-                    });
-                  }
-                }}
-              >
-                {comment.author_id === user.user_id ? "Delete" : "Remove"}
-              </button>
-            )}
-          </div>
-        )}
-        {live(comment) && (!comment.spoiler || revealed.has(comment.id)) && (
-          <Reactions
-            item={currentSnapshot.conversation.id}
-            reply={comment.id}
-            summary={comment.reactions}
-            refresh={refresh}
-          />
-        )}
+              {commentActions(comment)}
+            </Reactions>
+          ) : (
+            <div className="item-actions">{commentActions(comment)}</div>
+          ))}
       </article>
     );
   }
@@ -267,12 +275,9 @@ export function ThreadView({
     <section aria-label="Conversation" className="thread">
       {comments.length > 0 && (
         <>
-          <div className="section-heading">
-            <h2>Conversation</h2>
-            <span className="muted">
-              {comments.filter(live).length} replies
-            </span>
-          </div>
+          <p className="reply-count small muted">
+            {replyCount} {replyCount === 1 ? "reply" : "replies"}
+          </p>
           {start > 0 && (
             <button
               className="text-button"

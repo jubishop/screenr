@@ -416,7 +416,8 @@ test("nested updates preserve drafts, expansion, and position while parent acces
   await childReactions
     .getByRole("button", { name: "React", exact: true })
     .click();
-  await childReactions
+  await comment(child)
+    .getByRole("group", { name: "Choose a reaction", exact: true })
     .getByRole("button", { name: "Care", exact: true })
     .click();
   await expect(

@@ -7,6 +7,7 @@ import { Poster } from "./poster";
 import { ThreadView } from "./thread";
 import { preservePosition } from "./position";
 import { Reactions } from "./reactions";
+import { Icon } from "./icons";
 
 type Known = Map<string, { activity: string; comments: Set<string> }>;
 function capture(items: FeedItem[]): Known {
@@ -221,6 +222,69 @@ function FeedEntry({
     }
   }
 
+  const titleActions = item && (
+    <div className="title-actions">
+      {item.item_type === "comment" &&
+        item.active &&
+        item.owner_id === user.user_id && (
+          <button
+            type="button"
+            className="text-button muted"
+            disabled={busy || deleting || !interactive}
+            onClick={() => void deleteComment()}
+          >
+            {deleting ? "Deleting…" : "Delete"}
+          </button>
+        )}
+      {item.owner_id !== user.user_id && (
+        <>
+          <button
+            className="text-button"
+            disabled={busy || !interactive}
+            onClick={() =>
+              void activity(
+                item.title_id,
+                "want_to_watch",
+                !item.viewer_want_to_watch,
+              )
+            }
+          >
+            {item.viewer_want_to_watch ? "✓ Want to watch" : "+ Want to watch"}
+          </button>
+          <button
+            className="text-button"
+            disabled={busy || !interactive}
+            onClick={() =>
+              void activity(
+                item.title_id,
+                "recommended",
+                !item.viewer_recommended,
+              )
+            }
+          >
+            {item.viewer_recommended ? "✓ Recommended" : "+ Recommend"}
+          </button>
+        </>
+      )}
+      <span className="copy-link">
+        <button
+          type="button"
+          className="icon-button"
+          aria-label="Copy link to discussion"
+          title="Copy link to discussion"
+          disabled={!interactive}
+          aria-disabled={copying}
+          onClick={() => void copyDiscussion()}
+        >
+          <Icon name="link" />
+        </button>
+        <span className="copy-status small" role="status">
+          {copyMessage}
+        </span>
+      </span>
+    </div>
+  );
+
   return (
     <article
       hidden={!item}
@@ -230,126 +294,73 @@ function FeedEntry({
     >
       {item && (
         <header className="activity-card" data-item-heading={item.id}>
-          <Link
-            className="poster-link"
-            href={titleURL}
-            prefetch={false}
-            aria-label={item.title_name}
-          >
-            <Poster path={item.poster_path} name={item.title_name} />
-          </Link>
-          <div className="activity-content">
-            <p className="activity-by">
-              <Link href={`/people/${item.username}`} prefetch={false}>
-                {item.display_name}
-              </Link>{" "}
-              <span className="muted">
-                {item.item_type === "comment"
-                  ? "commented on"
-                  : item.item_type === "earlier"
-                    ? "· Earlier discussion"
-                    : item.item_type === "recommended"
-                      ? item.active
-                        ? "recommends"
-                        : "removed their recommendation"
-                      : item.active
-                        ? "wants to watch"
-                        : "removed Want to watch"}
-              </span>
-            </p>
-            <h2>
-              <Link href={titleURL} prefetch={false}>
-                {item.title_name}
-              </Link>
-            </h2>
-            <p className="small muted">
-              {item.kind === "tv" ? "TV show" : "Movie"} ·{" "}
-              <time dateTime={item.visible_activity}>
-                {dateLabel(item.visible_activity, interactive)}
-              </time>
-            </p>
-            {item.item_type === "comment" && !item.active && (
-              <p className="muted">Comment removed</p>
-            )}
-            {hiddenSpoiler ? (
-              <button className="spoiler" onClick={() => setRevealed(true)}>
-                Contains spoilers · Reveal discussion
-              </button>
-            ) : (
-              item.body && <p className="comment-body">{item.body}</p>
-            )}
-            <div className="inline-actions">
-              {item.item_type === "comment" &&
-                item.active &&
-                item.owner_id === user.user_id && (
-                  <button
-                    type="button"
-                    className="text-button muted"
-                    disabled={busy || deleting || !interactive}
-                    onClick={() => void deleteComment()}
-                  >
-                    {deleting ? "Deleting…" : "Delete"}
-                  </button>
-                )}
-              <button
-                type="button"
-                className="text-button conversation-link"
-                disabled={!interactive}
-                aria-disabled={copying}
-                onClick={() => void copyDiscussion()}
-              >
-                Copy link to discussion
-              </button>
-              {item.owner_id !== user.user_id && (
-                <>
-                  <button
-                    className="text-button"
-                    disabled={busy || !interactive}
-                    onClick={() =>
-                      void activity(
-                        item.title_id,
-                        "want_to_watch",
-                        !item.viewer_want_to_watch,
-                      )
-                    }
-                  >
-                    {item.viewer_want_to_watch
-                      ? "✓ Want to watch"
-                      : "+ Want to watch"}
-                  </button>
-                  <button
-                    className="text-button"
-                    disabled={busy || !interactive}
-                    onClick={() =>
-                      void activity(
-                        item.title_id,
-                        "recommended",
-                        !item.viewer_recommended,
-                      )
-                    }
-                  >
-                    {item.viewer_recommended ? "✓ Recommended" : "+ Recommend"}
-                  </button>
-                </>
+          <div className="activity-summary">
+            <Link
+              className="poster-link"
+              href={titleURL}
+              prefetch={false}
+              aria-label={item.title_name}
+            >
+              <Poster path={item.poster_path} name={item.title_name} />
+            </Link>
+            <div className="activity-content">
+              <p className="activity-by">
+                <Link href={`/people/${item.username}`} prefetch={false}>
+                  {item.display_name}
+                </Link>{" "}
+                <span className="muted">
+                  {item.item_type === "comment"
+                    ? "commented on"
+                    : item.item_type === "earlier"
+                      ? "· Earlier discussion"
+                      : item.item_type === "recommended"
+                        ? item.active
+                          ? "recommends"
+                          : "removed their recommendation"
+                        : item.active
+                          ? "wants to watch"
+                          : "removed Want to watch"}
+                </span>
+              </p>
+              <h2>
+                <Link href={titleURL} prefetch={false}>
+                  {item.title_name}
+                </Link>
+              </h2>
+              <p className="small muted">
+                {item.kind === "tv" ? "TV show" : "Movie"} ·{" "}
+                <time dateTime={item.visible_activity}>
+                  {dateLabel(item.visible_activity, interactive)}
+                </time>
+              </p>
+              {item.item_type === "comment" && !item.active && (
+                <p className="muted">Comment removed</p>
+              )}
+              {hiddenSpoiler ? (
+                <button className="spoiler" onClick={() => setRevealed(true)}>
+                  Contains spoilers · Reveal discussion
+                </button>
+              ) : (
+                item.body && <p className="comment-body">{item.body}</p>
               )}
             </div>
-            {!hiddenSpoiler &&
-              (item.item_type !== "comment" || item.active) && (
-                <Reactions
-                  item={item.id}
-                  summary={item.reactions}
-                  refresh={refresh}
-                />
-              )}
-            <p className="small" role="status">
-              {copyMessage}
-            </p>
-            {deleteError && (
-              <p className="error" role="alert">
-                {deleteError}
-              </p>
-            )}
           </div>
+          {!hiddenSpoiler && (item.item_type !== "comment" || item.active) ? (
+            <Reactions
+              item={item.id}
+              summary={item.reactions}
+              refresh={refresh}
+            >
+              {titleActions}
+            </Reactions>
+          ) : (
+            <div className="item-actions">{titleActions}</div>
+          )}
+          {deleteError && (
+            <p className="error" role="alert">
+              {deleteError}
+            </p>
+          )}
         </header>
       )}
       <ThreadView

@@ -1,4 +1,4 @@
-import { expect } from "@playwright/test";
+import { expect, type Locator } from "@playwright/test";
 import { browserConfig } from "../../scripts/browser-config";
 import { test } from "./monitored-test";
 import { prepareFriendship } from "./member-fixture";
@@ -53,20 +53,27 @@ test("emoji reactions persist across feeds on entries and replies, with change, 
   });
   await reader.goto("/titles/movie/987654");
   const entry = reader.locator(`[data-item-id="${standalone}"]`);
+  const heading = reader.locator(`[data-item-heading="${standalone}"]`);
   const reactions = entry.getByRole("group", {
     name: "Reactions to entry",
     exact: true,
   });
+  // The picker opens beneath the whole action line, outside the counts group.
+  const picker = (scope: Locator) =>
+    scope.getByRole("group", { name: "Choose a reaction", exact: true });
   await expect(
     reactions.getByRole("button", { name: "React", exact: true }),
   ).toBeVisible();
-  for (const group of [
-    reactions,
-    entry.locator(`[data-comment-id="${reply}"]`).getByRole("group", {
-      name: "Reactions to reply",
-      exact: true,
-    }),
-  ]) {
+  for (const [group, scope] of [
+    [reactions, heading],
+    [
+      entry.locator(`[data-comment-id="${reply}"]`).getByRole("group", {
+        name: "Reactions to reply",
+        exact: true,
+      }),
+      entry.locator(`[data-comment-id="${reply}"]`),
+    ],
+  ] as const) {
     const trigger = group.getByRole("button", { name: "React", exact: true });
     for (const focusChoice of [false, true]) {
       await expect(trigger).toBeEnabled();
@@ -74,18 +81,18 @@ test("emoji reactions persist across feeds on entries and replies, with change, 
       await reader.keyboard.press("Enter");
       await expect(trigger).toHaveAttribute("aria-expanded", "true");
       if (focusChoice)
-        await group.getByRole("button", { name: "Like", exact: true }).focus();
+        await picker(scope)
+          .getByRole("button", { name: "Like", exact: true })
+          .focus();
       await reader.keyboard.press("Escape");
       await expect(trigger).toHaveAttribute("aria-expanded", "false");
       await expect(trigger).toBeFocused();
-      await expect(
-        group.getByRole("button", { name: "Like", exact: true }),
-      ).toHaveCount(0);
+      await expect(picker(scope)).toHaveCount(0);
     }
   }
   for (const name of ["Like", "Love", "Care", "Haha", "Wow", "Sad", "Angry"]) {
     await reactions.getByRole("button", { name: "React", exact: true }).click();
-    await reactions.getByRole("button", { name, exact: true }).click();
+    await picker(heading).getByRole("button", { name, exact: true }).click();
     await expect(
       reactions.getByRole("button", { name: `${name}: 1`, exact: true }),
     ).toHaveAttribute("aria-pressed", "true");
@@ -100,16 +107,17 @@ test("emoji reactions persist across feeds on entries and replies, with change, 
     .getByRole("button", { name: "View 1 reply", exact: true })
     .click();
   for (const [selector, label] of [
-    [`[data-item-id="${recommended}"]`, "Reactions to entry"],
-    [`[data-item-id="${watch}"]`, "Reactions to entry"],
+    [`[data-item-heading="${recommended}"]`, "Reactions to entry"],
+    [`[data-item-heading="${watch}"]`, "Reactions to entry"],
     [`[data-comment-id="${reply}"]`, "Reactions to reply"],
     [`[data-comment-id="${nested}"]`, "Reactions to reply"],
   ]) {
-    const group = reader
-      .locator(selector)
-      .getByRole("group", { name: label, exact: true });
+    const scope = reader.locator(selector);
+    const group = scope.getByRole("group", { name: label, exact: true });
     await group.getByRole("button", { name: "React", exact: true }).click();
-    await group.getByRole("button", { name: "Love", exact: true }).click();
+    await picker(scope)
+      .getByRole("button", { name: "Love", exact: true })
+      .click();
     await expect(
       group.getByRole("button", { name: "Love: 1", exact: true }),
     ).toHaveAttribute("aria-pressed", "true");
@@ -160,7 +168,7 @@ test("emoji reactions persist across feeds on entries and replies, with change, 
           reactions.getByRole("button", { name: "Angry: 1", exact: true }),
         ).toHaveCount(0);
       } else {
-        await expect(reactions.getByRole("alert")).toHaveText(
+        await expect(heading.getByRole("alert")).toHaveText(
           "Reaction failed. Please retry.",
         );
         await expect(
@@ -223,7 +231,7 @@ test("emoji reactions persist across feeds on entries and replies, with change, 
   await survivingReactions
     .getByRole("button", { name: "React", exact: true })
     .click();
-  await survivingReactions
+  await picker(entry.locator(`[data-comment-id="${reply}"]`))
     .getByRole("button", { name: "Care", exact: true })
     .click();
   await expect(

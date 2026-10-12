@@ -547,9 +547,11 @@ Native emoji represent the seven named reactions.
 
 The implementation uses one reaction per person per entry or reply. Choosing
 another reaction replaces it; choosing the selected reaction removes it.
-The React button opens a labeled picker that supports touch and keyboard
-input. Count buttons show the reader's selected reaction and also permit
-changing or removing it. A failed save shows an error and allows retry.
+Counts and React follow the entry's or reply's other actions on one line.
+The React button opens a labeled picker beneath that line that supports
+touch and keyboard input. Count buttons show the reader's selected reaction
+and also permit changing or removing it. A failed save shows an error and
+allows retry.
 
 Reaction reads and writes use the existing conversation audience. Counts
 exclude people who are no longer friends with the entry owner and people

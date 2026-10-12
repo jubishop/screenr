@@ -1,5 +1,5 @@
 "use client";
-import { useId, useRef, useState } from "react";
+import { useId, useRef, useState, type ReactNode } from "react";
 import {
   reactionOptions,
   type ReactionKind,
@@ -7,16 +7,21 @@ import {
 } from "../shared";
 import { api, useInteractive } from "./client";
 
+// Lay out an entry's or reply's actions on one wrapping line: the caller's
+// actions first, then the reaction counts and React. The picker and any
+// error open beneath the whole line so they can use its full width.
 export function Reactions({
   item,
   reply,
   summary,
   refresh,
+  children,
 }: {
   item: string;
   reply?: string;
   summary: ReactionSummary[];
   refresh: () => Promise<void>;
+  children?: ReactNode;
 }) {
   const interactive = useInteractive();
   const [open, setOpen] = useState(false);
@@ -48,57 +53,67 @@ export function Reactions({
       setBusy(false);
     }
   }
+  function dismiss(event: React.KeyboardEvent) {
+    if (open && event.key === "Escape") {
+      setOpen(false);
+      trigger.current?.focus({ preventScroll: true });
+    }
+  }
   return (
-    <div
-      className="reactions"
-      role="group"
-      aria-label={reply ? "Reactions to reply" : "Reactions to entry"}
-      onKeyDown={(event) => {
-        if (open && event.key === "Escape") {
-          setOpen(false);
-          trigger.current?.focus({ preventScroll: true });
-        }
-      }}
-    >
-      <div className="reaction-summary">
-        {reactionOptions.map((option) => {
-          const reaction = summary.find((r) => r.kind === option.kind);
-          return reaction ? (
-            <button
-              key={option.kind}
-              type="button"
-              className="reaction-count"
-              aria-label={`${option.label}: ${reaction.count}`}
-              aria-pressed={reaction.reacted}
-              title={
-                reaction.reacted
-                  ? `Remove your ${option.label} reaction`
-                  : `React with ${option.label}`
-              }
-              disabled={busy || !interactive}
-              onClick={() => void react(option.kind)}
-            >
-              <span aria-hidden="true">{option.emoji}</span> {reaction.count}
-            </button>
-          ) : null;
-        })}
-        <button
-          ref={trigger}
-          type="button"
-          className="text-button reaction-trigger"
-          aria-expanded={open}
-          aria-controls={pickerId}
-          disabled={!interactive}
-          aria-disabled={busy}
-          onClick={() => {
-            if (!busy) setOpen((value) => !value);
-          }}
+    <>
+      <div className="item-actions">
+        {children}
+        <div
+          className="reactions"
+          role="group"
+          aria-label={reply ? "Reactions to reply" : "Reactions to entry"}
+          onKeyDown={dismiss}
         >
-          React
-        </button>
+          {reactionOptions.map((option) => {
+            const reaction = summary.find((r) => r.kind === option.kind);
+            return reaction ? (
+              <button
+                key={option.kind}
+                type="button"
+                className="reaction-count"
+                aria-label={`${option.label}: ${reaction.count}`}
+                aria-pressed={reaction.reacted}
+                title={
+                  reaction.reacted
+                    ? `Remove your ${option.label} reaction`
+                    : `React with ${option.label}`
+                }
+                disabled={busy || !interactive}
+                onClick={() => void react(option.kind)}
+              >
+                <span aria-hidden="true">{option.emoji}</span> {reaction.count}
+              </button>
+            ) : null;
+          })}
+          <button
+            ref={trigger}
+            type="button"
+            className="text-button reaction-trigger"
+            aria-expanded={open}
+            aria-controls={pickerId}
+            disabled={!interactive}
+            aria-disabled={busy}
+            onClick={() => {
+              if (!busy) setOpen((value) => !value);
+            }}
+          >
+            React
+          </button>
+        </div>
       </div>
       {open && (
-        <div id={pickerId} className="reaction-picker">
+        <div
+          id={pickerId}
+          className="reaction-picker"
+          role="group"
+          aria-label="Choose a reaction"
+          onKeyDown={dismiss}
+        >
           {reactionOptions.map((option) => (
             <button
               key={option.kind}
@@ -122,6 +137,6 @@ export function Reactions({
           {error}
         </p>
       )}
-    </div>
+    </>
   );
 }

@@ -1,28 +1,70 @@
 /* Feed entries, discussions, composers, spoilers, and reactions.
    Keep later entry and nested-reply overrides after the general thread rules. */
+/* One wrapping line of actions under an entry or reply: the caller's actions,
+   then reaction counts and React. Groups wrap whole, so a phone entry uses at
+   most two lines: title actions, then reactions. */
+.item-actions,
+.title-actions,
 .reactions {
-  margin-top: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
 }
-.reaction-summary,
+.item-actions,
+.title-actions {
+  gap: 0 18px;
+}
+.reactions {
+  gap: 6px;
+}
+.reaction-count {
+  min-height: 44px;
+  min-width: 44px;
+  padding: 8px 10px;
+  border: 1px solid #d5ddd3;
+}
+.reaction-count + .reaction-trigger {
+  margin-left: 4px;
+}
+.reaction-count[aria-pressed="true"],
+.reaction-picker button[aria-pressed="true"] {
+  background: #e7efdd;
+  box-shadow: inset 0 0 0 2px #55753a;
+}
+.icon-button {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border-radius: 50%;
+}
+@media (hover: hover) {
+  .icon-button:hover {
+    background: #eef0e6;
+  }
+}
+.icon {
+  display: block;
+  width: 20px;
+  height: 20px;
+}
+/* The copy status fills the space left beside the icon and wraps there, so
+   showing it does not push the icon onto another line. */
+.copy-link {
+  display: flex;
+  align-items: center;
+  flex: 1 1 0;
+  min-width: 40px;
+}
+.copy-status:not(:empty) {
+  margin-left: 4px;
+}
 .reaction-picker {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 6px;
-}
-.reaction-summary button {
-  min-height: 44px;
-  min-width: 44px;
-  padding: 8px 10px;
-}
-.reaction-count {
-  border: 1px solid #d5ddd3;
-}
-.reactions button[aria-pressed="true"] {
-  background: #e7efdd;
-  box-shadow: inset 0 0 0 2px #55753a;
-}
-.reaction-picker {
   margin-top: 8px;
   padding: 8px;
   border: 1px solid #d5ddd3;
@@ -45,11 +87,16 @@
 }
 .activity-card {
   padding: 23px;
-  display: flex;
-  gap: 22px;
   background: var(--white);
   border: 1px solid var(--line);
   border-radius: 12px;
+}
+.activity-summary {
+  display: flex;
+  gap: 22px;
+}
+.activity-card > .item-actions {
+  margin-top: 12px;
 }
 .activity-content {
   flex: 1;
@@ -69,9 +116,11 @@
 .activity-content > .small {
   margin-bottom: 13px;
 }
-.conversation-link {
-  font-size: 12px;
-  font-weight: 600;
+.activity-content > :last-child {
+  margin-bottom: 0;
+}
+.activity-card > .error {
+  margin: 12px 0 0;
 }
 .thread {
   background: var(--white);
@@ -93,6 +142,9 @@
 }
 .comment-heading + .small {
   margin: 5px 0;
+}
+.reply-count {
+  margin-bottom: 8px;
 }
 .comment-body {
   white-space: pre-wrap;
@@ -171,7 +223,13 @@
 @media (max-width: 800px) {
   .activity-card {
     padding: 18px;
+  }
+  .activity-summary {
     gap: 15px;
+  }
+  .item-actions,
+  .title-actions {
+    column-gap: 13px;
   }
   .activity-content h2 {
     font-size: 19px;
@@ -180,15 +238,12 @@
 @media (max-width: 560px) {
   .activity-card {
     padding: 17px 14px;
+  }
+  .activity-summary {
     gap: 14px;
   }
   .activity-content h2 {
     font-size: 18px;
-  }
-  .activity-content .inline-actions {
-    gap: 5px;
-    align-items: flex-start;
-    flex-direction: column;
   }
   .thread {
     padding: 18px 14px;
