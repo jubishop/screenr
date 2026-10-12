@@ -76,8 +76,8 @@ as_backup() {
 }
 ```
 
-List the snapshots, oldest first. Each deployment of a new release adds one
-before activation, beside the daily backups.
+List the snapshots, oldest first. Each deployment that replaces an active
+release adds one before activation, beside the daily backups.
 
 ```sh
 as_backup restic snapshots --no-lock --host bishop --tag screenr --compact
@@ -182,15 +182,17 @@ other applications that it checks to be running.
    `op document get NAME --vault Private --out-file PATH`. With the server
    gone, compare the available copies with `cmp` and resolve any difference
    before continuing.
-2. On the new Ubuntu 24.04 x64 host, clone the public repository and run the
-   [provisioning](deployment.md#provisioning) script. Do not create a new
-   role, settings, or restic repository by hand: the settings come from the
-   Mac, step 3 creates the role with its existing password, and the
-   repository already exists.
+2. On the new Ubuntu 24.04 x64 host, clone the public repository to a
+   temporary directory, run the [provisioning](deployment.md#provisioning)
+   script, and remove the clone. Do not create a new role, settings, or
+   restic repository by hand: the settings come from the Mac, step 3 creates
+   the role with its existing password, and the repository already exists.
 
    ```sh
-   git clone --depth 1 https://github.com/jubishop/screenr.git /opt/screenr/releases/bootstrap
-   sh /opt/screenr/releases/bootstrap/ops/provision.sh
+   bootstrap=$(mktemp -d)
+   git clone --depth 1 https://github.com/jubishop/screenr.git "$bootstrap"
+   sh "$bootstrap/ops/provision.sh"
+   rm -rf "$bootstrap"
    ```
 
    Then install the settings from the Mac:
@@ -226,29 +228,20 @@ other applications that it checks to be running.
      environment, as in
      [production environment setup](deployment.md#production-environment-setup).
      Generate a new key pair if the old public key is lost.
-   - The deploy job cannot yet activate a host with no active release
-     ([#184](https://github.com/jubishop/screenr/issues/184)). It reads
-     `/opt/screenr/current/REVISION`, and its backup before activation runs
-     `/opt/screenr/current/ops/backup.sh`. Until that is fixed, give the
-     clone a `REVISION` file and point `current` at it. The deployed `main`
-     revision must contain the clone's revision, because production never
-     moves backwards.
-
-     ```sh
-     git -C /opt/screenr/releases/bootstrap rev-parse HEAD > /opt/screenr/releases/bootstrap/REVISION
-     ln -s /opt/screenr/releases/bootstrap /opt/screenr/current
-     ```
+   - Leave `/opt/screenr/current` absent and `/opt/screenr/releases` empty.
+     The deploy job then treats the host as
+     [new](deployment.md#first-release-on-a-new-host): it skips the
+     production revision comparison and the backup before activation, which
+     needs a backup script from an active release.
 
 5. Use **Run workflow** on `main` to deploy. After it passes, enable the
-   services and timers, remove the clone, which release cleanup preserves,
-   and run the restore check:
+   services and timers, and run the restore check:
 
    ```sh
    systemctl enable screenr-web screenr-worker
    systemctl enable --now screenr-backup.timer screenr-restore-check.timer \
      screenr-backup-age.timer screenr-backup-size.timer \
      screenr-postgresql-updates.timer
-   rm -rf /opt/screenr/releases/bootstrap
    systemctl start screenr-restore-check.service
    ```
 

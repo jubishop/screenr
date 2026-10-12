@@ -18,7 +18,7 @@ REVISION = 'a' * 40
 ROOT_SCRIPTS = ('ops/deploy-release.sh', 'ops/activate.sh', 'ops/prune-releases.py')
 
 FAKE_COMMAND = r'''#!/usr/bin/env python3
-import json, os, sys, shutil
+import json, os, subprocess, sys, shutil
 from pathlib import Path
 name, args = Path(sys.argv[0]).name, sys.argv[1:]
 base = Path(os.environ['FIXTURE'])
@@ -62,15 +62,26 @@ elif name == 'gh':
         print(json.dumps(dict(status=status)))
     else: sys.exit(99)
 elif name == 'ssh':
+    # The fixture's host directory stands in for /opt/screenr on the host.
+    host = base / 'host'
     if args[-1].startswith('mktemp'): print('/tmp/screenr-release.ABC123')
     elif args[-1] == 'cat /opt/screenr/current/REVISION':
-        if os.environ.get('ACTIVE_EXIT'): sys.exit(1)
+        if os.environ.get('ACTIVE_EXIT') or not (host / 'current/REVISION').is_file(): sys.exit(1)
         count = sum('current/REVISION' in line for line in (base / 'calls').read_text().splitlines())
         print(os.environ['LATE_ACTIVE'] if os.environ.get('LATE_ACTIVE') and count > 1 else os.environ.get('ACTIVE_SHA', '0'*40))
     elif args[-1].startswith('sh -c'):
         sys.exit(int(os.environ.get('SSH_EXIT', '0')))
     elif args[-1].startswith('python3 '):
         sys.exit(int(os.environ.get('PRUNE_EXIT', '0')))
+    elif '/opt/screenr' in args[-1]:
+        # Run any other host inspection for real against the fixture host.
+        sys.exit(subprocess.run(['sh', '-c', args[-1].replace('/opt/screenr', str(host))]).returncode)
+elif name == 'scp':
+    if os.environ.get('ACTIVATED_DURING_UPLOAD'):
+        # Another activation finishes while this archive uploads.
+        (base / 'host/releases' / ('b'*40)).mkdir(parents=True)
+        (base / 'host/releases' / ('b'*40) / 'REVISION').write_text('b'*40 + '\n')
+        (base / 'host/current').symlink_to('releases/' + 'b'*40)
 elif name == 'curl':
     if args[-1].endswith('health'): print(os.environ.get('HEALTH', '{"ok":true}'))
     elif args[-1].endswith('get-session'): print(os.environ.get('SESSION', 'null'))
@@ -107,7 +118,16 @@ class DeploymentFixture(unittest.TestCase):
             (self.base / name).write_text('fixture')
         self.environment['SCREENR_DEPLOY_KEY_FILE'] = str(self.base / 'deploy-key')
         self.environment['SCREENR_DEPLOY_KNOWN_HOSTS_FILE'] = str(self.base / 'known-hosts')
+        self.make_host()
         self.make_archive()
+
+    def make_host(self):
+        # A host that already runs a release.
+        shutil.rmtree(self.base / 'host', ignore_errors=True)
+        active = self.base / 'host/releases' / ('0' * 40)
+        active.mkdir(parents=True)
+        (active / 'REVISION').write_text('0' * 40 + '\n')
+        (self.base / 'host/current').symlink_to('releases/' + '0' * 40)
 
     def make_archive(self, revision=REVISION, extra=None, root_scripts=True):
         files = [('REVISION', revision), ('server.js', '// server')]
@@ -272,6 +292,49 @@ class CIDeploymentTests(DeploymentFixture):
                 self.assertIn('Could not', result.stderr)
                 self.assertFalse(self.uploaded())
 
+    def make_new_host(self):
+        # A provisioned replacement host that never activated a release.
+        shutil.rmtree(self.base / 'host/releases' / ('0' * 40))
+        (self.base / 'host/current').unlink()
+
+    def test_first_deploy_to_new_host_activates_without_production_comparison(self):
+        self.make_new_host()
+        result = self.execute()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('DEPLOY SUCCEEDED', result.stdout)
+        self.assertIn('production has no active release', result.stdout)
+        # Main must still contain the release; only the production comparison is skipped.
+        compares = [call[-1] for call in self.calls() if '/compare/' in call[-1]]
+        self.assertEqual(compares, [f'repos/jubishop/screenr/compare/{REVISION}...main?per_page=1'] * 2)
+        self.assert_only_checked_root_scripts()
+
+    def test_missing_active_revision_on_used_host_never_uploads(self):
+        # Only a host with no active release and no releases skips the comparison.
+        host = self.base / 'host'
+        for name, damage in (
+                ('dangling active link', lambda: shutil.rmtree(host / 'releases' / ('0' * 40))),
+                ('active link removed', lambda: (host / 'current').unlink()),
+                ('active manifest removed', lambda: (host / 'releases' / ('0' * 40) / 'REVISION').unlink()),
+                ('other release directory', lambda: (self.make_new_host(), (host / 'releases/bootstrap').mkdir())),
+                ('releases directory missing', lambda: (self.make_new_host(), (host / 'releases').rmdir()))):
+            with self.subTest(name=name):
+                self.make_host()
+                (self.base / 'calls').unlink(missing_ok=True)
+                damage()
+                result = self.execute()
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn('Could not read the active production revision', result.stderr)
+                self.assertFalse(self.uploaded())
+
+    def test_release_activated_during_first_upload_still_cannot_move_backwards(self):
+        self.make_new_host()
+        result = self.execute(ACTIVATED_DURING_UPLOAD='yes', LATE_ACTIVE='b' * 40)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('does not contain production revision ' + 'b' * 40, result.stderr)
+        calls = self.calls()
+        self.assertTrue(any(call[0] == 'scp' for call in calls))
+        self.assertFalse(any(call[0] == 'ssh' and call[-1].startswith('sh -c') for call in calls))
+
     def test_push_during_upload_still_activates(self):
         result = self.execute(LATE_MAIN='b' * 40)
         self.assertEqual(result.returncode, 0, result.stderr)
@@ -406,8 +469,14 @@ class RemoteDeploymentTests(unittest.TestCase):
         touch() { :; }
         rm() { printf 'removed\n' >> "$FIXTURE/events"; }
         cat() { printf '%s\n' "$REVISION"; }
+        # The host has no active release when the fixture records none, and its
+        # releases directory lists only the names in OTHER_RELEASES.
+        ls() { [ -z "${OTHER_RELEASES:-}" ] || printf '%s\n' "$OTHER_RELEASES"; }
         test() {
             if [ "$1" = -f ]; then return 0; fi
+            case "$*" in '-e /opt/screenr/current'|'-L /opt/screenr/current')
+                [ -n "$(command cat "$FIXTURE/current")" ]; return ;;
+            esac
             # An earlier failed rollback kept this revision's candidate.
             if [ "$1" = -e ] && [ "$2" = "/opt/screenr/releases/$REVISION/.deployment-pending" ]; then
                 [ "${KEPT_CANDIDATE:-}" = yes ]; return
@@ -472,6 +541,27 @@ class RemoteDeploymentTests(unittest.TestCase):
         self.assertNotIn('Rolled back', result.stdout + result.stderr)
         self.assertEqual(current, '/opt/screenr/releases/' + REVISION)
         self.assertNotIn('removed', events)
+        # Replacing an active release backs it up first.
+        self.assertIn('start screenr-backup.service', self.systemctl_calls)
+
+    def test_first_deploy_to_new_host_activates_without_backup(self):
+        # A new host has no active release, so it has no backup script yet.
+        result, events, current = self.execute_remote(NO_PREVIOUS='yes')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('No active release', result.stdout)
+        self.assertIn('Activated ' + REVISION, result.stdout)
+        self.assertNotIn('start screenr-backup.service', self.systemctl_calls)
+        self.assertEqual(current, '/opt/screenr/releases/' + REVISION)
+
+    def test_missing_active_release_beside_other_releases_changes_nothing(self):
+        for releases in ('d' * 40, 'bootstrap'):
+            with self.subTest(releases=releases):
+                result, events, current = self.execute_remote(NO_PREVIOUS='yes', OTHER_RELEASES=releases)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn('No active release, but /opt/screenr/releases is not empty', result.stderr)
+                self.assertNotIn('start screenr-backup.service', self.systemctl_calls)
+                self.assertEqual(events, '')
+                self.assertEqual(current, '')
 
     def test_activation_runs_checked_script_not_release_copy(self):
         result, events, current = self.execute_remote(

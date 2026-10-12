@@ -15,6 +15,10 @@ REPO = 'jubishop/screenr'
 ROOT = Path(__file__).resolve().parents[1]
 # The remote scripts exit with this status when no healthy release is running.
 PRODUCTION_DOWN = 69
+# Succeeds only on a provisioned host that has never activated a release.
+# ops/deploy-release.sh repeats the check under the deploy lock.
+NEW_HOST_CHECK = ('test ! -e /opt/screenr/current && test ! -L /opt/screenr/current && '
+                  'test -d /opt/screenr/releases && test -z "$(ls -A /opt/screenr/releases)"')
 
 
 def run(*args, capture=False):
@@ -39,16 +43,32 @@ def contains(older, newer):
         raise ValueError(f'Could not compare {older} with {newer}.') from error
 
 
+def active_revision(host):
+    """Return the active production revision, or None on a host that never activated one."""
+    try:
+        active = run('ssh', host, 'cat /opt/screenr/current/REVISION', capture=True).strip()
+    except subprocess.SubprocessError:
+        # Only a provisioned host with no active release and an empty releases
+        # directory takes a first deployment. Any other state fails closed.
+        try:
+            run('ssh', host, NEW_HOST_CHECK)
+        except subprocess.SubprocessError as error:
+            raise ValueError('Could not read the active production revision.') from error
+        return None
+    if not re.fullmatch(r'[0-9a-f]{40}', active):
+        raise ValueError('Could not read the active production revision.')
+    return active
+
+
 def check_release(revision, host):
     """Require main to contain the release and the release to contain production."""
     if not contains(revision, 'main'):
         raise ValueError(f'Release {revision} is not in main. Deploy a revision that main contains.')
-    try:
-        active = run('ssh', host, 'cat /opt/screenr/current/REVISION', capture=True).strip()
-    except subprocess.SubprocessError as error:
-        raise ValueError('Could not read the active production revision.') from error
-    if not re.fullmatch(r'[0-9a-f]{40}', active):
-        raise ValueError('Could not read the active production revision.')
+    active = active_revision(host)
+    if active is None:
+        print(f'Main contains {revision}; production has no active release, '
+              'so this is the first deployment.', flush=True)
+        return
     if not contains(active, revision):
         raise ValueError(f'Release {revision} does not contain production revision {active}. '
                          'Production never moves backwards.')

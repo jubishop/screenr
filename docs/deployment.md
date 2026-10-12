@@ -244,7 +244,8 @@ checks still run. PR workflows only run checks. **Run workflow** on `main`
 forces a checked deployment when needed. There is no local deployment command.
 
 The deployment job downloads the archive from its own run, checks its revision
-and paths, and verifies the transfer checksum. It takes a backup, activates the
+and paths, and verifies the transfer checksum. It takes a backup unless the
+host has [no active release](#first-release-on-a-new-host), activates the
 release, and checks Screenr services, the public health endpoint, the login
 page, and the sign-in route: a signed-out `/api/auth/get-session` must return
 `null`. It also checks that Caddy, Health, KidsBank, and Trading retain their
@@ -284,10 +285,10 @@ therefore still deploys its validated release; the next run deploys the newer
 revision. Production never moves backwards: the helper refuses a revision that
 `main` does not contain, or one that is older than or diverged from
 production. If a comparison or the production read fails, it refuses before
-activation. A skip trailer on a later push cannot strand a refused or failed
-release: skipping requires every commit since the last successful production
-deployment to skip. The host also locks deployment so two activations cannot
-run together.
+activation, except on a [new host](#first-release-on-a-new-host). A skip
+trailer on a later push cannot strand a refused or failed release: skipping
+requires every commit since the last successful production deployment to
+skip. The host also locks deployment so two activations cannot run together.
 
 The workflow stores release artifacts with one-day retention. After downloading
 and verifying an archive, the deployment job deletes its GitHub artifact. Build
@@ -333,6 +334,28 @@ files. Other entries and symlinks are preserved for inspection. Cleanup failures
 fail the deploy job without stopping the active application; retrying
 verification and cleanup is safe. Database files and backups are outside the
 release tree.
+
+### First release on a new host
+
+A provisioned replacement host has no active release, so it has neither
+`/opt/screenr/current/REVISION` nor the backup script that the backup service
+runs from the active release
+([issue #184](https://github.com/jubishop/screenr/issues/184)). When the
+production read fails, the helper checks over SSH that `/opt/screenr/current`
+does not exist, not even as a broken link, and that `/opt/screenr/releases`
+exists and is empty. Only then does it skip the production comparison; `main`
+must still contain the revision. Under the deploy lock, `deploy-release.sh`
+checks the host the same way and skips the backup before activation. The
+database on such a host is empty or was just restored from a backup. Every
+deployment that replaces an active release still compares revisions and backs
+up first.
+
+Any other host without a readable active revision fails closed. A host whose
+`current` link is missing while releases remain is not new. Point the link back
+at the release that was active before deploying, so the comparison and the
+backup run again. The
+[rebuild runbook](restore-and-patching.md#rebuild-on-a-replacement-host)
+leaves both paths untouched until the first deployment.
 
 ### Production environment setup
 

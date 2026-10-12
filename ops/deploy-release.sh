@@ -37,7 +37,18 @@ trap cleanup EXIT
 if [ "$(readlink /opt/screenr/current)" = "$release" ]; then
     echo "Revision $revision is already active; verifying health."
 else
-    systemctl start screenr-backup.service
+    if test -e /opt/screenr/current || test -L /opt/screenr/current; then
+        # Back up before replacing a release. A missing backup script fails.
+        systemctl start screenr-backup.service
+    elif test -z "$(ls -A /opt/screenr/releases)"; then
+        # A new host's backup script arrives with its first release. Its
+        # database is empty or was just restored from a backup.
+        echo 'No active release: skipping the backup for this first deployment.'
+    else
+        echo "No active release, but /opt/screenr/releases is not empty. \
+Restore the /opt/screenr/current link before deploying." >&2
+        exit 1
+    fi
     # A failed rollback kept this revision's candidate; a retry replaces it.
     if test -e "$release/.deployment-pending"; then rm -rf "$release"; fi
     mkdir "$release"
