@@ -4,13 +4,12 @@ status: current
 
 # Shared VPS deployment
 
-Screenr targets the existing Hetzner VPS and `screenr.club`, under the
+Screenr runs on the existing Hetzner VPS at `https://screenr.club`, under the
 [accepted hosting decision](application-stack.md#initial-hosting-layout--2026-09-05).
-The files in `ops/` define the deployment. Their presence does not mean the
-live services or provider accounts have been configured. The initial deployment
-at `screenr.jubishop.com` is recorded in [issue #1](https://github.com/jubishop/screenr/issues/1).
-The move to `screenr.club` is tracked in [issue #9](https://github.com/jubishop/screenr/issues/9);
-follow the [domain cutover procedure](#domain-cutover) for an existing installation.
+The files in `ops/` define the deployment. The initial deployment at
+`screenr.jubishop.com` is recorded in [issue #1](https://github.com/jubishop/screenr/issues/1),
+and the move to `screenr.club` in [issue #9](https://github.com/jubishop/screenr/issues/9).
+The old hostname now only [redirects](#old-hostname-redirect) to the new one.
 
 ## Layout
 
@@ -78,8 +77,9 @@ existing Cloudflare setup. Verify the zone's origin TLS mode and certificate
 compatibility; do not weaken a zone-wide setting. Keep the origin key private.
 Validate Caddy before reloading it. Add a **proxied** A record for
 `screenr.club` pointing to this VPS. Keep the old proxied `screenr.jubishop.com`
-record and its certificate for redirects. Preserve the existing firewall
-rules limiting public HTTP(S) access to Cloudflare.
+record and its certificate for the [old hostname redirect](#old-hostname-redirect).
+Preserve the existing firewall rules limiting public HTTP(S) access to
+Cloudflare.
 
 Screenr supplies its own invited-member authentication. Do not put a second
 Cloudflare Access login in front of its public login or OAuth callback.
@@ -280,10 +280,6 @@ Do not paste the resulting invitation into a public issue or PR.
 
 ## Independent acceptance
 
-For the one-time hostname change, use only the focused checks in
-[Domain cutover](#domain-cutover). The broader checks below apply to other
-releases when the affected behavior requires them.
-
 After deployment, check the public `/api/health` and `/login` responses,
 service status and restart counts, and logs. Verify the relevant changed
 behavior on the live site, using existing accounts where possible. Verify
@@ -304,54 +300,23 @@ journalctl -u screenr-web -u screenr-worker --since '30 minutes ago' --no-pager
 curl --fail https://screenr.club/api/health
 ```
 
-## Domain cutover
+## Old hostname redirect
 
-**Decision — 2026-09-06:** The owner is the only user. Apply the
-[hostname change](product-brief.md#public-hostname--2026-09-06) as a small
-configuration update through the main branch workflow. This replaces the previous
-maintenance window, extra backup verification, full sign-in and invitation
-checklist, and mandatory CI rerun. The normal deployment already takes a
-backup and checks the services.
+The `screenr.jubishop.com` site in `ops/Caddyfile` answers every request with
+a permanent 308 redirect to the same path and query on `https://screenr.club`,
+so old shared invitation and title links keep working. Requests to the old
+host never reach the application. The redirect sends `Cache-Control: no-store`,
+so browsers do not cache it.
 
-1. **Let deployment finish.** Push the checked change to `main`; no extra before-merge task is
-   required. Wait for the automatic run to end before editing server settings.
-   The final `screenr.club` check can fail because the domain is not configured
-   yet. If activation and remote service checks passed, continue below;
-   otherwise resolve the deployment failure first.
-2. **Switch the settings.** Add Google's
-   `https://screenr.club/api/auth/callback/google` callback in project
-   `screenr-69420`, and update its consent-screen domain and URLs where needed.
-   In Cloudflare, point the proxied apex A record to the existing VPS and use
-   Full (strict) TLS with an active edge certificate. Install the origin
-   certificate and private key at `/etc/caddy/certs/screenr-club.pem` and
-   `/etc/caddy/certs/screenr-club.key`, readable by Caddy with the key private.
-   Save private copies of `/etc/screenr/app.env` and `/etc/caddy/Caddyfile`,
-   preserving permissions. Set `BETTER_AUTH_URL=https://screenr.club` and
-   install both Screenr blocks from the checked `ops/Caddyfile`, preserving
-   unrelated sites and the existing firewall. Run
-   `caddy validate --config /etc/caddy/Caddyfile`, then
-   `systemctl restart screenr-web screenr-worker` and `systemctl reload caddy`.
-   Restart explicitly: deploying an already-active revision skips restarts.
-3. **Check that it works.** Confirm `https://screenr.club/api/health` returns
-   HTTP 200 with `{"ok":true}`. Open `/login` and sign in to the existing owner
-   profile using the usual method. Prefer Google if the account uses it,
-   because its callback changed. Check that one old URL redirects to the same
-   path and query on the new host. These checks complete the domain change;
-   no second sign-in method, new invitation, or separate acceptance report is
-   required. Inspect logs or other services only if a check fails.
+Keep the old proxied DNS record and its origin certificate at
+`/etc/caddy/certs/screenr.pem` and `/etc/caddy/certs/screenr.key`; TLS must
+succeed before a browser can follow the redirect. The old Google callback
+registration also stays in place, unused. No cleanup is scheduled. Production
+sets `BETTER_AUTH_URL=https://screenr.club`; the registered callbacks are in
+[provider configuration](running-screenr.md#provider-configuration).
 
-Keep the existing database, auth secret, provider credentials, and verified
-`Screenr <screenr@jubishop.com>` sender. Expect to sign in again on the new
-host. Leave the old DNS, certificate, and Google callback in place; there is
-no scheduled cleanup or rollback window.
-
-If the switch fails, restore the two saved configuration files, validate
-Caddy, restart Screenr web and worker, and reload Caddy. Check the old login
-again. No database or release rollback is needed for these domain settings.
-
-If the first Actions run failed only at the new-host check, the direct checks
-above are sufficient. That run stays failed; the next normal deployment checks
-the new host. A full workflow rerun is optional, not a completion requirement.
+The one-time move finished when issue #9 closed on 2026-09-07. Its
+[cutover procedure and decision](archive/domain-cutover.md) are archived.
 
 ## Encrypted backups and restore check
 

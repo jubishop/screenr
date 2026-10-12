@@ -123,11 +123,11 @@ https://screenr.club/api/auth/callback/google
 ```
 
 For production, set `BETTER_AUTH_URL=https://screenr.club` in the private
-server environment. Register the new callback before changing this value.
-Leave the old `https://screenr.jubishop.com/api/auth/callback/google` registration
-in place. Follow the [domain cutover procedure](deployment.md#domain-cutover)
-to coordinate Google, DNS, TLS, and the server. Google's callback must match
-the registered URL exactly; see its [redirect URI requirements](https://developers.google.com/identity/protocols/oauth2/web-server#creatingcred).
+server environment. The old `https://screenr.jubishop.com/api/auth/callback/google`
+registration stays in place but is unused: the old host
+[redirects](deployment.md#old-hostname-redirect) before requests reach Screenr.
+Google's callback must match the registered URL exactly; see its
+[redirect URI requirements](https://developers.google.com/identity/protocols/oauth2/web-server#creatingcred).
 
 Set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` on the server. Google sign-in
 appears when configured. An account created through Google can later use an
@@ -146,10 +146,10 @@ For production email, use `EMAIL_TRANSPORT=resend`, the existing sending-only
 The sending-only key can send mail but cannot list or configure domains.
 Do not replace a working key because a management endpoint rejects its scope.
 The existing account accepted a provider test message from
-`Screenr <screenr@jubishop.com>` on 2026-09-05. Keep that verified sender when
-moving the website to `screenr.club`; the website domain does not require an
-email sender change. No new sender DNS is needed. Verify actual inbox delivery
-before opening signup. No paid-plan upgrade is part of this deployment.
+`Screenr <screenr@jubishop.com>` on 2026-09-05. Screenr keeps that verified
+sender on `screenr.club`; the website domain does not require a matching sender
+domain or new sender DNS. Verify actual inbox delivery before opening signup.
+No paid-plan upgrade is part of this deployment.
 
 The email worker stores encrypted, expiring jobs in PostgreSQL. Failed sends
 retry with the same Resend idempotency key. Requesting a new code replaces an
@@ -389,7 +389,7 @@ use or restore a friendship after unfriending or blocking.
 Operational tests check activation rollback after a stalled health request and
 rejection of incorrectly named SQL migrations before schema changes begin.
 The proxy test runs the production Caddy routes on loopback with a temporary
-certificate and a fixture upstream. It verifies the new hostname, client IP
+certificate and a fixture upstream. It verifies the `screenr.club` site, client IP
 forwarding, security headers, and old invitation/title redirects with their
 paths and queries intact. Run it alone with
 `node --import tsx --test tests/app/proxy.test.ts`. It does not verify public DNS,

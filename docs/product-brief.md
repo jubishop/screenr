@@ -1213,9 +1213,10 @@ to skip deployment. It replaces the earlier mandatory PR review and merge step.
 requested the move and confirmed that they had registered the domain with
 Cloudflare. This supersedes the 2026-09-05 choice of `screenr.jubishop.com`.
 
-The [domain cutover procedure](deployment.md#domain-cutover) keeps the existing
-VPS and preserves old shared links through redirects. The decision does not
-mean that DNS, provider settings, or production have already changed.
+The move kept the existing VPS and preserves old shared links through the
+[old hostname redirect](deployment.md#old-hostname-redirect). It finished when
+issue #9 closed on 2026-09-07; the completed
+[cutover procedure](archive/domain-cutover.md) is archived.
 
 ## Open decisions
 

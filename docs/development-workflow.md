@@ -331,9 +331,6 @@ trailers keep deployment enabled. Full CI still runs. Never use `[skip ci]`
 for this purpose. A manual **Run workflow** on `main` runs checks, packages,
 and deploys current main even if its commit has a skip trailer.
 
-For the one-time move to `screenr.club`, use the short
-[domain cutover procedure](deployment.md#domain-cutover).
-
 ## Project Starter
 
 `.project-starter.json` records the installed Project Starter release and the
