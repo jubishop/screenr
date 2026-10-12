@@ -140,8 +140,9 @@ configuration automatically.
   monitor on `https://screenr.club/api/health`. The monitor alerts when the
   response lacks `"ok":true`, which also covers the database because the
   endpoint queries it and returns 503 on failure. Use a 5-minute interval and
-  the account's existing alert contacts. The owner creates this monitor,
-  because agents have no UptimeRobot access.
+  the account's existing alert contacts. The monitor "Keyword on
+  screenr.club/api/health" was created on 2026-10-12, alerts by email, and
+  passed its first check.
 
 [Issue #113](https://github.com/jubishop/screenr/issues/113) tracks the
 work.
