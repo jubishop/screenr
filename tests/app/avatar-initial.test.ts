@@ -15,3 +15,21 @@ test("avatar initials keep a combined first character whole", () => {
   assert.equal(initial("👍🏽 Thumbs"), "👍🏽");
   assert.equal(initial("🇯🇵 Fan"), "🇯🇵");
 });
+
+test("avatar initials fall back to the first code point without Intl.Segmenter", async () => {
+  const segmenter = Object.getOwnPropertyDescriptor(Intl, "Segmenter");
+  assert.ok(segmenter);
+  Reflect.deleteProperty(Intl, "Segmenter");
+  try {
+    const module: typeof import("../../src/components/initial") = await import(
+      new URL("../../src/components/initial.ts?no-segmenter", import.meta.url)
+        .href
+    );
+    assert.equal(module.initial("🎬 Movie Fan"), "🎬");
+    assert.equal(module.initial("𝔄ngela"), "𝔄");
+    assert.equal(module.initial("Renée"), "R");
+    assert.equal(module.initial(""), "");
+  } finally {
+    Object.defineProperty(Intl, "Segmenter", segmenter);
+  }
+});

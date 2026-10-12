@@ -314,6 +314,7 @@ current gap until a separate feature ships.
 reader sees, so a leading emoji, flag, or accented letter stays intact.
 `src/components/initial.ts` takes it for every initial, including the poster
 placeholder ([issue #144](https://github.com/jubishop/screenr/issues/144)).
+Browsers without `Intl.Segmenter` fall back to the first code point.
 
 ### Sectioned Friends page — 2026-10-12
 
