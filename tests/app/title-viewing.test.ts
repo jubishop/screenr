@@ -2,9 +2,13 @@ import { test, before, beforeEach, after } from "node:test";
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
-import { useDatabase, db } from "./social-fixture";
+import { useDatabase, db, person, friend } from "./social-fixture";
+import type { TitleViewing } from "../../src/shared";
 const { findTitles } = await import("../../src/server/title-viewing");
-const { getTitle } = await import("../../src/server/catalog");
+const { getTitle, getTitleAvailability } =
+  await import("../../src/server/catalog");
+const { loadScreen } = await import("../../src/server/screens");
+const { updateTitleActivity } = await import("../../src/server/social");
 useDatabase();
 
 let items: { id: number; title: string; name: string; media_type: string }[];
@@ -172,4 +176,98 @@ test("slow catalog search leaves time to return titles within the browser search
     Date.now() - start < 9500,
     "Optional providers must not exhaust the ten-second browser deadline",
   );
+});
+
+test("suggestion and Watch together lists read cached availability in one query and refresh only expired or missing titles", async (t) => {
+  const alice = await person("alice"),
+    ben = await person("ben"),
+    cam = await person("cam");
+  await friend(alice, ben);
+  await friend(cam, ben);
+  const netflix = {
+    link: null,
+    providers: {
+      flatrate: [{ provider_id: 8, provider_name: "Netflix", logo_path: null }],
+    },
+  };
+  // Fresh, older with failure backoff, failed with backoff, expired, missing.
+  const cache: [string, string, string | null, string | null][] = [
+    ["movie:96001", "fresh", "now()", "now()+interval '1 day'"],
+    ["movie:96002", "fresh", "now()", "now()+interval '1 day'"],
+    [
+      "tv:96003",
+      "stale",
+      "now()-interval '2 days'",
+      "now()+interval '5 minutes'",
+    ],
+    ["movie:96004", "failed", null, "now()+interval '5 minutes'"],
+    [
+      "movie:96005",
+      "expired",
+      "now()-interval '2 days'",
+      "now()-interval '1 second'",
+    ],
+    ["tv:96006", "missing", null, null],
+  ];
+  for (const [id, state, fetched, refresh] of cache) {
+    const [kind, tmdbId] = id.split(":");
+    await db.query(
+      "INSERT INTO title(id,kind,tmdb_id,name) VALUES($1,$2,$3,$4)",
+      [id, kind, tmdbId, `Listed ${state} ${tmdbId}`],
+    );
+    if (refresh)
+      await db.query(
+        `INSERT INTO title_availability(title_id,country,availability,fetched_at,refresh_after)
+        VALUES($1,'US',$2,${fetched ?? "NULL"},${refresh})`,
+        [id, fetched ? netflix : null],
+      );
+    for (const user of [alice, ben])
+      await updateTitleActivity(user, id, "want_to_watch", true);
+  }
+  const query = t.mock.method(db, "query");
+  const cacheReads = () =>
+    query.mock.calls.filter((call) =>
+      /\bFROM title_availability\b/.test(String(call.arguments[0])),
+    ).length;
+  const viewing = (titles: { id: string; viewing: TitleViewing }[]) =>
+    Object.fromEntries(titles.map((title) => [title.id, title.viewing]));
+  const expected = {
+    "movie:96001": ["ok", "Netflix"],
+    "movie:96002": ["ok", "Netflix"],
+    "tv:96003": ["stale", "Netflix"],
+    "movie:96004": ["unavailable", undefined],
+    "movie:96005": ["ok", "AMC+"],
+    "tv:96006": ["ok", "AMC+"],
+  };
+
+  const together = await loadScreen(alice, "/watch-together?with=ben");
+  if (together.kind !== "watch-together")
+    throw new Error("Expected Watch together");
+  assert.equal(together.titles.length, cache.length);
+  assert.equal(cacheReads(), 1);
+  assert.deepEqual(providers.sort(), [
+    "/movie/96005/watch/providers",
+    "/tv/96006/watch/providers",
+  ]);
+  const shared = viewing(together.titles);
+  for (const [id, [status, service]] of Object.entries(expected)) {
+    assert.equal(shared[id].status, status, id);
+    assert.equal(shared[id].sections[0]?.services[0].name, service, id);
+  }
+
+  query.mock.resetCalls();
+  providers = [];
+  const search = await loadScreen(cam, "/search");
+  if (search.kind !== "search") throw new Error("Expected search");
+  assert.equal(search.suggestions.length, cache.length);
+  assert.equal(cacheReads(), 1);
+  assert.deepEqual(providers, []);
+  const suggested = viewing(search.suggestions);
+  assert.deepEqual(suggested, shared);
+  // A list entry matches the title screen's single-title result.
+  for (const [id] of cache) {
+    const { status, checked_at, sections } = await getTitleAvailability(id);
+    assert.deepEqual(suggested[id], { status, checked_at, sections }, id);
+  }
+  assert.deepEqual(providers, []);
 });

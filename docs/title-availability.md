@@ -282,13 +282,14 @@ US region, last-checked time, attribution, and watch-page link. It distinguishes
 empty, failed, and older cached data, including older empty results.
 
 `src/server/title-viewing.ts` adds this same availability to catalog results,
-circle suggestions, and shared Want to watch titles. It allows four concurrent
-lookups and stops starting provider requests after three seconds. Catalog search
-also stops starting provider requests seven seconds after the search began,
-leaving room within the browser's ten-second deadline. In-flight requests retain
-the two-second timeout. Remaining titles use cached data or
-an explicit unknown state; they are not dropped. Search summaries create only
-missing title identities for the cache and never overwrite richer details.
+circle suggestions, and shared Want to watch titles. Each list reads its cache
+rows in one query, then requests only missing or expired entries from TMDB. It
+allows four concurrent provider requests and stops starting them after three
+seconds. Catalog search also stops starting provider requests seven seconds
+after the search began, leaving room within the browser's ten-second deadline.
+In-flight requests retain the two-second timeout. Remaining titles use cached
+data or an explicit unknown state; they are not dropped. Search summaries create
+only missing title identities for the cache and never overwrite richer details.
 
 `db/009-streaming-services.sql` stores each member's selected stable service
 identities. `src/server/streaming-services.ts` validates selections against the
@@ -376,6 +377,7 @@ The registry test checks the full union rather than a fixed provider count.
 `tests/app/streaming-services.test.ts` covers authenticated writes, isolation,
 validation, free access, either participant's services, and blocked access.
 `tests/app/title-viewing.test.ts` covers enrichment, cache reuse, failure
-recovery, and bounded cold-list requests through the public API.
+recovery, bounded cold-list requests, and single-query cache reads for the
+suggestion and Watch together screens through the public API.
 `tests/browser/streaming-services.spec.ts` covers saving, cancelling, clearing,
 failed saves, filters, background preference changes, and responsive grouping.

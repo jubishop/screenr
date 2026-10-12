@@ -306,28 +306,23 @@ function availabilityResult(cached?: CachedAvailability): WatchAvailability {
   };
 }
 
+async function readCachedAvailability(ids: string[]) {
+  const { rows } = await db.query<CachedAvailability & { title_id: string }>(
+    "SELECT title_id,availability,fetched_at,refresh_after FROM title_availability WHERE title_id=ANY($1::text[]) AND country='US'",
+    [ids],
+  );
+  return new Map(rows.map(({ title_id, ...cached }) => [title_id, cached]));
+}
+
 // Fetch only optional public metadata here. A failed refresh must neither
 // erase the last success nor be retried on every title-screen poll. Cache
 // writes wait for `titleStored`, as for trailers.
-export async function getTitleAvailability(
+async function refreshAvailability(
   id: string,
-  refreshBefore = Infinity,
-  titleStored: Promise<unknown> = Promise.resolve(),
+  cached: CachedAvailability | undefined,
+  titleStored: Promise<unknown>,
 ): Promise<WatchAvailability> {
-  if (!/^(movie|tv):[1-9][0-9]*$/.test(id)) return availabilityResult();
-  let cached: CachedAvailability | undefined;
   try {
-    cached = (
-      await db.query<CachedAvailability>(
-        "SELECT availability,fetched_at,refresh_after FROM title_availability WHERE title_id=$1 AND country='US'",
-        [id],
-      )
-    ).rows[0];
-    if (
-      Date.now() >= refreshBefore ||
-      (cached && cached.refresh_after.getTime() > Date.now())
-    )
-      return availabilityResult(cached);
     let availability: AvailabilityData;
     try {
       availability = parseAvailability(
@@ -363,4 +358,52 @@ export async function getTitleAvailability(
   } catch {
     return availabilityResult(cached);
   }
+}
+
+// Read every cached entry in one query, then call the provider only for
+// missing or expired entries, at most four at a time. No request starts at or
+// after `refreshBefore`; those titles keep their cached or unknown state.
+// Results follow the order of `ids`.
+export async function getTitleAvailabilities(
+  ids: string[],
+  refreshBefore = Infinity,
+  titleStored: Promise<unknown> = Promise.resolve(),
+): Promise<WatchAvailability[]> {
+  const results = new Map<string, WatchAvailability>();
+  const valid = [...new Set(ids)].filter((id) =>
+    /^(movie|tv):[1-9][0-9]*$/.test(id),
+  );
+  let cached = new Map<string, CachedAvailability>();
+  try {
+    if (valid.length) cached = await readCachedAvailability(valid);
+    const due: string[] = [];
+    for (const id of valid) {
+      const entry = cached.get(id);
+      results.set(id, availabilityResult(entry));
+      if (!entry || entry.refresh_after.getTime() <= Date.now()) due.push(id);
+    }
+    let next = 0;
+    await Promise.all(
+      Array.from({ length: Math.min(4, due.length) }, async () => {
+        while (next < due.length && Date.now() < refreshBefore) {
+          const id = due[next++];
+          results.set(
+            id,
+            await refreshAvailability(id, cached.get(id), titleStored),
+          );
+        }
+      }),
+    );
+  } catch {
+    // An unreadable cache leaves every title unknown without provider calls.
+  }
+  return ids.map((id) => results.get(id) ?? availabilityResult());
+}
+
+export async function getTitleAvailability(
+  id: string,
+  refreshBefore = Infinity,
+  titleStored: Promise<unknown> = Promise.resolve(),
+): Promise<WatchAvailability> {
+  return (await getTitleAvailabilities([id], refreshBefore, titleStored))[0];
 }

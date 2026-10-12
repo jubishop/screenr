@@ -1,33 +1,23 @@
 import type { Title, ViewingTitle } from "../shared";
-import { getTitleAvailability, searchTitles } from "./catalog";
+import { getTitleAvailabilities, searchTitles } from "./catalog";
 import { db } from "./db";
 
 export async function withViewingOptions<T extends Title>(
   titles: T[],
   refreshDeadline = Infinity,
 ): Promise<ViewingTitle<T>[]> {
-  const result = new Array<ViewingTitle<T>>(titles.length);
-  // Stop starting provider requests after three seconds. Existing cache entries
-  // remain readable; unconfirmed titles remain visible as unknown. Each in-flight
-  // provider request also has the catalog's two-second timeout.
-  const refreshBefore = Math.min(Date.now() + 3000, refreshDeadline);
-  let next = 0;
-  await Promise.all(
-    Array.from({ length: Math.min(4, titles.length) }, async () => {
-      while (next < titles.length) {
-        const index = next++;
-        const { status, checked_at, sections } = await getTitleAvailability(
-          titles[index].id,
-          refreshBefore,
-        );
-        result[index] = {
-          ...titles[index],
-          viewing: { status, checked_at, sections },
-        };
-      }
-    }),
+  // Read the cache for the whole list in one query. Stop starting provider
+  // requests after three seconds. Existing cache entries remain readable;
+  // unconfirmed titles remain visible as unknown. Each in-flight provider
+  // request also has the catalog's two-second timeout.
+  const availability = await getTitleAvailabilities(
+    titles.map((title) => title.id),
+    Math.min(Date.now() + 3000, refreshDeadline),
   );
-  return result;
+  return titles.map((title, index) => {
+    const { status, checked_at, sections } = availability[index];
+    return { ...title, viewing: { status, checked_at, sections } };
+  });
 }
 
 export async function findTitles(query: string) {
