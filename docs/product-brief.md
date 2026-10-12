@@ -328,6 +328,13 @@ catalog data are live, and stale offline content would mislead.
 work. Rejected alternatives: staying a regular website without installation,
 and caching recent feeds and titles for offline reading.
 
+The app icon is a deep green (`#163c34`) rounded square with a heavy cream
+lowercase "s" and the wordmark's lime dot at its lower right. Keep an SVG
+source in the repository and generate the PNG sizes for the browser tab, the
+iOS home screen, and Android, including a maskable version that keeps the
+mark inside the safe zone. The user chose this over a lime dot alone and over
+a green "s" on cream.
+
 ### Interface design — 2026-10-12
 
 The [interface design decisions](interface-design.md) define the layout and
@@ -421,6 +428,49 @@ be skipped. The optional friend request to the inviter is superseded by the
 **Why:** The user accepted keeping setup short so people can get started
 quickly.
 
+### Profile photos — 2026-10-12
+
+**Decision:** Members can add an optional profile photo during setup or later
+on Account, and can replace or remove it there.
+
+- **Upload:** the browser crops the image to a square and resizes it to a
+  512×512 JPEG of at most 200 KB before sending, so the server needs no image
+  library.
+- **Google photo:** a member with Google sign-in can choose "Use my Google
+  photo". Screenr fetches that picture once at 512 pixels and stores its own
+  copy; it never links to Google's image servers.
+- **Storage and access:** the server checks the file type and size and stores
+  photos in Screenr's data directory, which backups cover. Photos are served
+  only to signed-in members who can see that profile.
+
+Photos replace initials in the shared
+[avatar component](interface-design.md#avatars-wherever-a-person-appears--2026-10-12).
+[Issue #104](https://github.com/jubishop/screenr/issues/104) tracks the work.
+
+**Why:** The user chose uploads plus a one-time copy of the Google photo.
+Copying keeps members' browsers from contacting Google whenever an avatar
+appears.
+
+**Rejected alternatives:** Uploads only, and Google photos only, which would
+leave email-code members with initials.
+
+**Updated — 2026-10-12:** When photos ship, run a one-time backfill. For each
+existing member who has no profile photo and has a Google sign-in, copy
+their Google picture into Screenr's storage using the same 512-pixel copy.
+Read the picture from the stored Google profile image, or from the linked
+Google account's stored ID token when the account was linked after an
+email-code signup. Members without Google, or whose picture cannot be
+fetched, keep their initials, and the failure is logged. The backfill runs
+once, can be retried safely, and never replaces a photo a member has chosen.
+The user requested this backfill.
+
+The same rule applies going forward. When a member without a photo signs up
+with Google or links Google, copy their Google picture automatically. Never
+replace a photo the member chose. Once a member removes their photo, record
+that choice and do not add a Google picture again unless they choose "Use my
+Google photo". The user chose automatic copies for new members over limiting
+them to the one-time backfill.
+
 ### Display name editing — 2026-09-07
 
 **Decision:** Members can change their display name on their own profile
@@ -494,6 +544,16 @@ for this sign-in experience. Use the Resend relay selected below. The dedicated
 Google project and callback URLs are recorded in the
 [provider configuration](running-screenr.md#provider-configuration).
 
+**Updated — 2026-10-12:** Limit login-code emails to 3 per address per 15
+minutes and 10 per address per day, and to 40 across all of Screenr per day.
+That leaves room in the shared Resend free allowance of 100 emails a day for
+activity emails and other applications. When a limit is reached, show "Too
+many codes requested. Try again later, or continue with Google." Add no
+separate per-address lockout: these caps and the existing five attempts per
+code keep guessing negligible. The user chose these limits for
+[issue #106](https://github.com/jubishop/screenr/issues/106) over looser
+paid-plan limits.
+
 ### One account across sign-in methods — 2026-09-05
 
 **Decision:** Google sign-in and email-code sign-in for the same email
@@ -526,6 +586,19 @@ require tracking individual episodes.
 
 **Why:** The user accepted this status set, including a way to distinguish
 watching a show from waiting for more episodes.
+
+**Updated — 2026-10-12:** Want to watch is one of the statuses. Each person
+has at most one current status per title: Want to watch, Watching, Caught up
+(TV only), Finished, or Stopped watching. Moving from Want to watch to
+another status switches Want to watch off under its
+[existing lifecycle](title-feed.md#want-to-watch-uses-the-same-item-lifecycle--2026-09-06),
+keeping its entry and discussion. Recommend remains a separate action that
+[conflicts only with Want to watch](title-feed.md#exclusive-recommend-and-want-to-watch--2026-09-09),
+so a person can be Watching, Caught up, Finished, or Stopped watching and
+also Recommend the title. Choosing Want to watch still switches Recommend
+off. The user chose this for
+[issue #100](https://github.com/jubishop/screenr/issues/100) over making
+Recommend clear every status.
 
 ### Watch history at launch — 2026-09-04
 
@@ -769,6 +842,16 @@ rules, whether or not they have a title attached.
 **Why:** The user accepted general discussions so that friends can ask for
 suggestions, such as "Any good comedies for tonight?"
 
+**Updated — 2026-10-12:** Create title-less posts from a compact Start a
+conversation button on the Your circle heading row, which opens the same
+composer as title pages. Posts created there have no title. They appear in
+the friends feed for the author's current friends and on the author's
+profile, under the usual audience rules; title pages show only posts about
+that title. A title-less post's permalink and notification links open the
+friends feed at that post (`/?item=<id>`), because it has no title page. The
+user chose this for [issue #103](https://github.com/jubishop/screenr/issues/103)
+over a single composer with an optional title picker.
+
 ### Season and episode discussion labels — 2026-09-04
 
 **Decision:** Let TV discussion posts optionally identify a season or
@@ -778,6 +861,15 @@ tracking remain at show level.
 
 **Why:** The user accepted these labels so friends can tell what part of a
 show a conversation covers before revealing spoilers.
+
+**Updated — 2026-10-12:** On a TV title page, the discussion post composer
+offers optional Season and Episode pickers filled from TMDB's season and
+episode lists. The label reads "Season 2" or "Season 2, Episode 4"; episode
+names may appear in the picker but not in the label. Labels apply only to TV
+discussion posts, not replies, reviews, or statuses. When TMDB's season data
+is unavailable, the post can still be created without a label. The user chose
+TMDB pickers for [issue #103](https://github.com/jubishop/screenr/issues/103)
+over free text, for consistent labels.
 
 ### Finding and adding friends — 2026-09-04
 

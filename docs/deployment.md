@@ -86,6 +86,73 @@ Cloudflare Access login in front of its public login or OAuth callback.
 The proxy overwrites forwarded client IP headers from Cloudflare's trusted
 header so authentication rate limits apply to the actual client.
 
+**Decision — 2026-10-12:** Add three response headers:
+
+- `Strict-Transport-Security` with a one-year maximum age, without joining
+  the browser preload list.
+- A `Permissions-Policy` that denies browser features Screenr does not use.
+- An enforced, nonce-based `Content-Security-Policy`. Scripts run only with a
+  per-request nonce. Images load only from Screenr and TMDB, frames only from
+  YouTube for trailers, and workers only from Screenr, for the
+  [offline page](product-brief.md#launch-platform--2026-09-04). Framing,
+  `<base>` changes, and plugins are blocked.
+
+Browser tests must pass under the enforced policy.
+[Issue #109](https://github.com/jubishop/screenr/issues/109) tracks the work.
+
+**Why:** The user chose an enforced full policy as defense in depth. Every
+page already renders per request, so per-request nonces add no cost.
+
+**Rejected alternatives:** Only the CSP rules that need no nonces, and a
+report-only rollout that needs a report endpoint and a later step to enforce.
+
+### Host configuration drift
+
+**Decision — 2026-10-12:** During deployment, under the deploy lock and
+before activation, compare the release's `ops/` copies with the host:
+
+- **Screenr's systemd units and timers** (`screenr-*`): install changed
+  copies automatically and reload systemd.
+- **The shared Caddyfile and `ops/postgresql.conf`:** never apply them
+  automatically. Fail the deploy with a clear message naming the file and
+  how to apply it by hand.
+
+[Issue #117](https://github.com/jubishop/screenr/issues/117) tracks the
+work, and [#118](https://github.com/jubishop/screenr/issues/118) relies on it
+to roll out unit hardening.
+
+**Why:** The user chose automatic installation for units that only Screenr
+uses. A bad Caddy reload would also take down the other sites on the shared
+host.
+
+**Rejected alternatives:** Failing on any drift, and applying every
+configuration automatically.
+
+### Failure alerts
+
+**Decision — 2026-10-12:** Alert the owner on failures in two ways:
+
+- **Email:** use Resend for a failed backup, a failed restore check, or a
+  web, worker, or database service that reaches its restart limit. A daily
+  on-server check also emails when the newest backup is more than 30 hours
+  old, which catches a backup timer that never fires.
+- **Uptime:** reuse the owner's existing UptimeRobot account with a keyword
+  monitor on `https://screenr.club/api/health`. The monitor alerts when the
+  response lacks `"ok":true`, which also covers the database because the
+  endpoint queries it and returns 503 on failure. Use a 5-minute interval and
+  the account's existing alert contacts. The owner creates this monitor,
+  because agents have no UptimeRobot access.
+
+[Issue #113](https://github.com/jubishop/screenr/issues/113) tracks the
+work.
+
+**Why:** The user already runs UptimeRobot for other projects and asked to
+reuse it for the health endpoint. Backup checks stay on the server because
+UptimeRobot's free plan has no heartbeat monitors.
+
+**Rejected alternative:** A separate third-party heartbeat service for
+backups.
+
 ## Build and activate a release
 
 Follow the [main branch workflow](development-workflow.md#main-branch-delivery).
@@ -292,6 +359,31 @@ bucket. The existing DNS/Access Cloudflare token cannot provision R2 and must
 not be copied to this server. Configure the values in `ops/backup.env.example`.
 Store a recoverable copy of the random `RESTIC_PASSWORD` outside the VPS
 before initializing the repository. Losing this password loses the backups.
+
+**Decision — 2026-10-12:** Keep copies of the production secrets off the
+VPS in three places:
+
+- **Working copy:** `~/.config/screenr/` on the owner's Mac, in two files.
+  `production.env` mirrors `/etc/screenr/app.env`, including
+  `BETTER_AUTH_SECRET`, the Resend and TMDB keys, and the Google client
+  secret. `backup.env` mirrors `/etc/screenr/backup.env`, including the
+  restic repository, `RESTIC_PASSWORD`, and the R2 keys. Both files are
+  mode 0600.
+- **Home repository:** the owner's private home repository already tracks
+  `~/.config/screenr/`, so its remote also holds both files.
+- **1Password:** documents "Screenr production.env" and "Screenr
+  backup.env" in the owner's Private vault, tagged `screenr`.
+
+The restore runbook from
+[issue #123](https://github.com/jubishop/screenr/issues/123) restores secrets
+from these copies. Whenever a production secret changes, update the server
+and every copy together, and have the runbook check them against the server
+before relying on them.
+
+**Why:** The owner already kept the files in `~/.config/screenr/`, which
+the private home repository tracks, matching other projects on the same Mac.
+The user approved adding a 1Password copy on 2026-10-12 as one more copy
+independent of the Mac and the home repository.
 
 Initialize the Restic repository once, using the backup service's user and
 environment. Start `screenr-backup.service`, then `screenr-restore-check.service`

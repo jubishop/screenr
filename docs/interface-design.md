@@ -224,6 +224,23 @@ sections.
 adds each recommender's rank beside their name and lists top 10
 recommenders first, best rank first.
 
+### Watch status button on title pages — 2026-10-12
+
+**Decision:** In the title page header, replace the Want to watch button
+with a status button that shows the viewer's current status, or "+ Want to
+watch" when there is none. It opens a menu with Want to watch, Watching,
+Caught up (TV only), Finished, Stopped watching, and Clear status, marking
+the current choice. Choosing Finished sets the last-finished date to today,
+which the viewer can change or clear in the menu. Feed entries, suggestion
+tiles, and other surfaces keep their one-tap "+ Want to watch" action.
+[Issue #100](https://github.com/jubishop/screenr/issues/100) tracks the work.
+
+**Why:** The user chose a single status control that fits beside Recommend
+and the profile top 10 control without taking more header space.
+
+**Rejected alternative:** A row of status chips, which takes more room,
+especially on phone.
+
 ### Trailer collapsed until played — 2026-10-12
 
 **Decision:** When a title has a supported trailer, show a one-line

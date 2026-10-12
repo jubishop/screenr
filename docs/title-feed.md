@@ -246,6 +246,31 @@ date. Recommend and Want to watch do not share a reply group.
 This keeps each action's discussion together while keeping distinct
 structured actions separate.
 
+### One progress entry per person and title — 2026-10-12
+
+**Decision:** Watching, Caught up, Finished, and Stopped watching share one
+progress entry per person per title, separate from the Want to watch and
+Recommend entries. Each status change updates that entry in place, keeps its
+replies and reactions, and moves it up using the change date, like a
+[review edit](#review-edits-update-and-move-the-existing-item--2026-09-06).
+The entry reads, for example, "Theo Park is watching" or "Theo Park finished
+· Oct 12", using the optional last-finished date when one is set.
+
+When the person clears their status or moves back to Want to watch, the
+progress entry follows the
+[removal rule](#removing-an-action-does-not-move-it-up--2026-09-06): it is
+hidden from readers without visible replies, otherwise marked as no longer
+current, and the removal does not move it up. Choosing a progress status
+again reuses the entry and its replies.
+
+**Why:** The user chose one updating entry so a show's progress does not
+create a new feed entry for every change, while each change still surfaces
+in friends' feeds. Implementation is tracked in
+[issue #100](https://github.com/jubishop/screenr/issues/100).
+
+**Rejected alternatives:** A new entry for every status change, and feed
+entries only for Finished.
+
 ### Exclusive Recommend and Want to watch — 2026-09-09
 
 **Decision:** A person can have only one of Recommend and Want to watch
