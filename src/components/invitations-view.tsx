@@ -5,6 +5,13 @@ import type { ScreenData } from "../server/screens";
 import type { Person } from "../shared";
 import { dateLabel, useInteractive } from "./client";
 import { InvitationLink } from "./invitation-link";
+import { useActionError } from "./action-error";
+
+type Invitation = Extract<
+  ScreenData,
+  { kind: "invites" }
+>["invitations"][number];
+
 export function InvitationsView({
   data,
   busy,
@@ -16,6 +23,7 @@ export function InvitationsView({
 }) {
   const interactive = useInteractive();
   const [inviteLimit, setInviteLimit] = useState(1);
+  const failure = useActionError();
   // Keep the chosen limit through failed reads without retaining invitation data.
   if (!data) return null;
   return (
@@ -29,9 +37,11 @@ export function InvitationsView({
       </div>
       <form
         className="invite-form"
-        onSubmit={async (e) => {
+        onSubmit={(e) => {
           e.preventDefault();
-          await mutate("invite", { limit: inviteLimit });
+          void failure.run("create", () =>
+            mutate("invite", { limit: inviteLimit }),
+          );
         }}
       >
         <label>
@@ -48,47 +58,75 @@ export function InvitationsView({
             ))}
           </select>
         </label>
-        <button className="primary" disabled={busy || !interactive}>
+        <button
+          className="primary"
+          disabled={busy || !interactive}
+          aria-describedby={failure.describedBy("create")}
+        >
           Create invitation
         </button>
       </form>
+      {failure.alert}
       <div className="invite-list">
         {!data.invitations.length && (
           <p className="muted">No active invitations.</p>
         )}
         {data.invitations.map((invite) => (
-          <article className="invite-card" key={invite.id}>
-            <div className="section-heading">
-              <strong>
-                {invite.uses} of {invite.max_uses} signups
-              </strong>
-              <button
-                className="text-button"
-                disabled={busy || !interactive}
-                onClick={() => void mutate("revoke-invite", { id: invite.id })}
-              >
-                Revoke
-              </button>
-            </div>
-            <p className="small muted">
-              Expires {dateLabel(invite.expires_at, interactive)}
-            </p>
-            <InvitationLink key={invite.url} url={invite.url} />
-            <p>
-              {invite.joined.map((p: Person) => (
-                <Link
-                  className="joined-person"
-                  key={p.username}
-                  href={`/people/${p.username}`}
-                  prefetch={false}
-                >
-                  {p.display_name} (@{p.username})
-                </Link>
-              ))}
-            </p>
-          </article>
+          <InvitationCard
+            key={invite.id}
+            invite={invite}
+            disabled={busy || !interactive}
+            revoke={() => mutate("revoke-invite", { id: invite.id })}
+          />
         ))}
       </div>
     </>
+  );
+}
+
+function InvitationCard({
+  invite,
+  disabled,
+  revoke,
+}: {
+  invite: Invitation;
+  disabled: boolean;
+  revoke: () => Promise<unknown>;
+}) {
+  const interactive = useInteractive();
+  const failure = useActionError();
+  return (
+    <article className="invite-card">
+      <div className="section-heading">
+        <strong>
+          {invite.uses} of {invite.max_uses} signups
+        </strong>
+        <button
+          className="text-button"
+          disabled={disabled}
+          aria-describedby={failure.describedBy("revoke")}
+          onClick={() => void failure.run("revoke", revoke)}
+        >
+          Revoke
+        </button>
+      </div>
+      {failure.alert}
+      <p className="small muted">
+        Expires {dateLabel(invite.expires_at, interactive)}
+      </p>
+      <InvitationLink key={invite.url} url={invite.url} />
+      <p>
+        {invite.joined.map((p: Person) => (
+          <Link
+            className="joined-person"
+            key={p.username}
+            href={`/people/${p.username}`}
+            prefetch={false}
+          >
+            {p.display_name} (@{p.username})
+          </Link>
+        ))}
+      </p>
+    </article>
   );
 }

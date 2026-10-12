@@ -9,6 +9,7 @@ import { preservePosition } from "./position";
 import { Reactions } from "./reactions";
 import { Icon } from "./icons";
 import { Avatar } from "./avatar";
+import { useActionError } from "./action-error";
 
 type Known = Map<string, { activity: string; comments: Set<string> }>;
 function capture(items: FeedItem[]): Known {
@@ -200,21 +201,18 @@ function FeedEntry({
   const [copying, setCopying] = useState(false);
   const [copyMessage, setCopyMessage] = useState("");
   const [deleting, setDeleting] = useState(false);
-  const [deleteError, setDeleteError] = useState("");
+  // The title actions share one message beneath the entry's action line.
+  const failure = useActionError();
   const titleURL = item ? `/titles/${item.title_id.replace(":", "/")}` : "";
 
   async function deleteComment() {
     if (!item || deleting) return;
     setDeleting(true);
-    setDeleteError("");
-    try {
+    await failure.run("delete", async () => {
       await api("remove-comment", { id: item.id });
       await refresh();
-    } catch (error) {
-      setDeleteError((error as Error).message);
-    } finally {
-      setDeleting(false);
-    }
+    });
+    setDeleting(false);
   }
 
   async function copyDiscussion() {
@@ -242,6 +240,7 @@ function FeedEntry({
             type="button"
             className="text-button muted"
             disabled={busy || deleting || !interactive}
+            aria-describedby={failure.describedBy("delete")}
             onClick={() => void deleteComment()}
           >
             {deleting ? "Deleting…" : "Delete"}
@@ -252,14 +251,17 @@ function FeedEntry({
           <button
             className="text-button"
             disabled={busy || !interactive}
+            aria-describedby={failure.describedBy("want_to_watch")}
             onClick={() =>
-              void activity(
-                item.title_id,
-                "want_to_watch",
-                !item.viewer_want_to_watch,
-                item.item_type === "recommended" && item.active
-                  ? "friend_recommendation"
-                  : "friend_entry",
+              void failure.run("want_to_watch", () =>
+                activity(
+                  item.title_id,
+                  "want_to_watch",
+                  !item.viewer_want_to_watch,
+                  item.item_type === "recommended" && item.active
+                    ? "friend_recommendation"
+                    : "friend_entry",
+                ),
               )
             }
           >
@@ -268,11 +270,14 @@ function FeedEntry({
           <button
             className="text-button"
             disabled={busy || !interactive}
+            aria-describedby={failure.describedBy("recommended")}
             onClick={() =>
-              void activity(
-                item.title_id,
-                "recommended",
-                !item.viewer_recommended,
+              void failure.run("recommended", () =>
+                activity(
+                  item.title_id,
+                  "recommended",
+                  !item.viewer_recommended,
+                ),
               )
             }
           >
@@ -376,11 +381,7 @@ function FeedEntry({
           ) : (
             <div className="item-actions">{titleActions}</div>
           )}
-          {deleteError && (
-            <p className="error" role="alert">
-              {deleteError}
-            </p>
-          )}
+          {failure.alert}
         </header>
       )}
       <ThreadView

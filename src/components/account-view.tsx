@@ -2,32 +2,31 @@
 import { useState } from "react";
 import type { ScreenData } from "../server/screens";
 import type { Person } from "../shared";
-import { authClient, useInteractive } from "./client";
+import { authClient, signOut, useInteractive } from "./client";
+import { useActionError } from "./action-error";
 import { AccountProfileEditor } from "./account-profile-editor";
 import { StreamingServicesEditor } from "./streaming-services-editor";
 import { ActivityEmailSetting } from "./activity-email-setting";
 export function AccountView({
   data,
   user,
-  busy,
   initialGoogleError,
   saveProfile,
   saveServices,
   refresh,
-  onSignOut,
 }: {
   data: Extract<ScreenData, { kind: "account" }> | null;
   user: Person;
-  busy: boolean;
   initialGoogleError: string;
   saveProfile: (name: string, username: string) => Promise<void>;
   saveServices: (ids: string[]) => Promise<void>;
   refresh: () => Promise<void>;
-  onSignOut: () => Promise<void>;
 }) {
   const interactive = useInteractive();
   const [googleError, setGoogleError] = useState(initialGoogleError);
   const [connectingGoogle, setConnectingGoogle] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
+  const signOutFailure = useActionError();
   return (
     <>
       <div className="page-heading">
@@ -69,7 +68,7 @@ export function AccountView({
               </p>
               <button
                 className="secondary"
-                disabled={busy || connectingGoogle || !interactive}
+                disabled={signingOut || connectingGoogle || !interactive}
                 onClick={async () => {
                   setConnectingGoogle(true);
                   setGoogleError("");
@@ -105,11 +104,17 @@ export function AccountView({
           <hr />
           <button
             className="text-button"
-            disabled={busy || !interactive || connectingGoogle}
-            onClick={() => void onSignOut()}
+            disabled={signingOut || !interactive || connectingGoogle}
+            aria-describedby={signOutFailure.describedBy("sign-out")}
+            onClick={async () => {
+              setSigningOut(true);
+              await signOutFailure.run("sign-out", signOut);
+              setSigningOut(false);
+            }}
           >
             Sign out
           </button>
+          {signOutFailure.alert}
         </section>
       )}
     </>

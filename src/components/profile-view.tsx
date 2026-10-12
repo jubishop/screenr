@@ -8,6 +8,7 @@ import { DisplayNameEditor } from "./display-name-editor";
 import { Avatar } from "./avatar";
 import { Icon } from "./icons";
 import { Confirmation } from "./confirmation";
+import { useActionError } from "./action-error";
 
 type Profile = Extract<ScreenData, { kind: "profile" }>["profile"];
 type Guarded = "remove" | "block";
@@ -115,8 +116,15 @@ function ProfileActions({
   const confirming =
     choice === "remove" && !profile.accepted_at ? null : choice;
   const name = profile.display_name;
-  const act = (action: string) => () =>
-    void relationship(profile.user_id, action);
+  // The visible actions share one message beneath their row. The open
+  // confirmation keeps its own until it closes.
+  const failure = useActionError();
+  const guarded = useActionError();
+  const act = (action: string) => ({
+    "aria-describedby": failure.describedBy(action),
+    onClick: () =>
+      void failure.run(action, () => relationship(profile.user_id, action)),
+  });
   // Return focus to More actions once it is enabled again after an action.
   const restoreFocus = useRef(false);
   useEffect(() => {
@@ -124,14 +132,19 @@ function ProfileActions({
     restoreFocus.current = false;
     more.current?.focus();
   });
+  function choose(value: Guarded | null) {
+    guarded.clear();
+    setChoice(value);
+  }
   function close() {
     restoreFocus.current = true;
-    setChoice(null);
+    choose(null);
   }
   async function confirm() {
     if (!confirming) return;
-    await relationship(profile.user_id, confirming);
-    close();
+    const action = confirming;
+    if (await guarded.run(action, () => relationship(profile.user_id, action)))
+      close();
   }
   const blockEffect = profile.accepted_at
     ? "This ends your friendship. "
@@ -150,27 +163,15 @@ function ProfileActions({
             Watch together
           </Link>
         ) : profile.requested_by === user.user_id ? (
-          <button
-            className="secondary"
-            disabled={disabled}
-            onClick={act("remove")}
-          >
+          <button className="secondary" disabled={disabled} {...act("remove")}>
             Cancel friend request
           </button>
         ) : profile.requested_by ? (
-          <button
-            className="primary"
-            disabled={disabled}
-            onClick={act("accept")}
-          >
+          <button className="primary" disabled={disabled} {...act("accept")}>
             Accept friend request
           </button>
         ) : (
-          <button
-            className="primary"
-            disabled={disabled}
-            onClick={act("request")}
-          >
+          <button className="primary" disabled={disabled} {...act("request")}>
             Send friend request
           </button>
         )}
@@ -184,9 +185,10 @@ function ProfileActions({
               : []),
             { label: "Block", value: "block" as const },
           ]}
-          onSelect={setChoice}
+          onSelect={choose}
         />
       </div>
+      {failure.alert}
       {confirming && (
         <Confirmation
           key={confirming}
@@ -199,7 +201,10 @@ function ProfileActions({
           busy={busy}
           onConfirm={() => void confirm()}
           onCancel={close}
-        />
+          describedBy={guarded.describedBy(confirming)}
+        >
+          {guarded.alert}
+        </Confirmation>
       )}
     </>
   );

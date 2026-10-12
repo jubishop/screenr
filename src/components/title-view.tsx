@@ -7,6 +7,7 @@ import { Poster } from "./poster";
 import { TitleAvailability } from "./title-availability";
 import { TitleCommentComposer } from "./title-comment";
 import { TitleTrailer } from "./title-trailer";
+import { useActionError } from "./action-error";
 // Suggestion tiles and Watch together open title pages with ?from=<surface>,
 // so a Want to watch save here reports where the member found the title.
 const origins: SaveSurface[] = [
@@ -37,6 +38,7 @@ export function TitleView({
   const interactive = useInteractive();
   const from = useSearchParams().get("from") as SaveSurface | null;
   const surface = from && origins.includes(from) ? from : "title";
+  const failure = useActionError();
   const own = (data?.conversations ?? []).filter(
     (c) => c.owner_id === user.user_id,
   );
@@ -63,11 +65,14 @@ export function TitleView({
                 <button
                   className="primary"
                   disabled={busy || !interactive}
+                  aria-describedby={failure.describedBy("recommended")}
                   onClick={() =>
-                    void activity(
-                      data.title.id,
-                      "recommended",
-                      !own.some((c) => c.recommended),
+                    void failure.run("recommended", () =>
+                      activity(
+                        data.title.id,
+                        "recommended",
+                        !own.some((c) => c.recommended),
+                      ),
                     )
                   }
                 >
@@ -78,12 +83,15 @@ export function TitleView({
                 <button
                   className="secondary"
                   disabled={busy || !interactive}
+                  aria-describedby={failure.describedBy("want_to_watch")}
                   onClick={() =>
-                    void activity(
-                      data.title.id,
-                      "want_to_watch",
-                      !own.some((c) => c.want_to_watch),
-                      surface,
+                    void failure.run("want_to_watch", () =>
+                      activity(
+                        data.title.id,
+                        "want_to_watch",
+                        !own.some((c) => c.want_to_watch),
+                        surface,
+                      ),
                     )
                   }
                 >
@@ -92,6 +100,7 @@ export function TitleView({
                     : "+ Want to watch"}
                 </button>
               </div>
+              {failure.alert}
             </div>
           </div>
           <TitleAvailability

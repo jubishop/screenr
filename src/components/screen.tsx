@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { ScreenData } from "../server/screens";
 import type { Person, SaveSurface } from "../shared";
 import { parseMemberRoute, type MemberRoute } from "../member-routes";
-import { api, signOut } from "./client";
+import { api } from "./client";
 import { Avatar } from "./avatar";
 import { Icon, type IconName } from "./icons";
 import { FeedView } from "./feed";
@@ -54,7 +54,6 @@ export function Screen({
   const [user, setUser] = useState(initialUser);
   const [data, setData] = useState(initialData),
     [loadError, setLoadError] = useState(initialError),
-    [error, setError] = useState(""),
     [busy, setBusy] = useState(false);
   const pending = useRef<AbortController | null>(null);
   const refresh = useCallback(async () => {
@@ -110,27 +109,14 @@ export function Screen({
       document.removeEventListener("visibilitychange", focus);
     };
   }, [refresh]);
+  // A failed write rejects, so its caller shows the error beside the control.
   async function mutate(action: string, body: unknown) {
     pending.current?.abort();
     setBusy(true);
-    setError("");
     try {
       const result = await api(action, body);
       await refresh();
       return result;
-    } catch (error) {
-      setError((error as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  }
-  async function signOutOfAccount() {
-    setBusy(true);
-    setError("");
-    try {
-      await signOut();
-    } catch (error) {
-      setError((error as Error).message);
     } finally {
       setBusy(false);
     }
@@ -242,14 +228,6 @@ export function Screen({
             </button>
           </div>
         )}
-        {error && (
-          <div className="error" role="alert">
-            {error}
-            <button className="text-button" onClick={() => setError("")}>
-              Dismiss
-            </button>
-          </div>
-        )}
         {data?.kind === "feed" && (
           <div className="page-heading">
             <h1 className="page-title">Your circle</h1>
@@ -324,12 +302,10 @@ export function Screen({
           <AccountView
             data={data?.kind === "account" ? data : null}
             user={user}
-            busy={busy}
             initialGoogleError={initialGoogleError}
             saveProfile={saveProfile}
             saveServices={saveServices}
             refresh={refresh}
-            onSignOut={signOutOfAccount}
           />
         )}
       </main>

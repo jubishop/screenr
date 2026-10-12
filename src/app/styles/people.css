@@ -135,6 +135,10 @@ a.person:hover strong {
   margin: 0 0 0 52px;
   overflow-wrap: anywhere;
 }
+.person-row > .action-error {
+  flex-basis: 100%;
+  margin: 0;
+}
 .people-list {
   margin-bottom: 36px;
 }
@@ -196,6 +200,11 @@ a.person:hover strong {
   margin: 0;
   flex-shrink: 0;
   accent-color: var(--ink);
+}
+/* Labels and card headings already leave space above these messages. */
+.invite-form + .action-error,
+.invite-card .action-error {
+  margin: 0 0 18px;
 }
 .invite-card .invitation-created {
   border: 0;

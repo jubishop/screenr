@@ -1,5 +1,6 @@
 import { expect, type Page } from "@playwright/test";
 import { test } from "./member-fixture";
+import { expectErrorBeside, failAction, press } from "./action-errors";
 
 const screenRead = "**/api/screenr/screen?**";
 const unavailable =
@@ -118,7 +119,10 @@ test("proxy error pages show a retryable message instead of parser errors", asyn
   await create.click();
   await expect(main.getByRole("alert")).toContainText(unavailable);
   await expect(create).toBeEnabled();
-  await page.getByRole("button", { name: "Dismiss", exact: true }).click();
+  await page.unroute("**/api/screenr/invite");
+  await create.click();
+  await expect(page.getByText("0 of 1 signups", { exact: true })).toBeVisible();
+  await expect(main.getByRole("alert")).toHaveCount(0);
 
   await page.route(screenRead, (route) =>
     route.fulfill({
@@ -135,6 +139,67 @@ test("proxy error pages show a retryable message instead of parser errors", asyn
   await page.getByRole("button", { name: "Try again", exact: true }).click();
   await expect(main.getByRole("alert")).toHaveCount(0);
   await expect(create).toBeEnabled();
+});
+
+test("invitation and sign-out failures show their errors beside the control", async ({
+  member,
+}) => {
+  const page = await member("actionerrorplacement");
+  await page.goto("/invites");
+  const main = page.getByRole("main");
+  const create = page.getByRole("button", {
+    name: "Create invitation",
+    exact: true,
+  });
+  await expect(create).toBeEnabled();
+  await failAction(page, "invite", "Invitations unavailable.");
+  await press(create);
+  for (const width of [390, 1366]) {
+    await page.setViewportSize({ width, height: 844 });
+    await expectErrorBeside(page, {
+      container: main,
+      failed: create,
+      controls: [create, page.getByLabel("Maximum signups")],
+      message: "Invitations unavailable.",
+      screenshot: "action-error-invite",
+    });
+  }
+  await page.unroute("**/api/screenr/invite");
+  await press(create);
+  const card = page.locator(".invite-card");
+  await expect(card).toContainText("0 of 1 signups");
+  await expect(main.getByRole("alert")).toHaveCount(0);
+  const revoke = card.getByRole("button", { name: "Revoke", exact: true });
+  await failAction(page, "revoke-invite", "Revoking unavailable.");
+  await press(revoke);
+  for (const width of [390, 1366]) {
+    await page.setViewportSize({ width, height: 844 });
+    await expectErrorBeside(page, {
+      container: card,
+      failed: revoke,
+      controls: [revoke],
+      message: "Revoking unavailable.",
+      screenshot: "action-error-revoke",
+    });
+  }
+
+  await page.goto("/account");
+  const signOut = page.getByRole("button", { name: "Sign out", exact: true });
+  await expect(signOut).toBeEnabled();
+  await page.route("**/api/auth/sign-out", (route) =>
+    route.fulfill({ status: 503, json: { message: "Sign-out unavailable." } }),
+  );
+  await press(signOut);
+  for (const width of [390, 1366]) {
+    await page.setViewportSize({ width, height: 844 });
+    await expectErrorBeside(page, {
+      container: page.getByRole("region", { name: "Sign-in methods" }),
+      failed: signOut,
+      controls: [signOut],
+      message: "Sign-out unavailable.",
+      screenshot: "action-error-sign-out",
+    });
+  }
 });
 
 test("a stalled write times out and re-enables its controls", async ({

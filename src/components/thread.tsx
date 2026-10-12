@@ -169,6 +169,7 @@ export function ThreadView({
     );
   }
   function commentActions(comment: Comment) {
+    const key = `remove-${comment.id}`;
     return (
       <>
         <button
@@ -188,18 +189,18 @@ export function ThreadView({
           currentSnapshot.conversation.owner_id === user.user_id) && (
           <button
             className="text-button muted"
-            disabled={busy.has(`remove-${comment.id}`) || !interactive}
+            disabled={busy.has(key) || !interactive}
+            aria-describedby={errors[key] ? `${key}-error` : undefined}
             onClick={async () => {
-              const key = `remove-${comment.id}`;
               setBusy((current) => new Set([...current, key]));
-              setErrors((current) => ({ ...current, remove: "" }));
+              setErrors((current) => ({ ...current, [key]: "" }));
               try {
                 await api("remove-comment", { id: comment.id });
                 await refresh();
               } catch (error) {
                 setErrors((current) => ({
                   ...current,
-                  remove: (error as Error).message,
+                  [key]: (error as Error).message,
                 }));
               } finally {
                 setBusy((current) => {
@@ -282,6 +283,15 @@ export function ThreadView({
           ) : (
             <div className="item-actions">{commentActions(comment)}</div>
           ))}
+        {errors[`remove-${comment.id}`] && (
+          <div
+            id={`remove-${comment.id}-error`}
+            className="error action-error"
+            role="alert"
+          >
+            {errors[`remove-${comment.id}`]}
+          </div>
+        )}
       </article>
     );
   }
@@ -371,11 +381,6 @@ export function ThreadView({
         Comment
       </button>
       {directOpen && composer("direct")}
-      {errors.remove && (
-        <p className="error" role="alert">
-          {errors.remove}
-        </p>
-      )}
     </section>
   );
 }

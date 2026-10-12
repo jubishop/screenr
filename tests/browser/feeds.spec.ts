@@ -6,6 +6,7 @@ import { expectTextContrast } from "./contrast";
 import { test } from "./monitored-test";
 import { prepareFriendship } from "./member-fixture";
 import { befriend, confirmProfileAction } from "./journey-helpers";
+import { expectErrorBeside, failAction, press } from "./action-errors";
 
 test("unified feeds show separate entries and support inline replies on title, friends, and profile", async ({
   member,
@@ -311,6 +312,132 @@ test("feed entries lay out actions in full-width rows with an icon copy link and
   await reader.keyboard.press("Escape");
   await expect(picker).toHaveCount(0);
   await expect(trigger).toBeFocused();
+});
+
+test("a failed entry, comment, or title action shows its error beside that control", async ({
+  member,
+}) => {
+  const owner = await member("erroractionowner");
+  const reader = await member("erroractionreader");
+  await prepareFriendship(owner, reader);
+  const post = async (page: Page, action: string, data: object) => {
+    const response = await page.request.post(`/api/screenr/${action}`, {
+      headers: { Origin: browserConfig.baseURL },
+      data,
+    });
+    expect(response.status()).toBe(200);
+    return (await response.json()).id as string;
+  };
+  const [id, otherId] = [
+    await post(owner, "activity", {
+      title: "movie:987654",
+      field: "recommended",
+      value: true,
+    }),
+    await post(owner, "activity", {
+      title: "movie:987655",
+      field: "recommended",
+      value: true,
+    }),
+  ];
+  const ownComment = await post(reader, "comment", {
+    conversation: otherId,
+    body: "A reply to remove",
+    spoiler: false,
+  });
+  const header = reader.locator(`[data-item-heading="${id}"]`);
+  const otherHeader = reader.locator(`[data-item-heading="${otherId}"]`);
+  const want = header.getByRole("button", {
+    name: "+ Want to watch",
+    exact: true,
+  });
+  const recommend = header.getByRole("button", {
+    name: "+ Recommend",
+    exact: true,
+  });
+  const react = header.getByRole("button", { name: "React", exact: true });
+  const message = "Could not save. Please try again.";
+  await reader.goto("/");
+  await expect(want).toBeEnabled();
+  await failAction(reader, "activity", message);
+  await press(want);
+  for (const width of [390, 1366]) {
+    await reader.setViewportSize({ width, height: 844 });
+    await expectErrorBeside(reader, {
+      container: header,
+      failed: want,
+      controls: [want, recommend, react],
+      message,
+      screenshot: "action-error-entry",
+    });
+    await expect(recommend).toHaveAccessibleDescription("");
+  }
+  await expect(otherHeader.getByRole("alert")).toHaveCount(0);
+  await expect(
+    otherHeader.getByRole("button", { name: "+ Want to watch", exact: true }),
+  ).toBeEnabled();
+  // Refreshes keep the message; the entry's next action replaces it.
+  await nextAccountRefreshForPath(reader, "/");
+  await expect(header.getByRole("alert")).toHaveText(message);
+  await reader.unroute("**/api/screenr/activity");
+  await press(recommend);
+  await expect(
+    header.getByRole("button", { name: "✓ Recommended", exact: true }),
+  ).toBeVisible();
+  await expect(header.getByRole("alert")).toHaveCount(0);
+  await expect(want).toHaveAccessibleDescription("");
+
+  // A comment's removal error stays with that comment.
+  const comment = reader.locator(`[data-comment-id="${ownComment}"]`);
+  const remove = comment.getByRole("button", { name: "Delete", exact: true });
+  await failAction(reader, "remove-comment", "Removal unavailable.");
+  await press(remove);
+  for (const width of [390, 1366]) {
+    await reader.setViewportSize({ width, height: 844 });
+    await expectErrorBeside(reader, {
+      container: comment,
+      failed: remove,
+      controls: [
+        remove,
+        comment.getByRole("button", { name: "React", exact: true }),
+      ],
+      message: "Removal unavailable.",
+      screenshot: "action-error-comment",
+    });
+  }
+  await reader.unroute("**/api/screenr/remove-comment");
+  await press(remove);
+  await expect(
+    reader.getByText("A reply to remove", { exact: true }),
+  ).toHaveCount(0);
+  await expect(reader.getByRole("main").getByRole("alert")).toHaveCount(0);
+
+  // The title page header shows its own actions' errors beneath them.
+  await reader.goto("/titles/movie/987655");
+  const hero = reader.locator(".title-hero");
+  const titleWant = hero.getByRole("button", {
+    name: "+ Want to watch",
+    exact: true,
+  });
+  const titleRecommend = hero.getByRole("button", {
+    name: "Recommend to friends",
+    exact: true,
+  });
+  await expect(titleWant).toBeEnabled();
+  await failAction(reader, "activity", message);
+  await press(titleWant);
+  for (const width of [390, 1366]) {
+    await reader.setViewportSize({ width, height: 844 });
+    await expectErrorBeside(reader, {
+      container: hero,
+      failed: titleWant,
+      controls: [titleRecommend, titleWant],
+      message,
+      screenshot: "action-error-title",
+    });
+  }
+  await reader.context().close();
+  await owner.context().close();
 });
 
 test("every feed holds incoming activity, preserves drafts and position, and expands reply links safely", async ({

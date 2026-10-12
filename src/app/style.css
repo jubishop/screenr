@@ -182,6 +182,10 @@ hr {
 .error button {
   margin-left: 12px;
 }
+/* A failed action's message, directly beneath the controls that started it. */
+.action-error {
+  margin: 8px 0 0;
+}
 .brand {
   font-size: 32px;
   font-weight: 800;

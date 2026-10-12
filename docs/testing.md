@@ -279,6 +279,10 @@ recipients. A full run checks:
   the person's line at phone and desktop widths. Avatars keep their color
   after a rename and show a whole emoji initial.
 - Invitations can be created and revoked.
+- A failed feed entry, comment, title header, Friends row, profile,
+  confirmation, invitation, or sign-out action shows its error beneath that
+  control at phone and desktop widths. The error describes the control, other
+  controls stay usable, and no page-level alert appears.
 - Cookie-free preview requests follow invitation redirects and receive metadata
   in the HTML head for mobile, desktop, and social crawler user agents. The
   public PNG is reachable and has the declared dimensions. Preview requests

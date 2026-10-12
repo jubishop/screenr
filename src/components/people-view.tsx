@@ -5,33 +5,70 @@ import type { ScreenData } from "../server/screens";
 import type { Person } from "../shared";
 import { useInteractive } from "./client";
 import { Avatar } from "./avatar";
+import { useActionError } from "./action-error";
+
+type Action = { label: string; run: () => Promise<void>; primary?: boolean };
 
 // One person: avatar, display name, and @username, linking to the profile.
 // The username may wrap beneath the name; actions stay on the same line.
+// Notes, then a failed action's message, take the lines beneath. Blocked
+// people show only the name, since blocking hides the profile.
 function PersonRow({
   person,
   note,
-  children,
+  status,
+  actions = [],
+  disabled = false,
+  blocked = false,
 }: {
   person: Person;
   note?: ReactNode;
-  children?: ReactNode;
+  status?: string;
+  actions?: Action[];
+  disabled?: boolean;
+  blocked?: boolean;
 }) {
+  const failure = useActionError();
+  const name = (
+    <>
+      <Avatar person={person} />
+      <span className="person-name">
+        <strong>{person.display_name}</strong>
+        {!blocked && <span className="muted"> @{person.username}</span>}
+      </span>
+    </>
+  );
   return (
-    <article className={`person-row${children ? "" : " link-row"}`}>
-      <Link
-        className="person"
-        href={`/people/${person.username}`}
-        prefetch={false}
-      >
-        <Avatar person={person} />
-        <span className="person-name">
-          <strong>{person.display_name}</strong>
-          <span className="muted"> @{person.username}</span>
-        </span>
-      </Link>
-      {children && <div className="person-actions">{children}</div>}
+    <article className={`person-row${actions.length ? "" : " link-row"}`}>
+      {blocked ? (
+        <span className="person">{name}</span>
+      ) : (
+        <Link
+          className="person"
+          href={`/people/${person.username}`}
+          prefetch={false}
+        >
+          {name}
+        </Link>
+      )}
+      {actions.length > 0 && (
+        <div className="person-actions">
+          {status && <span className="small muted">{status}</span>}
+          {actions.map(({ label, run, primary }) => (
+            <button
+              key={label}
+              className={primary ? "primary" : "text-button"}
+              disabled={disabled}
+              aria-describedby={failure.describedBy(label)}
+              onClick={() => void failure.run(label, run)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
       {note}
+      {failure.alert}
     </article>
   );
 }
@@ -69,6 +106,8 @@ export function PeopleView({
   // Retain the draft while failed reads hide the protected snapshot.
   if (!data) return null;
   const disabled = busy || !interactive;
+  const act = (person: Person, action: string) => () =>
+    relationship(person.user_id, action);
   const requests = data.connections.filter(
     (p) => !p.accepted_at && p.requested_by !== user.user_id,
   );
@@ -116,22 +155,15 @@ export function PeopleView({
       {requests.length > 0 && (
         <PeopleSection id="people-requests-heading" heading="Requests">
           {requests.map((person) => (
-            <PersonRow key={person.user_id} person={person}>
-              <button
-                className="primary"
-                disabled={disabled}
-                onClick={() => void relationship(person.user_id, "accept")}
-              >
-                Accept
-              </button>
-              <button
-                className="text-button"
-                disabled={disabled}
-                onClick={() => void relationship(person.user_id, "remove")}
-              >
-                Decline
-              </button>
-            </PersonRow>
+            <PersonRow
+              key={person.user_id}
+              person={person}
+              actions={[
+                { label: "Accept", run: act(person, "accept"), primary: true },
+                { label: "Decline", run: act(person, "remove") },
+              ]}
+              disabled={disabled}
+            />
           ))}
         </PeopleSection>
       )}
@@ -145,16 +177,13 @@ export function PeopleView({
       {sent.length > 0 && (
         <PeopleSection id="people-sent-heading" heading="Sent requests">
           {sent.map((person) => (
-            <PersonRow key={person.user_id} person={person}>
-              <span className="small muted">Request sent</span>
-              <button
-                className="text-button"
-                disabled={disabled}
-                onClick={() => void relationship(person.user_id, "remove")}
-              >
-                Cancel
-              </button>
-            </PersonRow>
+            <PersonRow
+              key={person.user_id}
+              person={person}
+              status="Request sent"
+              actions={[{ label: "Cancel", run: act(person, "remove") }]}
+              disabled={disabled}
+            />
           ))}
         </PeopleSection>
       )}
@@ -183,15 +212,15 @@ export function PeopleView({
                 ))}
               </p>
             }
-          >
-            <button
-              className="primary"
-              disabled={disabled}
-              onClick={() => void relationship(person.user_id, "request")}
-            >
-              Send friend request
-            </button>
-          </PersonRow>
+            actions={[
+              {
+                label: "Send friend request",
+                run: act(person, "request"),
+                primary: true,
+              },
+            ]}
+            disabled={disabled}
+          />
         ))}
         {!data.suggestions.length && (
           <p className="empty">No friend suggestions yet.</p>
@@ -204,23 +233,13 @@ export function PeopleView({
         >
           <h2 id="people-blocked-heading">Blocked people</h2>
           {data.blocked.map((person) => (
-            <article className="person-row" key={person.user_id}>
-              <span className="person">
-                <Avatar person={person} />
-                <span className="person-name">
-                  <strong>{person.display_name}</strong>
-                </span>
-              </span>
-              <div className="person-actions">
-                <button
-                  className="text-button"
-                  disabled={disabled}
-                  onClick={() => void relationship(person.user_id, "unblock")}
-                >
-                  Unblock
-                </button>
-              </div>
-            </article>
+            <PersonRow
+              key={person.user_id}
+              person={person}
+              blocked
+              actions={[{ label: "Unblock", run: act(person, "unblock") }]}
+              disabled={disabled}
+            />
           ))}
         </section>
       )}

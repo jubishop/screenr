@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { db } from "./database-fixture";
 import { test } from "./monitored-test";
 import { prepareFriendship } from "./member-fixture";
+import { expectErrorBeside, failAction, press } from "./action-errors";
 
 const { changeRelationship } = await import("../../src/server/relationships");
 
@@ -278,4 +279,148 @@ test("the profile More actions menu works by keyboard and pointer and confirms U
     .click();
   await expect(region(viewer, "Blocked people")).toHaveCount(0);
   expect(dialogs).toEqual([]);
+});
+
+test("a failed Friends page action shows its error on that person's row", async ({
+  page,
+  signIn,
+}) => {
+  const viewer = await signIn(page, "errorrowviewer");
+  const requester = await person("errorrowrequester", "Rae Requester");
+  const sent = await person("errorrowsent", "Sam Sent");
+  const fran = await person("errorrowfriend", "Fran Friend");
+  const suggested = await person("errorrowsuggested", "Sue Suggested");
+  const blocked = await person("errorrowblocked", "Blair Blocked");
+  await changeRelationship(requester, viewer, "request");
+  await changeRelationship(viewer, sent, "request");
+  await friend(viewer, fran);
+  await friend(fran, suggested);
+  await changeRelationship(viewer, blocked, "block");
+  await page.goto("/people");
+  const message = "Friends are temporarily unavailable.";
+  const request = region(page, "Requests").getByRole("article");
+  const accept = request.getByRole("button", { name: "Accept", exact: true });
+  const decline = request.getByRole("button", { name: "Decline", exact: true });
+  await expect(accept).toBeEnabled();
+  await failAction(page, "relationship", message);
+  await press(accept);
+  for (const width of [390, 1366]) {
+    await page.setViewportSize({ width, height: 900 });
+    await expectErrorBeside(page, {
+      container: request,
+      failed: accept,
+      controls: [request.locator(".person"), accept, decline],
+      message,
+      screenshot: "action-error-request",
+    });
+    await expect(decline).toHaveAccessibleDescription("");
+  }
+  // Each row keeps its own message beneath the person and any note.
+  await page.setViewportSize({ width: 390, height: 900 });
+  const rows = [
+    [region(page, "Sent requests"), "Cancel"],
+    [region(page, "People you may know"), "Send friend request"],
+    [region(page, "Blocked people"), "Unblock"],
+  ] as const;
+  for (const [index, [section, name]] of rows.entries()) {
+    const row = section.getByRole("article");
+    const button = row.getByRole("button", { name, exact: true });
+    await press(button);
+    await expectErrorBeside(page, {
+      container: row,
+      failed: button,
+      controls: [
+        row.locator(".person"),
+        button,
+        ...(await row.locator(".person-note").all()),
+      ],
+      message,
+      alerts: index + 2,
+      screenshot: `action-error-row-${index}`,
+    });
+  }
+  await expect(accept).toHaveAccessibleDescription(message);
+  // A successful retry moves the person on without their old message.
+  await page.unroute("**/api/screenr/relationship");
+  await press(accept);
+  await expect(region(page, "Requests")).toHaveCount(0);
+  const friends = region(page, "Friends");
+  await expect(friends).toContainText("Rae Requester");
+  await expect(friends.getByRole("alert")).toHaveCount(0);
+  await expect(page.getByRole("main").getByRole("alert")).toHaveCount(3);
+});
+
+test("a failed profile action shows its error beneath the actions or in its confirmation", async ({
+  page,
+  signIn,
+}) => {
+  const viewer = await signIn(page, "errorprofileviewer");
+  const other = await person("errorprofileother", "Opal Other");
+  await page.goto("/people/errorprofileother");
+  const message = "Profiles are temporarily unavailable.";
+  const heading = page.locator(".page-heading");
+  const send = page.getByRole("button", {
+    name: "Send friend request",
+    exact: true,
+  });
+  const more = page.getByRole("button", {
+    name: "More actions for Opal Other",
+    exact: true,
+  });
+  await expect(send).toBeEnabled();
+  await failAction(page, "relationship", message);
+  await press(send);
+  for (const width of [390, 1366]) {
+    await page.setViewportSize({ width, height: 844 });
+    await expectErrorBeside(page, {
+      container: heading,
+      failed: send,
+      controls: [send, more],
+      message,
+      screenshot: "action-error-profile",
+    });
+  }
+
+  // A failed confirmation stays open with its message until Cancel.
+  await page.unroute("**/api/screenr/relationship");
+  await friend(viewer, other);
+  await page.reload();
+  await expect(
+    page.getByRole("link", { name: "Watch together", exact: true }),
+  ).toBeVisible();
+  await expect(page.getByRole("main").getByRole("alert")).toHaveCount(0);
+  await failAction(page, "relationship", message);
+  const confirmation = page.getByRole("group", { name: /^Unfriend Opal/ });
+  const unfriend = confirmation.getByRole("button", {
+    name: "Unfriend",
+    exact: true,
+  });
+  const cancel = confirmation.getByRole("button", {
+    name: "Cancel",
+    exact: true,
+  });
+  await more.click();
+  await page.getByRole("menuitem", { name: "Unfriend", exact: true }).click();
+  await press(unfriend);
+  for (const width of [390, 1366]) {
+    await page.setViewportSize({ width, height: 844 });
+    await expectErrorBeside(page, {
+      container: confirmation,
+      failed: unfriend,
+      controls: [unfriend, cancel],
+      message,
+      screenshot: "action-error-confirmation",
+    });
+  }
+  await cancel.click();
+  await expect(confirmation).toHaveCount(0);
+  await expect(page.getByRole("main").getByRole("alert")).toHaveCount(0);
+  await more.click();
+  await page.getByRole("menuitem", { name: "Unfriend", exact: true }).click();
+  await expect(confirmation.getByRole("alert")).toHaveCount(0);
+  await page.unroute("**/api/screenr/relationship");
+  await unfriend.click();
+  await expect(send).toBeVisible();
+  await expect(confirmation).toHaveCount(0);
+  await expect(page.getByRole("main").getByRole("alert")).toHaveCount(0);
 });
