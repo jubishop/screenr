@@ -7,6 +7,18 @@ import { test } from "./monitored-test";
 import { join } from "./journey-helpers";
 const { createInvitation } = await import("../../src/server/invitations");
 
+const timedOut = "The request timed out. Please try again.";
+const unreachable =
+  "Could not reach Screenr. Check your connection and try again.";
+
+// Hold a Better Auth request without answering until the page abandons it.
+async function stall(page: Page, path: string) {
+  let started!: () => void;
+  const request = new Promise<void>((resolve) => (started = resolve));
+  await page.route(`**/api/auth/${path}`, () => started());
+  return request;
+}
+
 test("server-rendered signup controls wait for their event handlers", async ({
   page,
 }) => {
@@ -51,6 +63,48 @@ test("a limited code request explains how to continue", async ({ page }) => {
   );
   await expect(page.getByLabel("Sign-in code", { exact: true })).toHaveCount(0);
   await expect(send).toBeEnabled();
+});
+
+test("stalled email code requests time out and re-enable the sign-in form", async ({
+  page,
+}) => {
+  // Paused timers fire only when the test advances the clock.
+  await page.clock.install();
+  await page.clock.pauseAt(Date.now() + 1000);
+  await page.goto("/login");
+  const alert = page.getByRole("main").getByRole("alert");
+  const waiting = page.getByRole("button", { name: "One moment…" });
+  const send = page.getByRole("button", {
+    name: "Send sign-in code",
+    exact: true,
+  });
+  await page
+    .getByLabel("Email address")
+    .fill("stalledcode.browser@example.test");
+  const sending = stall(page, "email-otp/send-verification-otp");
+  await send.click();
+  await sending;
+  await expect(waiting).toBeDisabled();
+  await page.clock.fastForward(15_000);
+  await expect(alert).toHaveText(timedOut);
+  await expect(send).toBeEnabled();
+  await expect(page.getByLabel("Sign-in code", { exact: true })).toHaveCount(0);
+
+  await page.unroute("**/api/auth/email-otp/send-verification-otp");
+  await page.route("**/api/auth/email-otp/send-verification-otp", (route) =>
+    route.fulfill({ json: { success: true } }),
+  );
+  await send.click();
+  await page.getByLabel("Sign-in code", { exact: true }).fill("123456");
+  const signIn = page.getByRole("button", { name: "Sign in", exact: true });
+  const verifying = stall(page, "sign-in/email-otp");
+  await signIn.click();
+  await verifying;
+  await expect(waiting).toBeDisabled();
+  await page.clock.fastForward(15_000);
+  await expect(alert).toHaveText(timedOut);
+  await expect(signIn).toBeEnabled();
+  await expect(page).toHaveURL(/\/login$/);
 });
 
 async function useTestGoogle(page: Page) {
@@ -242,7 +296,9 @@ for (const complete of [true, false]) {
             }),
       );
       await signOut.click();
-      await expect(alert).toBeVisible();
+      await expect(alert).toHaveText(
+        transportFailure ? unreachable : "Sign-out temporarily unavailable.",
+      );
       await expect(page).toHaveURL(startURL);
       await expect(signOut).toBeEnabled();
       if (complete) {
@@ -262,6 +318,52 @@ for (const complete of [true, false]) {
   });
 }
 
+test("stalled Google link and sign-out requests time out and re-enable Account", async ({
+  member,
+}) => {
+  const page = await member("stalledaccountauth");
+  // Paused timers stop polling. Once the first read returns, the jumps below
+  // can expire only the held request's deadline.
+  await page.clock.install();
+  await page.clock.pauseAt(Date.now() + 1000);
+  const loaded = nextAccountRefresh(page);
+  await page.goto("/account");
+  await loaded;
+  const methods = page.getByRole("region", { name: "Sign-in methods" });
+  const connect = page.getByRole("button", {
+    name: "Connect Google",
+    exact: true,
+  });
+  const signOut = page.getByRole("button", { name: "Sign out", exact: true });
+  const linking = stall(page, "link-social");
+  await connect.click();
+  await linking;
+  await expect(
+    page.getByRole("button", { name: "Connecting…", exact: true }),
+  ).toBeDisabled();
+  await expect(signOut).toBeDisabled();
+  await page.clock.fastForward(15_000);
+  await expect(methods.getByRole("alert")).toHaveText(timedOut);
+  await expect(connect).toBeEnabled();
+  await expect(signOut).toBeEnabled();
+
+  const signingOut = stall(page, "sign-out");
+  await signOut.click();
+  await signingOut;
+  await expect(signOut).toBeDisabled();
+  await expect(connect).toBeDisabled();
+  await page.clock.fastForward(15_000);
+  await expect(signOut).toHaveAccessibleDescription(timedOut);
+  await expect(signOut).toBeEnabled();
+  await expect(connect).toBeEnabled();
+  await expect(page).toHaveURL(/\/account$/);
+
+  await page.unroute("**/api/auth/sign-out");
+  await page.clock.resume();
+  await signOut.click();
+  await expect(page).toHaveURL(/\/login$/);
+});
+
 test("Google sign-in recovers from transport failure and an empty redirect", async ({
   page,
 }) => {
@@ -276,7 +378,11 @@ test("Google sign-in recovers from transport failure and an empty redirect", asy
         : route.fulfill({ status: 200, json: {} }),
     );
     await google.click();
-    await expect(page.getByRole("main").getByRole("alert")).toBeVisible();
+    await expect(page.getByRole("main").getByRole("alert")).toHaveText(
+      transportFailure
+        ? unreachable
+        : "Google sign-in did not start. Please try again.",
+    );
     await expect(google).toBeEnabled();
     await expect(
       page.getByRole("button", { name: "Send sign-in code", exact: true }),

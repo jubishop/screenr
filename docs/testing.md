@@ -335,6 +335,8 @@ recipients. A full run checks:
 - A limited code request shows the limit message and allows retry.
 - Failed sign-out and Google sign-in requests show an error and allow retry.
   A pending member can finish signup through a replacement invitation.
+- Stalled email code, Google link, and sign-out requests time out after
+  fifteen seconds with a retry message and re-enable their controls.
 - Reply drafts survive failed refreshes and typing during a pending post.
   Refresh failures hide server content until access is checked again;
   unrelated refreshes do not clear action errors.

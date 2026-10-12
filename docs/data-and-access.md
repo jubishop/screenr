@@ -102,9 +102,12 @@ every three seconds while visible,
 waiting for any active refresh to finish, and refresh on focus. Each refresh
 has a ten-second deadline; failure clears server content until a successful
 refresh. Writes and other requests stop waiting after fifteen seconds, which
-re-enables their controls. While a write is pending, its button and the
-others it blocks stay focusable with `aria-disabled` and ignore presses, and
-text fields become read-only, so keyboard focus stays on the pressed control
+re-enables their controls. Better Auth requests, such as email codes, Google
+sign-in and linking, and sign-out, share this deadline and its retry messages
+([issue #183](https://github.com/jubishop/screenr/issues/183)). While a write
+is pending, its button and the others it blocks stay focusable with
+`aria-disabled` and ignore presses, and text fields become read-only, so
+keyboard focus stays on the pressed control
 ([issue #142](https://github.com/jubishop/screenr/issues/142)).
 `src/components/action-button.tsx` is the shared button; `disabled` remains
 only before hydration. Focus stays there after the write, or moves to the

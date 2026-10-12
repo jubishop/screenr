@@ -2,15 +2,6 @@
 import { useEffect, useState } from "react";
 import { createAuthClient } from "better-auth/react";
 import { emailOTPClient } from "better-auth/client/plugins";
-export const authClient = createAuthClient({ plugins: [emailOTPClient()] });
-export async function signOut() {
-  const result = await authClient.signOut();
-  if (result.error || !result.data?.success)
-    throw new Error(
-      result.error?.message || "Could not sign out. Please try again.",
-    );
-  window.location.assign("/login");
-}
 // `status` is the HTTP status, or undefined when no response arrived.
 export class ApiError extends Error {
   constructor(
@@ -21,28 +12,23 @@ export class ApiError extends Error {
     this.name = "ApiError";
   }
 }
-// Every request stops waiting here, so a stalled write releases its controls.
-// Writes can wait on the catalog's eight-second timeout. Reads also pass
-// shorter deadlines with their own messages.
+// Every request, including Better Auth's, stops waiting here, so a stalled
+// request releases its controls. Writes can wait on the catalog's
+// eight-second timeout. Reads also pass shorter deadlines with their own
+// messages.
 const requestDeadline = 15_000;
 const unavailable =
   "Screenr is temporarily unavailable. Please try again in a moment.";
-export async function api<T = Record<string, unknown>>(
-  action: string,
-  data?: unknown,
-  signal?: AbortSignal,
-): Promise<T> {
+// The deadline also covers the body, so the whole reply is read here.
+async function send(input: string | URL | Request, init: RequestInit) {
   const deadline = AbortSignal.timeout(requestDeadline);
-  let response: Response, text: string;
+  const { signal } = init;
   try {
-    response = await fetch(`/api/screenr/${action}`, {
-      method: data === undefined ? "GET" : "POST",
-      cache: "no-store",
+    const response = await fetch(input, {
+      ...init,
       signal: signal ? AbortSignal.any([signal, deadline]) : deadline,
-      headers: data === undefined ? {} : { "Content-Type": "application/json" },
-      body: data === undefined ? undefined : JSON.stringify(data),
     });
-    text = await response.text();
+    return { response, text: await response.text() };
   } catch (error) {
     // Callers recognize their own cancellations and read timeouts.
     if (signal?.aborted) throw error;
@@ -52,6 +38,42 @@ export async function api<T = Record<string, unknown>>(
         : "Could not reach Screenr. Check your connection and try again.",
     );
   }
+}
+// Better Auth parses the buffered reply. A failed request rejects with the
+// message above, which the caller shows beside its control.
+export const authClient = createAuthClient({
+  plugins: [emailOTPClient()],
+  fetchOptions: {
+    async customFetchImpl(input, init = {}) {
+      const { response, text } = await send(input, init);
+      return new Response(text || null, {
+        status: response.status,
+        statusText: response.statusText,
+        headers: response.headers,
+      });
+    },
+  },
+});
+export async function signOut() {
+  const result = await authClient.signOut();
+  if (result.error || !result.data?.success)
+    throw new Error(
+      result.error?.message || "Could not sign out. Please try again.",
+    );
+  window.location.assign("/login");
+}
+export async function api<T = Record<string, unknown>>(
+  action: string,
+  data?: unknown,
+  signal?: AbortSignal,
+): Promise<T> {
+  const { response, text } = await send(`/api/screenr/${action}`, {
+    method: data === undefined ? "GET" : "POST",
+    cache: "no-store",
+    signal,
+    headers: data === undefined ? {} : { "Content-Type": "application/json" },
+    body: data === undefined ? undefined : JSON.stringify(data),
+  });
   if (response.status === 401) {
     window.location.replace("/login");
     throw new ApiError("Sign in to continue.", 401);
