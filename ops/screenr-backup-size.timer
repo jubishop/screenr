@@ -1,0 +1,12 @@
+[Unit]
+Description=Screenr backup storage size check every six hours
+
+[Timer]
+# Retries a failed warning well within Resend's 24-hour idempotency window.
+# The 12:30 run measures after the daily backup.
+OnCalendar=*-*-* 00,06,12,18:30:00 UTC
+RandomizedDelaySec=10m
+Persistent=true
+
+[Install]
+WantedBy=timers.target

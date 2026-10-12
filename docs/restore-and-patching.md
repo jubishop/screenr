@@ -56,9 +56,8 @@ ssh root@YOUR_SSH_HOST cat /etc/screenr/app.env > ~/.config/screenr/production.e
 op document edit "Screenr production.env" ~/.config/screenr/production.env --vault Private
 ```
 
-An outdated `backup.env` copy breaks backups after a rebuild, because the
-backup job requires the [size warning](deployment.md#backup-storage-warning)
-settings.
+An outdated `backup.env` copy can break backups, failure alerts, or the
+[size warning](deployment.md#backup-storage-warning) after a rebuild.
 
 ## Backup commands on the VPS
 
@@ -247,7 +246,8 @@ other applications that it checks to be running.
    ```sh
    systemctl enable screenr-web screenr-worker
    systemctl enable --now screenr-backup.timer screenr-restore-check.timer \
-     screenr-backup-age.timer screenr-postgresql-updates.timer
+     screenr-backup-age.timer screenr-backup-size.timer \
+     screenr-postgresql-updates.timer
    rm -rf /opt/screenr/releases/bootstrap
    systemctl start screenr-restore-check.service
    ```

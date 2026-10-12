@@ -155,8 +155,9 @@ UptimeRobot's free plan has no heartbeat monitors.
 **Rejected alternative:** A separate third-party heartbeat service for
 backups.
 
-The backup, restore check, stale-backup check, PostgreSQL update check, web,
-worker, and database units each set `OnFailure=screenr-alert@%n.service`.
+The backup, restore check, stale-backup check, backup storage check,
+PostgreSQL update check, web, worker, and database units each set
+`OnFailure=screenr-alert@%n.service`.
 That template runs `ops/failure-alert.py` with the failed unit's name. It
 sends through the Resend settings in `/etc/screenr/backup.env` described
 under [backup storage warning](#backup-storage-warning). It runs as the backup
@@ -178,6 +179,10 @@ each deployment blocked by a failing backup sends one.
 runs `ops/check-backup-age.py`; its failure starts the alert. A single missed
 backup is over 30 hours old at the next check.
 
+`screenr-backup-size.timer` runs the
+[backup storage check](#backup-storage-warning) every six hours, and its
+failure starts the alert.
+
 `screenr-postgresql-updates.timer` runs the daily
 [PostgreSQL update check](restore-and-patching.md#pending-update-notice)
 around 09:00 PDT / 08:00 PST. It sends its own one-time notice through
@@ -189,9 +194,9 @@ changes during deployment, install Screenr's changed units by hand after the
 release that contains them is active. Copy only `ops/screenr-*.service` and
 `ops/screenr-*.timer` from a Git checkout of that revision, not from the
 release directory, to `/etc/systemd/system`. Run
-`systemctl daemon-reload`, and enable the stale-backup and PostgreSQL update
-checks with
-`systemctl enable --now screenr-backup-age.timer screenr-postgresql-updates.timer`.
+`systemctl daemon-reload`, and enable the stale-backup, backup storage, and
+PostgreSQL update checks with
+`systemctl enable --now screenr-backup-age.timer screenr-backup-size.timer screenr-postgresql-updates.timer`.
 
 Verify the alert path without sending email:
 
@@ -200,6 +205,8 @@ Verify the alert path without sending email:
   `screenr-web.service is active (running); no alert`.
 - `systemctl start screenr-backup-age.service` passes while backups are
   current.
+- `systemctl start screenr-backup-size.service` passes and logs the bucket
+  size. Below 1 GB it sends nothing.
 - `systemctl start screenr-postgresql-updates.service` passes. Its first run
   only records pending versions, so it sends nothing.
 - For a deliberately failed transient unit, `failure-alert.py --dry-run`
@@ -505,9 +512,9 @@ The user approved adding a 1Password copy on 2026-10-12 as one more copy
 independent of the Mac and the home repository.
 
 Initialize the Restic repository once, using the backup service's user and
-environment. Start `screenr-backup.service`, then `screenr-restore-check.service`
-and `screenr-backup-age.service`, and inspect their journals before enabling
-their timers. A restore check first
+environment. Start `screenr-backup.service`, then `screenr-restore-check.service`,
+`screenr-backup-age.service`, and `screenr-backup-size.service`, and inspect
+their journals before enabling their timers. A restore check first
 fails when the newest snapshot is more than 30 hours old, so stopped backups
 cannot pass by restoring an older snapshot. It then reads the encrypted
 repository, restores a consistent dump into a uniquely named temporary
@@ -524,9 +531,10 @@ stale or cannot be read. The restore check and the daily
 Backups run daily around 05:00 PDT / 04:00 PST. After each successful backup,
 `ops/backup.sh` forgets snapshots outside the
 [accepted retention](#backup-storage-warning) and prunes their data. The
-restore check runs weekly on Saturdays around 07:00 PDT / 06:00 PST, and the
-stale-backup check daily around 12:00 PDT / 11:00 PST. Timers
-catch up after downtime. Dumps are private temporary files and are removed
+restore check runs weekly on Saturdays around 07:00 PDT / 06:00 PST, the
+stale-backup check daily around 12:00 PDT / 11:00 PST, and the
+[storage check](#backup-storage-warning) every six hours. Timers catch up
+after downtime. Dumps are private temporary files and are removed
 after each run; encrypted remote objects remain. The schedules were chosen
 during implementation under the
 [initial backup scope](application-stack.md#initial-backup-scope--2026-09-05);
@@ -548,6 +556,27 @@ successful measurement below it. Equality neither starts nor clears a warning.
 Backups continue. The owner wants notice of growth before backup costs become
 material; reducing retention to one snapshot was considered and withdrawn.
 
+**Decision — 2026-10-12:** Run the size monitor as its own unit and timer
+instead of inside the backup job. Its failures then never fail the backup that
+deployment requires, and [failure alerts](#failure-alerts) report them. This
+supersedes measuring inside the backup job after each backup and prune.
+[Issue #121](https://github.com/jubishop/screenr/issues/121) tracks the work.
+
+**Why:** A temporary Resend or network error on the day backups passed 1 GB
+would fail the backup job. The next daily run came after the 23-hour retry
+window, so the warning would need manual reconciliation, and every deployment
+would fail until then although the backups themselves succeeded.
+
+**Rejected alternative:** Retrying pending warnings from the backup unit.
+
+`screenr-backup-size.timer` starts `screenr-backup-size.service` at 00:30,
+06:30, 12:30, and 18:30 UTC, each up to 10 minutes late. The 12:30 UTC run,
+05:30 PDT / 04:30 PST, measures after the daily backup. A run that starts
+during a backup, including one a deployment started, waits for the backup to
+finish. The service runs the release's `ops/check-backup-size.py` as
+`screenr-db`, with `backup.env`. Six hours keeps automatic retries well within
+the retry window below, and limits a persistent failure to four alerts a day.
+
 `ops/check-backup-size.py` uses Python 3.10 or newer and its standard library.
 It lists every page of R2 objects, including Restic data and metadata, even
 when the repository URL specifies a prefix. It does not download backups.
@@ -558,27 +587,30 @@ and billing apply to the whole account.
 Before deploying this monitor, add `EMAIL_FROM`, `RESEND_API_KEY`, and
 `BACKUP_ALERT_TO` to the root-owned, mode-0600 `/etc/screenr/backup.env`.
 Use the verified Screenr sender and a sending-only key. Keep the owner's
-recipient private. The backup process does not need the rest of `app.env`.
+recipient private. The size check does not need the rest of `app.env`.
 
 Latest bytes, object count, check time, and warning state are saved atomically
 in `/var/lib/screenr-backup/size.json`, mode 0600, outside release directories.
-The job logs each successful measurement. A failed listing preserves the last
-measurement and does not clear a warning. Email failure preserves the new
-measurement and pending notification. The backup service then reports failure,
-but its completed backup and retention cleanup remain intact. A failing backup
-service can also block deployment's required pre-activation backup check.
+The check logs each successful measurement. A failed listing preserves the
+last measurement and does not clear a warning. Email failure preserves the new
+measurement and pending notification. Either failure fails the size check's
+unit and sends a failure alert; backups and deployments continue. The next
+run measures again and retries a pending warning.
 
 Email attempts share a persisted key and unchanged payload. The monitor makes
 up to three attempts per invocation. Resend retains keys for
 [24 hours](https://resend.com/docs/dashboard/emails/idempotency-keys)
 (verified September 25, 2026). An uncertain delivery stops automatic retries
-after 23 hours, with margin for request duration and clock differences.
+after 23 hours, with margin for request duration and clock differences. Runs
+are about six hours apart, so three later runs retry within that window.
 A definite initial rejection, such as an invalid key, can retry after the
 configuration is fixed. An acceptance receipt means Resend accepted the email;
 it does not prove inbox delivery.
 
-Inspect `journalctl -u screenr-backup.service` and the private state file when
-the job fails. Correct configuration or network errors, then rerun the service.
+Inspect `journalctl -u screenr-backup-size.service` and the private state
+file when the check fails. Correct configuration errors, then rerun it with
+`systemctl start screenr-backup-size.service`; the next run retries network
+errors automatically.
 For expired uncertain delivery, first reconcile the saved key and message in
 Resend. If accepted, record its receipt ID and acceptance time as `email_id`
 and `sent_at` in the saved warning. If confirmed unsent, clear `attempted_at`

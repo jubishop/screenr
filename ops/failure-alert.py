@@ -32,6 +32,12 @@ JOBS = {
         'no backup in the last 30 hours',
         'The daily stale-backup check found no backup from the last 30 hours, or could not '
         'read the backup snapshots. Backups may have stopped running.'),
+    'screenr-backup-size.service': (
+        'backup storage check failed',
+        'The backup storage check could not measure the R2 backup bucket, save its state, or '
+        'email its 1 GB warning. Backups and deployments are unaffected, and it retries at its '
+        'next run within six hours. If the journal says to reconcile, follow the backup '
+        'storage warning steps in docs/deployment.md before rerunning it.'),
     'screenr-postgresql-updates.service': (
         'PostgreSQL update check failed',
         'The daily PostgreSQL update check could not list pending package updates, save its '

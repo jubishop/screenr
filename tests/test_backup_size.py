@@ -1,4 +1,4 @@
-"""Exercise the backup monitor CLI with HTTP fakes and real persisted state."""
+"""Exercise the backup size monitor CLI with HTTP fakes and real persisted state, and its units."""
 import io
 import fcntl
 import json
@@ -13,8 +13,24 @@ from unittest.mock import patch
 from urllib.error import HTTPError, URLError
 from urllib.parse import parse_qs, urlsplit
 
+from test_failure_alert import unit_file
+
 ROOT = Path(__file__).resolve().parents[1]
 GIGABYTE = 1_000_000_000
+
+
+def longest_timer_gap(timer):
+    """Return the longest possible time between two runs of a daily UTC timer."""
+    settings = unit_file(timer)['Timer']
+    day, clock, zone = settings['OnCalendar'][0].split()
+    if day != '*-*-*' or zone != 'UTC':
+        raise AssertionError(f'{timer} is not a daily UTC timer')
+    hours, minutes, seconds = clock.split(':')
+    runs = sorted(int(hour) * 3600 + int(minutes) * 60 + int(seconds) for hour in hours.split(','))
+    delay = {'10m': 600}[settings['RandomizedDelaySec'][0]]
+    # One run starts without its randomized delay and the next with all of it.
+    return max((later - earlier) % 86400 or 86400
+               for earlier, later in zip(runs, runs[1:] + runs[:1])) + delay
 
 
 def listing(sizes, *, token=None):
@@ -142,6 +158,16 @@ class BackupSizeTests(unittest.TestCase):
         self.execute([listing([3 * GIGABYTE])])
         self.assertEqual(len(self.emails()), count)
 
+    def test_next_timer_run_retries_a_transient_send_failure(self):
+        code, _, _ = self.execute([listing([GIGABYTE + 1])], mail=URLError('lost response'))
+        self.assertNotEqual(code, 0)
+        self.now += longest_timer_gap('screenr-backup-size.timer')
+        code, output, errors = self.execute([listing([GIGABYTE + 1])])
+        self.assertEqual(code, 0, errors)
+        self.assertIn('accepted by Resend', output)
+        self.assertEqual(self.state()['warning']['email_id'], 'email-accepted')
+        self.assertEqual(len({req.get_header('Idempotency-key') for req in self.emails()}), 1)
+
     def test_ambiguous_delivery_does_not_resend_after_provider_window(self):
         self.execute([listing([GIGABYTE + 1])], mail=URLError('lost response'))
         count = len(self.emails())
@@ -219,23 +245,51 @@ failure=$2
                                str(ROOT / 'ops/backup.sh'), failure],
                               text=True, capture_output=True, timeout=5)
 
-    def test_monitor_runs_only_after_successful_backup_and_prune(self):
-        result = self.execute()
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn('--keep-daily 7 --keep-weekly 4 --prune', result.stdout)
-        self.assertIn('check-backup-size.py', result.stdout)
-        self.assertLess(result.stdout.index('restic forget'), result.stdout.index('monitor'))
-        for failure in ['dump', 'backup', 'forget']:
-            result = self.execute(failure)
-            self.assertNotEqual(result.returncode, 0)
-            self.assertNotIn('monitor', result.stdout)
-            self.assertIn('cleanup', result.stdout)
-
-    def test_monitor_failure_does_not_undo_backup_and_cleans_dump(self):
+    def test_backup_succeeds_without_the_size_monitor(self):
+        # A failing or pending warning cannot fail the backup that deploys require.
         result = self.execute('monitor')
-        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn('restic backup', result.stdout)
+        self.assertIn('--keep-daily 7 --keep-weekly 4 --prune', result.stdout)
+        self.assertNotIn('monitor', result.stdout)
         self.assertTrue(result.stdout.rstrip().endswith('cleanup'))
+
+    def test_failed_backup_steps_fail_the_job_and_clean_the_dump(self):
+        for failure in ['dump', 'backup', 'forget']:
+            with self.subTest(failure=failure):
+                result = self.execute(failure)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn('cleanup', result.stdout)
+
+
+class BackupSizeUnitTests(unittest.TestCase):
+    def test_size_monitor_runs_as_its_own_alerting_unit(self):
+        unit = unit_file('screenr-backup-size.service')
+        self.assertEqual(unit['Unit']['OnFailure'], ['screenr-alert@%n.service'])
+        # A run that starts during a backup waits, so it never measures mid-upload.
+        self.assertIn('screenr-backup.service', ' '.join(unit['Unit']['After']).split())
+        service = unit['Service']
+        self.assertEqual(service['Type'], ['oneshot'])
+        self.assertEqual(service['ExecStart'],
+                         ['/usr/bin/python3 /opt/screenr/current/ops/check-backup-size.py'])
+        self.assertEqual(service['User'], ['screenr-db'])
+        self.assertEqual(service['EnvironmentFile'], ['/etc/screenr/backup.env'])
+        self.assertEqual(service['StateDirectory'], ['screenr-backup'])
+        self.assertEqual(service['ProtectSystem'], ['strict'])
+        timer = unit_file('screenr-backup-size.timer')
+        self.assertEqual(timer['Timer']['Persistent'], ['true'])
+        self.assertEqual(timer['Install']['WantedBy'], ['timers.target'])
+
+    def test_deploy_backup_neither_runs_nor_waits_for_the_size_monitor(self):
+        # Deployment starts screenr-backup.service, which runs only backup.sh.
+        self.assertIn('systemctl start screenr-backup.service',
+                      (ROOT / 'ops/deploy-release.sh').read_text())
+        backup = unit_file('screenr-backup.service')
+        self.assertEqual(backup['Service']['ExecStart'],
+                         ['/bin/sh /opt/screenr/current/ops/backup.sh'])
+        for name in ['ops/screenr-backup.service', 'ops/backup.sh', 'ops/deploy-release.sh']:
+            with self.subTest(file=name):
+                self.assertNotIn('backup-size', (ROOT / name).read_text())
 
 
 if __name__ == '__main__':
