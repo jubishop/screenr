@@ -59,9 +59,13 @@ async function fetchCatalog(path: string, timeout = 8000) {
     );
   }
 }
-function parseTitle(raw: Record<string, unknown>, kind: "movie" | "tv"): Title {
-  const name = kind === "movie" ? raw.title : raw.name;
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+function parseTitle(raw: unknown, kind: "movie" | "tv"): Title {
+  const name = isRecord(raw) && (kind === "movie" ? raw.title : raw.name);
   if (
+    !isRecord(raw) ||
     !Number.isSafeInteger(raw.id) ||
     Number(raw.id) <= 0 ||
     typeof name !== "string" ||
@@ -92,16 +96,14 @@ export async function searchTitles(query: string): Promise<Title[]> {
   const data = await fetchCatalog(
     `/search/multi?query=${encodeURIComponent(query)}&include_adult=false`,
   );
-  if (!Array.isArray(data.results))
+  if (!isRecord(data) || !Array.isArray(data.results))
     throw new AppError("The catalog returned invalid search results.", 502);
   return data.results
     .filter(
-      (r: Record<string, unknown>) =>
-        r.media_type === "movie" || r.media_type === "tv",
+      (r): r is Record<string, unknown> =>
+        isRecord(r) && (r.media_type === "movie" || r.media_type === "tv"),
     )
-    .map((r: Record<string, unknown>) =>
-      parseTitle(r, r.media_type as "movie" | "tv"),
-    );
+    .map((r) => parseTitle(r, r.media_type as "movie" | "tv"));
 }
 // Stored details refresh after a day. When TMDB fails, times out, or no longer
 // has the title, the stored row is served and the refresh waits five minutes.
@@ -230,10 +232,6 @@ type CachedAvailability = {
   fetched_at: Date | null;
   refresh_after: Date;
 };
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === "object" && !Array.isArray(value);
-}
 
 function parseAvailability(data: unknown, id: string): AvailabilityData {
   const [kind, tmdbId] = id.split(":");

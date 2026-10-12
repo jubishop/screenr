@@ -697,6 +697,10 @@ and waits five minutes before retrying. Migration `013-title-retry.sql` adds
 the nullable `title.retry_after` column for this delay, which the previous
 release ignores; `fetched_at` still records the last successful fetch. Only a
 title that was never stored depends on TMDB, with an eight-second timeout.
+For such a title, a TMDB 404 returns not found, and any other TMDB failure or
+invalid response returns a 502 catalog error. Search returns the same catalog
+errors. It sends no request for fewer than two non-space characters, rejects
+queries over 120 characters, and drops results that are not movies or TV.
 Title details, trailer, and availability load in parallel, and the optional
 caches are written once the title is stored. Actions and comments use the
 stored title without contacting TMDB, so members can still remove actions on
