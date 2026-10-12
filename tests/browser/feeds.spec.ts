@@ -1,11 +1,10 @@
 import { nextAccountRefreshForPath } from "./refresh-helpers";
-import { expect, type Locator, type Page } from "@playwright/test";
-import { setTimeout as delay } from "node:timers/promises";
+import { expect, type Locator, type Page, type Route } from "@playwright/test";
 import { browserConfig } from "../../scripts/browser-config";
 import { expectTextContrast } from "./contrast";
 import { test } from "./monitored-test";
 import { prepareFriendship } from "./member-fixture";
-import { befriend, confirmProfileAction } from "./journey-helpers";
+import { confirmProfileAction } from "./journey-helpers";
 import { expectErrorBeside, failAction, press } from "./action-errors";
 
 test("unified feeds show separate entries and support inline replies on title, friends, and profile", async ({
@@ -687,19 +686,33 @@ test("slow and failed refreshes enforce access while preserving reply drafts", a
   await expect(
     page.getByRole("link", { name: "Watch together", exact: true }),
   ).toBeVisible();
+  // Paused timers poll only when the test advances the viewer's clock, and
+  // each read of the conversation's title page waits until the test
+  // continues it. A read can then stay pending past the 3-second polling
+  // interval or the 10-second refresh deadline without real waiting.
+  // Application authorization and database reads still determine the
+  // returned content.
+  await viewer.clock.install();
+  await viewer.clock.pauseAt(Date.now() + 1000);
+  const conversationRead = (url: URL) =>
+    url.pathname === "/api/screenr/screen" &&
+    url.searchParams.get("path") === `/titles/movie/987654?item=${id}`;
+  const reads: Route[] = [];
+  await viewer.route(conversationRead, (route) => {
+    reads.push(route);
+  });
   await viewer.goto(`/conversations/${id}`);
+  await expect.poll(() => reads.length).toBe(1);
   await viewer.getByRole("button", { name: "Comment", exact: true }).click();
   await viewer.getByLabel("Add your reply").fill("Keep my slow-network draft");
-  await viewer.route("**/api/screenr/screen?**", async (route) => {
-    // Delay the real HTTP boundary beyond the polling interval. Application
-    // authorization and database reads still determine the returned content.
-    await delay(4000);
-    await route.continue();
-  });
   await page.request.post("/api/screenr/comment", {
     headers: { Origin: browserConfig.baseURL },
     data: { conversation: id, body: "A slow incoming reply", spoiler: false },
   });
+  // Two polls come due while the first read is pending. A poll that replaced
+  // it would leave its own read held, so New activity would never appear.
+  await viewer.clock.runFor(6000);
+  await reads[0].continue();
   await expect(
     viewer.getByRole("button", { name: /New activity/ }),
   ).toBeVisible();
@@ -708,38 +721,41 @@ test("slow and failed refreshes enforce access while preserving reply drafts", a
     viewer.getByText("A slow incoming reply", { exact: true }),
   ).toBeVisible();
   await confirmProfileAction(page, "Unfriend");
+  await expect(
+    page.getByRole("button", { name: "Send friend request", exact: true }),
+  ).toBeVisible();
+  // The next poll reads after the unfriend, and another poll comes due
+  // before that read returns.
+  await viewer.clock.runFor(3000);
+  await expect.poll(() => reads.length).toBe(2);
+  await viewer.clock.runFor(3000);
+  await reads[1].continue();
   await expect(viewer.getByRole("status")).toContainText(
     "This activity is unavailable.",
   );
   await expect(
     viewer.getByText("A slow incoming reply", { exact: true }),
   ).toHaveCount(0);
-  await viewer.unrouteAll({ behavior: "wait" });
-  await befriend(page, viewer, "slowviewer", "draftrefresh");
+  await prepareFriendship(page, viewer);
   await viewer.goto(`/conversations/${id}`);
+  await expect.poll(() => reads.length).toBe(3);
   await viewer.getByRole("button", { name: "Comment", exact: true }).click();
   await viewer.getByLabel("Add your reply").fill("Retain this timed-out draft");
-  let requestStarted!: () => void;
-  const delayedRequest = new Promise<void>((resolve) => {
-    requestStarted = resolve;
-  });
-  await viewer.route("**/api/screenr/screen?**", async (route) => {
-    requestStarted();
-    await delay(15000);
-    await route.continue();
-  });
-  await viewer.bringToFront();
-  // Measure the refresh deadline from an actual intercepted request, not
-  // from navigation or a background tab's next polling opportunity.
-  await delayedRequest;
+  // The deadline counts from the held read, which started when the page
+  // loaded on the paused clock.
+  await viewer.clock.runFor(10_000);
   await expect(viewer.getByRole("main").getByRole("alert")).toContainText(
     "Refresh timed out. Please try again.",
-    { timeout: 12000 },
   );
   await expect(
     viewer.getByText("Visible conversation content", { exact: true }),
   ).toHaveCount(0);
-  await viewer.unrouteAll({ behavior: "wait" });
+  await reads[2].continue();
+  await viewer.unroute(conversationRead);
+  await viewer.clock.runFor(3000);
+  await expect(
+    viewer.getByText("Visible conversation content", { exact: true }),
+  ).toBeVisible();
   await expect(viewer.getByLabel("Add your reply")).toHaveValue(
     "Retain this timed-out draft",
   );

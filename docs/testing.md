@@ -205,6 +205,11 @@ a mobile browser context; `signIn` prepares the test's existing page.
   email signup and browser friendship setup for scenarios that test those
   journeys. [Refresh helpers](../tests/browser/refresh-helpers.ts) wait for
   screen responses.
+- Scenarios that test polling intervals or request deadlines don't sleep.
+  They install and pause Playwright's clock in the member's context, advance
+  it explicitly, and hold the timed request in a route until the test
+  continues it. The slow and timed-out refresh scenario in `feeds.spec.ts`
+  follows this pattern.
 - Page loads pass through the offline service worker. A test that intercepts
   page loads needs the context setting described in
   [installation tests](installation.md#tests).
