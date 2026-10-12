@@ -18,6 +18,9 @@ jobs:
   check:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    permissions:
+      contents: read
+      deployments: read # Find the last successful production deployment.
     outputs:
       deploy: ${{ steps.release.outputs.deploy }}
     services:
@@ -38,6 +41,7 @@ jobs:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           persist-credentials: false
+          fetch-depth: 0 # A skip must cover every commit since that deployment.
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: lts/*
@@ -56,6 +60,7 @@ jobs:
       - name: Decide whether to deploy
         id: release
         env:
+          GH_TOKEN: ${{ github.token }}
           EVENT_NAME: ${{ github.event_name }}
           REF: ${{ github.ref }}
           REVISION: ${{ github.sha }}

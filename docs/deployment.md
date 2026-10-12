@@ -174,8 +174,10 @@ remote script comes from the checked Git revision, not a mutable local file.
 A new push does not cancel a running main workflow or interrupt activation.
 GitHub keeps the latest pending run when pushes arrive quickly. Before uploading
 and again before activation, the helper rejects a revision that is no longer
-current `main`; the newer push supplies the replacement release. The host also
-locks deployment so two activations cannot run together.
+current `main`; the newer push supplies the replacement release. A skip trailer
+on that push cannot strand the rejected release: skipping requires every commit
+since the last successful production deployment to skip. The host also locks
+deployment so two activations cannot run together.
 
 The workflow stores release artifacts with one-day retention. After downloading
 and verifying an archive, the deployment job deletes its GitHub artifact. Build

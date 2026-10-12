@@ -326,10 +326,21 @@ Screenr-Deploy-Reason: Instructions only; production contains all material chang
 ```
 
 Replace the example reason with the actual assessment and deployed revision.
-The workflow uses the push's final commit. Missing, duplicate, or conflicting
-trailers keep deployment enabled. Full CI still runs. Never use `[skip ci]`
-for this purpose. A manual **Run workflow** on `main` runs checks, packages,
-and deploys current main even if its commit has a skip trailer.
+The workflow reads the trailers on the push's final commit, then finds the
+newest successful `production` deployment in GitHub. It skips only when every
+commit after that deployment, including the final one, carries valid skip
+trailers. Otherwise it deploys, so a skipped push still delivers an earlier
+change whose own deployment was refused or failed. Missing, duplicate, or
+conflicting trailers on any of those commits keep deployment enabled. So does
+any doubt: an unreadable deployment history, no successful deployment, a
+deployed revision outside the pushed history, or an incomplete checkout. Full
+CI still runs. Never use `[skip ci]` for this purpose. A manual
+**Run workflow** on `main` runs checks, packages, and deploys current main
+even if its commit has a skip trailer.
+
+[`bin/deployment-decision`](../bin/deployment-decision) makes this choice in
+the check job. That job checks out full history and has `deployments: read`
+permission to query the deployment history.
 
 ## Project Starter
 

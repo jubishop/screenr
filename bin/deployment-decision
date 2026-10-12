@@ -1,10 +1,83 @@
 #!/usr/bin/env python3
-"""Report whether a validated workflow run should deploy production."""
+"""Report whether a validated workflow run should deploy production.
+
+A push skips deployment only when every commit since the last successful
+production deployment carries a reviewed skip trailer. Any doubt deploys.
+"""
 
 import argparse
+import json
 import re
 import subprocess
 import sys
+
+DEPLOYMENTS_QUERY = """query {
+  repository(owner: "jubishop", name: "screenr") {
+    deployments(environments: ["production"], first: 100,
+                orderBy: {field: CREATED_AT, direction: DESC}) {
+      nodes { commitOid latestStatus { state } }
+    }
+  }
+}"""
+
+
+def git(*args):
+    return subprocess.run(["git", *args], check=True, capture_output=True, text=True).stdout
+
+
+def skip_reason(revision):
+    """Return a commit's reviewed skip reason, or None when it must deploy."""
+    trailers = subprocess.run(
+        ["git", "interpret-trailers", "--parse"],
+        input=git("show", "-s", "--format=%B", revision),
+        check=True, capture_output=True, text=True,
+    ).stdout
+    decisions, reasons = [], []
+    for line in trailers.splitlines():
+        key, _, value = line.partition(":")
+        if key.lower() == "screenr-deploy":
+            decisions.append(value.strip())
+        elif key.lower() == "screenr-deploy-reason":
+            reasons.append(value.strip())
+    if decisions == ["skip"] and len(reasons) == 1 and reasons[0]:
+        return reasons[0]
+    return None
+
+
+def last_deployed_revision():
+    """Return the revision of the newest successful production deployment."""
+    response = subprocess.run(
+        ["gh", "api", "graphql", "-f", "query=" + DEPLOYMENTS_QUERY],
+        check=True, capture_output=True, text=True, timeout=60,
+    ).stdout
+    for node in json.loads(response)["data"]["repository"]["deployments"]["nodes"]:
+        if (node.get("latestStatus") or {}).get("state") == "SUCCESS":
+            return node["commitOid"]
+    return None
+
+
+def undeployed_change(revision):
+    """Explain why skipping could leave a change out of production, or return None."""
+    try:
+        deployed = last_deployed_revision()
+        if deployed is None:
+            return "no successful production deployment was found"
+        if not isinstance(deployed, str) or not re.fullmatch(r"[0-9a-f]{40}", deployed):
+            return "the last production deployment has no full commit SHA"
+        if git("rev-parse", "--is-shallow-repository").strip() != "false":
+            return "the checkout has incomplete history"
+        ancestor = subprocess.run(["git", "merge-base", "--is-ancestor", deployed, revision],
+                                  capture_output=True)
+        if ancestor.returncode != 0:
+            return f"deployed revision {deployed} is not in this revision's history"
+        for commit in git("rev-list", f"{deployed}..{revision}").split():
+            if skip_reason(commit) is None:
+                return f"{commit} has no reviewed skip trailer and production lacks it"
+    except (OSError, ValueError, LookupError, TypeError, AttributeError,
+            subprocess.SubprocessError) as error:
+        return f"the last production deployment could not be checked ({error})"
+    print(f"Production has {deployed}; every later commit skips deployment.", file=sys.stderr)
+    return None
 
 
 def main():
@@ -17,24 +90,14 @@ def main():
     if deploy and args.event == "push":
         if not re.fullmatch(r"[0-9a-f]{40}", args.revision):
             raise ValueError("Expected a full commit SHA.")
-        message = subprocess.run(
-            ["git", "show", "-s", "--format=%B", args.revision],
-            check=True, capture_output=True, text=True,
-        ).stdout
-        trailers = subprocess.run(
-            ["git", "interpret-trailers", "--parse"],
-            input=message, check=True, capture_output=True, text=True,
-        ).stdout
-        decisions, reasons = [], []
-        for line in trailers.splitlines():
-            key, _, value = line.partition(":")
-            if key.lower() == "screenr-deploy":
-                decisions.append(value.strip())
-            elif key.lower() == "screenr-deploy-reason":
-                reasons.append(value.strip())
-        if decisions == ["skip"] and len(reasons) == 1 and reasons[0]:
-            deploy = False
-            print("Skipping deployment: " + reasons[0], file=sys.stderr)
+        reason = skip_reason(args.revision)
+        if reason is not None:
+            problem = undeployed_change(args.revision)
+            if problem is None:
+                deploy = False
+                print("Skipping deployment: " + reason, file=sys.stderr)
+            else:
+                print(f"Deploying despite the skip trailer: {problem}.", file=sys.stderr)
     print("deploy=" + str(deploy).lower())
 
 
