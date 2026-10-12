@@ -33,6 +33,21 @@ Project Starter manages this block; add project rules after it.
 Track TODOs, bugs, and work that needs lifecycle tracking in GitHub issues in
 `jubishop/screenr`.
 
+Label every issue when you create it, and relabel it when its scope changes:
+
+- Exactly one type: `bug`, `feature`, `improvement`, `documentation`, or
+  `investigation`.
+- Each affected area: `area: ui`, `area: server`, `area: ops` (hosting,
+  deployment, backups, monitoring), or `area: tooling` (tests, CI, development
+  scripts). Documentation-only issues may omit an area.
+- `security`, `privacy`, `accessibility`, or `performance` when that concern is
+  central to the issue.
+- `needs decision` while the issue waits on the user's product or policy
+  choice. Remove it once the user decides.
+
+Label descriptions in the repository define each label. Use only existing
+labels, and change the label set only with the user's approval.
+
 `bin/check --full` runs `bin/check-application`: shell lint for `ops/`, Python
 tests, formatting, typechecking, application and browser tests, and the
 build. CI uses this full mode. Require successful full CI before merge and
