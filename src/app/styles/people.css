@@ -29,11 +29,12 @@
 .more-actions .more-button {
   width: 44px;
   height: 44px;
-  border: 1px solid #b2c1b4;
-  background: var(--white);
+  border: 1px solid var(--border);
+  background: var(--surface);
 }
 .more-actions .more-button[aria-expanded="true"] {
   background: var(--accent);
+  color: var(--on-accent);
 }
 /* Opens toward the page's inline start from the button's end, which always
    follows a wider action on the same line. */
@@ -47,8 +48,8 @@
   padding: 6px;
   border: 1px solid var(--line);
   border-radius: 10px;
-  background: var(--white);
-  box-shadow: 0 10px 30px #163c3424;
+  background: var(--surface);
+  box-shadow: 0 10px 30px var(--shadow);
 }
 .action-menu button {
   text-align: left;
@@ -169,7 +170,7 @@ a.person:hover strong {
   border: 1px solid var(--line);
   border-radius: 10px;
   padding: 24px;
-  background: var(--white);
+  background: var(--surface);
   margin-bottom: 18px;
 }
 /* The photo editor on Account and during setup. On phones the buttons wrap

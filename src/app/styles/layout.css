@@ -51,6 +51,7 @@
 }
 .main-nav [aria-current] {
   background: var(--accent);
+  color: var(--on-accent);
   font-weight: 600;
 }
 .nav-short {
@@ -172,7 +173,7 @@
     margin: 0;
     padding: 0 max(4px, env(safe-area-inset-right)) env(safe-area-inset-bottom)
       max(4px, env(safe-area-inset-left));
-    background: var(--white);
+    background: var(--surface);
     border-top: 1px solid var(--line);
   }
   .main-nav a {
@@ -206,6 +207,7 @@
   }
   .main-nav [aria-current] .nav-icon {
     background: var(--accent);
+    color: var(--on-accent);
   }
   .nav-full {
     display: none;

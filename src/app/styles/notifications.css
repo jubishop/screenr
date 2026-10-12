@@ -7,12 +7,13 @@
   height: 42px;
   padding: 0;
   border-radius: 50%;
-  background: var(--white);
+  background: var(--surface);
   border: 1px solid var(--line);
 }
 .notification-bell:hover,
 .notification-bell[aria-expanded="true"] {
   background: var(--accent);
+  color: var(--on-accent);
 }
 .notification-badge {
   position: absolute;
@@ -22,7 +23,7 @@
   padding: 0 5px;
   min-width: 20px;
   background: var(--ink);
-  color: var(--white);
+  color: var(--surface);
   font-size: 11px;
   line-height: 20px;
 }
@@ -36,9 +37,9 @@
   max-height: min(660px, calc(100dvh - var(--panel-top) - 16px));
   border: 1px solid var(--line);
   border-radius: 16px;
-  background: var(--white);
+  background: var(--surface);
   color: var(--ink);
-  box-shadow: 0 16px 60px #163c3429;
+  box-shadow: 0 16px 60px var(--shadow-strong);
   overflow: hidden;
 }
 .notification-panel[open] {
@@ -79,6 +80,7 @@
 }
 .notification-filters [aria-pressed="true"] {
   background: var(--accent);
+  color: var(--on-accent);
 }
 .notification-content {
   padding: 8px;

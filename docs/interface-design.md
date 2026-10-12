@@ -579,3 +579,21 @@ color, muted sage for secondary text, and the lime accent for the current
 navigation item and pressed states. The implementer chooses the exact values
 within the contrast requirements. The user chose this over a neutral gray
 palette and over reviewing a preview of both directions first.
+
+**Implementation note:** [Issue #171](https://github.com/jubishop/screenr/issues/171)
+defines every interface color as a custom property on `:root` in
+`src/app/style.css`. A `prefers-color-scheme: dark` block overrides each one
+except the shared lime accent, the brand dot, and the poster and trailer
+player stand-ins. The dark page is `#0f1a17`, cards `#182621`, text
+`#eeece2`, and secondary text `#9aac9f`. Primary and danger buttons invert:
+a light fill labeled in the card color. The current navigation item, an open
+menu button, and pressed filters keep the lime fill with deep green labels,
+and pressed reactions get a lime ring. Stylesheets declare
+`color-scheme: light dark`, and the head carries a theme color for each
+scheme. The offline page in `public/sw.js` repeats the theme values it uses.
+`tests/app/theme.test.ts` fails on a color outside the theme values, a
+light value without a dark one, or a pairing below the contrast
+requirements. In the dark theme, focus rings and field borders also reach
+3:1; [issue #196](https://github.com/jubishop/screenr/issues/196) tracks the
+light theme's. `tests/browser/contrast.spec.ts` audits text contrast and
+painted colors in both schemes.

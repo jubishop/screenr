@@ -1,5 +1,5 @@
 import { expect, type APIRequestContext, type Page } from "@playwright/test";
-import { expectTextContrast } from "./contrast";
+import { expectTextContrast, expectThemedPage } from "./contrast";
 import { test } from "./monitored-test";
 
 const themeColor = "#f7f6f0";
@@ -11,10 +11,27 @@ async function expectInstallableHead(page: Page, request: APIRequestContext) {
     "href",
     "/manifest.webmanifest",
   );
-  await expect(head.locator('meta[name="theme-color"]')).toHaveAttribute(
+  // Form controls and the browser's interface follow the device's theme. Each
+  // scheme's theme color is that theme's page color.
+  await expect(head.locator('meta[name="color-scheme"]')).toHaveAttribute(
     "content",
-    themeColor,
+    "light dark",
   );
+  await expect(head.locator('meta[name="theme-color"]')).toHaveCount(2);
+  for (const colorScheme of ["light", "dark"] as const) {
+    await page.emulateMedia({ colorScheme });
+    const paper = await page.evaluate(() =>
+      getComputedStyle(document.documentElement)
+        .getPropertyValue("--paper")
+        .trim(),
+    );
+    expect(paper).toBe(colorScheme === "light" ? themeColor : "#0f1a17");
+    await expect(
+      head.locator(
+        `meta[name="theme-color"][media="(prefers-color-scheme: ${colorScheme})"]`,
+      ),
+    ).toHaveAttribute("content", paper);
+  }
   await expect(
     head.locator('meta[name="apple-mobile-web-app-title"]'),
   ).toHaveAttribute("content", "Screenr");
@@ -78,7 +95,7 @@ function inspectIcon(page: Page, src: string) {
   }, src);
 }
 
-test("sign-in and member pages declare the manifest, icons, and theme color", async ({
+test("sign-in and member pages declare the manifest, icons, color schemes, and theme colors", async ({
   page,
   request,
   member,
@@ -172,6 +189,11 @@ test("offline page loads show the offline page, and the worker caches nothing", 
     viewer.getByText("Check your connection and try again."),
   );
   await expectTextContrast(viewer.getByRole("link", { name: "Try again" }));
+  for (const colorScheme of ["dark", "light"] as const) {
+    await viewer.emulateMedia({ colorScheme });
+    await expectThemedPage(viewer, `offline ${colorScheme}`);
+    await viewer.screenshot({ path: `.cache/offline-${colorScheme}.png` });
+  }
   const retried = viewer.waitForEvent("load");
   await viewer.getByRole("link", { name: "Try again" }).click();
   await retried;

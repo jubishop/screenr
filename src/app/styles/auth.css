@@ -7,7 +7,7 @@
 }
 .auth-card {
   margin: 35px 0 24px;
-  background: var(--white);
+  background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 18px;
   padding: 45px;

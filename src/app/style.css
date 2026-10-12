@@ -1,13 +1,37 @@
 /* Shared theme, element defaults, controls, and reusable visual primitives.
    Feature styles load after this file in layout.tsx. */
+/* Every interface color is a theme value. The dark theme below follows the
+   device's appearance setting and overrides each value except the shared
+   brand and media colors at the end of this block. tests/app/theme.test.ts
+   checks the values and their contrast. */
 :root {
+  color-scheme: light dark;
+  /* The page, and raised surfaces such as cards, fields, and menus. */
   --paper: #f7f6f0;
+  --surface: #fffef9;
+  /* Text. Primary buttons are filled with it and labeled in --surface. */
   --ink: #163c34;
   --muted: #627068;
   --line: #dfe5db;
-  --accent: #d9eb85;
-  --white: #fffef9;
+  --line-strong: #d5ddd3;
+  /* Field, button, and empty-state outlines. */
+  --border: #b2c1b4;
+  --focus: #759e4a;
+  /* Hovered icon buttons and spoiler covers. */
+  --tint: #eef0e6;
+  --spoiler-ink: #5c6d57;
+  --field-disabled: #edf0e8;
+  --primary-hover: #28554a;
+  /* Error text and danger buttons. */
   --red: #9b3838;
+  --danger-hover: #812c2c;
+  --error-bg: #f8eae4;
+  --error-border: #e9c9be;
+  --pressed: #e7efdd;
+  --pressed-ring: #55753a;
+  --shadow: #163c3424;
+  --shadow-strong: #163c3429;
+  --shadow-soft: #163c3415;
   /* Muted avatar backgrounds, chosen by user ID. Ink text meets 4.5:1 on each. */
   --avatar-0: #dce6cf;
   --avatar-1: #e9dfc9;
@@ -18,6 +42,52 @@
   --avatar-6: #d6e0ec;
   --avatar-7: #eedcc0;
   --avatar-placeholder: #e6e8e3;
+  /* Shared by both themes. The lime accent marks the current navigation item
+     and pressed controls, labeled in --on-accent. */
+  --accent: #d9eb85;
+  --on-accent: #163c34;
+  --accent-border: #b7cc73;
+  --brand-dot: #88a841;
+  /* Stand-ins for posters and the trailer player keep their own colors. */
+  --poster-from: #315a4b;
+  --poster-to: #b4c29a;
+  --poster-letter: #e7edda;
+  --player: #000;
+}
+/* Green-tinted charcoal surfaces, warm off-white text, and muted sage. */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #0f1a17;
+    --surface: #182621;
+    --ink: #eeece2;
+    --muted: #9aac9f;
+    --line: #2a3a34;
+    --line-strong: #3a4c45;
+    --border: #5f7368;
+    --focus: #a6cc5e;
+    --tint: #22322c;
+    --spoiler-ink: #b8c6b2;
+    --field-disabled: #1f2d28;
+    --primary-hover: #d3d9cc;
+    --red: #f19d90;
+    --danger-hover: #f6bcb2;
+    --error-bg: #3a2421;
+    --error-border: #6e3d36;
+    --pressed: #2b3b24;
+    --pressed-ring: #d9eb85;
+    --shadow: #00000066;
+    --shadow-strong: #00000080;
+    --shadow-soft: #0000004d;
+    --avatar-0: #35503f;
+    --avatar-1: #55492f;
+    --avatar-2: #2e4f4e;
+    --avatar-3: #5a3c36;
+    --avatar-4: #463f5e;
+    --avatar-5: #4b532d;
+    --avatar-6: #34495f;
+    --avatar-7: #5e4429;
+    --avatar-placeholder: #2c3a35;
+  }
 }
 * {
   box-sizing: border-box;
@@ -73,7 +143,7 @@ button:disabled,
   cursor: wait;
 }
 :focus-visible {
-  outline: 3px solid #759e4a;
+  outline: 3px solid var(--focus);
   outline-offset: 4px;
 }
 input,
@@ -81,9 +151,9 @@ textarea,
 select {
   display: block;
   width: 100%;
-  border: 1px solid #b9c7bb;
+  border: 1px solid var(--border);
   border-radius: 8px;
-  background: var(--white);
+  background: var(--surface);
   padding: 11px 13px;
   color: var(--ink);
   /* iOS Safari zooms into focused fields with text smaller than 16px. */
@@ -91,7 +161,7 @@ select {
   margin-top: 6px;
 }
 input:disabled {
-  background: #edf0e8;
+  background: var(--field-disabled);
 }
 textarea {
   min-height: 110px;
@@ -125,9 +195,11 @@ h2 {
 p {
   margin-bottom: 16px;
 }
+/* The rule is drawn in its text color, which replaces the browser's gray. */
 hr {
   border: 0;
-  border-top: 1px solid var(--line);
+  border-top: 1px solid;
+  color: var(--line);
   margin: 24px 0;
 }
 .muted {
@@ -145,21 +217,21 @@ hr {
 }
 .primary {
   background: var(--ink);
-  color: var(--white);
+  color: var(--surface);
 }
 .primary:hover {
-  background: #28554a;
+  background: var(--primary-hover);
 }
 .secondary {
-  border: 1px solid #b2c1b4;
-  background: var(--white);
+  border: 1px solid var(--border);
+  background: var(--surface);
 }
 .danger {
   background: var(--red);
-  color: var(--white);
+  color: var(--surface);
 }
 .danger:hover {
-  background: #812c2c;
+  background: var(--danger-hover);
 }
 .wide {
   width: 100%;
@@ -175,8 +247,8 @@ hr {
 }
 .error {
   color: var(--red);
-  background: #f8eae4;
-  border: 1px solid #e9c9be;
+  background: var(--error-bg);
+  border: 1px solid var(--error-border);
   padding: 12px 15px;
   border-radius: 8px;
   margin-bottom: 20px;
@@ -196,7 +268,7 @@ hr {
 }
 .brand span {
   font-size: 12px;
-  color: #88a841;
+  color: var(--brand-dot);
   margin-left: 4px;
   vertical-align: middle;
 }
@@ -262,7 +334,7 @@ hr {
   position: relative;
   width: 72px;
   height: 108px;
-  background: linear-gradient(145deg, #315a4b, #b4c29a);
+  background: linear-gradient(145deg, var(--poster-from), var(--poster-to));
   border-radius: 6px;
   overflow: hidden;
   flex-shrink: 0;
@@ -275,7 +347,7 @@ hr {
   place-items: center;
   height: 100%;
   font-size: 32px;
-  color: #e7edda;
+  color: var(--poster-letter);
   font-family: Georgia, serif;
 }
 .poster.large {
@@ -289,7 +361,7 @@ hr {
   flex-wrap: wrap;
 }
 .empty-card {
-  border: 1px dashed #bac8b8;
+  border: 1px dashed var(--border);
   border-radius: 12px;
   padding: 40px;
   text-align: center;
@@ -333,9 +405,9 @@ hr {
   max-width: 520px;
   margin-top: 16px;
   padding: 16px;
-  border: 1px solid #e9c9be;
+  border: 1px solid var(--error-border);
   border-radius: 10px;
-  background: var(--white);
+  background: var(--surface);
 }
 .confirmation p {
   margin-bottom: 12px;
@@ -358,7 +430,7 @@ hr {
   padding: 6px 8px 6px 16px;
   border: 1px solid var(--line);
   border-radius: 10px;
-  background: var(--white);
+  background: var(--surface);
 }
 .page-notice p {
   flex: 1 1 auto;

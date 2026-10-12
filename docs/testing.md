@@ -325,6 +325,12 @@ recipients. A full run checks:
   chevron. Watch together prompts a viewer without saved services to save
   them on Account.
 - Invitations can be created and revoked.
+- In both the light and dark color schemes, every visible text meets 4.5:1
+  and only theme colors are painted. This covers sign-in, setup, credits, and
+  member pages with feeds, menus, notifications, and confirmations at phone
+  and desktop widths, and the offline page at phone width.
+  `tests/app/theme.test.ts` checks that stylesheets use only theme values,
+  that each light value has a dark one, and the contrast of their pairings.
 - A failed feed entry, comment, title header, Friends row, profile,
   confirmation, invitation, or sign-out action shows its error beneath that
   control at phone and desktop widths. The error describes the control, other

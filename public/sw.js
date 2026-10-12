@@ -7,13 +7,36 @@ const offlinePage = `<!doctype html>
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#f7f6f0" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" content="#f7f6f0" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0f1a17" media="(prefers-color-scheme: dark)" />
     <title>Offline · Screenr</title>
     <style>
+      /* The app's theme values from src/app/style.css, in both themes. */
+      :root {
+        color-scheme: light dark;
+        --paper: #f7f6f0;
+        --surface: #fffef9;
+        --ink: #163c34;
+        --muted: #627068;
+        --line: #dfe5db;
+        --primary-hover: #28554a;
+        --brand-dot: #88a841;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --paper: #0f1a17;
+          --surface: #182621;
+          --ink: #eeece2;
+          --muted: #9aac9f;
+          --line: #2a3a34;
+          --primary-hover: #d3d9cc;
+        }
+      }
       body {
         margin: 0;
-        background: #f7f6f0;
-        color: #163c34;
+        background: var(--paper);
+        color: var(--ink);
         font: 15px/1.6 "Avenir Next", Avenir, -apple-system, BlinkMacSystemFont,
           "Segoe UI", sans-serif;
       }
@@ -31,14 +54,14 @@ const offlinePage = `<!doctype html>
       }
       .brand span {
         font-size: 12px;
-        color: #88a841;
+        color: var(--brand-dot);
         margin-left: 4px;
         vertical-align: middle;
       }
       section {
         margin: 35px 0 24px;
-        background: #fffef9;
-        border: 1px solid #dfe5db;
+        background: var(--surface);
+        border: 1px solid var(--line);
         border-radius: 18px;
         padding: 45px;
         text-align: left;
@@ -52,19 +75,19 @@ const offlinePage = `<!doctype html>
       }
       section p {
         margin: 0 0 23px;
-        color: #627068;
+        color: var(--muted);
       }
       a {
         display: inline-block;
         border-radius: 8px;
         padding: 10px 17px;
-        background: #163c34;
-        color: #fffef9;
+        background: var(--ink);
+        color: var(--surface);
         font-weight: 600;
         text-decoration: none;
       }
       a:hover {
-        background: #28554a;
+        background: var(--primary-hover);
       }
       @media (max-width: 560px) {
         main {

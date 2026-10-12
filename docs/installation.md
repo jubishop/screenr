@@ -12,7 +12,10 @@ icons are generated, and the offline page its service worker shows.
 Screenr is installable to the home screen with no offline mode
 ([launch platform decision](product-brief.md#launch-platform--2026-09-04)).
 `src/app/manifest.ts` serves `/manifest.webmanifest` with standalone display.
-The root layout sets the `#f7f6f0` theme color and the iOS home-screen title.
+The root layout sets the iOS home-screen title, declares light and dark color
+schemes, and sets one theme color per scheme: `#f7f6f0` for light and
+`#0f1a17` for dark, matching each theme's page color. The manifest keeps the
+light `#f7f6f0` for its theme and background colors.
 Next's file conventions add head links for `src/app/favicon.ico` (16, 32, and
 48 pixels), `src/app/icon.svg`, and the 180-pixel `src/app/apple-icon.png`.
 The manifest lists 192- and 512-pixel icons and a 512-pixel maskable icon in
@@ -36,18 +39,21 @@ The root layout registers `public/sw.js` on every page. The worker passes page
 loads to the network with navigation preload and returns its built-in
 "You’re offline" page only when a page load fails. It ignores other requests
 and stores nothing in Cache Storage, so it never shows stale feeds, titles, or
-member data. The page is part of the worker script, so browsers pick up an
-edited page with the changed worker at their next update check. Browsers
-without service workers keep their own offline error. The
-[Content-Security-Policy](deployment.md#provisioning) allows workers only from
-Screenr.
+member data. The page follows the device's light or dark setting with the
+app's theme values for the colors it uses, which `tests/app/theme.test.ts`
+keeps in step with `src/app/style.css`. The page is part of the worker
+script, so browsers pick up an edited page with the changed worker at their
+next update check. Browsers without service workers keep their own offline
+error. The [Content-Security-Policy](deployment.md#provisioning) allows
+workers only from Screenr.
 
 ## Tests
 
 `tests/browser/installation.spec.ts` checks the head links on sign-in and
 member pages and the manifest and icon responses for signed-out requests. It
-also checks icon sizes, opacity, and the maskable safe zone, and that the
-offline page appears with the network off while Cache Storage stays empty.
+also checks the theme color for each color scheme, icon sizes, opacity, and
+the maskable safe zone, and that the offline page appears with the network off
+while Cache Storage stays empty, in both color schemes.
 Page loads in other browser tests also pass through the worker. Playwright
 does not route requests that a service worker handles, so a test that
 intercepts page loads should create its context with

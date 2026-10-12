@@ -52,6 +52,8 @@ test flow, and [Testing Screenr](docs/testing.md) for the automated suites.
   acceptances, comments, and replies, with optional activity email. Account
   settings edit the display name, username, and profile photo, connect
   Google, and save streaming services.
+- **Appearance:** Every page, including sign-in, setup, credits, and the
+  offline page, follows the device's light or dark appearance setting.
 - **Home screen:** Members can add Screenr to a phone's home screen and open
   it as a standalone app. Offline page loads show a plain offline page; there
   is no offline content.
@@ -74,8 +76,6 @@ Remaining product features are tracked as
   ([#103](https://github.com/jubishop/screenr/issues/103))
 - A ranked top 10 on each profile
   ([#99](https://github.com/jubishop/screenr/issues/99))
-- A dark theme that follows the system setting
-  ([#171](https://github.com/jubishop/screenr/issues/171))
 
 ## Stack and code map
 

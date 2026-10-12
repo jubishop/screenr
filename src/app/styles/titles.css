@@ -58,8 +58,8 @@
   padding: 6px;
   border: 1px solid var(--line);
   border-radius: 10px;
-  background: var(--white);
-  box-shadow: 0 10px 30px #163c3424;
+  background: var(--surface);
+  box-shadow: 0 10px 30px var(--shadow);
 }
 .status-panel [role="menu"] {
   display: grid;
@@ -134,7 +134,7 @@
   padding: 7px 12px;
   border: 1px solid var(--line);
   border-radius: 8px;
-  background: var(--white);
+  background: var(--surface);
 }
 .availability-group li span {
   min-width: 0;
@@ -174,7 +174,7 @@
   aspect-ratio: 16 / 9;
   min-height: 200px;
   border: 0;
-  background: #000;
+  background: var(--player);
 }
 .trailer-player + p {
   margin: 8px 0 0;

@@ -20,9 +20,15 @@ export const metadata: Metadata = {
   appleWebApp: { title: "Screenr" },
 };
 // Pages extend under the device's safe areas and pad themselves clear of them.
+// The theme follows the device's appearance setting; each theme color matches
+// that theme's --paper in style.css.
 export const viewport: Viewport = {
   viewportFit: "cover",
-  themeColor: "#f7f6f0",
+  colorScheme: "light dark",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#f7f6f0" },
+    { media: "(prefers-color-scheme: dark)", color: "#0f1a17" },
+  ],
 };
 export default function Layout({ children }: { children: React.ReactNode }) {
   return (
