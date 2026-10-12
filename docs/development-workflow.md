@@ -52,8 +52,7 @@ security updates. Add weekly Dependabot version updates for the `npm` and
 `github-actions` ecosystems. They keep exact npm versions and commit-SHA
 Action pins. Group minor and patch updates into one pull request per
 ecosystem, and open major updates separately. Every update pull request runs
-the full CI gate and merges only after review and passing CI. Implementation
-is tracked in [issue #111](https://github.com/jubishop/screenr/issues/111).
+the full CI gate and merges only after review and passing CI.
 
 **Why:** The user chose automatic update pull requests so security fixes and
 routine releases do not depend on someone noticing them. This follows the
@@ -63,6 +62,28 @@ keeping the lockfile.
 
 **Rejected alternatives:** Security updates only, alerts only, and fully
 manual updates.
+
+Vulnerability alerts and Dependabot security updates are repository settings,
+enabled on 2026-10-12. `gh api repos/jubishop/screenr/vulnerability-alerts`
+succeeds only while alerts are on, and
+`gh api repos/jubishop/screenr/automated-security-fixes` reports whether
+security updates are on.
+
+[`.github/dependabot.yml`](../.github/dependabot.yml) schedules the weekly
+version updates. The npm `increase` strategy moves each exact `package.json`
+version to the new release, and Action updates keep commit-SHA pins. One
+group per ecosystem collects minor and patch updates; every major update
+opens its own pull request. Update pull requests carry no labels, so
+Dependabot does not add labels outside the repository's set.
+
+Dependabot pull requests run [the check workflow](../.github/workflows/check.yml),
+including `bin/check --full`, like any other pull request. GitHub gives them
+a read-only token and no Actions secrets, and the check job needs neither.
+They cannot deploy: `bin/deployment-decision` selects deployment only for
+pushes and manual runs on `main`, and the `production` environment accepts
+only `main`.
+Merging an update pull request pushes to `main`, which runs full CI and
+deploys.
 
 ## Checks
 
