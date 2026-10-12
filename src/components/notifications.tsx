@@ -13,6 +13,7 @@ import { api, useInteractive } from "./client";
 import { ActivityTime } from "./activity-time";
 import { Avatar } from "./avatar";
 import { Confirmation } from "./confirmation";
+import { ActionButton } from "./action-button";
 
 type Item = NotificationPage["items"][number];
 
@@ -227,21 +228,21 @@ export function Notifications({
       );
     return (
       <div className="notification-actions">
-        <button
+        <ActionButton
           className="primary"
-          disabled={busy}
+          unavailable={busy}
           onClick={() => void respond(item, "accept")}
         >
           Accept
-        </button>
-        <button
+        </ActionButton>
+        <ActionButton
           className="secondary"
-          disabled={busy}
+          unavailable={busy}
           ref={focusWhen(`decline-${item.id}`)}
           onClick={() => setDeclining(item.id)}
         >
           Decline
-        </button>
+        </ActionButton>
       </div>
     );
   }
@@ -342,10 +343,10 @@ export function Notifications({
             className="notification-filters"
           >
             {([false, true] as const).map((onlyUnread) => (
-              <button
+              <ActionButton
                 key={String(onlyUnread)}
                 aria-pressed={unreadOnly === onlyUnread}
-                disabled={busy}
+                unavailable={busy}
                 onClick={() => {
                   if (unreadOnly === onlyUnread && cursor === null) return;
                   changeView();
@@ -354,16 +355,16 @@ export function Notifications({
                 }}
               >
                 {onlyUnread ? "Unread" : "All"}
-              </button>
+              </ActionButton>
             ))}
           </div>
-          <button
+          <ActionButton
             className="text-button"
-            disabled={busy || !page?.unread}
+            unavailable={busy || !page?.unread}
             onClick={() => void markAll()}
           >
             Mark all as read
-          </button>
+          </ActionButton>
         </div>
         <div className="notification-content">
           {error ? (
@@ -386,9 +387,9 @@ export function Notifications({
                       key={item.id}
                       className={`notification-item${item.read ? "" : " unread"}`}
                     >
-                      <button
+                      <ActionButton
                         className="notification-select"
-                        disabled={busy}
+                        unavailable={busy}
                         onClick={() => void select(item)}
                       >
                         <Avatar
@@ -411,7 +412,7 @@ export function Notifications({
                             aria-label="Unread"
                           />
                         )}
-                      </button>
+                      </ActionButton>
                       {requestControls(item)}
                     </li>
                   ))}
@@ -434,21 +435,21 @@ export function Notifications({
               )}
               <div className="notification-pagination">
                 {cursor && (
-                  <button
+                  <ActionButton
                     className="secondary"
-                    disabled={busy}
+                    unavailable={busy}
                     onClick={() => {
                       changeView();
                       setCursor(null);
                     }}
                   >
                     Latest notifications
-                  </button>
+                  </ActionButton>
                 )}
                 {page.next && (
-                  <button
+                  <ActionButton
                     className="secondary"
-                    disabled={busy}
+                    unavailable={busy}
                     onClick={() => {
                       if (!page.next || !page.through) return;
                       changeView();
@@ -456,7 +457,7 @@ export function Notifications({
                     }}
                   >
                     Earlier notifications
-                  </button>
+                  </ActionButton>
                 )}
               </div>
             </>

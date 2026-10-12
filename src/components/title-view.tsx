@@ -8,6 +8,7 @@ import { TitleAvailability } from "./title-availability";
 import { TitleCommentComposer } from "./title-comment";
 import { TitleTrailer } from "./title-trailer";
 import { useActionError } from "./action-error";
+import { ActionButton } from "./action-button";
 // Suggestion tiles and Watch together open title pages with ?from=<surface>,
 // so a Want to watch save here reports where the member found the title.
 const origins: SaveSurface[] = [
@@ -62,9 +63,10 @@ export function TitleView({
                 {data.title.overview || "No synopsis available."}
               </p>
               <div className="inline-actions">
-                <button
+                <ActionButton
                   className="primary"
-                  disabled={busy || !interactive}
+                  disabled={!interactive}
+                  unavailable={busy}
                   aria-describedby={failure.describedBy("recommended")}
                   onClick={() =>
                     void failure.run("recommended", () =>
@@ -79,10 +81,11 @@ export function TitleView({
                   {own.some((c) => c.recommended)
                     ? "✓ Recommended"
                     : "Recommend to friends"}
-                </button>
-                <button
+                </ActionButton>
+                <ActionButton
                   className="secondary"
-                  disabled={busy || !interactive}
+                  disabled={!interactive}
+                  unavailable={busy}
                   aria-describedby={failure.describedBy("want_to_watch")}
                   onClick={() =>
                     void failure.run("want_to_watch", () =>
@@ -98,7 +101,7 @@ export function TitleView({
                   {own.some((c) => c.want_to_watch)
                     ? "✓ Want to watch"
                     : "+ Want to watch"}
-                </button>
+                </ActionButton>
               </div>
               {failure.alert}
             </div>

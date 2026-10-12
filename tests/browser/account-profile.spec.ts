@@ -153,8 +153,8 @@ test("account profile editing saves both names, preserves drafts, and updates pr
     await expect(
       owner.getByRole("button", { name: "Saving…", exact: true }),
     ).toBeDisabled();
-    await expect(name).toBeDisabled();
-    await expect(username).toBeDisabled();
+    await expect(name).not.toBeEditable();
+    await expect(username).not.toBeEditable();
     await expect(cancel).toBeDisabled();
   } finally {
     release();
@@ -338,7 +338,7 @@ test("profile display name editing preserves drafts, saves, and updates existing
     await expect(
       owner.getByRole("button", { name: "Saving…", exact: true }),
     ).toBeDisabled();
-    await expect(input).toBeDisabled();
+    await expect(input).not.toBeEditable();
     await expect(cancel).toBeDisabled();
   } finally {
     release();

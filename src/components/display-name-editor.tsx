@@ -1,6 +1,7 @@
 "use client";
 import { useRef, useState, type ReactNode } from "react";
 import { useInteractive } from "./client";
+import { ActionButton } from "./action-button";
 
 // Children render under the name, above the form while editing.
 export function DisplayNameEditor({
@@ -76,22 +77,25 @@ export function DisplayNameEditor({
               maxLength={60}
               autoComplete="name"
               value={draft}
-              disabled={busy}
+              readOnly={busy}
               onChange={(event) => setDraft(event.target.value)}
             />
           </label>
           <div className="inline-actions">
-            <button className="primary" disabled={busy || !draft.trim()}>
+            <ActionButton
+              className="primary"
+              unavailable={busy || !draft.trim()}
+            >
               {busy ? "Saving…" : "Save"}
-            </button>
-            <button
+            </ActionButton>
+            <ActionButton
               className="secondary"
               type="button"
-              disabled={busy}
+              unavailable={busy}
               onClick={close}
             >
               Cancel
-            </button>
+            </ActionButton>
           </div>
           {error && (
             <p className="error" role="alert">

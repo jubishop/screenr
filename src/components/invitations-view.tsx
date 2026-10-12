@@ -6,6 +6,7 @@ import type { Person } from "../shared";
 import { dateLabel, useInteractive } from "./client";
 import { InvitationLink } from "./invitation-link";
 import { useActionError } from "./action-error";
+import { ActionButton } from "./action-button";
 
 type Invitation = Extract<
   ScreenData,
@@ -58,13 +59,14 @@ export function InvitationsView({
             ))}
           </select>
         </label>
-        <button
+        <ActionButton
           className="primary"
-          disabled={busy || !interactive}
+          disabled={!interactive}
+          unavailable={busy}
           aria-describedby={failure.describedBy("create")}
         >
           Create invitation
-        </button>
+        </ActionButton>
       </form>
       {failure.alert}
       <div className="invite-list">
@@ -75,7 +77,8 @@ export function InvitationsView({
           <InvitationCard
             key={invite.id}
             invite={invite}
-            disabled={busy || !interactive}
+            disabled={!interactive}
+            busy={busy}
             revoke={() => mutate("revoke-invite", { id: invite.id })}
           />
         ))}
@@ -87,10 +90,12 @@ export function InvitationsView({
 function InvitationCard({
   invite,
   disabled,
+  busy,
   revoke,
 }: {
   invite: Invitation;
   disabled: boolean;
+  busy: boolean;
   revoke: () => Promise<unknown>;
 }) {
   const interactive = useInteractive();
@@ -101,14 +106,15 @@ function InvitationCard({
         <strong>
           {invite.uses} of {invite.max_uses} signups
         </strong>
-        <button
+        <ActionButton
           className="text-button"
           disabled={disabled}
+          unavailable={busy}
           aria-describedby={failure.describedBy("revoke")}
           onClick={() => void failure.run("revoke", revoke)}
         >
           Revoke
-        </button>
+        </ActionButton>
       </div>
       {failure.alert}
       <p className="small muted">

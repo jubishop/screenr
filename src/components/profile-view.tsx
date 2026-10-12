@@ -9,6 +9,7 @@ import { Avatar } from "./avatar";
 import { Icon } from "./icons";
 import { Confirmation } from "./confirmation";
 import { useActionError } from "./action-error";
+import { ActionButton } from "./action-button";
 
 type Profile = Extract<ScreenData, { kind: "profile" }>["profile"];
 type Guarded = "remove" | "block";
@@ -109,7 +110,7 @@ function ProfileActions({
   relationship: (target: string, action: string) => Promise<void>;
 }) {
   const interactive = useInteractive();
-  const disabled = busy || !interactive;
+  const row = useRef<HTMLDivElement>(null);
   const more = useRef<HTMLButtonElement>(null);
   const [choice, setChoice] = useState<Guarded | null>(null);
   // A friendship that ended elsewhere no longer offers Unfriend.
@@ -120,24 +121,34 @@ function ProfileActions({
   // confirmation keeps its own until it closes.
   const failure = useActionError();
   const guarded = useActionError();
-  const act = (action: string) => ({
-    "aria-describedby": failure.describedBy(action),
-    onClick: () =>
-      void failure.run(action, () => relationship(profile.user_id, action)),
-  });
-  // Return focus to More actions once it is enabled again after an action.
-  const restoreFocus = useRef(false);
+  // Pending actions keep focus. Once a focused action finishes, focus moves
+  // to the control that replaced it, such as Watch together after Accept.
+  // It returns to More actions when a confirmation closes.
+  const restoreFocus = useRef<"row" | "more" | null>(null);
   useEffect(() => {
-    if (!restoreFocus.current || disabled) return;
-    restoreFocus.current = false;
-    more.current?.focus();
+    if (!restoreFocus.current || busy) return;
+    const target = restoreFocus.current;
+    restoreFocus.current = null;
+    if (target === "more") more.current?.focus();
+    else if (document.activeElement === document.body)
+      (row.current?.firstElementChild as HTMLElement | null)?.focus();
+  });
+  const act = (action: string) => ({
+    disabled: !interactive,
+    unavailable: busy,
+    "aria-describedby": failure.describedBy(action),
+    onClick: (event: React.MouseEvent<HTMLButtonElement>) => {
+      if (event.currentTarget === document.activeElement)
+        restoreFocus.current = "row";
+      void failure.run(action, () => relationship(profile.user_id, action));
+    },
   });
   function choose(value: Guarded | null) {
     guarded.clear();
     setChoice(value);
   }
   function close() {
-    restoreFocus.current = true;
+    restoreFocus.current = "more";
     choose(null);
   }
   async function confirm() {
@@ -153,7 +164,7 @@ function ProfileActions({
       : "";
   return (
     <>
-      <div className="inline-actions profile-actions">
+      <div className="inline-actions profile-actions" ref={row}>
         {profile.accepted_at ? (
           <Link
             className="primary button"
@@ -163,22 +174,23 @@ function ProfileActions({
             Watch together
           </Link>
         ) : profile.requested_by === user.user_id ? (
-          <button className="secondary" disabled={disabled} {...act("remove")}>
+          <ActionButton className="secondary" {...act("remove")}>
             Cancel friend request
-          </button>
+          </ActionButton>
         ) : profile.requested_by ? (
-          <button className="primary" disabled={disabled} {...act("accept")}>
+          <ActionButton className="primary" {...act("accept")}>
             Accept friend request
-          </button>
+          </ActionButton>
         ) : (
-          <button className="primary" disabled={disabled} {...act("request")}>
+          <ActionButton className="primary" {...act("request")}>
             Send friend request
-          </button>
+          </ActionButton>
         )}
         <MoreActions
           label={`More actions for ${name}`}
           buttonRef={more}
-          disabled={disabled}
+          disabled={!interactive}
+          unavailable={busy}
           items={[
             ...(profile.accepted_at
               ? [{ label: "Unfriend", value: "remove" as const }]
@@ -217,12 +229,14 @@ function MoreActions<T extends string>({
   label,
   items,
   disabled,
+  unavailable,
   buttonRef,
   onSelect,
 }: {
   label: string;
   items: { label: string; value: T }[];
   disabled: boolean;
+  unavailable: boolean;
   buttonRef: RefObject<HTMLButtonElement | null>;
   onSelect: (value: T) => void;
 }) {
@@ -247,7 +261,7 @@ function MoreActions<T extends string>({
     document.addEventListener("pointerdown", outside);
     return () => document.removeEventListener("pointerdown", outside);
   }, [open]);
-  if (open && disabled) setOpen(false);
+  if (open && (disabled || unavailable)) setOpen(false);
   function show(index: number) {
     start.current = index;
     setOpen(true);
@@ -274,7 +288,7 @@ function MoreActions<T extends string>({
         }
       }}
     >
-      <button
+      <ActionButton
         ref={buttonRef}
         id={buttonId}
         type="button"
@@ -285,15 +299,16 @@ function MoreActions<T extends string>({
         aria-expanded={open}
         aria-controls={open ? menuId : undefined}
         disabled={disabled}
+        unavailable={unavailable}
         onClick={() => (open ? setOpen(false) : show(0))}
         onKeyDown={(event) => {
           if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
           event.preventDefault();
-          show(event.key === "ArrowDown" ? 0 : -1);
+          if (!unavailable) show(event.key === "ArrowDown" ? 0 : -1);
         }}
       >
         <Icon name="more" />
-      </button>
+      </ActionButton>
       {open && (
         <div
           ref={menu}

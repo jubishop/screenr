@@ -6,19 +6,22 @@ import type { Person } from "../shared";
 import { useInteractive } from "./client";
 import { Avatar } from "./avatar";
 import { useActionError } from "./action-error";
+import { ActionButton } from "./action-button";
 
 type Action = { label: string; run: () => Promise<void>; primary?: boolean };
 
 // One person: avatar, display name, and @username, linking to the profile.
 // The username may wrap beneath the name; actions stay on the same line.
 // Notes, then a failed action's message, take the lines beneath. Blocked
-// people show only the name, since blocking hides the profile.
+// people show only the name, since blocking hides the profile. Pending
+// actions keep focus but ignore presses.
 function PersonRow({
   person,
   note,
   status,
   actions = [],
   disabled = false,
+  busy = false,
   blocked = false,
 }: {
   person: Person;
@@ -26,6 +29,7 @@ function PersonRow({
   status?: string;
   actions?: Action[];
   disabled?: boolean;
+  busy?: boolean;
   blocked?: boolean;
 }) {
   const failure = useActionError();
@@ -55,15 +59,16 @@ function PersonRow({
         <div className="person-actions">
           {status && <span className="small muted">{status}</span>}
           {actions.map(({ label, run, primary }) => (
-            <button
+            <ActionButton
               key={label}
               className={primary ? "primary" : "text-button"}
               disabled={disabled}
+              unavailable={busy}
               aria-describedby={failure.describedBy(label)}
               onClick={() => void failure.run(label, run)}
             >
               {label}
-            </button>
+            </ActionButton>
           ))}
         </div>
       )}
@@ -105,7 +110,6 @@ export function PeopleView({
   const [query, setQuery] = useState("");
   // Retain the draft while failed reads hide the protected snapshot.
   if (!data) return null;
-  const disabled = busy || !interactive;
   const act = (person: Person, action: string) => () =>
     relationship(person.user_id, action);
   const requests = data.connections.filter(
@@ -162,7 +166,8 @@ export function PeopleView({
                 { label: "Accept", run: act(person, "accept"), primary: true },
                 { label: "Decline", run: act(person, "remove") },
               ]}
-              disabled={disabled}
+              disabled={!interactive}
+              busy={busy}
             />
           ))}
         </PeopleSection>
@@ -182,7 +187,8 @@ export function PeopleView({
               person={person}
               status="Request sent"
               actions={[{ label: "Cancel", run: act(person, "remove") }]}
-              disabled={disabled}
+              disabled={!interactive}
+              busy={busy}
             />
           ))}
         </PeopleSection>
@@ -219,7 +225,8 @@ export function PeopleView({
                 primary: true,
               },
             ]}
-            disabled={disabled}
+            disabled={!interactive}
+            busy={busy}
           />
         ))}
         {!data.suggestions.length && (
@@ -238,7 +245,8 @@ export function PeopleView({
               person={person}
               blocked
               actions={[{ label: "Unblock", run: act(person, "unblock") }]}
-              disabled={disabled}
+              disabled={!interactive}
+              busy={busy}
             />
           ))}
         </section>

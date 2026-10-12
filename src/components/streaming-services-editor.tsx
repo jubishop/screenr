@@ -1,6 +1,7 @@
 "use client";
 import { useRef, useState } from "react";
 import { useInteractive } from "./client";
+import { ActionButton } from "./action-button";
 
 export function StreamingServicesEditor({
   services,
@@ -62,7 +63,7 @@ export function StreamingServicesEditor({
               autoFocus
               type="search"
               value={query}
-              disabled={busy}
+              readOnly={busy}
               onChange={(event) => setQuery(event.target.value)}
             />
           </label>
@@ -94,25 +95,25 @@ export function StreamingServicesEditor({
             {!visible.length && <p>No services match that name.</p>}
           </div>
           <div className="inline-actions">
-            <button className="primary" disabled={busy}>
+            <ActionButton className="primary" unavailable={busy}>
               {busy ? "Saving…" : "Save services"}
-            </button>
-            <button
+            </ActionButton>
+            <ActionButton
               type="button"
               className="secondary"
-              disabled={busy}
+              unavailable={busy}
               onClick={close}
             >
               Cancel
-            </button>
-            <button
+            </ActionButton>
+            <ActionButton
               type="button"
               className="text-button"
-              disabled={busy || !draft.length}
+              unavailable={busy || !draft.length}
               onClick={() => setDraft([])}
             >
               Clear selections
-            </button>
+            </ActionButton>
           </div>
           {error && (
             <p className="error" role="alert">

@@ -1,12 +1,12 @@
 "use client";
 import { useId, useRef, useState } from "react";
 import { useInteractive } from "./client";
+import { ActionButton } from "./action-button";
 
 export function InvitationLink({ url }: { url: string }) {
   const interactive = useInteractive();
   const input = useRef<HTMLInputElement>(null);
   const hint = useId();
-  // Use aria-disabled while pending to retain keyboard focus; ignore repeat actions.
   const [pending, setPending] = useState(false);
   const [message, setMessage] = useState("");
 
@@ -60,21 +60,21 @@ export function InvitationLink({ url }: { url: string }) {
         />
       </label>
       <div className="invitation-actions">
-        <button
+        <ActionButton
           type="button"
           className="secondary"
           disabled={!interactive}
-          aria-disabled={pending}
+          unavailable={pending}
           onClick={() => void copy()}
         >
           Copy link
-        </button>
+        </ActionButton>
         {interactive && typeof navigator.share === "function" && (
-          <button
+          <ActionButton
             type="button"
             className="secondary"
             aria-label="Share invitation"
-            aria-disabled={pending}
+            unavailable={pending}
             onClick={() => void share()}
           >
             <svg
@@ -91,7 +91,7 @@ export function InvitationLink({ url }: { url: string }) {
               <path d="M12 15V3m-4 4 4-4 4 4M7 11H4v10h16V11h-3" />
             </svg>
             Share
-          </button>
+          </ActionButton>
         )}
       </div>
       <p id={hint} className="small muted">

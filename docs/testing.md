@@ -301,6 +301,11 @@ recipients. A full run checks:
   confirmation, invitation, or sign-out action shows its error beneath that
   control at phone and desktop widths. The error describes the control, other
   controls stay usable, and no page-level alert appears.
+- Pending feed entry, title header, Post, profile, confirmation, Friends row,
+  notification, invitation, and Account actions keep keyboard focus, and
+  repeated presses send no second request. Focus then stays on the control
+  or moves to its replacement or result. Feed, title, Post, and profile
+  actions are checked at phone and desktop widths.
 - Cookie-free preview requests follow invitation redirects and receive metadata
   in the HTML head for mobile, desktop, and social crawler user agents. The
   public PNG is reachable and has the declared dimensions. Preview requests

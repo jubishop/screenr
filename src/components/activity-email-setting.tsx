@@ -21,11 +21,17 @@ export function ActivityEmailSetting({
         yet.
       </p>
       <label className="checkbox">
+        {/* While saving, the setting keeps focus but ignores changes. */}
         <input
           type="checkbox"
           checked={enabled ?? false}
-          disabled={!interactive || busy || enabled === null}
+          disabled={!interactive || enabled === null}
+          aria-disabled={busy}
+          onClick={(event) => {
+            if (busy) event.preventDefault();
+          }}
           onChange={async (event) => {
+            if (busy) return;
             const selected = event.target.checked;
             setBusy(true);
             setError("");

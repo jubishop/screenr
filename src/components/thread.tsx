@@ -7,6 +7,7 @@ import { ActivityTime } from "./activity-time";
 import { preservePosition } from "./position";
 import { Reactions } from "./reactions";
 import { Avatar } from "./avatar";
+import { ActionButton } from "./action-button";
 import {
   CommentComposer,
   type CommentDraft as Draft,
@@ -188,9 +189,10 @@ export function ThreadView({
         </button>
         {(comment.author_id === user.user_id ||
           currentSnapshot.conversation.owner_id === user.user_id) && (
-          <button
+          <ActionButton
             className="text-button muted"
-            disabled={busy.has(key) || !interactive}
+            disabled={!interactive}
+            unavailable={busy.has(key)}
             aria-describedby={errors[key] ? `${key}-error` : undefined}
             onClick={async () => {
               setBusy((current) => new Set([...current, key]));
@@ -213,7 +215,7 @@ export function ThreadView({
             }}
           >
             {comment.author_id === user.user_id ? "Delete" : "Remove"}
-          </button>
+          </ActionButton>
         )}
       </>
     );

@@ -1,5 +1,6 @@
 "use client";
 import type { ReactNode, Ref } from "react";
+import { ActionButton } from "./action-button";
 
 export type CommentDraft = { body: string; spoiler: boolean };
 
@@ -76,12 +77,14 @@ export function CommentComposer({
           >
             Cancel
           </button>
-          <button
+          {/* Post stays focusable while posting and once the draft clears. */}
+          <ActionButton
             className="primary"
-            disabled={busy || disabled || !interactive || !draft.body.trim()}
+            disabled={!interactive}
+            unavailable={busy || disabled || !draft.body.trim()}
           >
             {busy ? "Posting…" : submitLabel}
-          </button>
+          </ActionButton>
         </div>
       </div>
       {error && (

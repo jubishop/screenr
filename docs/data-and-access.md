@@ -100,7 +100,17 @@ every three seconds while visible,
 waiting for any active refresh to finish, and refresh on focus. Each refresh
 has a ten-second deadline; failure clears server content until a successful
 refresh. Writes and other requests stop waiting after fifteen seconds, which
-re-enables their controls. Proxy error pages, empty bodies, and other
+re-enables their controls. While a write is pending, its button and the
+others it blocks stay focusable with `aria-disabled` and ignore presses, and
+text fields become read-only, so keyboard focus stays on the pressed control
+([issue #142](https://github.com/jubishop/screenr/issues/142)).
+`src/components/action-button.tsx` is the shared button; `disabled` remains
+only before hydration. Focus stays there after the write, or moves to the
+control that replaced it: Watch together after accepting on a profile, the
+notification's result, or More actions after a confirmation closes. Where a
+successful write removes its button, such as Delete,
+[issue #191](https://github.com/jubishop/screenr/issues/191) tracks where
+focus goes. Proxy error pages, empty bodies, and other
 unreadable replies show a message asking the member to try again instead of
 parser errors. A failed write shows its message as an alert beneath the
 control that started it, in the same entry, comment, person row, invitation,

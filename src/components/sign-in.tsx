@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { codeLimitMessage } from "../shared";
 import { authClient, api, signOut, useInteractive } from "./client";
+import { ActionButton } from "./action-button";
 
 export function SignIn({
   invited,
@@ -62,9 +63,10 @@ export function SignIn({
             : "Welcome back. Sign in to your circle. New members need an invitation."}
         </p>
         {googleEnabled && (
-          <button
+          <ActionButton
             className="secondary wide"
-            disabled={busy || !interactive}
+            disabled={!interactive}
+            unavailable={busy}
             onClick={async () => {
               setBusy(true);
               setError("");
@@ -92,7 +94,7 @@ export function SignIn({
             }}
           >
             Continue with Google
-          </button>
+          </ActionButton>
         )}
         {googleEnabled && <div className="divider">or use an email code</div>}
         <form onSubmit={submit}>
@@ -128,9 +130,13 @@ export function SignIn({
               {error}
             </p>
           )}
-          <button className="primary wide" disabled={busy || !interactive}>
+          <ActionButton
+            className="primary wide"
+            disabled={!interactive}
+            unavailable={busy}
+          >
             {busy ? "One moment…" : sent ? "Sign in" : "Send sign-in code"}
-          </button>
+          </ActionButton>
           {sent && (
             <button
               type="button"
@@ -263,7 +269,11 @@ export function Setup({
               {error}
             </p>
           )}
-          <button className="primary wide" disabled={busy || !interactive}>
+          <ActionButton
+            className="primary wide"
+            disabled={!interactive}
+            unavailable={busy}
+          >
             {busy
               ? "One moment…"
               : verified
@@ -271,10 +281,11 @@ export function Setup({
                 : sent
                   ? "Verify email"
                   : "Send verification code"}
-          </button>
+          </ActionButton>
         </form>
-        <button
-          disabled={busy || !interactive}
+        <ActionButton
+          disabled={!interactive}
+          unavailable={busy}
           className="text-button"
           onClick={async () => {
             setBusy(true);
@@ -289,7 +300,7 @@ export function Setup({
           }}
         >
           Sign out
-        </button>
+        </ActionButton>
       </section>
     </main>
   );

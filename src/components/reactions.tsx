@@ -6,6 +6,7 @@ import {
   type ReactionSummary,
 } from "../shared";
 import { api, useInteractive } from "./client";
+import { ActionButton } from "./action-button";
 
 // Lay out an entry's or reply's actions on one wrapping line: the caller's
 // actions first, then the reaction counts and React. The picker and any
@@ -72,7 +73,7 @@ export function Reactions({
           {reactionOptions.map((option) => {
             const reaction = summary.find((r) => r.kind === option.kind);
             return reaction ? (
-              <button
+              <ActionButton
                 key={option.kind}
                 type="button"
                 className="reaction-count"
@@ -83,27 +84,26 @@ export function Reactions({
                     ? `Remove your ${option.label} reaction`
                     : `React with ${option.label}`
                 }
-                disabled={busy || !interactive}
+                disabled={!interactive}
+                unavailable={busy}
                 onClick={() => void react(option.kind)}
               >
                 <span aria-hidden="true">{option.emoji}</span> {reaction.count}
-              </button>
+              </ActionButton>
             ) : null;
           })}
-          <button
+          <ActionButton
             ref={trigger}
             type="button"
             className="text-button reaction-trigger"
             aria-expanded={open}
             aria-controls={pickerId}
             disabled={!interactive}
-            aria-disabled={busy}
-            onClick={() => {
-              if (!busy) setOpen((value) => !value);
-            }}
+            unavailable={busy}
+            onClick={() => setOpen((value) => !value)}
           >
             React
-          </button>
+          </ActionButton>
         </div>
       </div>
       {open && (
@@ -115,7 +115,7 @@ export function Reactions({
           onKeyDown={dismiss}
         >
           {reactionOptions.map((option) => (
-            <button
+            <ActionButton
               key={option.kind}
               type="button"
               aria-label={option.label}
@@ -123,12 +123,13 @@ export function Reactions({
               aria-pressed={summary.some(
                 (r) => r.kind === option.kind && r.reacted,
               )}
-              disabled={busy || !interactive}
+              disabled={!interactive}
+              unavailable={busy}
               onClick={() => void react(option.kind)}
             >
               <span aria-hidden="true">{option.emoji}</span>
               <span>{option.label}</span>
-            </button>
+            </ActionButton>
           ))}
         </div>
       )}

@@ -12,6 +12,7 @@ import { Avatar } from "./avatar";
 import { useActionError } from "./action-error";
 import { ActivityTime } from "./activity-time";
 import { titleDetails } from "./title-card";
+import { ActionButton } from "./action-button";
 
 type Known = Map<string, { activity: string; comments: Set<string> }>;
 function capture(items: FeedItem[]): Known {
@@ -238,21 +239,23 @@ function FeedEntry({
       {item.item_type === "comment" &&
         item.active &&
         item.owner_id === user.user_id && (
-          <button
+          <ActionButton
             type="button"
             className="text-button muted"
-            disabled={busy || deleting || !interactive}
+            disabled={!interactive}
+            unavailable={busy || deleting}
             aria-describedby={failure.describedBy("delete")}
             onClick={() => void deleteComment()}
           >
             {deleting ? "Deleting…" : "Delete"}
-          </button>
+          </ActionButton>
         )}
       {item.owner_id !== user.user_id && (
         <>
-          <button
+          <ActionButton
             className="text-button"
-            disabled={busy || !interactive}
+            disabled={!interactive}
+            unavailable={busy}
             aria-describedby={failure.describedBy("want_to_watch")}
             onClick={() =>
               void failure.run("want_to_watch", () =>
@@ -268,10 +271,11 @@ function FeedEntry({
             }
           >
             {item.viewer_want_to_watch ? "✓ Want to watch" : "+ Want to watch"}
-          </button>
-          <button
+          </ActionButton>
+          <ActionButton
             className="text-button"
-            disabled={busy || !interactive}
+            disabled={!interactive}
+            unavailable={busy}
             aria-describedby={failure.describedBy("recommended")}
             onClick={() =>
               void failure.run("recommended", () =>
@@ -284,21 +288,21 @@ function FeedEntry({
             }
           >
             {item.viewer_recommended ? "✓ Recommended" : "+ Recommend"}
-          </button>
+          </ActionButton>
         </>
       )}
       <span className="copy-link">
-        <button
+        <ActionButton
           type="button"
           className="icon-button"
           aria-label="Copy link to discussion"
           title="Copy link to discussion"
           disabled={!interactive}
-          aria-disabled={copying}
+          unavailable={copying}
           onClick={() => void copyDiscussion()}
         >
           <Icon name="link" />
-        </button>
+        </ActionButton>
         <span className="copy-status small" role="status">
           {copyMessage}
         </span>

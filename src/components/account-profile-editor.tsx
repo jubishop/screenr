@@ -3,6 +3,7 @@ import Link from "next/link";
 import { useRef, useState } from "react";
 import type { Person } from "../shared";
 import { useInteractive } from "./client";
+import { ActionButton } from "./action-button";
 
 export function AccountProfileEditor({
   user,
@@ -64,7 +65,7 @@ export function AccountProfileEditor({
               maxLength={60}
               autoComplete="name"
               value={draft.name}
-              disabled={busy}
+              readOnly={busy}
               onChange={(event) =>
                 setDraft({ ...draft, name: event.target.value })
               }
@@ -80,7 +81,7 @@ export function AccountProfileEditor({
               spellCheck={false}
               aria-describedby="username-help"
               value={draft.username}
-              disabled={busy}
+              readOnly={busy}
               onChange={(event) =>
                 setDraft({ ...draft, username: event.target.value })
               }
@@ -93,17 +94,17 @@ export function AccountProfileEditor({
             old username.
           </p>
           <div className="inline-actions">
-            <button className="primary" disabled={busy || !valid}>
+            <ActionButton className="primary" unavailable={busy || !valid}>
               {busy ? "Saving…" : "Save"}
-            </button>
-            <button
+            </ActionButton>
+            <ActionButton
               className="secondary"
               type="button"
-              disabled={busy}
+              unavailable={busy}
               onClick={close}
             >
               Cancel
-            </button>
+            </ActionButton>
           </div>
           {error && (
             <p className="error" role="alert">

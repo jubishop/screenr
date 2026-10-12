@@ -1,9 +1,11 @@
 "use client";
 import { useEffect, useId, useRef, type ReactNode } from "react";
+import { ActionButton } from "./action-button";
 
 // The in-page confirmation for destructive actions; never a browser dialog.
 // It states the effect, then offers the action and Cancel. Cancel takes focus,
 // so a reader hears the question and an accidental Enter changes nothing.
+// While the action is pending, both buttons keep focus but ignore presses.
 // A failed action's message, `children`, follows the buttons and describes
 // the action through `describedBy`.
 export function Confirmation({
@@ -32,24 +34,24 @@ export function Confirmation({
     <div className="confirmation" role="group" aria-labelledby={question}>
       <p id={question}>{message}</p>
       <div className="confirmation-actions">
-        <button
+        <ActionButton
           type="button"
           className="danger"
-          disabled={busy}
+          unavailable={busy}
           aria-describedby={describedBy}
           onClick={onConfirm}
         >
           {action}
-        </button>
-        <button
+        </ActionButton>
+        <ActionButton
           type="button"
           className="secondary"
           ref={cancel}
-          disabled={busy}
+          unavailable={busy}
           onClick={onCancel}
         >
           Cancel
-        </button>
+        </ActionButton>
       </div>
       {children}
     </div>
