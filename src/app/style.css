@@ -260,6 +260,12 @@ hr {
 .action-error {
   margin: 8px 0 0;
 }
+/* Diagnostic details on their own line, which long values may wrap. */
+.action-error-details {
+  display: block;
+  margin-top: 4px;
+  overflow-wrap: anywhere;
+}
 .brand {
   font-size: 32px;
   font-weight: 800;

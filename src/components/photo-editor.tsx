@@ -7,55 +7,97 @@ import { Avatar } from "./avatar";
 
 export type PhotoChange = Blob | "remove" | "google";
 
-const side = 512;
 // Caddy accepts request bodies of at most 64 KB (ops/Caddyfile), so uploads
 // stay under 60 KB, within the 200 KB maximum. A 512-pixel JPEG of that size
 // keeps more detail than any avatar shows.
 const uploadTarget = 60 * 1024;
+// Safari's JPEGs are about twice the size of Chromium's at each quality and
+// stop shrinking below about 0.1, so a detailed camera photo can need a low
+// quality, or a smaller size when even that is too large.
+const sides = [512, 384, 256];
+const qualities = [
+  0.86, 0.78, 0.7, 0.62, 0.54, 0.46, 0.38, 0.3, 0.22, 0.14, 0.06,
+];
+
+// A failure's details line names the failed step and what the browser
+// reported, for a member to copy into a report. It omits the file name, which
+// can be personal.
+class PhotoError extends Error {
+  constructor(
+    message: string,
+    readonly details: string,
+  ) {
+    super(message);
+  }
+}
 
 // Crops the center square and resizes it to a 512×512 JPEG in the browser,
-// so the server needs no image library. Reading the file through an image
-// bitmap needs no blob: URL, which the content security policy disallows.
+// or a smaller one when none fits the upload limit, so the server needs no
+// image library. Reading the file through an image bitmap needs no blob: URL,
+// which the content security policy disallows.
 export async function preparePhoto(file: Blob) {
+  // Each step adds what it learned, so details cover every step that ran.
+  const details = [`${file.type || "unknown type"}, ${file.size} bytes`];
+  const failure = (step: string, message: string) =>
+    new PhotoError(message, `Details: ${step} failed; ${details.join("; ")}`);
   let bitmap: ImageBitmap;
   try {
     bitmap = await createImageBitmap(file);
   } catch {
-    throw new Error(
+    throw failure(
+      "open",
       "This photo could not be opened. Choose a JPEG or PNG image.",
     );
   }
+  details[0] += `, ${bitmap.width}×${bitmap.height}`;
   try {
-    const crop = Math.min(bitmap.width, bitmap.height);
     const canvas = document.createElement("canvas");
-    canvas.width = canvas.height = side;
     const context = canvas.getContext("2d");
-    if (!context) throw new Error("This browser could not prepare the photo.");
-    // JPEG has no transparency; transparent areas become white.
-    context.fillStyle = "#fff";
-    context.fillRect(0, 0, side, side);
-    context.imageSmoothingQuality = "high";
-    context.drawImage(
-      bitmap,
-      (bitmap.width - crop) / 2,
-      (bitmap.height - crop) / 2,
-      crop,
-      crop,
-      0,
-      0,
-      side,
-      side,
-    );
-    for (const quality of [0.86, 0.78, 0.7, 0.62, 0.54, 0.46]) {
-      const blob = await new Promise<Blob | null>((resolve) =>
-        canvas.toBlob(resolve, "image/jpeg", quality),
+    if (!context)
+      throw failure("canvas", "This browser could not prepare the photo.");
+    details.push(`limit ${uploadTarget} bytes`);
+    const crop = Math.min(bitmap.width, bitmap.height);
+    for (const side of sides) {
+      // Resizing the canvas clears it and resets the context's settings.
+      canvas.width = canvas.height = side;
+      // JPEG has no transparency; transparent areas become white.
+      context.fillStyle = "#fff";
+      context.fillRect(0, 0, side, side);
+      context.imageSmoothingQuality = "high";
+      context.drawImage(
+        bitmap,
+        (bitmap.width - crop) / 2,
+        (bitmap.height - crop) / 2,
+        crop,
+        crop,
+        0,
+        0,
+        side,
+        side,
       );
-      if (blob && blob.size <= uploadTarget) return blob;
+      const results: string[] = [];
+      let blob: Blob | null = null;
+      for (const quality of qualities) {
+        blob = await new Promise<Blob | null>((resolve) =>
+          canvas.toBlob(resolve, "image/jpeg", quality),
+        );
+        if (blob && blob.size <= uploadTarget) return blob;
+        results.push(`${quality}=${blob?.size ?? "no image"}`);
+        // A browser that returns no JPEG will not return one at a lower
+        // quality or size either.
+        if (!blob) break;
+      }
+      details.push(`${side}px: ${results.join(", ")}`);
+      if (!blob)
+        throw failure("encode", "This browser could not convert the photo.");
     }
+    throw failure(
+      "encode",
+      "This photo could not be made small enough. Try another.",
+    );
   } finally {
     bitmap.close();
   }
-  throw new Error("This photo could not be made small enough. Try another.");
 }
 
 export function sendPhoto(change: PhotoChange) {

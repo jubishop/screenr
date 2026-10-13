@@ -26,6 +26,41 @@ async function widePhoto(page: Page, center: string) {
   };
 }
 
+// A detailed 4:3 camera photo: every 2-pixel block has a random color, so a
+// 512-pixel JPEG of it needs a quality below 0.46 to fit the upload limit.
+async function detailedPhoto(page: Page) {
+  const bytes = await page.evaluate(async () => {
+    const [width, height] = [1200, 900];
+    const canvas = new OffscreenCanvas(width, height);
+    const context = canvas.getContext("2d")!;
+    const image = context.createImageData(width, height);
+    let seed = 1;
+    const random = () => (seed = (seed * 16807) % 2147483647) % 256;
+    for (let y = 0; y < height; y += 2)
+      for (let x = 0; x < width; x += 2) {
+        const color = [random(), random(), random(), 255];
+        for (const [dx, dy] of [
+          [0, 0],
+          [1, 0],
+          [0, 1],
+          [1, 1],
+        ])
+          image.data.set(color, ((y + dy) * width + x + dx) * 4);
+      }
+    context.putImageData(image, 0, 0);
+    const blob = await canvas.convertToBlob({
+      type: "image/jpeg",
+      quality: 0.9,
+    });
+    return Array.from(new Uint8Array(await blob.arrayBuffer()));
+  });
+  return {
+    name: "camera.jpg",
+    mimeType: "image/jpeg",
+    buffer: Buffer.from(bytes),
+  };
+}
+
 async function choosePhoto(
   page: Page,
   button: Locator,
@@ -173,12 +208,10 @@ test("members add, replace, and remove a profile photo on Account, and friends s
     mimeType: "text/plain",
     buffer: Buffer.from("not a photo"),
   });
-  await expect(card.getByRole("alert")).toHaveText(
-    "This photo could not be opened. Choose a JPEG or PNG image.",
-  );
-  await expect(replace).toHaveAccessibleDescription(
-    "This photo could not be opened. Choose a JPEG or PNG image.",
-  );
+  const unopened =
+    "This photo could not be opened. Choose a JPEG or PNG image. Details: open failed; text/plain, 11 bytes";
+  await expect(card.getByRole("alert")).toHaveText(unopened);
+  await expect(replace).toHaveAccessibleDescription(unopened);
   expect((await storedPhoto(ownerId)).version).toBe(second.version);
 
   for (const width of [390, 1280]) {
@@ -217,6 +250,116 @@ test("members add, replace, and remove a profile photo on Account, and friends s
       .locator(".avatar"),
   ).toHaveText("P");
   await expect(viewer.locator(".avatar img")).toHaveCount(0);
+});
+
+test("detailed camera photos fit the upload limit, at a smaller size when no 512-pixel JPEG fits", async ({
+  member,
+}) => {
+  const owner = await member("photodetail");
+  const ownerId = await userId(owner);
+  await owner.goto("/account");
+  const card = owner.getByRole("region", {
+    name: "Profile photo",
+    exact: true,
+  });
+  const status = card.getByRole("status");
+  const header = owner.locator(".header-profile .avatar img");
+  await choosePhoto(
+    owner,
+    card.getByRole("button", { name: "Add photo", exact: true }),
+    await detailedPhoto(owner),
+  );
+  await expect(status).toHaveText("Photo added.");
+  const first = await storedPhoto(ownerId);
+  expect(first.size).toBeLessThanOrEqual(60 * 1024);
+  await expect(header).toHaveAttribute(
+    "src",
+    `/api/photos/${ownerId}/${first.version}`,
+  );
+  expect((await shownPhoto(header)).width).toBe(512);
+
+  // Safari's encoder makes larger files than Chromium's at each quality and
+  // stops shrinking near its lowest quality, so a detailed photo can exceed
+  // the limit at 512 pixels however low the quality goes.
+  await owner.evaluate(() => {
+    const encode = HTMLCanvasElement.prototype.toBlob;
+    HTMLCanvasElement.prototype.toBlob = function (callback, type, quality) {
+      if (this.width === 512)
+        callback(new Blob([new Uint8Array(70_000)], { type }));
+      else encode.call(this, callback, type, quality);
+    };
+  });
+  await choosePhoto(
+    owner,
+    card.getByRole("button", { name: "Replace photo", exact: true }),
+    await detailedPhoto(owner),
+  );
+  await expect(status).toHaveText("Photo replaced.");
+  const second = await storedPhoto(ownerId);
+  expect(second.size).toBeLessThanOrEqual(60 * 1024);
+  await expect(header).toHaveAttribute(
+    "src",
+    `/api/photos/${ownerId}/${second.version}`,
+  );
+  const smaller = await shownPhoto(header);
+  expect([smaller.width, smaller.height]).toEqual([384, 384]);
+});
+
+test("each photo preparation failure names its step with details to copy", async ({
+  member,
+}) => {
+  const owner = await member("photofailure");
+  await owner.goto("/account");
+  const card = owner.getByRole("region", {
+    name: "Profile photo",
+    exact: true,
+  });
+  const add = card.getByRole("button", { name: "Add photo", exact: true });
+  const alert = card.getByRole("alert");
+  const photo = await widePhoto(owner, "#ff0000");
+  const file = `image/png, ${photo.buffer.length} bytes, 1200×800`;
+  async function expectFailure(message: string) {
+    await expect(alert).toHaveText(message);
+    await expect(add).toHaveAccessibleDescription(message);
+    await expect(card.locator(".avatar img")).toHaveCount(0);
+  }
+
+  // The browser returns no JPEG; trying lower qualities would not help.
+  await owner.evaluate(() => {
+    HTMLCanvasElement.prototype.toBlob = (callback) => callback(null);
+  });
+  await choosePhoto(owner, add, photo);
+  await expectFailure(
+    `This browser could not convert the photo. Details: encode failed; ${file}; limit 61440 bytes; 512px: 0.86=no image`,
+  );
+
+  // Every JPEG is over the limit, at every quality and size.
+  await owner.evaluate(() => {
+    HTMLCanvasElement.prototype.toBlob = (callback, type) =>
+      callback(new Blob([new Uint8Array(70_000)], { type }));
+  });
+  await choosePhoto(owner, add, photo);
+  const qualities = [
+    0.86, 0.78, 0.7, 0.62, 0.54, 0.46, 0.38, 0.3, 0.22, 0.14, 0.06,
+  ];
+  const results = [512, 384, 256]
+    .map(
+      (side) =>
+        `${side}px: ${qualities.map((quality) => `${quality}=70000`).join(", ")}`,
+    )
+    .join("; ");
+  await expectFailure(
+    `This photo could not be made small enough. Try another. Details: encode failed; ${file}; limit 61440 bytes; ${results}`,
+  );
+
+  // The browser offers no 2D canvas context.
+  await owner.evaluate(() => {
+    HTMLCanvasElement.prototype.getContext = () => null;
+  });
+  await choosePhoto(owner, add, photo);
+  await expectFailure(
+    `This browser could not prepare the photo. Details: canvas failed; ${file}`,
+  );
 });
 
 test("setup offers an optional photo that the new profile keeps", async ({

@@ -114,9 +114,16 @@ hex digits of its SHA-256, which every query that returns a person includes
 as `photo`. Blocked people are listed with no photo.
 
 **Uploads.** The browser crops the center square, resizes it to 512×512, and
-encodes a JPEG, lowering the quality until it is under 60 KB. That stays
-within the decided 200 KB maximum and under the 64 KB request body limit in
-`ops/Caddyfile`, so the shared Caddy configuration needs no change. Reading
+encodes a JPEG, lowering the quality from 0.86 to 0.06 until it is under
+60 KB. That stays within the decided 200 KB maximum and under the 64 KB
+request body limit in `ops/Caddyfile`, so the shared Caddy configuration needs
+no change. Safari's JPEGs are about twice the size of Chromium's at each
+quality and stop shrinking below about 0.1, so a detailed camera photo can
+need a low quality. When no 512-pixel JPEG fits, the browser tries 384 and
+then 256 pixels. A failure names its step: opening the file, getting a canvas,
+or encoding the JPEG. A details line beneath the message gives the file's
+reported type and size, its decoded dimensions, the limit, and each attempt's
+JPEG size or missing image, but never the file name. Reading
 the file through `createImageBitmap` needs no `blob:` or `data:` image URL,
 which the [content security policy](deployment.md#provisioning) would block.
 The `photo` action receives the JPEG as the raw request body. The server
