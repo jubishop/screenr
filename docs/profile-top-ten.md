@@ -135,6 +135,16 @@ editing.
 
 **Rejected alternatives:** Drag and drop, and always-visible controls.
 
+**Updated — 2026-10-12:** On desktop, the owner can also reorder by
+dragging posters in the poster row on their own profile. Edit mode stays
+for keyboard and touch. Dragging on phones waits until Screenr has a native
+mobile app. This supersedes rejecting drag and drop outright.
+[Issue #202](https://github.com/jubishop/screenr/issues/202) tracks the
+work. The user found reordering one step at a time in Edit mode clunky, and
+deferred touch dragging to a native app after reviewing a press-and-hold
+design for the browser. Rejected alternative: press-and-hold dragging on
+phones in the browser.
+
 ### Poster row at the top of the profile — 2026-10-12
 
 **Decision:** Show the top 10 beneath the profile header and above the
