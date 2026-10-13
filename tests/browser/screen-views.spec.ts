@@ -1,18 +1,11 @@
 import { expect, type Page } from "@playwright/test";
 import { test } from "./monitored-test";
 import { expectErrorBeside, failAction, press } from "./action-errors";
+import { openWithoutPolling, refreshOnFocus } from "./refresh-helpers";
 
 const screenRead = "**/api/screenr/screen?**";
 const unavailable =
   "Screenr is temporarily unavailable. Please try again in a moment.";
-
-async function refresh(page: Page) {
-  const response = page.waitForResponse((response) =>
-    response.url().includes("/api/screenr/screen?"),
-  );
-  await page.evaluate(() => window.dispatchEvent(new Event("focus")));
-  await (await response).finished();
-}
 
 async function failRefresh(page: Page) {
   await page.route(screenRead, (route) =>
@@ -21,7 +14,7 @@ async function failRefresh(page: Page) {
       json: { error: "View refresh unavailable" },
     }),
   );
-  await refresh(page);
+  await refreshOnFocus(page);
   await expect(page.getByRole("main").getByRole("alert")).toContainText(
     "View refresh unavailable",
   );
@@ -43,10 +36,10 @@ test("People retains the username draft and focus on refresh, and restores the d
   member,
 }) => {
   const page = await member("peopledraft");
-  await page.goto("/people");
+  await openWithoutPolling(page, "/people");
   const input = page.getByLabel("Exact username");
   await input.fill("Some_Friend");
-  await refresh(page);
+  await refreshOnFocus(page);
   await expect(input).toHaveValue("Some_Friend");
   await expect(input).toBeFocused();
   await failRefresh(page);
@@ -68,7 +61,7 @@ test("invitations retain the signup limit through reads and disable creation whi
   member,
 }) => {
   const page = await member("invitelimitdraft");
-  await page.goto("/invites");
+  await openWithoutPolling(page, "/invites");
   const limit = page.getByLabel("Maximum signups");
   const create = page.getByRole("button", {
     name: "Create invitation",
@@ -76,7 +69,7 @@ test("invitations retain the signup limit through reads and disable creation whi
   });
   await limit.selectOption("7");
   await limit.focus();
-  await refresh(page);
+  await refreshOnFocus(page);
   await expect(limit).toHaveValue("7");
   await expect(limit).toBeFocused();
   await failRefresh(page);
@@ -97,7 +90,7 @@ test("invitations retain the signup limit through reads and disable creation whi
     await create.click();
     await started.promise;
     await expect(create).toBeDisabled();
-    await refresh(page);
+    await refreshOnFocus(page);
     await expect(create).toBeDisabled();
   } finally {
     release.resolve();
@@ -112,7 +105,7 @@ test("proxy error pages show a retryable message instead of parser errors", asyn
   member,
 }) => {
   const page = await member("proxyerrors");
-  await page.goto("/invites");
+  await openWithoutPolling(page, "/invites");
   const main = page.getByRole("main");
   const create = page.getByRole("button", {
     name: "Create invitation",
@@ -138,7 +131,7 @@ test("proxy error pages show a retryable message instead of parser errors", asyn
       body: "<!doctype html><title>502 Bad Gateway</title><h1>Bad Gateway</h1>",
     }),
   );
-  await refresh(page);
+  await refreshOnFocus(page);
   await expect(main.getByRole("alert")).toContainText(unavailable);
   await expect(main).not.toContainText(/Unexpected|JSON/);
   await expect(create).toHaveCount(0);
@@ -366,7 +359,7 @@ test("account linking and sign-out keep pending states and errors across read re
   member,
 }) => {
   const page = await member("accountpending");
-  await page.goto("/account");
+  await openWithoutPolling(page, "/account");
   const connect = page.getByRole("button", {
     name: "Connect Google",
     exact: true,
@@ -446,7 +439,7 @@ test("account linking and sign-out keep pending states and errors across read re
   ).toBeVisible();
   await expect(signOut).toBeEnabled();
   await expect(connect).toBeEnabled();
-  await refresh(page);
+  await refreshOnFocus(page);
   await expect(
     page
       .getByRole("main")

@@ -2,6 +2,7 @@ import { expect } from "@playwright/test";
 import { browserConfig } from "../../scripts/browser-config";
 import { test } from "./monitored-test";
 import { prepareFriendship } from "./member-fixture";
+import { openWithoutPolling, refreshOnFocus } from "./refresh-helpers";
 import { chooseStatus } from "./watch-status";
 
 test("discussion links copy from every feed without navigating or losing drafts and recover from clipboard failures", async ({
@@ -265,7 +266,7 @@ test("an item link on the friends feed renders the feed through refreshes", asyn
   });
   expect(posted.status()).toBe(200);
   const id = (await posted.json()).id as string;
-  await reader.goto(`/?item=${id}`);
+  await openWithoutPolling(reader, `/?item=${id}`);
   await expect(
     reader.getByRole("heading", { name: "Your circle", exact: true }),
   ).toBeVisible();
@@ -276,13 +277,7 @@ test("an item link on the friends feed renders the feed through refreshes", asyn
       .getByRole("navigation", { name: "Main navigation" })
       .getByRole("link", { name: "Circle", exact: true }),
   ).toHaveAttribute("aria-current", "page");
-  const refreshed = reader.waitForResponse(
-    (response) =>
-      response.url().includes("/api/screenr/screen?") &&
-      new URL(response.url()).searchParams.get("path") === `/?item=${id}`,
-  );
-  await reader.evaluate(() => window.dispatchEvent(new Event("focus")));
-  await (await refreshed).finished();
+  await refreshOnFocus(reader);
   await expect(item).toContainText("Linked from the friends feed");
   await reader.context().close();
   await owner.context().close();

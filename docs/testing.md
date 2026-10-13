@@ -213,7 +213,11 @@ session. Specs import these helpers instead of defining their own copies.
 - [Journey helpers](../tests/browser/journey-helpers.ts) retain complete
   email signup and browser friendship setup for scenarios that test those
   journeys. [Refresh helpers](../tests/browser/refresh-helpers.ts) wait for
-  screen responses.
+  screen responses. A scenario that waits for the read it starts opens the
+  page with polling paused and waits for the page's first read. A refresh
+  aborts any read still in flight, and Playwright never finishes a response
+  whose request then fails, so waiting for a poll's response could hang
+  ([#197](https://github.com/jubishop/screenr/issues/197)).
 - Scenarios that test polling intervals or request deadlines don't sleep.
   They install and pause Playwright's clock in the member's context, advance
   it explicitly, and hold the timed request in a route until the test
