@@ -94,7 +94,5 @@ Do not treat an interview recommendation as an accepted decision.
 Record each accepted interview decision using the process in
 [`docs/README.md`](docs/README.md#recording-decisions).
 
-This repository is private (since 2026-10-13); see the
-[visibility decision](docs/ios-app.md#private-repository-with-a-self-hosted-ios-runner--2026-10-13).
-Still keep credentials, private records, local environment files, and
-generated caches out of Git.
+This is a public repository. Keep credentials, private records, local
+environment files, and generated caches out of Git.

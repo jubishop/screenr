@@ -264,7 +264,7 @@ differing sites or settings, and says how to apply them. For Caddy, copy the
 sites, run `caddy validate --config /etc/caddy/Caddyfile`, and reload Caddy.
 For PostgreSQL, edit the Screenr settings at the end of the file and restart
 `screenr-db`. Then rerun the deployment. Output never includes host values,
-because Actions logs are readable by everyone with repository access.
+because anyone can read the Actions logs of this public repository.
 
 Then each `ops/screenr-*.service` and `.timer` that is missing from
 `/etc/systemd/system` or differs from the host copy is written there

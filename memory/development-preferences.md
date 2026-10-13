@@ -16,9 +16,9 @@ recommended answer. Inspect the repository first when it can answer the
 question. Record accepted product decisions in the
 [product brief](../docs/product-brief.md) or a more specific design document.
 
-The user approved a public `jubishop/screenr` GitHub repository, then made it
-private on 2026-10-13 for the
-[iPhone app's feedback flow](../docs/ios-app.md#private-repository-with-a-self-hosted-ios-runner--2026-10-13).
+The user approved a public `jubishop/screenr` GitHub repository. It was
+briefly private on 2026-10-13 and returned to public the same day; see the
+[visibility decision](../docs/ios-app.md#public-repository-with-feedback-issues-that-link-to-sentry--2026-10-13).
 
 ## Third-party dependencies
 

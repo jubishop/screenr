@@ -92,11 +92,6 @@ issues, and two checkouts.
 - iOS CI runs as a separate job on a macOS runner, filtered by path.
 - `AGENTS.md` and `bin/check` gain iOS sections.
 
-**Updated — 2026-10-13:** The repository is now private, so GitHub's macOS
-runners are no longer free. iOS CI runs on a
-[self-hosted runner](#private-repository-with-a-self-hosted-ios-runner--2026-10-13).
-The monorepo decision stands.
-
 ### Email code, Sign in with Apple, and Google — 2026-10-13
 
 **Decision:** The app offers three sign-in methods: the email one-time code,
@@ -687,8 +682,9 @@ ScreenrKit.
 
 **Decision:**
 
-- **CI:** a path-filtered GitHub Actions job builds and tests `ios/**` on the
-  [self-hosted Mac runner](#private-repository-with-a-self-hosted-ios-runner--2026-10-13).
+- **CI:** a path-filtered GitHub Actions job builds and tests `ios/**` on a
+  GitHub-hosted macOS runner, which is free for this public repository. It
+  runs when `ios/**` or the server payload fixtures change.
 - **Releases:** `bin/ios-testflight` produces TestFlight builds on the user's
   Mac. The user or an agent can run it.
 
@@ -842,66 +838,44 @@ from YouTube before the member taps Play. The app adds no YouTube SDK.
 
 **Rejected for now:** Home Screen widgets.
 
-### Private repository with a self-hosted iOS runner — 2026-10-13
+### Public repository with feedback issues that link to Sentry — 2026-10-13
 
-**Decision:** `jubishop/screenr` became a private repository on 2026-10-13.
-
-- **Web CI:** stays on GitHub-hosted Linux runners. To save minutes, pushes
-  that change only documentation skip it, and newer runs cancel superseded
-  ones.
-- **iOS CI:** runs on a self-hosted GitHub Actions runner on the user's Mac.
-  It runs when `ios/**` or the server payload fixtures change. A passing run
-  still gates `bin/ios-testflight`.
-
-**Why:** The user proposed going private so the app can follow
-[PodHaven's feedback flow](#feedback-form-and-private-issue-automation--2026-10-13).
-That flow turns tester feedback into GitHub issues, which would be public in a
-public repository. The user's condition was that CI costs stay constrained.
-
-Cost figures as of 2026-10-13:
-
-- **Private allowance:** 2,000 included minutes a month on GitHub Free, or
-  3,000 on Pro.
-- **Rates beyond the allowance:** about $0.006 a minute on Linux and $0.062
-  on macOS.
-- **Web CI usage:** about 2,700 run-minutes from 2026-09-05 to 2026-10-13,
-  mostly in bursts.
-- **iOS on hosted runners:** about $1 a run.
-- **Self-hosted runners:** free while GitHub's announced fee for self-hosted
-  runners remains postponed.
-
-The repository had no stars, forks, watchers, rulesets, or branch protection,
-and deployment does not depend on public access.
-
-**Tradeoff:** iOS jobs wait while the Mac sleeps, and they share the Mac's
-CPU with local agents.
-
-**Rejected alternatives:**
-
-- iOS CI on GitHub-hosted macOS runners.
-- A local-only iOS gate with no iOS CI.
-- Staying public, with feedback through TestFlight only.
-
-**Supersedes:** the 2026-09-05 approval of a public repository, recorded in
-the [development preferences](../memory/development-preferences.md).
-
-### Feedback form and private issue automation — 2026-10-13
-
-**Decision:** The app follows PodHaven's feedback flow:
+**Decision:** `jubishop/screenr` stays public. iOS CI runs on GitHub-hosted
+macOS runners. The app follows PodHaven's feedback flow, except that its
+GitHub issues never contain what members write:
 
 1. **Feedback form:** You → Settings has a Send feedback form. It sends Sentry
    user feedback with the member's text, optional screenshots, and recent log
    tails. The log tails contain no user content.
-2. **Issue workflow:** a daily GitHub Actions workflow on Linux turns new
-   Sentry feedback into issues in the now-private `jubishop/screenr`.
+2. **Issue workflow:** a daily GitHub Actions workflow on Linux files one issue
+   per new feedback item. Each issue holds only the Sentry link, the date, and
+   the app build, with no member text or screenshots. Agents read the content
+   through Sentry while working the issue.
 
-**Why:** The user asked to match PodHaven's flow and made the repository
-private so that it could.
+**Why:** The user asked to match PodHaven's flow. Public issues that quoted
+feedback could expose friends' names or comments. Earlier the same day the user
+made the repository private for this reason. They then reversed that once the
+cost became clear:
+
+- **Free plan allowance:** the account is on GitHub Free, with 2,000 included
+  private Actions minutes a month.
+- **Screenr's usage:** Screenr alone used about 1,900 Actions minutes in
+  September. Each push runs a 9–11 minute check job, including documentation
+  pushes.
+- **Hard stop:** at the default $0 spending limit, private jobs stop when the
+  allowance runs out. That would block deploys.
+- **PodHaven precedent:** PodHaven is public and uses Sentry. Sentry was never
+  the concern, only issues that publish member text.
+
+Data from the GitHub billing usage API on 2026-10-13.
 
 **Rejected alternatives:**
 
-- TestFlight's built-in feedback only.
-- The form without issue automation.
+- Filing full feedback issues in a separate private repository.
+- Staying private, trimming CI minutes, and raising the spending limit.
+
+**Supersedes:** a same-day decision that made the repository private and ran
+iOS CI on a self-hosted Mac runner.
 
 ### An `area: ios` label — 2026-10-13
 
