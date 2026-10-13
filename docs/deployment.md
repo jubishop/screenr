@@ -156,7 +156,7 @@ describes the records behind them.
 
 | Setting | Purpose | Read by |
 | --- | --- | --- |
-| `SENTRY_DSN` | DSN of the `screenr-server` Sentry project, for failure reports | [#223](https://github.com/jubishop/screenr/issues/223) |
+| `SENTRY_DSN` | DSN of the `screenr-server` Sentry project, for [failure reports](#failure-reports-in-sentry). Optional: without it, failures are only logged | [#223](https://github.com/jubishop/screenr/issues/223) |
 | `APPLE_TEAM_ID` | Apple developer team ID, the issuer of tokens signed with either Apple key | [#215](https://github.com/jubishop/screenr/issues/215), [#240](https://github.com/jubishop/screenr/issues/240) |
 | `APPLE_KEY_ID` | Key ID of the Sign in with Apple key | [#215](https://github.com/jubishop/screenr/issues/215) |
 | `APPLE_PRIVATE_KEY` | Sign in with Apple key, which signs the client secret for Apple's token endpoint | [#215](https://github.com/jubishop/screenr/issues/215) |
@@ -687,6 +687,7 @@ journalctl -u screenr-worker --since '1 day ago' --no-pager | grep '"event":"ema
 | `email delivery failed` | worker | `job` ID, `kind` (`code` or `activity`), `attempt`, and `final` |
 | `google photo copy failed` | web, worker | `user` ID, `trigger` (`account`, `choice`, or `backfill`), `reason`, and `status` for an HTTP reply |
 | `google photo backfill failed` | worker | Error fields only |
+| `sentry report failed` | web, worker | `status` for a Sentry reply, `reason` `invalid DSN`, or error fields; see [failure reports](#failure-reports-in-sentry) |
 
 For a Resend reply, `email delivery failed` adds the HTTP `status` and the
 `provider` error name, such as `daily_quota_exceeded` or `invalid_api_key`.
@@ -732,6 +733,48 @@ Logs never include error messages, PostgreSQL details, page paths, request
 bodies, email addresses, email content, cookies, or keys. Messages and details
 can quote the values that failed. `email_job.last_error` keeps a short
 message until cleanup deletes the expired job.
+
+### Failure reports in Sentry
+
+With `SENTRY_DSN` set in `app.env`, `src/server/log.ts` also sends each
+failure line to the `screenr-server` Sentry project
+([issue #223](https://github.com/jubishop/screenr/issues/223)), under the
+[Sentry decision](ios-app.md#sentry-for-the-app-and-the-server--2026-10-13).
+Web and worker failures both report, because both log through it. It posts a
+Sentry envelope over HTTPS and uses no Sentry package. Without a DSN, failures
+go only to the journal. Restart `screenr-web` and `screenr-worker` after
+setting or changing the DSN.
+
+The event carries only the failure line:
+
+- **Exception:** the `error` class as its type. The line's `event`, such as
+  `request failed`, takes the place of the error message. A failure without an
+  error uses its `event` as the type.
+- **Stack trace:** the line's frames, with paths relative to the release.
+- **Tags:** `event`, and `request_id` from the line's `requestId` field.
+- **Failure context:** every field of the line except `stack`.
+- **Environment:** `NODE_ENV`, which is `production` on the host.
+
+Like the journal, Sentry never receives error messages or anything else the
+[failure logs](#failure-logs) leave out. A request or worker pass never waits
+for Sentry, and a failed send never fails it. When a send fails or takes more
+than 10 seconds, the service prints a `sentry report failed` line. It has
+`status` for a Sentry reply, such as 429; `reason` `invalid DSN`; or error
+fields for a network failure.
+
+To confirm reporting, send a test failure from the active release:
+
+```sh
+systemd-run --quiet --wait --pipe --collect --uid=screenr \
+  --working-directory=/opt/screenr/current \
+  -p EnvironmentFile=/etc/screenr/app.env -p Environment=NODE_ENV=production \
+  /opt/screenr/node/bin/node --import tsx --input-type=module \
+  -e 'const { logFailure } = await import("./src/server/log.ts"); logFailure("sentry check", { requestId: "sentry-check" }, new Error("check"));'
+```
+
+It prints the failure line, and a `sentry report failed` line if the send
+fails. The `screenr-server` project then shows an `Error: sentry check` issue
+tagged `request_id:sentry-check`.
 
 ## Old hostname redirect
 

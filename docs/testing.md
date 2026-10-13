@@ -92,11 +92,12 @@ is inherited. Direct Playwright and harness calls default to production;
 
 The harness sets its disposable database, auth origin, test Google credentials,
 UTC timezone, and local catalog before building. It clears inherited catalog
-and email service credentials. No production service or private dotenv file is
-needed. Keep credentials out of `NEXT_PUBLIC_*` and Next's `env` configuration;
-those values are included in browser bundles. Normal server configuration stays
-runtime configuration. The auth fixture remains a separate process running the
-real auth handlers with a local Google provider and file email capture. Next's
+and email service credentials and the Sentry DSN. No production service or
+private dotenv file is needed. Keep credentials out of `NEXT_PUBLIC_*` and
+Next's `env` configuration; those values are included in browser bundles.
+Normal server configuration stays runtime configuration. The auth fixture
+remains a separate process running the real auth handlers with a local Google
+provider and file email capture. Next's
 production pages and API handlers read the same real signed sessions. Because
 the fixture answers `/api/auth/*`, the built auth route runs only in the
 [release packaging check](deployment.md#build-and-activate-a-release) and the
@@ -177,10 +178,12 @@ session. Specs import these helpers instead of defining their own copies.
   server modules load, the module validates the test database, exported as
   `testDatabaseURL`, and sets authentication configuration. It also clears
   provider settings inherited from the shell: the TMDB token and catalog URL,
-  the email transport, Resend key and sender, and the Google client. Tests
-  therefore never call TMDB, Resend, or Google, even when a developer shell
-  exports real credentials. A suite that exercises a provider sets fake values
-  after the import and answers with a loopback server or a replaced `fetch`.
+  the email transport, Resend key and sender, the Google client, and the
+  Sentry DSN. Tests therefore never call TMDB, Resend, Google, or Sentry, even
+  when a developer shell exports real credentials. A suite that exercises a
+  provider sets fake values after the import and answers with a loopback
+  server or a replaced `fetch`; `tests/app/failure-logs.test.ts` runs a
+  loopback Sentry endpoint.
   `tests/app/social-fixture.test.ts` covers the clearing.
 - Suites call `useDatabase()` once at file scope to register the migration,
   per-test user/verification reset, and final pool shutdown. A suite that

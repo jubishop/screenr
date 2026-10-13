@@ -51,7 +51,7 @@ test("the browser command builds current checkout sources before serving and sto
   const record = `fs.appendFileSync('calls.jsonl', JSON.stringify({mode, source, cwd:process.cwd(), nodeEnv:process.env.NODE_ENV,
   database: new URL(process.env.DATABASE_URL).pathname, origin:process.env.BETTER_AUTH_URL,
   catalog:process.env.SCREENR_TEST_TMDB_URL, test:process.env.SCREENR_BROWSER_TEST,
-  token:process.env.TMDB_READ_TOKEN, email:process.env.EMAIL_TRANSPORT})+'\\n');`;
+  token:process.env.TMDB_READ_TOKEN, email:process.env.EMAIL_TRANSPORT, sentry:process.env.SENTRY_DSN})+'\\n');`;
   const standalone = `
 const fs = require('node:fs');
 const mode = 'start';
@@ -91,6 +91,7 @@ if (mode === 'build') {
         ...env,
         SCREENR_BROWSER_MODE: mode,
         TMDB_READ_TOKEN: "inherited-private-sentinel",
+        SENTRY_DSN: "https://inherited-key@sentry.example.test/1",
       },
       stdio: ["ignore", "pipe", "pipe"],
     });
@@ -157,6 +158,7 @@ if (mode === 'build') {
     assert.equal(call.catalog, config.catalogURL);
     assert.equal(call.test, "1");
     assert.equal(call.token, "");
+    assert.equal(call.sentry, "");
     assert.equal(call.email, "file");
   }
 });

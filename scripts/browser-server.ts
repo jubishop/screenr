@@ -113,6 +113,7 @@ try {
   process.env.TMDB_READ_TOKEN = "";
   process.env.RESEND_API_KEY = "";
   process.env.EMAIL_FROM = "";
+  process.env.SENTRY_DSN = "";
   const { migrate } = await import("./migrate");
   db = (await import("../src/server/db")).db;
   await migrate();

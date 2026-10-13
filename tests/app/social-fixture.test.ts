@@ -11,6 +11,7 @@ const inherited = {
   EMAIL_FROM: "Inherited <inherited@example.test>",
   GOOGLE_CLIENT_ID: "inherited-google-client",
   GOOGLE_CLIENT_SECRET: "inherited-google-secret",
+  SENTRY_DSN: "https://inherited-key@sentry.example.test/1",
 };
 Object.assign(process.env, inherited);
 await import("./social-fixture");
