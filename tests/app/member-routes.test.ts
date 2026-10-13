@@ -164,6 +164,7 @@ test("return paths ignore external, ambiguous, and non-member values", () => {
     "/join/token",
     "/api/screenr/screen",
     "/credits",
+    "/privacy",
     "/titles/movie",
     "/unknown",
     "/%E0%A4%A",

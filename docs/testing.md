@@ -499,9 +499,10 @@ recipients. A full run checks:
   with its empty messages.
 - Invitations can be created and revoked.
 - In both the light and dark color schemes, every visible text meets 4.5:1
-  and only theme colors are painted. This covers sign-in, setup, credits, and
-  member pages with feeds, menus, notifications, and confirmations at phone
-  and desktop widths, and the offline page at phone width.
+  and only theme colors are painted. This covers sign-in, setup, credits,
+  the privacy policy, and member pages with feeds, menus, notifications, and
+  confirmations at phone and desktop widths, and the offline page at phone
+  width.
   `tests/app/theme.test.ts` checks that stylesheets use only theme values,
   that each light value has a dark one, and the contrast of their pairings.
 - A failed feed entry, comment, title header, Friends row, profile,
@@ -670,7 +671,9 @@ feature, therefore needs a policy change. `tests/app/browser-script-guard.test.t
 covers these reports.
 
 `tests/browser/security-headers.spec.ts` checks the exact headers on pages,
-redirects, API responses, and static files. Every script a page renders
+redirects, API responses, and static files. The public pages `/login`,
+`/credits`, and `/privacy` answer 200 to a signed-out request, with no
+sign-in redirect. Every script a page renders
 carries that response's new nonce, even when the request supplies its own
 policy, and the browser reports unused features as denied.
 `tests/app/content-security-policy.test.ts` covers the nonce and the

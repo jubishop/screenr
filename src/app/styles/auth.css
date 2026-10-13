@@ -1,4 +1,4 @@
-/* Sign-in, signup, and the public credits page. */
+/* Sign-in, signup, and the public credits and privacy pages. */
 .auth-page {
   max-width: 620px;
   margin: 45px auto;
@@ -21,6 +21,27 @@
 }
 .auth-card .small {
   margin-top: 15px;
+}
+/* The sign-in page's links to the public pages. */
+.auth-links {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 4px 18px;
+}
+/* The privacy policy's sections. */
+.policy h2 {
+  margin-top: 28px;
+}
+.policy ul {
+  margin: 0 0 16px;
+  padding-left: 20px;
+}
+.policy li + li {
+  margin-top: 8px;
+}
+.policy p a {
+  text-decoration: underline;
 }
 .divider {
   text-align: center;

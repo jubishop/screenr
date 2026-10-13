@@ -112,6 +112,12 @@
   align-items: center;
   font-size: 13px;
 }
+.sidebar-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin: 0;
+}
 .sidebar-bottom small {
   display: block;
   color: var(--muted);

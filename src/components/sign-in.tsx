@@ -159,9 +159,10 @@ export function SignIn({
           No password to remember. Your conversations stay within your circle.
         </p>
       </section>
-      <a className="small muted" href="/credits">
-        Catalog credits
-      </a>
+      <p className="small muted auth-links">
+        <a href="/credits">Catalog credits</a>
+        <a href="/privacy">Privacy policy</a>
+      </p>
     </main>
   );
 }

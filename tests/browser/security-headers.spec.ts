@@ -94,6 +94,7 @@ test("pages, API responses, redirects, and static files carry the security heade
   for (const [path, status] of [
     ["/login", 200],
     ["/credits", 200],
+    ["/privacy", 200],
     ["/", 307],
     [`/join/${"a".repeat(43)}`, 307],
     ["/api/health", 200],

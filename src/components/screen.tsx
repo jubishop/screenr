@@ -379,9 +379,10 @@ export function Screen({
               <small>@{user.username}</small>
             </span>
           </Link>
-          <Link href="/credits" className="small muted">
-            Catalog credits
-          </Link>
+          <p className="small muted sidebar-links">
+            <Link href="/credits">Catalog credits</Link>
+            <Link href="/privacy">Privacy policy</Link>
+          </p>
         </div>
       </header>
       <main
