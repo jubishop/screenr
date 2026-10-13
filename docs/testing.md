@@ -332,9 +332,12 @@ recipients. A full run checks:
 - Friends recommend orders and names recommending friends, filters by Movies
   or TV and by My services across tabs, and saves to Want to watch inline and
   from title pages with the `friends_recommend` surface. Its tab survives
-  searches, history, and reloads. `tests/app/friends-recommend.test.ts`
-  covers the order, the current-friend audience, which actions count, the
-  viewer's own status, and the response fields.
+  searches, history, and reloads. It hides a title finished on its title
+  page; Show finished keeps its state across tabs and starts off after a
+  reload. `tests/app/friends-recommend.test.ts` covers the order, the
+  current-friend audience, which actions count, the viewer's own status, the
+  response fields, and which titles the Finished filter hides, with its empty
+  messages.
 - Invitations can be created and revoked.
 - In both the light and dark color schemes, every visible text meets 4.5:1
   and only theme colors are painted. This covers sign-in, setup, credits, and

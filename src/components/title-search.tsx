@@ -14,7 +14,12 @@ import { TitleServices, ViewingAttribution } from "./title-services";
 import { api, useInteractive } from "./client";
 import { Poster } from "./poster";
 import { TitleCard } from "./title-card";
-import { FriendsRecommend, ofKind, type TitleKind } from "./friends-recommend";
+import {
+  FriendsRecommend,
+  ofKind,
+  withFinished,
+  type TitleKind,
+} from "./friends-recommend";
 
 type ReasonAction = "recommended" | "want_to_watch" | "watching";
 
@@ -123,7 +128,10 @@ export function TitleSearch({
   const route = parseMemberRoute(`${usePathname()}?${useSearchParams()}`);
   const submitted = (route.kind === "search" && route.q) || "";
   const tab = route.kind === "search" ? route.tab : undefined;
+  // Friends recommend's own filters keep their state across tabs. Finished
+  // titles start hidden on each visit.
   const [kind, setKind] = useState<TitleKind>("all");
+  const [showFinished, setShowFinished] = useState(false);
   const [query, setQuery] = useState(submitted);
   const [results, setResults] = useState<ViewingTitle[] | null>(
     submitted.length < 2 ? null : [],
@@ -223,7 +231,9 @@ export function TitleSearch({
   const visibleSuggestions = suggestions?.filter(included);
   const listed: ViewingTitle[] =
     results ??
-    (tab ? recommendations?.filter(ofKind(kind)) : suggestions) ??
+    (tab
+      ? recommendations?.filter(ofKind(kind)).filter(withFinished(showFinished))
+      : suggestions) ??
     [];
   const unknownCount = listed.filter(
     (title) => viewingAccess(title.viewing, serviceIds ?? []) === "unknown",
@@ -335,6 +345,8 @@ export function TitleSearch({
           recommendations={recommendations}
           kind={kind}
           setKind={setKind}
+          showFinished={showFinished}
+          setShowFinished={setShowFinished}
           included={included}
           myServices={myServices}
           serviceIds={serviceIds ?? []}

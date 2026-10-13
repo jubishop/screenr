@@ -1,7 +1,12 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { useDatabase, db, friend, person } from "./social-fixture";
+import type { TitleKind } from "../../src/components/friends-recommend";
 const { loadScreen } = await import("../../src/server/screens");
+const { FriendsRecommend } =
+  await import("../../src/components/friends-recommend");
 const { changeRelationship } = await import("../../src/server/relationships");
 const { updateTitleActivity, updateWatchStatus } =
   await import("../../src/server/title-actions");
@@ -225,6 +230,108 @@ test("each title carries the viewer's own status and Recommend, and none hides i
       ["movie:4", ["maya"], "watching", true],
     ],
   );
+});
+
+// The viewer's Friends recommend view, rendered with the Finished switch off,
+// its default, or on: the listed title IDs and any empty-list message.
+async function view(
+  viewer: string,
+  {
+    showFinished = false,
+    kind = "all",
+    myServices = false,
+    included = () => true,
+  }: {
+    showFinished?: boolean;
+    kind?: TitleKind;
+    myServices?: boolean;
+    included?: (title: { id: string }) => boolean;
+  } = {},
+) {
+  const markup = renderToStaticMarkup(
+    createElement(FriendsRecommend, {
+      recommendations: await recommendations(viewer),
+      kind,
+      setKind: () => {},
+      showFinished,
+      setShowFinished: () => {},
+      included,
+      myServices,
+      serviceIds: [],
+      activity: async () => {},
+      busy: false,
+    }),
+  );
+  return {
+    ids: [
+      ...markup.matchAll(/class="search-result" href="\/titles\/(\w+)\/(\d+)/g),
+    ].map(([, kind, id]) => `${kind}:${id}`),
+    empty: /<p class="empty">([^<]*)<\/p>/.exec(markup)?.[1],
+  };
+}
+
+test("the view hides titles the viewer marked Finished until its switch shows them", async () => {
+  await titles(3);
+  const [viewer, maya, sam] = await people("viewer", "maya", "sam");
+  for (const id of [maya, sam]) await friend(viewer, id);
+  const statuses = [
+    ["movie:1", "finished"],
+    ["tv:1", "caught_up"],
+    ["movie:2", "stopped"],
+    ["tv:2", "watching"],
+    ["movie:3", "finished"],
+    ["tv:3", null],
+  ] as const;
+  for (const [index, [title, status]] of statuses.entries()) {
+    await recommend(maya, title, `2026-01-0${9 - index}`);
+    if (status) await updateWatchStatus(viewer, title, status);
+  }
+  // The viewer's own Recommend doesn't keep a Finished title listed, and a
+  // friend's Finished status doesn't hide one.
+  await recommend(viewer, "movie:3");
+  await updateWatchStatus(sam, "tv:3", "finished");
+
+  assert.deepEqual(await view(viewer), {
+    ids: ["tv:1", "movie:2", "tv:2", "tv:3"],
+    empty: undefined,
+  });
+  assert.deepEqual((await view(viewer, { showFinished: true })).ids, [
+    "movie:1",
+    "tv:1",
+    "movie:2",
+    "tv:2",
+    "movie:3",
+    "tv:3",
+  ]);
+  assert.deepEqual((await view(viewer, { kind: "movie" })).ids, ["movie:2"]);
+
+  // An empty list says how many titles the switch would show.
+  await updateWatchStatus(viewer, "movie:2", "finished");
+  assert.deepEqual(await view(viewer, { kind: "movie" }), {
+    ids: [],
+    empty:
+      "You finished all 3 movie recommendations. Turn on Show finished to see them.",
+  });
+  assert.deepEqual(
+    await view(viewer, {
+      kind: "movie",
+      myServices: true,
+      included: (title) => title.id === "movie:2",
+    }),
+    {
+      ids: [],
+      empty:
+        "You finished the only movie recommendation on your services or free. Turn on Show finished to see it.",
+    },
+  );
+  assert.deepEqual(
+    (await view(viewer, { kind: "movie", showFinished: true })).ids,
+    ["movie:1", "movie:2", "movie:3"],
+  );
+
+  // Clearing Finished lists the title again.
+  await updateWatchStatus(viewer, "movie:1", null);
+  assert.deepEqual((await view(viewer, { kind: "movie" })).ids, ["movie:1"]);
 });
 
 test("Friends recommend data names friends without entry or account IDs", async () => {

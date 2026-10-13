@@ -193,8 +193,10 @@ Recommend's 20 with `40 - rank` and adds ranks beside names. Each title lists
 its friends' usernames and display names, most recent Recommend first, with
 the viewer's current status and whether the viewer recommends it. The
 response holds no scores, feed item IDs, or account IDs. The viewer's
-statuses do not hide titles; hiding Finished titles is
-[#172](https://github.com/jubishop/screenr/issues/172).
+statuses do not remove titles from the response. The view hides titles the
+viewer marked Finished from that status, so its Show finished switch
+([#172](https://github.com/jubishop/screenr/issues/172)) needs no second
+read.
 
 ## Write lock and refresh behavior
 

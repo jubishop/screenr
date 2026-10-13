@@ -32,7 +32,8 @@ test flow, and [Testing Screenr](docs/testing.md) for the automated suites.
   friends' Recommend, Want to watch, and Watching choices, with anonymous
   counts once at least three friends of friends share a choice. Its Friends
   recommend tab lists titles that direct friends recommend, most recommended
-  first, with who recommends each, a Movies/TV filter, and Want to watch.
+  first, with who recommends each, a Movies/TV filter, and Want to watch. It
+  hides titles the member marked Finished until they turn on Show finished.
   Title pages show details, which friends recommend or want to watch the
   title, a trailer, US viewing options under Subs and Free, and the title's
   feed in compact entries. Saved streaming services mark matching titles and
@@ -74,8 +75,6 @@ test flow, and [Testing Screenr](docs/testing.md) for the automated suites.
 Remaining product features are tracked as
 [open feature issues](https://github.com/jubishop/screenr/issues?q=is%3Aissue%20state%3Aopen%20label%3Afeature):
 
-- Hiding Finished titles in Friends recommend by default
-  ([#172](https://github.com/jubishop/screenr/issues/172))
 - Title-less discussion posts and season or episode labels
   ([#103](https://github.com/jubishop/screenr/issues/103))
 - A ranked top 10 on each profile

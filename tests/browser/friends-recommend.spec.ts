@@ -231,3 +231,89 @@ test("the Find a title tab stays in the URL through search, history, and reloads
   await expect(page).toHaveURL(/\/search$/);
   await expect(suggestions.getByRole("link")).toHaveCount(1);
 });
+
+test("Friends recommend hides titles the viewer finished until Show finished is on", async ({
+  page,
+  signIn,
+}) => {
+  const viewer = await signIn(page, "recommendfinished");
+  await db.query(`INSERT INTO title(id,kind,tmdb_id,name,overview) VALUES
+    ('movie:987654','movie',987654,'The Lantern Room','A fictional coastal story.'),
+    ('tv:998001','tv',998001,'The Harbor Signal','A fictional mystery.')
+    ON CONFLICT(id) DO NOTHING`);
+  const maya = await person("recommendfinishedmaya", "Maya Chen");
+  await friend(viewer, maya);
+  await recommend(maya, "movie:987654", "2026-01-02");
+  await recommend(maya, "tv:998001", "2026-01-01");
+  await updateWatchStatus(viewer, "movie:987654", "finished");
+  await page.goto("/search?tab=friends-recommend");
+  const tabs = page.getByRole("navigation", { name: "Find a title lists" });
+  const list = page.getByRole("region", {
+    name: "Friends recommend",
+    exact: true,
+  });
+  const card = (name: string) =>
+    page.locator(".title-card").filter({
+      has: page.getByRole("heading", { name, exact: true }),
+    });
+  const showFinished = page.getByRole("button", {
+    name: "Show finished",
+    exact: true,
+  });
+  await expect(list.getByRole("heading")).toHaveText(["The Harbor Signal"]);
+  await expect(showFinished).toHaveAttribute("aria-pressed", "false");
+  await showFinished.click();
+  await expect(showFinished).toHaveAttribute("aria-pressed", "true");
+  await expect(list.getByRole("heading")).toHaveText([
+    "The Lantern Room",
+    "The Harbor Signal",
+  ]);
+  await expect(
+    card("The Lantern Room").getByRole("link", {
+      name: "✓ Finished",
+      exact: true,
+    }),
+  ).toBeVisible();
+
+  // Like the Movies/TV filter, the switch keeps its state across tabs, and
+  // each visit starts with Finished titles hidden.
+  await tabs.getByRole("link", { name: "Suggestions" }).click();
+  await expect(list).toHaveCount(0);
+  await tabs.getByRole("link", { name: "Friends recommend" }).click();
+  await expect(showFinished).toHaveAttribute("aria-pressed", "true");
+  await expect(list.getByRole("heading")).toHaveCount(2);
+  await page.reload();
+  await expect(showFinished).toHaveAttribute("aria-pressed", "false");
+  await expect(list.getByRole("heading")).toHaveText(["The Harbor Signal"]);
+
+  // Finishing a title on its page hides it here.
+  await card("The Harbor Signal")
+    .getByRole("link", { name: /^The Harbor Signal/ })
+    .click();
+  await chooseStatus(page, "Finished");
+  await page.goBack();
+  await expect(page).toHaveURL(/\/search\?tab=friends-recommend$/);
+  await expect(
+    page.getByText(
+      "You finished all 2 recommendations. Turn on Show finished to see them.",
+    ),
+  ).toBeVisible();
+  await expect(list.getByRole("heading")).toHaveCount(0);
+  for (const width of [390, 1280]) {
+    await page.setViewportSize({ width, height: 900 });
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= window.innerWidth,
+      ),
+    ).toBe(true);
+    await page.screenshot({
+      path: `.cache/friends-recommend-finished-${width}.png`,
+      fullPage: true,
+    });
+  }
+  await showFinished.click();
+  await expect(list.getByRole("heading")).toHaveText([
+    "The Lantern Room",
+    "The Harbor Signal",
+  ]);
+});

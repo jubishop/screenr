@@ -194,10 +194,16 @@ tab beside a submitted query, so clearing a search returns to the same tab.
 The search screen loads both lists, and one availability read covers them,
 so `src/components/title-search.tsx` switches tabs by changing the URL in
 place, as it does for a query. Each tab adds a history entry, and the My
-services and Movies/TV filters keep their state across tabs. Before the page
-is interactive, or opened in a new tab, each tab is an ordinary link. The
-tabs are links in a navigation landmark, with `aria-current="page"` on the
-selected one, and searching hides them with the tab content.
+services, Movies/TV, and Show finished filters keep their state across tabs.
+Show finished, a toggle button beside the Movies/TV group
+([#172](https://github.com/jubishop/screenr/issues/172)), starts off on each
+visit, so titles the viewer marked Finished stay hidden until they turn it on.
+Other statuses never hide a title. When the filters leave no titles and some
+are hidden as Finished, the empty message counts them and points to the
+switch. Before the page is interactive, or opened in a new tab, each tab is an
+ordinary link. The tabs are links in a navigation landmark, with
+`aria-current="page"` on the selected one, and searching hides them with the
+tab content.
 `src/components/friends-recommend.tsx` lists each title in the shared title
 card, with "Recommended by" and the friends' names, then one action beneath
 the card's link. The action is the feed's one-tap **+ Want to watch**, which

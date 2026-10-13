@@ -306,13 +306,18 @@
   color: var(--ink);
   border-bottom-color: var(--ink);
 }
+/* Friends recommend's Movies/TV group and Show finished switch. */
+.recommend-filters,
 .kind-filter {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+}
+.recommend-filters {
+  column-gap: 16px;
   margin-bottom: 4px;
 }
-.kind-filter button {
+.recommend-filters button {
   padding: 7px 14px;
   font-size: 14px;
 }

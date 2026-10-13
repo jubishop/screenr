@@ -21,6 +21,12 @@ const kinds: { kind: TitleKind; label: string }[] = [
 // Whether a title passes the Movies/TV filter.
 export const ofKind = (kind: TitleKind) => (title: Pick<Title, "kind">) =>
   kind === "all" || title.kind === kind;
+// Whether a title passes the Finished filter: titles the viewer marked
+// Finished stay hidden unless the Show finished switch is on.
+export const withFinished =
+  (showFinished: boolean) =>
+  (title: Pick<FriendsRecommendation, "viewer_status">) =>
+    showFinished || title.viewer_status !== "finished";
 
 type Activity = (
   title: string,
@@ -99,12 +105,15 @@ function Action({
 }
 
 // The Friends recommend tab on Find a title: titles that direct friends
-// recommend, in the server's order, with a Movies/TV filter. The page-wide
-// My services filter arrives as `included`.
+// recommend, in the server's order, with a Movies/TV filter and a switch that
+// shows titles the viewer finished. The page-wide My services filter arrives
+// as `included`.
 export function FriendsRecommend({
   recommendations,
   kind,
   setKind,
+  showFinished,
+  setShowFinished,
   included,
   myServices,
   serviceIds,
@@ -114,6 +123,8 @@ export function FriendsRecommend({
   recommendations: ViewingTitle<FriendsRecommendation>[];
   kind: TitleKind;
   setKind: (kind: TitleKind) => void;
+  showFinished: boolean;
+  setShowFinished: (showFinished: boolean) => void;
   included: (title: ViewingTitle) => boolean;
   myServices: boolean;
   serviceIds: string[];
@@ -128,23 +139,38 @@ export function FriendsRecommend({
         <p>When friends recommend a movie or show, it will appear here.</p>
       </div>
     );
-  const visible = recommendations.filter(ofKind(kind)).filter(included);
-  const what = `${{ all: "", movie: "movie ", tv: "TV " }[kind]}recommendations`;
+  const matching = recommendations.filter(ofKind(kind)).filter(included);
+  const visible = matching.filter(withFinished(showFinished));
+  const finished = matching.length - visible.length;
+  const noun = `${{ all: "", movie: "movie ", tv: "TV " }[kind]}recommendation`;
+  const what = `${noun}s`;
+  const where = myServices ? " on your services or free" : "";
   return (
     <>
-      <div className="kind-filter" role="group" aria-label="Title type">
-        {kinds.map((option) => (
-          <button
-            key={option.kind}
-            type="button"
-            className={option.kind === kind ? "primary" : "secondary"}
-            aria-pressed={option.kind === kind}
-            disabled={!interactive}
-            onClick={() => setKind(option.kind)}
-          >
-            {option.label}
-          </button>
-        ))}
+      <div className="recommend-filters">
+        <div className="kind-filter" role="group" aria-label="Title type">
+          {kinds.map((option) => (
+            <button
+              key={option.kind}
+              type="button"
+              className={option.kind === kind ? "primary" : "secondary"}
+              aria-pressed={option.kind === kind}
+              disabled={!interactive}
+              onClick={() => setKind(option.kind)}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+        <button
+          type="button"
+          className={showFinished ? "primary" : "secondary"}
+          aria-pressed={showFinished}
+          disabled={!interactive}
+          onClick={() => setShowFinished(!showFinished)}
+        >
+          Show finished
+        </button>
       </div>
       <section className="search-results" aria-label="Friends recommend">
         {visible.map((title) => (
@@ -164,9 +190,11 @@ export function FriendsRecommend({
       </section>
       {visible.length === 0 && (
         <p className="empty">
-          {myServices
-            ? `No ${what} on your services or free. Turn off My services to see all ${what}.`
-            : `No ${what} yet.`}
+          {finished
+            ? `You finished ${finished === 1 ? `the only ${noun}` : `all ${finished} ${what}`}${where}. Turn on Show finished to see ${finished === 1 ? "it" : "them"}.`
+            : myServices
+              ? `No ${what}${where}. Turn off My services to see all ${what}.`
+              : `No ${what} yet.`}
         </p>
       )}
     </>
