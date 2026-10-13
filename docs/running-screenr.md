@@ -46,9 +46,10 @@ file private. Set `TMDB_READ_TOKEN` to the API Read Access Token from TMDB's
 account API settings. `EMAIL_TRANSPORT=file` captures development codes
 locally and sends no email. Keep the tracked `.env.example` complete when
 adding or renaming configuration: include placeholders for authentication,
-Google, TMDB, Resend, and backup settings, with no real secrets. Backup
-placeholders are optional for local development; the VPS backup jobs use the
-separate file described in [deployment](deployment.md#encrypted-backups-and-restore-check).
+Google, TMDB, Resend, Sentry, and backup settings, with no real secrets. Leave
+`SENTRY_DSN` empty locally. Backup placeholders are optional for local
+development; the VPS backup jobs use the separate file described in
+[deployment](deployment.md#encrypted-backups-and-restore-check).
 Then run:
 
 ```sh
@@ -370,7 +371,7 @@ address scrubbing and data scrubbing enabled.
 | Record | Purpose | Storage |
 | --- | --- | --- |
 | Project `screenr-ios` (Apple iOS) | App crashes, errors, performance, and feedback ([#222](https://github.com/jubishop/screenr/issues/222)) | DSN compiled into Release builds |
-| Project `screenr-server` (Node) | Server failure reports ([#223](https://github.com/jubishop/screenr/issues/223)) | DSN in production `SENTRY_DSN` |
+| Project `screenr-server` (Node) | Server [failure reports](deployment.md#failure-reports-in-sentry) ([#223](https://github.com/jubishop/screenr/issues/223)) | DSN in production `SENTRY_DSN` |
 | The owner's Sentry user token | Uploads dSYMs from archive builds ([#222](https://github.com/jubishop/screenr/issues/222)) | `SENTRY_AUTH_TOKEN` in the owner's shell on the Mac |
 | Read-only personal token with `event:read`, `project:read`, and `org:read` | The daily feedback workflow ([#249](https://github.com/jubishop/screenr/issues/249)) | GitHub repository secret `SENTRY_AUTH_TOKEN` |
 

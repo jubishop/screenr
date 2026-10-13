@@ -14,8 +14,9 @@ process.env.DATABASE_URL = testDatabaseURL;
 process.env.BETTER_AUTH_SECRET = "screenr-test-secret-only-32-characters-long";
 process.env.BETTER_AUTH_URL = "http://localhost:3000";
 // A developer shell may export real provider credentials. Clear them so no
-// application test reaches TMDB, Resend, or Google. Suites that exercise a
-// provider set fake values and use a loopback server or a replaced fetch.
+// application test reaches TMDB, Resend, Google, or Sentry. Suites that
+// exercise a provider set fake values and use a loopback server or a replaced
+// fetch.
 for (const name of [
   "TMDB_READ_TOKEN",
   "SCREENR_TEST_TMDB_URL",
@@ -24,6 +25,7 @@ for (const name of [
   "EMAIL_FROM",
   "GOOGLE_CLIENT_ID",
   "GOOGLE_CLIENT_SECRET",
+  "SENTRY_DSN",
 ])
   delete process.env[name];
 
