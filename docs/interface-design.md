@@ -648,7 +648,9 @@ and pressed reactions get a lime ring. Stylesheets declare
 scheme. The offline page in `public/sw.js` repeats the theme values it uses.
 `tests/app/theme.test.ts` fails on a color outside the theme values, a
 light value without a dark one, or a pairing below the contrast
-requirements. In the dark theme, focus rings and field borders also reach
-3:1; [issue #196](https://github.com/jubishop/screenr/issues/196) tracks the
-light theme's. `tests/browser/contrast.spec.ts` audits text contrast and
-painted colors in both schemes.
+requirements. In both themes, focus rings reach 3:1 against the page, cards,
+and error messages, and field and button borders reach 3:1 against the page
+and cards. [Issue #196](https://github.com/jubishop/screenr/issues/196)
+darkened the light focus ring to `#6c9440` and borders to `#849286`.
+`tests/browser/contrast.spec.ts` audits text contrast and painted colors in
+both schemes.

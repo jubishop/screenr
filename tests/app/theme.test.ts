@@ -132,16 +132,17 @@ test("theme colors meet the text and control contrast requirements in both theme
     ["--on-accent", "--accent"],
     ...Array.from({ length: 8 }, (_, tone) => ["--ink", `--avatar-${tone}`]),
   ];
-  // Controls and focus rings need 3:1 against what surrounds them.
+  // Controls and focus rings need 3:1 against what surrounds them. Focus rings
+  // sit on the page, on cards and menus, and on error messages that offer Try
+  // again. Field and button borders sit on the page and on cards, and fields
+  // are filled with the card color.
   const controls = [
     ["--pressed-ring", "--pressed"],
     ["--muted", "--avatar-placeholder"],
-  ];
-  // The dark theme also keeps focus rings and field borders at 3:1. Issue
-  // #196 tracks the light theme's.
-  const darkControls = [
     ["--focus", "--paper"],
     ["--focus", "--surface"],
+    ["--focus", "--error-bg"],
+    ["--border", "--paper"],
     ["--border", "--surface"],
   ];
   for (const [scheme, tokens] of [
@@ -162,7 +163,6 @@ test("theme colors meet the text and control contrast requirements in both theme
     };
     check(text, 4.5);
     check(controls, 3);
-    if (scheme === "dark") check(darkControls, 3);
   }
 });
 
