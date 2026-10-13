@@ -746,10 +746,9 @@ notification view. It changes no existing rows. The preceding release reads
 only `feed_item` and `title_comment`, so it shows neither progress entries
 nor their replies, and notifications for those replies open an unavailable
 target. Its Want to watch write would leave a progress status current beside
-it, so the `feed_item_withdraw_progress` trigger withdraws the progress entry
-when Want to watch turns on. This release withdraws it itself, so a later
-migration can drop the trigger once the preceding release does too
-([#195](https://github.com/jubishop/screenr/issues/195)). Statuses saved
+it, so the `feed_item_withdraw_progress` trigger withdrew the progress entry
+when Want to watch turned on. This release withdraws it itself, so migration
+023 dropped the trigger once the preceding release did too. Statuses saved
 before a rollback reappear with this release.
 
 Migration `020-drop-legacy-conversation-columns.sql` drops the
@@ -775,6 +774,18 @@ reviews nor their replies, and notifications for those replies open an
 unavailable target. It writes no reviews, and its replies and reactions still
 pass the new checks. Reviews saved before a rollback reappear with this
 release.
+
+Migration `023-drop-watch-status-guard.sql` drops the
+`feed_item_withdraw_progress` trigger and its `screenr_withdraw_progress()`
+function ([issue #195](https://github.com/jubishop/screenr/issues/195)). Only
+the `comment_notify` and `friendship_notify` notification triggers remain. It
+changes no rows, and databases without the trigger are left as they are. It
+shipped once every retained release included ccbd432, the release that added
+migration 018. Those releases withdraw the progress entry in the same
+transaction that turns Want to watch on, so activation and rollback both keep
+one current status. A release before ccbd432 could leave a progress status
+current beside Want to watch against a migrated database. Take the normal
+pre-upgrade backup; no manual step is needed.
 
 ## Decisions deferred to future features
 

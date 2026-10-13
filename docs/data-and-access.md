@@ -331,9 +331,10 @@ then the column, following Better Auth's 1.7 upgrade guide. Databases first
 created by 1.7.3 or later have neither, so it changes nothing there. A
 release that ships 1.7.2 can no longer run against a migrated database.
 
-The same rule applies to Screenr's own schema: drop a column or constraint
-only once no retained release reads or writes it, and use `IF EXISTS` so
-databases without it are unchanged. Migration
+The same rule applies to Screenr's own schema: drop a column, constraint, or
+compatibility trigger only once no retained release depends on it, and use
+`IF EXISTS` so databases without it are unchanged. Migration
 `020-drop-legacy-conversation-columns.sql` dropped the legacy `conversation`
-action flags and activity date this way; see
+action flags and activity date this way, and migration
+`023-drop-watch-status-guard.sql` dropped the watch status guard trigger; see
 [migration and rollback compatibility](title-feed.md#migration-and-rollback-compatibility).

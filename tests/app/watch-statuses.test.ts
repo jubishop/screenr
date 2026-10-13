@@ -232,34 +232,33 @@ test("progress statuses replace Want to watch and coexist with Recommend", async
     }
 });
 
-// A later migration drops the previous release's guard trigger, so status
-// writes must keep one current status themselves.
-test("Want to watch replaces a progress status without the database trigger", async () => {
+// Migration 023 dropped the database guard, so status writes keep one
+// current status themselves.
+test("Want to watch replaces a progress status without a database trigger", async () => {
   const { alice } = await setup();
-  await db.query(
-    "ALTER TABLE feed_item DISABLE TRIGGER feed_item_withdraw_progress",
+  assert.deepEqual(
+    (
+      await db.query(
+        "SELECT tgname FROM pg_trigger WHERE tgrelid='feed_item'::regclass AND NOT tgisinternal",
+      )
+    ).rows,
+    [],
   );
-  try {
-    for (const save of [
-      () => updateTitleActivity(alice, "movie:1", "want_to_watch", true),
-      () => updateWatchStatus(alice, "movie:1", "want_to_watch"),
-    ]) {
-      await updateWatchStatus(alice, "movie:1", "watching");
-      await save();
-      assert.deepEqual(
-        (
-          await db.query(
-            `SELECT 'progress' AS entry FROM watch_progress WHERE owner_id=$1 AND active
-            UNION ALL SELECT item_type FROM feed_item WHERE owner_id=$1 AND active`,
-            [alice],
-          )
-        ).rows,
-        [{ entry: "want_to_watch" }],
-      );
-    }
-  } finally {
-    await db.query(
-      "ALTER TABLE feed_item ENABLE TRIGGER feed_item_withdraw_progress",
+  for (const save of [
+    () => updateTitleActivity(alice, "movie:1", "want_to_watch", true),
+    () => updateWatchStatus(alice, "movie:1", "want_to_watch"),
+  ]) {
+    await updateWatchStatus(alice, "movie:1", "watching");
+    await save();
+    assert.deepEqual(
+      (
+        await db.query(
+          `SELECT 'progress' AS entry FROM watch_progress WHERE owner_id=$1 AND active
+          UNION ALL SELECT item_type FROM feed_item WHERE owner_id=$1 AND active`,
+          [alice],
+        )
+      ).rows,
+      [{ entry: "want_to_watch" }],
     );
   }
 });

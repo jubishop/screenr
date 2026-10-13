@@ -12,14 +12,12 @@ const triggers = `SELECT c.relname AS "table",t.tgname AS name
   ORDER BY 1,2`;
 const legacyFunctions = `SELECT proname FROM pg_proc
   WHERE pronamespace=current_schema()::text::regnamespace
-  AND proname IN ('screenr_sync_actions','screenr_attach_legacy_comment')`;
+  AND proname IN ('screenr_sync_actions','screenr_attach_legacy_comment',
+    'screenr_withdraw_progress')`;
 
-// Besides notifications, only the watch status guard for the release before
-// migration 018 remains; a later migration drops it.
-test("migrated databases keep only the notification and watch status triggers", async () => {
+test("migrated databases keep only the notification triggers", async () => {
   assert.deepEqual((await db.query(triggers)).rows, [
     { table: "comment", name: "comment_notify" },
-    { table: "feed_item", name: "feed_item_withdraw_progress" },
     { table: "friendship", name: "friendship_notify" },
   ]);
   assert.deepEqual((await db.query(legacyFunctions)).rows, []);
@@ -268,6 +266,107 @@ test("legacy column migration drops the conversation flags and keeps every row a
         JOIN comment c ON c.id=v.comment_id WHERE c.body='New reply'`),
       [{ linked: true }],
     );
+  } finally {
+    await client.query("ROLLBACK");
+    client.release();
+    await pool.end();
+  }
+});
+
+// Every retained release withdraws the progress entry itself when Want to
+// watch turns on, so migration 023 drops the guard migration 018 added for
+// the release before it.
+const dropWatchStatusGuard = "db/023-drop-watch-status-guard.sql";
+
+test("watch status guard migration drops only the trigger and its function", async () => {
+  const pool = new Pool({ connectionString: testDatabaseURL });
+  const client = await pool.connect();
+  const rows = async (sql: string) => (await client.query(sql)).rows;
+  try {
+    await client.query("BEGIN");
+    await client.query("CREATE SCHEMA watch_status_guard_migration_test");
+    await client.query(
+      "SET LOCAL search_path=watch_status_guard_migration_test",
+    );
+    await client.query('CREATE TABLE "user" (id text PRIMARY KEY)');
+    for (const name of [
+      "001-domain",
+      "004-feed-items",
+      "005-title-comments",
+      "006-reactions",
+      "006-remove-title-comments",
+      "008-exclusive-title-actions",
+      "010-notifications",
+      "017-retire-legacy-triggers",
+      "018-watch-statuses",
+    ])
+      await client.query(await readFile(`db/${name}.sql`, "utf8"));
+    // Alice has a progress status on one title and Want to watch on another,
+    // each with a reply and a reaction.
+    await client.query(`INSERT INTO "user" VALUES ('alice'),('ben');
+      INSERT INTO profile(user_id,username,display_name) SELECT id,id,id FROM "user";
+      INSERT INTO friendship(low_id,high_id,requested_by,accepted_at) VALUES ('alice','ben','ben',now());
+      INSERT INTO title(id,kind,tmdb_id,name) VALUES ('movie:1','movie',1,'Film'),('tv:2','tv',2,'Show');
+      INSERT INTO conversation(id,owner_id,title_id) VALUES
+        (gen_random_uuid(),'alice','movie:1'),(gen_random_uuid(),'alice','tv:2');
+      INSERT INTO watch_progress(id,conversation_id,owner_id,title_id,status,finished_on)
+        SELECT gen_random_uuid(),id,owner_id,title_id,'finished','2026-10-01' FROM conversation WHERE title_id='movie:1';
+      INSERT INTO feed_item(id,conversation_id,owner_id,title_id,item_type,active)
+        SELECT gen_random_uuid(),id,owner_id,title_id,'want_to_watch',true FROM conversation WHERE title_id='tv:2';
+      INSERT INTO comment(conversation_id,watch_progress_id,author_id,body)
+        SELECT conversation_id,id,'ben','Progress reply' FROM watch_progress;
+      INSERT INTO comment(conversation_id,feed_item_id,author_id,body)
+        SELECT conversation_id,id,'ben','Want to watch reply' FROM feed_item;
+      INSERT INTO reaction(user_id,watch_progress_id,kind) SELECT 'ben',id,'love' FROM watch_progress;
+      INSERT INTO reaction(user_id,feed_item_id,kind) SELECT 'ben',id,'wow' FROM feed_item`);
+
+    const tables = [
+      "conversation",
+      "feed_item",
+      "watch_progress",
+      "comment",
+      "reaction",
+      "notification",
+    ];
+    const snapshot = async () => {
+      const result: Record<string, Record<string, unknown>[]> = {};
+      for (const table of tables)
+        result[table] = await rows(`SELECT * FROM ${table} t ORDER BY t::text`);
+      return result;
+    };
+    const guard = `SELECT proname FROM pg_proc
+      WHERE pronamespace=current_schema()::text::regnamespace
+      AND proname='screenr_withdraw_progress'`;
+    const before = await snapshot();
+    assert.deepEqual(
+      (await rows(triggers)).map(({ name }) => name),
+      ["comment_notify", "feed_item_withdraw_progress", "friendship_notify"],
+    );
+    assert.deepEqual(await rows(guard), [
+      { proname: "screenr_withdraw_progress" },
+    ]);
+    assert.equal(before.comment.length, 2);
+    assert.equal(before.reaction.length, 2);
+    assert.equal(before.notification.length, 3);
+
+    // It drops only the guard; running it again changes nothing.
+    for (let run = 0; run < 2; run++) {
+      await client.query(await readFile(dropWatchStatusGuard, "utf8"));
+      assert.deepEqual(
+        (await rows(triggers)).map(({ name }) => name),
+        ["comment_notify", "friendship_notify"],
+      );
+      assert.deepEqual(await rows(guard), []);
+      assert.deepEqual(await snapshot(), before);
+    }
+
+    // The database no longer withdraws a progress status; retained releases
+    // do it in the same transaction as Want to watch.
+    await client.query(`INSERT INTO feed_item(id,conversation_id,owner_id,title_id,item_type,active)
+      SELECT gen_random_uuid(),id,owner_id,title_id,'want_to_watch',true FROM conversation WHERE title_id='movie:1'`);
+    assert.deepEqual(await rows("SELECT active FROM watch_progress"), [
+      { active: true },
+    ]);
   } finally {
     await client.query("ROLLBACK");
     client.release();
