@@ -223,7 +223,7 @@ export function TitleView({
                   name={data.title.name}
                   entries={entries}
                   busy={busy}
-                  run={(replace) => topTen(data.title.id, "add", replace)}
+                  run={(replace) => topTen(data.title.id, "add", { replace })}
                   onDone={() => close(topTenButton)}
                   onCancel={() => close(topTenButton)}
                 />

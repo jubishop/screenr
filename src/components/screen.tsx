@@ -294,8 +294,12 @@ export function Screen({
   function finishedDate(title: string, date: string | null) {
     return mutate("finished-date", { title, date });
   }
-  function topTen(title: string, change: TopTenChange, replace?: string) {
-    return mutate("top-ten", { title, change, replace });
+  function topTen(
+    title: string,
+    change: TopTenChange,
+    options?: { replace?: string; rank?: number },
+  ) {
+    return mutate("top-ten", { title, change, ...options });
   }
   const shell = (
     <div className="app-shell">

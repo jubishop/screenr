@@ -293,20 +293,21 @@ const actions: Record<string, Action> = {
     input: ({ title }) => id(title),
     run: (title, { userId }) => removeReview(userId, title),
   }),
-  // `change` is add, remove, up, or down. Adding to a full list names the
-  // listed title to remove as `replace`.
+  // `change` is add, remove, up, down, or move. Adding to a full list names
+  // the listed title to remove as `replace`; moving names the new `rank`.
   "top-ten": write({
-    input: ({ title, change, replace }) => ({
+    input: ({ title, change, replace, rank }) => ({
       title: id(title),
       change,
       replace,
+      rank,
     }),
-    run: async ({ title, change, replace }, { userId }) =>
+    run: async ({ title, change, replace, rank }, { userId }) =>
       updateTopTen(
         userId,
         change === "add" ? await ensureTitle(title) : title,
         change,
-        replace,
+        { replace, rank },
       ),
   }),
   "title-comment": write({

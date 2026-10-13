@@ -25,7 +25,7 @@ export type TopTenEntry = Pick<Title, "id" | "name" | "poster_path"> & {
   rank: number;
 };
 export const topTenLimit = 10;
-export const topTenChanges = ["add", "remove", "up", "down"] as const;
+export const topTenChanges = ["add", "remove", "up", "down", "move"] as const;
 export type TopTenChange = (typeof topTenChanges)[number];
 export const codeLimitMessage =
   "Too many codes requested. Try again later, or continue with Google.";

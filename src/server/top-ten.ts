@@ -40,6 +40,15 @@ async function rankOf(client: PoolClient, owner: string, titleId: string) {
   );
 }
 
+async function size(client: PoolClient, owner: string) {
+  return (
+    await client.query<{ count: number }>(
+      "SELECT count(*)::int AS count FROM top_ten WHERE owner_id=$1",
+      [owner],
+    )
+  ).rows[0].count;
+}
+
 // Removes a title and moves the entries below it up. Returns the rank it
 // held, or null when it was not listed.
 export async function leaveTopTen(
@@ -74,12 +83,7 @@ export async function joinTopTen(
     if ((await leaveTopTen(client, owner, replace)) === null)
       throw new AppError("Choose a title from your top 10 to remove.");
   }
-  const { count } = (
-    await client.query<{ count: number }>(
-      "SELECT count(*)::int AS count FROM top_ten WHERE owner_id=$1",
-      [owner],
-    )
-  ).rows[0];
+  const count = await size(client, owner);
   if (count >= topTenLimit)
     throw new AppError("Your top 10 is full. Choose a title to remove.");
   await client.query(
@@ -103,6 +107,27 @@ export async function moveInTopTen(
     `UPDATE top_ten SET rank=CASE WHEN rank=$2 THEN $3 ELSE $2 END
     WHERE owner_id=$1 AND rank IN ($2,$3)
       AND EXISTS (SELECT 1 FROM top_ten WHERE owner_id=$1 AND rank=$3)`,
+    [owner, rank, target],
+  );
+}
+
+// Moves a title to `target` and shifts the entries between by one toward its
+// old rank, in one statement. Its own rank changes nothing.
+export async function moveInTopTenTo(
+  client: PoolClient,
+  owner: string,
+  titleId: string,
+  target: number,
+) {
+  const rank = await rankOf(client, owner, titleId);
+  if (rank === null) throw new AppError("That title is not in your top 10.");
+  if (target < 1 || target > (await size(client, owner)))
+    throw new AppError("Choose a rank in your top 10.");
+  await client.query(
+    `UPDATE top_ten SET rank=CASE WHEN rank=$2 THEN $3
+      WHEN $2<$3 THEN rank-1 ELSE rank+1 END
+    WHERE owner_id=$1
+      AND rank BETWEEN least($2::int,$3::int) AND greatest($2,$3)`,
     [owner, rank, target],
   );
 }

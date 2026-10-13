@@ -281,8 +281,10 @@ a.person:hover strong {
 .top-ten-empty {
   margin: 0;
 }
-/* The padding keeps focus rings inside the scrolling area. */
+/* The padding keeps focus rings inside the scrolling area. The row positions
+   its posters, so dragging can read their places. */
 .top-ten-row {
+  position: relative;
   display: flex;
   gap: 14px;
   margin: 0 -6px;
@@ -294,6 +296,7 @@ a.person:hover strong {
   scroll-padding: 0 6px;
 }
 .top-ten-row li {
+  position: relative;
   flex: none;
   width: 104px;
   scroll-snap-align: start;
@@ -309,6 +312,47 @@ a.person:hover strong {
 }
 .top-ten-row a:hover .top-ten-name {
   text-decoration: underline;
+}
+/* With a mouse or trackpad, the owner drags posters to reorder them. The
+   dragged poster follows the pointer over the others, and a bar in the gap,
+   drawn above it, marks where it will land. */
+.top-ten-row.draggable {
+  user-select: none;
+}
+.top-ten-row.draggable a {
+  cursor: grab;
+}
+.top-ten-row[data-dragging] {
+  scroll-snap-type: none;
+}
+.top-ten-row[data-dragging],
+.top-ten-row[data-dragging] a {
+  cursor: grabbing;
+}
+.top-ten-row [data-dragged] {
+  z-index: 1;
+  background: var(--paper);
+}
+.top-ten-row [data-dragged] .poster {
+  box-shadow: 0 10px 30px var(--shadow-strong);
+}
+.top-ten-row [data-drop]::before {
+  position: absolute;
+  z-index: 2;
+  top: 0;
+  bottom: 0;
+  left: -9px;
+  width: 4px;
+  border-radius: 2px;
+  background: var(--focus);
+  content: "";
+}
+.top-ten-row li:first-child[data-drop="before"]::before {
+  left: -6px;
+}
+.top-ten-row [data-drop="after"]::before {
+  right: -6px;
+  left: auto;
 }
 .top-ten-poster {
   position: relative;
