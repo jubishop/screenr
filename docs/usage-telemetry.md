@@ -44,6 +44,14 @@ day-level rows hold no pages or times.
 **Rejected alternatives:** Counting every request, including refreshes, and
 a per-visit log with timestamps and pages.
 
+**Updated — 2026-10-13:** The
+[native iPhone app](ios-app.md#app-visits-and-client-split-in-usage-telemetry--2026-10-13)
+counts as activity too. Its first screen read after launch, or after
+returning to the foreground, records the day as a page load does. Each row
+also records which clients the member used that day: web, iOS, or both. This
+supersedes "holding only the member and the Pacific date." The report shows
+app adoption.
+
 ### Save attribution, observed and inferred — 2026-10-12
 
 **Decision:** Record each Want to watch save with the member, title, date,

@@ -24,7 +24,8 @@ Do not use memory for:
 - Recent changes or Git history: use `git log` and `git blame`.
 - Local tasks, implementation checklists, or session progress: use
   [td](../docs/foundation/task-tracking.md). Keep shared work in GitHub issues.
-- Secrets or private personal records: this repository is public.
+- Secrets or private personal records: keep them out of Git even though this
+  repository is private.
 
 ## Page format
 

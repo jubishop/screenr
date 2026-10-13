@@ -339,6 +339,17 @@ a green "s" on cream.
 added the manifest, icons, and offline page; see
 [installation and offline page](installation.md).
 
+### Native iPhone app — 2026-10-13
+
+**Decision:** Screenr will add a native iPhone app written in Swift and
+SwiftUI, alongside the web app. It will cover every member feature,
+including joining through an invitation. The
+[native iPhone app plan](ios-app.md) records its accepted decisions and open
+questions.
+
+**Why:** The user proposed the app. They named two things it should
+deliver: real push notifications, and touch drag reordering of the top 10.
+
 ### Interface design — 2026-10-12
 
 The [interface design decisions](interface-design.md) define the layout and
@@ -529,6 +540,45 @@ to the same member and show the current names.
 Profile links and exact-username search use the current username. Changing it
 changes the profile URL; this implementation does not retain old-name redirects
 or reservations. The editor explains the link change before saving.
+
+### Account deletion — 2026-10-13
+
+**Decision:** Members can delete their account from Account on the web and
+from You → Settings in the iPhone app.
+
+**Confirming identity:** deletion first re-verifies the member, with an email
+code or a fresh sign-in.
+
+**What is erased:** deletion is immediate and permanent, with no grace
+period. It removes:
+
+- The person, with their sessions and push devices.
+- Their profile and photo.
+- Their friendships, invitations, and blocks.
+- Their recommendations, watch statuses, reviews, and top 10.
+- Their reactions and notifications.
+- Their usage telemetry rows.
+
+**Posts and comments:** these are erased following the existing
+[author removal](#comment-removal-by-the-conversations-author--2026-09-04)
+behavior:
+
+- A post or review is removed together with its whole conversation.
+- A comment that has replies becomes a "Comment removed" placeholder, so the
+  replies remain.
+
+**Sign in with Apple:** for an account linked to Sign in with Apple, deletion
+also revokes its Apple tokens, as Apple requires.
+
+**Why:** The user accepted the recommendation. App Store
+[guideline 5.1.1(v)](https://developer.apple.com/app-store/review/guidelines/#data-collection-and-storage)
+requires in-app account deletion once the
+[iPhone app](ios-app.md) supports signup.
+
+**Rejected alternatives:**
+
+- A 30-day deactivation before erasure.
+- Deferring the rules to a separate decision.
 
 ### Automatic inviter friendship — 2026-09-07
 

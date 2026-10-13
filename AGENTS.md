@@ -37,9 +37,10 @@ Label every issue when you create it, and relabel it when its scope changes:
 
 - Exactly one type: `bug`, `feature`, `improvement`, `documentation`, or
   `investigation`.
-- Each affected area: `area: ui`, `area: server`, `area: ops` (hosting,
-  deployment, backups, monitoring), or `area: tooling` (tests, CI, development
-  scripts). Documentation-only issues may omit an area.
+- Each affected area: `area: ui` (web client), `area: ios` (native iPhone
+  app), `area: server`, `area: ops` (hosting, deployment, backups,
+  monitoring), or `area: tooling` (tests, CI, development scripts).
+  Documentation-only issues may omit an area.
 - `security`, `privacy`, `accessibility`, or `performance` when that concern is
   central to the issue.
 - `needs decision` while the issue waits on the user's product or policy
@@ -93,5 +94,7 @@ Do not treat an interview recommendation as an accepted decision.
 Record each accepted interview decision using the process in
 [`docs/README.md`](docs/README.md#recording-decisions).
 
-This is a public repository. Keep credentials, private records, local
-environment files, and generated caches out of Git.
+This repository is private (since 2026-10-13); see the
+[visibility decision](docs/ios-app.md#private-repository-with-a-self-hosted-ios-runner--2026-10-13).
+Still keep credentials, private records, local environment files, and
+generated caches out of Git.

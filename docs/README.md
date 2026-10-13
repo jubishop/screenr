@@ -87,6 +87,9 @@ both memory and design documents.
 - [Profile top 10](profile-top-ten.md): accepted ranked list, rank-based
   recommendation weight, and member-visible exception for issue #99, and
   their implementation.
+- [Native iPhone app](ios-app.md): accepted decisions for the Swift and
+  SwiftUI iPhone app, its server support, push notifications, Sentry, CI, and
+  TestFlight releases.
 - [Application stack](application-stack.md): selected core stack, alternatives,
   tradeoffs, and implementation conventions.
 - [Development workflow](development-workflow.md): repository setup, the
