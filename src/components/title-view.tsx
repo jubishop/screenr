@@ -12,9 +12,9 @@ import { useActionError } from "./action-error";
 import { ActionButton } from "./action-button";
 import { localToday, WatchStatusMenu } from "./watch-status";
 import { useReviewEditor } from "./review";
-// Suggestion tiles and Watch together open title pages with ?from=<surface>,
-// so a Want to watch status chosen here reports where the member found the
-// title.
+// Suggestion tiles, Friends recommend, and Watch together open title pages
+// with ?from=<surface>, so a Want to watch status chosen here reports where
+// the member found the title.
 const origins: SaveSurface[] = [
   "friends_recommend",
   "suggestion_recommendation",

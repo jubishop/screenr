@@ -185,6 +185,26 @@ test("Find a title filters catalog results and suggestions using current service
     "Night Orchard",
     "Night Harbor",
   ]);
+  // The page-wide filter stays on for the Friends recommend tab.
+  const tabs = page.getByRole("navigation", { name: "Find a title lists" });
+  await tabs.getByRole("link", { name: "Friends recommend" }).click();
+  const recommended = page.getByRole("region", {
+    name: "Friends recommend",
+    exact: true,
+  });
+  await expect(filter).toHaveAttribute("aria-pressed", "true");
+  await expect(recommended.getByRole("heading")).toHaveText([
+    "Night Orchard",
+    "Night Harbor",
+  ]);
+  await expect(
+    recommended.getByText("Included in your saved services"),
+  ).toHaveCount(1);
+  await expect(
+    page.getByText(/1 title has unknown viewing options/),
+  ).toBeVisible();
+  await noOverflow(page, "streaming-recommend");
+  await tabs.getByRole("link", { name: "Suggestions" }).click();
   await noOverflow(page, "streaming-search");
   await save(page, []);
   await expect(suggestions.getByRole("heading")).toHaveText(["Night Orchard"]);

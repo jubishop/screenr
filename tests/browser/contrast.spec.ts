@@ -151,6 +151,9 @@ for (const width of [390, 1366])
     await page.goto("/search?q=streaming%20choices");
     await expect(page.locator(".search-result").first()).toBeVisible();
     await expectBothThemes(page, `search-${width}`);
+    await page.goto("/search?tab=friends-recommend");
+    await expect(page.getByText("Recommended by Maya Chen")).toBeVisible();
+    await expectBothThemes(page, `friends-recommend-${width}`);
     await page.goto("/people");
     await expect(page.getByText("Bea Blocked")).toBeVisible();
     await expectBothThemes(page, `friends-${width}`);

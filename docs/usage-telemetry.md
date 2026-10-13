@@ -166,11 +166,13 @@ The client sends one of these surfaces with the Want to watch action:
 | `suggestion` | A title page opened from another suggestion tile | No |
 | `watch_together` | A title page opened from Watch together | No |
 | `title` | A title page reached another way, such as search or a feed link | No |
-| `friends_recommend` | Reserved for the Friends recommend view ([#102](https://github.com/jubishop/screenr/issues/102)) | Yes |
+| `friends_recommend` | The Friends recommend tab on Find a title, or a title page opened from it | Yes |
 
 Suggestion tiles and Watch together have no inline title actions, so their
-links add `?from=<surface>` to the title page address. The title page sends
-that surface with its Want to watch action. The member route parser ignores
+links add `?from=<surface>` to the title page address. Friends recommend
+sends its surface with its own Want to watch action, and its title links add
+`?from=friends_recommend`. The title page sends that surface with its Want to
+watch action. The member route parser ignores
 the parameter, so it does not change which screen loads; a copied address
 keeps it. A save without a surface, from a page loaded before this release,
 stores no surface and can count only as inferred. An unknown surface is

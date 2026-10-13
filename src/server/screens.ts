@@ -6,12 +6,14 @@ import { listInvitations } from "./invitations";
 import { AppError, db } from "./db";
 import { watchTogether } from "./watch-together";
 import { titleSuggestions } from "./title-suggestions";
+import { friendsRecommend } from "./friends-recommend";
 import { savedServices, streamingServices } from "./streaming-services";
 import { withViewingOptions } from "./title-viewing";
 import { activityEmail, unreadNotifications } from "./notifications";
 import { logFailure } from "./log";
 import { watchStatus } from "./title-actions";
 import { parseMemberRoute, type MemberRoute } from "../member-routes";
+import type { Title } from "../shared";
 
 export async function loadScreen(userId: string, requestedPath: string) {
   const [content, unread] = await Promise.all([
@@ -57,12 +59,28 @@ async function loadContent(userId: string, route: MemberRoute) {
       kind: "feed" as const,
       conversations: await conversations(userId),
     };
-  if (route.kind === "search")
+  if (route.kind === "search") {
+    // Both Find a title tabs load together, so switching tabs needs no new
+    // read, and one availability read covers titles on either list.
+    const [suggestions, recommendations, serviceIds] = await Promise.all([
+      titleSuggestions(userId),
+      friendsRecommend(userId),
+      savedServices(userId),
+    ]);
+    const viewing = new Map(
+      (await withViewingOptions([...suggestions, ...recommendations])).map(
+        (title) => [title.id, title.viewing],
+      ),
+    );
+    const withViewing = <T extends Title>(titles: T[]) =>
+      titles.map((title) => ({ ...title, viewing: viewing.get(title.id)! }));
     return {
       kind: "search" as const,
-      suggestions: await withViewingOptions(await titleSuggestions(userId)),
-      serviceIds: await savedServices(userId),
+      suggestions: withViewing(suggestions),
+      recommendations: withViewing(recommendations),
+      serviceIds,
     };
+  }
   if (route.kind === "people")
     return { kind: "people" as const, ...(await people(userId)) };
   if (route.kind === "watch-together") {

@@ -2,13 +2,19 @@
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import type { TitleSuggestion, ViewingTitle } from "../shared";
-import { memberPath, parseMemberRoute } from "../member-routes";
+import type {
+  FriendsRecommendation,
+  SaveSurface,
+  TitleSuggestion,
+  ViewingTitle,
+} from "../shared";
+import { memberPath, parseMemberRoute, type SearchTab } from "../member-routes";
 import { viewingAccess } from "../viewing";
 import { TitleServices, ViewingAttribution } from "./title-services";
 import { api, useInteractive } from "./client";
 import { Poster } from "./poster";
 import { TitleCard } from "./title-card";
+import { FriendsRecommend, ofKind, type TitleKind } from "./friends-recommend";
 
 type ReasonAction = "recommended" | "want_to_watch" | "watching";
 
@@ -52,18 +58,72 @@ function Reason({
 
 const tooShort = "Enter at least two characters to search.";
 
+const tabs: { tab?: SearchTab; label: string }[] = [
+  { label: "Suggestions" },
+  { tab: "friends-recommend", label: "Friends recommend" },
+];
+
+// Find a title's tabs change the URL in place, like a submitted search, so
+// both keep their state. Before the page is interactive, and when opened in a
+// new tab or window, each is an ordinary link.
+function TabLink({
+  tab,
+  current,
+  label,
+}: {
+  tab?: SearchTab;
+  current: boolean;
+  label: string;
+}) {
+  const href = memberPath({ kind: "search", tab });
+  return (
+    <a
+      href={href}
+      aria-current={current ? "page" : undefined}
+      onClick={(event) => {
+        if (
+          event.button !== 0 ||
+          event.metaKey ||
+          event.ctrlKey ||
+          event.shiftKey ||
+          event.altKey
+        )
+          return;
+        event.preventDefault();
+        if (!current) window.history.pushState(null, "", href);
+      }}
+    >
+      {label}
+    </a>
+  );
+}
+
 export function TitleSearch({
   suggestions,
+  recommendations,
   serviceIds,
+  activity,
+  busy,
 }: {
   suggestions: ViewingTitle<TitleSuggestion>[] | null;
+  recommendations: ViewingTitle<FriendsRecommendation>[] | null;
   serviceIds: string[] | null;
+  activity: (
+    title: string,
+    field: string,
+    value: boolean,
+    surface?: SaveSurface,
+  ) => Promise<unknown>;
+  busy: boolean;
 }) {
   const interactive = useInteractive();
-  // The URL holds the submitted query, so Back, Forward, and reloads restore
-  // a search. Typing edits a draft until the viewer submits or clears it.
+  // The URL holds the submitted query and the tab, so Back, Forward, and
+  // reloads restore them. Typing edits a draft until the viewer submits or
+  // clears it.
   const route = parseMemberRoute(`${usePathname()}?${useSearchParams()}`);
   const submitted = (route.kind === "search" && route.q) || "";
+  const tab = route.kind === "search" ? route.tab : undefined;
+  const [kind, setKind] = useState<TitleKind>("all");
   const [query, setQuery] = useState(submitted);
   const [results, setResults] = useState<ViewingTitle[] | null>(
     submitted.length < 2 ? null : [],
@@ -93,7 +153,11 @@ export function TitleSearch({
     if (value.trim()) return;
     // Clearing isn't a new search, so it replaces the current history entry.
     if (submitted)
-      window.history.replaceState(null, "", memberPath({ kind: "search" }));
+      window.history.replaceState(
+        null,
+        "",
+        memberPath({ kind: "search", tab }),
+      );
     void search("");
   }
 
@@ -108,7 +172,7 @@ export function TitleSearch({
       window.history.pushState(
         null,
         "",
-        memberPath({ kind: "search", q: text }),
+        memberPath({ kind: "search", tab, q: text }),
       );
     void search(text);
   }
@@ -157,7 +221,11 @@ export function TitleSearch({
       viewingAccess(title.viewing, serviceIds) === "available");
   const visibleResults = results?.filter(included);
   const visibleSuggestions = suggestions?.filter(included);
-  const unknownCount = (results ?? suggestions ?? []).filter(
+  const listed: ViewingTitle[] =
+    results ??
+    (tab ? recommendations?.filter(ofKind(kind)) : suggestions) ??
+    [];
+  const unknownCount = listed.filter(
     (title) => viewingAccess(title.viewing, serviceIds ?? []) === "unknown",
   ).length;
 
@@ -250,7 +318,31 @@ export function TitleSearch({
               </p>
             )}
         </section>
-      ) : suggestions !== null ? (
+      ) : (
+        <nav className="view-tabs" aria-label="Find a title lists">
+          {tabs.map((option) => (
+            <TabLink
+              key={option.label}
+              tab={option.tab}
+              current={option.tab === tab}
+              label={option.label}
+            />
+          ))}
+        </nav>
+      )}
+      {results === null && tab && recommendations !== null && (
+        <FriendsRecommend
+          recommendations={recommendations}
+          kind={kind}
+          setKind={setKind}
+          included={included}
+          myServices={myServices}
+          serviceIds={serviceIds ?? []}
+          activity={activity}
+          busy={busy}
+        />
+      )}
+      {results !== null || tab ? null : suggestions !== null ? (
         suggestions.length ? (
           <>
             <div className="section-heading">

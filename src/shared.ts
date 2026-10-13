@@ -65,6 +65,14 @@ export type TitleSuggestion = Title & {
   second_degree_wanted: number;
   second_degree_watching: number;
 };
+// A title that current direct friends recommend, for Friends recommend.
+export type FriendsRecommendation = Title & {
+  // Recommending friends, most recent recommendation first.
+  recommended_by: Pick<Person, "username" | "display_name">[];
+  // The viewer's own current status and Recommend for the title.
+  viewer_status: WatchStatus | null;
+  viewer_recommended: boolean;
+};
 export const reactionOptions = [
   { kind: "like", label: "Like", emoji: "👍" },
   { kind: "love", label: "Love", emoji: "❤️" },

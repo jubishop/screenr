@@ -188,6 +188,27 @@ services filter because the control sits above both tabs.
 **Rejected alternatives:** A link from the friends feed, a fifth navigation
 item, and leaving the entry point open in #102.
 
+**Implementation note:** Friends recommend is `/search?tab=friends-recommend`;
+Suggestions, the default, adds no parameter. `src/member-routes.ts` keeps the
+tab beside a submitted query, so clearing a search returns to the same tab.
+The search screen loads both lists, and one availability read covers them,
+so `src/components/title-search.tsx` switches tabs by changing the URL in
+place, as it does for a query. Each tab adds a history entry, and the My
+services and Movies/TV filters keep their state across tabs. Before the page
+is interactive, or opened in a new tab, each tab is an ordinary link. The
+tabs are links in a navigation landmark, with `aria-current="page"` on the
+selected one, and searching hides them with the tab content.
+`src/components/friends-recommend.tsx` lists each title in the shared title
+card, with "Recommended by" and the friends' names, then one action beneath
+the card's link. The action is the feed's one-tap **+ Want to watch**, which
+reads **✓ Want to watch** and removes it on a second tap. A viewer with
+another status sees it instead, and a viewer who recommends the title sees
+**✓ Recommended**, since Want to watch would withdraw that Recommend; both
+link to the title page. The action and the title links report the
+[`friends_recommend` surface](usage-telemetry.md#save-attribution).
+[Data and access](data-and-access.md#friends-recommend) describes the list's
+audience and order.
+
 ### Plain page titles — 2026-10-12
 
 **Decision:** Title each member page with its name in a smaller heading.

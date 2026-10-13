@@ -174,6 +174,28 @@ moves the person to Sent requests. Polling, focus changes,
 and relationship actions refresh the section. This discovery route does not
 grant access to private activity or change anonymous title suggestions.
 
+## Friends recommend
+
+`src/server/friends-recommend.ts` reads the
+[Friends recommend](interface-design.md#friends-recommend-as-a-find-a-title-tab--2026-10-12)
+tab in one query. It counts active Recommends from the viewer's current
+direct friends: an accepted friendship with no block in either direction,
+which also excludes a block left beside a retained friendship. Pending
+requests, friends of friends, withdrawn Recommends, Want to watch, watch
+statuses, comments, and the viewer's own Recommend count for nothing.
+
+Titles sort by the sum of each recommending friend's contribution, then the
+most recent active Recommend, then the title name and ID. Contributions use
+the [integer twentieths](profile-top-ten.md#ranking): each Recommend adds 20
+until the profile top 10
+([#99](https://github.com/jubishop/screenr/issues/99)) replaces a top 10
+Recommend's 20 with `40 - rank` and adds ranks beside names. Each title lists
+its friends' usernames and display names, most recent Recommend first, with
+the viewer's current status and whether the viewer recommends it. The
+response holds no scores, feed item IDs, or account IDs. The viewer's
+statuses do not hide titles; hiding Finished titles is
+[#172](https://github.com/jubishop/screenr/issues/172).
+
 ## Write lock and refresh behavior
 
 All domain writes take one transaction advisory lock. This makes invitation

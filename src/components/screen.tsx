@@ -382,7 +382,12 @@ export function Screen({
         {route.kind === "search" && (
           <TitleSearch
             suggestions={data?.kind === "search" ? data.suggestions : null}
+            recommendations={
+              data?.kind === "search" ? data.recommendations : null
+            }
             serviceIds={data?.kind === "search" ? data.serviceIds : null}
+            activity={activity}
+            busy={busy}
           />
         )}
         {route.kind === "people" && (

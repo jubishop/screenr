@@ -25,6 +25,14 @@ test("member routes name each screen and its parameters", () => {
     ["/search", { kind: "search" }],
     ["/search?q=Severance", { kind: "search", q: "Severance" }],
     ["/search?q=+The%20Office+", { kind: "search", q: "The Office" }],
+    [
+      "/search?tab=friends-recommend",
+      { kind: "search", tab: "friends-recommend" },
+    ],
+    [
+      "/search?q=Lost&tab=friends-recommend",
+      { kind: "search", q: "Lost", tab: "friends-recommend" },
+    ],
     ["/people", { kind: "people" }],
     ["/invites", { kind: "invites" }],
     ["/account?error=access_denied", { kind: "account" }],
@@ -48,6 +56,9 @@ test("member routes name each screen and its parameters", () => {
   for (const [path, route] of cases) assert.deepEqual(parse(path), route, path);
   assert.deepEqual(parse("/?item=&reply="), { kind: "feed" });
   assert.deepEqual(parse("/search?q=%20%20"), { kind: "search" });
+  // Suggestions is the default tab, so only Friends recommend is named.
+  for (const tab of ["", "suggestions", "Friends-Recommend", "other"])
+    assert.deepEqual(parse(`/search?tab=${tab}`), { kind: "search" }, tab);
   assert.deepEqual(parse("/titles/movie/42?item="), {
     kind: "title",
     id: "movie:42",
@@ -76,6 +87,13 @@ test("member paths keep only each screen's parameters and round-trip", () => {
     ["/search?item=post&q=The%20Office", "/search?q=The+Office"],
     ["/search?q=+Lost+", "/search?q=Lost"],
     ["/search?q=", "/search"],
+    ["/search?tab=friends-recommend", "/search?tab=friends-recommend"],
+    [
+      "/search?q=Lost&tab=friends-recommend",
+      "/search?tab=friends-recommend&q=Lost",
+    ],
+    ["/search?tab=other&q=Lost", "/search?q=Lost"],
+    ["/?tab=friends-recommend", "/"],
     ["/?q=Lost", "/"],
     ["/account?error=access_denied", "/account"],
     ["/people/alice?item=post", "/people/alice"],
@@ -110,6 +128,7 @@ test("return paths keep same-origin member pages in canonical form", () => {
       "/titles/movie/42?item=post&reply=answer",
     ],
     ["/search?q=The%20Office", "/search?q=The+Office"],
+    ["/search?tab=friends-recommend", "/search?tab=friends-recommend"],
     ["/people/alice#friends", "/people/alice"],
     ["/people/%2F%2Fevil.example", "/people/%2F%2Fevil.example"],
     ["/conversations/legacy?reply=old", "/conversations/legacy?reply=old"],

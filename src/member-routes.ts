@@ -3,9 +3,12 @@
 // which screen a URL names and which of its query parameters matter. Sign-in
 // accepts only these paths as return paths.
 type ItemTarget = { item?: string; reply?: string };
+// Find a title's tabs. Suggestions is the default, so only Friends recommend
+// appears in the URL.
+export type SearchTab = "friends-recommend";
 export type MemberRoute =
   | ({ kind: "feed" } & ItemTarget)
-  | { kind: "search"; q?: string }
+  | { kind: "search"; q?: string; tab?: SearchTab }
   | { kind: "people" }
   | { kind: "invites" }
   | { kind: "account" }
@@ -34,7 +37,14 @@ export function parseMemberRoute(path: string): MemberRoute {
   if (!rest.length) {
     // Search trims its query, so whitespace alone names no search.
     if (section === "search")
-      return { kind: section, q: param("q")?.trim() || undefined };
+      return {
+        kind: section,
+        q: param("q")?.trim() || undefined,
+        tab:
+          param("tab") === "friends-recommend"
+            ? "friends-recommend"
+            : undefined,
+      };
     if (section === "watch-together")
       return { kind: section, with: url.searchParams.getAll("with") };
     const page = pages.find((name) => name === section);
@@ -59,7 +69,7 @@ export function memberPath(route: MemberRoute): string {
       return withQuery(`/titles/${segments(kind, tmdbId.join(":"))}`, route);
     }
     case "search":
-      return withQuery("/search", { q: route.q });
+      return withQuery("/search", { tab: route.tab, q: route.q });
     case "watch-together":
       return withQuery("/watch-together", { with: route.with });
     case "profile":
@@ -80,13 +90,15 @@ function withQuery(
   {
     item,
     reply,
+    tab,
     q,
     with: usernames = [],
-  }: ItemTarget & { q?: string; with?: string[] },
+  }: ItemTarget & { tab?: SearchTab; q?: string; with?: string[] },
 ) {
   const query = new URLSearchParams();
   if (item) query.set("item", item);
   if (reply) query.set("reply", reply);
+  if (tab) query.set("tab", tab);
   if (q) query.set("q", q);
   for (const username of usernames) query.append("with", username);
   return query.size ? `${path}?${query}` : path;

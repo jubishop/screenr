@@ -324,6 +324,12 @@ recipients. A full run checks:
 - Search and Watch together rows clamp descriptions to two lines and end in a
   chevron. Watch together prompts a viewer without saved services to save
   them on Account.
+- Friends recommend orders and names recommending friends, filters by Movies
+  or TV and by My services across tabs, and saves to Want to watch inline and
+  from title pages with the `friends_recommend` surface. Its tab survives
+  searches, history, and reloads. `tests/app/friends-recommend.test.ts`
+  covers the order, the current-friend audience, which actions count, the
+  viewer's own status, and the response fields.
 - Invitations can be created and revoked.
 - In both the light and dark color schemes, every visible text meets 4.5:1
   and only theme colors are painted. This covers sign-in, setup, credits, and

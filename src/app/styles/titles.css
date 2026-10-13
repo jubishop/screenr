@@ -288,6 +288,57 @@
 .viewing-attribution a {
   text-decoration: underline;
 }
+/* Find a title's Suggestions and Friends recommend tabs. */
+.view-tabs {
+  display: flex;
+  gap: 24px;
+  margin-bottom: 24px;
+  border-bottom: 1px solid var(--line);
+}
+.view-tabs a {
+  padding: 10px 0;
+  margin-bottom: -1px;
+  border-bottom: 3px solid transparent;
+  color: var(--muted);
+  font-weight: 600;
+}
+.view-tabs a[aria-current] {
+  color: var(--ink);
+  border-bottom-color: var(--ink);
+}
+.kind-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.kind-filter button {
+  padding: 7px 14px;
+  font-size: 14px;
+}
+/* Content beneath a title card's link lines up with its text: the poster's
+   width plus the 18px gap. */
+.title-card {
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--line);
+}
+.title-card > .search-result {
+  padding-bottom: 10px;
+  border-bottom: 0;
+}
+.title-card-extra {
+  margin-left: 90px;
+  overflow-wrap: anywhere;
+}
+.recommenders {
+  margin-bottom: 2px;
+  font-size: 14px;
+  color: var(--muted);
+}
+.recommenders strong {
+  color: var(--ink);
+  font-weight: 600;
+}
 .title-services {
   margin-top: 8px;
   overflow-wrap: anywhere;
@@ -319,5 +370,8 @@
   }
   .search-result .overview {
     display: none;
+  }
+  .title-card-extra {
+    margin-left: 78px;
   }
 }

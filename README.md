@@ -30,11 +30,13 @@ test flow, and [Testing Screenr](docs/testing.md) for the automated suites.
   or initial.
 - **Titles:** Find a title searches the TMDB catalog and suggests titles from
   friends' Recommend, Want to watch, and Watching choices, with anonymous
-  counts once at least three friends of friends share a choice. Title pages show details,
-  which friends recommend or want to watch the title, a trailer, US viewing
-  options under Subs and Free, and the title's feed in compact entries.
-  Saved streaming services mark matching titles and enable a My services
-  filter.
+  counts once at least three friends of friends share a choice. Its Friends
+  recommend tab lists titles that direct friends recommend, most recommended
+  first, with who recommends each, a Movies/TV filter, and Want to watch.
+  Title pages show details, which friends recommend or want to watch the
+  title, a trailer, US viewing options under Subs and Free, and the title's
+  feed in compact entries. Saved streaming services mark matching titles and
+  enable a My services filter.
 - **Watch statuses:** A title page's status menu sets one current status:
   Want to watch, Watching, Caught up (TV only), Finished, or Stopped watching,
   with an optional last-finished date. Watching through Stopped watching share
@@ -72,9 +74,8 @@ test flow, and [Testing Screenr](docs/testing.md) for the automated suites.
 Remaining product features are tracked as
 [open feature issues](https://github.com/jubishop/screenr/issues?q=is%3Aissue%20state%3Aopen%20label%3Afeature):
 
-- The Friends recommend view
-  ([#102](https://github.com/jubishop/screenr/issues/102)), hiding Finished
-  titles by default ([#172](https://github.com/jubishop/screenr/issues/172))
+- Hiding Finished titles in Friends recommend by default
+  ([#172](https://github.com/jubishop/screenr/issues/172))
 - Title-less discussion posts and season or episode labels
   ([#103](https://github.com/jubishop/screenr/issues/103))
 - A ranked top 10 on each profile

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { ReactNode } from "react";
 import type { SaveSurface, Title, ViewingTitle } from "../shared";
 import { Poster } from "./poster";
 import { TitleServices } from "./title-services";
@@ -15,20 +16,24 @@ export function titleDetails(title: Pick<Title, "kind" | "release_date">) {
 // One row in a title list, such as search results or Watch together. The
 // heading level follows the list's place in the page outline. `from` tells
 // the title page where a Want to watch save started, for usage telemetry.
+// Children, such as Friends recommend's recommenders and action, follow the
+// link beneath its text, outside the link so they can hold controls.
 export function TitleCard({
   title,
   heading: Heading,
   serviceIds,
   shared,
   from,
+  children,
 }: {
   title: ViewingTitle;
   heading: "h2" | "h3";
   serviceIds: string[];
   shared?: boolean;
   from?: SaveSurface;
+  children?: ReactNode;
 }) {
-  return (
+  const link = (
     <Link
       className="search-result"
       href={`/titles/${title.id.replace(":", "/")}${from ? `?from=${from}` : ""}`}
@@ -47,5 +52,13 @@ export function TitleCard({
       </div>
       <Icon name="chevron" />
     </Link>
+  );
+  return children ? (
+    <div className="title-card">
+      {link}
+      <div className="title-card-extra">{children}</div>
+    </div>
+  ) : (
+    link
   );
 }
