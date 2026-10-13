@@ -1,0 +1,36 @@
+name: Sentry feedback
+
+# Files one GitHub issue per new Sentry feedback item from the iPhone app.
+# Issues hold only the Sentry link, the date, and the app build; see
+# docs/ios-app.md#public-repository-with-feedback-issues-that-link-to-sentry--2026-10-13.
+
+on:
+  schedule:
+    # 14:00 UTC is 07:00 PDT or 06:00 PST; GitHub cron uses UTC only.
+    - cron: "0 14 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: sentry-feedback
+  cancel-in-progress: false
+
+jobs:
+  file:
+    name: File new feedback
+    if: github.repository == 'jubishop/screenr'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: File an issue for each new feedback item
+        env:
+          GH_REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ github.token }}
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+        run: bin/sentry-feedback-issues

@@ -879,6 +879,21 @@ GitHub issues never contain what members write:
    the app build, with no member text or screenshots. Agents read the content
    through Sentry while working the issue.
 
+**Implementation:** `.github/workflows/sentry-feedback.yml` runs
+`bin/sentry-feedback-issues` daily at 14:00 UTC, and on demand with
+`gh workflow run sentry-feedback.yml`. It reads unresolved feedback from the
+`screenr-ios` Sentry project with the read-only `SENTRY_AUTH_TOKEN`
+repository secret, and needs only `contents: read` and `issues: write`. As
+in PodHaven, it skips feedback that is resolved or that Sentry marked as
+spam; Sentry flagged the #249 test feedback as spam until it was marked not
+spam. It files each item as `investigation` and `area: ios`, with a hidden
+`sentry-feedback:screenr-ios:<id>` marker. It skips any feedback whose marker
+or link already appears in an open or closed issue. The issue copies a
+Sentry value only when it matches a strict pattern for an ID or a build, so
+member text cannot reach it. `tests/test_sentry_feedback_issues.py` covers
+the body, deduplication, and failures. Run the script with `--dry-run` to
+list what it would file.
+
 **Why:** The user asked to match PodHaven's flow. Public issues that quoted
 feedback could expose friends' names or comments. Earlier the same day the user
 made the repository private for this reason. They then reversed that once the
