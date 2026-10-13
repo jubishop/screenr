@@ -65,6 +65,14 @@ protocol-relative, backslash, control-character, and other paths, including
 `/login` and `/setup`, fall back to the friends feed. Invitation links and
 sign-out go to `/login` without a return path. Unsent drafts are not kept.
 
+Services find a record by comparing its ID with the column's own type, `uuid`
+or `bigint`, so PostgreSQL reads it through an `id` index instead of scanning
+the table, including while a write holds the shared lock. Only the text
+PostgreSQL prints for that type is an ID: a lowercase, hyphenated UUID, or a
+positive integer in the `bigint` range without leading zeros. Any other value
+returns the same not-found error as a missing record
+([issue #129](https://github.com/jubishop/screenr/issues/129)).
+
 ## Display names
 
 Display names contain 1–60 characters after trimming. Signup and both name

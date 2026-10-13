@@ -1,4 +1,4 @@
-import { AppError, db } from "./db";
+import { AppError, db, isUuid } from "./db";
 import type { FeedItem, FriendActivity, Thread } from "../shared";
 
 // Access, replies, counts, and activity are read in one PostgreSQL snapshot.
@@ -135,7 +135,8 @@ export function friendActivity(
 }
 
 export async function thread(viewer: string, id: string): Promise<Thread> {
-  const { rows } = await db.query(`${itemQuery} AND c.id::text=$2`, [
+  if (!isUuid(id)) throw new AppError("Conversation not found.", 404);
+  const { rows } = await db.query(`${itemQuery} AND c.id=$2::uuid`, [
     viewer,
     id,
   ]);
@@ -149,13 +150,16 @@ export async function conversationURL(
   id: string,
   reply?: string,
 ) {
-  const legacy = (
-    await db.query(
-      `SELECT title_id,owner_id FROM conversation
-    WHERE id::text=$2 AND screenr_can_read($1,owner_id)`,
-      [viewer, id],
-    )
-  ).rows[0];
+  // `thread` below reports an ID that is not a uuid as not found.
+  const legacy = isUuid(id)
+    ? (
+        await db.query(
+          `SELECT title_id,owner_id FROM conversation
+    WHERE id=$2::uuid AND screenr_can_read($1,owner_id)`,
+          [viewer, id],
+        )
+      ).rows[0]
+    : undefined;
   let item: FeedItem | undefined;
   if (legacy) {
     const eligible = await conversations(viewer, {

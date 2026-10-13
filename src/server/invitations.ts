@@ -1,5 +1,12 @@
 import { createHash, createHmac, randomUUID } from "node:crypto";
-import { db, transaction, AppError, displayNameText, usernameText } from "./db";
+import {
+  db,
+  transaction,
+  AppError,
+  displayNameText,
+  isUuid,
+  usernameText,
+} from "./db";
 
 export const invitationHash = (token: string) =>
   createHash("sha256").update(token).digest("hex");
@@ -153,9 +160,10 @@ export async function listInvitations(userId: string) {
 }
 
 export async function revokeInvitation(userId: string, id: string) {
+  if (!isUuid(id)) throw new AppError("Invitation not found.", 404);
   await transaction(async (client) => {
     const result = await client.query(
-      "UPDATE invitation SET revoked_at=coalesce(revoked_at,now()) WHERE id::text=$1 AND creator_id=$2",
+      "UPDATE invitation SET revoked_at=coalesce(revoked_at,now()) WHERE id=$1::uuid AND creator_id=$2",
       [id, userId],
     );
     if (!result.rowCount) throw new AppError("Invitation not found.", 404);

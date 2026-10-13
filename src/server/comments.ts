@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { AppError, text, transaction } from "./db";
+import { AppError, isBigintId, isUuid, text, transaction } from "./db";
 import { belongsTo, entryColumn, feedEntries, itemQuery } from "./feed";
 
 export async function addComment(
@@ -16,9 +16,11 @@ export async function addComment(
     (typeof replyTo !== "string" || !/^\d+$/.test(replyTo))
   )
     throw new AppError("Invalid reply target.");
+  if (!isUuid(conversationId))
+    throw new AppError("Conversation not found.", 404);
   return transaction(async (client) => {
     const conversation = (
-      await client.query(`${itemQuery} AND c.id::text=$2`, [
+      await client.query(`${itemQuery} AND c.id=$2::uuid`, [
         viewer,
         conversationId,
       ])
@@ -27,14 +29,16 @@ export async function addComment(
     let parent:
       { id: string; root_id: string | null; author_id: string } | undefined;
     if (replyTo) {
-      parent = (
-        await client.query(
-          `SELECT id::text,root_id::text,author_id FROM comment
-        WHERE id::text=$1 AND ${belongsTo("comment", "$2::uuid")} AND removed_at IS NULL
+      parent = isBigintId(replyTo)
+        ? (
+            await client.query(
+              `SELECT id::text,root_id::text,author_id FROM comment
+        WHERE id=$1::bigint AND ${belongsTo("comment", "$2::uuid")} AND removed_at IS NULL
         AND screenr_can_read(author_id,$3) AND NOT screenr_blocked($4,author_id)`,
-          [replyTo, conversation.id, conversation.owner_id, viewer],
-        )
-      ).rows[0];
+              [replyTo, conversation.id, conversation.owner_id, viewer],
+            )
+          ).rows[0]
+        : undefined;
       if (!parent) throw new AppError("Reply target not found.", 404);
     }
     const result = await client.query(
@@ -53,22 +57,26 @@ export async function addComment(
     return result.rows[0].id as string;
   });
 }
+
+// Replies have bigint IDs, and standalone entries have uuid IDs.
 export async function removeComment(viewer: string, id: string) {
+  const reply = isBigintId(id);
+  if (!reply && !isUuid(id)) throw new AppError("Comment not found.", 404);
   await transaction(async (client) => {
-    const result = await client.query(
-      `UPDATE comment cm SET removed_at=coalesce(removed_at,now()),body='[removed]'
-      FROM ${feedEntries} c WHERE cm.id::text=$1 AND ${belongsTo("cm", "c.id")}
+    const result = reply
+      ? await client.query(
+          `UPDATE comment cm SET removed_at=coalesce(removed_at,now()),body='[removed]'
+      FROM ${feedEntries} c WHERE cm.id=$1::bigint AND ${belongsTo("cm", "c.id")}
       AND (cm.author_id=$2 OR c.owner_id=$2)
       AND screenr_can_read(cm.author_id,c.owner_id) AND NOT screenr_blocked($2,cm.author_id)`,
-      [id, viewer],
-    );
-    if (result.rowCount) return;
-    const standalone = await client.query(
-      `UPDATE title_comment SET removed_at=coalesce(removed_at,now()),body='[removed]'
-       WHERE id::text=$1 AND owner_id=$2`,
-      [id, viewer],
-    );
-    if (!standalone.rowCount) throw new AppError("Comment not found.", 404);
+          [id, viewer],
+        )
+      : await client.query(
+          `UPDATE title_comment SET removed_at=coalesce(removed_at,now()),body='[removed]'
+       WHERE id=$1::uuid AND owner_id=$2`,
+          [id, viewer],
+        );
+    if (!result.rowCount) throw new AppError("Comment not found.", 404);
   });
 }
 

@@ -64,6 +64,19 @@ export class AppError extends Error {
   }
 }
 
+// Lookups compare IDs with the column's own type so PostgreSQL can use its
+// index. Only the text PostgreSQL prints for a uuid (lowercase, hyphenated) or
+// a positive bigint (no leading zeros) is an ID. Services report any other
+// value as not found before it reaches a cast that would fail.
+export const isUuid = (value: unknown): value is string =>
+  typeof value === "string" &&
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(value);
+
+export const isBigintId = (value: unknown): value is string =>
+  typeof value === "string" &&
+  /^[1-9][0-9]{0,18}$/.test(value) &&
+  BigInt(value) <= 9223372036854775807n;
+
 export function text(value: unknown, label: string, max = 2000): string {
   if (typeof value !== "string" || !value.trim() || value.trim().length > max) {
     throw new AppError(`${label} must contain 1–${max} characters.`);

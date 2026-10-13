@@ -268,7 +268,11 @@ load a photo and its caching headers, automatic Google copies after signup
 and after linking, the removed-photo rule, Use my Google photo, and the
 backfill. A replaced `fetch` stands in for Google's image servers, so no test
 contacts Google. `tests/browser/profile-photos.spec.ts` adds, replaces, and
-removes photos at phone and desktop widths. Focus, drafts,
+removes photos at phone and desktop widths.
+`tests/app/id-lookups.test.ts` plans the statements sent by thread reads,
+replies, reactions, removals, and invitation revocation against a few hundred
+analyzed rows per table, with sequential scans disabled, and requires each ID
+lookup to use an `id` index. Focus, drafts,
 navigation, rendering, spoilers, and visible access changes remain browser
 assertions.
 

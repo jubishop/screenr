@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
-import { AppError, db, transaction } from "./db";
+import { AppError, db, isBigintId, transaction } from "./db";
 
 type NotificationRow = {
   id: string;
@@ -46,12 +46,7 @@ function present(row: NotificationRow) {
 }
 
 function identifier(value: unknown): string {
-  if (
-    typeof value !== "string" ||
-    !/^[1-9][0-9]{0,18}$/.test(value) ||
-    BigInt(value) > 9223372036854775807n
-  )
-    throw new AppError("Invalid notification.");
+  if (!isBigintId(value)) throw new AppError("Invalid notification.");
   return value;
 }
 
