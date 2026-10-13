@@ -220,6 +220,8 @@ export function PeopleView({
           disabled={!interactive}
           id="friend-search"
           placeholder="Find an exact username"
+          autoCapitalize="none"
+          spellCheck={false}
           value={query}
           required
           pattern="[a-zA-Z0-9_]{3,24}"

@@ -490,7 +490,8 @@ interface. The initial preview contains the latest three eligible direct
 comments. Nested replies do not consume preview places. Parent placeholders
 supply context without counting as live comments. **Show earlier comments**
 expands earlier groups inline. Each group's **View N replies** control expands
-or collapses one indented level with a connecting border. Direct comments and
+or collapses one indented level with a connecting border and reads **Hide N
+replies** while the level is open. Direct comments and
 nested replies each retain timestamp and comment-ID order; nested activity
 does not move the direct parent within the discussion.
 

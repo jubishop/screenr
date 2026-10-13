@@ -161,17 +161,39 @@ test("open panel removes blocked activity, recovers from failed reads, and activ
     name: "Email me about new activity",
   });
   await expect(setting).not.toBeChecked();
-  await owner.route(
-    "**/api/screenr/activity-email",
-    (route) => route.abort("failed"),
-    { times: 1 },
-  );
+  const failure = owner
+    .getByRole("region", { name: "Activity emails" })
+    .getByRole("alert");
+  // The checkbox shows the choice while it saves, and a failed save
+  // restores the saved setting.
+  const hold = async (fail: boolean) => {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    await owner.route(
+      "**/api/screenr/activity-email",
+      async (route) => {
+        await gate;
+        if (fail) await route.abort("failed");
+        else await route.continue();
+      },
+      { times: 1 },
+    );
+    return release;
+  };
+  let release = await hold(true);
   await setting.click();
-  await expect(
-    owner.getByRole("region", { name: "Activity emails" }).getByRole("alert"),
-  ).toBeVisible();
+  await expect(setting).toHaveAttribute("aria-disabled", "true");
+  await expect(setting).toBeChecked();
+  release();
+  await expect(failure).toBeVisible();
   await expect(setting).not.toBeChecked();
+  release = await hold(false);
   await setting.click();
+  await expect(setting).toHaveAttribute("aria-disabled", "true");
+  await expect(setting).toBeChecked();
+  await expect(failure).toHaveCount(0);
+  release();
+  await expect(setting).toHaveAttribute("aria-disabled", "false");
   await expect(setting).toBeChecked();
   await expect(setting).toBeEnabled();
   await owner.reload();

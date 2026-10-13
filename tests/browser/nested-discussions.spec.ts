@@ -138,7 +138,14 @@ test("nested discussions group stored replies, preview direct comments, and keep
     });
     await expand.focus();
     await reader.keyboard.press("Enter");
-    await expect(expand).toHaveAttribute("aria-expanded", "true");
+    // The open control offers to hide the replies and keeps focus.
+    const collapse = item.getByRole("button", {
+      name: "Hide 2 replies",
+      exact: true,
+    });
+    await expect(collapse).toHaveAttribute("aria-expanded", "true");
+    await expect(collapse).toBeFocused();
+    await expect(expand).toHaveCount(0);
     await expect(comment(grandchild)).toBeVisible();
     expect((await comment(child).boundingBox())!.x).toBeGreaterThan(
       (await comment(root).boundingBox())!.x + 10,
@@ -231,12 +238,13 @@ test("nested discussions group stored replies, preview direct comments, and keep
     item.getByRole("alert").filter({ hasText: "Removal unavailable" }),
   ).toBeVisible();
   await reader.unroute("**/api/screenr/remove-comment");
-  const groupToggle = item.getByRole("button", {
-    name: "View 2 replies",
-    exact: true,
-  });
-  await groupToggle.click();
+  await item
+    .getByRole("button", { name: "Hide 2 replies", exact: true })
+    .click();
   await expect(comment(child)).toHaveCount(0);
+  await expect(
+    item.getByRole("button", { name: "View 2 replies", exact: true }),
+  ).toHaveAttribute("aria-expanded", "false");
   await nested()
     .getByRole("button", { name: "Post reply", exact: true })
     .click();
@@ -474,7 +482,7 @@ test("nested updates preserve drafts, expansion, and position while parent acces
   ).toBeVisible();
   await expect(comment(child)).toBeVisible();
   await expect(
-    item.getByRole("button", { name: "View 2 replies", exact: true }),
+    item.getByRole("button", { name: "Hide 2 replies", exact: true }),
   ).toHaveAttribute("aria-expanded", "true");
   await reader.reload();
   await expect(

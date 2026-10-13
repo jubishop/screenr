@@ -362,7 +362,7 @@ export function ThreadView({
                           })
                         }
                       >
-                        View {replies.length}{" "}
+                        {open ? "Hide" : "View"} {replies.length}{" "}
                         {replies.length === 1 ? "reply" : "replies"}
                       </button>
                       <div id={`replies-${parent.id}`} className="nested">

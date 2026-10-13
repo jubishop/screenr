@@ -10,7 +10,10 @@ export function ActivityEmailSetting({
   refresh: () => Promise<void>;
 }) {
   const interactive = useInteractive();
-  const [busy, setBusy] = useState(false);
+  // The choice being saved, shown in place of the saved setting until the
+  // save and refresh finish.
+  const [saving, setSaving] = useState<boolean | null>(null);
+  const busy = saving !== null;
   const [error, setError] = useState("");
   return (
     <section className="settings-card" aria-labelledby="activity-email-heading">
@@ -24,7 +27,7 @@ export function ActivityEmailSetting({
         {/* While saving, the setting keeps focus but ignores changes. */}
         <input
           type="checkbox"
-          checked={enabled ?? false}
+          checked={saving ?? enabled ?? false}
           disabled={!interactive || enabled === null}
           aria-disabled={busy}
           onClick={(event) => {
@@ -33,7 +36,7 @@ export function ActivityEmailSetting({
           onChange={async (event) => {
             if (busy) return;
             const selected = event.target.checked;
-            setBusy(true);
+            setSaving(selected);
             setError("");
             try {
               await api("activity-email", { enabled: selected });
@@ -41,7 +44,7 @@ export function ActivityEmailSetting({
             } catch (failure) {
               setError((failure as Error).message);
             } finally {
-              setBusy(false);
+              setSaving(null);
             }
           }}
         />

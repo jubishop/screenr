@@ -116,6 +116,8 @@ the first pending event is 10 minutes old, the existing worker groups pending
 events into one job. It sends only events still unread and accessible, using
 the member's verified email address. Turning the setting off cancels queued
 and unqueued activity emails; turning it back on does not send an old backlog.
+While a change saves, the checkbox shows the new choice and ignores further
+changes; a failed save restores the saved setting and shows the error.
 
 Activity jobs store notification references, with message text generated from
 current data immediately before each send. Each job keeps its original event

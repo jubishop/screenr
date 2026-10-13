@@ -228,6 +228,14 @@ export function TitleSearch({
     (serviceIds !== null &&
       viewingAccess(title.viewing, serviceIds) === "available");
   const visibleResults = results?.filter(included);
+  // Screen readers hear how many results each finished search shows.
+  const count = visibleResults?.length ?? 0;
+  const summary =
+    results === null || searching || error
+      ? ""
+      : count
+        ? `${count} ${count === 1 ? "result" : "results"}`
+        : "No results";
   const visibleSuggestions = suggestions?.filter(included);
   const listed: ViewingTitle[] =
     results ??
@@ -301,6 +309,10 @@ export function TitleSearch({
           {error}
         </div>
       )}
+      {/* Rendered before any search so updates are announced. */}
+      <p className="sr-only" role="status">
+        {summary}
+      </p>
       {results !== null ? (
         <section
           className="search-results"

@@ -339,6 +339,8 @@ on a saved service or with a free option. It starts off and preserves the
 existing social order. Service notes use broad names, such as AMC+, without
 plan or reseller suffixes. Failed availability remains visible with the filter
 off; when it is on, a notice explains how to see titles with unknown options.
+A visually hidden status announces how many results each finished search
+shows after the filter, or No results.
 These additions follow the
 [saved-service decision](product-brief.md#saved-streaming-services-and-discovery--2026-09-10).
 

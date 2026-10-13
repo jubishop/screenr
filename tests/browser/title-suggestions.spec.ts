@@ -234,12 +234,16 @@ test("search submission and clearing switch modes without applying suggestion ex
     name: "Search results",
     exact: true,
   });
+  // A live region announces each finished search's result count.
+  const summary = page.getByRole("main").getByRole("status");
+  await expect(summary).toBeEmpty();
   await input.fill("The Lantern Room");
   await expect(grid.getByRole("link")).toHaveCount(2);
   await input.press("Enter");
   await expect(
     results.getByRole("heading", { name: "The Lantern Room", exact: true }),
   ).toBeVisible();
+  await expect(summary).toHaveText("1 result");
   await expect(grid).toHaveCount(0);
   await input.fill("Edited but not submitted");
   await expect(
@@ -257,11 +261,13 @@ test("search submission and clearing switch modes without applying suggestion ex
   ).toBeVisible();
   await input.fill("   ");
   await expect(grid.getByRole("link")).toHaveCount(1);
+  await expect(summary).toBeEmpty();
   await input.fill("no matching suggestions");
   await input.press("Enter");
   await expect(
     results.getByText("No matches. Try a different title.", { exact: true }),
   ).toBeVisible();
+  await expect(summary).toHaveText("No results");
   await expect(grid).toHaveCount(0);
 });
 

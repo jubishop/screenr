@@ -73,3 +73,27 @@ test("form controls use 16px text at phone width so iOS Safari does not zoom on 
     owner.getByLabel("Your comment", { exact: true }),
   );
 });
+
+// Phones would otherwise capitalize or autocorrect the first letter.
+test("username fields turn off automatic capitalization and spelling correction", async ({
+  member,
+}) => {
+  const pending = await member("capssetup", { complete: false });
+  const owner = await member("capsowner");
+  await owner.goto("/account");
+  await owner
+    .getByRole("button", { name: "Edit profile", exact: true })
+    .click();
+  const fields = [
+    pending.getByLabel("Username", { exact: true }),
+    owner.getByLabel("Username", { exact: true }),
+  ];
+  for (const field of fields) {
+    await expect(field).toHaveAttribute("autocapitalize", "none");
+    await expect(field).toHaveAttribute("spellcheck", "false");
+  }
+  await owner.goto("/people");
+  const search = owner.getByLabel("Exact username", { exact: true });
+  await expect(search).toHaveAttribute("autocapitalize", "none");
+  await expect(search).toHaveAttribute("spellcheck", "false");
+});

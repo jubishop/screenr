@@ -224,8 +224,7 @@ test("invited friends discover, save, and share inline discussions with live acc
         has: page.locator(`[data-comment-id="${ownId}"]`),
       });
     const expansion = group.getByRole("button", {
-      name: "View 1 reply",
-      exact: true,
+      name: /^(View|Hide) 1 reply$/,
     });
     if ((await expansion.getAttribute("aria-expanded")) !== "true")
       await expansion.click();

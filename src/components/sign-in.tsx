@@ -253,6 +253,8 @@ export function Setup({
                   pattern="[a-zA-Z0-9_]{3,24}"
                   maxLength={24}
                   autoComplete="username"
+                  autoCapitalize="none"
+                  spellCheck={false}
                   aria-describedby="username-help"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
