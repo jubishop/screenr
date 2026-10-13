@@ -439,7 +439,8 @@ on Account, and can replace or remove it there.
 
 - **Upload:** the browser crops the image to a square and resizes it to a
   512×512 JPEG of at most 200 KB before sending, so the server needs no image
-  library.
+  library. When no 512-pixel JPEG of a photo is small enough to send, the
+  browser uses 384 or 256 pixels instead.
 - **Google photo:** a member with Google sign-in can choose "Use my Google
   photo". Screenr fetches that picture once at 512 pixels and stores its own
   copy; it never links to Google's image servers.
@@ -478,7 +479,11 @@ them to the one-time backfill.
 **Implementation note:** PostgreSQL stores the photos, under Screenr's data
 directory `/var/lib/screenr/postgres`, so the existing encrypted backups
 cover them. Uploads stay under 60 KB to pass the proxy's 64 KB request limit,
-within the 200 KB maximum. The worker runs the backfill once after deployment.
+within the 200 KB maximum. Safari's JPEG of a detailed iPhone photo exceeded
+60 KB at every quality the first version tried, so the browser now lowers the
+quality further and then tries the smaller sizes, which replace the fixed 512
+pixels for those photos ([issue #204](https://github.com/jubishop/screenr/issues/204)).
+The worker runs the backfill once after deployment.
 [Profile photos](data-and-access.md#profile-photos) describes storage,
 access, caching, and the Google copies.
 

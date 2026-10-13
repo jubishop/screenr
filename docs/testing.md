@@ -274,7 +274,11 @@ load a photo and its caching headers, automatic Google copies after signup
 and after linking, the removed-photo rule, Use my Google photo, and the
 backfill. A replaced `fetch` stands in for Google's image servers, so no test
 contacts Google. `tests/browser/profile-photos.spec.ts` adds, replaces, and
-removes photos at phone and desktop widths.
+removes photos at phone and desktop widths. It fits a detailed camera photo
+under the upload limit, falls back to a smaller size when no 512-pixel JPEG
+fits, and shows the details of each preparation failure. CI's Chromium cannot
+reproduce Safari's larger JPEGs; on macOS, add `--browser=webkit` to run the
+spec with Apple's JPEG encoder, which Safari also uses.
 `tests/app/id-lookups.test.ts` plans the statements sent by thread reads,
 replies, reactions, removals, and invitation revocation against a few hundred
 analyzed rows per table, with sequential scans disabled, and requires each ID
