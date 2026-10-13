@@ -1,0 +1,230 @@
+{
+  "description": "Find a title: suggestions and Friends recommend, with viewing options and saved services.",
+  "viewer": "alice",
+  "request": {
+    "method": "GET",
+    "action": "screen",
+    "path": "/api/screenr/screen?path=%2Fsearch",
+    "query": {
+      "path": "/search"
+    }
+  },
+  "response": {
+    "status": 200,
+    "etag": "W/\"OQs-i4EBbP8j2dfTrEdsFEbYzxiJe92uuF2LIaj4I48\"",
+    "body": {
+      "kind": "search",
+      "suggestions": [
+        {
+          "id": "movie:105",
+          "kind": "movie",
+          "name": "Winter Garden",
+          "tmdb_id": 105,
+          "overview": "A botanist tends a greenhouse through the polar night.",
+          "wanted_by": [
+            {
+              "username": "ben",
+              "display_name": "Ben Ortiz"
+            }
+          ],
+          "poster_path": "/winter-garden.jpg",
+          "watching_by": [],
+          "release_date": "2019-12-06",
+          "recommended_by": [
+            {
+              "rank": null,
+              "username": "cam",
+              "display_name": "Cam Rivera"
+            }
+          ],
+          "second_degree_wanted": 0,
+          "second_degree_watching": 0,
+          "second_degree_recommended": 0,
+          "viewing": {
+            "status": "ok",
+            "checked_at": "2026-10-13T12:00:00.000Z",
+            "sections": [
+              {
+                "key": "subs",
+                "label": "Subs",
+                "services": [
+                  {
+                    "id": "service:netflix",
+                    "name": "Netflix",
+                    "logo_path": "/rK1KljqmbvO9HQa1PBFLILWah72.png",
+                    "route_note": null
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "id": "tv:204",
+          "kind": "tv",
+          "name": "Signal Fire",
+          "tmdb_id": 204,
+          "overview": "Radio operators on a remote island hear a distress call.",
+          "wanted_by": [],
+          "poster_path": "/signal-fire.jpg",
+          "watching_by": [
+            {
+              "username": "cam",
+              "display_name": "Cam Rivera"
+            }
+          ],
+          "release_date": "2025-02-14",
+          "recommended_by": [],
+          "second_degree_wanted": 0,
+          "second_degree_watching": 0,
+          "second_degree_recommended": 0,
+          "viewing": {
+            "status": "ok",
+            "checked_at": "2026-10-13T12:00:00.000Z",
+            "sections": [
+              {
+                "key": "subs",
+                "label": "Subs",
+                "services": [
+                  {
+                    "id": "service:hulu",
+                    "name": "Hulu",
+                    "logo_path": "/44uAnmSqvA4yBOdbPWN8YgQHjWm.png",
+                    "route_note": null
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "recommendations": [
+        {
+          "id": "movie:101",
+          "kind": "movie",
+          "name": "Night Crossing",
+          "tmdb_id": 101,
+          "overview": "Two strangers share the last ferry across a frozen strait.",
+          "poster_path": "/night-crossing.jpg",
+          "release_date": "2024-03-08",
+          "viewer_status": null,
+          "recommended_by": [
+            {
+              "rank": 1,
+              "username": "ben",
+              "display_name": "Ben Ortiz"
+            }
+          ],
+          "viewer_recommended": true,
+          "viewing": {
+            "status": "ok",
+            "checked_at": "2026-10-13T12:00:00.000Z",
+            "sections": [
+              {
+                "key": "subs",
+                "label": "Subs",
+                "services": [
+                  {
+                    "id": "service:netflix",
+                    "name": "Netflix",
+                    "logo_path": "/rK1KljqmbvO9HQa1PBFLILWah72.png",
+                    "route_note": null
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "id": "tv:201",
+          "kind": "tv",
+          "name": "Harbor Lights",
+          "tmdb_id": 201,
+          "overview": "A lighthouse town keeps its secrets through the fog.",
+          "poster_path": "/harbor-lights.jpg",
+          "release_date": "2021-09-30",
+          "viewer_status": null,
+          "recommended_by": [
+            {
+              "rank": 2,
+              "username": "ben",
+              "display_name": "Ben Ortiz"
+            }
+          ],
+          "viewer_recommended": true,
+          "viewing": {
+            "status": "ok",
+            "checked_at": "2026-10-13T12:00:00.000Z",
+            "sections": [
+              {
+                "key": "subs",
+                "label": "Subs",
+                "services": [
+                  {
+                    "id": "service:acorn-tv",
+                    "name": "Acorn TV",
+                    "logo_path": "/3aWmgZsNAqdOt8ClxIFT4pnmHrM.png",
+                    "route_note": "via Amazon"
+                  },
+                  {
+                    "id": "service:hbo-max",
+                    "name": "HBO Max",
+                    "logo_path": "/skypuy7SXuugIQeYg0IglmzoKaS.png",
+                    "route_note": null
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "id": "movie:105",
+          "kind": "movie",
+          "name": "Winter Garden",
+          "tmdb_id": 105,
+          "overview": "A botanist tends a greenhouse through the polar night.",
+          "poster_path": "/winter-garden.jpg",
+          "release_date": "2019-12-06",
+          "viewer_status": null,
+          "recommended_by": [
+            {
+              "rank": null,
+              "username": "cam",
+              "display_name": "Cam Rivera"
+            }
+          ],
+          "viewer_recommended": false,
+          "viewing": {
+            "status": "ok",
+            "checked_at": "2026-10-13T12:00:00.000Z",
+            "sections": [
+              {
+                "key": "subs",
+                "label": "Subs",
+                "services": [
+                  {
+                    "id": "service:netflix",
+                    "name": "Netflix",
+                    "logo_path": "/rK1KljqmbvO9HQa1PBFLILWah72.png",
+                    "route_note": null
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "serviceIds": [
+        "service:hulu",
+        "service:netflix"
+      ],
+      "unreadNotifications": 6,
+      "user": {
+        "user_id": "user-alice",
+        "username": "alice",
+        "display_name": "Alice Park",
+        "photo": "486e0212c15728ee"
+      }
+    }
+  }
+}

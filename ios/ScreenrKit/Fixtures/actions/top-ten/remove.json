@@ -1,0 +1,19 @@
+{
+  "description": "Removing a title from the top 10.",
+  "viewer": "alice",
+  "request": {
+    "method": "POST",
+    "action": "top-ten",
+    "path": "/api/screenr/top-ten",
+    "body": {
+      "title": "movie:102",
+      "change": "remove"
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "ok": true
+    }
+  }
+}

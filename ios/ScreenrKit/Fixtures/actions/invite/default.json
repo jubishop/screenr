@@ -1,0 +1,19 @@
+{
+  "description": "Creating an invitation link for three signups.",
+  "viewer": "alice",
+  "request": {
+    "method": "POST",
+    "action": "invite",
+    "path": "/api/screenr/invite",
+    "body": {
+      "limit": 3
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "id": "00000000-0000-4000-8000-000000000001",
+      "token": "QNE_sNJvLOlUC5trCM95B3uk-DYRNVk2aMyabD1iBns"
+    }
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "description": "Sending a friend request.",
+  "viewer": "alice",
+  "request": {
+    "method": "POST",
+    "action": "relationship",
+    "path": "/api/screenr/relationship",
+    "body": {
+      "target": "user-erin",
+      "action": "request"
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "ok": true
+    }
+  }
+}

@@ -1,0 +1,29 @@
+{
+  "description": "A link to an entry the viewer cannot see reports the target unavailable.",
+  "viewer": "nora",
+  "request": {
+    "method": "GET",
+    "action": "screen",
+    "path": "/api/screenr/screen?path=%2F%3Fitem%3D872a205a-bab2-48f8-8c27-b737397eb469",
+    "query": {
+      "path": "/?item=872a205a-bab2-48f8-8c27-b737397eb469"
+    }
+  },
+  "response": {
+    "status": 200,
+    "etag": "W/\"GwehcP5eHfAazUoOjz2ngbZc8mVRS0xSI7-Lcb1orIo\"",
+    "body": {
+      "kind": "feed",
+      "conversations": [],
+      "target": null,
+      "targetUnavailable": true,
+      "unreadNotifications": 0,
+      "user": {
+        "user_id": "user-nora",
+        "username": "nora",
+        "display_name": "Nora Quinn",
+        "photo": null
+      }
+    }
+  }
+}

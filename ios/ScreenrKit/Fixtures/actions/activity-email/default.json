@@ -1,0 +1,18 @@
+{
+  "description": "Turning activity email off.",
+  "viewer": "alice",
+  "request": {
+    "method": "POST",
+    "action": "activity-email",
+    "path": "/api/screenr/activity-email",
+    "body": {
+      "enabled": false
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "activityEmail": false
+    }
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "description": "Changing the display name and username returns the profile.",
+  "viewer": "alice",
+  "request": {
+    "method": "POST",
+    "action": "profile",
+    "path": "/api/screenr/profile",
+    "body": {
+      "name": "Alice Park",
+      "username": "alicep"
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "user_id": "user-alice",
+      "username": "alicep",
+      "display_name": "Alice Park",
+      "photo": "486e0212c15728ee"
+    }
+  }
+}

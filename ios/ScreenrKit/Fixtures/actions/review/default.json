@@ -1,0 +1,21 @@
+{
+  "description": "Saving a rated spoiler review returns the entry.",
+  "viewer": "alice",
+  "request": {
+    "method": "POST",
+    "action": "review",
+    "path": "/api/screenr/review",
+    "body": {
+      "title": "movie:101",
+      "rating": 5,
+      "body": "The ending on the ice is perfect.",
+      "spoiler": true
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "id": "00000000-0000-4000-8000-000000000001"
+    }
+  }
+}

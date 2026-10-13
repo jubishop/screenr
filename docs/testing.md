@@ -5,7 +5,8 @@ status: current
 # Testing Screenr
 
 This guide covers the test commands, the browser harness, shared fixtures,
-resource ownership rules, coverage, and browser failure diagnostics. Complete
+the iPhone API fixtures, resource ownership rules, coverage, and browser
+failure diagnostics. Complete
 [local setup](running-screenr.md#local-setup) first. The
 [development workflow](development-workflow.md#testing) records the decisions
 behind browser setup, coverage placement, serving mode, and validation modes.
@@ -232,6 +233,128 @@ session. Specs import these helpers instead of defining their own copies.
 - Page loads pass through the offline service worker. A test that intercepts
   page loads needs the context setting described in
   [installation tests](installation.md#tests).
+
+## iPhone API fixtures
+
+The iPhone app's Swift models are tested by decoding checked-in responses
+from the real API
+([decision](ios-app.md#hand-written-models-checked-against-server-fixtures--2026-10-13)).
+`tests/app/ios-fixtures.test.ts` sends each case through the
+`/api/screenr/[action]` handler and compares the response with its file under
+`ios/ScreenrKit/Fixtures/`. It runs in `npm test`, so `bin/check --full` and
+CI fail when a response no longer matches its fixture, when a case has no
+file, or when a file has no case. The failure shows the changed fields.
+
+After an intended payload change, regenerate the fixtures and commit the
+fixture diff with the server change:
+
+```sh
+npm run fixtures:ios
+```
+
+The command uses the `npm test` database, including `TEST_DATABASE_URL`. It
+rewrites the files whose responses changed and removes files without a case.
+Run it again, or run `npm test`, and the files stay unchanged.
+
+### Fixture layout
+
+Each file holds one case, named for the state it shows, such as `default`,
+`empty`, `full-top-ten`, or `not-found`:
+
+- `screen/<route kind>/<case>.json`: the `screen` action for each route kind
+  in `src/member-routes.ts`.
+- `actions/<action>/<case>.json`: every other action in
+  `src/server/actions.ts`, under its API name.
+- `errors/<case>.json`: errors that any action can return, such as a missing
+  session. Every error body is `{"error": "<message>"}`.
+
+### Fixture format
+
+Each file is one JSON object, shown here with a shortened body:
+
+```json
+{
+  "description": "A member with no friends or activity.",
+  "viewer": "nora",
+  "request": {
+    "method": "GET",
+    "action": "screen",
+    "path": "/api/screenr/screen?path=%2F",
+    "query": { "path": "/" }
+  },
+  "response": {
+    "status": 200,
+    "etag": "W/\"<version>\"",
+    "body": { "kind": "feed", "conversations": [] }
+  }
+}
+```
+
+- `viewer` is the signed-in member's username, or `null` without a session.
+- `request` always has `method`, `action`, and `path`. A GET has `query`. A
+  POST has its JSON `body`, or `upload` (`contentType` and `bytes`) when the
+  body is a file, as for photo uploads. `headers` lists any extra request
+  headers, such as `If-None-Match`.
+- `response` has the HTTP `status` and the JSON `body`, which is `null` for
+  a 304. A GET's `etag` is the version the server computes for that body.
+
+### Fixture data
+
+`tests/app/ios-fixture-world.ts` builds one world through the real services
+and the shared test helpers. Alice, the usual viewer, has friends, requests
+in both directions, a blocked member, an invitation link that a friend
+joined, notifications, saved services, a photo, and a linked Google account.
+The entries include an edited spoiler review, season and episode labels,
+spoiler and removed replies, a deleted post, a blocked author's reply, and
+reactions. Erin has
+a full top 10, and Nora has no friends or activity. A loopback TMDB
+stand-in serves the titles, trailers, providers, seasons, and episodes, and
+a replaced `fetch` stands in for Google's image server. Every person and
+title is fictional.
+
+GET cases share the world. Each POST case first restores a saved copy of the
+database, so no case sees another's changes.
+
+Volatile values become placeholders, so regenerating without a payload
+change produces no diff:
+
+- **Timestamps:** every timestamp becomes one instant in the format the API
+  sent: `2026-10-13T12:00:00.000Z` for JavaScript dates, and
+  `2026-10-13T12:00:00.000000+00:00` for PostgreSQL JSON timestamps. The app
+  must accept both forms. PostgreSQL drops trailing zeros from the fraction,
+  and the whole fraction when it is zero.
+- **User IDs:** `user-<username>`.
+- **UUIDs:** a record the world created keeps one UUID in every fixture,
+  derived from a label such as its owner, title, and type. Other UUIDs, such as a record
+  that an action creates, become `00000000-0000-4000-8000-000000000001`
+  onward within each fixture.
+- **Invitation tokens:** 43-character tokens derived from a label.
+- **ETags:** recomputed from the fixture body.
+
+Comment and notification IDs are sequence values. The suite resets the
+sequences, so they stay stable. Dates without a time, such as finished and
+release dates, are fixed in the world.
+
+### Adding a fixture
+
+The case tables in `tests/app/ios-fixtures.test.ts` are keyed by
+`MemberRoute["kind"]` and by the `ActionName` type from
+`src/server/actions.ts`. A new route kind or action fails
+`npm run typecheck` until it has an entry. To add cases:
+
+1. Add the entry under the action's API name in `actions`, or the route kind
+   in `screens`, with one case for each state the app must decode. `read`,
+   `write`, and `screen` build GET, POST, and screen cases. Pass the
+   expected status for an error case. A request or body may be a function of
+   the world, to use its IDs or prepare more state.
+2. Add any members or records the cases need to `buildWorld`. Its label
+   query names the UUIDs of feed entries, comments, posts, conversations,
+   and invitations. Extend it when a new table's UUIDs appear in responses.
+3. Register every credential, token, or other volatile value that a case
+   sends or receives with `world.placeholders.add`, so no live value is
+   written. Session cookies are never recorded.
+4. Run `npm run fixtures:ios`, review the new files, and commit them with
+   the server change.
 
 ## Resource ownership
 

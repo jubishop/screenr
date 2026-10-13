@@ -1,0 +1,18 @@
+{
+  "description": "Removing a review.",
+  "viewer": "alice",
+  "request": {
+    "method": "POST",
+    "action": "remove-review",
+    "path": "/api/screenr/remove-review",
+    "body": {
+      "title": "movie:102"
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "ok": true
+    }
+  }
+}

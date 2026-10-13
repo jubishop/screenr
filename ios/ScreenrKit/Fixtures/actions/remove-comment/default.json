@@ -1,0 +1,18 @@
+{
+  "description": "Removing one's own reply.",
+  "viewer": "alice",
+  "request": {
+    "method": "POST",
+    "action": "remove-comment",
+    "path": "/api/screenr/remove-comment",
+    "body": {
+      "id": "4"
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "ok": true
+    }
+  }
+}

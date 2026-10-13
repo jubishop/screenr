@@ -1,0 +1,38 @@
+{
+  "description": "A member who has asked to be Alice's friend.",
+  "viewer": "alice",
+  "request": {
+    "method": "GET",
+    "action": "screen",
+    "path": "/api/screenr/screen?path=%2Fpeople%2Ffay",
+    "query": {
+      "path": "/people/fay"
+    }
+  },
+  "response": {
+    "status": 200,
+    "etag": "W/\"x2mq11ePrmCjvWQXbtW0giXOWy7oFx4sPWLN9lIaPSo\"",
+    "body": {
+      "kind": "profile",
+      "profile": {
+        "user_id": "user-fay",
+        "username": "fay",
+        "display_name": "Fay Chen",
+        "photo": null,
+        "can_read": false,
+        "requested_by": "user-fay",
+        "accepted_at": null,
+        "friends": []
+      },
+      "topTen": [],
+      "conversations": [],
+      "unreadNotifications": 6,
+      "user": {
+        "user_id": "user-alice",
+        "username": "alice",
+        "display_name": "Alice Park",
+        "photo": "486e0212c15728ee"
+      }
+    }
+  }
+}

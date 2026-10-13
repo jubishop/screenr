@@ -1,0 +1,19 @@
+{
+  "description": "Completing the profile after joining.",
+  "viewer": "pat",
+  "request": {
+    "method": "POST",
+    "action": "setup",
+    "path": "/api/screenr/setup",
+    "body": {
+      "name": "Pat Morgan",
+      "username": "pat"
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "ok": true
+    }
+  }
+}

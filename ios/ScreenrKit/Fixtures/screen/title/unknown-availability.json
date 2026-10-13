@@ -1,0 +1,151 @@
+{
+  "description": "A title with no poster or trailer whose availability could not be checked.",
+  "viewer": "alice",
+  "request": {
+    "method": "GET",
+    "action": "screen",
+    "path": "/api/screenr/screen?path=%2Ftitles%2Fmovie%2F104",
+    "query": {
+      "path": "/titles/movie/104"
+    }
+  },
+  "response": {
+    "status": 200,
+    "etag": "W/\"itbCpGmO2jKKvPg8dBZGFUM1FJWkooB0RWpa0pU5xlk\"",
+    "body": {
+      "kind": "title",
+      "title": {
+        "id": "movie:104",
+        "kind": "movie",
+        "tmdb_id": 104,
+        "name": "Glass Meridian",
+        "overview": "",
+        "poster_path": null,
+        "release_date": "2022-08-19"
+      },
+      "trailer": null,
+      "availability": {
+        "country": "US",
+        "status": "unavailable",
+        "checked_at": null,
+        "link": null,
+        "providers": {},
+        "sections": []
+      },
+      "watch": {
+        "status": "want_to_watch",
+        "finished_on": null
+      },
+      "topTen": [
+        {
+          "id": "movie:101",
+          "name": "Night Crossing",
+          "poster_path": "/night-crossing.jpg",
+          "rank": 1
+        },
+        {
+          "id": "movie:102",
+          "name": "Paper Lanterns",
+          "poster_path": "/paper-lanterns.jpg",
+          "rank": 2
+        },
+        {
+          "id": "tv:201",
+          "name": "Harbor Lights",
+          "poster_path": "/harbor-lights.jpg",
+          "rank": 3
+        }
+      ],
+      "conversations": [
+        {
+          "id": "d96511cd-0569-4f0c-8c20-402a2422ce98",
+          "conversation_id": "04063826-113f-466f-8d5a-96c0a8b45a95",
+          "owner_id": "user-ben",
+          "title_id": "movie:104",
+          "item_type": "want_to_watch",
+          "active": true,
+          "created_at": "2026-10-13T12:00:00.000Z",
+          "activity_at": "2026-10-13T12:00:00.000Z",
+          "body": null,
+          "spoiler": false,
+          "status": null,
+          "finished_on": null,
+          "rating": null,
+          "edited": false,
+          "season": null,
+          "episode": null,
+          "username": "ben",
+          "display_name": "Ben Ortiz",
+          "photo": "8fc275dfeaca5cf8",
+          "title_name": "Glass Meridian",
+          "poster_path": null,
+          "kind": "movie",
+          "release_date": "2022-08-19",
+          "recommended": false,
+          "want_to_watch": true,
+          "viewer_want_to_watch": true,
+          "viewer_recommended": false,
+          "viewer_status": "want_to_watch",
+          "viewer_top_ten_rank": null,
+          "visible_activity": "2026-10-13T12:00:00.000Z",
+          "comments": [],
+          "reactions": []
+        },
+        {
+          "id": "0c266b83-8255-491f-8380-39761af9b4a1",
+          "conversation_id": "14ca381c-e8f0-4227-8411-0415a65f8c0a",
+          "owner_id": "user-alice",
+          "title_id": "movie:104",
+          "item_type": "want_to_watch",
+          "active": true,
+          "created_at": "2026-10-13T12:00:00.000Z",
+          "activity_at": "2026-10-13T12:00:00.000Z",
+          "body": null,
+          "spoiler": false,
+          "status": null,
+          "finished_on": null,
+          "rating": null,
+          "edited": false,
+          "season": null,
+          "episode": null,
+          "username": "alice",
+          "display_name": "Alice Park",
+          "photo": "486e0212c15728ee",
+          "title_name": "Glass Meridian",
+          "poster_path": null,
+          "kind": "movie",
+          "release_date": "2022-08-19",
+          "recommended": false,
+          "want_to_watch": true,
+          "viewer_want_to_watch": true,
+          "viewer_recommended": false,
+          "viewer_status": "want_to_watch",
+          "viewer_top_ten_rank": null,
+          "visible_activity": "2026-10-13T12:00:00.000Z",
+          "comments": [],
+          "reactions": []
+        }
+      ],
+      "friends": {
+        "recommended": [],
+        "want_to_watch": [
+          {
+            "item": "d96511cd-0569-4f0c-8c20-402a2422ce98",
+            "user_id": "user-ben",
+            "display_name": "Ben Ortiz",
+            "rank": null
+          }
+        ]
+      },
+      "target": null,
+      "targetUnavailable": false,
+      "unreadNotifications": 6,
+      "user": {
+        "user_id": "user-alice",
+        "username": "alice",
+        "display_name": "Alice Park",
+        "photo": "486e0212c15728ee"
+      }
+    }
+  }
+}

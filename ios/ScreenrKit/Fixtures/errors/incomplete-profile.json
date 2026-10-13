@@ -1,0 +1,18 @@
+{
+  "description": "A member action before profile setup.",
+  "viewer": "pat",
+  "request": {
+    "method": "GET",
+    "action": "screen",
+    "path": "/api/screenr/screen?path=%2F",
+    "query": {
+      "path": "/"
+    }
+  },
+  "response": {
+    "status": 403,
+    "body": {
+      "error": "Complete your profile first."
+    }
+  }
+}

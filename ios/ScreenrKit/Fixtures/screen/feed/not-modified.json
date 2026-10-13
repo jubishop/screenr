@@ -1,0 +1,20 @@
+{
+  "description": "A refresh that sends the version it holds gets 304 without a body.",
+  "viewer": "alice",
+  "request": {
+    "method": "GET",
+    "action": "screen",
+    "path": "/api/screenr/screen?path=%2F",
+    "query": {
+      "path": "/"
+    },
+    "headers": {
+      "If-None-Match": "W/\"nK6cYh2ogS3qAOFE2vaemGYb5qDIAal2So4OD5s0QfU\""
+    }
+  },
+  "response": {
+    "status": 304,
+    "etag": "W/\"nK6cYh2ogS3qAOFE2vaemGYb5qDIAal2So4OD5s0QfU\"",
+    "body": null
+  }
+}

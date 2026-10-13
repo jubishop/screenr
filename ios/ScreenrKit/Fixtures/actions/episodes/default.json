@@ -1,0 +1,33 @@
+{
+  "description": "A season's episodes.",
+  "viewer": "alice",
+  "request": {
+    "method": "GET",
+    "action": "episodes",
+    "path": "/api/screenr/episodes?title=tv%3A201&season=1",
+    "query": {
+      "title": "tv:201",
+      "season": "1"
+    }
+  },
+  "response": {
+    "status": 200,
+    "etag": "W/\"4-KKu3S0E9qz6yCd4zx-31j11PLHJZuwGDb0KCXodfI\"",
+    "body": {
+      "episodes": [
+        {
+          "number": 1,
+          "name": "Arrival"
+        },
+        {
+          "number": 2,
+          "name": "Undertow"
+        },
+        {
+          "number": 3,
+          "name": "The Fog"
+        }
+      ]
+    }
+  }
+}

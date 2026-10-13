@@ -1,0 +1,19 @@
+{
+  "description": "Changing the finished date.",
+  "viewer": "alice",
+  "request": {
+    "method": "POST",
+    "action": "finished-date",
+    "path": "/api/screenr/finished-date",
+    "body": {
+      "title": "movie:102",
+      "date": "2026-09-21"
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "ok": true
+    }
+  }
+}

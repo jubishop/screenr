@@ -1,0 +1,112 @@
+{
+  "description": "A member who is not a friend: a full top 10, mutual friends, and no entries.",
+  "viewer": "alice",
+  "request": {
+    "method": "GET",
+    "action": "screen",
+    "path": "/api/screenr/screen?path=%2Fpeople%2Ferin",
+    "query": {
+      "path": "/people/erin"
+    }
+  },
+  "response": {
+    "status": 200,
+    "etag": "W/\"81Yj72UsU7r6vMZvZri2-T9UI8wi4arhHL8LjoP4hOo\"",
+    "body": {
+      "kind": "profile",
+      "profile": {
+        "user_id": "user-erin",
+        "username": "erin",
+        "display_name": "Erin Walsh",
+        "photo": null,
+        "can_read": false,
+        "requested_by": null,
+        "accepted_at": null,
+        "friends": [
+          {
+            "photo": "8fc275dfeaca5cf8",
+            "user_id": "user-ben",
+            "username": "ben",
+            "display_name": "Ben Ortiz"
+          },
+          {
+            "photo": null,
+            "user_id": "user-cam",
+            "username": "cam",
+            "display_name": "Cam Rivera"
+          }
+        ]
+      },
+      "topTen": [
+        {
+          "id": "movie:301",
+          "name": "Copper Coast",
+          "poster_path": "/copper-coast.jpg",
+          "rank": 1
+        },
+        {
+          "id": "movie:302",
+          "name": "Second Spring",
+          "poster_path": "/second-spring.jpg",
+          "rank": 2
+        },
+        {
+          "id": "movie:303",
+          "name": "Low Tide",
+          "poster_path": "/low-tide.jpg",
+          "rank": 3
+        },
+        {
+          "id": "movie:304",
+          "name": "North Window",
+          "poster_path": "/north-window.jpg",
+          "rank": 4
+        },
+        {
+          "id": "movie:305",
+          "name": "Salt and Cedar",
+          "poster_path": "/salt-and-cedar.jpg",
+          "rank": 5
+        },
+        {
+          "id": "movie:306",
+          "name": "Blue Hour",
+          "poster_path": "/blue-hour.jpg",
+          "rank": 6
+        },
+        {
+          "id": "movie:307",
+          "name": "Far Fields",
+          "poster_path": "/far-fields.jpg",
+          "rank": 7
+        },
+        {
+          "id": "movie:308",
+          "name": "Small Hours",
+          "poster_path": "/small-hours.jpg",
+          "rank": 8
+        },
+        {
+          "id": "movie:309",
+          "name": "Kite Season",
+          "poster_path": "/kite-season.jpg",
+          "rank": 9
+        },
+        {
+          "id": "movie:310",
+          "name": "Last Ferry",
+          "poster_path": "/last-ferry.jpg",
+          "rank": 10
+        }
+      ],
+      "conversations": [],
+      "unreadNotifications": 6,
+      "user": {
+        "user_id": "user-alice",
+        "username": "alice",
+        "display_name": "Alice Park",
+        "photo": "486e0212c15728ee"
+      }
+    }
+  }
+}

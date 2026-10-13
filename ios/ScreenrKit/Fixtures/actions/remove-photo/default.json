@@ -1,0 +1,16 @@
+{
+  "description": "Removing the profile photo.",
+  "viewer": "alice",
+  "request": {
+    "method": "POST",
+    "action": "remove-photo",
+    "path": "/api/screenr/remove-photo",
+    "body": {}
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "photo": null
+    }
+  }
+}

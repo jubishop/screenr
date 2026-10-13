@@ -19,6 +19,7 @@
     "typecheck": "tsc --noEmit",
     "test": "tsx scripts/test-database.ts && tsx --test --test-concurrency=1 tests/app/*.test.ts",
     "test:coverage": "tsx scripts/test-database.ts && tsx scripts/test-coverage.ts",
+    "fixtures:ios": "tsx scripts/test-database.ts && SCREENR_WRITE_IOS_FIXTURES=1 tsx --test tests/app/ios-fixtures.test.ts",
     "db:migrate": "tsx --env-file=.env scripts/migrate.ts",
     "bootstrap": "tsx --env-file=.env scripts/bootstrap.ts",
     "test:browser": "SCREENR_BROWSER_MODE=production playwright test",

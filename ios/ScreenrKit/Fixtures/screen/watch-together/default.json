@@ -1,0 +1,90 @@
+{
+  "description": "Titles Alice and Ben both want to watch: one on her services, one with unknown availability.",
+  "viewer": "alice",
+  "request": {
+    "method": "GET",
+    "action": "screen",
+    "path": "/api/screenr/screen?path=%2Fwatch-together%3Fwith%3Dben",
+    "query": {
+      "path": "/watch-together?with=ben"
+    }
+  },
+  "response": {
+    "status": 200,
+    "etag": "W/\"WyH-DowEX_zrXEzIQQ2RwIKBibjSwSqJUGRuDTLAcK0\"",
+    "body": {
+      "kind": "watch-together",
+      "participants": [
+        {
+          "photo": "486e0212c15728ee",
+          "user_id": "user-alice",
+          "username": "alice",
+          "display_name": "Alice Park"
+        },
+        {
+          "photo": "8fc275dfeaca5cf8",
+          "user_id": "user-ben",
+          "username": "ben",
+          "display_name": "Ben Ortiz"
+        }
+      ],
+      "viewerHasServices": true,
+      "titles": [
+        {
+          "id": "movie:104",
+          "kind": "movie",
+          "name": "Glass Meridian",
+          "tmdb_id": 104,
+          "overview": "",
+          "poster_path": null,
+          "release_date": "2022-08-19",
+          "viewing": {
+            "status": "unavailable",
+            "checked_at": null,
+            "sections": []
+          },
+          "access": "unknown",
+          "matchingServiceIds": []
+        },
+        {
+          "id": "movie:103",
+          "kind": "movie",
+          "name": "The Quiet Orchard",
+          "tmdb_id": 103,
+          "overview": "An orchard keeper hears the trees whispering.",
+          "poster_path": "/quiet-orchard.jpg",
+          "release_date": "2025-05-02",
+          "viewing": {
+            "status": "ok",
+            "checked_at": "2026-10-13T12:00:00.000Z",
+            "sections": [
+              {
+                "key": "subs",
+                "label": "Subs",
+                "services": [
+                  {
+                    "id": "service:hulu",
+                    "name": "Hulu",
+                    "logo_path": "/44uAnmSqvA4yBOdbPWN8YgQHjWm.png",
+                    "route_note": null
+                  }
+                ]
+              }
+            ]
+          },
+          "access": "available",
+          "matchingServiceIds": [
+            "service:hulu"
+          ]
+        }
+      ],
+      "unreadNotifications": 6,
+      "user": {
+        "user_id": "user-alice",
+        "username": "alice",
+        "display_name": "Alice Park",
+        "photo": "486e0212c15728ee"
+      }
+    }
+  }
+}

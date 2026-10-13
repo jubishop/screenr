@@ -1,0 +1,49 @@
+{
+  "description": "An invitation link that one friend joined through, and an unused link.",
+  "viewer": "alice",
+  "request": {
+    "method": "GET",
+    "action": "screen",
+    "path": "/api/screenr/screen?path=%2Finvites",
+    "query": {
+      "path": "/invites"
+    }
+  },
+  "response": {
+    "status": 200,
+    "etag": "W/\"3lqJaJKGKVN1zV3S8WX5KtHgSOPXKF1-XasDgLdgAhE\"",
+    "body": {
+      "kind": "invites",
+      "invitations": [
+        {
+          "id": "a93ecb20-a553-4bee-8e54-0c690ca36d03",
+          "max_uses": 1,
+          "uses": 0,
+          "expires_at": "2026-10-13T12:00:00.000Z",
+          "joined": [],
+          "url": "http://localhost:3000/join/8FdwRYhlFy9tcqxOibjISU88FZTgsFeusFjHMbgJ1As"
+        },
+        {
+          "id": "a17bab21-d9cd-4416-85e4-8d6f1c301813",
+          "max_uses": 3,
+          "uses": 1,
+          "expires_at": "2026-10-13T12:00:00.000Z",
+          "joined": [
+            {
+              "username": "hana",
+              "display_name": "Hana Ito"
+            }
+          ],
+          "url": "http://localhost:3000/join/nuG3v-llEhmpwqUtOjBjqXWCUdJth3HSaJpe1MEPtLA"
+        }
+      ],
+      "unreadNotifications": 6,
+      "user": {
+        "user_id": "user-alice",
+        "username": "alice",
+        "display_name": "Alice Park",
+        "photo": "486e0212c15728ee"
+      }
+    }
+  }
+}

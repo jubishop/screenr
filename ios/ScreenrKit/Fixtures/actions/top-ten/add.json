@@ -1,0 +1,19 @@
+{
+  "description": "Adding a title to the top 10.",
+  "viewer": "alice",
+  "request": {
+    "method": "POST",
+    "action": "top-ten",
+    "path": "/api/screenr/top-ten",
+    "body": {
+      "title": "movie:105",
+      "change": "add"
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "ok": true
+    }
+  }
+}
