@@ -188,7 +188,8 @@ session. Specs import these helpers instead of defining their own copies.
   isolates files in separate processes; keep `--test-concurrency=1` when
   running them together against one database.
 - The same helper contains pending/completed members, accepted friendship,
-  a signed session cookie for route tests (`cookieFor`), and a small
+  a signed session cookie for route tests (`cookieFor`), the bearer token a
+  native client receives from the same sign-in (`bearerFor`), and a small
   discussion fixture. Feature-specific setup and assertions stay in their
   feature files. No suite imports another test file.
 - Authorization tests assert the exact error: status and message for

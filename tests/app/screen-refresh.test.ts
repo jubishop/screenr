@@ -37,7 +37,7 @@ function read(cookie: string, path: string, held?: string) {
 
 function assertPrivate(response: Response) {
   assert.equal(response.headers.get("Cache-Control"), "private, no-store");
-  assert.equal(response.headers.get("Vary"), "Cookie");
+  assert.equal(response.headers.get("Vary"), "Cookie, Authorization");
 }
 
 // A full screen, whose version is a weak ETag of its exact body.

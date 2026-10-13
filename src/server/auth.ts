@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
-import { betterAuth } from "better-auth";
+import { betterAuth, type BetterAuthPlugin } from "better-auth";
 import { APIError, createAuthMiddleware } from "better-auth/api";
-import { emailOTP } from "better-auth/plugins";
+import { bearer, emailOTP } from "better-auth/plugins";
 import { codeLimitMessage } from "../shared";
 import { db, transaction } from "./db";
 import { activeInvitation, invitationHash } from "./invitations";
@@ -80,6 +80,29 @@ async function reserveCodeEmail(email: string) {
     return true;
   }, codeLock);
 }
+
+// The bearer plugin returns the session token in `set-auth-token` whenever a
+// response sets the session cookie. Browsers send an Origin with sign-in
+// requests and keep the session in the HttpOnly cookie, so their responses
+// drop the header and page scripts never see the token. Native clients send
+// no Origin. This must follow the bearer plugin, whose hook adds the header.
+const nativeTokenOnly = {
+  id: "native-token-only",
+  hooks: {
+    after: [
+      {
+        matcher: (context) =>
+          Boolean(
+            context.request?.headers.get("origin") ??
+            context.headers?.get("origin"),
+          ),
+        handler: createAuthMiddleware(async (ctx) => {
+          ctx.context.responseHeaders?.delete("set-auth-token");
+        }),
+      },
+    ],
+  },
+} satisfies BetterAuthPlugin;
 
 export function createAuth(
   options: {
@@ -166,6 +189,11 @@ export function createAuth(
       }),
     },
     plugins: [
+      // Native clients: docs/data-and-access.md#native-client-sessions. Like
+      // the session cookie, a token counts only with its signature, so a
+      // session row's stored token alone never signs anyone in.
+      bearer({ requireSignature: true }),
+      nativeTokenOnly,
       emailOTP({
         expiresIn: 600,
         allowedAttempts: 5,
@@ -233,4 +261,21 @@ export function createAuth(
 let instance: ReturnType<typeof createAuth> | undefined;
 export function auth() {
   return (instance ??= createAuth());
+}
+
+// A native client's request, which names its session with
+// `Authorization: Bearer <token>` instead of a cookie.
+export function bearerRequest(headers: Headers) {
+  const scheme = headers.get("authorization")?.split(" ", 1)[0];
+  return scheme?.toLowerCase() === "bearer";
+}
+
+// The session of an API request. A bearer request skips the Origin check, so
+// only its token signs it in: a cookie it also carries is ignored, and a
+// missing, invalid, or revoked token finds no session.
+export function requestSession(headers: Headers) {
+  if (!bearerRequest(headers)) return auth().api.getSession({ headers });
+  const tokenOnly = new Headers(headers);
+  tokenOnly.delete("cookie");
+  return auth().api.getSession({ headers: tokenOnly });
 }

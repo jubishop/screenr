@@ -10,6 +10,7 @@ import {
   person,
   friend,
   cookieFor,
+  bearerFor,
   captureFailures,
 } from "./social-fixture";
 
@@ -229,7 +230,7 @@ test("photos are served only to signed-in members who can see that profile, with
       response.headers.get("cache-control"),
       "private, max-age=86400",
     );
-    assert.equal(response.headers.get("vary"), "Cookie");
+    assert.equal(response.headers.get("vary"), "Cookie, Authorization");
     assert.equal(response.headers.get("etag"), `"${photo}"`);
     assert.equal(
       response.headers.get("cross-origin-resource-policy"),
@@ -290,6 +291,50 @@ test("photos are served only to signed-in members who can see that profile, with
     version: null,
     source: null,
   });
+});
+
+// The iPhone app sends `Authorization: Bearer <token>` without a cookie or
+// Origin, for uploads and for photo fetches.
+test("bearer sessions upload and fetch photos, and invalid tokens get 401", async () => {
+  const owner = await person("owner");
+  const pal = await person("pal");
+  await friend(owner, pal);
+  const uploaded = await POST(
+    new Request(`${origin}/api/screenr/photo`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "image/jpeg",
+        Authorization: `Bearer ${await bearerFor(owner)}`,
+      },
+      body: jpeg(),
+    }),
+    { params: Promise.resolve({ action: "photo" }) },
+  );
+  assert.equal(uploaded.status, 200);
+  const { photo } = await uploaded.json();
+
+  const viewed = (authorization: string, cookie = "") =>
+    photoRoute(
+      new Request(`${origin}/api/photos/${owner}/${photo}`, {
+        headers: { Authorization: authorization, Cookie: cookie },
+      }),
+      { params: Promise.resolve({ user: owner, version: photo }) },
+    );
+  const token = await bearerFor(pal);
+  const response = await viewed(`Bearer ${token}`);
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get("cache-control"), "private, max-age=86400");
+  assert.equal(response.headers.get("vary"), "Cookie, Authorization");
+  assert.deepEqual(Buffer.from(await response.arrayBuffer()), jpeg());
+
+  // A bad token fails even beside a valid cookie.
+  const cookie = await cookieFor(pal);
+  for (const bad of ["Bearer not-a-token", "Bearer"]) {
+    const denial = await viewed(bad, cookie);
+    assert.equal(denial.status, 401);
+    assert.equal(denial.headers.get("cache-control"), "private, no-store");
+    assert.equal(denial.headers.get("vary"), "Cookie, Authorization");
+  }
 });
 
 test("every place a member appears carries their photo, and blocked people show initials", async () => {

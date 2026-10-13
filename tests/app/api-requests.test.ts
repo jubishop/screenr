@@ -7,9 +7,12 @@ import {
   assertRouteError,
   person,
   cookieFor,
+  bearerFor,
+  signIn,
 } from "./social-fixture";
 
 const { POST, GET } = await import("../../src/app/api/screenr/[action]/route");
+const { auth } = await import("../../src/server/auth");
 const { initialScreen } = await import("../../src/server/screens");
 useDatabase();
 
@@ -169,4 +172,139 @@ test("missing member pages return 404 from the screen API and the page loader", 
   const found = await initialScreen(alice, "/people/alice");
   assert.equal(found.status, 200);
   assert.equal(found.data?.kind, "profile");
+});
+
+// The iPhone app authenticates with `Authorization: Bearer <token>` and sends
+// neither a cookie nor an Origin.
+function native(
+  action: string,
+  authorization: string,
+  options: { body?: string; query?: string; cookie?: string } = {},
+) {
+  const { body, query = "", cookie } = options;
+  const headers = new Headers({ Authorization: authorization });
+  if (cookie) headers.set("Cookie", cookie);
+  if (body !== undefined) headers.set("Content-Type", "application/json");
+  const request = new Request(`${origin}/api/screenr/${action}${query}`, {
+    method: body === undefined ? "GET" : "POST",
+    headers,
+    body,
+  });
+  return (body === undefined ? GET : POST)(request, {
+    params: Promise.resolve({ action }),
+  });
+}
+
+const profilePath = `?path=${encodeURIComponent("/people/alice")}`;
+
+function signOut(authorization: string) {
+  return auth().handler(
+    new Request(`${origin}/api/auth/sign-out`, {
+      method: "POST",
+      headers: { Authorization: authorization },
+    }),
+  );
+}
+
+// The stored session row that a bearer token names.
+async function sessionRow(token: string) {
+  const id = decodeURIComponent(token).split(".")[0];
+  return (
+    await db.query(
+      `SELECT "userId", extract(epoch FROM "expiresAt"-now())::int AS seconds
+      FROM session WHERE token=$1`,
+      [id],
+    )
+  ).rows[0];
+}
+
+test("a bearer session reads screens and runs POST actions without a cookie or Origin", async () => {
+  const alice = await person("alice");
+  const token = await bearerFor(alice);
+
+  const screen = await native("screen", `Bearer ${token}`, {
+    query: profilePath,
+  });
+  assert.equal(screen.status, 200);
+  assert.equal((await screen.json()).kind, "profile");
+
+  const saved = await native("activity-email", `Bearer ${token}`, {
+    body: JSON.stringify({ enabled: true }),
+  });
+  assert.equal(saved.status, 200);
+  assert.deepEqual(await saved.json(), { activityEmail: true });
+  assert.equal(await activityEmail(alice), true);
+});
+
+test("only a sign-in without an Origin returns its session token in set-auth-token", async () => {
+  const alice = await person("alice");
+  const web = await signIn(alice, { Origin: origin });
+  assert.equal(web.headers.get("set-auth-token"), null);
+  assert.ok(web.headers.getSetCookie().length > 0);
+  const native = await signIn(alice, {});
+  assert.match(native.headers.get("set-auth-token") ?? "", /^[\w-]+\./);
+});
+
+test("bearer sessions are the web's session rows, with the same 30-day lifetime", async () => {
+  const alice = await person("alice");
+  const row = await sessionRow(await bearerFor(alice));
+  assert.equal(row.userId, alice);
+  const days = row.seconds / 86_400;
+  assert.ok(days > 29.99 && days <= 30, `expires in ${days} days`);
+});
+
+test("cookie requests keep the Origin check, and a bearer request never signs in with its cookie", async () => {
+  const alice = await person("alice");
+  const cookie = await cookieFor(alice);
+  const body = JSON.stringify({ enabled: true });
+  for (const authorization of ["Basic YWxpY2U6c2VjcmV0", "Bearerish token"])
+    await assertRouteError(
+      await native("activity-email", authorization, { body, cookie }),
+      denied.origin,
+    );
+  for (const authorization of ["Bearer not-a-token", "Bearer"]) {
+    await assertRouteError(
+      await native("activity-email", authorization, { body, cookie }),
+      denied.signedOut,
+    );
+    await assertRouteError(
+      await native("screen", authorization, { query: profilePath, cookie }),
+      denied.signedOut,
+    );
+  }
+  assert.equal(await activityEmail(alice), false);
+});
+
+test("invalid, unsigned, and signed-out bearer tokens get 401", async () => {
+  const alice = await person("alice");
+  const token = await bearerFor(alice);
+  const other = await bearerFor(alice);
+  // The live session's stored token, without or with a forged signature.
+  const unsigned = decodeURIComponent(other).split(".")[0];
+  const tampered = `${unsigned}.${"A".repeat(43)}`;
+
+  const signedOut = await signOut(`Bearer ${token}`);
+  assert.equal(signedOut.status, 200);
+  assert.equal(await sessionRow(token), undefined);
+
+  for (const bad of ["not-a-token", tampered, unsigned, token]) {
+    await assertRouteError(
+      await native("screen", `Bearer ${bad}`, { query: profilePath }),
+      denied.signedOut,
+    );
+    await assertRouteError(
+      await native("activity-email", `Bearer ${bad}`, {
+        body: JSON.stringify({ enabled: true }),
+      }),
+      denied.signedOut,
+    );
+  }
+  assert.equal(await activityEmail(alice), false);
+
+  // Signing out ends only that session, and the other one's signed token
+  // still works.
+  const remaining = await native("screen", `Bearer ${other}`, {
+    query: profilePath,
+  });
+  assert.equal(remaining.status, 200);
 });
