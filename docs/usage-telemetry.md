@@ -232,9 +232,10 @@ one for saves, with one row per week and an asterisk on the week in progress:
   two by the week's end; how many of those had back-and-forth by the week's
   end, counting the entry as its owner's first post; and members who
   commented that week and in any earlier week. Entries include Recommend,
-  Want to watch, watch progress, review, earlier discussion, and standalone
-  comment entries. Posting a
-  standalone comment starts a conversation and does not count as commenting.
+  Want to watch, watch progress, review, earlier discussion, standalone
+  comment, and title-less post entries. Posting a
+  standalone comment or post starts a conversation and does not count as
+  commenting.
   Removed comments count when they were posted.
 
 ### Retention and tests

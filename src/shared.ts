@@ -15,6 +15,9 @@ export type Title = {
   release_date: string;
 };
 export type Trailer = { key: string; name: string };
+// TMDB's seasons and episodes for a TV discussion post's label.
+export type Season = { number: number; name: string };
+export type Episode = { number: number; name: string };
 export const codeLimitMessage =
   "Too many codes requested. Try again later, or continue with Google.";
 export const watchCategories = [
@@ -111,17 +114,20 @@ export type ReactionSummary = {
   count: number;
   reacted: boolean;
 };
+// A feed entry. Posts without a title have no title fields; every other
+// entry belongs to a movie or show.
 export type Conversation = {
   id: string;
   owner_id: string;
-  title_id: string;
+  title_id: string | null;
   item_type:
     | "recommended"
     | "want_to_watch"
     | "earlier"
     | "comment"
     | "progress"
-    | "review";
+    | "review"
+    | "post";
   body: string | null;
   spoiler: boolean;
   active: boolean;
@@ -134,6 +140,9 @@ export type Conversation = {
   // changed it. A removed review has neither rating nor text.
   rating: number | null;
   edited: boolean;
+  // A TV comment's optional season, or episode within that season.
+  season: number | null;
+  episode: number | null;
   viewer_want_to_watch: boolean;
   viewer_recommended: boolean;
   // The reader's own current status for the entry's title.
@@ -141,10 +150,10 @@ export type Conversation = {
   username: string;
   display_name: string;
   photo: string | null;
-  title_name: string;
+  title_name: string | null;
   poster_path: string | null;
-  kind: "movie" | "tv";
-  release_date: string;
+  kind: "movie" | "tv" | null;
+  release_date: string | null;
   activity_at: string;
   visible_activity: string;
   reactions: ReactionSummary[];

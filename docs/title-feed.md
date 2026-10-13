@@ -469,8 +469,9 @@ interview if they preserve these decisions:
 
 ## Shared feed implementation
 
-`src/server/feed.ts` reads each eligible action, progress entry, review, or
-standalone comment and its replies in one PostgreSQL snapshot. The friends, title, and profile screens use this same
+`src/server/feed.ts` reads each eligible action, progress entry, review,
+standalone comment, or [post without a title](#discussion-posts-without-a-title)
+and its replies in one PostgreSQL snapshot. The friends, title, and profile screens use this same
 read path. Items sort by the latest eligible activity at millisecond precision,
 then by item UUID for a stable tie. A removed or inaccessible direct comment
 remains as parent context only while it has eligible nested replies. It does
@@ -523,8 +524,11 @@ visible reading anchor and the draft.
 Item links use `/titles/<kind>/<tmdb-id>?item=<item-id>`. A targeted reply adds
 `&reply=<comment-id>`. The server checks the title, item, and reply together;
 the browser exposes earlier direct comments, expands the target's parent
-group, and scrolls to an eligible target without revealing its spoilers. Old `/conversations/<id>` links redirect to the preserved discussion,
-an eligible action, or the title feed. Inaccessible targets reveal no private
+group, and scrolls to an eligible target without revealing its spoilers. A
+post without a title has no title page, so its links open the friends feed as
+`/?item=<item-id>`, with the same reply parameter and checks. Old
+`/conversations/<id>` links redirect to the preserved discussion,
+an eligible action, the title feed, or a post on the friends feed. Inaccessible targets reveal no private
 content. [Comment notifications](notifications.md#current-implementation),
 added in [#92](https://github.com/jubishop/screenr/issues/92), open their exact
 reply through these same title links.
@@ -541,16 +545,19 @@ clear only the submitted draft; later typing remains intact. Each saved
 comment has its own item ID and reply group. It uses the same shared feed,
 access checks, ordering, preview, expansion, and removal controls as other
 entries. Friends and profile pages show eligible comments and inline replies;
-they do not have a top-level composer. A profile includes only its owner's
-entries, not their replies on someone else's entries.
+they have no title comment composer. The friends feed's Start a conversation
+creates a [post without a title](#discussion-posts-without-a-title) instead.
+A profile includes only its owner's entries, not their replies on someone
+else's entries.
 
 Comments accept 1–2,000 characters after trimming outer whitespace. The
 optional spoiler flag hides the comment and its discussion until the reader
 reveals them. Reply-level spoiler flags still apply after that reveal. Failed
 posting and refreshes preserve the local draft; text entered while a post is
 saving remains available for the next comment. Creation does not change
-Recommend or Want to watch. Editing standalone comments, reviews, ratings,
-additional watch statuses, and titleless posts remain outside this feature.
+Recommend or Want to watch. Editing standalone comments, reviews, and ratings
+remain outside this feature. TV comments can carry a
+[season or episode label](#season-and-episode-labels).
 
 ### Emoji reactions
 
@@ -663,6 +670,60 @@ behind the spoiler control, but not the stars. Reviews and their edits create
 no notifications. Comments on a review notify its author like comments on
 other entries and open the review. Replies and reactions use their
 `review_id` columns.
+
+### Discussion posts without a title
+
+[Issue #103](https://github.com/jubishop/screenr/issues/103) adds discussion
+posts with no movie or show, following the
+[accepted decision](product-brief.md#discussions-without-an-attached-title--2026-09-04).
+`src/components/start-conversation.tsx` puts Start a conversation on the Your
+circle heading row and on the title page's "Around this title" row. Both open
+the same composer: the text field, spoiler checkbox, **Cancel**, which keeps
+the draft, and the posting action. On the friends feed the field is labeled
+**Your post** and the button **Post**.
+
+`createDiscussionPost` in `src/server/comments.ts` saves a `discussion_post`
+row with 1–2,000 characters and the spoiler flag. It has no title and no
+person/title conversation. The shared read path returns it as item type
+`post` with empty title fields, so the friends feed and the author's profile
+show it and title pages never do. It uses the same audience, blocking,
+ordering, preview, replies, nested replies, reactions, host removal, and
+spoiler rules as other entries. Deleting it erases the text, shows
+**Post removed**, and keeps eligible replies; with no visible live reply it
+disappears, like a deleted standalone comment.
+
+A post entry shows the author line ("Theo Park posted") and its text, without
+a poster, title, or Want to watch and Recommend buttons. Its copy link copies
+`/?item=<item-id>`. That link, and comment notifications and emails about the
+post, open the friends feed: the screen checks the item and reply against the
+reader's feed, scrolls to an eligible target, expands a targeted reply's
+group, and otherwise shows "This activity is unavailable." Replies use
+`comment.discussion_post_id` without a `conversation_id`, and reactions use
+`reaction.discussion_post_id`. The usage report counts post conversations
+like other entries.
+
+### Season and episode labels
+
+Issue #103 also lets TV discussion posts name a season or episode, following
+the [accepted decision](product-brief.md#season-and-episode-discussion-labels--2026-09-04).
+On a TV title page the composer adds optional **Season** and **Episode**
+pickers. Opening the composer loads TMDB's season list through the `seasons`
+action, and choosing a season loads its episodes through `episodes`; see
+[season and episode lists](title-catalog.md#season-and-episode-lists). The
+Episode picker appears once a season is chosen, lists "Episode 4 · Name", and
+offers **Whole season** for a season label. Cancel keeps the choices with the
+draft, and posting clears them. When the season list cannot load, the composer
+says so and the comment posts without a label. When an episode list cannot
+load, the comment can still name the season.
+
+`createTitleComment` accepts an optional season and episode, each a whole
+number from 1 to 100,000. An episode needs its season, and labels need a TV
+title. Columns `title_comment.season_number` and `episode_number` store them
+with the same checks. The server does not ask TMDB again when saving. Entries
+in all three feeds show the label as a small tag, "Season 2" or "Season 2,
+Episode 4", above the text and outside the spoiler cover. Deleting the comment
+keeps the label for its remaining discussion. Replies, reviews, statuses, and
+posts without a title have no label.
 
 ### Migration and rollback compatibility
 
@@ -786,6 +847,18 @@ transaction that turns Want to watch on, so activation and rollback both keep
 one current status. A release before ccbd432 could leave a progress status
 current beside Want to watch against a migrated database. Take the normal
 pre-upgrade backup; no manual step is needed.
+
+Migration `024-discussion-posts.sql` adds `discussion_post`, reply and
+reaction columns for it, one-target checks that include it, and a check that
+only replies to a post have no conversation. It adds the nullable TV-only
+`title_comment` label columns and teaches the comment notification trigger and
+`visible_notification` to find a post's owner. It changes no existing rows.
+The preceding release reads only `feed_item`, `title_comment`,
+`watch_progress`, and `review`, so it shows neither posts nor their replies and ignores
+labels. Its title comments, replies, and reactions still save. A notification
+about a post has no title, so the preceding release links it to the actor's
+profile instead of the post. Posts and labels saved before a rollback reappear
+with this release.
 
 ## Decisions deferred to future features
 

@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
 import { AppError, db, isBigintId, transaction } from "./db";
+import { entryPath } from "../member-routes";
 
 type NotificationRow = {
   id: string;
@@ -37,8 +38,13 @@ function present(row: NotificationRow) {
     actorId: row.actor_id,
     actorPhoto: row.photo,
     message: `${row.display_name} ${action}${row.title_name ? ` about ${row.title_name}` : ""}.`,
-    href: row.title_id
-      ? `/titles/${row.title_id.replace(":", "/")}?item=${row.item_id}&reply=${row.comment_id}`
+    // Comments open their reply in the entry's feed; friendships open the
+    // person's profile.
+    href: row.item_id
+      ? entryPath(
+          { id: row.item_id, title_id: row.title_id },
+          row.comment_id ?? undefined,
+        )
       : `/people/${row.username}`,
     createdAt: row.created_at,
     read: row.read_at !== null,

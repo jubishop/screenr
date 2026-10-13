@@ -1,7 +1,12 @@
 import { createHash } from "node:crypto";
 import { profileFor } from "./profiles";
 import { people } from "./relationships";
-import { conversations, conversationURL, friendActivity } from "./feed";
+import {
+  conversations,
+  conversationURL,
+  friendActivity,
+  linkTarget,
+} from "./feed";
 import { getTitle, getTitleTrailer, getTitleAvailability } from "./catalog";
 import { listInvitations } from "./invitations";
 import { AppError, db } from "./db";
@@ -69,11 +74,15 @@ export async function initialScreen(userId: string, requestedPath: string) {
 }
 
 async function loadContent(userId: string, route: MemberRoute) {
-  if (route.kind === "feed")
+  if (route.kind === "feed") {
+    // Links to posts without a title open them here.
+    const threads = await conversations(userId);
     return {
       kind: "feed" as const,
-      conversations: await conversations(userId),
+      conversations: threads,
+      ...linkTarget(threads, route),
     };
+  }
   if (route.kind === "search") {
     // Both Find a title tabs load together, so switching tabs needs no new
     // read, and one availability read covers titles on either list.
@@ -129,7 +138,7 @@ async function loadContent(userId: string, route: MemberRoute) {
       ).rowCount,
     };
   if (route.kind === "title") {
-    const { id, item, reply } = route;
+    const { id } = route;
     // Catalog requests run together to fit the client's refresh deadline.
     const stored = getTitle(id);
     const [title, threads, trailer, availability, watch] = await Promise.all([
@@ -147,22 +156,7 @@ async function loadContent(userId: string, route: MemberRoute) {
       watch,
       conversations: threads,
       friends: friendActivity(userId, threads),
-      target: (() => {
-        const targeted = threads.find((c) => c.id === item);
-        if (!targeted) return null;
-        const targetReply = targeted.comments.find(
-          (c) => c.id === reply && !c.unavailable,
-        );
-        return { item: targeted.id, reply: targetReply?.id };
-      })(),
-      targetUnavailable:
-        !!item &&
-        !threads.some(
-          (c) =>
-            c.id === item &&
-            (!reply ||
-              c.comments.some((r) => r.id === reply && !r.unavailable)),
-        ),
+      ...linkTarget(threads, route),
     };
   }
   if (route.kind === "profile") {

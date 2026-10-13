@@ -26,6 +26,7 @@ import { InvitationsView } from "./invitations-view";
 import { PeopleView } from "./people-view";
 import { ProfileView } from "./profile-view";
 import { TitleView } from "./title-view";
+import { StartConversation } from "./start-conversation";
 import { Notifications } from "./notifications";
 import { leaveNotice } from "./page-notice";
 
@@ -390,12 +391,14 @@ export function Screen({
             </button>
           </div>
         )}
-        {data?.kind === "feed" && (
-          <div className="page-heading">
-            <h1 className="page-title">Your circle</h1>
-          </div>
-        )}
         {/* Keep draft-owning views mounted while failed reads clear their data. */}
+        {route.kind === "feed" && (
+          <StartConversation
+            title={null}
+            available={data?.kind === "feed"}
+            refresh={refresh}
+          />
+        )}
         {route.kind === "title" && (
           <TitleView
             data={data?.kind === "title" ? data : null}
@@ -458,8 +461,8 @@ export function Screen({
             refresh={refresh}
             activity={activity}
             busy={busy}
-            target={data?.kind === "title" ? data.target : null}
-            unavailable={data?.kind === "title" && data.targetUnavailable}
+            target={data && "target" in data ? data.target : null}
+            unavailable={!!data && "target" in data && data.targetUnavailable}
             showEmpty={data?.kind !== "profile" || data.profile.can_read}
             compact={route.kind === "title"}
             shownEntry={route.kind === "title" ? shownEntry : null}

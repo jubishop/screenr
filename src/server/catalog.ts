@@ -2,6 +2,8 @@ import { AppError, db } from "./db";
 import { watchSections } from "./watch-sources";
 import {
   watchCategories,
+  type Episode,
+  type Season,
   type Title,
   type Trailer,
   type WatchAvailability,
@@ -171,6 +173,52 @@ export async function ensureTitle(id: string): Promise<string> {
   if ((await db.query("SELECT 1 FROM title WHERE id=$1", [id])).rowCount)
     return id;
   return (await getTitle(id)).id;
+}
+
+// The TV discussion composer's Season and Episode pickers read TMDB's lists
+// when a member opens it. Specials (season 0) have no "Season N" label, so
+// they are left out. A failed request leaves the post without a label.
+function showPath(id: string) {
+  if (!/^(movie|tv):[1-9][0-9]*$/.test(id))
+    throw new AppError("Title not found.", 404);
+  if (!id.startsWith("tv:"))
+    throw new AppError("Seasons are only for TV shows.", 404);
+  return `/tv/${id.slice(3)}`;
+}
+const positive = (value: unknown): value is number =>
+  Number.isSafeInteger(value) && Number(value) > 0;
+function invalidCatalog(): never {
+  throw new AppError("The catalog returned an invalid season list.", 502);
+}
+
+export async function titleSeasons(id: string): Promise<Season[]> {
+  const data = await fetchCatalog(showPath(id), 5000);
+  if (!isRecord(data) || !Array.isArray(data.seasons)) invalidCatalog();
+  return data.seasons
+    .filter((season) => isRecord(season) && positive(season.season_number))
+    .map((season) => ({
+      number: Number(season.season_number),
+      name:
+        typeof season.name === "string" && season.name.trim()
+          ? season.name.trim()
+          : `Season ${season.season_number}`,
+    }));
+}
+
+export async function seasonEpisodes(
+  id: string,
+  season: number,
+): Promise<Episode[]> {
+  const path = showPath(id);
+  if (!positive(season)) throw new AppError("Invalid season.");
+  const data = await fetchCatalog(`${path}/season/${season}`, 5000);
+  if (!isRecord(data) || !Array.isArray(data.episodes)) invalidCatalog();
+  return data.episodes
+    .filter((episode) => isRecord(episode) && positive(episode.episode_number))
+    .map((episode) => ({
+      number: Number(episode.episode_number),
+      name: typeof episode.name === "string" ? episode.name.trim() : "",
+    }));
 }
 
 function selectTrailer(data: unknown): Trailer | null {

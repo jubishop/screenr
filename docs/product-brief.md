@@ -863,6 +863,9 @@ friends feed at that post (`/?item=<id>`), because it has no title page. The
 user chose this for [issue #103](https://github.com/jubishop/screenr/issues/103)
 over a single composer with an optional title picker.
 
+**Implementation note:** [Discussion posts without a title](title-feed.md#discussion-posts-without-a-title)
+describes the shipped behavior.
+
 ### Season and episode discussion labels — 2026-09-04
 
 **Decision:** Let TV discussion posts optionally identify a season or
@@ -881,6 +884,10 @@ discussion posts, not replies, reviews, or statuses. When TMDB's season data
 is unavailable, the post can still be created without a label. The user chose
 TMDB pickers for [issue #103](https://github.com/jubishop/screenr/issues/103)
 over free text, for consistent labels.
+
+**Implementation note:** [Season and episode labels](title-feed.md#season-and-episode-labels)
+describes the shipped behavior. The pickers leave out TMDB's Specials
+(season 0), which has no "Season N" label.
 
 ### Finding and adding friends — 2026-09-04
 

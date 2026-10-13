@@ -71,13 +71,46 @@ export async function removeComment(viewer: string, id: string) {
       AND screenr_can_read(cm.author_id,c.owner_id) AND NOT screenr_blocked($2,cm.author_id)`,
           [id, viewer],
         )
-      : await client.query(
-          `UPDATE title_comment SET removed_at=coalesce(removed_at,now()),body='[removed]'
-       WHERE id=$1::uuid AND owner_id=$2`,
+      : // Authors delete their own comments and posts, keeping the replies.
+        await client.query(
+          `WITH removed AS (
+            UPDATE title_comment SET removed_at=coalesce(removed_at,now()),body='[removed]'
+            WHERE id=$1::uuid AND owner_id=$2 RETURNING id
+          ), post AS (
+            UPDATE discussion_post SET removed_at=coalesce(removed_at,now()),body='[removed]'
+            WHERE id=$1::uuid AND owner_id=$2 RETURNING id
+          ) SELECT id FROM removed UNION ALL SELECT id FROM post`,
           [id, viewer],
         );
     if (!result.rowCount) throw new AppError("Comment not found.", 404);
   });
+}
+
+// A discussion post without a title, for the author and their friends.
+export async function createDiscussionPost(
+  viewer: string,
+  body: unknown,
+  spoiler: unknown,
+) {
+  const content = text(body, "Post", 2000);
+  if (typeof spoiler !== "boolean") throw new AppError("Invalid spoiler flag.");
+  const id = randomUUID();
+  await transaction((client) =>
+    client.query(
+      "INSERT INTO discussion_post(id,owner_id,body,spoiler) VALUES($1,$2,$3,$4)",
+      [id, viewer, content, spoiler],
+    ),
+  );
+  return id;
+}
+
+// Season and episode numbers from the TV composer's TMDB pickers. Either may
+// be absent; an episode needs its season.
+function label(value: unknown, name: string) {
+  if (value == null) return null;
+  if (!Number.isSafeInteger(value) || Number(value) < 1 || Number(value) > 1e5)
+    throw new AppError(`Invalid ${name}.`);
+  return Number(value);
 }
 
 export async function createTitleComment(
@@ -85,15 +118,22 @@ export async function createTitleComment(
   titleId: string,
   body: unknown,
   spoiler: unknown,
+  seasonNumber?: unknown,
+  episodeNumber?: unknown,
 ) {
   const content = text(body, "Comment", 2000);
   if (typeof spoiler !== "boolean") throw new AppError("Invalid spoiler flag.");
+  const season = label(seasonNumber, "season");
+  const episode = label(episodeNumber, "episode");
+  if (episode !== null && season === null)
+    throw new AppError("Choose a season for the episode.");
   return transaction(async (client) => {
-    if (
-      !(await client.query("SELECT 1 FROM title WHERE id=$1", [titleId]))
-        .rowCount
-    )
-      throw new AppError("Title not found.", 404);
+    const title = (
+      await client.query("SELECT kind FROM title WHERE id=$1", [titleId])
+    ).rows[0];
+    if (!title) throw new AppError("Title not found.", 404);
+    if (season !== null && title.kind !== "tv")
+      throw new AppError("Season and episode labels are only for TV shows.");
     // The conversation row anchors entries and old links; add it when absent.
     await client.query(
       `INSERT INTO conversation(id,owner_id,title_id) VALUES($1,$2,$3)
@@ -102,9 +142,9 @@ export async function createTitleComment(
     );
     const id = randomUUID();
     await client.query(
-      `INSERT INTO title_comment(id,conversation_id,owner_id,title_id,body,spoiler)
-       SELECT $1,id,owner_id,title_id,$4,$5 FROM conversation WHERE owner_id=$2 AND title_id=$3`,
-      [id, viewer, titleId, content, spoiler],
+      `INSERT INTO title_comment(id,conversation_id,owner_id,title_id,body,spoiler,season_number,episode_number)
+       SELECT $1,id,owner_id,title_id,$4,$5,$6,$7 FROM conversation WHERE owner_id=$2 AND title_id=$3`,
+      [id, viewer, titleId, content, spoiler, season, episode],
     );
     return id;
   });

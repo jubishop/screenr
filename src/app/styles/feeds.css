@@ -198,6 +198,16 @@
   overflow-wrap: anywhere;
   margin: 10px 0;
 }
+/* A TV comment's season or episode label, shown before any spoiler cover. */
+.discussion-label {
+  display: inline-block;
+  margin: 4px 0 0;
+  padding: 1px 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+}
 .nested {
   margin-left: 22px;
   border-left: 2px solid var(--line);
@@ -238,6 +248,20 @@
 }
 .composer textarea {
   min-height: 0;
+}
+/* The friends feed heading row holds Start a conversation. */
+.feed-heading .text-button {
+  white-space: nowrap;
+}
+/* The TV composer's optional Season and Episode pickers share one row. */
+.episode-label {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 12px;
+  margin-bottom: 14px;
+}
+.episode-label label {
+  margin-bottom: 0;
 }
 .title-comment-composer {
   background: var(--surface);

@@ -285,6 +285,8 @@ placeholder, preserving replies and their addressed-person context. The server
 checks ownership and current conversation access on every removal request.
 Standalone comment authors can also **Delete** the top-level entry. Its text
 becomes **Comment removed** while eligible replies remain open for discussion.
+Deleting a [post without a title](title-feed.md#discussion-posts-without-a-title)
+works the same way and shows **Post removed**.
 Entries without visible, nonremoved replies disappear. The original spoiler
 flag still protects the remaining discussion. This behavior is shared across
 title, friends, and author-profile feeds, including open-page refreshes.

@@ -5,7 +5,7 @@ import type { Person, SaveSurface, WatchStatus } from "../shared";
 import { useInteractive } from "./client";
 import { Poster } from "./poster";
 import { TitleAvailability } from "./title-availability";
-import { TitleCommentComposer } from "./title-comment";
+import { StartConversation } from "./start-conversation";
 import { TitleFriends } from "./title-friends";
 import { TitleTrailer } from "./title-trailer";
 import { useActionError } from "./action-error";
@@ -152,8 +152,9 @@ export function TitleView({
           )}
         </>
       )}
-      <TitleCommentComposer
-        titleId={data?.title.id ?? null}
+      <StartConversation
+        title={data && { id: data.title.id, kind: data.title.kind }}
+        available={!!data}
         refresh={refresh}
       />
     </>

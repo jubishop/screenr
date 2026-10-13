@@ -49,9 +49,11 @@ test flow, and [Testing Screenr](docs/testing.md) for the automated suites.
   update it in place with an Edited label, and removal asks first.
 - **Feeds and conversations:** Members recommend titles or add them to Want to
   watch, which are mutually exclusive, and post standalone comments on title
-  pages. The friends, profile, and title feeds show the same entries. Members
-  reply inline with one level of nested replies, flag spoilers, react with
-  emoji, and delete their comments; hosts can remove others' comments.
+  pages, where TV comments can name a season or episode. Posts started from
+  Your circle have no title and appear on the friends feed and the author's
+  profile. The friends, profile, and title feeds show the same entries.
+  Members reply inline with one level of nested replies, flag spoilers, react
+  with emoji, and delete their comments; hosts can remove others' comments.
 - **Watch together:** A friend's profile links to a page that compares both
   people's Want to watch choices, listing titles on either person's services
   first.
@@ -75,8 +77,6 @@ test flow, and [Testing Screenr](docs/testing.md) for the automated suites.
 Remaining product features are tracked as
 [open feature issues](https://github.com/jubishop/screenr/issues?q=is%3Aissue%20state%3Aopen%20label%3Afeature):
 
-- Title-less discussion posts and season or episode labels
-  ([#103](https://github.com/jubishop/screenr/issues/103))
 - A ranked top 10 on each profile
   ([#99](https://github.com/jubishop/screenr/issues/99))
 
@@ -86,7 +86,8 @@ Screenr is one TypeScript application: Next.js and React for pages and request
 handling, PostgreSQL through `pg` with owned SQL migrations, and Better Auth
 for Google and email-code sign-in with database sessions. A worker process
 sends email through Resend from a PostgreSQL job queue. TMDB supplies catalog
-data, trailers, and JustWatch-backed US availability. Production runs as
+data, trailers, season and episode lists, and JustWatch-backed US
+availability. Production runs as
 systemd services behind Caddy on a shared Hetzner VPS, with encrypted backups
 in Cloudflare R2. See the [application stack](docs/application-stack.md) and
 [deployment guide](docs/deployment.md).

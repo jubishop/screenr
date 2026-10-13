@@ -17,6 +17,12 @@ import { progressPhrase, statusLabels } from "./watch-status";
 import { ConfirmAction } from "./confirmation";
 import { around, useRemovalFocus, type FocusTarget } from "./removal-focus";
 import { ReviewStars, reviewPhrase } from "./review";
+import { entryPath, memberPath } from "../member-routes";
+
+// A TV comment's label, such as "Season 2" or "Season 2, Episode 4".
+function discussionLabel(season: number, episode: number | null) {
+  return `Season ${season}${episode === null ? "" : `, Episode ${episode}`}`;
+}
 
 type Known = Map<string, { activity: string; comments: Set<string> }>;
 function capture(items: FeedItem[]): Known {
@@ -259,7 +265,19 @@ function FeedEntry({
   ];
   // The title actions share one message beneath the entry's action line.
   const failure = useActionError();
-  const titleURL = item ? `/titles/${item.title_id.replace(":", "/")}` : "";
+  // Every entry but a post without a title belongs to a movie or show.
+  const title =
+    item?.title_id && item.title_name !== null && item.kind
+      ? {
+          id: item.title_id,
+          name: item.title_name,
+          kind: item.kind,
+          release_date: item.release_date ?? "",
+        }
+      : null;
+  const titleURL = title ? memberPath({ kind: "title", id: title.id }) : "";
+  // Comments and posts can be deleted, keeping their replies.
+  const deletable = item?.item_type === "comment" || item?.item_type === "post";
 
   async function copyDiscussion() {
     if (!item || copying) return;
@@ -267,7 +285,7 @@ function FeedEntry({
     setCopyMessage("");
     try {
       await navigator.clipboard.writeText(
-        new URL(`${titleURL}?item=${item.id}`, window.location.origin).href,
+        new URL(entryPath(item), window.location.origin).href,
       );
       setCopyMessage("Link copied.");
     } catch {
@@ -295,14 +313,12 @@ function FeedEntry({
       </span>
     </span>
   );
-  // Deleted standalone comments and removed reviews show no reactions.
+  // Deleted standalone comments and posts and removed reviews show no
+  // reactions.
   const erased =
-    (item?.item_type === "comment" || item?.item_type === "review") &&
-    !item.active;
+    (deletable || item?.item_type === "review") && !!item && !item.active;
   const canDelete =
-    item?.item_type === "comment" &&
-    item.active &&
-    item.owner_id === user.user_id;
+    deletable && !!item?.active && item.owner_id === user.user_id;
   // Compact title page entries leave the title actions to the page header
   // and move the copy link to the author line.
   const titleActions = item && (!compact || canDelete) && (
@@ -318,7 +334,7 @@ function FeedEntry({
           Delete
         </button>
       )}
-      {!compact && item.owner_id !== user.user_id && (
+      {!compact && title && item.owner_id !== user.user_id && (
         <>
           {/* One tap saves to Want to watch. A reader with another status
               sees it instead, linked to the title page's status menu. */}
@@ -335,7 +351,7 @@ function FeedEntry({
               onClick={() =>
                 void failure.run("want_to_watch", () =>
                   activity(
-                    item.title_id,
+                    title.id,
                     "want_to_watch",
                     !item.viewer_want_to_watch,
                     item.item_type === "recommended" && item.active
@@ -357,11 +373,7 @@ function FeedEntry({
             aria-describedby={failure.describedBy("recommended")}
             onClick={() =>
               void failure.run("recommended", () =>
-                activity(
-                  item.title_id,
-                  "recommended",
-                  !item.viewer_recommended,
-                ),
+                activity(title.id, "recommended", !item.viewer_recommended),
               )
             }
           >
@@ -389,24 +401,26 @@ function FeedEntry({
           ? compact
             ? "commented"
             : "commented on"
-          : item.item_type === "earlier"
-            ? "· Earlier discussion"
-            : item.item_type === "review"
-              ? reviewPhrase(item)
-              : item.item_type === "progress"
-                ? progressPhrase(
-                    item.status!,
-                    item.finished_on,
-                    item.active,
-                    interactive,
-                  )
-                : item.item_type === "recommended"
-                  ? item.active
-                    ? "recommends"
-                    : "removed their recommendation"
-                  : item.active
-                    ? "wants to watch"
-                    : "removed Want to watch"}
+          : item.item_type === "post"
+            ? "posted"
+            : item.item_type === "earlier"
+              ? "· Earlier discussion"
+              : item.item_type === "review"
+                ? reviewPhrase(item)
+                : item.item_type === "progress"
+                  ? progressPhrase(
+                      item.status!,
+                      item.finished_on,
+                      item.active,
+                      interactive,
+                    )
+                  : item.item_type === "recommended"
+                    ? item.active
+                      ? "recommends"
+                      : "removed their recommendation"
+                    : item.active
+                      ? "wants to watch"
+                      : "removed Want to watch"}
       </span>
       {/* Non-breaking spaces keep the time beside the action. */}
       <span className="muted">
@@ -424,12 +438,12 @@ function FeedEntry({
       className={`feed-entry${compact ? " compact" : ""}`}
       data-item-id={item?.id}
       id={item ? `item-${item.id}` : undefined}
-      // The author line and title name an entry; compact entries have no
-      // title heading. The friend line focuses an entry after scrolling to
-      // it, and removals can move focus to it.
+      // The author line and title name an entry; compact entries and posts
+      // without a title have no title heading. The friend line focuses an
+      // entry after scrolling to it, and removals can move focus to it.
       aria-labelledby={
         item
-          ? compact
+          ? compact || !title
             ? `by-${item.id}`
             : `by-${item.id} title-${item.id}`
           : undefined
@@ -439,14 +453,14 @@ function FeedEntry({
       {item && (
         <header className="activity-card" data-item-heading={item.id}>
           <div className="activity-summary">
-            {!compact && (
+            {!compact && title && (
               <Link
                 className="poster-link"
                 href={titleURL}
                 prefetch={false}
-                aria-label={item.title_name}
+                aria-label={title.name}
               >
-                <Poster path={item.poster_path} name={item.title_name} />
+                <Poster path={item.poster_path} name={title.name} />
               </Link>
             )}
             <div className="activity-content">
@@ -458,17 +472,29 @@ function FeedEntry({
               ) : (
                 <>
                   {byline}
-                  <h2 id={`title-${item.id}`}>
-                    <Link href={titleURL} prefetch={false}>
-                      {item.title_name}
-                    </Link>
-                  </h2>
-                  <p className="small muted">{titleDetails(item)}</p>
+                  {title && (
+                    <>
+                      <h2 id={`title-${item.id}`}>
+                        <Link href={titleURL} prefetch={false}>
+                          {title.name}
+                        </Link>
+                      </h2>
+                      <p className="small muted">{titleDetails(title)}</p>
+                    </>
+                  )}
                 </>
               )}
-              {item.item_type === "comment" && !item.active && (
+              {/* The label stays outside the spoiler cover. */}
+              {item.season !== null && (
+                <p className="discussion-label">
+                  {discussionLabel(item.season, item.episode)}
+                </p>
+              )}
+              {deletable && !item.active && (
                 <p className="muted" id={`removed-${item.id}`} tabIndex={-1}>
-                  Comment removed
+                  {item.item_type === "post"
+                    ? "Post removed"
+                    : "Comment removed"}
                 </p>
               )}
               {/* A spoiler flag covers the text, not the rating. */}
@@ -496,7 +522,7 @@ function FeedEntry({
           {failure.alert}
           {canDelete && confirming && (
             <ConfirmAction
-              message="Delete this comment? Its text will be erased."
+              message={`Delete this ${item.item_type === "post" ? "post" : "comment"}? Its text will be erased.`}
               action="Delete"
               run={async () => {
                 // An entry with replies keeps its placeholder; otherwise it

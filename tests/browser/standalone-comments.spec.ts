@@ -78,9 +78,10 @@ test("standalone title comments persist and share replies across all three mobil
     "/people/commentowner",
   ].entries()) {
     await reader.goto(path);
+    // The friends feed starts posts without a title; profiles have no composer.
     await expect(
       reader.getByRole("button", { name: "Start a conversation", exact: true }),
-    ).toHaveCount(index === 0 ? 1 : 0);
+    ).toHaveCount(index === 2 ? 0 : 1);
     await expect(
       reader.getByRole("form", { name: "New title comment" }),
     ).toHaveCount(0);

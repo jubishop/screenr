@@ -303,6 +303,14 @@ recipients. A full run checks:
   composer. The same entries and replies persist in all three feeds, with
   spoiler protection for the whole discussion and independent reply groups.
   Posting and refresh failures preserve comment drafts.
+- A member posts without a title from the Your circle heading row. A friend
+  reads, reacts, and replies on the friends feed and profile, and copies its
+  `/?item=` link; title pages and nonfriends don't show it. The reply's
+  notification opens the friends feed at the reply, and deletion keeps it.
+- The fictional catalog's `tv:998020` lists seasons and episodes, so its
+  composer offers Season and Episode pickers. Labels stay visible above the
+  spoiler cover in all three feeds. Other TV fixtures list no seasons, so
+  their comments post without a label.
 - A nonfriend cannot read or write through direct API calls or the page.
 - Unfriending removes open-page access and hides historical comments for
   remaining readers; refriending restores them.
@@ -432,7 +440,10 @@ date validation, audience and blocking, notifications, and migration 018
 with the previous release's writes. Review tests cover validation, edits,
 removal and reuse, reactions on removed reviews, audience and blocking,
 notifications, the conversation measure, and migration 022 with the previous
-release's writes.
+release's writes. Discussion post tests cover posts without a title through
+the same audience, reply, reaction, removal, notification, link, and usage
+rules, label validation and TMDB season lists, and migration 024 with the
+previous release's writes.
 `tests/app/failure-logs.test.ts` and `tests/app/email.test.ts` capture the
 [failure logs](deployment.md#failure-logs) of request, page, worker, and
 Resend failures. They compare the logged fields exactly, check that comment

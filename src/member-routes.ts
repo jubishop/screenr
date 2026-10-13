@@ -85,6 +85,21 @@ export function memberPath(route: MemberRoute): string {
   }
 }
 
+/**
+ * A feed entry's permalink: its title page, or the friends feed for a post
+ * without a title, optionally at one of its replies.
+ */
+export function entryPath(
+  entry: { id: string; title_id: string | null },
+  reply?: string,
+) {
+  return memberPath(
+    entry.title_id
+      ? { kind: "title", id: entry.title_id, item: entry.id, reply }
+      : { kind: "feed", item: entry.id, reply },
+  );
+}
+
 function withQuery(
   path: string,
   {

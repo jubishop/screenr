@@ -422,8 +422,13 @@ because it contained only one small text button.
 keep the card's height.
 
 **Implementation note:** [Issue #169](https://github.com/jubishop/screenr/issues/169)
-moves the heading into `src/components/title-comment.tsx`, which owns the
-button, the draft, and the composer card that opens beneath the heading.
+moved the heading into the composer component, now
+`src/components/start-conversation.tsx`, which owns the button, the draft, and
+the composer card that opens beneath the heading.
+[Issue #103](https://github.com/jubishop/screenr/issues/103) reuses it on the
+Your circle heading row for
+[posts without a title](title-feed.md#discussion-posts-without-a-title), and
+adds Season and Episode pickers to the TV composer.
 
 ### Avatars wherever a person appears — 2026-10-12
 

@@ -84,7 +84,9 @@ dropdown on desktop and a full-screen panel on phones. Close or Escape returns
 to the underlying page without losing its scroll position or comment drafts.
 The panel has All and Unread filters and controls for earlier notifications.
 Opening it does not mark notifications read. Selecting a notification marks
-it read and opens its person or exact title reply. A pending friend request
+it read and opens its person or exact title reply. A reply on a
+[post without a title](title-feed.md#discussion-posts-without-a-title) opens
+on the friends feed instead. A pending friend request
 also shows Accept and Decline; Decline asks for the
 [in-page confirmation](interface-design.md#confirm-other-destructive-actions--2026-10-12)
 first. Either action marks that notification read and answers only that
@@ -102,8 +104,9 @@ requests without sending email. It does not backfill old comments or accepted
 friendships. Invited signup creates one new-friend notification for the inviter.
 Comments notify their content owner and addressed commenter, excluding the
 actor and duplicate recipients. Watch status changes and reviews notify no
-one; comments on a progress entry or review notify like comments on other
-entries. Notifications use current names and access;
+one; comments on a progress entry, review, or post without a title notify like
+comments on other entries. Migration `024-discussion-posts.sql` finds a post's
+owner for the trigger and the visible list. Notifications use current names and access;
 they contain no comment text. Withdrawn requests and deleted or inaccessible
 comments disappear from lists and counts. Restoring comment access preserves
 the notification's read state.

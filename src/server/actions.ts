@@ -1,6 +1,11 @@
 import { tokenFromCookie } from "./auth";
-import { ensureTitle } from "./catalog";
-import { addComment, createTitleComment, removeComment } from "./comments";
+import { ensureTitle, seasonEpisodes, titleSeasons } from "./catalog";
+import {
+  addComment,
+  createDiscussionPost,
+  createTitleComment,
+  removeComment,
+} from "./comments";
 import {
   completeSignup,
   createInvitation,
@@ -147,6 +152,20 @@ const actions: Record<string, Action> = {
     input: (query) => query.get("q") ?? "",
     run: (text) => findTitles(text),
   }),
+  // The TV discussion composer's Season and Episode pickers.
+  seasons: read({
+    input: (query) => query.get("title") ?? "",
+    run: async (title) => ({ seasons: await titleSeasons(title) }),
+  }),
+  episodes: read({
+    input: (query) => ({
+      title: query.get("title") ?? "",
+      season: Number(query.get("season")),
+    }),
+    run: async ({ title, season }) => ({
+      episodes: await seasonEpisodes(title, season),
+    }),
+  }),
   notifications: read({
     input: (query) => ({
       before: query.get("before"),
@@ -274,14 +293,28 @@ const actions: Record<string, Action> = {
     run: (title, { userId }) => removeReview(userId, title),
   }),
   "title-comment": write({
-    input: ({ title, body, spoiler }) => ({ title: id(title), body, spoiler }),
-    run: async ({ title, body, spoiler }, { userId }) => ({
+    input: ({ title, body, spoiler, season, episode }) => ({
+      title: id(title),
+      body,
+      spoiler,
+      season,
+      episode,
+    }),
+    run: async ({ title, body, spoiler, season, episode }, { userId }) => ({
       id: await createTitleComment(
         userId,
         await ensureTitle(title),
         body,
         spoiler,
+        season,
+        episode,
       ),
+    }),
+  }),
+  "discussion-post": write({
+    input: ({ body, spoiler }) => ({ body, spoiler }),
+    run: async ({ body, spoiler }, { userId }) => ({
+      id: await createDiscussionPost(userId, body, spoiler),
     }),
   }),
   comment: write({

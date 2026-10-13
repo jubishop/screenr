@@ -261,6 +261,21 @@ try {
       );
       return;
     }
+    // TMDB's season and episode lists for discussion labels. Other TV
+    // fixtures list no seasons, so their pickers are unavailable.
+    const season = request.url?.match(/^\/tv\/998020\/season\/(\d+)$/);
+    if (season) {
+      const names = ["Departure", "Fog Bank", "Night Crossing", "Landfall"];
+      response.end(
+        JSON.stringify({
+          season_number: Number(season[1]),
+          episodes: names
+            .slice(0, season[1] === "1" ? 3 : 4)
+            .map((name, index) => ({ episode_number: index + 1, name })),
+        }),
+      );
+      return;
+    }
     const searchQuery = new URL(
       request.url ?? "/",
       browserConfig.catalogURL,
@@ -290,6 +305,17 @@ try {
               id: Number(request.url?.split("/")[2]) || fixture.id,
               ...(request.url === "/tv/998001"
                 ? { name: "The Harbor Signal", first_air_date: "2025-09-01" }
+                : {}),
+              ...(request.url === "/tv/998020"
+                ? {
+                    name: "The Night Ferry",
+                    first_air_date: "2024-03-01",
+                    seasons: [
+                      { season_number: 0, name: "Specials" },
+                      { season_number: 1, name: "Season 1" },
+                      { season_number: 2, name: "Season 2" },
+                    ],
+                  }
                 : {}),
               ...(request.url === "/movie/987658"
                 ? {

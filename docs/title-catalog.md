@@ -6,8 +6,9 @@ status: current
 
 Screenr reads movie and TV details and trailers from TMDB on the server, using
 the `TMDB_READ_TOKEN` described in [local setup](running-screenr.md#local-setup).
-This page covers title search and how title details and trailers are
-cached, attributed, and shown. [Title availability](title-availability.md) covers US viewing options.
+This page covers title search, how title details and trailers are
+cached, attributed, and shown, and the season and episode lists for TV
+discussion labels. [Title availability](title-availability.md) covers US viewing options.
 
 ## Title details
 
@@ -79,3 +80,19 @@ confirm in the network panel that the title page contacts no YouTube domain
 before Play trailer, press Play trailer, check advancing playback on desktop
 and mobile, and check the provider link.
 Automated provider fixtures do not establish live YouTube availability.
+
+## Season and episode lists
+
+The TV discussion composer's
+[Season and Episode pickers](title-feed.md#season-and-episode-labels) read
+TMDB's [TV series details](https://developer.themoviedb.org/reference/tv-series-details)
+and [TV season details](https://developer.themoviedb.org/reference/tv-season-details)
+through the `seasons` and `episodes` actions. `titleSeasons` and
+`seasonEpisodes` in `src/server/catalog.ts` request them only when a member
+opens the composer or chooses a season, with a five-second timeout. The
+browser keeps them for that page; the server caches nothing. Seasons and
+episodes need positive whole numbers. Specials, TMDB's season 0, are left out
+because a label reads "Season N". A season without a name shows "Season N",
+and an episode without one shows only its number. A movie ID returns not
+found, a TMDB 404 returns not found, and other TMDB failures or malformed
+lists return a 502 catalog error, so the post has no label.

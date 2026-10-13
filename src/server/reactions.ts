@@ -1,5 +1,5 @@
 import { AppError, isUuid, transaction } from "./db";
-import { entryColumn, itemQuery } from "./feed";
+import { entryColumn, erasable, itemQuery } from "./feed";
 import type { FeedItem } from "../shared";
 import { reactionOptions } from "../shared";
 
@@ -21,13 +21,9 @@ export async function setReaction(
     const item: FeedItem | undefined = (
       await client.query(`${itemQuery} AND c.id=$2::uuid`, [viewer, itemId])
     ).rows[0];
-    // Deleted standalone comments and removed reviews accept no reactions.
-    if (
-      !item ||
-      (replyId == null &&
-        (item.item_type === "comment" || item.item_type === "review") &&
-        !item.active)
-    )
+    // Deleted standalone comments and posts and removed reviews accept no
+    // reactions.
+    if (!item || (replyId == null && erasable(item.item_type) && !item.active))
       throw new AppError("Conversation not found.", 404);
     if (
       replyId != null &&
