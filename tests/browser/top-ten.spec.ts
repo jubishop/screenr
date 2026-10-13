@@ -2,8 +2,9 @@ import { expect, type Locator, type Page } from "@playwright/test";
 import { db } from "./database-fixture";
 import { expectTextContrast, expectThemedPage } from "./contrast";
 import { test } from "./monitored-test";
-import { friend, person } from "./member-fixture";
+import { friend, person, userId } from "./member-fixture";
 import { statusButton } from "./watch-status";
+import { expectErrorBeside, failAction } from "./action-errors";
 
 const { updateTitleActivity, updateTopTen } =
   await import("../../src/server/title-actions");
@@ -37,6 +38,48 @@ function dialogs(page: Page) {
     void dialog.dismiss();
   });
   return opened;
+}
+
+// Presses the mouse on a poster and moves past the distance that tells a
+// drag from a click, leaving the button down.
+async function pressAndDrag(page: Page, poster: Locator) {
+  const start = await box(poster);
+  const x = start.x + start.width / 2;
+  const y = start.y + start.height / 2;
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  await page.mouse.move(x + 12, y, { steps: 3 });
+}
+
+// A point over a poster's left or right half, where a drop lands before or
+// after it.
+async function half(poster: Locator, side: "before" | "after") {
+  const bounds = await box(poster);
+  return {
+    x: bounds.x + bounds.width * (side === "before" ? 0.25 : 0.75),
+    y: bounds.y + bounds.height / 2,
+  };
+}
+
+// Drags a poster to a point and drops it.
+async function dragTo(
+  page: Page,
+  poster: Locator,
+  target: { x: number; y: number },
+) {
+  await pressAndDrag(page, poster);
+  await page.mouse.move(target.x, target.y, { steps: 8 });
+  await page.mouse.up();
+}
+
+// Records the top 10 writes the page sends.
+function topTenWrites(page: Page) {
+  const sent: unknown[] = [];
+  page.on("request", (request) => {
+    if (request.url().endsWith("/api/screenr/top-ten"))
+      sent.push(request.postDataJSON());
+  });
+  return sent;
 }
 
 async function expectBothThemes(page: Page, name: string) {
@@ -355,3 +398,211 @@ for (const width of [390, 1366])
     ).toHaveText(["Recommended by Maya Chen (#1)", "Recommended by Maya Chen"]);
     expect(opened).toEqual([]);
   });
+
+test("on desktop, dragging a poster in your own row moves it to the dropped rank in one change", async ({
+  page,
+  signIn,
+  member,
+}) => {
+  await page.setViewportSize({ width: 1366, height: 844 });
+  const owner = await signIn(page, "toptendrag", { displayName: "Dana Drag" });
+  const ids = await titles(997501, 10, "Drag Pick");
+  for (const id of ids) await updateTopTen(owner, id, "add");
+  const names = (...indexes: number[]) =>
+    indexes.map((index) => `Drag Pick ${index}`);
+  const profile = "/people/toptendrag";
+  await page.goto(profile);
+  const section = page.getByRole("region", { name: "Top 10", exact: true });
+  const row = section.getByRole("list");
+  const links = row.getByRole("link");
+  const shown = row.locator(".top-ten-name");
+  const writes = topTenWrites(page);
+  // The row is busy until a dropped order saves.
+  const saved = () => expect(row).not.toHaveAttribute("aria-busy");
+  // Posters drag once the page is interactive.
+  const ready = () => expect(links.first()).toHaveCSS("cursor", "grab");
+  const scrolled = (end: "start" | "end") =>
+    expect
+      .poll(() =>
+        row.evaluate(
+          (list, end) =>
+            end === "start"
+              ? list.scrollLeft <= 0
+              : list.scrollLeft + list.clientWidth >= list.scrollWidth - 1,
+          end,
+        ),
+      )
+      .toBe(true);
+  await expect(shown).toHaveText(names(1, 2, 3, 4, 5, 6, 7, 8, 9, 10));
+  // The poster is the handle, and the row scrolls at this width.
+  await ready();
+  expect(
+    await row.evaluate((list) => list.scrollWidth > list.clientWidth),
+  ).toBe(true);
+
+  // While dragging, the poster follows the pointer and a marker shows where
+  // it will land: dropped on the right half of #5, #2 takes #5 and the
+  // entries between move up one.
+  const lifted = row.locator("li[data-dragged]");
+  const marker = row.locator("li[data-drop]");
+  await pressAndDrag(page, links.nth(1));
+  const target = await half(links.nth(4), "after");
+  await page.mouse.move(target.x, target.y, { steps: 8 });
+  await expect(row).toHaveAttribute("data-dragging");
+  await expect(lifted.locator(".top-ten-name")).toHaveText("Drag Pick 2");
+  await expect(marker).toHaveCount(1);
+  await expect(marker).toHaveAttribute("data-drop", "before");
+  await expect(marker.locator(".top-ten-name")).toHaveText("Drag Pick 6");
+  await expect(links.nth(1)).toHaveCSS("cursor", "grabbing");
+  await page.screenshot({ path: ".cache/top-ten-drag-1366.png" });
+  await page.mouse.up();
+  await expect(shown).toHaveText(names(1, 3, 4, 5, 2, 6, 7, 8, 9, 10));
+  await expect(links.nth(4)).toHaveAccessibleName("#5 Drag Pick 2");
+  await saved();
+  await expect(row).not.toHaveAttribute("data-dragging");
+  await expect(lifted.or(marker)).toHaveCount(0);
+  expect(page.url()).toMatch(/\/people\/toptendrag$/);
+  expect(writes).toEqual([{ title: ids[1], change: "move", rank: 5 }]);
+  await page.reload();
+  await expect(shown).toHaveText(names(1, 3, 4, 5, 2, 6, 7, 8, 9, 10));
+  await ready();
+
+  // Near either edge the row scrolls, so #1 reaches #10 and comes back.
+  await pressAndDrag(page, links.first());
+  const area = await box(row);
+  await page.mouse.move(area.x + area.width - 6, area.y + area.height / 3, {
+    steps: 8,
+  });
+  await scrolled("end");
+  const last = await half(links.last(), "after");
+  await page.mouse.move(last.x, last.y, { steps: 4 });
+  await page.mouse.up();
+  await expect(shown).toHaveText(names(3, 4, 5, 2, 6, 7, 8, 9, 10, 1));
+  await expect(links.last()).toHaveAccessibleName("#10 Drag Pick 1");
+  await saved();
+  await pressAndDrag(page, links.last());
+  await page.mouse.move(area.x + 6, area.y + area.height / 3, { steps: 8 });
+  await scrolled("start");
+  const first = await half(links.first(), "before");
+  await page.mouse.move(first.x, first.y, { steps: 4 });
+  await page.mouse.up();
+  await expect(shown).toHaveText(names(1, 3, 4, 5, 2, 6, 7, 8, 9, 10));
+  await saved();
+  expect(writes.slice(1)).toEqual([
+    { title: ids[0], change: "move", rank: 10 },
+    { title: ids[0], change: "move", rank: 1 },
+  ]);
+  await page.reload();
+  await expect(shown).toHaveText(names(1, 3, 4, 5, 2, 6, 7, 8, 9, 10));
+  await ready();
+
+  // Escape, a drop outside the row, and a drop back in place change nothing
+  // and never open the title.
+  await pressAndDrag(page, links.nth(2));
+  const away = await half(links.nth(6), "after");
+  await page.mouse.move(away.x, away.y, { steps: 8 });
+  await expect(marker).toHaveCount(1);
+  await page.keyboard.press("Escape");
+  await expect(row).not.toHaveAttribute("data-dragging");
+  await expect(lifted.or(marker)).toHaveCount(0);
+  await page.mouse.up();
+  const below = await box(page.locator(".profile-friends"));
+  await dragTo(page, links.nth(2), {
+    x: below.x + below.width / 2,
+    y: below.y + below.height / 2,
+  });
+  await dragTo(page, links.nth(2), await half(links.nth(2), "after"));
+  await dragTo(page, links.nth(2), await half(links.nth(3), "before"));
+  await expect(shown).toHaveText(names(1, 3, 4, 5, 2, 6, 7, 8, 9, 10));
+  expect(page.url()).toMatch(/\/people\/toptendrag$/);
+  expect(writes).toHaveLength(3);
+
+  // A failed save returns the row to the saved order and shows the error.
+  await failAction(page, "top-ten", "Could not save your top 10.");
+  await dragTo(page, links.nth(4), await half(links.first(), "before"));
+  await expectErrorBeside(page, {
+    container: section,
+    failed: links.nth(4),
+    controls: [row],
+    message: "Could not save your top 10.",
+    screenshot: "top-ten-drag-error",
+  });
+  await saved();
+  await expect(shown).toHaveText(names(1, 3, 4, 5, 2, 6, 7, 8, 9, 10));
+  expect(writes.at(-1)).toEqual({ title: ids[1], change: "move", rank: 1 });
+  await page.unroute("**/api/screenr/top-ten");
+
+  // A click without a drag still opens the title page.
+  await links.nth(1).click();
+  await expect(page).toHaveURL(`/titles/movie/${ids[2].slice(6)}`);
+  // Reordering added no feed entries.
+  expect(
+    (
+      await db.query(
+        "SELECT count(*)::int AS count FROM feed_item WHERE owner_id=$1",
+        [owner],
+      )
+    ).rows[0].count,
+  ).toBe(10);
+
+  // Another member's profile has no drag behavior.
+  const visitor = await member("toptendragvisit");
+  await visitor.setViewportSize({ width: 1366, height: 844 });
+  await visitor.goto(profile);
+  const seen = visitor
+    .getByRole("region", { name: "Top 10", exact: true })
+    .getByRole("list");
+  // Once the page is interactive, the posters are still plain links.
+  await expect(
+    visitor.getByRole("button", { name: "Send friend request" }),
+  ).toBeEnabled();
+  await expect(seen.getByRole("link").first()).toHaveCSS("cursor", "pointer");
+  await pressAndDrag(visitor, seen.getByRole("link").first());
+  const elsewhere = await half(seen.getByRole("link").nth(3), "after");
+  await visitor.mouse.move(elsewhere.x, elsewhere.y, { steps: 8 });
+  await expect(seen).not.toHaveAttribute("data-dragging");
+  await expect(seen.locator("[data-dragged], [data-drop]")).toHaveCount(0);
+  await visitor.mouse.up();
+  await expect(seen.locator(".top-ten-name")).toHaveText(
+    names(1, 3, 4, 5, 2, 6, 7, 8, 9, 10),
+  );
+});
+
+test("phones and touch-only devices reorder only through Edit", async ({
+  member,
+}) => {
+  const page = await member("toptendragphone", { hasTouch: true });
+  const owner = await userId(page);
+  const ids = await titles(997601, 3, "Phone Pick");
+  for (const id of ids) await updateTopTen(owner, id, "add");
+  const writes = topTenWrites(page);
+  await page.goto("/people/toptendragphone");
+  const section = page.getByRole("region", { name: "Top 10", exact: true });
+  const row = section.getByRole("list");
+  const links = row.getByRole("link");
+  const edit = section.getByRole("button", { name: "Edit top 10" });
+  // Once the page is interactive, the posters are still plain links.
+  await expect(edit).toBeEnabled();
+  await expect(links.first()).toHaveCSS("cursor", "pointer");
+  await pressAndDrag(page, links.first());
+  const target = await half(links.last(), "after");
+  await page.mouse.move(target.x, target.y, { steps: 8 });
+  await expect(row).not.toHaveAttribute("data-dragging");
+  await expect(row.locator("[data-dragged], [data-drop]")).toHaveCount(0);
+  await page.mouse.up();
+  await expect(row.locator(".top-ten-name")).toHaveText([
+    "Phone Pick 1",
+    "Phone Pick 2",
+    "Phone Pick 3",
+  ]);
+  expect(writes).toEqual([]);
+  await edit.click();
+  await section
+    .getByRole("button", { name: "Move Phone Pick 1 down", exact: true })
+    .click();
+  await expect(section.locator(".top-ten-edit .top-ten-name")).toHaveText([
+    "Phone Pick 2",
+    "Phone Pick 1",
+    "Phone Pick 3",
+  ]);
+});

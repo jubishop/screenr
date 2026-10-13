@@ -129,13 +129,16 @@ test("a full list adds only by removing a chosen entry, which stays recommended"
   // The refused addition changes nothing, including Recommend.
   assert.deepEqual(await list(alice), full);
   assert.deepEqual(await actions(alice, pick(11)), []);
-  await assert.rejects(updateTopTen(alice, pick(11), "add", pick(12)), {
-    message: "Choose a title from your top 10 to remove.",
-  });
+  await assert.rejects(
+    updateTopTen(alice, pick(11), "add", { replace: pick(12) }),
+    {
+      message: "Choose a title from your top 10 to remove.",
+    },
+  );
   assert.deepEqual(await actions(alice, pick(11)), []);
 
   const before = await activity();
-  await updateTopTen(alice, pick(11), "add", pick(3));
+  await updateTopTen(alice, pick(11), "add", { replace: pick(3) });
   // Entries below #3 move up and the new title joins at #10.
   assert.deepEqual(await list(alice), [
     pick(1),
@@ -180,6 +183,49 @@ test("moving and removing keep ranks contiguous, keep Recommend, and add no acti
     message: "That title is not in your top 10.",
   });
   assert.deepEqual(await list(alice), [pick(3), pick(2), pick(4)]);
+  assert.deepEqual(await activity(), before);
+});
+
+test("moving to a rank shifts the entries between by one, keeps Recommend, and adds no activity", async () => {
+  await titles();
+  const alice = await person("alice");
+  await fill(alice, 6);
+  const before = await activity();
+  const move = (index: number, rank: unknown) =>
+    updateTopTen(alice, pick(index), "move", { rank });
+  const order = (...indexes: number[]) => indexes.map((index) => pick(index));
+
+  // Moving down moves the entries between up one, and moving up moves them
+  // down one; neither swaps.
+  await move(2, 5);
+  assert.deepEqual(await list(alice), order(1, 3, 4, 5, 2, 6));
+  await move(6, 2);
+  assert.deepEqual(await list(alice), order(1, 6, 3, 4, 5, 2));
+  // To either end.
+  await move(1, 6);
+  assert.deepEqual(await list(alice), order(6, 3, 4, 5, 2, 1));
+  await move(2, 1);
+  assert.deepEqual(await list(alice), order(2, 6, 3, 4, 5, 1));
+  // The same rank changes nothing.
+  await move(3, 3);
+  assert.deepEqual(await list(alice), order(2, 6, 3, 4, 5, 1));
+
+  // A rank outside the list, a title not in it, or a rank that is not a
+  // whole number changes nothing.
+  for (const rank of [0, -1, 7, 10, 11])
+    await assert.rejects(move(4, rank), {
+      message: "Choose a rank in your top 10.",
+    });
+  await assert.rejects(move(7, 1), {
+    message: "That title is not in your top 10.",
+  });
+  for (const rank of [undefined, null, 1.5, "2"])
+    await assert.rejects(move(4, rank), {
+      message: "Invalid top 10 change.",
+    });
+  assert.deepEqual(await list(alice), order(2, 6, 3, 4, 5, 1));
+  for (let index = 1; index <= 6; index++)
+    assert.deepEqual(await actions(alice, pick(index)), ["recommended"]);
   assert.deepEqual(await activity(), before);
 });
 
@@ -371,6 +417,16 @@ test("top 10 changes validate their input through the action route", async () =>
   }
   assert.equal((await post({ title: pick(2), change: "up" })).status, 200);
   assert.deepEqual(await list(alice), [pick(2), pick(1)]);
+  // Moving to a rank needs a whole-number rank.
+  for (const rank of ["1", 1.5, undefined]) {
+    const response = await post({ title: pick(1), change: "move", rank });
+    assert.equal(response.status, 400, JSON.stringify(rank));
+  }
+  assert.equal(
+    (await post({ title: pick(1), change: "move", rank: 1 })).status,
+    200,
+  );
+  assert.deepEqual(await list(alice), [pick(1), pick(2)]);
   assert.equal((await post({ title: pick(2), change: "remove" })).status, 200);
   assert.deepEqual(await list(alice), [pick(1)]);
   assert.deepEqual(await actions(alice, pick(2)), ["recommended"]);

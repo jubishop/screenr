@@ -2,7 +2,12 @@ import { randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
 import { AppError, db, transaction } from "./db";
 import { viewerStatus } from "./feed";
-import { joinTopTen, leaveTopTen, moveInTopTen } from "./top-ten";
+import {
+  joinTopTen,
+  leaveTopTen,
+  moveInTopTen,
+  moveInTopTenTo,
+} from "./top-ten";
 import type {
   ProgressStatus,
   SaveSurface,
@@ -103,23 +108,26 @@ export async function updateWatchStatus(
 // Changes the member's profile top 10 (docs/profile-top-ten.md). Adding
 // recommends the title through the usual Recommend path, which clears Want
 // to watch; a full list needs `replace`, the listed title to remove, which
-// stays recommended. Removing keeps the Recommend. None of these changes
-// adds a feed entry or notification of its own.
+// stays recommended. Removing keeps the Recommend. Moving takes the new
+// `rank`. None of these changes adds a feed entry or notification of its own.
 export async function updateTopTen(
   viewer: string,
   titleId: string,
   change: unknown,
-  replace?: unknown,
+  { replace, rank }: { replace?: unknown; rank?: unknown } = {},
 ) {
   if (
     !topTenChanges.includes(change as TopTenChange) ||
-    (replace != null && typeof replace !== "string")
+    (replace != null && typeof replace !== "string") ||
+    (change === "move" && !Number.isInteger(rank))
   )
     throw new AppError("Invalid top 10 change.");
   await transaction(async (client) => {
     if (change === "remove") await leaveTopTen(client, viewer, titleId);
     else if (change === "up" || change === "down")
       await moveInTopTen(client, viewer, titleId, change);
+    else if (change === "move")
+      await moveInTopTenTo(client, viewer, titleId, rank as number);
     else {
       await titleKind(client, titleId);
       await joinTopTen(client, viewer, titleId, replace ?? null);

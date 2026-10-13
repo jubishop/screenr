@@ -271,20 +271,23 @@ rank. The rank key is checked at the end of each statement, so one statement
 can swap or shift ranks. `src/server/top-ten.ts` reads lists and changes
 them inside the shared domain transaction, whose lock orders every write.
 Adding takes the next rank, removing moves the entries below it up, and
-moving swaps an entry with its neighbor; a move past either end changes
-nothing.
+moving up or down swaps an entry with its neighbor; a move past either end
+changes nothing. Moving to a rank puts the entry there and shifts the entries
+between by one in a single statement
+([issue #202](https://github.com/jubishop/screenr/issues/202)).
 
 `updateTopTen` in `src/server/title-actions.ts` serves the `top-ten` action,
-whose `change` is `add`, `remove`, `up`, or `down`. Adding recommends the
-title through the usual Recommend write in the same transaction, so a new
-Recommend gets its normal feed entry; a title already listed keeps its rank
-and an existing Recommend keeps its activity date. A full list refuses an
-addition unless `replace` names a listed title, which leaves the list first
-and stays recommended. Removing a title that is not listed changes nothing,
-and moving one is an error. Withdrawing Recommend, or switching to Want to
-watch from a title action or the status menu, removes the entry and closes
-its gap in the same write. Progress statuses go with Recommend, so they keep
-the entry. No list change adds a feed entry or notification of its own.
+whose `change` is `add`, `remove`, `up`, `down`, or `move`, which takes the
+new `rank`. Adding recommends the title through the usual Recommend write in
+the same transaction, so a new Recommend gets its normal feed entry; a title
+already listed keeps its rank and an existing Recommend keeps its activity
+date. A full list refuses an addition unless `replace` names a listed title,
+which leaves the list first and stays recommended. Removing a title that is
+not listed changes nothing, and moving one is an error, as is moving to a
+rank outside the list. Withdrawing Recommend, or switching to Want to watch
+from a title action or the status menu, removes the entry and closes its gap
+in the same write. Progress statuses go with Recommend, so they keep the
+entry. No list change adds a feed entry or notification of its own.
 
 The release before migration 025 withdrew Recommend without knowing about
 the list, so the `feed_item_leave_top_ten` trigger removed the entry and
@@ -327,6 +330,18 @@ its other move button at either end, and moves to the next Remove after a
 removal, or to the heading once the list is empty, which shows the empty
 state.
 
+On the owner's own profile, when the primary pointer is fine and can hover,
+the posters in the row show a grab cursor and drag with the mouse at any
+window width. A press becomes a drag after the pointer moves 6px, so a click
+still opens the title. The dragged poster follows the pointer between the
+row's ends, a bar in the gap marks where it will land, and the row scrolls
+when the pointer nears either end. A drop sends one `move` change with the
+new rank and shows the new order while the row is busy saving; a failed save
+returns the row to the saved order with the error beneath it. Escape, a drop
+outside the row, or a drop back in place changes nothing, and no drag opens
+the title. Touch input, touch-first devices, and other members' profiles keep
+plain links, and Edit mode stays for keyboard and touch.
+
 The title header adds Add to top 10 beside Recommend. Once listed it
 reads "✓ #3 in your top 10", and choosing it removes the title from the list.
 `src/components/title-view.tsx` and full feed entries in
@@ -337,9 +352,10 @@ makes it unnecessary.
 
 ### Tests
 
-`tests/app/top-ten.test.ts` covers adding, the full list, moves and removals,
-the Recommend lifecycle without a database trigger, the migration's
-constraints, who sees a list, and the action route.
+`tests/app/top-ten.test.ts` covers adding, the full list, moves and
+removals, moving to a rank in either direction, to either end, in place, and
+refused ranks and titles, the Recommend lifecycle without a database
+trigger, the migration's constraints, who sees a list, and the action route.
 `tests/app/legacy-trigger-migration.test.ts` covers the guard trigger and
 its removal by migration 026.
 `tests/app/title-suggestions.test.ts` covers the weights in both groups and
@@ -348,7 +364,10 @@ weights and ranks in Friends recommend, and `tests/app/title-page.test.ts`
 covers ranks in the friend line. `tests/browser/top-ten.spec.ts` covers the poster row, edit
 mode, adding, the full-list prompt, the confirmations, and the ranks beside
 friends' names at phone and desktop widths, auditing contrast in both color
-schemes.
+schemes. It also drags posters at desktop width: the landing marker, one
+saved change per drop, #1 to #10 and back with edge scrolling, Escape, drops
+outside the row and in place, a failed save, and click-through. A touch phone
+and another member's profile get no dragging.
 
 ## Scope boundary
 
