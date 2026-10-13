@@ -864,12 +864,24 @@ Migration `025-profile-top-ten.sql` adds the
 [profile top 10](profile-top-ten.md#storage-and-actions) table and changes no
 existing rows. The preceding release ignores the table, but its Recommend
 withdrawals and switches to Want to watch would leave entries for titles the
-owner no longer recommends. The `feed_item_leave_top_ten` trigger removes the
-entry and closes the gap when a Recommend turns off. This release removes it
-itself, so a later migration can drop the trigger once the preceding release
-does too ([#198](https://github.com/jubishop/screenr/issues/198)). Lists
-saved before a rollback reappear with this release. Take the normal
-pre-upgrade backup; no manual step is needed.
+owner no longer recommends. The `feed_item_leave_top_ten` trigger removed the
+entry and closed the gap when a Recommend turned off. This release removes it
+itself, so migration 026 dropped the trigger once the preceding release did
+too. Lists saved before a rollback reappear with this release. Take the
+normal pre-upgrade backup; no manual step is needed.
+
+Migration `026-drop-top-ten-guard.sql` drops the `feed_item_leave_top_ten`
+trigger and its `screenr_leave_top_ten()` function
+([issue #198](https://github.com/jubishop/screenr/issues/198)). Only the
+`comment_notify` and `friendship_notify` notification triggers remain. It
+changes no rows, and databases without the trigger are left as they are. It
+shipped once every retained release included 36f797a, the commit that added
+migration 025. Those releases remove the top 10 entry and close its gap in
+the same transaction that withdraws Recommend or switches to Want to watch,
+so activation and rollback both keep every entry a current Recommend. A
+release before 36f797a could leave an entry for a title its owner no longer
+recommends against a migrated database. Take the normal pre-upgrade backup;
+no manual step is needed.
 
 ## Decisions deferred to future features
 

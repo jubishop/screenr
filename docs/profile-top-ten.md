@@ -276,11 +276,12 @@ watch from a title action or the status menu, removes the entry and closes
 its gap in the same write. Progress statuses go with Recommend, so they keep
 the entry. No list change adds a feed entry or notification of its own.
 
-The preceding release withdraws Recommend without knowing about the list, so
-the `feed_item_leave_top_ten` trigger removes the entry and closes the gap
-whenever a Recommend turns off. This release removes the entry itself first.
-[Issue #198](https://github.com/jubishop/screenr/issues/198) drops the
-trigger once no retained release predates migration 025.
+The release before migration 025 withdrew Recommend without knowing about
+the list, so the `feed_item_leave_top_ten` trigger removed the entry and
+closed the gap whenever a Recommend turned off. Once every retained release
+removed the entry itself, migration `026-drop-top-ten-guard.sql` dropped the
+trigger and its function
+([issue #198](https://github.com/jubishop/screenr/issues/198)).
 
 ### Reads and ranking
 
@@ -327,8 +328,10 @@ makes it unnecessary.
 ### Tests
 
 `tests/app/top-ten.test.ts` covers adding, the full list, moves and removals,
-the Recommend lifecycle with and without the trigger, the migration's
+the Recommend lifecycle without a database trigger, the migration's
 constraints, who sees a list, and the action route.
+`tests/app/legacy-trigger-migration.test.ts` covers the guard trigger and
+its removal by migration 026.
 `tests/app/title-suggestions.test.ts` covers the weights in both groups and
 under the minimum, `tests/app/friends-recommend.test.ts` covers the summed
 weights and ranks in Friends recommend, and `tests/app/title-page.test.ts`

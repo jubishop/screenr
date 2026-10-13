@@ -353,6 +353,7 @@ The same rule applies to Screenr's own schema: drop a column, constraint, or
 compatibility trigger only once no retained release depends on it, and use
 `IF EXISTS` so databases without it are unchanged. Migration
 `020-drop-legacy-conversation-columns.sql` dropped the legacy `conversation`
-action flags and activity date this way, and migration
-`023-drop-watch-status-guard.sql` dropped the watch status guard trigger; see
+action flags and activity date this way, and migrations
+`023-drop-watch-status-guard.sql` and `026-drop-top-ten-guard.sql` dropped
+the watch status and top 10 guard triggers; see
 [migration and rollback compatibility](title-feed.md#migration-and-rollback-compatibility).

@@ -206,59 +206,48 @@ test("withdrawing Recommend or switching to Want to watch removes the entry for 
   assert.equal((await activity()).notifications, before.notifications);
 });
 
-test("Recommend changes remove entries without the database trigger", async () => {
+// Migration 026 dropped the database guard, so Recommend writes keep the
+// list valid themselves.
+test("Recommend withdrawals and switches keep the list contiguous without a database trigger", async () => {
   await titles();
   const alice = await person("alice");
-  await fill(alice, 4);
-  await db.query(
-    "ALTER TABLE feed_item DISABLE TRIGGER feed_item_leave_top_ten",
+  assert.deepEqual(
+    (
+      await db.query(
+        "SELECT tgname FROM pg_trigger WHERE tgrelid='feed_item'::regclass AND NOT tgisinternal",
+      )
+    ).rows,
+    [],
   );
-  try {
-    await updateTitleActivity(alice, pick(1), "recommended", false);
-    await updateTitleActivity(alice, pick(3), "want_to_watch", true);
-    await updateWatchStatus(alice, pick(4), "want_to_watch");
-    assert.deepEqual(await list(alice), [pick(2)]);
-  } finally {
-    await db.query(
-      "ALTER TABLE feed_item ENABLE TRIGGER feed_item_leave_top_ten",
-    );
-  }
+  await fill(alice, 5);
+  // The first, a middle, and the last entry, each through another path.
+  await updateWatchStatus(alice, pick(1), "want_to_watch");
+  assert.deepEqual(await list(alice), [pick(2), pick(3), pick(4), pick(5)]);
+  await updateTitleActivity(alice, pick(3), "recommended", false);
+  assert.deepEqual(await list(alice), [pick(2), pick(4), pick(5)]);
+  await updateTitleActivity(alice, pick(5), "want_to_watch", true);
+  assert.deepEqual(await list(alice), [pick(2), pick(4)]);
+  // Adding after a removal takes the next rank.
+  await updateTopTen(alice, pick(6), "add");
+  assert.deepEqual(await list(alice), [pick(2), pick(4), pick(6)]);
 });
 
-test("migration 025 stores ranked entries and removes them when the preceding release withdraws Recommend", async () => {
+test("migration 025 stores one entry per title and per rank, ranks 1 through 10", async () => {
   await titles();
-  const [alice, ben] = [await person("alice"), await person("ben")];
+  const alice = await person("alice");
   await fill(alice, 3);
-  await fill(ben, 2);
-  const insert = (owner: string, title: string, rank: number) =>
+  const insert = (title: string, rank: number) =>
     db.query("INSERT INTO top_ten(owner_id,title_id,rank) VALUES($1,$2,$3)", [
-      owner,
+      alice,
       title,
       rank,
     ]);
-  // One entry per title and per rank, ranks 1 through 10 only.
-  await assert.rejects(insert(alice, pick(1), 4), { code: "23505" });
-  await assert.rejects(insert(alice, pick(4), 3), { code: "23505" });
+  await assert.rejects(insert(pick(1), 4), { code: "23505" });
+  await assert.rejects(insert(pick(4), 3), { code: "23505" });
   for (const rank of [0, 11])
-    await assert.rejects(insert(alice, pick(4), rank), { code: "23514" });
-  await assert.rejects(insert(alice, "movie:999", 4), { code: "23503" });
-
-  // The preceding release withdraws Recommend, or switches to Want to watch,
-  // by updating feed items directly; the trigger closes the gap.
-  await db.query(
-    `UPDATE feed_item SET active=false
-    WHERE owner_id=$1 AND title_id=$2 AND item_type='recommended'`,
-    [alice, pick(1)],
-  );
-  assert.deepEqual(await list(alice), [pick(2), pick(3)]);
-  assert.deepEqual(await list(ben), [pick(1), pick(2)]);
-  // Other feed item changes leave the list alone.
-  await db.query(
-    `UPDATE feed_item SET activity_at=now()
-    WHERE owner_id=$1 AND item_type='recommended'`,
-    [alice],
-  );
-  assert.deepEqual(await list(alice), [pick(2), pick(3)]);
+    await assert.rejects(insert(pick(4), rank), { code: "23514" });
+  await assert.rejects(insert("movie:999", 4), { code: "23503" });
+  assert.deepEqual(await list(alice), [pick(1), pick(2), pick(3)]);
 });
 
 test("any signed-in, unblocked member sees a profile's top 10 without its Recommend entries", async () => {
