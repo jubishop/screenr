@@ -1,27 +1,29 @@
-import { auth } from "../../../../../server/auth";
+import { requestSession } from "../../../../../server/auth";
 import { viewablePhoto } from "../../../../../server/photos";
 
-// Serves a profile photo to signed-in people who may see that profile. The
-// URL names the photo's version, so a browser may keep its own copy for a
-// day. `private` keeps shared caches from storing it, and `Vary: Cookie`
-// stops another person signed in to the same browser from reusing that copy.
+// Serves a profile photo to signed-in people who may see that profile, by
+// cookie or by a native client's bearer token. The URL names the photo's
+// version, so a client may keep its own copy for a day. `private` keeps
+// shared caches from storing it, and `Vary` stops another person signed in
+// to the same browser or app from reusing that copy.
+const vary = "Cookie, Authorization";
 const unavailable = (status: number) =>
   new Response(null, {
     status,
-    headers: { "Cache-Control": "private, no-store", Vary: "Cookie" },
+    headers: { "Cache-Control": "private, no-store", Vary: vary },
   });
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ user: string; version: string }> },
 ) {
   const { user, version } = await params;
-  const session = await auth().api.getSession({ headers: request.headers });
+  const session = await requestSession(request.headers);
   if (!session) return unavailable(401);
   const photo = await viewablePhoto(session.user.id, user, version);
   if (!photo) return unavailable(404);
   const headers = {
     "Cache-Control": "private, max-age=86400",
-    Vary: "Cookie",
+    Vary: vary,
     ETag: `"${version}"`,
     "Cross-Origin-Resource-Policy": "same-origin",
   };

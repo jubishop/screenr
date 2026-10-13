@@ -77,8 +77,9 @@ export async function person(name: string) {
   return id;
 }
 
-// Signs in an existing verified user through email OTP for route tests.
-export async function cookieFor(userId: string) {
+// Signs in an existing verified user through email OTP for route tests. The
+// web sends its Origin; the iPhone app sends none.
+export async function signIn(userId: string, headers: Record<string, string>) {
   const { email } = (
     await db.query('SELECT email FROM "user" WHERE id=$1', [userId])
   ).rows[0];
@@ -93,10 +94,7 @@ export async function cookieFor(userId: string) {
     auth.handler(
       new Request(`http://localhost:3000/api/auth/${path}`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Origin: "http://localhost:3000",
-        },
+        headers: { "Content-Type": "application/json", ...headers },
         body: JSON.stringify(data),
       }),
     );
@@ -107,10 +105,23 @@ export async function cookieFor(userId: string) {
   );
   const response = await post("sign-in/email-otp", { email, otp: code });
   assert.equal(response.status, 200);
+  return response;
+}
+
+export async function cookieFor(userId: string) {
+  const response = await signIn(userId, { Origin: "http://localhost:3000" });
   return response.headers
     .getSetCookie()
     .map((value) => value.split(";", 1)[0])
     .join("; ");
+}
+
+// The session token that sign-in returns in `set-auth-token`, which a native
+// client keeps and sends as `Authorization: Bearer <token>`.
+export async function bearerFor(userId: string) {
+  const token = (await signIn(userId, {})).headers.get("set-auth-token");
+  assert.ok(token, "Sign-in returns a set-auth-token header.");
+  return token;
 }
 
 // The exact errors that denied access raises. Rejection tests match status and

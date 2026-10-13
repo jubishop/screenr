@@ -1,4 +1,4 @@
-import { auth } from "../../../../server/auth";
+import { bearerRequest, requestSession } from "../../../../server/auth";
 import { findAction } from "../../../../server/actions";
 import { AppError } from "../../../../server/db";
 import { logFailure } from "../../../../server/log";
@@ -7,7 +7,10 @@ import { readVersion } from "../../../../server/screens";
 import { recordActiveDay } from "../../../../server/usage";
 
 // Responses depend on the session, and no cache may store them.
-const headers = { "Cache-Control": "private, no-store", Vary: "Cookie" };
+const headers = {
+  "Cache-Control": "private, no-store",
+  Vary: "Cookie, Authorization",
+};
 const json = (data: unknown, status = 200) =>
   Response.json(data, { status, headers });
 // A successful read carries its version. A request whose If-None-Match lists
@@ -60,13 +63,16 @@ async function handle(
   const { action: name } = await params;
   const action = findAction(name, request.method);
   try {
+    // A browser never adds a bearer token on its own, so only cookie
+    // requests need the Origin check against cross-site forgery.
     if (
       request.method === "POST" &&
+      !bearerRequest(request.headers) &&
       request.headers.get("origin") !==
         new URL(process.env.BETTER_AUTH_URL!).origin
     )
       throw new AppError("Invalid request origin.", 403);
-    const session = await auth().api.getSession({ headers: request.headers });
+    const session = await requestSession(request.headers);
     if (!session) throw new AppError("Sign in to continue.", 401);
     const context = { userId: session.user.id, headers: request.headers };
     if (action && !action.profile) {

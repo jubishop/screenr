@@ -36,7 +36,8 @@ from the query or JSON body, and calls the services that validate them. Its
 result becomes the JSON response; an action without one responds
 `{ ok: true }`. The route applies the shared rules in this order:
 
-1. A POST must come from the app's origin (403).
+1. A POST must come from the app's origin (403), unless it carries a
+   [bearer token](#native-client-sessions).
 2. The request needs a session (401).
 3. Every action except profile setup and photo changes needs a completed
    profile (403).
@@ -51,6 +52,39 @@ Add an action as one entry, using `read` for a member GET, `write` for a
 member POST, `signup` for a POST that runs before profile setup, or `photo`
 for a photo change, which works before and after setup. Give it an
 [iPhone API fixture](testing.md#iphone-api-fixtures) case in the same change.
+
+## Native client sessions
+
+The iPhone app signs in with Better Auth's bearer plugin instead of the
+session cookie ([decision](ios-app.md#bearer-sessions-in-the-keychain--2026-10-13),
+[issue #212](https://github.com/jubishop/screenr/issues/212)).
+
+- **Receiving the token:** a sign-in response that sets the session cookie
+  also returns its signed value in the `set-auth-token` header when the
+  request has no `Origin`. That covers the email code
+  (`POST /api/auth/sign-in/email-otp`) and ID-token sign-in through
+  `POST /api/auth/sign-in/social`. Browsers send an `Origin`, so their
+  responses omit the header and page scripts never see a usable token.
+- **Sending it:** the app keeps the token in the Keychain and sends
+  `Authorization: Bearer <token>` on every request, including photo fetches.
+  It sends no cookies, because Better Auth checks the `Origin` of any POST
+  that carries one.
+- **Signature required:** like the cookie, a token counts only with its
+  signature. The bare `token` field in sign-in response bodies, or a value
+  read from the `session` table, signs no one in.
+- **Origin exemption:** `/api/screenr` skips its POST `Origin` check for a
+  request whose `Authorization` scheme is `Bearer`. A browser never adds that
+  header on its own, and a cross-site page cannot add it without a CORS
+  preflight that Screenr never approves, so cross-site forgery does not
+  apply. Every other request keeps the check, including a cookie request
+  with another scheme.
+- **Token only:** a bearer request signs in only with its token.
+  `requestSession` in `src/server/auth.ts` ignores the request's cookies, so
+  a missing, invalid, or revoked token gets 401 even beside a valid cookie.
+  The API and photo routes use it.
+- **Session rows:** a token names the same Postgres `session` row as a
+  cookie, with the same 30-day lifetime. `POST /api/auth/sign-out` with the
+  bearer header deletes that row and ends only that session.
 
 ## Sign-in return path
 
@@ -134,14 +168,16 @@ skip the shared write lock because they change no access rules.
 
 **Serving.** `/api/photos/<user ID>/<version>` returns the photo only to a
 signed-in person viewing their own photo, including before setup, or to a
-member viewing a member whose profile they can open. Blocking hides it in
-both directions. Other requests get 401 or 404 with `no-store`. A photo
-response is `Cache-Control: private, max-age=86400` with `Vary: Cookie`, an
-`ETag` of its version, and `Cross-Origin-Resource-Policy: same-origin`.
-`private` keeps shared caches from storing it, `Vary: Cookie` keeps a
-browser from reusing it for another signed-in person, and a changed photo
-has a new URL, so the old one returns 404. URLs are same-origin, so the
-policy's `img-src 'self'` covers them.
+member viewing a member whose profile they can open. A
+[bearer token](#native-client-sessions) signs in like the cookie. Blocking
+hides it in both directions. Other requests get 401 or 404 with `no-store`.
+A photo response is `Cache-Control: private, max-age=86400` with
+`Vary: Cookie, Authorization`, an `ETag` of its version, and
+`Cross-Origin-Resource-Policy: same-origin`. `private` keeps shared caches
+from storing it, `Vary` keeps a browser or the app from reusing it for
+another signed-in person, and a changed photo has a new URL, so the old one
+returns 404. URLs are same-origin, so the policy's `img-src 'self'` covers
+them.
 
 **Google pictures.** Screenr fetches a Google picture only from
 `lh3.googleusercontent.com` through `lh6`, over HTTPS, requests the
@@ -248,7 +284,8 @@ JSON body, including the reader's own profile. Refreshes send back the
 version they hold in `If-None-Match`, and an unchanged screen answers 304
 without a body. The page then keeps its data and doesn't render again
 ([issue #138](https://github.com/jubishop/screenr/issues/138)). Responses
-stay `Cache-Control: private, no-store` with `Vary: Cookie`, so a version
+stay `Cache-Control: private, no-store` with `Vary: Cookie, Authorization`,
+so a version
 never answers for another member and no shared cache keeps a screen. Every
 refresh still reads the database and checks access. Each refresh
 has a ten-second deadline; failure clears server content until a successful
