@@ -898,6 +898,16 @@ blocking controls remain in scope.
 **Why:** The user asked to skip moderation for now; no further rationale
 was stated.
 
+**Revisited — 2026-10-13:** The user chose to keep deferring moderation and
+to distribute the iPhone app through TestFlight only for now. The
+[App Store milestone](https://github.com/jubishop/screenr/issues/251) stays
+blocked, because App Store
+[guideline 1.2](https://developer.apple.com/app-store/review/guidelines/#user-generated-content)
+requires a report action and prompt responses. Revisit after the TestFlight
+release. Rejected for now: a minimal Report action that emails the owner, with
+operator scripts for removal, and an in-app administrator review queue. No
+reason was given.
+
 ### Discussions without an attached title — 2026-09-04
 
 **Decision:** Let users start discussion posts without attaching a movie or
