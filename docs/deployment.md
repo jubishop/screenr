@@ -551,6 +551,10 @@ npm run build
 npm run release:package
 ```
 
+Packaging copies the repository paths in `scripts/release-paths.ts` for the
+maintenance scripts, and an
+[application test](testing.md#coverage) checks that they cover every module
+those scripts load.
 Packaging excludes local environment files and generated caches. It then
 verifies the package against a disposable database. Set `TEST_DATABASE_URL` to
 an available database whose name ends in `_test`; the default is the local test

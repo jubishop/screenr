@@ -474,6 +474,19 @@ schema changes begin. A failed configuration check or migration stops
 activation before the release link switches. The restore check fails, and drops
 any temporary database, when restic cannot check or read the backup,
 `pg_restore` fails, the restore has no profiles, or its access query fails.
+Release packaging runs only in Linux CI, so
+`tests/app/release-package.test.ts` checks locally that the package includes
+every module its maintenance scripts load
+([#201](https://github.com/jubishop/screenr/issues/201)). It parses the
+scripts production runs from the release (`validate-config`, `migrate`,
+`worker`, `bootstrap`, and `report-usage` in `scripts/`) with TypeScript's
+parser and follows their `import`, `export … from`, and literal `import()`
+specifiers, including extensionless and index paths. It skips `import type`,
+`export type`, comments, and strings. It fails when a reached local module is
+outside the paths in `scripts/release-paths.ts`, which `scripts/package.ts`
+copies. It also fails on an unresolved import, a computed `import()`, a
+package outside the production dependencies, or a script that `ops/` runs
+but the test does not list.
 An authentication test confirms that a Better Auth schema mismatch fails that
 session request.
 The proxy test runs the production Caddy routes on loopback with a temporary

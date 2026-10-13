@@ -2,23 +2,14 @@ import { cp, mkdir, readdir, readlink, rm, writeFile } from "node:fs/promises";
 import { join, dirname, isAbsolute, relative, resolve } from "node:path";
 import { execFileSync, spawn } from "node:child_process";
 import { setTimeout as delay } from "node:timers/promises";
+import { releasePaths } from "./release-paths";
 
 if (process.platform !== "linux" || process.arch !== "x64")
   throw new Error("Build the VPS release on Linux x64, outside the VPS.");
 const output = ".cache/release";
 await rm(output, { recursive: true, force: true });
 await mkdir(output, { recursive: true });
-for (const path of [
-  "public",
-  "scripts",
-  "src/server",
-  "src/shared.ts",
-  "src/member-routes.ts",
-  "db",
-  "ops",
-  "package.json",
-  "package-lock.json",
-]) {
+for (const path of releasePaths) {
   await cp(path, join(output, path), { recursive: true });
 }
 // Maintenance scripts need complete runtime packages. Install them before
