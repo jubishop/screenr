@@ -1,0 +1,26 @@
+// Screenr Dev, which the Debug configuration builds: the Simulator variant. It
+// talks to a local Screenr server, uses the APNs sandbox, and opens
+// screenr-dev:// links in place of universal links. The configuration keeps
+// Xcode's Debug name because local packages build optimized under any other.
+#include "Base.xcconfig"
+
+SCREENR_VARIANT = dev
+SCREENR_BUNDLE_IDENTIFIER = com.artisanalsoftware.Screenr.dev
+SCREENR_DISPLAY_NAME = Screenr Dev
+SCREENR_APP_ICON = DevAppIcon
+SCREENR_APP_GROUP = group.com.artisanalsoftware.Screenr.dev
+SCREENR_APS_ENVIRONMENT = development
+SCREENR_URL_SCHEME = screenr-dev
+// An xcconfig comment starts at two slashes, so $() keeps them apart.
+SCREENR_SERVER_URL = http:/$()/localhost:3000
+// Screenr/Info.plist adds the URL scheme and local networking only for Dev.
+INFOPLIST_PREPROCESSOR_DEFINITIONS = SCREENR_DEV=1
+
+ONLY_ACTIVE_ARCH = YES
+ENABLE_TESTABILITY = YES
+DEBUG_INFORMATION_FORMAT = dwarf
+GCC_OPTIMIZATION_LEVEL = 0
+GCC_PREPROCESSOR_DEFINITIONS = DEBUG=1 $(inherited)
+SWIFT_OPTIMIZATION_LEVEL = -Onone
+SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG $(inherited)
+MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE

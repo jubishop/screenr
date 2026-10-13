@@ -1,0 +1,8 @@
+// The UI test target, which drives the app in the Simulator in both variants.
+PRODUCT_NAME = ScreenrUITests
+PRODUCT_BUNDLE_IDENTIFIER = com.artisanalsoftware.ScreenrUITests
+GENERATE_INFOPLIST_FILE = YES
+TEST_TARGET_NAME = Screenr
+// XCTestCase is nonisolated; mark tests that drive the app @MainActor.
+SWIFT_DEFAULT_ACTOR_ISOLATION = nonisolated
+LD_RUNPATH_SEARCH_PATHS = $(inherited) @executable_path/Frameworks @loader_path/Frameworks

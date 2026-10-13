@@ -1,0 +1,19 @@
+// Screenr, which the Release configuration builds: the TestFlight and App
+// Store variant. It talks only to https://screenr.club and uses production APNs.
+#include "Base.xcconfig"
+
+SCREENR_VARIANT = release
+SCREENR_BUNDLE_IDENTIFIER = com.artisanalsoftware.Screenr
+SCREENR_DISPLAY_NAME = Screenr
+SCREENR_APP_ICON = AppIcon
+SCREENR_APP_GROUP = group.com.artisanalsoftware.Screenr
+SCREENR_APS_ENVIRONMENT = production
+// An xcconfig comment starts at two slashes, so $() keeps them apart.
+SCREENR_SERVER_URL = https:/$()/screenr.club
+
+DEBUG_INFORMATION_FORMAT = dwarf-with-dsym
+SWIFT_COMPILATION_MODE = wholemodule
+SWIFT_OPTIMIZATION_LEVEL = -O
+ENABLE_NS_ASSERTIONS = NO
+VALIDATE_PRODUCT = YES
+MTL_ENABLE_DEBUG_INFO = NO

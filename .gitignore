@@ -5,6 +5,12 @@ playwright-report/
 test-results/
 next-env.d.ts
 
+# iPhone app build output, SwiftPM state, and per-user Xcode state
+/ios/build/
+/ios/ScreenrKit/.build/
+/ios/ScreenrKit/.swiftpm/
+xcuserdata/
+
 # Local td task state
 
 # project-starter:begin

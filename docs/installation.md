@@ -33,6 +33,13 @@ image tools and repeats the same output. The favicon and the 192- and
 opaque full squares, because iOS and Android apply their own shapes. The mark stays inside the maskable safe zone, a central circle
 whose radius is 40 percent of the icon's width.
 
+The script also renders the iPhone app's icons into
+`ios/Screenr/Assets.xcassets`: a 1024-pixel full square for Screenr and a
+lime one for Screenr Dev. It re-encodes them as RGB without an alpha channel,
+which App Store Connect requires. `tests/app/ios-assets.test.ts` checks their
+size and format, and that the app's tint and wordmark dot match the web's
+brand colors. See the [iPhone app guide](../ios/README.md#icons).
+
 ## Offline page
 
 The root layout registers `public/sw.js` on every page. The worker passes page

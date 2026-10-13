@@ -1,0 +1,362 @@
+// !$*UTF8*$!
+{
+  archiveVersion = 1;
+  classes = {
+  };
+  objectVersion = 77;
+  objects = {
+
+/* Begin PBXBuildFile section */
+    5C0000000000000000000017 /* ScreenrKit in Frameworks */ = {isa = PBXBuildFile; productRef = 5C0000000000000000000016 /* ScreenrKit */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+    5C0000000000000000000014 /* PBXContainerItemProxy */ = {
+      isa = PBXContainerItemProxy;
+      containerPortal = 5C0000000000000000000001 /* Project object */;
+      proxyType = 1;
+      remoteGlobalIDString = 5C000000000000000000000A;
+      remoteInfo = Screenr;
+    };
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+    5C0000000000000000000008 /* Screenr.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Screenr.app; sourceTree = BUILT_PRODUCTS_DIR; };
+    5C0000000000000000000009 /* ScreenrUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ScreenrUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+    5C0000000000000000000021 /* Base.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Base.xcconfig; sourceTree = "<group>"; };
+    5C0000000000000000000022 /* Dev.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Dev.xcconfig; sourceTree = "<group>"; };
+    5C0000000000000000000023 /* Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Release.xcconfig; sourceTree = "<group>"; };
+    5C0000000000000000000024 /* Screenr.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Screenr.xcconfig; sourceTree = "<group>"; };
+    5C0000000000000000000025 /* ScreenrUITests.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = ScreenrUITests.xcconfig; sourceTree = "<group>"; };
+    5C0000000000000000000026 /* Version.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Version.xcconfig; sourceTree = "<group>"; };
+    5C0000000000000000000027 /* Screenr.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Screenr.entitlements; sourceTree = "<group>"; };
+    5C0000000000000000000028 /* ScreenrKit */ = {isa = PBXFileReference; lastKnownFileType = wrapper; path = ScreenrKit; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+    5C0000000000000000000007 /* Exceptions for "Screenr" folder in "Screenr" target */ = {
+      isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+      membershipExceptions = (
+        Info.plist,
+      );
+      target = 5C000000000000000000000A /* Screenr */;
+    };
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+    5C0000000000000000000005 /* Screenr */ = {
+      isa = PBXFileSystemSynchronizedRootGroup;
+      exceptions = (
+        5C0000000000000000000007 /* Exceptions for "Screenr" folder in "Screenr" target */,
+      );
+      path = Screenr;
+      sourceTree = "<group>";
+    };
+    5C0000000000000000000006 /* ScreenrUITests */ = {
+      isa = PBXFileSystemSynchronizedRootGroup;
+      path = ScreenrUITests;
+      sourceTree = "<group>";
+    };
+/* End PBXFileSystemSynchronizedRootGroup section */
+
+/* Begin PBXFrameworksBuildPhase section */
+    5C000000000000000000000D /* Frameworks */ = {
+      isa = PBXFrameworksBuildPhase;
+      buildActionMask = 2147483647;
+      files = (
+        5C0000000000000000000017 /* ScreenrKit in Frameworks */,
+      );
+      runOnlyForDeploymentPostprocessing = 0;
+    };
+    5C0000000000000000000011 /* Frameworks */ = {
+      isa = PBXFrameworksBuildPhase;
+      buildActionMask = 2147483647;
+      files = (
+      );
+      runOnlyForDeploymentPostprocessing = 0;
+    };
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+    5C0000000000000000000002 = {
+      isa = PBXGroup;
+      children = (
+        5C0000000000000000000004 /* Config */,
+        5C0000000000000000000028 /* ScreenrKit */,
+        5C0000000000000000000005 /* Screenr */,
+        5C0000000000000000000006 /* ScreenrUITests */,
+        5C0000000000000000000003 /* Products */,
+      );
+      sourceTree = "<group>";
+    };
+    5C0000000000000000000003 /* Products */ = {
+      isa = PBXGroup;
+      children = (
+        5C0000000000000000000008 /* Screenr.app */,
+        5C0000000000000000000009 /* ScreenrUITests.xctest */,
+      );
+      name = Products;
+      sourceTree = "<group>";
+    };
+    5C0000000000000000000004 /* Config */ = {
+      isa = PBXGroup;
+      children = (
+        5C0000000000000000000021 /* Base.xcconfig */,
+        5C0000000000000000000022 /* Dev.xcconfig */,
+        5C0000000000000000000023 /* Release.xcconfig */,
+        5C0000000000000000000024 /* Screenr.xcconfig */,
+        5C0000000000000000000025 /* ScreenrUITests.xcconfig */,
+        5C0000000000000000000026 /* Version.xcconfig */,
+        5C0000000000000000000027 /* Screenr.entitlements */,
+      );
+      path = Config;
+      sourceTree = "<group>";
+    };
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+    5C000000000000000000000A /* Screenr */ = {
+      isa = PBXNativeTarget;
+      buildConfigurationList = 5C0000000000000000000019 /* Build configuration list for PBXNativeTarget "Screenr" */;
+      buildPhases = (
+        5C000000000000000000000F /* Check Swift Formatting */,
+        5C000000000000000000000C /* Sources */,
+        5C000000000000000000000D /* Frameworks */,
+        5C000000000000000000000E /* Resources */,
+      );
+      buildRules = (
+      );
+      dependencies = (
+      );
+      fileSystemSynchronizedGroups = (
+        5C0000000000000000000005 /* Screenr */,
+      );
+      name = Screenr;
+      packageProductDependencies = (
+        5C0000000000000000000016 /* ScreenrKit */,
+      );
+      productName = Screenr;
+      productReference = 5C0000000000000000000008 /* Screenr.app */;
+      productType = "com.apple.product-type.application";
+    };
+    5C000000000000000000000B /* ScreenrUITests */ = {
+      isa = PBXNativeTarget;
+      buildConfigurationList = 5C000000000000000000001A /* Build configuration list for PBXNativeTarget "ScreenrUITests" */;
+      buildPhases = (
+        5C0000000000000000000010 /* Sources */,
+        5C0000000000000000000011 /* Frameworks */,
+        5C0000000000000000000012 /* Resources */,
+      );
+      buildRules = (
+      );
+      dependencies = (
+        5C0000000000000000000013 /* PBXTargetDependency */,
+      );
+      fileSystemSynchronizedGroups = (
+        5C0000000000000000000006 /* ScreenrUITests */,
+      );
+      name = ScreenrUITests;
+      packageProductDependencies = (
+      );
+      productName = ScreenrUITests;
+      productReference = 5C0000000000000000000009 /* ScreenrUITests.xctest */;
+      productType = "com.apple.product-type.bundle.ui-testing";
+    };
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+    5C0000000000000000000001 /* Project object */ = {
+      isa = PBXProject;
+      attributes = {
+        BuildIndependentTargetsInParallel = 1;
+        LastSwiftUpdateCheck = 2700;
+        LastUpgradeCheck = 2700;
+        TargetAttributes = {
+          5C000000000000000000000A = {
+            CreatedOnToolsVersion = 27.0;
+          };
+          5C000000000000000000000B = {
+            CreatedOnToolsVersion = 27.0;
+            TestTargetID = 5C000000000000000000000A;
+          };
+        };
+      };
+      buildConfigurationList = 5C0000000000000000000018 /* Build configuration list for PBXProject "Screenr" */;
+      developmentRegion = en;
+      hasScannedForEncodings = 0;
+      knownRegions = (
+        en,
+        Base,
+      );
+      mainGroup = 5C0000000000000000000002;
+      minimizedProjectReferenceProxies = 1;
+      packageReferences = (
+        5C0000000000000000000015 /* XCLocalSwiftPackageReference "ScreenrKit" */,
+      );
+      preferredProjectObjectVersion = 77;
+      productRefGroup = 5C0000000000000000000003 /* Products */;
+      projectDirPath = "";
+      projectRoot = "";
+      targets = (
+        5C000000000000000000000A /* Screenr */,
+        5C000000000000000000000B /* ScreenrUITests */,
+      );
+    };
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+    5C000000000000000000000E /* Resources */ = {
+      isa = PBXResourcesBuildPhase;
+      buildActionMask = 2147483647;
+      files = (
+      );
+      runOnlyForDeploymentPostprocessing = 0;
+    };
+    5C0000000000000000000012 /* Resources */ = {
+      isa = PBXResourcesBuildPhase;
+      buildActionMask = 2147483647;
+      files = (
+      );
+      runOnlyForDeploymentPostprocessing = 0;
+    };
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+    5C000000000000000000000F /* Check Swift Formatting */ = {
+      isa = PBXShellScriptBuildPhase;
+      alwaysOutOfDate = 1;
+      buildActionMask = 2147483647;
+      files = (
+      );
+      inputFileListPaths = (
+      );
+      inputPaths = (
+      );
+      name = "Check Swift Formatting";
+      outputFileListPaths = (
+      );
+      outputPaths = (
+      );
+      runOnlyForDeploymentPostprocessing = 0;
+      shellPath = /bin/sh;
+      shellScript = "exec \"${SRCROOT}/../bin/format-swift\" --check\n";
+      showEnvVarsInLog = 0;
+    };
+/* End PBXShellScriptBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+    5C000000000000000000000C /* Sources */ = {
+      isa = PBXSourcesBuildPhase;
+      buildActionMask = 2147483647;
+      files = (
+      );
+      runOnlyForDeploymentPostprocessing = 0;
+    };
+    5C0000000000000000000010 /* Sources */ = {
+      isa = PBXSourcesBuildPhase;
+      buildActionMask = 2147483647;
+      files = (
+      );
+      runOnlyForDeploymentPostprocessing = 0;
+    };
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+    5C0000000000000000000013 /* PBXTargetDependency */ = {
+      isa = PBXTargetDependency;
+      target = 5C000000000000000000000A /* Screenr */;
+      targetProxy = 5C0000000000000000000014 /* PBXContainerItemProxy */;
+    };
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+    5C000000000000000000001B /* Debug */ = {
+      isa = XCBuildConfiguration;
+      baseConfigurationReference = 5C0000000000000000000022 /* Dev.xcconfig */;
+      buildSettings = {
+      };
+      name = Debug;
+    };
+    5C000000000000000000001C /* Release */ = {
+      isa = XCBuildConfiguration;
+      baseConfigurationReference = 5C0000000000000000000023 /* Release.xcconfig */;
+      buildSettings = {
+      };
+      name = Release;
+    };
+    5C000000000000000000001D /* Debug */ = {
+      isa = XCBuildConfiguration;
+      baseConfigurationReference = 5C0000000000000000000024 /* Screenr.xcconfig */;
+      buildSettings = {
+      };
+      name = Debug;
+    };
+    5C000000000000000000001E /* Release */ = {
+      isa = XCBuildConfiguration;
+      baseConfigurationReference = 5C0000000000000000000024 /* Screenr.xcconfig */;
+      buildSettings = {
+      };
+      name = Release;
+    };
+    5C000000000000000000001F /* Debug */ = {
+      isa = XCBuildConfiguration;
+      baseConfigurationReference = 5C0000000000000000000025 /* ScreenrUITests.xcconfig */;
+      buildSettings = {
+      };
+      name = Debug;
+    };
+    5C0000000000000000000020 /* Release */ = {
+      isa = XCBuildConfiguration;
+      baseConfigurationReference = 5C0000000000000000000025 /* ScreenrUITests.xcconfig */;
+      buildSettings = {
+      };
+      name = Release;
+    };
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+    5C0000000000000000000018 /* Build configuration list for PBXProject "Screenr" */ = {
+      isa = XCConfigurationList;
+      buildConfigurations = (
+        5C000000000000000000001B /* Debug */,
+        5C000000000000000000001C /* Release */,
+      );
+      defaultConfigurationIsVisible = 0;
+      defaultConfigurationName = Release;
+    };
+    5C0000000000000000000019 /* Build configuration list for PBXNativeTarget "Screenr" */ = {
+      isa = XCConfigurationList;
+      buildConfigurations = (
+        5C000000000000000000001D /* Debug */,
+        5C000000000000000000001E /* Release */,
+      );
+      defaultConfigurationIsVisible = 0;
+      defaultConfigurationName = Release;
+    };
+    5C000000000000000000001A /* Build configuration list for PBXNativeTarget "ScreenrUITests" */ = {
+      isa = XCConfigurationList;
+      buildConfigurations = (
+        5C000000000000000000001F /* Debug */,
+        5C0000000000000000000020 /* Release */,
+      );
+      defaultConfigurationIsVisible = 0;
+      defaultConfigurationName = Release;
+    };
+/* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+    5C0000000000000000000015 /* XCLocalSwiftPackageReference "ScreenrKit" */ = {
+      isa = XCLocalSwiftPackageReference;
+      relativePath = ScreenrKit;
+    };
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+    5C0000000000000000000016 /* ScreenrKit */ = {
+      isa = XCSwiftPackageProductDependency;
+      productName = ScreenrKit;
+    };
+/* End XCSwiftPackageProductDependency section */
+  };
+  rootObject = 5C0000000000000000000001 /* Project object */;
+}

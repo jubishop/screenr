@@ -14,6 +14,28 @@ def run(*command):
     subprocess.run(command, cwd=ROOT, check=True)
 
 
+def git(*args):
+    return subprocess.run(["git", *args], cwd=ROOT, check=True, capture_output=True, text=True).stdout
+
+
+def ios_checks_needed():
+    """Report whether this Mac should run bin/check-ios: ios/ differs from where this branch left main."""
+    if not shutil.which("xcodebuild"):
+        print("Skipping iOS checks: they need macOS with Xcode.", flush=True)
+        return False
+    try:
+        base = git("merge-base", "HEAD", "origin/main").strip()
+    except subprocess.CalledProcessError:
+        print("Running iOS checks: there is no origin/main to compare ios/ with.", flush=True)
+        return True
+    # Committed, staged, and unstaged changes to tracked files, then untracked files.
+    if git("diff", "--name-only", base, "--", "ios") or git("ls-files", "--others", "--exclude-standard", "--", "ios"):
+        print(f"Running iOS checks: ios/ differs from origin/main at {base[:12]}.", flush=True)
+        return True
+    print(f"Skipping iOS checks: ios/ matches origin/main at {base[:12]}.", flush=True)
+    return False
+
+
 def main():
     required = json.loads((ROOT / "package.json").read_text())["engines"]["node"]
     minimum = int(required.removeprefix(">="))
@@ -33,6 +55,8 @@ def main():
     # Browser validation builds and tests the current production artifact.
     for script in ("format:check", "typecheck", "test", "test:browser"):
         run("npm", "run", script)
+    if ios_checks_needed():
+        run(str(ROOT / "bin/check-ios"))
     print("Application checks passed.", flush=True)
 
 
