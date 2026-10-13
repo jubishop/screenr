@@ -380,3 +380,70 @@ The `screenr-ios` DSN is public, because the Release app contains it:
 ```text
 https://7835b8d6ce485bae558bdc65d7f373ee@o4508469263663104.ingest.us.sentry.io/4512251383513088
 ```
+
+## Demo circle for Apple review
+
+Apple's Beta App Review signs in to a closed demo circle, under the
+[demo circle decision](ios-app.md#isolated-demo-circle-for-apple-review--2026-10-13)
+([issue #247](https://github.com/jubishop/screenr/issues/247)).
+`npm run seed:review` runs `scripts/seed-review.ts`, which reads `.env` when
+present. Production runs it with the
+[one-off command](deployment.md#build-and-activate-a-release) in the
+deployment guide. It creates:
+
+- **The reviewer:** `review@screenr.club`, username `demo_reviewer`.
+- **Three demo friends:** `demo_maya`, `demo_theo`, and `demo_priya`. Their
+  addresses use the reserved `demo.screenr.invalid` domain, which can never
+  receive email.
+- **Activity:** everyone in the circle is an accepted friend of everyone else
+  and of no one outside it. The friends recommend and review real TMDB
+  titles, mark watch statuses, keep a top 10, and talk in a conversation. The
+  reviewer has one Want to watch with a friend's reply, which shows as a
+  notification.
+
+The command first resolves the titles through the catalog, so it needs
+`TMDB_READ_TOKEN`; a catalog failure changes nothing. It refuses, also
+changing nothing, when a seeded address or username belongs to an account
+outside the circle.
+
+**Reset.** Every run replaces the circle. It deletes each demo account,
+including anyone who joined through a demo invitation, with everything they
+made, their sessions, and their notifications, then seeds a fresh circle in
+new accounts. A signed-in reviewer is signed out. The accounts and
+friendships commit together; the activity follows through the same
+services, so if a run fails partway, run it again.
+
+**Sign-in code.** `REVIEW_SIGN_IN_CODE` holds the reviewer's fixed six-digit
+code. Set it only in the production environment, and put the code in App
+Store Connect's review notes, never in an issue, PR, or log. Screenr never
+prints it. One way to generate a code:
+
+```sh
+node -e 'console.log(String(require("node:crypto").randomInt(1e6)).padStart(6, "0"))'
+```
+
+When the reviewer requests a code, Screenr stores this one, hashed, instead
+of a random code. It then works like any other code: only after a request,
+for 10 minutes, and for five attempts, under every
+[login-code limit](#provider-configuration). Only `review@screenr.club` and
+only sign-in codes use it. Without a six-digit value, the reviewer gets an
+ordinary random code that is never sent, so nobody can sign in to the circle,
+and the command prints a reminder. The web service reads the variable when it
+starts, so restart `screenr-web` after setting or changing it.
+
+**No email.** Screenr sends no sign-in code to a seeded address. The reviewer
+types the code from the review notes, and the demo friends never sign in.
+Skipping the send keeps the code out of mailboxes, spends none of the shared
+Resend allowance, and avoids bounces from addresses that cannot receive mail.
+These requests still count toward the per-address limits.
+
+**Isolation.** Migration `028-demo-circle.sql` marks demo profiles with
+`profile.demo`, and `screenr_blocked` treats a demo profile and a real one as
+blocked in both directions. Neither can open the other's profile or send a
+friend request, and neither appears in the other's friend lists, People you
+may know, feeds, title suggestions, Friends recommend, comments,
+notifications, or photos, even across a friendship. Someone who joins through
+a demo member's invitation joins the demo circle. The
+[usage report](usage-telemetry.md#owner-report) leaves out demo accounts and
+everything they post. `tests/app/review-demo.test.ts` covers the command and
+reset, the fixed code and its limits, and isolation.

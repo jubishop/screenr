@@ -955,6 +955,10 @@ leave the reviewer with no way in.
 - Internal TestFlight testing only, which requires every tester to be an App
   Store Connect user on the team.
 
+[Running Screenr](running-screenr.md#demo-circle-for-apple-review) describes
+the command, its environment variable, and the reset
+([issue #247](https://github.com/jubishop/screenr/issues/247)).
+
 ## Open questions
 
 None remain from the planning interview. The App Store milestone stays blocked

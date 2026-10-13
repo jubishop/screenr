@@ -93,9 +93,12 @@ export async function completeSignup(
         403,
       );
     try {
+      // Joining through a demo member's invitation joins the closed demo
+      // circle (src/server/demo-circle.ts).
       await client.query(
-        "INSERT INTO profile(user_id,username,display_name) VALUES($1,$2,$3)",
-        [userId, handle, displayName],
+        `INSERT INTO profile(user_id,username,display_name,demo) VALUES($1,$2,$3,
+          coalesce((SELECT demo FROM profile WHERE user_id=$4),false))`,
+        [userId, handle, displayName, invite.creator_id],
       );
     } catch (error) {
       if ((error as { code?: string }).code === "23505")

@@ -22,7 +22,9 @@ release. Shared reads and writes live in `src/server/` by area: `profiles.ts`,
 `reviews.ts` ([ratings and reviews](title-feed.md#reviews)), `comments.ts`,
 and `reactions.ts`. PostgreSQL functions
 `screenr_can_read` and `screenr_blocked` apply the same current relationship
-rules to threads, cards, and comments. The title page friend line comes
+rules to threads, cards, and comments. `screenr_blocked` also keeps the
+[demo circle for Apple review](running-screenr.md#demo-circle-for-apple-review)
+and real members apart. The title page friend line comes
 from the viewer's title feed read, so it names only friends whose entries
 that feed shows. Friendship pairs are ordered by
 PostgreSQL, including mixed-case auth IDs. No private feed or permission
