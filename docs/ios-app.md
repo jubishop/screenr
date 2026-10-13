@@ -381,6 +381,17 @@ It excludes `/api/*`, `/login`, `/setup`, and `/credits`.
 When the app is installed, a shared link or a group-chat invitation opens in
 the app. Without the app, the link opens the web as it does today.
 
+**Implementation:** The route handler
+`src/app/.well-known/apple-app-site-association/route.ts` serves the file as
+`application/json`, without the sign-in redirect that member routes use. It
+lists the exclusions before the claimed paths because Apple applies the first
+match. The claimed paths also include `/people`, the Friends page. Item
+permalinks match as title and feed paths with query parameters.
+`tests/app/universal-links.test.ts` checks the list against every member
+route. The file names only the Release app,
+`34TKMKM889.com.artisanalsoftware.Screenr`. Screenr Dev uses its
+`screenr-dev://` scheme instead.
+
 **Why:** The user accepted the recommendation. Invitation links that open the
 app follow from [full parity](#full-parity-including-signup--2026-10-13), and
 member paths map directly onto app destinations.
