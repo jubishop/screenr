@@ -1,5 +1,5 @@
 "use client";
-import Link from "next/link";
+import { Link } from "./pending-navigation";
 import { useEffect, useId, useRef, useState, type RefObject } from "react";
 import type { ScreenData } from "../server/screens";
 import type { Person } from "../shared";

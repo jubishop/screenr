@@ -630,6 +630,32 @@ actions and placeholder person icons. It also added the notification Accept
 and Decline actions. An answered request leaves the server's list, so the
 open panel keeps that row with its result.
 
+### Pending feedback during navigation — 2026-10-12
+
+**Decision:** Show a pending state on navigation and title links while the
+next member screen loads, with a thin progress indicator.
+[Issue #137](https://github.com/jubishop/screenr/issues/137) records it.
+
+**Why:** Each navigation waits for the server to render the next screen,
+which can take seconds for an uncached title. On a phone, tapping a title or
+a navigation item showed nothing until the server responded, so people
+tapped again.
+
+**Rejected alternative:** A member-segment `loading.tsx` would blank the
+navigation during each load, because `Screen` renders it.
+
+**Implementation note:** `src/components/pending-navigation.tsx` wraps
+`next/link`, so every member link reports its `useLinkStatus` pending state.
+Choosing a notification reports its `router.push` transition the same way.
+Each screen counts its own reports, so the next screen, and the heading it
+focuses, never start busy.
+While either waits, the current screen stays in place, its `main` region has
+`aria-busy="true"`, and a 3px bar spans the top of the window, with a dark
+segment sliding along a lime track. The bar fades in after 200ms, so fast
+navigations don't flash it, and it takes no layout space. With reduced
+motion it is a still, full-width line in the text color. Background
+refreshes don't show it.
+
 ### Dark theme follows the system setting — 2026-10-12
 
 **Decision:** Add a dark color theme that follows the device's light or dark

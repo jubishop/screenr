@@ -1,5 +1,5 @@
 "use client";
-import Link from "next/link";
+import { Link } from "./pending-navigation";
 import { useRef, useState } from "react";
 import type { Person } from "../shared";
 import { useInteractive } from "./client";

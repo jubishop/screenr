@@ -5,6 +5,7 @@ import {
   useId,
   useRef,
   useState,
+  useTransition,
   type CSSProperties,
 } from "react";
 import { useRouter } from "next/navigation";
@@ -14,6 +15,7 @@ import { ActivityTime } from "./activity-time";
 import { Avatar } from "./avatar";
 import { Confirmation } from "./confirmation";
 import { ActionButton } from "./action-button";
+import { useReportNavigation } from "./pending-navigation";
 
 type Item = NotificationPage["items"][number];
 
@@ -26,6 +28,8 @@ export function Notifications({
 }) {
   const interactive = useInteractive();
   const router = useRouter();
+  const [navigating, startNavigation] = useTransition();
+  useReportNavigation(navigating);
   const heading = useId();
   const dialog = useRef<HTMLDialogElement>(null);
   const bell = useRef<HTMLButtonElement>(null);
@@ -139,7 +143,7 @@ export function Notifications({
     // otherwise stays completed in the mounted feed during client navigation.
     if (window.location.pathname + window.location.search === href)
       window.location.assign(href);
-    else router.push(href);
+    else startNavigation(() => router.push(href));
   }
 
   async function select(item: Item) {

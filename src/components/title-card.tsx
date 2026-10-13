@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { Link } from "./pending-navigation";
 import type { ReactNode } from "react";
 import type { SaveSurface, Title, ViewingTitle } from "../shared";
 import { Poster } from "./poster";

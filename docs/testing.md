@@ -321,6 +321,11 @@ recipients. A full run checks:
   name scrolls to and focuses its entry, including one waiting behind New
   activity. `tests/app/title-page.test.ts` covers the line's grouping, order,
   name limit, and friendship and blocking rules.
+- While a held navigation, title, or notification link waits for the next
+  screen, the current screen stays in place and busy, and the progress bar
+  fades in across the top at phone and desktop widths. The next screen's
+  focused heading is not busy. Background refreshes show no bar, and reduced
+  motion keeps it still.
 - Search and Watch together rows clamp descriptions to two lines and end in a
   chevron. Watch together prompts a viewer without saved services to save
   them on Account.

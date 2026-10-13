@@ -1,10 +1,54 @@
-/* Application shell, navigation, and page headings. */
+/* Application shell, navigation, its progress bar, and page headings. */
 .app-shell {
   max-width: 1440px;
   margin: auto;
   min-height: 100vh;
   display: grid;
   grid-template-columns: 250px minmax(0, 1fr);
+}
+/* Shown while a client navigation waits for the next screen. It fades in
+   after 200ms so fast navigations don't flash it. */
+.navigation-progress {
+  position: fixed;
+  top: env(safe-area-inset-top);
+  left: 0;
+  right: 0;
+  z-index: 10;
+  height: 3px;
+  overflow: hidden;
+  pointer-events: none;
+  background: var(--accent);
+  opacity: 0;
+  animation: navigation-progress-appear 200ms ease 200ms forwards;
+}
+.navigation-progress::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 40%;
+  background: var(--on-accent);
+  animation: navigation-progress-slide 1.2s ease-in-out infinite;
+}
+@keyframes navigation-progress-appear {
+  to {
+    opacity: 1;
+  }
+}
+@keyframes navigation-progress-slide {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(250%);
+  }
+}
+/* A still line in the text color stays visible on both themes. */
+@media (prefers-reduced-motion: reduce) {
+  .navigation-progress::before {
+    width: 100%;
+    background: var(--ink);
+    animation: none;
+  }
 }
 .sidebar {
   border-right: 1px solid var(--line);

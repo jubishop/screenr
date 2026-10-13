@@ -1,5 +1,5 @@
 "use client";
-import Link from "next/link";
+import { Link } from "./pending-navigation";
 import type {
   FriendsRecommendation,
   SaveSurface,

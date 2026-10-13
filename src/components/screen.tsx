@@ -1,5 +1,9 @@
 "use client";
-import Link from "next/link";
+import {
+  Link,
+  NavigationReports,
+  usePendingNavigations,
+} from "./pending-navigation";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ScreenData } from "../server/screens";
@@ -107,6 +111,7 @@ export function Screen({
     memberTitle(parseMemberRoute(path), initialData),
   );
   const router = useRouter();
+  const [navigating, reportNavigation] = usePendingNavigations();
   const pending = useRef<AbortController | null>(null);
   // Set while a write makes this page unreadable, so no refresh reads it.
   const leaving = useRef(false);
@@ -277,7 +282,7 @@ export function Screen({
   function finishedDate(title: string, date: string | null) {
     return mutate("finished-date", { title, date });
   }
-  return (
+  const shell = (
     <div className="app-shell">
       {/* React places the title in the document head. */}
       <title>{pageTitle}</title>
@@ -292,6 +297,14 @@ export function Screen({
       >
         Skip to main content
       </a>
+      {/* The current screen stays while the next one renders on the server. */}
+      {navigating && (
+        <div
+          className="navigation-progress"
+          role="progressbar"
+          aria-label="Loading page"
+        />
+      )}
       <header className="sidebar">
         <div className="brand-row">
           <Link href="/" className="brand" prefetch={false}>
@@ -352,7 +365,12 @@ export function Screen({
           </Link>
         </div>
       </header>
-      <main className="main" id="main-content" ref={main}>
+      <main
+        className="main"
+        id="main-content"
+        ref={main}
+        aria-busy={navigating || undefined}
+      >
         {loadError && (
           <div className="error" role="alert">
             {loadError}
@@ -456,5 +474,9 @@ export function Screen({
         )}
       </main>
     </div>
+  );
+  // Links and notifications in this screen report their pending navigations.
+  return (
+    <NavigationReports value={reportNavigation}>{shell}</NavigationReports>
   );
 }
