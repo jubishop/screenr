@@ -7,6 +7,7 @@ import {
   db,
   denied,
   pending,
+  cookieFor,
 } from "./social-fixture";
 import { updateProfile } from "../../src/server/profiles";
 import { changeRelationship } from "../../src/server/relationships";
@@ -20,12 +21,14 @@ import { setReaction } from "../../src/server/reactions";
 import { loadScreen } from "../../src/server/screens";
 import {
   notifications,
+  type NotificationPage,
   readNotification,
   readAllNotifications,
   respondToFriendRequest,
   saveActivityEmail,
 } from "../../src/server/notifications";
 import { createInvitation, completeSignup } from "../../src/server/invitations";
+import { GET } from "../../src/app/api/screenr/[action]/route";
 
 useDatabase();
 
@@ -135,6 +138,75 @@ test("older-page snapshots leave newer unseen notifications unread until returni
   assert.notEqual(latest.through, first.through);
   await readAllNotifications(alice, latest.through);
   assert.equal(await unread(alice), 0);
+});
+
+function readPage(cookie: string, query: string, held?: string) {
+  const headers = new Headers({ Cookie: cookie });
+  if (held) headers.set("If-None-Match", held);
+  return GET(
+    new Request(`http://localhost:3000/api/screenr/notifications?${query}`, {
+      headers,
+    }),
+    { params: Promise.resolve({ action: "notifications" }) },
+  );
+}
+async function changedPage(cookie: string, query: string, held?: string) {
+  const response = await readPage(cookie, query, held);
+  assert.equal(response.status, 200);
+  const version = response.headers.get("ETag");
+  assert.match(version ?? "", /^W\/"[\w-]{43}"$/);
+  if (held) assert.notEqual(version, held);
+  return {
+    version: version!,
+    page: (await response.json()) as NotificationPage,
+  };
+}
+async function unchangedPage(cookie: string, query: string, version: string) {
+  const response = await readPage(cookie, query, version);
+  assert.equal(response.status, 304);
+  assert.equal(response.headers.get("ETag"), version);
+  assert.equal(response.headers.get("Cache-Control"), "private, no-store");
+  assert.equal(await response.text(), "");
+}
+
+test("unchanged notification pages answer 304, while arrivals, reads, and older pages answer in full with their boundary", async () => {
+  const { alice, ben, conversation } = await setup();
+  await friend(alice, ben);
+  for (let i = 0; i < 34; i++)
+    await addComment(ben, conversation, `Comment ${i}`, false);
+  const cookie = await cookieFor(alice);
+  const latest = await changedPage(cookie, "unread=false");
+  await unchangedPage(cookie, "unread=false", latest.version);
+  const olderQuery = `unread=false&before=${latest.page.next}&through=${latest.page.through}`;
+  const older = await changedPage(cookie, olderQuery, latest.version);
+  assert.equal(older.page.items.length, 5);
+  await unchangedPage(cookie, olderQuery, older.version);
+
+  // An arrival changes the older page's unread count, not its items or
+  // bulk-read boundary.
+  await addComment(ben, conversation, "Arrived after the latest page", false);
+  const counted = await changedPage(cookie, olderQuery, older.version);
+  assert.deepEqual(counted.page.items, older.page.items);
+  assert.equal(counted.page.through, latest.page.through);
+  assert.equal(counted.page.unread, older.page.unread + 1);
+  const arrived = await changedPage(cookie, "unread=false", latest.version);
+  assert.notEqual(arrived.page.through, latest.page.through);
+
+  await readNotification(alice, arrived.page.items[0].id);
+  const read = await changedPage(cookie, "unread=false", arrived.version);
+  assert.equal(read.page.items[0].read, true);
+  await readAllNotifications(alice, read.page.through);
+  const all = await changedPage(cookie, "unread=false", read.version);
+  assert.equal(all.page.unread, 0);
+  await unchangedPage(cookie, "unread=false", all.version);
+
+  // A version answers only for the page whose body it hashes.
+  const other = await changedPage(
+    await cookieFor(ben),
+    "unread=false",
+    all.version,
+  );
+  assert.notDeepEqual(other.page, all.page);
 });
 
 test("current access removes notices and counts, and restored comments retain their read state", async () => {

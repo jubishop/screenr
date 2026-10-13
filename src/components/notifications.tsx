@@ -10,7 +10,7 @@ import {
 } from "react";
 import { useRouter } from "next/navigation";
 import type { NotificationPage } from "../server/notifications";
-import { api, useInteractive } from "./client";
+import { api, readChanged, useInteractive } from "./client";
 import { ActivityTime } from "./activity-time";
 import { Avatar } from "./avatar";
 import { Confirmation } from "./confirmation";
@@ -41,6 +41,15 @@ export function Notifications({
     through: string;
   } | null>(null);
   const [page, setPage] = useState<NotificationPage | null>(null);
+  // The version of the shown page, or null when none is shown or the reply
+  // had none. Polls send it, and an unchanged page answers 304, which keeps
+  // the list, its paging, and its Mark all as read boundary without
+  // rendering again.
+  const version = useRef<string | null>(null);
+  const clearPage = useCallback(() => {
+    version.current = null;
+    setPage(null);
+  }, []);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [position, setPosition] = useState({ top: 0, left: 0 });
@@ -62,24 +71,25 @@ export function Notifications({
       query.set("through", cursor.through);
     }
     try {
-      const result = await api<NotificationPage>(
+      const result = await readChanged<NotificationPage>(
         `notifications?${query}`,
-        undefined,
+        version.current,
         AbortSignal.any([controller.signal, AbortSignal.timeout(10_000)]),
       );
-      if (!controller.signal.aborted) {
-        setPage(result);
+      if (!controller.signal.aborted && result) {
+        version.current = result.version;
+        setPage(result.data);
         setError("");
       }
     } catch (failure) {
       if (!controller.signal.aborted) {
-        setPage(null);
+        clearPage();
         setError((failure as Error).message);
       }
     } finally {
       if (pending.current === controller) pending.current = null;
     }
-  }, [cursor, unreadOnly]);
+  }, [cursor, unreadOnly, clearPage]);
 
   useEffect(() => {
     if (!open) return;
@@ -88,16 +98,14 @@ export function Notifications({
       if (document.visibilityState === "visible" && !pending.current)
         void refresh();
     }, 3000);
-    const focus = () => {
-      void refresh();
+    const visible = () => {
+      if (document.visibilityState === "visible") void refresh();
     };
-    window.addEventListener("focus", focus);
-    document.addEventListener("visibilitychange", focus);
+    document.addEventListener("visibilitychange", visible);
     return () => {
       clearInterval(timer);
       pending.current?.abort();
-      window.removeEventListener("focus", focus);
-      document.removeEventListener("visibilitychange", focus);
+      document.removeEventListener("visibilitychange", visible);
     };
   }, [open, refresh]);
 
@@ -124,7 +132,7 @@ export function Notifications({
   }, [open]);
 
   function changeView() {
-    setPage(null);
+    clearPage();
     setAnswered(new Map());
     setDeclining(null);
   }
@@ -159,7 +167,7 @@ export function Notifications({
       void refreshScreen();
       visit(result.href);
     } catch (failure) {
-      setPage(null);
+      clearPage();
       setError((failure as Error).message);
     } finally {
       setBusy(false);
@@ -185,7 +193,7 @@ export function Notifications({
       );
       await Promise.all([refresh(), refreshScreen()]);
     } catch (failure) {
-      setPage(null);
+      clearPage();
       setError((failure as Error).message);
     } finally {
       setBusy(false);
@@ -259,7 +267,7 @@ export function Notifications({
       await api("read-notifications", { through: page.through });
       await Promise.all([refresh(), refreshScreen()]);
     } catch (failure) {
-      setPage(null);
+      clearPage();
       setError((failure as Error).message);
     } finally {
       setBusy(false);

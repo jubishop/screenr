@@ -412,6 +412,11 @@ recipients. A full run checks:
   advance each minute. `tests/app/screen-refresh.test.ts` covers every
   screen kind, the page's first version, each visible change, and versions
   sent by other members or for unreadable screens.
+- The open notification panel reads once when the page becomes visible and
+  not on focus. Its unchanged polls answer 304 without a body and commit no
+  render; arrivals still appear, and Mark all as read sends the shown page's
+  boundary. `tests/app/notifications.test.ts` covers versions for the latest
+  and older pages, arrivals that keep an older page's boundary, and reads.
 - Missing titles, people, and pages respond 404 with the member's navigation
   and the reason, through page loads and client navigation. Polling continues
   through 503 refreshes and stops after a permanent error until the reader

@@ -97,6 +97,12 @@ closes or changes view, and selecting it still opens the person.
 through the newest notification in the displayed snapshot, leaving later
 arrivals unread. Older pages and their refreshes keep that boundary; returning
 to **Latest notifications** displays new arrivals and updates the boundary.
+The open panel reads its page every three seconds while visible and when the
+page becomes visible again. Each poll sends the version of the page it shows,
+and an unchanged page answers 304 without a body, so the panel keeps its list,
+paging, and boundary without rendering again
+([issue #199](https://github.com/jubishop/screenr/issues/199)). Changing the
+view or a failed read clears the version, so the next read is whole.
 
 Migration `010-notifications.sql` creates notification records and transaction
 triggers for friendship and comment events. It seeds existing pending friend

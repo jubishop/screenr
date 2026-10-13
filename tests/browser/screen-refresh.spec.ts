@@ -1,48 +1,11 @@
-import { expect, type Page, type Response } from "@playwright/test";
+import { expect, type Response } from "@playwright/test";
 import { browserConfig } from "../../scripts/browser-config";
 import { test } from "./monitored-test";
 import { prepareFriendship } from "./member-fixture";
+import { commits, countCommits, nextPoll } from "./refresh-helpers";
 
 const isScreenRead = (response: Response) =>
   new URL(response.url()).pathname === "/api/screenr/screen";
-
-// React reports each commit to the DevTools hook, also in production builds,
-// so the count shows whether a refresh rendered the page again.
-function countCommits(page: Page) {
-  return page.addInitScript(() => {
-    const target = window as unknown as Record<string, unknown> & {
-      commits: number;
-    };
-    target.commits = 0;
-    target.__REACT_DEVTOOLS_GLOBAL_HOOK__ = {
-      supportsFiber: true,
-      inject: () => 1,
-      onCommitFiberRoot: () => target.commits++,
-      onCommitFiberUnmount: () => {},
-      checkDCE: () => {},
-    };
-  });
-}
-const commits = (page: Page) =>
-  page.evaluate(() => (window as unknown as { commits: number }).commits);
-
-// Advances the paused clock one polling interval and returns that poll's
-// read. A poll that comes due while the last read is still finishing is
-// skipped, so the clock advances again.
-async function nextPoll(page: Page) {
-  for (let attempt = 0; attempt < 3; attempt++) {
-    const read = page
-      .waitForResponse(isScreenRead, { timeout: 5000 })
-      .catch(() => null);
-    await page.clock.runFor(3000);
-    const response = await read;
-    if (response) {
-      await response.finished();
-      return response;
-    }
-  }
-  throw new Error("No screen read after three polling intervals");
-}
 
 test("unchanged refreshes send no body and render nothing, while changes and times still update", async ({
   member,
@@ -85,7 +48,7 @@ test("unchanged refreshes send no body and render nothing, while changes and tim
   expect(rendered).toBeGreaterThan(0);
   let version: string | null = null;
   for (let poll = 0; poll < 2; poll++) {
-    const read = await nextPoll(viewer);
+    const read = await nextPoll(viewer, isScreenRead);
     expect(read.status()).toBe(304);
     expect((await read.request().sizes()).responseBodySize).toBe(0);
     version ??= await read.request().headerValue("if-none-match");
@@ -101,13 +64,13 @@ test("unchanged refreshes send no body and render nothing, while changes and tim
     body: "A reply after quiet refreshes",
     spoiler: false,
   });
-  const changed = await nextPoll(viewer);
+  const changed = await nextPoll(viewer, isScreenRead);
   expect(changed.status()).toBe(200);
   expect((await changed.request().sizes()).responseBodySize).toBeGreaterThan(0);
   const newActivity = viewer.getByRole("button", { name: /New activity/ });
   await expect(newActivity).toBeVisible();
   expect(await commits(viewer)).toBeGreaterThan(rendered);
-  const latest = await nextPoll(viewer);
+  const latest = await nextPoll(viewer, isScreenRead);
   expect(latest.status()).toBe(304);
   expect(await latest.request().headerValue("if-none-match")).toBe(
     changed.headers().etag,

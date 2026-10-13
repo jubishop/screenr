@@ -1,8 +1,18 @@
-import { expect, type Page } from "@playwright/test";
+import {
+  expect,
+  type Page,
+  type Request,
+  type Response,
+} from "@playwright/test";
 import { test } from "./monitored-test";
 import { prepareFriendship } from "./member-fixture";
 import { browserConfig } from "../../scripts/browser-config";
-import { openWithoutPolling } from "./refresh-helpers";
+import {
+  commits,
+  countCommits,
+  nextPoll,
+  openWithoutPolling,
+} from "./refresh-helpers";
 
 async function post(page: Page, action: string, data: unknown) {
   const response = await page.request.post(`/api/screenr/${action}`, {
@@ -14,6 +24,85 @@ async function post(page: Page, action: string, data: unknown) {
 }
 const bell = (page: Page) =>
   page.getByRole("button", { name: /^Notifications/ });
+const isNotificationRead = (read: Request | Response) =>
+  new URL(read.url()).pathname === "/api/screenr/notifications";
+
+test("an open panel reads once on return and skips unchanged polls without rendering, while arrivals still appear", async ({
+  member,
+}) => {
+  const owner = await member("quietpanelowner");
+  const reader = await member("quietpanelreader");
+  await prepareFriendship(owner, reader);
+  const { id } = await post(owner, "activity", {
+    title: "movie:987654",
+    field: "recommended",
+    value: true,
+  });
+  await post(reader, "comment", {
+    conversation: id,
+    body: "A first comment",
+    spoiler: false,
+  });
+  const reads: Request[] = [];
+  owner.on("request", (request) => {
+    if (isNotificationRead(request)) reads.push(request);
+  });
+  await countCommits(owner);
+  // Paused timers poll only when the test advances the owner's clock.
+  await owner.clock.install();
+  await owner.clock.pauseAt(Date.now() + 1000);
+  await owner.goto("/account");
+  await bell(owner).click();
+  const panel = owner.getByRole("dialog");
+  const comments = panel.getByText(/commented on your post/);
+  await expect(comments).toHaveCount(1);
+  expect(reads).toHaveLength(1);
+  const opened = (await reads[0].response())!;
+  expect(opened.status()).toBe(200);
+  const version = opened.headers().etag;
+  expect(version).toMatch(/^W\/"[\w-]{43}"$/);
+
+  const rendered = await commits(owner);
+  for (let poll = 0; poll < 2; poll++) {
+    const read = await nextPoll(owner, isNotificationRead);
+    expect(read.status()).toBe(304);
+    expect((await read.request().sizes()).responseBodySize).toBe(0);
+    expect(await read.request().headerValue("if-none-match")).toBe(version);
+  }
+  expect(await commits(owner)).toBe(rendered);
+
+  // Returning to the page reads once; focus alone reads nothing.
+  const before = reads.length;
+  await owner.evaluate(() => window.dispatchEvent(new Event("focus")));
+  const returned = owner.waitForResponse(isNotificationRead);
+  await owner.evaluate(() =>
+    document.dispatchEvent(new Event("visibilitychange")),
+  );
+  expect((await returned).status()).toBe(304);
+  expect(reads.length - before).toBe(1);
+  expect(await commits(owner)).toBe(rendered);
+
+  // An arrival sends and renders the whole page, and Mark all as read uses
+  // its boundary.
+  await post(reader, "comment", {
+    conversation: id,
+    body: "A second comment",
+    spoiler: false,
+  });
+  const arrival = await nextPoll(owner, isNotificationRead);
+  expect(arrival.status()).toBe(200);
+  await expect(comments).toHaveCount(2);
+  expect(await commits(owner)).toBeGreaterThan(rendered);
+  const marked = owner.waitForRequest("**/api/screenr/read-notifications");
+  await panel.getByRole("button", { name: "Mark all as read" }).click();
+  expect((await marked).postDataJSON()).toEqual({
+    through: (await arrival.json()).through,
+  });
+  await expect(bell(owner)).toHaveAccessibleName("Notifications");
+  await expect(
+    panel.getByRole("img", { name: "Unread", exact: true }),
+  ).toHaveCount(0);
+});
 
 test("desktop dropdown and mobile panel preserve drafts, scroll, and unread state with keyboard dismissal", async ({
   member,

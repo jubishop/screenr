@@ -69,3 +69,44 @@ export async function refreshOnReturn(page: Page) {
   }
   throw new Error("Returning to the page did not read its screen");
 }
+
+// React reports each commit to the DevTools hook, also in production builds,
+// so the count shows whether a refresh rendered the page again.
+export function countCommits(page: Page) {
+  return page.addInitScript(() => {
+    const target = window as unknown as Record<string, unknown> & {
+      commits: number;
+    };
+    target.commits = 0;
+    target.__REACT_DEVTOOLS_GLOBAL_HOOK__ = {
+      supportsFiber: true,
+      inject: () => 1,
+      onCommitFiberRoot: () => target.commits++,
+      onCommitFiberUnmount: () => {},
+      checkDCE: () => {},
+    };
+  });
+}
+export const commits = (page: Page) =>
+  page.evaluate(() => (window as unknown as { commits: number }).commits);
+
+// Advances a paused clock one polling interval and returns that poll's read,
+// the first response that `matches`. A poll that comes due while the last
+// read is still finishing is skipped, so the clock advances again.
+export async function nextPoll(
+  page: Page,
+  matches: (response: Response) => boolean,
+) {
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const read = page
+      .waitForResponse(matches, { timeout: 5000 })
+      .catch(() => null);
+    await page.clock.runFor(3000);
+    const response = await read;
+    if (response) {
+      await response.finished();
+      return response;
+    }
+  }
+  throw new Error("No read after three polling intervals");
+}
