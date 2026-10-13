@@ -1,9 +1,9 @@
-import { type Page, type Response } from "@playwright/test";
+import { type Page, type Request, type Response } from "@playwright/test";
 
 // A screen read of `path`, such as "/account" or "/?item=…", or of any path.
 function readOf(path?: string) {
-  return (response: Response) => {
-    const url = new URL(response.url());
+  return (read: Request | Response) => {
+    const url = new URL(read.url());
     return (
       url.pathname === "/api/screenr/screen" &&
       (path === undefined || url.searchParams.get("path") === path)
@@ -19,32 +19,53 @@ export async function nextAccountRefreshForPath(page: Page, path: string) {
   await page.waitForResponse(readOf(path));
 }
 
-async function finishRead(
-  page: Page,
-  path: string | undefined,
-  start: () => Promise<unknown>,
-) {
-  const read = page.waitForResponse(readOf(path));
-  await start();
-  await (await read).finished();
+// Unchanged screen reads answer 304 and render nothing. Scenarios that check
+// what a rendered refresh keeps, such as drafts and focus, drop the held
+// version, so the next `times` reads, or all of them, return and render the
+// whole screen, as a change would. Routes added later still apply first.
+export async function renderRefreshes(page: Page, times?: number) {
+  await page.route(
+    "**/api/screenr/screen?**",
+    (route) => {
+      const headers = route.request().headers();
+      delete headers["if-none-match"];
+      return route.fallback({ headers });
+    },
+    { times },
+  );
 }
 
 // A refresh aborts any read still in flight, and Playwright never finishes a
 // response whose request then fails. Waiting for a poll's or an earlier
 // read's response could therefore hang
 // (https://github.com/jubishop/screenr/issues/197). These helpers pause
-// polling and wait for the page's first read, so each later read is one the
-// test starts.
+// polling, so each read is one the test starts. The page load brings the
+// first screen, so opening the page returns to it once to confirm the page
+// is interactive.
 export async function openWithoutPolling(page: Page, path: string) {
   await page.clock.install();
   await page.clock.pauseAt(Date.now() + 1000);
-  // Reads of the previous page don't count.
-  await finishRead(page, path, () => page.goto(path));
+  await page.goto(path);
+  await refreshOnReturn(page);
 }
 
-// Returning to a page opened with openWithoutPolling reads it once.
-export async function refreshOnFocus(page: Page) {
-  await finishRead(page, undefined, () =>
-    page.evaluate(() => window.dispatchEvent(new Event("focus"))),
-  );
+// Returning to a page opened with openWithoutPolling reads it once and
+// renders the whole screen, as a change would. Before the page is
+// interactive, returning reads nothing, so the test returns again.
+export async function refreshOnReturn(page: Page) {
+  await renderRefreshes(page, 1);
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const started = page
+      .waitForRequest(readOf(), { timeout: 2000 })
+      .catch(() => null);
+    await page.evaluate(() =>
+      document.dispatchEvent(new Event("visibilitychange")),
+    );
+    const read = await started;
+    if (read) {
+      await (await read.response())?.finished();
+      return;
+    }
+  }
+  throw new Error("Returning to the page did not read its screen");
 }

@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { profileFor } from "./profiles";
 import { people } from "./relationships";
 import { conversations, conversationURL, friendActivity } from "./feed";
@@ -13,7 +14,7 @@ import { activityEmail, unreadNotifications } from "./notifications";
 import { logFailure } from "./log";
 import { watchStatus } from "./title-actions";
 import { parseMemberRoute, type MemberRoute } from "../member-routes";
-import type { Title } from "../shared";
+import type { Person, Title } from "../shared";
 
 export async function loadScreen(userId: string, requestedPath: string) {
   const [content, unread] = await Promise.all([
@@ -23,6 +24,20 @@ export async function loadScreen(userId: string, requestedPath: string) {
   return content.kind === "redirect"
     ? content
     : { ...content, unreadNotifications: unread };
+}
+
+// The screen API responds with the screen and the reader's own profile.
+export function screenResponse(screen: ScreenData, user: Person) {
+  return { ...screen, user };
+}
+
+// Successful API reads send this weak ETag of their exact JSON body. It covers
+// everything the reader receives, including their own profile, so a reader
+// that holds the same version already holds the same body. The member page
+// sends its first screen's version, and screen refreshes send back the
+// version they hold, so an unchanged screen answers 304 without a body.
+export function readVersion(body: string) {
+  return `W/"${createHash("sha256").update(body).digest("base64url")}"`;
 }
 
 // The member page loads its first screen on the server. A failure shows its

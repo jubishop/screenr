@@ -120,7 +120,9 @@ test("My services can be turned off when a preferences refresh fails", async ({
   await page.route("**/api/screenr/screen?**", (route) =>
     route.abort("failed"),
   );
-  await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+  await page.evaluate(() =>
+    document.dispatchEvent(new Event("visibilitychange")),
+  );
   await expect(
     page.getByText("Your services could not be loaded. Try refreshing."),
   ).toBeVisible();

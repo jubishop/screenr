@@ -97,7 +97,9 @@ test("suggestion tiles explain the circle without revealing second-degree identi
   await friend(direct, another);
   await updateTitleActivity(another, "movie:987654", "recommended", true);
   await updateTitleActivity(another, "tv:998001", "want_to_watch", true);
-  await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+  await page.evaluate(() =>
+    document.dispatchEvent(new Event("visibilitychange")),
+  );
   await expect(
     grid.getByText("4 friends of friends also recommend this.", {
       exact: true,
@@ -152,7 +154,9 @@ test("suggestion tiles explain the circle without revealing second-degree identi
   await page.goBack();
   await expect(grid.getByRole("link")).toHaveCount(1);
   await updateTitleActivity(viewer, "movie:987654", "want_to_watch", false);
-  await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+  await page.evaluate(() =>
+    document.dispatchEvent(new Event("visibilitychange")),
+  );
   await expect(grid.getByRole("link")).toHaveCount(2);
 });
 
@@ -206,7 +210,9 @@ test("suggestion tiles explain Watching by friends and anonymous friends of frie
 
   await updateTitleActivity(direct, "tv:998001", "recommended", true);
   await updateWatchStatus(direct, "tv:998001", "caught_up");
-  await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+  await page.evaluate(() =>
+    document.dispatchEvent(new Event("visibilitychange")),
+  );
   await expect(show.locator(".suggestion-reasons p")).toHaveText([
     "Maya Chen recommends this.",
     "Maya Chen is watching.",
@@ -214,7 +220,9 @@ test("suggestion tiles explain Watching by friends and anonymous friends of frie
   ]);
   // The viewer's own status removes the title from suggestions.
   await updateWatchStatus(viewer, "movie:987654", "stopped");
-  await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+  await page.evaluate(() =>
+    document.dispatchEvent(new Event("visibilitychange")),
+  );
   await expect(grid.getByRole("link")).toHaveCount(1);
   await expect(movie).toHaveCount(0);
 });
@@ -252,7 +260,9 @@ test("search submission and clearing switch modes without applying suggestion ex
   await input.fill("");
   await expect(grid.getByRole("link")).toHaveCount(2);
   await updateTitleActivity(viewer, "movie:987654", "recommended", true);
-  await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+  await page.evaluate(() =>
+    document.dispatchEvent(new Event("visibilitychange")),
+  );
   await expect(grid.getByRole("link")).toHaveCount(1);
   await input.fill("The Lantern Room");
   await input.press("Enter");
@@ -443,14 +453,18 @@ test("relationship refreshes and failures clear social data while preserving usa
   });
   await input.fill("A draft search");
   await changeRelationship(second, viewer, "block");
-  await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+  await page.evaluate(() =>
+    document.dispatchEvent(new Event("visibilitychange")),
+  );
   await expect(grid.getByRole("link")).toHaveCount(1);
   await expect(grid.getByText(/friends? of (a )?friends?/)).toHaveCount(0);
   await expect(input).toHaveValue("A draft search");
   await page.route("**/api/screenr/screen?**", (route) =>
     route.abort("failed"),
   );
-  await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+  await page.evaluate(() =>
+    document.dispatchEvent(new Event("visibilitychange")),
+  );
   await expect(failure).toBeVisible();
   await expect(grid).toHaveCount(0);
   await expect(input).toHaveValue("A draft search");
@@ -474,7 +488,9 @@ test("relationship refreshes and failures clear social data while preserving usa
     page.getByRole("heading", { name: "No suggestions yet.", exact: true }),
   ).toBeVisible();
   await friend(viewer, direct);
-  await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+  await page.evaluate(() =>
+    document.dispatchEvent(new Event("visibilitychange")),
+  );
   await expect(grid.getByRole("link")).toHaveCount(1);
   await page.route("**/api/screenr/search?**", (route) =>
     route.abort("failed"),

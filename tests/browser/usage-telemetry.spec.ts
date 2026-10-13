@@ -24,7 +24,7 @@ test("page loads and navigation count as active days, background refreshes do no
   await nextAccountRefreshForPath(page, "/");
   await Promise.all([
     nextAccountRefreshForPath(page, "/"),
-    page.evaluate(() => window.dispatchEvent(new Event("focus"))),
+    page.evaluate(() => document.dispatchEvent(new Event("visibilitychange"))),
   ]);
   expect(await activeDays()).toBe(0);
   await page

@@ -328,18 +328,17 @@ test("stalled Google link and sign-out requests time out and re-enable Account",
   member,
 }) => {
   const page = await member("stalledaccountauth");
-  // Paused timers stop polling. Once the first read returns, the jumps below
-  // can expire only the held request's deadline.
+  // Paused timers stop polling, and the page load brings the first screen,
+  // so the jumps below can expire only the held request's deadline.
   await page.clock.install();
   await page.clock.pauseAt(Date.now() + 1000);
-  const loaded = nextAccountRefresh(page);
   await page.goto("/account");
-  await loaded;
   const methods = page.getByRole("region", { name: "Sign-in methods" });
   const connect = page.getByRole("button", {
     name: "Connect Google",
     exact: true,
   });
+  await expect(connect).toBeEnabled();
   const signOut = page.getByRole("button", { name: "Sign out", exact: true });
   const linking = stall(page, "link-social");
   await connect.click();

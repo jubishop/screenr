@@ -21,7 +21,7 @@ async function saves(viewer: string) {
   ).rows;
 }
 const refresh = (page: Page) =>
-  page.evaluate(() => window.dispatchEvent(new Event("focus")));
+  page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
 
 test("Friends recommend lists friends' recommendations, filters by type, and saves to Want to watch", async ({
   page,

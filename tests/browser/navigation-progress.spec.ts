@@ -160,7 +160,9 @@ test("member screens show a progress bar while the next screen loads", async ({
     { times: 1 },
   );
   const refresh = viewer.waitForRequest("**/api/screenr/screen?**");
-  await viewer.evaluate(() => window.dispatchEvent(new Event("focus")));
+  await viewer.evaluate(() =>
+    document.dispatchEvent(new Event("visibilitychange")),
+  );
   await refresh;
   await expect(progress).toHaveCount(0);
   await expect(main).not.toHaveAttribute("aria-busy");

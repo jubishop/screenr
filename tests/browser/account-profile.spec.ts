@@ -1,4 +1,4 @@
-import { nextAccountRefresh } from "./refresh-helpers";
+import { nextAccountRefresh, renderRefreshes } from "./refresh-helpers";
 import { expect, type Page } from "@playwright/test";
 import { test, monitorErrors } from "./monitored-test";
 import { prepareFriendship } from "./member-fixture";
@@ -36,6 +36,7 @@ test("account profile editing saves both names, preserves drafts, and updates pr
   const owner = await member("accountowner");
   const friend = await member("accountfriend");
   await prepareFriendship(owner, friend);
+  await renderRefreshes(owner);
   await owner.goto("/account?item=ignored");
   const edit = owner.getByRole("button", { name: "Edit profile", exact: true });
   await expect(edit).toBeVisible();
@@ -237,6 +238,7 @@ test("profile display name editing preserves drafts, saves, and updates existing
   const owner = await member("renameowner");
   const friend = await member("renamefriend");
   await prepareFriendship(owner, friend);
+  await renderRefreshes(owner);
   await owner.goto("/titles/movie/987654");
   await owner
     .getByRole("button", { name: "Recommend to friends", exact: true })

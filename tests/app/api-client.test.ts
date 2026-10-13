@@ -1,6 +1,6 @@
 import { afterEach, test } from "node:test";
 import assert from "node:assert/strict";
-import { api, ApiError } from "../../src/components/client";
+import { api, ApiError, readChanged } from "../../src/components/client";
 
 const unavailable =
   "Screenr is temporarily unavailable. Please try again in a moment.";
@@ -108,6 +108,39 @@ test("error replies without a server message use a generic one", async () => {
   );
   reply(JSON.stringify({ message: "Upstream failed" }), { status: 503 });
   assert.equal((await failure(api("screen?path=%2F"))).message, unavailable);
+});
+
+test("changed reads send the held version and report an unchanged reply as null", async () => {
+  const sent: (string | null)[] = [];
+  const answer = (response: () => Response) => {
+    globalThis.fetch = async (_input, init) => {
+      sent.push(new Headers(init!.headers).get("If-None-Match"));
+      return response();
+    };
+  };
+  answer(() =>
+    Response.json({ kind: "feed" }, { headers: { ETag: 'W/"one"' } }),
+  );
+  assert.deepEqual(await readChanged("screen?path=%2F", null), {
+    data: { kind: "feed" },
+    version: 'W/"one"',
+  });
+  answer(
+    () => new Response(null, { status: 304, headers: { ETag: 'W/"one"' } }),
+  );
+  assert.equal(await readChanged("screen?path=%2F", 'W/"one"'), null);
+  // A reply without a version, such as through a proxy that drops it, reads
+  // in full next time.
+  answer(() => Response.json({ kind: "people" }));
+  assert.deepEqual(await readChanged("screen?path=%2Fpeople", 'W/"one"'), {
+    data: { kind: "people" },
+    version: null,
+  });
+  assert.deepEqual(sent, [null, 'W/"one"', 'W/"one"']);
+  answer(() => Response.json({ error: "Person not found." }, { status: 404 }));
+  const error = await failure(readChanged("screen?path=%2Fpeople%2Fx", null));
+  assert.equal(error.message, "Person not found.");
+  assert.equal(error.status, 404);
 });
 
 test("a stalled mutation stops at its deadline with a retryable message", async () => {

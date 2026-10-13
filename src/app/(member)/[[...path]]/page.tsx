@@ -1,7 +1,11 @@
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { currentMember } from "../../../server/session";
-import { initialScreen } from "../../../server/screens";
+import {
+  initialScreen,
+  readVersion,
+  screenResponse,
+} from "../../../server/screens";
 import { Screen } from "../../../components/screen";
 import { memberPath, parseMemberRoute } from "../../../member-routes";
 export const dynamic = "force-dynamic";
@@ -44,6 +48,10 @@ export default async function Page({
       user={user}
       path={requestedPath}
       initialData={initialData}
+      initialVersion={
+        screen.data &&
+        readVersion(JSON.stringify(screenResponse(screen.data, user)))
+      }
       initialError={screen.error}
       initialStatus={screen.status}
       initialGoogleError={initialGoogleError}

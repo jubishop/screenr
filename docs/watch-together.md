@@ -142,6 +142,7 @@ the viewer has saved services. Without any, the page shows the prompt above
 the results, linked to `/account#streaming-services`.
 
 The existing screen refresh checks choices and access every three seconds
-while visible and on focus. A failed refresh clears private results until a
-successful read. Unfriending or blocking makes the comparison unavailable on
-the next access check. Data already delivered to a browser cannot be retracted.
+while visible and when the page becomes visible again. A failed refresh
+clears private results until a successful read. Unfriending or blocking
+makes the comparison unavailable on the next access check. Data already
+delivered to a browser cannot be retracted.

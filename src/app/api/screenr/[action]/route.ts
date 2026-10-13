@@ -3,13 +3,28 @@ import { findAction } from "../../../../server/actions";
 import { AppError } from "../../../../server/db";
 import { logFailure } from "../../../../server/log";
 import { member } from "../../../../server/profiles";
+import { readVersion } from "../../../../server/screens";
 import { recordActiveDay } from "../../../../server/usage";
 
+// Responses depend on the session, and no cache may store them.
+const headers = { "Cache-Control": "private, no-store", Vary: "Cookie" };
 const json = (data: unknown, status = 200) =>
-  Response.json(data, {
-    status,
-    headers: { "Cache-Control": "private, no-store", Vary: "Cookie" },
+  Response.json(data, { status, headers });
+// A successful read carries its version. A request whose If-None-Match lists
+// it, compared weakly, gets 304 without a body.
+function versioned(request: Request, data: unknown) {
+  const body = JSON.stringify(data);
+  const version = readVersion(body);
+  const held = request.headers.get("If-None-Match")?.split(",") ?? [];
+  if (held.some((tag) => tag.trim().replace(/^W\//, "") === version.slice(2)))
+    return new Response(null, {
+      status: 304,
+      headers: { ...headers, ETag: version },
+    });
+  return new Response(body, {
+    headers: { ...headers, ETag: version, "Content-Type": "application/json" },
   });
+}
 async function read(request: Request, limit: number) {
   const reader = request.body?.getReader();
   if (!reader) throw new AppError("A request body is required.");
@@ -64,13 +79,15 @@ async function handle(
     const user = await member(context.userId);
     if (!action) throw new AppError("Action not found.", 404);
     if (action.usage) await recordActiveDay(context.userId);
-    const result =
-      action.method === "GET"
-        ? await action.respond(new URL(request.url).searchParams, {
-            ...context,
-            user,
-          })
-        : await action.respond(await body(request), { ...context, user });
+    if (action.method === "GET") {
+      const query = new URL(request.url).searchParams;
+      const result = await action.respond(query, { ...context, user });
+      return versioned(request, result ?? { ok: true });
+    }
+    const result = await action.respond(await body(request), {
+      ...context,
+      user,
+    });
     return json(result ?? { ok: true });
   } catch (error) {
     if (error instanceof AppError)

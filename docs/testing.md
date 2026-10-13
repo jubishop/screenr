@@ -214,10 +214,13 @@ session. Specs import these helpers instead of defining their own copies.
   email signup and browser friendship setup for scenarios that test those
   journeys. [Refresh helpers](../tests/browser/refresh-helpers.ts) wait for
   screen responses. A scenario that waits for the read it starts opens the
-  page with polling paused and waits for the page's first read. A refresh
-  aborts any read still in flight, and Playwright never finishes a response
-  whose request then fails, so waiting for a poll's response could hang
-  ([#197](https://github.com/jubishop/screenr/issues/197)).
+  page with polling paused, then returns to the page until it reads once. A
+  refresh aborts any read still in flight, and Playwright never finishes a
+  response whose request then fails, so waiting for a poll's response could
+  hang ([#197](https://github.com/jubishop/screenr/issues/197)). Unchanged
+  screen reads answer 304 and render nothing, so scenarios that check what a
+  refresh keeps, such as drafts and focus, use `renderRefreshes` to read and
+  render the whole screen, as a return to the page in these helpers does.
 - Scenarios that test polling intervals or request deadlines don't sleep.
   They install and pause Playwright's clock in the member's context, advance
   it explicitly, and hold the timed request in a route until the test
@@ -386,6 +389,12 @@ recipients. A full run checks:
   unrelated refreshes do not clear action errors.
 - Slow refreshes still deliver new replies and revoke access. A refresh that
   exceeds ten seconds hides server content; later recovery retains the draft.
+- Unchanged screen refreshes answer 304 without a body and commit no React
+  render, counted through a stub DevTools hook, so reply drafts stay put.
+  The page load isn't read again. Changes still arrive, and relative times
+  advance each minute. `tests/app/screen-refresh.test.ts` covers every
+  screen kind, the page's first version, each visible change, and versions
+  sent by other members or for unreadable screens.
 - Missing titles, people, and pages respond 404 with the member's navigation
   and the reason, through page loads and client navigation. Polling continues
   through 503 refreshes and stops after a permanent error until the reader

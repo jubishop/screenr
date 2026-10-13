@@ -14,7 +14,7 @@ import {
   parseMemberRoute,
   type MemberRoute,
 } from "../member-routes";
-import { api, ApiError, isPermanent } from "./client";
+import { api, ApiError, isPermanent, readChanged } from "./client";
 import { Avatar } from "./avatar";
 import { Icon, type IconName } from "./icons";
 import { FeedView } from "./feed";
@@ -63,6 +63,7 @@ export function MissingScreen({ user }: { user: Person }) {
       user={user}
       path={path}
       initialData={null}
+      initialVersion={null}
       initialError=""
       initialGoogleError=""
     />
@@ -89,6 +90,7 @@ export function Screen({
   user: initialUser,
   path,
   initialData,
+  initialVersion,
   initialError,
   initialStatus,
   initialGoogleError,
@@ -96,6 +98,8 @@ export function Screen({
   user: Person;
   path: string;
   initialData: ScreenData | null;
+  // The version of the screen response that brought initialData.
+  initialVersion: string | null;
   initialError: string;
   // The page load's status, when it already read this screen.
   initialStatus?: number;
@@ -133,6 +137,10 @@ export function Screen({
       preventScroll: true,
     });
   }, []);
+  // The version of the shown screen, or null when none is shown or the reply
+  // had none. Refreshes send it, and an unchanged screen answers 304, which
+  // keeps the current data without rendering again.
+  const version = useRef(initialVersion);
   const refresh = useCallback(async () => {
     if (leaving.current) return;
     pending.current?.abort();
@@ -140,24 +148,27 @@ export function Screen({
     const timeout = AbortSignal.timeout(10_000);
     pending.current = controller;
     try {
-      const latest = await api<ScreenData & { user: Person }>(
+      const latest = await readChanged<ScreenData & { user: Person }>(
         `screen?path=${encodeURIComponent(path)}`,
-        undefined,
+        version.current,
         AbortSignal.any([controller.signal, timeout]),
       );
       if (!controller.signal.aborted) {
-        if (latest.kind === "redirect") {
-          window.location.replace(latest.url);
+        if (latest?.data.kind === "redirect") {
+          window.location.replace(latest.data.url);
           return;
         }
         stopped.current = false;
-        setData(latest);
-        setPageTitle(memberTitle(parseMemberRoute(path), latest));
-        setUser(latest.user);
+        if (!latest) return;
+        version.current = latest.version;
+        setData(latest.data);
+        setPageTitle(memberTitle(parseMemberRoute(path), latest.data));
+        setUser(latest.data.user);
         setLoadError("");
       }
     } catch (error) {
       if (!controller.signal.aborted) {
+        version.current = null;
         stopped.current =
           error instanceof ApiError && isPermanent(error.status);
         if (error instanceof ApiError && error.status === 404)
@@ -174,10 +185,12 @@ export function Screen({
     }
   }, [path]);
   useEffect(() => {
-    if (!stopped.current) void refresh();
+    // The page load brings the first screen. Without one, such as after a
+    // failed load or on the not-found view, the page reads it now.
+    if (version.current === null && !stopped.current) void refresh();
     const timer = setInterval(() => {
       // A slow request must finish before the next poll starts. Explicit
-      // refreshes still supersede old reads after mutations or focus changes.
+      // refreshes still supersede old reads after mutations or a return.
       if (
         document.visibilityState === "visible" &&
         !pending.current &&
@@ -185,16 +198,14 @@ export function Screen({
       )
         void refresh();
     }, 3000);
-    const focus = () => {
-      void refresh();
+    const visible = () => {
+      if (document.visibilityState === "visible") void refresh();
     };
-    window.addEventListener("focus", focus);
-    document.addEventListener("visibilitychange", focus);
+    document.addEventListener("visibilitychange", visible);
     return () => {
       clearInterval(timer);
       pending.current?.abort();
-      window.removeEventListener("focus", focus);
-      document.removeEventListener("visibilitychange", focus);
+      document.removeEventListener("visibilitychange", visible);
     };
   }, [refresh]);
   // A failed write rejects, so its caller shows the error beside the control.

@@ -3,6 +3,7 @@ import { Pool } from "pg";
 import { browserConfig } from "../../scripts/browser-config";
 import { expectTextContrast } from "./contrast";
 import { test } from "./monitored-test";
+import { renderRefreshes } from "./refresh-helpers";
 
 test("title watch availability shows US categories, empty results, failures, and older data on mobile and desktop", async ({
   member,
@@ -237,6 +238,8 @@ test("title trailers load YouTube only after Play trailer, fit desktop and mobil
       body: "Trailer player fixture",
     });
   });
+  // Each background refresh renders the whole title page.
+  await renderRefreshes(page);
   const backgroundRefresh = () =>
     page.waitForResponse(
       (response) =>

@@ -322,7 +322,9 @@ test("a confirmed Block opens the Friends page with a dismissible notice", async
       await viewer.evaluate(() => document.documentElement.scrollWidth),
     ).toBe(width);
     await viewer.screenshot({ path: `.cache/block-notice-${width}.png` });
-    await viewer.evaluate(() => window.dispatchEvent(new Event("focus")));
+    await viewer.evaluate(() =>
+      document.dispatchEvent(new Event("visibilitychange")),
+    );
     await expect(notice).toBeVisible();
 
     // Dismiss removes the notice and leaves focus on the page heading.

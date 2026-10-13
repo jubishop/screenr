@@ -178,7 +178,7 @@ requests in either direction, and blocked people or paths. One query reads
 the candidates and mutual friends in one snapshot. Candidates appear once,
 ordered by most mutual friends and then username; mutual friends use username
 order. The section has an empty state when nobody qualifies. Sending a request
-moves the person to Sent requests. Polling, focus changes,
+moves the person to Sent requests. Polling, returning to the page,
 and relationship actions refresh the section. This discovery route does not
 grant access to private activity or change anonymous title suggestions.
 
@@ -225,8 +225,17 @@ commits the profile, invitation use, signup record, and accepted inviter
 friendship in one transaction. A replacement link connects the new member to
 the creator of the invitation actually used to finish signup. Existing accounts
 are not backfilled. Thread reads use one database snapshot. Open pages poll
-every three seconds while visible,
-waiting for any active refresh to finish, and refresh on focus. Each refresh
+every three seconds while visible, waiting for any active refresh to finish,
+and refresh when the page becomes visible again. The page load brings the
+first screen; the page reads it again on load only after a failed load or on
+the not-found view. Successful API reads send a weak `ETag` of their exact
+JSON body, including the reader's own profile. Refreshes send back the
+version they hold in `If-None-Match`, and an unchanged screen answers 304
+without a body. The page then keeps its data and doesn't render again
+([issue #138](https://github.com/jubishop/screenr/issues/138)). Responses
+stay `Cache-Control: private, no-store` with `Vary: Cookie`, so a version
+never answers for another member and no shared cache keeps a screen. Every
+refresh still reads the database and checks access. Each refresh
 has a ten-second deadline; failure clears server content until a successful
 refresh. A permanent error, any 4xx response except 408 and 429, stops polling
 until a read succeeds. Until then, only Try again, returning to the page, a

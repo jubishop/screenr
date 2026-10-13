@@ -763,7 +763,8 @@ test("slow and failed refreshes enforce access while preserving reply drafts", a
   // continues it. A read can then stay pending past the 3-second polling
   // interval or the 10-second refresh deadline without real waiting.
   // Application authorization and database reads still determine the
-  // returned content.
+  // returned content. The page load brings the first screen, so the first
+  // read is the first poll.
   await viewer.clock.install();
   await viewer.clock.pauseAt(Date.now() + 1000);
   const conversationRead = (url: URL) =>
@@ -774,9 +775,10 @@ test("slow and failed refreshes enforce access while preserving reply drafts", a
     reads.push(route);
   });
   await viewer.goto(`/conversations/${id}`);
-  await expect.poll(() => reads.length).toBe(1);
   await viewer.getByRole("button", { name: "Comment", exact: true }).click();
   await viewer.getByLabel("Add your reply").fill("Keep my slow-network draft");
+  await viewer.clock.runFor(3000);
+  await expect.poll(() => reads.length).toBe(1);
   await page.request.post("/api/screenr/comment", {
     headers: { Origin: browserConfig.baseURL },
     data: { conversation: id, body: "A slow incoming reply", spoiler: false },
@@ -810,11 +812,12 @@ test("slow and failed refreshes enforce access while preserving reply drafts", a
   ).toHaveCount(0);
   await prepareFriendship(page, viewer);
   await viewer.goto(`/conversations/${id}`);
-  await expect.poll(() => reads.length).toBe(3);
   await viewer.getByRole("button", { name: "Comment", exact: true }).click();
   await viewer.getByLabel("Add your reply").fill("Retain this timed-out draft");
-  // The deadline counts from the held read, which started when the page
-  // loaded on the paused clock.
+  await viewer.clock.runFor(3000);
+  await expect.poll(() => reads.length).toBe(3);
+  // The deadline counts from the held read, which started with the first
+  // poll on the paused clock.
   await viewer.clock.runFor(10_000);
   await expect(viewer.getByRole("main").getByRole("alert")).toContainText(
     "Refresh timed out. Please try again.",

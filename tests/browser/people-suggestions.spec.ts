@@ -118,7 +118,9 @@ test("People suggestions show mutual friends, send requests, and refresh safely 
     .click();
   await expect(pending).toContainText("Request sent");
   await changeRelationship(dana, viewer, "accept");
-  await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+  await page.evaluate(() =>
+    document.dispatchEvent(new Event("visibilitychange")),
+  );
   // Accepted friends move to Friends, where rows only open the profile.
   await expect(
     page
@@ -128,10 +130,14 @@ test("People suggestions show mutual friends, send requests, and refresh safely 
   await expect(pending.getByRole("button")).toHaveCount(0);
   await expect(danaRow).toHaveCount(0);
   await changeRelationship(viewer, dana, "remove");
-  await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+  await page.evaluate(() =>
+    document.dispatchEvent(new Event("visibilitychange")),
+  );
   await expect(danaRow).toHaveCount(1);
   await changeRelationship(ben, dana, "remove");
-  await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+  await page.evaluate(() =>
+    document.dispatchEvent(new Event("visibilitychange")),
+  );
   await expect(
     danaRow.getByRole("link", {
       name: `${benName} (@suggestedben)`,

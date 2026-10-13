@@ -23,7 +23,7 @@ import { updateDisplayName, updateProfile } from "./profiles";
 import { setReaction } from "./reactions";
 import { changeRelationship } from "./relationships";
 import { removeReview, saveReview } from "./reviews";
-import { loadScreen } from "./screens";
+import { loadScreen, screenResponse } from "./screens";
 import { saveServices } from "./streaming-services";
 import {
   setFinishedDate,
@@ -139,10 +139,8 @@ const actions: Record<string, Action> = {
   }),
   screen: read({
     input: (query) => query.get("path") ?? "/",
-    run: async (path, { userId, user }) => ({
-      ...(await loadScreen(userId, path)),
-      user,
-    }),
+    run: async (path, { userId, user }) =>
+      screenResponse(await loadScreen(userId, path), user),
   }),
   search: read({
     usage: true,

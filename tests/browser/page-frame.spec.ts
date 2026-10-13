@@ -3,6 +3,7 @@ import { browserConfig } from "../../scripts/browser-config";
 import { expectTextContrast } from "./contrast";
 import { test } from "./monitored-test";
 import { prepareFriendship } from "./member-fixture";
+import { renderRefreshes } from "./refresh-helpers";
 
 const sections = [
   { path: "/", heading: "Your circle", current: "Your circle" },
@@ -420,10 +421,13 @@ test("each member page has its own title, and navigation focuses its heading", a
 
     // Background refreshes keep focus and the draft where the reader left them.
     await search.fill("Lantern");
+    await renderRefreshes(viewer, 1);
     const refreshed = viewer.waitForResponse((response) =>
       response.url().includes("/api/screenr/screen?"),
     );
-    await viewer.evaluate(() => window.dispatchEvent(new Event("focus")));
+    await viewer.evaluate(() =>
+      document.dispatchEvent(new Event("visibilitychange")),
+    );
     await refreshed;
     await expect(search).toBeFocused();
     await expect(search).toHaveValue("Lantern");

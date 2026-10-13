@@ -1,7 +1,7 @@
 import { expect, type Page } from "@playwright/test";
 import { test } from "./monitored-test";
 import { expectErrorBeside, failAction, press } from "./action-errors";
-import { openWithoutPolling, refreshOnFocus } from "./refresh-helpers";
+import { openWithoutPolling, refreshOnReturn } from "./refresh-helpers";
 
 const screenRead = "**/api/screenr/screen?**";
 const unavailable =
@@ -14,7 +14,7 @@ async function failRefresh(page: Page) {
       json: { error: "View refresh unavailable" },
     }),
   );
-  await refreshOnFocus(page);
+  await refreshOnReturn(page);
   await expect(page.getByRole("main").getByRole("alert")).toContainText(
     "View refresh unavailable",
   );
@@ -39,7 +39,7 @@ test("People retains the username draft and focus on refresh, and restores the d
   await openWithoutPolling(page, "/people");
   const input = page.getByLabel("Exact username");
   await input.fill("Some_Friend");
-  await refreshOnFocus(page);
+  await refreshOnReturn(page);
   await expect(input).toHaveValue("Some_Friend");
   await expect(input).toBeFocused();
   await failRefresh(page);
@@ -69,7 +69,7 @@ test("invitations retain the signup limit through reads and disable creation whi
   });
   await limit.selectOption("7");
   await limit.focus();
-  await refreshOnFocus(page);
+  await refreshOnReturn(page);
   await expect(limit).toHaveValue("7");
   await expect(limit).toBeFocused();
   await failRefresh(page);
@@ -90,7 +90,7 @@ test("invitations retain the signup limit through reads and disable creation whi
     await create.click();
     await started.promise;
     await expect(create).toBeDisabled();
-    await refreshOnFocus(page);
+    await refreshOnReturn(page);
     await expect(create).toBeDisabled();
   } finally {
     release.resolve();
@@ -131,7 +131,7 @@ test("proxy error pages show a retryable message instead of parser errors", asyn
       body: "<!doctype html><title>502 Bad Gateway</title><h1>Bad Gateway</h1>",
     }),
   );
-  await refreshOnFocus(page);
+  await refreshOnReturn(page);
   await expect(main.getByRole("alert")).toContainText(unavailable);
   await expect(main).not.toContainText(/Unexpected|JSON/);
   await expect(create).toHaveCount(0);
@@ -291,9 +291,12 @@ test("polling retries transient refresh errors and stops after a permanent one u
       json: { error: `Refresh failed (${failures})` },
     });
   });
+  // The page load brings the first screen, so the first poll reads first.
   await page.goto("/invites");
-  await expect(alert).toContainText("Refresh failed (1)");
-  for (const failure of [2, 3]) {
+  await expect(
+    page.getByRole("button", { name: "Create invitation", exact: true }),
+  ).toBeEnabled();
+  for (const failure of [1, 2, 3]) {
     await page.clock.runFor(3000);
     await expect(alert).toContainText(`Refresh failed (${failure})`);
   }
@@ -303,7 +306,9 @@ test("polling retries transient refresh errors and stops after a permanent one u
   // Ten polling intervals pass without a read. Returning to the page and
   // trying again each read once.
   await page.clock.runFor(30_000);
-  await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+  await page.evaluate(() =>
+    document.dispatchEvent(new Event("visibilitychange")),
+  );
   await expect(alert).toContainText("Refresh failed (5)");
   await main.getByRole("button", { name: "Try again", exact: true }).click();
   await expect(alert).toContainText("Refresh failed (6)");
@@ -321,7 +326,7 @@ test("polling retries transient refresh errors and stops after a permanent one u
     response.url().includes("/api/screenr/screen?"),
   );
   await page.clock.runFor(3000);
-  expect((await poll).status()).toBe(200);
+  expect((await poll).status()).toBe(304);
 });
 
 test("a stalled write times out and re-enables its controls", async ({
@@ -439,7 +444,7 @@ test("account linking and sign-out keep pending states and errors across read re
   ).toBeVisible();
   await expect(signOut).toBeEnabled();
   await expect(connect).toBeEnabled();
-  await refreshOnFocus(page);
+  await refreshOnReturn(page);
   await expect(
     page
       .getByRole("main")

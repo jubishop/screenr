@@ -95,6 +95,30 @@ export async function api<T = Record<string, unknown>>(
     body:
       data === undefined || data instanceof Blob ? data : JSON.stringify(data),
   });
+  return readReply<T>(response, text);
+}
+
+// A repeated read sends the version of the copy it holds. An unchanged reply
+// is 304 without a body and returns null; otherwise the read returns its data
+// and new version.
+export async function readChanged<T = Record<string, unknown>>(
+  action: string,
+  version: string | null,
+  signal?: AbortSignal,
+): Promise<{ data: T; version: string | null } | null> {
+  const { response, text } = await send(`/api/screenr/${action}`, {
+    cache: "no-store",
+    signal,
+    headers: version ? { "If-None-Match": version } : {},
+  });
+  if (response.status === 304) return null;
+  return {
+    data: readReply<T>(response, text),
+    version: response.headers.get("ETag"),
+  };
+}
+
+function readReply<T>(response: Response, text: string): T {
   if (response.status === 401) {
     // Return to this member page, or to the one setup was continuing to.
     const { pathname, search } = window.location;

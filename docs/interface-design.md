@@ -282,7 +282,9 @@ time zone. A reader's clock running up to a week behind shows new activity
 as "now". Like other dates since
 [issue #86](https://github.com/jubishop/screenr/issues/86), the server and
 hydration render the UTC date and a UTC hover time, then localize once the
-page is interactive. Screen and notification refreshes re-render the times.
+page is interactive. Unchanged screen refreshes don't render again, so a
+shared timer renders the shown times again each minute
+([issue #138](https://github.com/jubishop/screenr/issues/138)).
 
 ### Compact entries on title pages — 2026-10-12
 
