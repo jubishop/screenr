@@ -1,0 +1,29 @@
+{
+  "description": "Find a title with no friends' activity.",
+  "viewer": "nora",
+  "request": {
+    "method": "GET",
+    "action": "screen",
+    "path": "/api/screenr/screen?path=%2Fsearch",
+    "query": {
+      "path": "/search"
+    }
+  },
+  "response": {
+    "status": 200,
+    "etag": "W/\"p5NH-LcX64XVG7JFpqS_9ZGez4bwAo_teYLWWpkWYwA\"",
+    "body": {
+      "kind": "search",
+      "suggestions": [],
+      "recommendations": [],
+      "serviceIds": [],
+      "unreadNotifications": 0,
+      "user": {
+        "user_id": "user-nora",
+        "username": "nora",
+        "display_name": "Nora Quinn",
+        "photo": null
+      }
+    }
+  }
+}

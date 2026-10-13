@@ -1,0 +1,1095 @@
+{
+  "description": "Account settings with Google connected, activity email on, and saved services.",
+  "viewer": "alice",
+  "request": {
+    "method": "GET",
+    "action": "screen",
+    "path": "/api/screenr/screen?path=%2Faccount",
+    "query": {
+      "path": "/account"
+    }
+  },
+  "response": {
+    "status": 200,
+    "etag": "W/\"hWPPOhb63FcAJxgbjQJAk4txD-QZiKo13ZnS4Zq_1UM\"",
+    "body": {
+      "kind": "account",
+      "activityEmail": false,
+      "services": [
+        {
+          "id": "service:a-e",
+          "name": "A&E"
+        },
+        {
+          "id": "service:a-e-crime-central",
+          "name": "A&E Crime Central"
+        },
+        {
+          "id": "service:abc",
+          "name": "ABC"
+        },
+        {
+          "id": "service:acaciatv",
+          "name": "Acaciatv"
+        },
+        {
+          "id": "service:acorn-tv",
+          "name": "Acorn TV"
+        },
+        {
+          "id": "service:ad-tv",
+          "name": "AD tv"
+        },
+        {
+          "id": "service:adult-swim",
+          "name": "Adult Swim"
+        },
+        {
+          "id": "service:aha",
+          "name": "aha"
+        },
+        {
+          "id": "service:alchemiya",
+          "name": "Alchemiya"
+        },
+        {
+          "id": "service:all-warrior-network",
+          "name": "All warrior network"
+        },
+        {
+          "id": "service:allblk",
+          "name": "ALLBLK"
+        },
+        {
+          "id": "service:amasian-tv",
+          "name": "Amasian TV"
+        },
+        {
+          "id": "service:amazon-prime-video",
+          "name": "Amazon Prime Video"
+        },
+        {
+          "id": "service:amazon-video",
+          "name": "Amazon Video"
+        },
+        {
+          "id": "service:amc",
+          "name": "AMC"
+        },
+        {
+          "id": "service:amc-plus",
+          "name": "AMC+"
+        },
+        {
+          "id": "service:amebatv",
+          "name": "Amebatv"
+        },
+        {
+          "id": "service:angel-studios",
+          "name": "Angel Studios"
+        },
+        {
+          "id": "service:animal-planet",
+          "name": "Animal Planet"
+        },
+        {
+          "id": "service:apple-tv",
+          "name": "Apple TV"
+        },
+        {
+          "id": "service:apple-tv-store",
+          "name": "Apple TV Store"
+        },
+        {
+          "id": "service:arrow",
+          "name": "ARROW"
+        },
+        {
+          "id": "service:artiflix",
+          "name": "Artiflix"
+        },
+        {
+          "id": "service:artify",
+          "name": "Artify"
+        },
+        {
+          "id": "service:asiancrush",
+          "name": "AsianCrush"
+        },
+        {
+          "id": "service:aspire-tv",
+          "name": "Aspire TV"
+        },
+        {
+          "id": "service:baeble",
+          "name": "Baeble"
+        },
+        {
+          "id": "service:bbc-america",
+          "name": "BBC America"
+        },
+        {
+          "id": "service:bbc-select",
+          "name": "BBC Select"
+        },
+        {
+          "id": "service:befit",
+          "name": "BeFit"
+        },
+        {
+          "id": "service:best-of-british-tv",
+          "name": "Best of British Tv"
+        },
+        {
+          "id": "service:best-tv-ever",
+          "name": "Best tv ever"
+        },
+        {
+          "id": "service:best-westerns-ever",
+          "name": "Best Westerns Ever"
+        },
+        {
+          "id": "service:bfi-player",
+          "name": "BFI Player"
+        },
+        {
+          "id": "service:bloodstream",
+          "name": "Bloodstream"
+        },
+        {
+          "id": "service:bravo-tv",
+          "name": "Bravo TV"
+        },
+        {
+          "id": "service:brew",
+          "name": "Brew"
+        },
+        {
+          "id": "service:britbox",
+          "name": "BritBox"
+        },
+        {
+          "id": "service:broadwayhd",
+          "name": "BroadwayHD"
+        },
+        {
+          "id": "service:brown-sugar",
+          "name": "Brown Sugar"
+        },
+        {
+          "id": "service:byutv",
+          "name": "BYUtv"
+        },
+        {
+          "id": "service:caixaforum-plus",
+          "name": "CaixaForum+"
+        },
+        {
+          "id": "service:carnegie-hall-plus",
+          "name": "Carnegie Hall+"
+        },
+        {
+          "id": "service:chai-flicks",
+          "name": "Chai Flicks"
+        },
+        {
+          "id": "service:chilling",
+          "name": "Chilling"
+        },
+        {
+          "id": "service:cinemax",
+          "name": "Cinemax"
+        },
+        {
+          "id": "service:cineverse",
+          "name": "Cineverse"
+        },
+        {
+          "id": "service:cocina-on",
+          "name": "Cocina ON"
+        },
+        {
+          "id": "service:cohen-media",
+          "name": "Cohen Media"
+        },
+        {
+          "id": "service:criterion-channel",
+          "name": "Criterion Channel"
+        },
+        {
+          "id": "service:crunchyroll",
+          "name": "Crunchyroll"
+        },
+        {
+          "id": "service:cultpix",
+          "name": "Cultpix"
+        },
+        {
+          "id": "service:curiosity-stream",
+          "name": "Curiosity Stream"
+        },
+        {
+          "id": "service:daily-burn",
+          "name": "Daily Burn"
+        },
+        {
+          "id": "service:danime",
+          "name": "dAnime"
+        },
+        {
+          "id": "service:daring-docs",
+          "name": "Daring Docs"
+        },
+        {
+          "id": "service:darkroom",
+          "name": "Darkroom"
+        },
+        {
+          "id": "service:dekkoo",
+          "name": "Dekkoo"
+        },
+        {
+          "id": "service:demand-africa",
+          "name": "Demand Africa"
+        },
+        {
+          "id": "service:discovery",
+          "name": "Discovery"
+        },
+        {
+          "id": "service:discovery-plus",
+          "name": "Discovery+"
+        },
+        {
+          "id": "service:disney-plus",
+          "name": "Disney Plus"
+        },
+        {
+          "id": "service:disneynow",
+          "name": "DisneyNOW"
+        },
+        {
+          "id": "service:distrotv",
+          "name": "DistroTV"
+        },
+        {
+          "id": "service:docalliance-films",
+          "name": "DocAlliance Films"
+        },
+        {
+          "id": "service:doccom",
+          "name": "DocCom"
+        },
+        {
+          "id": "service:docsville",
+          "name": "DOCSVILLE"
+        },
+        {
+          "id": "service:docuramafilms",
+          "name": "DocuramaFilms"
+        },
+        {
+          "id": "service:doki",
+          "name": "Doki"
+        },
+        {
+          "id": "service:dove",
+          "name": "Dove"
+        },
+        {
+          "id": "service:dox",
+          "name": "Dox"
+        },
+        {
+          "id": "service:dreamscape-kids",
+          "name": "Dreamscape Kids"
+        },
+        {
+          "id": "service:dreamworkstv",
+          "name": "DreamWorksTV"
+        },
+        {
+          "id": "service:echoboom",
+          "name": "Echoboom"
+        },
+        {
+          "id": "service:eros-now-select",
+          "name": "Eros Now Select"
+        },
+        {
+          "id": "service:espn",
+          "name": "ESPN"
+        },
+        {
+          "id": "service:espn-plus",
+          "name": "ESPN Plus"
+        },
+        {
+          "id": "service:eternal-family",
+          "name": "Eternal Family"
+        },
+        {
+          "id": "service:eventive",
+          "name": "Eventive"
+        },
+        {
+          "id": "service:fandango",
+          "name": "Fandango"
+        },
+        {
+          "id": "service:fandango-at-home",
+          "name": "Fandango At Home"
+        },
+        {
+          "id": "service:fandor",
+          "name": "Fandor"
+        },
+        {
+          "id": "service:fawesome",
+          "name": "Fawesome"
+        },
+        {
+          "id": "service:fear-factory",
+          "name": "Fear Factory"
+        },
+        {
+          "id": "service:fidotv-channel",
+          "name": "FidoTV Channel"
+        },
+        {
+          "id": "service:film-movement-plus",
+          "name": "Film Movement Plus"
+        },
+        {
+          "id": "service:filmbox-live",
+          "name": "FilmBox Live"
+        },
+        {
+          "id": "service:filmbox-plus",
+          "name": "FilmBox+"
+        },
+        {
+          "id": "service:filmzie",
+          "name": "Filmzie"
+        },
+        {
+          "id": "service:fitfusion",
+          "name": "Fitfusion"
+        },
+        {
+          "id": "service:flix-premiere",
+          "name": "Flix Premiere"
+        },
+        {
+          "id": "service:flixfling",
+          "name": "FlixFling"
+        },
+        {
+          "id": "service:flixhouse",
+          "name": "FlixHouse"
+        },
+        {
+          "id": "service:food-matters",
+          "name": "Food Matters"
+        },
+        {
+          "id": "service:food-network",
+          "name": "Food Network"
+        },
+        {
+          "id": "service:found-tv",
+          "name": "FOUND TV"
+        },
+        {
+          "id": "service:fox-one",
+          "name": "FOX One"
+        },
+        {
+          "id": "service:france-channel",
+          "name": "France Channel"
+        },
+        {
+          "id": "service:freeform",
+          "name": "Freeform"
+        },
+        {
+          "id": "service:fubotv",
+          "name": "fuboTV"
+        },
+        {
+          "id": "service:fuel-tv-plus",
+          "name": "FUEL TV+"
+        },
+        {
+          "id": "service:full-moon",
+          "name": "Full Moon"
+        },
+        {
+          "id": "service:fuse-plus",
+          "name": "Fuse+"
+        },
+        {
+          "id": "service:fxnow",
+          "name": "FXNow"
+        },
+        {
+          "id": "service:fyi-network",
+          "name": "FYI Network"
+        },
+        {
+          "id": "service:gaia",
+          "name": "Gaia"
+        },
+        {
+          "id": "service:gaiam-tv-yoga-fit",
+          "name": "Gaiam TV Yoga & Fit"
+        },
+        {
+          "id": "service:glewedtv",
+          "name": "GlewedTV"
+        },
+        {
+          "id": "service:google-play-movies",
+          "name": "Google Play Movies"
+        },
+        {
+          "id": "service:green-planet-stream",
+          "name": "Green Planet Stream"
+        },
+        {
+          "id": "service:guidedoc",
+          "name": "GuideDoc"
+        },
+        {
+          "id": "service:hallmark-tv",
+          "name": "Hallmark TV"
+        },
+        {
+          "id": "service:hallmark-plus",
+          "name": "Hallmark+"
+        },
+        {
+          "id": "service:hbo-max",
+          "name": "HBO Max"
+        },
+        {
+          "id": "service:here-tv",
+          "name": "Here TV"
+        },
+        {
+          "id": "service:hgtv",
+          "name": "HGTV"
+        },
+        {
+          "id": "service:hi-yah",
+          "name": "Hi-YAH"
+        },
+        {
+          "id": "service:hidive",
+          "name": "HIDIVE"
+        },
+        {
+          "id": "service:history",
+          "name": "History"
+        },
+        {
+          "id": "service:history-vault",
+          "name": "History Vault"
+        },
+        {
+          "id": "service:hoichoi",
+          "name": "Hoichoi"
+        },
+        {
+          "id": "service:hoopla",
+          "name": "Hoopla"
+        },
+        {
+          "id": "service:hopster",
+          "name": "Hopster"
+        },
+        {
+          "id": "service:howdy",
+          "name": "Howdy"
+        },
+        {
+          "id": "service:hulu",
+          "name": "Hulu"
+        },
+        {
+          "id": "service:ifc-films-unlimited",
+          "name": "IFC Films Unlimited"
+        },
+        {
+          "id": "service:indie-club",
+          "name": "Indie Club"
+        },
+        {
+          "id": "service:indieflix",
+          "name": "IndieFlix"
+        },
+        {
+          "id": "service:indieflix-shorts",
+          "name": "IndieFlix Shorts"
+        },
+        {
+          "id": "service:indiepix-unlimited",
+          "name": "IndiePix Unlimited"
+        },
+        {
+          "id": "service:investigation-discovery",
+          "name": "Investigation Discovery"
+        },
+        {
+          "id": "service:iqiyi",
+          "name": "iQIYI"
+        },
+        {
+          "id": "service:jolt-film",
+          "name": "Jolt Film"
+        },
+        {
+          "id": "service:justwatch-tv",
+          "name": "JustWatch TV"
+        },
+        {
+          "id": "service:kableone",
+          "name": "KableOne"
+        },
+        {
+          "id": "service:kanopy",
+          "name": "Kanopy"
+        },
+        {
+          "id": "service:kartoon-channel",
+          "name": "Kartoon Channel"
+        },
+        {
+          "id": "service:kidstream",
+          "name": "Kidstream"
+        },
+        {
+          "id": "service:kino-film-collection",
+          "name": "Kino Film Collection"
+        },
+        {
+          "id": "service:klassiki",
+          "name": "Klassiki"
+        },
+        {
+          "id": "service:kocowa",
+          "name": "Kocowa"
+        },
+        {
+          "id": "service:kqed",
+          "name": "KQED"
+        },
+        {
+          "id": "service:lifetime",
+          "name": "Lifetime"
+        },
+        {
+          "id": "service:lifetime-movie-club",
+          "name": "Lifetime Movie Club"
+        },
+        {
+          "id": "service:lionsgate-plus",
+          "name": "Lionsgate+"
+        },
+        {
+          "id": "service:magellan-tv",
+          "name": "Magellan TV"
+        },
+        {
+          "id": "service:magnolia-network",
+          "name": "Magnolia Network"
+        },
+        {
+          "id": "service:magnolia-selects",
+          "name": "Magnolia Selects"
+        },
+        {
+          "id": "service:marquee-tv",
+          "name": "Marquee TV"
+        },
+        {
+          "id": "service:metrograph",
+          "name": "Metrograph"
+        },
+        {
+          "id": "service:mgm-plus",
+          "name": "MGM+"
+        },
+        {
+          "id": "service:mhz-choice",
+          "name": "MHz Choice"
+        },
+        {
+          "id": "service:midnight-pulp",
+          "name": "Midnight Pulp"
+        },
+        {
+          "id": "service:mometu",
+          "name": "Mometu"
+        },
+        {
+          "id": "service:monsters-and-nightmares",
+          "name": "Monsters and Nightmares"
+        },
+        {
+          "id": "service:motorvision-tv",
+          "name": "Motorvision TV"
+        },
+        {
+          "id": "service:movieme",
+          "name": "MovieMe"
+        },
+        {
+          "id": "service:moviesaints",
+          "name": "MovieSaints"
+        },
+        {
+          "id": "service:moviesphere-plus",
+          "name": "MovieSphere+"
+        },
+        {
+          "id": "service:mubi",
+          "name": "MUBI"
+        },
+        {
+          "id": "service:myfilmfriend",
+          "name": "myfilmfriend"
+        },
+        {
+          "id": "service:myoutdoortv",
+          "name": "MyOutdoorTV"
+        },
+        {
+          "id": "service:national-geographic",
+          "name": "National Geographic"
+        },
+        {
+          "id": "service:nbc",
+          "name": "NBC"
+        },
+        {
+          "id": "service:netflix",
+          "name": "Netflix"
+        },
+        {
+          "id": "service:night-flight-plus",
+          "name": "Night Flight Plus"
+        },
+        {
+          "id": "service:ondemandkorea",
+          "name": "OnDemandKorea"
+        },
+        {
+          "id": "service:outside-tv-features",
+          "name": "Outside TV Features"
+        },
+        {
+          "id": "service:outside-watch",
+          "name": "Outside Watch"
+        },
+        {
+          "id": "service:outtv",
+          "name": "OUTtv"
+        },
+        {
+          "id": "service:ovation-tv",
+          "name": "Ovation TV"
+        },
+        {
+          "id": "service:ovid",
+          "name": "OVID"
+        },
+        {
+          "id": "service:oxygen",
+          "name": "OXYGEN"
+        },
+        {
+          "id": "service:paramount-plus",
+          "name": "Paramount+"
+        },
+        {
+          "id": "service:passionflix",
+          "name": "Passionflix"
+        },
+        {
+          "id": "service:pbs",
+          "name": "PBS"
+        },
+        {
+          "id": "service:pbs-america",
+          "name": "PBS America"
+        },
+        {
+          "id": "service:pbs-documentaries",
+          "name": "PBS Documentaries"
+        },
+        {
+          "id": "service:pbs-kids",
+          "name": "PBS Kids"
+        },
+        {
+          "id": "service:pbs-living",
+          "name": "PBS Living"
+        },
+        {
+          "id": "service:pbs-masterpiece",
+          "name": "PBS Masterpiece"
+        },
+        {
+          "id": "service:peacock",
+          "name": "Peacock"
+        },
+        {
+          "id": "service:philo",
+          "name": "Philo"
+        },
+        {
+          "id": "service:pijama-films",
+          "name": "Pijama Films"
+        },
+        {
+          "id": "service:pinoy-box-office",
+          "name": "Pinoy Box Office"
+        },
+        {
+          "id": "service:pixl",
+          "name": "PixL"
+        },
+        {
+          "id": "service:planet-earth",
+          "name": "Planet Earth"
+        },
+        {
+          "id": "service:plex",
+          "name": "Plex"
+        },
+        {
+          "id": "service:plex-channel",
+          "name": "Plex Channel"
+        },
+        {
+          "id": "service:pluto-tv",
+          "name": "Pluto TV"
+        },
+        {
+          "id": "service:public-domain-movies",
+          "name": "Public Domain Movies"
+        },
+        {
+          "id": "service:pure-flix",
+          "name": "Pure Flix"
+        },
+        {
+          "id": "service:qello-concerts-by-stingray",
+          "name": "Qello Concerts by Stingray"
+        },
+        {
+          "id": "service:rakuten-viki",
+          "name": "Rakuten Viki"
+        },
+        {
+          "id": "service:reelz-plus",
+          "name": "REELZ+"
+        },
+        {
+          "id": "service:retrocrush",
+          "name": "RetroCrush"
+        },
+        {
+          "id": "service:revry",
+          "name": "Revry"
+        },
+        {
+          "id": "service:runtime",
+          "name": "Runtime"
+        },
+        {
+          "id": "service:ryan-and-friends-plus",
+          "name": "Ryan and Friends Plus"
+        },
+        {
+          "id": "service:science-channel",
+          "name": "Science Channel"
+        },
+        {
+          "id": "service:screambox",
+          "name": "Screambox"
+        },
+        {
+          "id": "service:screenpix",
+          "name": "ScreenPix"
+        },
+        {
+          "id": "service:sensical",
+          "name": "Sensical"
+        },
+        {
+          "id": "service:shahid-vip",
+          "name": "Shahid VIP"
+        },
+        {
+          "id": "service:shortstv",
+          "name": "ShortsTV"
+        },
+        {
+          "id": "service:shout-factory-tv",
+          "name": "Shout! Factory TV"
+        },
+        {
+          "id": "service:shudder",
+          "name": "Shudder"
+        },
+        {
+          "id": "service:sling-tv",
+          "name": "Sling TV"
+        },
+        {
+          "id": "service:sony-pictures-core",
+          "name": "Sony Pictures Core"
+        },
+        {
+          "id": "service:spectrum-on-demand",
+          "name": "Spectrum On Demand"
+        },
+        {
+          "id": "service:starz",
+          "name": "Starz"
+        },
+        {
+          "id": "service:stingray-classica",
+          "name": "Stingray Classica"
+        },
+        {
+          "id": "service:stingray-djazz",
+          "name": "Stingray Djazz"
+        },
+        {
+          "id": "service:stingray-karaoke",
+          "name": "Stingray Karaoke"
+        },
+        {
+          "id": "service:strand-releasing",
+          "name": "Strand Releasing"
+        },
+        {
+          "id": "service:sun-nxt",
+          "name": "Sun Nxt"
+        },
+        {
+          "id": "service:sundance-now",
+          "name": "Sundance Now"
+        },
+        {
+          "id": "service:takflix",
+          "name": "Takflix"
+        },
+        {
+          "id": "service:tastemade",
+          "name": "Tastemade"
+        },
+        {
+          "id": "service:tbs",
+          "name": "TBS"
+        },
+        {
+          "id": "service:tcm",
+          "name": "TCM"
+        },
+        {
+          "id": "service:the-coda-collection",
+          "name": "The Coda Collection"
+        },
+        {
+          "id": "service:the-cw",
+          "name": "The CW"
+        },
+        {
+          "id": "service:the-great-courses",
+          "name": "The Great Courses"
+        },
+        {
+          "id": "service:the-oprah-winfrey-network",
+          "name": "The Oprah Winfrey Network"
+        },
+        {
+          "id": "service:the-roku-channel",
+          "name": "The Roku Channel"
+        },
+        {
+          "id": "service:the-surf-network",
+          "name": "The Surf Network"
+        },
+        {
+          "id": "service:thirteen",
+          "name": "Thirteen"
+        },
+        {
+          "id": "service:tlc",
+          "name": "TLC"
+        },
+        {
+          "id": "service:tnt",
+          "name": "TNT"
+        },
+        {
+          "id": "service:toku",
+          "name": "Toku"
+        },
+        {
+          "id": "service:toon-goggles",
+          "name": "Toon Goggles"
+        },
+        {
+          "id": "service:tpt",
+          "name": "TPT"
+        },
+        {
+          "id": "service:travel-channel",
+          "name": "Travel Channel"
+        },
+        {
+          "id": "service:troma-now",
+          "name": "Troma NOW"
+        },
+        {
+          "id": "service:tru-tv",
+          "name": "tru TV"
+        },
+        {
+          "id": "service:true-royalty",
+          "name": "True Royalty"
+        },
+        {
+          "id": "service:true-story",
+          "name": "True Story"
+        },
+        {
+          "id": "service:tubi-tv",
+          "name": "Tubi TV"
+        },
+        {
+          "id": "service:univer-video",
+          "name": "Univer Video"
+        },
+        {
+          "id": "service:up-faith-family",
+          "name": "UP Faith & Family"
+        },
+        {
+          "id": "service:usa-network",
+          "name": "USA Network"
+        },
+        {
+          "id": "service:vemox-cine",
+          "name": "Vemox Cine"
+        },
+        {
+          "id": "service:vh1",
+          "name": "VH1"
+        },
+        {
+          "id": "service:viaplay",
+          "name": "Viaplay"
+        },
+        {
+          "id": "service:vice-tv",
+          "name": "Vice TV"
+        },
+        {
+          "id": "service:vimeo",
+          "name": "Vimeo"
+        },
+        {
+          "id": "service:vix",
+          "name": "ViX"
+        },
+        {
+          "id": "service:warriors-and-gangsters",
+          "name": "Warriors and Gangsters"
+        },
+        {
+          "id": "service:watchit-kid",
+          "name": "Watchit.Kid"
+        },
+        {
+          "id": "service:weta-plus",
+          "name": "WETA+"
+        },
+        {
+          "id": "service:wetv",
+          "name": "WeTV"
+        },
+        {
+          "id": "service:wonder-project",
+          "name": "Wonder Project"
+        },
+        {
+          "id": "service:wow-presents-plus",
+          "name": "WOW Presents Plus"
+        },
+        {
+          "id": "service:wwe-network",
+          "name": "WWE Network"
+        },
+        {
+          "id": "service:xive-tv-documentaries",
+          "name": "Xive TV Documentaries"
+        },
+        {
+          "id": "service:xltv",
+          "name": "XLTV"
+        },
+        {
+          "id": "service:xumo-play",
+          "name": "Xumo Play"
+        },
+        {
+          "id": "service:yipee-kids-tv",
+          "name": "Yipee Kids TV"
+        },
+        {
+          "id": "service:yoga-and-fitness-tv",
+          "name": "Yoga and Fitness TV"
+        },
+        {
+          "id": "service:young-hollywood",
+          "name": "Young Hollywood"
+        },
+        {
+          "id": "service:youtube",
+          "name": "YouTube"
+        },
+        {
+          "id": "service:youtube-tv",
+          "name": "YouTube TV"
+        },
+        {
+          "id": "service:yow-tv",
+          "name": "YOW.tv"
+        },
+        {
+          "id": "service:zenlife-by-stingray",
+          "name": "ZenLIFE by Stingray"
+        }
+      ],
+      "serviceIds": [
+        "service:hulu",
+        "service:netflix"
+      ],
+      "googleEnabled": true,
+      "googleConnected": true,
+      "unreadNotifications": 6,
+      "user": {
+        "user_id": "user-alice",
+        "username": "alice",
+        "display_name": "Alice Park",
+        "photo": "486e0212c15728ee"
+      }
+    }
+  }
+}

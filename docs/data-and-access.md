@@ -49,7 +49,8 @@ result becomes the JSON response; an action without one responds
 
 Add an action as one entry, using `read` for a member GET, `write` for a
 member POST, `signup` for a POST that runs before profile setup, or `photo`
-for a photo change, which works before and after setup.
+for a photo change, which works before and after setup. Give it an
+[iPhone API fixture](testing.md#iphone-api-fixtures) case in the same change.
 
 ## Sign-in return path
 

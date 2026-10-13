@@ -1,0 +1,16 @@
+{
+  "description": "Using the Google account's picture.",
+  "viewer": "alice",
+  "request": {
+    "method": "POST",
+    "action": "google-photo",
+    "path": "/api/screenr/google-photo",
+    "body": {}
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "photo": "430279302ec04e0b"
+    }
+  }
+}

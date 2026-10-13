@@ -1,0 +1,18 @@
+{
+  "description": "Watch together without a friend.",
+  "viewer": "alice",
+  "request": {
+    "method": "GET",
+    "action": "screen",
+    "path": "/api/screenr/screen?path=%2Fwatch-together",
+    "query": {
+      "path": "/watch-together"
+    }
+  },
+  "response": {
+    "status": 400,
+    "body": {
+      "error": "Choose one friend from their profile."
+    }
+  }
+}

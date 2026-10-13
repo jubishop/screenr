@@ -1,0 +1,27 @@
+{
+  "description": "A member with no open invitations.",
+  "viewer": "nora",
+  "request": {
+    "method": "GET",
+    "action": "screen",
+    "path": "/api/screenr/screen?path=%2Finvites",
+    "query": {
+      "path": "/invites"
+    }
+  },
+  "response": {
+    "status": 200,
+    "etag": "W/\"eGZLBBeNhGIKXmAGfc1-jSJ3gkVm6E0cLD6QfdJdOUQ\"",
+    "body": {
+      "kind": "invites",
+      "invitations": [],
+      "unreadNotifications": 0,
+      "user": {
+        "user_id": "user-nora",
+        "username": "nora",
+        "display_name": "Nora Quinn",
+        "photo": null
+      }
+    }
+  }
+}

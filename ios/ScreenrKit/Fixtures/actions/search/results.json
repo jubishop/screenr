@@ -1,0 +1,72 @@
+{
+  "description": "Search results for a movie and a TV show, with viewing options.",
+  "viewer": "alice",
+  "request": {
+    "method": "GET",
+    "action": "search",
+    "path": "/api/screenr/search?q=night",
+    "query": {
+      "q": "night"
+    }
+  },
+  "response": {
+    "status": 200,
+    "etag": "W/\"aKYWmYox7mc4yVcBnXzt_bwCUWMGTEZXQNbWFHfC8fs\"",
+    "body": [
+      {
+        "id": "movie:101",
+        "kind": "movie",
+        "tmdb_id": 101,
+        "name": "Night Crossing",
+        "overview": "Two strangers share the last ferry across a frozen strait.",
+        "poster_path": "/night-crossing.jpg",
+        "release_date": "2024-03-08",
+        "viewing": {
+          "status": "ok",
+          "checked_at": "2026-10-13T12:00:00.000Z",
+          "sections": [
+            {
+              "key": "subs",
+              "label": "Subs",
+              "services": [
+                {
+                  "id": "service:netflix",
+                  "name": "Netflix",
+                  "logo_path": "/rK1KljqmbvO9HQa1PBFLILWah72.png",
+                  "route_note": null
+                }
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "id": "tv:203",
+        "kind": "tv",
+        "tmdb_id": 203,
+        "name": "Night Harbor",
+        "overview": "Dockworkers uncover a smuggling ring.",
+        "poster_path": "/night-harbor.jpg",
+        "release_date": "2018-04-12",
+        "viewing": {
+          "status": "ok",
+          "checked_at": "2026-10-13T12:00:00.000Z",
+          "sections": [
+            {
+              "key": "subs",
+              "label": "Subs",
+              "services": [
+                {
+                  "id": "provider:9999",
+                  "name": "Harbor Cinema Club",
+                  "logo_path": null,
+                  "route_note": null
+                }
+              ]
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

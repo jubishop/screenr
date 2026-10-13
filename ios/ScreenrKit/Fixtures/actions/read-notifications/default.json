@@ -1,0 +1,18 @@
+{
+  "description": "Mark all as read through the newest notification shown.",
+  "viewer": "alice",
+  "request": {
+    "method": "POST",
+    "action": "read-notifications",
+    "path": "/api/screenr/read-notifications",
+    "body": {
+      "through": "5"
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "ok": true
+    }
+  }
+}

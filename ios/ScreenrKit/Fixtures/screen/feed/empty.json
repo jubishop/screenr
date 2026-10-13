@@ -1,0 +1,29 @@
+{
+  "description": "A member with no friends or activity.",
+  "viewer": "nora",
+  "request": {
+    "method": "GET",
+    "action": "screen",
+    "path": "/api/screenr/screen?path=%2F",
+    "query": {
+      "path": "/"
+    }
+  },
+  "response": {
+    "status": 200,
+    "etag": "W/\"ybkdy12oQ-yk1hLvfcHXuDeIzRjXfiD6mX2N_4yD-GU\"",
+    "body": {
+      "kind": "feed",
+      "conversations": [],
+      "target": null,
+      "targetUnavailable": false,
+      "unreadNotifications": 0,
+      "user": {
+        "user_id": "user-nora",
+        "username": "nora",
+        "display_name": "Nora Quinn",
+        "photo": null
+      }
+    }
+  }
+}

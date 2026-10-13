@@ -1,0 +1,19 @@
+{
+  "description": "A username someone else has.",
+  "viewer": "pat",
+  "request": {
+    "method": "POST",
+    "action": "setup",
+    "path": "/api/screenr/setup",
+    "body": {
+      "name": "Pat Morgan",
+      "username": "alice"
+    }
+  },
+  "response": {
+    "status": 400,
+    "body": {
+      "error": "That username is already taken."
+    }
+  }
+}

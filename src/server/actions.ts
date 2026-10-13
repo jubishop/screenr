@@ -137,7 +137,7 @@ function photo<Input>({
 // record, so the service reports it as not found.
 const id = (value: unknown) => String(value);
 
-const actions: Record<string, Action> = {
+const actions = {
   setup: signup({
     input: ({ name, username }) => ({ name, username }),
     run: ({ name, username }, { userId, headers }) =>
@@ -355,9 +355,14 @@ const actions: Record<string, Action> = {
     run: ({ item, reply, kind }, { userId }) =>
       setReaction(userId, item, reply, kind),
   }),
-};
+} satisfies Record<string, Action>;
+
+// Each action's name. The iPhone fixture suite needs a case for every one.
+export type ActionName = keyof typeof actions;
 
 export function findAction(name: string, method: string) {
-  const action = Object.hasOwn(actions, name) ? actions[name] : undefined;
+  const action: Action | undefined = Object.hasOwn(actions, name)
+    ? actions[name as ActionName]
+    : undefined;
   return action?.method === method ? action : undefined;
 }

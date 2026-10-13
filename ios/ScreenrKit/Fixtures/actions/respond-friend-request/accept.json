@@ -1,0 +1,19 @@
+{
+  "description": "Accepting a friend request from its notification.",
+  "viewer": "alice",
+  "request": {
+    "method": "POST",
+    "action": "respond-friend-request",
+    "path": "/api/screenr/respond-friend-request",
+    "body": {
+      "id": "14",
+      "action": "accept"
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "ok": true
+    }
+  }
+}

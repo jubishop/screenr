@@ -1,0 +1,19 @@
+{
+  "description": "Uploading a 512×512 JPEG returns its photo version.",
+  "viewer": "alice",
+  "request": {
+    "method": "POST",
+    "action": "photo",
+    "path": "/api/screenr/photo",
+    "upload": {
+      "contentType": "image/jpeg",
+      "bytes": 4000
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "photo": "6b8351fef1a68536"
+    }
+  }
+}

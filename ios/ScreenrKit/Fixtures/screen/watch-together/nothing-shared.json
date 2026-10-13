@@ -1,0 +1,42 @@
+{
+  "description": "A friend with no shared Want to watch titles.",
+  "viewer": "alice",
+  "request": {
+    "method": "GET",
+    "action": "screen",
+    "path": "/api/screenr/screen?path=%2Fwatch-together%3Fwith%3Dcam",
+    "query": {
+      "path": "/watch-together?with=cam"
+    }
+  },
+  "response": {
+    "status": 200,
+    "etag": "W/\"_GROVPS8SdtVLNkMYdIxMGkLICsq0YwMAzKvAJ1qv2A\"",
+    "body": {
+      "kind": "watch-together",
+      "participants": [
+        {
+          "photo": "486e0212c15728ee",
+          "user_id": "user-alice",
+          "username": "alice",
+          "display_name": "Alice Park"
+        },
+        {
+          "photo": null,
+          "user_id": "user-cam",
+          "username": "cam",
+          "display_name": "Cam Rivera"
+        }
+      ],
+      "viewerHasServices": true,
+      "titles": [],
+      "unreadNotifications": 6,
+      "user": {
+        "user_id": "user-alice",
+        "username": "alice",
+        "display_name": "Alice Park",
+        "photo": "486e0212c15728ee"
+      }
+    }
+  }
+}

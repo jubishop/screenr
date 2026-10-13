@@ -1,0 +1,22 @@
+{
+  "description": "Posting a spoiler comment about an episode returns the entry.",
+  "viewer": "alice",
+  "request": {
+    "method": "POST",
+    "action": "title-comment",
+    "path": "/api/screenr/title-comment",
+    "body": {
+      "title": "tv:201",
+      "body": "That keeper twist!",
+      "spoiler": true,
+      "season": 2,
+      "episode": 2
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "id": "00000000-0000-4000-8000-000000000001"
+    }
+  }
+}

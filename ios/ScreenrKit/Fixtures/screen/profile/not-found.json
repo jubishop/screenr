@@ -1,0 +1,18 @@
+{
+  "description": "A username that does not exist.",
+  "viewer": "alice",
+  "request": {
+    "method": "GET",
+    "action": "screen",
+    "path": "/api/screenr/screen?path=%2Fpeople%2Fnobody",
+    "query": {
+      "path": "/people/nobody"
+    }
+  },
+  "response": {
+    "status": 404,
+    "body": {
+      "error": "Person not found."
+    }
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "description": "Posting without a title returns the entry.",
+  "viewer": "alice",
+  "request": {
+    "method": "POST",
+    "action": "discussion-post",
+    "path": "/api/screenr/discussion-post",
+    "body": {
+      "body": "Movie night at my place on Friday?",
+      "spoiler": false
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "id": "00000000-0000-4000-8000-000000000001"
+    }
+  }
+}

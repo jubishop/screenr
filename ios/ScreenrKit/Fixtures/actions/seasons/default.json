@@ -1,0 +1,28 @@
+{
+  "description": "A TV show's seasons, without specials.",
+  "viewer": "alice",
+  "request": {
+    "method": "GET",
+    "action": "seasons",
+    "path": "/api/screenr/seasons?title=tv%3A201",
+    "query": {
+      "title": "tv:201"
+    }
+  },
+  "response": {
+    "status": 200,
+    "etag": "W/\"a8AF6tseNjcN_ofXztqH2IEylV0ZERFLwLHDlwYzwV8\"",
+    "body": {
+      "seasons": [
+        {
+          "number": 1,
+          "name": "Season 1"
+        },
+        {
+          "number": 2,
+          "name": "Season 2"
+        }
+      ]
+    }
+  }
+}

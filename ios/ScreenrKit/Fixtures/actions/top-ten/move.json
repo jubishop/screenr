@@ -1,0 +1,20 @@
+{
+  "description": "Moving a title to a new rank.",
+  "viewer": "alice",
+  "request": {
+    "method": "POST",
+    "action": "top-ten",
+    "path": "/api/screenr/top-ten",
+    "body": {
+      "title": "tv:201",
+      "change": "move",
+      "rank": 1
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "ok": true
+    }
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "description": "Replying to a reply returns the new reply's ID.",
+  "viewer": "alice",
+  "request": {
+    "method": "POST",
+    "action": "comment",
+    "path": "/api/screenr/comment",
+    "body": {
+      "conversation": "0601645c-005d-450f-8b22-ae05a508119d",
+      "body": "Adding it to my list.",
+      "spoiler": false,
+      "replyTo": "2"
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "id": "10"
+    }
+  }
+}

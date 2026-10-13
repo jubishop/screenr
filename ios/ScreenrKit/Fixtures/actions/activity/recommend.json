@@ -1,0 +1,20 @@
+{
+  "description": "Recommending a title returns the entry.",
+  "viewer": "alice",
+  "request": {
+    "method": "POST",
+    "action": "activity",
+    "path": "/api/screenr/activity",
+    "body": {
+      "title": "movie:105",
+      "field": "recommended",
+      "value": true
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "id": "00000000-0000-4000-8000-000000000001"
+    }
+  }
+}

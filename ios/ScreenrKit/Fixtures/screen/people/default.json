@@ -1,0 +1,98 @@
+{
+  "description": "Friends, requests in both directions, a blocked member, and a suggestion with mutual friends.",
+  "viewer": "alice",
+  "request": {
+    "method": "GET",
+    "action": "screen",
+    "path": "/api/screenr/screen?path=%2Fpeople",
+    "query": {
+      "path": "/people"
+    }
+  },
+  "response": {
+    "status": 200,
+    "etag": "W/\"b5sQLOhKsViSSwMP8iRYaY5_oAFOEMpaxlwDNrl1RF8\"",
+    "body": {
+      "kind": "people",
+      "connections": [
+        {
+          "user_id": "user-ben",
+          "username": "ben",
+          "display_name": "Ben Ortiz",
+          "photo": "8fc275dfeaca5cf8",
+          "requested_by": "user-alice",
+          "accepted_at": "2026-10-13T12:00:00.000Z"
+        },
+        {
+          "user_id": "user-cam",
+          "username": "cam",
+          "display_name": "Cam Rivera",
+          "photo": null,
+          "requested_by": "user-alice",
+          "accepted_at": "2026-10-13T12:00:00.000Z"
+        },
+        {
+          "user_id": "user-fay",
+          "username": "fay",
+          "display_name": "Fay Chen",
+          "photo": null,
+          "requested_by": "user-fay",
+          "accepted_at": null
+        },
+        {
+          "user_id": "user-gus",
+          "username": "gus",
+          "display_name": "Gus Novak",
+          "photo": null,
+          "requested_by": "user-alice",
+          "accepted_at": null
+        },
+        {
+          "user_id": "user-hana",
+          "username": "hana",
+          "display_name": "Hana Ito",
+          "photo": null,
+          "requested_by": "user-hana",
+          "accepted_at": "2026-10-13T12:00:00.000Z"
+        }
+      ],
+      "blocked": [
+        {
+          "user_id": "user-dana",
+          "username": "dana",
+          "display_name": "Dana Kim",
+          "photo": null
+        }
+      ],
+      "suggestions": [
+        {
+          "user_id": "user-erin",
+          "username": "erin",
+          "display_name": "Erin Walsh",
+          "photo": null,
+          "mutual_friends": [
+            {
+              "photo": "8fc275dfeaca5cf8",
+              "user_id": "user-ben",
+              "username": "ben",
+              "display_name": "Ben Ortiz"
+            },
+            {
+              "photo": null,
+              "user_id": "user-cam",
+              "username": "cam",
+              "display_name": "Cam Rivera"
+            }
+          ]
+        }
+      ],
+      "unreadNotifications": 6,
+      "user": {
+        "user_id": "user-alice",
+        "username": "alice",
+        "display_name": "Alice Park",
+        "photo": "486e0212c15728ee"
+      }
+    }
+  }
+}

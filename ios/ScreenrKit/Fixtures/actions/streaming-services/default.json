@@ -1,0 +1,24 @@
+{
+  "description": "Saving streaming services.",
+  "viewer": "alice",
+  "request": {
+    "method": "POST",
+    "action": "streaming-services",
+    "path": "/api/screenr/streaming-services",
+    "body": {
+      "serviceIds": [
+        "service:netflix",
+        "service:hbo-max"
+      ]
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "serviceIds": [
+        "service:hbo-max",
+        "service:netflix"
+      ]
+    }
+  }
+}

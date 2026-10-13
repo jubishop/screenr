@@ -99,8 +99,8 @@ both memory and design documents.
 - [Running Screenr](running-screenr.md): local setup, invitations, several
   checkouts, the email worker, production builds, and provider configuration.
 - [Testing Screenr](testing.md): test commands, running one suite, the browser
-  harness, fixtures, resource ownership rules, coverage, and the failed
-  script load guard.
+  harness, fixtures, iPhone API fixtures, resource ownership rules, coverage,
+  and the failed script load guard.
 - [Notifications](notifications.md): accepted trigger, delivery, panel, read
   state, and activity email decisions, with their implementation.
 - [Data and access rules](data-and-access.md): shared-feed access checks,

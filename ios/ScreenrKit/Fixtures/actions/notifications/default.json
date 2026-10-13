@@ -1,0 +1,98 @@
+{
+  "description": "Friend request, acceptances, a comment, and a spoiler reply, one of them read.",
+  "viewer": "alice",
+  "request": {
+    "method": "GET",
+    "action": "notifications",
+    "path": "/api/screenr/notifications",
+    "query": {}
+  },
+  "response": {
+    "status": 200,
+    "etag": "W/\"_F7xN6m5z3y8nU-TRX39GOPIyJJYNBJouBstq5BE5QM\"",
+    "body": {
+      "items": [
+        {
+          "id": "23",
+          "kind": "comment",
+          "actor": "Ben Ortiz",
+          "actorId": "user-ben",
+          "actorPhoto": "8fc275dfeaca5cf8",
+          "message": "Ben Ortiz commented on your post.",
+          "href": "/?item=872a205a-bab2-48f8-8c27-b737397eb469&reply=8",
+          "createdAt": "2026-10-13T12:00:00.000000+00:00",
+          "read": false
+        },
+        {
+          "id": "20",
+          "kind": "reply",
+          "actor": "Ben Ortiz",
+          "actorId": "user-ben",
+          "actorPhoto": "8fc275dfeaca5cf8",
+          "message": "Ben Ortiz replied to your comment about Harbor Lights.",
+          "href": "/titles/tv/201?item=e22cb5a7-a2dd-4582-8f62-db3e31f2761b&reply=5",
+          "createdAt": "2026-10-13T12:00:00.000000+00:00",
+          "read": false
+        },
+        {
+          "id": "18",
+          "kind": "comment",
+          "actor": "Ben Ortiz",
+          "actorId": "user-ben",
+          "actorPhoto": "8fc275dfeaca5cf8",
+          "message": "Ben Ortiz commented on your post about Harbor Lights.",
+          "href": "/titles/tv/201?item=e22cb5a7-a2dd-4582-8f62-db3e31f2761b&reply=3",
+          "createdAt": "2026-10-13T12:00:00.000000+00:00",
+          "read": false
+        },
+        {
+          "id": "14",
+          "kind": "friend_request",
+          "actor": "Fay Chen",
+          "actorId": "user-fay",
+          "actorPhoto": null,
+          "message": "Fay Chen sent you a friend request.",
+          "href": "/people/fay",
+          "createdAt": "2026-10-13T12:00:00.000000+00:00",
+          "read": false
+        },
+        {
+          "id": "5",
+          "kind": "friend_accepted",
+          "actor": "Cam Rivera",
+          "actorId": "user-cam",
+          "actorPhoto": null,
+          "message": "Cam Rivera became your friend.",
+          "href": "/people/cam",
+          "createdAt": "2026-10-13T12:00:00.000000+00:00",
+          "read": false
+        },
+        {
+          "id": "3",
+          "kind": "friend_accepted",
+          "actor": "Ben Ortiz",
+          "actorId": "user-ben",
+          "actorPhoto": "8fc275dfeaca5cf8",
+          "message": "Ben Ortiz became your friend.",
+          "href": "/people/ben",
+          "createdAt": "2026-10-13T12:00:00.000000+00:00",
+          "read": true
+        },
+        {
+          "id": "1",
+          "kind": "friend_accepted",
+          "actor": "Hana Ito",
+          "actorId": "user-hana",
+          "actorPhoto": null,
+          "message": "Hana Ito became your friend.",
+          "href": "/people/hana",
+          "createdAt": "2026-10-13T12:00:00.000000+00:00",
+          "read": false
+        }
+      ],
+      "through": "23",
+      "unread": 6,
+      "next": null
+    }
+  }
+}

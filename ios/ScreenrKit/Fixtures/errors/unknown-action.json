@@ -1,0 +1,16 @@
+{
+  "description": "An action the server does not have.",
+  "viewer": "alice",
+  "request": {
+    "method": "GET",
+    "action": "unknown",
+    "path": "/api/screenr/unknown",
+    "query": {}
+  },
+  "response": {
+    "status": 404,
+    "body": {
+      "error": "Action not found."
+    }
+  }
+}

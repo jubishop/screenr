@@ -1,0 +1,29 @@
+{
+  "description": "A member with no connections.",
+  "viewer": "nora",
+  "request": {
+    "method": "GET",
+    "action": "screen",
+    "path": "/api/screenr/screen?path=%2Fpeople",
+    "query": {
+      "path": "/people"
+    }
+  },
+  "response": {
+    "status": 200,
+    "etag": "W/\"J0ygDAvjV2TLQzPDwts6_-dGFQTn2Yiym6dxjIWKg8s\"",
+    "body": {
+      "kind": "people",
+      "connections": [],
+      "blocked": [],
+      "suggestions": [],
+      "unreadNotifications": 0,
+      "user": {
+        "user_id": "user-nora",
+        "username": "nora",
+        "display_name": "Nora Quinn",
+        "photo": null
+      }
+    }
+  }
+}

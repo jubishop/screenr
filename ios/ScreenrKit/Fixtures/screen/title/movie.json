@@ -1,0 +1,271 @@
+{
+  "description": "A movie with a trailer, streaming and rental offers, friends who recommend it (with a top 10 rank) and want to watch it, Alice's top 10, and a blocked author's reply.",
+  "viewer": "alice",
+  "request": {
+    "method": "GET",
+    "action": "screen",
+    "path": "/api/screenr/screen?path=%2Ftitles%2Fmovie%2F101",
+    "query": {
+      "path": "/titles/movie/101"
+    }
+  },
+  "response": {
+    "status": 200,
+    "etag": "W/\"2eK3eOj8KX5DLfyDa83DU0nCcif4unZWjs9RW1pkfrA\"",
+    "body": {
+      "kind": "title",
+      "title": {
+        "id": "movie:101",
+        "kind": "movie",
+        "tmdb_id": 101,
+        "name": "Night Crossing",
+        "overview": "Two strangers share the last ferry across a frozen strait.",
+        "poster_path": "/night-crossing.jpg",
+        "release_date": "2024-03-08"
+      },
+      "trailer": {
+        "key": "nightCross1",
+        "name": "Official Trailer"
+      },
+      "availability": {
+        "country": "US",
+        "status": "ok",
+        "checked_at": "2026-10-13T12:00:00.000Z",
+        "link": "https://www.themoviedb.org/movie/101-night-crossing/watch",
+        "providers": {
+          "rent": [
+            {
+              "logo_path": null,
+              "provider_id": 2,
+              "provider_name": "Apple TV Store"
+            }
+          ],
+          "flatrate": [
+            {
+              "logo_path": null,
+              "provider_id": 8,
+              "provider_name": "Netflix"
+            }
+          ]
+        },
+        "sections": [
+          {
+            "key": "subs",
+            "label": "Subs",
+            "services": [
+              {
+                "id": "service:netflix",
+                "name": "Netflix",
+                "logo_path": "/rK1KljqmbvO9HQa1PBFLILWah72.png",
+                "route_note": null
+              }
+            ]
+          }
+        ]
+      },
+      "watch": {
+        "status": null,
+        "finished_on": null
+      },
+      "topTen": [
+        {
+          "id": "movie:101",
+          "name": "Night Crossing",
+          "poster_path": "/night-crossing.jpg",
+          "rank": 1
+        },
+        {
+          "id": "movie:102",
+          "name": "Paper Lanterns",
+          "poster_path": "/paper-lanterns.jpg",
+          "rank": 2
+        },
+        {
+          "id": "tv:201",
+          "name": "Harbor Lights",
+          "poster_path": "/harbor-lights.jpg",
+          "rank": 3
+        }
+      ],
+      "conversations": [
+        {
+          "id": "deb6f6bf-6172-4420-84a6-8b05a22ddf0b",
+          "conversation_id": "92ac34ff-5109-4cb9-8cc7-282ccd64e734",
+          "owner_id": "user-alice",
+          "title_id": "movie:101",
+          "item_type": "recommended",
+          "active": true,
+          "created_at": "2026-10-13T12:00:00.000Z",
+          "activity_at": "2026-10-13T12:00:00.000Z",
+          "body": null,
+          "spoiler": false,
+          "status": null,
+          "finished_on": null,
+          "rating": null,
+          "edited": false,
+          "season": null,
+          "episode": null,
+          "username": "alice",
+          "display_name": "Alice Park",
+          "photo": "486e0212c15728ee",
+          "title_name": "Night Crossing",
+          "poster_path": "/night-crossing.jpg",
+          "kind": "movie",
+          "release_date": "2024-03-08",
+          "recommended": true,
+          "want_to_watch": false,
+          "viewer_want_to_watch": false,
+          "viewer_recommended": true,
+          "viewer_status": null,
+          "viewer_top_ten_rank": 1,
+          "visible_activity": "2026-10-13T12:00:00.000Z",
+          "comments": [],
+          "reactions": []
+        },
+        {
+          "id": "0601645c-005d-450f-8b22-ae05a508119d",
+          "conversation_id": "4e78cefb-d2b2-4677-86e1-aefb695de7d4",
+          "owner_id": "user-ben",
+          "title_id": "movie:101",
+          "item_type": "recommended",
+          "active": true,
+          "created_at": "2026-10-13T12:00:00.000Z",
+          "activity_at": "2026-10-13T12:00:00.000Z",
+          "body": null,
+          "spoiler": false,
+          "status": null,
+          "finished_on": null,
+          "rating": null,
+          "edited": false,
+          "season": null,
+          "episode": null,
+          "username": "ben",
+          "display_name": "Ben Ortiz",
+          "photo": "8fc275dfeaca5cf8",
+          "title_name": "Night Crossing",
+          "poster_path": "/night-crossing.jpg",
+          "kind": "movie",
+          "release_date": "2024-03-08",
+          "recommended": true,
+          "want_to_watch": false,
+          "viewer_want_to_watch": false,
+          "viewer_recommended": true,
+          "viewer_status": null,
+          "viewer_top_ten_rank": 1,
+          "visible_activity": "2026-10-13T12:00:00.000Z",
+          "comments": [
+            {
+              "id": "1",
+              "body": "",
+              "photo": null,
+              "removed": false,
+              "root_id": null,
+              "spoiler": false,
+              "username": null,
+              "author_id": null,
+              "reactions": [],
+              "created_at": "2026-10-13T12:00:00.000000+00:00",
+              "unavailable": true,
+              "display_name": null,
+              "addressed_username": null
+            },
+            {
+              "id": "2",
+              "body": "That last scene stayed with me.",
+              "photo": "8fc275dfeaca5cf8",
+              "removed": false,
+              "root_id": "1",
+              "spoiler": false,
+              "username": "ben",
+              "author_id": "user-ben",
+              "reactions": [
+                {
+                  "kind": "haha",
+                  "count": 1,
+                  "reacted": true
+                }
+              ],
+              "created_at": "2026-10-13T12:00:00.000000+00:00",
+              "unavailable": false,
+              "display_name": "Ben Ortiz",
+              "addressed_username": null
+            }
+          ],
+          "reactions": [
+            {
+              "kind": "like",
+              "count": 1,
+              "reacted": false
+            },
+            {
+              "kind": "love",
+              "count": 1,
+              "reacted": true
+            }
+          ]
+        },
+        {
+          "id": "427028b3-d296-4c2f-834d-345c9c621faa",
+          "conversation_id": "5e6424b3-aca7-4390-8852-820618da2fa3",
+          "owner_id": "user-cam",
+          "title_id": "movie:101",
+          "item_type": "want_to_watch",
+          "active": true,
+          "created_at": "2026-10-13T12:00:00.000Z",
+          "activity_at": "2026-10-13T12:00:00.000Z",
+          "body": null,
+          "spoiler": false,
+          "status": null,
+          "finished_on": null,
+          "rating": null,
+          "edited": false,
+          "season": null,
+          "episode": null,
+          "username": "cam",
+          "display_name": "Cam Rivera",
+          "photo": null,
+          "title_name": "Night Crossing",
+          "poster_path": "/night-crossing.jpg",
+          "kind": "movie",
+          "release_date": "2024-03-08",
+          "recommended": false,
+          "want_to_watch": true,
+          "viewer_want_to_watch": false,
+          "viewer_recommended": true,
+          "viewer_status": null,
+          "viewer_top_ten_rank": 1,
+          "visible_activity": "2026-10-13T12:00:00.000Z",
+          "comments": [],
+          "reactions": []
+        }
+      ],
+      "friends": {
+        "recommended": [
+          {
+            "item": "0601645c-005d-450f-8b22-ae05a508119d",
+            "user_id": "user-ben",
+            "display_name": "Ben Ortiz",
+            "rank": 1
+          }
+        ],
+        "want_to_watch": [
+          {
+            "item": "427028b3-d296-4c2f-834d-345c9c621faa",
+            "user_id": "user-cam",
+            "display_name": "Cam Rivera",
+            "rank": null
+          }
+        ]
+      },
+      "target": null,
+      "targetUnavailable": false,
+      "unreadNotifications": 6,
+      "user": {
+        "user_id": "user-alice",
+        "username": "alice",
+        "display_name": "Alice Park",
+        "photo": "486e0212c15728ee"
+      }
+    }
+  }
+}

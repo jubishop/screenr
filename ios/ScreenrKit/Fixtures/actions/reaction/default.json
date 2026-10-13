@@ -1,0 +1,20 @@
+{
+  "description": "Reacting to a reply.",
+  "viewer": "alice",
+  "request": {
+    "method": "POST",
+    "action": "reaction",
+    "path": "/api/screenr/reaction",
+    "body": {
+      "item": "872a205a-bab2-48f8-8c27-b737397eb469",
+      "reply": "8",
+      "kind": "care"
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "ok": true
+    }
+  }
+}

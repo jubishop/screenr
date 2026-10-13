@@ -1,0 +1,18 @@
+{
+  "description": "Selecting a notification returns where it leads.",
+  "viewer": "alice",
+  "request": {
+    "method": "POST",
+    "action": "read-notification",
+    "path": "/api/screenr/read-notification",
+    "body": {
+      "id": "18"
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "href": "/titles/tv/201?item=e22cb5a7-a2dd-4582-8f62-db3e31f2761b&reply=3"
+    }
+  }
+}

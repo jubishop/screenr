@@ -1,0 +1,17 @@
+{
+  "description": "A query too short to search returns no titles.",
+  "viewer": "alice",
+  "request": {
+    "method": "GET",
+    "action": "search",
+    "path": "/api/screenr/search?q=n",
+    "query": {
+      "q": "n"
+    }
+  },
+  "response": {
+    "status": 200,
+    "etag": "W/\"T1PNoYwrqgwDVLtfmj7L5e0Sq02OEbqHPC8RFhICuUU\"",
+    "body": []
+  }
+}

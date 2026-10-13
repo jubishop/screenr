@@ -1,0 +1,18 @@
+{
+  "description": "Revoking an invitation link.",
+  "viewer": "alice",
+  "request": {
+    "method": "POST",
+    "action": "revoke-invite",
+    "path": "/api/screenr/revoke-invite",
+    "body": {
+      "id": "a93ecb20-a553-4bee-8e54-0c690ca36d03"
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "ok": true
+    }
+  }
+}

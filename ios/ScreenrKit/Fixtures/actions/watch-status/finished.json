@@ -1,0 +1,20 @@
+{
+  "description": "Finishing a show on a given date.",
+  "viewer": "alice",
+  "request": {
+    "method": "POST",
+    "action": "watch-status",
+    "path": "/api/screenr/watch-status",
+    "body": {
+      "title": "tv:202",
+      "status": "finished",
+      "finishedOn": "2026-10-01"
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "id": "398a02bb-53fa-4ee7-826e-9aa009db3b58"
+    }
+  }
+}

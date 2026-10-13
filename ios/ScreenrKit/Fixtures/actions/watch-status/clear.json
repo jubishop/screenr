@@ -1,0 +1,19 @@
+{
+  "description": "Clearing the status returns no entry.",
+  "viewer": "alice",
+  "request": {
+    "method": "POST",
+    "action": "watch-status",
+    "path": "/api/screenr/watch-status",
+    "body": {
+      "title": "tv:202",
+      "status": null
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "id": null
+    }
+  }
+}

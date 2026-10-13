@@ -1,0 +1,26 @@
+{
+  "description": "An old conversation link redirects to the entry on its title page.",
+  "viewer": "alice",
+  "request": {
+    "method": "GET",
+    "action": "screen",
+    "path": "/api/screenr/screen?path=%2Fconversations%2F0601645c-005d-450f-8b22-ae05a508119d",
+    "query": {
+      "path": "/conversations/0601645c-005d-450f-8b22-ae05a508119d"
+    }
+  },
+  "response": {
+    "status": 200,
+    "etag": "W/\"dgkZwvuoE5l92s58oJ-KufxFFtIAUX1YQEv6L2WpSoY\"",
+    "body": {
+      "kind": "redirect",
+      "url": "/titles/movie/101?item=0601645c-005d-450f-8b22-ae05a508119d",
+      "user": {
+        "user_id": "user-alice",
+        "username": "alice",
+        "display_name": "Alice Park",
+        "photo": "486e0212c15728ee"
+      }
+    }
+  }
+}
