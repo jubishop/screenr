@@ -149,6 +149,27 @@ Google credentials, and the TMDB read token. The activation command checks all
 required values without printing them. The provider setup and callback URLs
 are in [Running Screenr](running-screenr.md#provider-configuration).
 
+The iPhone app adds these `app.env` settings. Each takes effect once the
+issue in its row ships;
+[iPhone app accounts and keys](running-screenr.md#iphone-app-accounts-and-keys)
+describes the records behind them.
+
+| Setting | Purpose | Read by |
+| --- | --- | --- |
+| `SENTRY_DSN` | DSN of the `screenr-server` Sentry project, for failure reports | [#223](https://github.com/jubishop/screenr/issues/223) |
+| `APPLE_TEAM_ID` | Apple developer team ID, the issuer of tokens signed with either Apple key | [#215](https://github.com/jubishop/screenr/issues/215), [#240](https://github.com/jubishop/screenr/issues/240) |
+| `APPLE_KEY_ID` | Key ID of the Sign in with Apple key | [#215](https://github.com/jubishop/screenr/issues/215) |
+| `APPLE_PRIVATE_KEY` | Sign in with Apple key, which signs the client secret for Apple's token endpoint | [#215](https://github.com/jubishop/screenr/issues/215) |
+| `APNS_KEY_ID` | Key ID of the APNs auth key | [#240](https://github.com/jubishop/screenr/issues/240) |
+| `APNS_PRIVATE_KEY` | APNs auth key, which signs the provider tokens for push requests | [#240](https://github.com/jubishop/screenr/issues/240) |
+| `GOOGLE_IOS_CLIENT_ID` | iOS OAuth client ID, accepted as the audience of the app's Google ID tokens | [#216](https://github.com/jubishop/screenr/issues/216) |
+
+Both private keys use the
+[single-line form](running-screenr.md#apple-key-files). Like the other
+production secrets, update their
+[off-server copies](#encrypted-backups-and-restore-check) whenever they
+change.
+
 Add only the Screenr blocks from `ops/Caddyfile` to the existing Caddyfile;
 each deployment checks that they still match. The template uses a per-host
 origin certificate, following this server's existing Cloudflare setup. Verify

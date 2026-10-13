@@ -557,6 +557,10 @@ identity and App Store Connect setup as PodHaven.
 
 **Rejected alternative:** A `club.screenr` prefix to match the domain.
 
+[Running Screenr](running-screenr.md#iphone-app-accounts-and-keys) lists the
+App IDs, keys, and other account records
+([issue #221](https://github.com/jubishop/screenr/issues/221)).
+
 ### Dev and Release variants — 2026-10-13
 
 **Decision:** The app has two variants.
