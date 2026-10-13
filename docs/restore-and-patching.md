@@ -34,6 +34,12 @@ The documents are in the owner's Private vault, tagged `screenr`. The owner's
 private home repository tracks the Mac copies, so its remote holds a third
 copy.
 
+`app.env` also holds the Apple keys for Sign in with Apple and APNs, in
+`APPLE_PRIVATE_KEY` and `APNS_PRIVATE_KEY`. Restoring `app.env` restores
+them. Their original `.p8` files cannot be downloaded from Apple again and
+have the same three copies; [Apple key files](running-screenr.md#apple-key-files)
+lists them.
+
 ### Check the copies
 
 Keep each copy byte-identical to its server file. While the server is

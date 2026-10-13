@@ -279,3 +279,103 @@ password-reset codes, and Better Auth's password routes, such as
 `/api/auth/email-otp/reset-password`, return 404. The shared Resend free
 allowance can still be exhausted by other applications; inspect Resend
 delivery activity if codes do not arrive.
+
+## iPhone app accounts and keys
+
+[Issue #221](https://github.com/jubishop/screenr/issues/221) set up these
+records for the [iPhone app](ios-app.md). Key IDs, the team ID, client IDs,
+and DSNs identify records and are not secret. Never put a private key or
+token in the repository, an issue, a PR, or a log. `.env.example` lists the
+server settings with empty values, and [deployment](deployment.md#provisioning)
+lists the production settings with the issues that read them.
+
+### Apple Developer
+
+Every record belongs to Apple developer team `34TKMKM889`.
+
+| Record | Purpose | Storage |
+| --- | --- | --- |
+| App ID `com.artisanalsoftware.Screenr` | The Release app, and the primary App ID for Sign in with Apple | Apple Developer account |
+| App ID `com.artisanalsoftware.Screenr.dev` | The Dev variant; its Sign in with Apple is grouped with the primary | Apple Developer account |
+| App group `group.com.artisanalsoftware.Screenr` | Storage and Keychain items shared by the app and its extensions | Apple Developer account |
+| APNs key "Screenr APNs", key ID `YP5RTHDXQR` | Signs the worker's push requests ([#240](https://github.com/jubishop/screenr/issues/240)) | [Key files](#apple-key-files) and `APNS_PRIVATE_KEY` |
+| Sign in with Apple key "Screenr Sign in with Apple", key ID `738SADC362` | Signs the client secret for Apple's token and revoke endpoints ([#215](https://github.com/jubishop/screenr/issues/215)) | [Key files](#apple-key-files) and `APPLE_PRIVATE_KEY` |
+| Private email relay source `screenr@jubishop.com` | Lets Hide My Email addresses receive sign-in codes and activity email | Apple Developer account |
+
+Both App IDs have the App Groups, Associated Domains, Push Notifications,
+Sign in with Apple, and Communication Notifications capabilities. Keychain
+sharing is not an App ID capability; the app group doubles as the Keychain
+access group. Automatic signing registers the App IDs of the notification
+service and share extensions when they are added. The APNs key is team
+scoped and works with both the sandbox and production APNs.
+
+Apple's relay delivers mail only from registered sources. The registered
+`screenr@jubishop.com` passes SPF. Register a new sender before changing
+`EMAIL_FROM`, or relay addresses stop receiving Screenr's email.
+
+### Apple key files
+
+Apple allows each `.p8` key to be downloaded only once. The original files
+have the same off-server copies as the
+[production secrets](restore-and-patching.md#production-secrets):
+
+- **Mac:** `~/.config/screenr/keys/AuthKey_<key ID>.p8`, which the owner's
+  private home repository tracks.
+- **1Password:** documents "Screenr APNs key YP5RTHDXQR" and "Screenr Sign
+  in with Apple key 738SADC362" in the owner's Private vault, tagged
+  `screenr`.
+
+`app.env` stores each key on one line: the base64 body of the `.p8` file,
+without its PEM header, footer, or line breaks. That is the key's PKCS#8 DER
+in base64.
+
+### App Store Connect
+
+| Record | Purpose | Storage |
+| --- | --- | --- |
+| App "Screenr", Apple ID `6822501070`, SKU `screenr-ios` | The app record for TestFlight and, later, the App Store | App Store Connect |
+| TestFlight internal group "Screenr team" | Internal testing; the owner is a member | App Store Connect |
+| API key "Agents", key ID `A9CMX47R79`, Admin role | Signing, upload, and TestFlight distribution in the release script ([#246](https://github.com/jubishop/screenr/issues/246)) | The owner's Mac |
+
+Releases reuse the team's existing "Agents" key, which PodHaven also uses.
+Its `.p8` file stays on the owner's Mac at the path in `ASC_KEY_PATH`, and
+the owner's shell exports `ASC_KEY_ID` and `ASC_ISSUER_ID`. The external
+testers group with a public link can be created only after the first build
+is uploaded; [#250](https://github.com/jubishop/screenr/issues/250) creates
+it.
+
+### Google
+
+The iOS OAuth client "Screenr iOS" is in Google Cloud project
+`screenr-69420`, beside the [web client](#provider-configuration). An iOS
+client has no secret, and its client ID is public:
+
+```text
+1083033132977-i7pofqgq76lrnahd4l5q6bht51uhtc3o.apps.googleusercontent.com
+```
+
+The app requests Google ID tokens with it, and the server accepts it as their
+audience through `GOOGLE_IOS_CLIENT_ID`
+([#216](https://github.com/jubishop/screenr/issues/216)).
+
+**Known limitation:** the project's Google Auth Platform audience is in the
+Testing publishing status with no test users, which limits Google sign-in to
+listed test users.
+
+### Sentry
+
+Both projects are in Sentry organization `artisanal-software`, with IP
+address scrubbing and data scrubbing enabled.
+
+| Record | Purpose | Storage |
+| --- | --- | --- |
+| Project `screenr-ios` (Apple iOS) | App crashes, errors, performance, and feedback ([#222](https://github.com/jubishop/screenr/issues/222)) | DSN compiled into Release builds |
+| Project `screenr-server` (Node) | Server failure reports ([#223](https://github.com/jubishop/screenr/issues/223)) | DSN in production `SENTRY_DSN` |
+| The owner's Sentry user token | Uploads dSYMs from archive builds ([#222](https://github.com/jubishop/screenr/issues/222)) | `SENTRY_AUTH_TOKEN` in the owner's shell on the Mac |
+| Read-only personal token with `event:read`, `project:read`, and `org:read` | The daily feedback workflow ([#249](https://github.com/jubishop/screenr/issues/249)) | GitHub repository secret `SENTRY_AUTH_TOKEN` |
+
+The `screenr-ios` DSN is public, because the Release app contains it:
+
+```text
+https://7835b8d6ce485bae558bdc65d7f373ee@o4508469263663104.ingest.us.sentry.io/4512251383513088
+```
