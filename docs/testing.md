@@ -221,6 +221,9 @@ session. Specs import these helpers instead of defining their own copies.
   screen reads answer 304 and render nothing, so scenarios that check what a
   refresh keeps, such as drafts and focus, use `renderRefreshes` to read and
   render the whole screen, as a return to the page in these helpers does.
+  A scenario that clicks Try again after a failed read also pauses polling: a
+  successful poll could remove the button before the click
+  ([#200](https://github.com/jubishop/screenr/issues/200)).
 - Scenarios that test polling intervals or request deadlines don't sleep.
   They install and pause Playwright's clock in the member's context, advance
   it explicitly, and hold the timed request in a route until the test

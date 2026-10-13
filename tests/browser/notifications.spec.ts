@@ -2,6 +2,7 @@ import { expect, type Page } from "@playwright/test";
 import { test } from "./monitored-test";
 import { prepareFriendship } from "./member-fixture";
 import { browserConfig } from "../../scripts/browser-config";
+import { openWithoutPolling } from "./refresh-helpers";
 
 async function post(page: Page, action: string, data: unknown) {
   const response = await page.request.post(`/api/screenr/${action}`, {
@@ -156,7 +157,8 @@ test("open panel removes blocked activity, recovers from failed reads, and activ
   const session = await (
     await reader.request.get("/api/auth/get-session")
   ).json();
-  await owner.goto("/account");
+  // A poll could clear the panel's failure before Try again is clicked.
+  await openWithoutPolling(owner, "/account");
   const setting = owner.getByRole("checkbox", {
     name: "Email me about new activity",
   });
@@ -214,6 +216,8 @@ test("open panel removes blocked activity, recovers from failed reads, and activ
     target: session.user.id,
     action: "block",
   });
+  // The open panel's next poll removes the blocked activity.
+  await owner.clock.runFor(3000);
   await expect(panel.getByText("No notifications yet.")).toBeVisible();
   await expect(panel.getByText(/noticeblocked/)).toHaveCount(0);
 });

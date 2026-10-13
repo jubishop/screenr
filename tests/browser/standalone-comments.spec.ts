@@ -3,6 +3,7 @@ import { browserConfig } from "../../scripts/browser-config";
 import { test } from "./monitored-test";
 import { prepareFriendship } from "./member-fixture";
 import { confirmAction } from "./journey-helpers";
+import { openWithoutPolling, refreshOnReturn } from "./refresh-helpers";
 
 test("standalone title comments persist and share replies across all three mobile feeds", async ({
   member,
@@ -416,7 +417,8 @@ test("standalone composition retains drafts through posting and refresh failures
   member,
 }) => {
   const page = await member("commentdrafts");
-  await page.goto("/titles/movie/987655");
+  // A poll could clear the refresh failure before Try again is clicked.
+  await openWithoutPolling(page, "/titles/movie/987655");
   await page
     .getByRole("button", { name: "Start a conversation", exact: true })
     .click();
@@ -438,6 +440,7 @@ test("standalone composition retains drafts through posting and refresh failures
   await page.route("**/api/screenr/screen?**", (route) =>
     route.fulfill({ status: 503, json: { error: "Refresh unavailable" } }),
   );
+  await refreshOnReturn(page);
   await expect(page.getByRole("main").getByRole("alert")).toContainText(
     "Refresh unavailable",
   );

@@ -4,6 +4,7 @@ import { test } from "./monitored-test";
 import { person, friend } from "./member-fixture";
 import { browserConfig } from "../../scripts/browser-config";
 import { chooseStatus } from "./watch-status";
+import { openWithoutPolling } from "./refresh-helpers";
 
 const { changeRelationship } = await import("../../src/server/relationships");
 const { updateTitleActivity, updateWatchStatus } =
@@ -442,7 +443,8 @@ test("relationship refreshes and failures clear social data while preserving usa
     await signIn(page, "refreshviewer"),
     "refresh",
   );
-  await page.goto("/search");
+  // A poll could clear the refresh failure before Try again is clicked.
+  await openWithoutPolling(page, "/search");
   const input = page.getByLabel("Movie or show title");
   const grid = page.getByRole("region", {
     name: "Title suggestions",
