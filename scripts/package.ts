@@ -13,6 +13,7 @@ for (const path of [
   "scripts",
   "src/server",
   "src/shared.ts",
+  "src/member-routes.ts",
   "db",
   "ops",
   "package.json",
