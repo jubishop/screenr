@@ -760,6 +760,22 @@ const errors: Record<string, Case> = {
     "A request that fails validation.",
     400,
   ),
+  // docs/data-and-access.md#client-headers
+  "update-required": {
+    method: "GET",
+    description:
+      "An app build below the server's minimum, which shows the required-update screen.",
+    viewer: "alice",
+    status: 426,
+    request: () => {
+      process.env.SCREENR_IOS_MINIMUM_BUILD = "42";
+      return {
+        action: "screen",
+        query: { path: "/" },
+        headers: { "Screenr-Client": "ios/1.0.0/41" },
+      };
+    },
+  },
 };
 
 const cases: [string, Case][] = [
@@ -848,7 +864,10 @@ before(async () => {
   world = await buildWorld();
   saved = await saveDatabase();
 });
-afterEach(() => mock.restoreAll());
+afterEach(() => {
+  mock.restoreAll();
+  delete process.env.SCREENR_IOS_MINIMUM_BUILD;
+});
 after(async () => {
   closeCatalog?.();
   await saved?.remove();

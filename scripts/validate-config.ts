@@ -19,6 +19,12 @@ if (new URL(process.env.BETTER_AUTH_URL!).protocol !== "https:")
   throw new Error("Production requires an HTTPS public URL.");
 if (process.env.EMAIL_TRANSPORT !== "resend")
   throw new Error("Production requires EMAIL_TRANSPORT=resend.");
+// Optional: docs/data-and-access.md#client-headers
+const minimumBuild = process.env.SCREENR_IOS_MINIMUM_BUILD?.trim();
+if (minimumBuild && !/^\d{1,15}$/.test(minimumBuild))
+  throw new Error(
+    "SCREENR_IOS_MINIMUM_BUILD must be a whole number of at most 15 digits.",
+  );
 if (process.env.SCREENR_TEST_TMDB_URL)
   throw new Error("Remove the test catalog override from production.");
 console.log(

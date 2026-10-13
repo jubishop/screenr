@@ -1,13 +1,24 @@
+import { AsyncLocalStorage } from "node:async_hooks";
 import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { DatabaseError } from "pg";
+
+const request = new AsyncLocalStorage<string>();
+
+// Runs an API request. Failures logged while it runs name its request ID,
+// which the response also carries, so a client's error report and the
+// server's line can be matched: docs/data-and-access.md#client-headers
+export function withRequestId<T>(requestId: string, run: () => T) {
+  return request.run(requestId, run);
+}
 
 // Failures print one JSON line to standard error, which the journal keeps
 // for screenr-web and screenr-worker. Error messages are left out: PostgreSQL
 // and parser messages can quote the values that failed, and request or email
 // content is private. Codes, schema names, and stack frames identify the
 // failure without them. With SENTRY_DSN set, the same record also goes to
-// Sentry. A requestId field becomes the report's request_id tag.
+// Sentry. Its requestId, from withRequestId or the fields, becomes the
+// report's request_id tag.
 export function logFailure(
   event: string,
   fields: Record<string, string | number | boolean | undefined>,
@@ -15,6 +26,7 @@ export function logFailure(
 ) {
   const record = {
     event,
+    requestId: request.getStore(),
     ...fields,
     ...(error === undefined ? {} : describe(error, true)),
   };

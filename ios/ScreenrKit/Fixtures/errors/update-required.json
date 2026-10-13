@@ -1,0 +1,22 @@
+{
+  "description": "An app build below the server's minimum, which shows the required-update screen.",
+  "viewer": "alice",
+  "request": {
+    "method": "GET",
+    "action": "screen",
+    "path": "/api/screenr/screen?path=%2F",
+    "query": {
+      "path": "/"
+    },
+    "headers": {
+      "Screenr-Client": "ios/1.0.0/41"
+    }
+  },
+  "response": {
+    "status": 426,
+    "body": {
+      "error": "Update Screenr to continue.",
+      "minimumBuild": 42
+    }
+  }
+}

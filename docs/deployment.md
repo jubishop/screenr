@@ -164,6 +164,7 @@ describes the records behind them.
 | `APNS_PRIVATE_KEY` | APNs auth key, which signs the provider tokens for push requests | [#240](https://github.com/jubishop/screenr/issues/240) |
 | `GOOGLE_IOS_CLIENT_ID` | iOS OAuth client ID, accepted as the audience of the app's Google ID tokens | [#216](https://github.com/jubishop/screenr/issues/216) |
 | `REVIEW_SIGN_IN_CODE` | Fixed six-digit sign-in code for the [demo circle](running-screenr.md#demo-circle-for-apple-review)'s reviewer, given in App Store Connect's review notes | [#247](https://github.com/jubishop/screenr/issues/247) |
+| `SCREENR_IOS_MINIMUM_BUILD` | Optional lowest app build served; older builds get HTTP 426. Leave it unset until a [breaking payload change](data-and-access.md#changes-that-app-builds-depend-on) needs it. Activation rejects a value that is not a whole number | [#213](https://github.com/jubishop/screenr/issues/213) |
 
 Both private keys use the
 [single-line form](running-screenr.md#apple-key-files). Like the other
@@ -733,6 +734,15 @@ journalctl -u screenr-worker --since '1 day ago' --no-pager | grep '"event":"ema
 | `google photo copy failed` | web, worker | `user` ID, `trigger` (`account`, `choice`, or `backfill`), `reason`, and `status` for an HTTP reply |
 | `google photo backfill failed` | worker | Error fields only |
 | `sentry report failed` | web, worker | `status` for a Sentry reply, `reason` `invalid DSN`, or error fields; see [failure reports](#failure-reports-in-sentry) |
+
+A line written while an `/api/screenr` or `/api/photos` request runs adds
+`requestId`, which matches that response's
+[`Screenr-Request-Id`](data-and-access.md#client-headers) header and the ID in
+an iPhone app error report:
+
+```sh
+journalctl -u screenr-web --since '1 day ago' --no-pager | grep '"requestId":"REQUEST_ID"'
+```
 
 For a Resend reply, `email delivery failed` adds the HTTP `status` and the
 `provider` error name, such as `daily_quota_exceeded` or `invalid_api_key`.

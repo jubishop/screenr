@@ -281,7 +281,9 @@ Each file holds one case, named for the state it shows, such as `default`,
 - `actions/<action>/<case>.json`: every other action in
   `src/server/actions.ts`, under its API name.
 - `errors/<case>.json`: errors that any action can return, such as a missing
-  session. Every error body is `{"error": "<message>"}`.
+  session. Every error body is `{"error": "<message>"}`. The 426 for an
+  [outdated app build](data-and-access.md#client-headers) in
+  `update-required.json` also has `minimumBuild`.
 
 ### Fixture format
 
@@ -409,7 +411,11 @@ journeys retain browser interaction. Request-only reaction and title-comment
 validation is covered through the real HTTP handler in
 `tests/app/discussion-api.test.ts`. `tests/app/api-requests.test.ts` covers
 the same handler's 16,000-byte body limit, missing or non-object JSON, unknown
-actions, and origin and session checks before a body is read.
+actions, and origin and session checks before a body is read. It also covers
+the [client headers](data-and-access.md#client-headers) on that handler and
+the photo route: 426 for a build below the minimum, a build at the minimum,
+requests without the header, malformed headers, request ID echo, and the
+deployment check of the minimum.
 `tests/app/profile-photos.test.ts` covers photo upload validation, who may
 load a photo and its caching headers, automatic Google copies after signup
 and after linking, the removed-photo rule, Use my Google photo, and the
@@ -609,7 +615,10 @@ previous release's writes.
 [failure logs](deployment.md#failure-logs) of request, page, worker, and
 Resend failures. They compare the logged fields exactly, check that comment
 text, search terms, addresses, codes, cookies, keys, and error messages stay
-out, and confirm that permanent Resend rejections are not retried.
+out, and confirm that permanent Resend rejections are not retried. A request
+failure names the generated request ID, and
+`tests/app/profile-photos.test.ts` checks that a failed Use my Google photo
+request names the client's.
 `tests/app/email.test.ts` also runs `scripts/worker.ts` with fetch disabled. The
 worker refuses to start without the Resend settings, deletes expired jobs on its
 first pass, says once that push delivery is off without APNs settings, and

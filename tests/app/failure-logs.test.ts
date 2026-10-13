@@ -147,9 +147,14 @@ test("an unexpected database failure in a request logs its action, error class, 
   assert.deepEqual(await response.json(), {
     error: "Something went wrong. Please try again.",
   });
+  // The request sent no ID, so the line names the one the server generated
+  // and returned.
+  const requestId = response.headers.get("Screenr-Request-Id");
+  assert.match(requestId ?? "", /^[0-9a-f-]{36}$/);
   const { fields, stack } = logged(printed);
   assert.deepEqual(fields, {
     event: "request failed",
+    requestId,
     action: "comment",
     method: "POST",
     status: 500,
@@ -257,7 +262,10 @@ test("with a Sentry DSN, a request failure is also sent as an envelope with the 
   assert.deepEqual(event, {
     platform: "node",
     level: "error",
-    tags: { event: "request failed" },
+    tags: {
+      event: "request failed",
+      request_id: response.headers.get("Screenr-Request-Id"),
+    },
     contexts: { failure: fields },
   });
   assert.equal(exception.values.length, 1);
