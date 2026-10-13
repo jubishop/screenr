@@ -10,6 +10,7 @@ import { Icon } from "./icons";
 import { ConfirmAction } from "./confirmation";
 import { useActionError } from "./action-error";
 import { ActionButton } from "./action-button";
+import { TopTenSection, type ChangeTopTen } from "./top-ten";
 
 type Profile = Extract<ScreenData, { kind: "profile" }>["profile"];
 type Guarded = "remove" | "block";
@@ -22,6 +23,7 @@ export function ProfileView({
   relationship,
   block,
   saveDisplayName,
+  topTen,
 }: {
   data: Extract<ScreenData, { kind: "profile" }> | null;
   user: Person;
@@ -30,6 +32,7 @@ export function ProfileView({
   relationship: (target: string, action: string) => Promise<void>;
   block: (person: Person) => Promise<void>;
   saveDisplayName: (name: string) => Promise<void>;
+  topTen: ChangeTopTen;
 }) {
   return (
     <>
@@ -65,6 +68,12 @@ export function ProfileView({
       )}
       {data?.kind === "profile" && (
         <>
+          <TopTenSection
+            entries={data.topTen}
+            own={data.profile.user_id === user.user_id}
+            busy={busy}
+            change={topTen}
+          />
           <details className="profile-friends">
             <summary>Friends ({data.profile.friends.length})</summary>
             <section aria-label="Friends">

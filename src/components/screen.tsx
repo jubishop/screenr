@@ -7,7 +7,7 @@ import {
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ScreenData } from "../server/screens";
-import type { Person, SaveSurface, WatchStatus } from "../shared";
+import type { Person, SaveSurface, TopTenChange, WatchStatus } from "../shared";
 import {
   memberPath,
   memberTitle,
@@ -294,6 +294,9 @@ export function Screen({
   function finishedDate(title: string, date: string | null) {
     return mutate("finished-date", { title, date });
   }
+  function topTen(title: string, change: TopTenChange, replace?: string) {
+    return mutate("top-ten", { title, change, replace });
+  }
   const shell = (
     <div className="app-shell">
       {/* React places the title in the document head. */}
@@ -407,6 +410,7 @@ export function Screen({
             activity={activity}
             watchStatus={watchStatus}
             finishedDate={finishedDate}
+            topTen={topTen}
             refresh={refresh}
             showEntry={(item) => setShownEntry({ item })}
           />
@@ -446,6 +450,7 @@ export function Screen({
             relationship={relationship}
             block={block}
             saveDisplayName={saveDisplayName}
+            topTen={topTen}
           />
         )}
         {(route.kind === "feed" ||

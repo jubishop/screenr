@@ -15,9 +15,12 @@ const legacyFunctions = `SELECT proname FROM pg_proc
   AND proname IN ('screenr_sync_actions','screenr_attach_legacy_comment',
     'screenr_withdraw_progress')`;
 
-test("migrated databases keep only the notification triggers", async () => {
+// Besides notifications, only the top 10 guard for the release before
+// migration 025 remains; a later migration drops it (#198).
+test("migrated databases keep only the notification and top 10 triggers", async () => {
   assert.deepEqual((await db.query(triggers)).rows, [
     { table: "comment", name: "comment_notify" },
+    { table: "feed_item", name: "feed_item_leave_top_ten" },
     { table: "friendship", name: "friendship_notify" },
   ]);
   assert.deepEqual((await db.query(legacyFunctions)).rows, []);

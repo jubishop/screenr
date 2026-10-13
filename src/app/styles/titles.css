@@ -100,6 +100,25 @@
   display: flex;
   gap: 18px;
 }
+/* The full top 10 prompt lists the current entries as choices. */
+.top-ten-replace ol {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 8px;
+  margin: 0 0 12px;
+  padding: 0;
+  list-style: none;
+}
+.top-ten-replace ol button {
+  width: 100%;
+  height: 100%;
+  padding: 9px 12px;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+.top-ten-choice-rank {
+  color: var(--muted);
+}
 .title-trailer {
   margin-bottom: 42px;
 }

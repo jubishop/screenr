@@ -6,6 +6,7 @@ const namedFriends = 3;
 
 // "A", "A and B", "A, B, and C", or "A, B, C, and 2 more". Each name is an
 // in-page link to that friend's entry; showEntry scrolls to and focuses it.
+// A recommender's top 10 rank follows their name, as in "Maya Chen (#1)".
 function Names({
   people,
   showEntry,
@@ -14,16 +15,18 @@ function Names({
   showEntry: (item: string) => void;
 }) {
   const parts: ReactElement[] = people.slice(0, namedFriends).map((person) => (
-    <a
-      key={person.item}
-      href={`#item-${person.item}`}
-      onClick={(event) => {
-        event.preventDefault();
-        showEntry(person.item);
-      }}
-    >
-      {person.display_name}
-    </a>
+    <Fragment key={person.item}>
+      <a
+        href={`#item-${person.item}`}
+        onClick={(event) => {
+          event.preventDefault();
+          showEntry(person.item);
+        }}
+      >
+        {person.display_name}
+      </a>
+      {person.rank && ` (#${person.rank})`}
+    </Fragment>
   ));
   const others = people.length - parts.length;
   if (others) parts.push(<Fragment key="others">{others} more</Fragment>);
@@ -42,7 +45,8 @@ function Names({
 }
 
 // Below the title header's buttons: which friends recommend or want to watch
-// the title, recommenders first. Hidden when no friend has either action.
+// the title, recommenders first, with top 10 recommenders leading by rank.
+// Hidden when no friend has either action.
 // Each group wraps as a unit when it fits on one line.
 export function TitleFriends({
   friends,

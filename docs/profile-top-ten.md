@@ -7,10 +7,10 @@ status: current
 Each member can pin a ranked list of up to 10 titles they recommend to the
 top of their profile. A top 10 placement also strengthens that
 recommendation in Find a title and Friends recommend.
-[Issue #99](https://github.com/jubishop/screenr/issues/99) tracks
-implementation. Its layout builds on the 2026-10-12
-[interface design decisions](interface-design.md) that issue #165
-implements, so #165 lands first.
+[Issue #99](https://github.com/jubishop/screenr/issues/99) implemented it, as
+described under [Implementation](#implementation). Its layout builds on the
+2026-10-12 [interface design decisions](interface-design.md) that issue #165
+implemented.
 
 ## Accepted decisions
 
@@ -247,6 +247,95 @@ answers.
   #165's confirmations.
 - Leave the control off feed entries, which #165 limits to two action rows
   on phone.
+
+## Implementation
+
+[Issue #99](https://github.com/jubishop/screenr/issues/99) implements the
+decisions above.
+
+### Storage and actions
+
+Migration `025-profile-top-ten.sql` adds `top_ten`: one row per owner and
+title with a rank from 1 to 10, unique per owner and title and per owner and
+rank. The rank key is checked at the end of each statement, so one statement
+can swap or shift ranks. `src/server/top-ten.ts` reads lists and changes
+them inside the shared domain transaction, whose lock orders every write.
+Adding takes the next rank, removing moves the entries below it up, and
+moving swaps an entry with its neighbor; a move past either end changes
+nothing.
+
+`updateTopTen` in `src/server/title-actions.ts` serves the `top-ten` action,
+whose `change` is `add`, `remove`, `up`, or `down`. Adding recommends the
+title through the usual Recommend write in the same transaction, so a new
+Recommend gets its normal feed entry; a title already listed keeps its rank
+and an existing Recommend keeps its activity date. A full list refuses an
+addition unless `replace` names a listed title, which leaves the list first
+and stays recommended. Removing a title that is not listed changes nothing,
+and moving one is an error. Withdrawing Recommend, or switching to Want to
+watch from a title action or the status menu, removes the entry and closes
+its gap in the same write. Progress statuses go with Recommend, so they keep
+the entry. No list change adds a feed entry or notification of its own.
+
+The preceding release withdraws Recommend without knowing about the list, so
+the `feed_item_leave_top_ten` trigger removes the entry and closes the gap
+whenever a Recommend turns off. This release removes the entry itself first.
+[Issue #198](https://github.com/jubishop/screenr/issues/198) drops the
+trigger once no retained release predates migration 025.
+
+### Reads and ranking
+
+Profile screens include `topTen` for every member who can load the profile,
+beside the friends-only activity: the title ID, name, poster path, and rank,
+with no entry IDs. A blocked profile still fails to load. Title screens
+include the viewer's own list for the header control and the full-list
+prompt, and each feed entry carries `viewer_top_ten_rank`, the reader's own
+rank for its title, for the withdraw confirmation.
+
+`src/server/title-suggestions.ts` sums recommendations in twentieths: 20 for a
+plain Recommend or `40 - rank` for a top 10 one, times the 3:1 group weight.
+It drops second-degree groups below the minimum before summing, so the
+minimum also governs their boost. Each direct friend in `recommended_by`
+carries `rank`, top 10 recommenders first by rank, then by username. The title
+page friend line (`friendActivity` in `src/server/feed.ts`) lists top 10
+recommenders first by rank, then newest first.
+`src/server/friends-recommend.ts` sums the same contributions for direct
+friends, without a group weight, and names top 10 recommenders first by rank,
+then newest first; `src/components/friends-recommend.tsx` shows each rank
+beside the name.
+
+### Interface
+
+`src/components/top-ten.tsx` renders the profile section and the full-list
+prompt. The row is an ordered list of title links named like "#1 Title",
+with the rank on its own ink fill over the poster and the name clamped to two
+lines beneath. Its posters are 84px wide on phone and 104px on desktop, and
+the row scrolls sideways inside the page. Edit mode shows the same entries as
+a vertical list with Move up, Move down, and Remove icon buttons, so up and
+down match the order on screen. Focus follows a moved entry, falling back to
+its other move button at either end, and moves to the next Remove after a
+removal, or to the heading once the list is empty, which shows the empty
+state.
+
+The title header adds Add to top 10 beside Recommend. Once listed it
+reads "✓ #3 in your top 10", and choosing it removes the title from the list.
+`src/components/title-view.tsx` and full feed entries in
+`src/components/feed.tsx` confirm with `ConfirmAction` before a top 10 title
+loses its Recommend. Cancel or a confirmed change returns focus to the
+control that opened the prompt, and a prompt closes when a change elsewhere
+makes it unnecessary.
+
+### Tests
+
+`tests/app/top-ten.test.ts` covers adding, the full list, moves and removals,
+the Recommend lifecycle with and without the trigger, the migration's
+constraints, who sees a list, and the action route.
+`tests/app/title-suggestions.test.ts` covers the weights in both groups and
+under the minimum, `tests/app/friends-recommend.test.ts` covers the summed
+weights and ranks in Friends recommend, and `tests/app/title-page.test.ts`
+covers ranks in the friend line. `tests/browser/top-ten.spec.ts` covers the poster row, edit
+mode, adding, the full-list prompt, the confirmations, and the ranks beside
+friends' names at phone and desktop widths, auditing contrast in both color
+schemes.
 
 ## Scope boundary
 

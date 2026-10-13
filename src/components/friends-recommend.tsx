@@ -1,4 +1,5 @@
 "use client";
+import { Fragment } from "react";
 import { Link } from "./pending-navigation";
 import type {
   FriendsRecommendation,
@@ -38,22 +39,27 @@ type Activity = (
 const surface = "friends_recommend";
 
 // "Maya Chen", "Maya Chen and Sam Okafor", or "Maya Chen, Sam Okafor, and
-// Theo Park", with each name emphasized.
+// Theo Park", with each name emphasized. A friend's top 10 rank follows
+// their name, as in "Maya Chen (#1)".
 const list = new Intl.ListFormat("en", { type: "conjunction" });
 function Names({
   people,
 }: {
   people: FriendsRecommendation["recommended_by"];
 }) {
+  let person = 0;
   return list
-    .formatToParts(people.map((person) => person.display_name))
-    .map((part, index) =>
-      part.type === "element" ? (
-        <strong key={index}>{part.value}</strong>
-      ) : (
-        part.value
-      ),
-    );
+    .formatToParts(people.map((friend) => friend.display_name))
+    .map((part, index) => {
+      if (part.type !== "element") return part.value;
+      const { rank } = people[person++];
+      return (
+        <Fragment key={index}>
+          <strong>{part.value}</strong>
+          {rank && ` (#${rank})`}
+        </Fragment>
+      );
+    });
 }
 
 // One tap saves to Want to watch, and tapping again removes it. Another

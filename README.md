@@ -38,6 +38,11 @@ test flow, and [Testing Screenr](docs/testing.md) for the automated suites.
   title, a trailer, US viewing options under Subs and Free, and the title's
   feed in compact entries. Saved streaming services mark matching titles and
   enable a My services filter.
+- **Profile top 10:** Members rank up to 10 titles they recommend on their
+  profile, which every signed-in member who isn't blocked can see. Title pages
+  add titles, and the profile's edit mode reorders and removes them. Top 10
+  picks weigh more in suggestions and Friends recommend, and friends' ranks
+  appear beside their names.
 - **Watch statuses:** A title page's status menu sets one current status:
   Want to watch, Watching, Caught up (TV only), Finished, or Stopped watching,
   with an optional last-finished date. Watching through Stopped watching share
@@ -74,11 +79,9 @@ test flow, and [Testing Screenr](docs/testing.md) for the automated suites.
 
 ## Not built yet
 
-Remaining product features are tracked as
-[open feature issues](https://github.com/jubishop/screenr/issues?q=is%3Aissue%20state%3Aopen%20label%3Afeature):
-
-- A ranked top 10 on each profile
-  ([#99](https://github.com/jubishop/screenr/issues/99))
+Every feature in the product brief's initial scope has shipped. New
+features are tracked as
+[open feature issues](https://github.com/jubishop/screenr/issues?q=is%3Aissue%20state%3Aopen%20label%3Afeature).
 
 ## Stack and code map
 

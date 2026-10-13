@@ -42,9 +42,12 @@ export async function titleSuggestions(
       SELECT owner_id,title_id,'watching',activity_at FROM watch_progress
       WHERE active AND status IN ('watching','caught_up')
     ), signals AS (
-      SELECT a.title_id,a.action,a.activity_at,c.weight,p.username,p.display_name
+      SELECT a.title_id,a.action,a.activity_at,c.weight,p.username,p.display_name,
+        e.rank
       FROM actions a JOIN circle c ON c.user_id=a.owner_id
       LEFT JOIN profile p ON p.user_id=a.owner_id AND c.weight=3
+      LEFT JOIN top_ten e ON e.owner_id=a.owner_id AND e.title_id=a.title_id
+        AND a.action='recommended'
       WHERE NOT EXISTS (SELECT 1 FROM own WHERE own.title_id=a.title_id)
     ), sized AS (
       -- circle lists each person once, and feed_item and watch_progress hold
@@ -55,12 +58,16 @@ export async function titleSuggestions(
     ), qualified AS (
       SELECT * FROM sized WHERE weight=3 OR group_size>=$2
     ), totals AS (
+      -- Recommendations count in twentieths so top 10 weights stay exact:
+      -- 20 for a plain Recommend and 40 - rank for a top 10 one, which is
+      -- 1.5 times at #10 up to 1.95 times at #1. Only qualified groups
+      -- reach this point, so the minimum also governs the top 10 boost.
       SELECT title_id,max(activity_at) AS latest,
-        coalesce(sum(weight) FILTER (WHERE action='recommended'),0) AS recommendation_score,
+        coalesce(sum(weight*coalesce(40-rank,20)) FILTER (WHERE action='recommended'),0) AS recommendation_score,
         coalesce(sum(weight) FILTER (WHERE action='want_to_watch'),0) AS want_score,
         coalesce(sum(weight) FILTER (WHERE action='watching'),0) AS watching_score,
-        coalesce(jsonb_agg(jsonb_build_object('username',username,'display_name',display_name)
-          ORDER BY username) FILTER (WHERE weight=3 AND action='recommended'),'[]'::jsonb) AS recommended_by,
+        coalesce(jsonb_agg(jsonb_build_object('username',username,'display_name',display_name,'rank',rank)
+          ORDER BY rank NULLS LAST,username) FILTER (WHERE weight=3 AND action='recommended'),'[]'::jsonb) AS recommended_by,
         coalesce(jsonb_agg(jsonb_build_object('username',username,'display_name',display_name)
           ORDER BY username) FILTER (WHERE weight=3 AND action='want_to_watch'),'[]'::jsonb) AS wanted_by,
         coalesce(jsonb_agg(jsonb_build_object('username',username,'display_name',display_name)

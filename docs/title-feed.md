@@ -860,6 +860,17 @@ about a post has no title, so the preceding release links it to the actor's
 profile instead of the post. Posts and labels saved before a rollback reappear
 with this release.
 
+Migration `025-profile-top-ten.sql` adds the
+[profile top 10](profile-top-ten.md#storage-and-actions) table and changes no
+existing rows. The preceding release ignores the table, but its Recommend
+withdrawals and switches to Want to watch would leave entries for titles the
+owner no longer recommends. The `feed_item_leave_top_ten` trigger removes the
+entry and closes the gap when a Recommend turns off. This release removes it
+itself, so a later migration can drop the trigger once the preceding release
+does too ([#198](https://github.com/jubishop/screenr/issues/198)). Lists
+saved before a rollback reappear with this release. Take the normal
+pre-upgrade backup; no manual step is needed.
+
 ## Decisions deferred to future features
 
 - How edits to freeform comments affect existing items. Standalone comments

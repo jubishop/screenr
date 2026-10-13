@@ -491,6 +491,13 @@ test("a failed entry, comment, or title action shows its error beside that contr
     name: "Recommend to friends",
     exact: true,
   });
+  // The header's controls wrap onto more lines when they do not fit.
+  const titleControls = [
+    titleRecommend,
+    titleWant,
+    hero.getByRole("button", { name: "Add to top 10", exact: true }),
+    hero.getByRole("button", { name: "Rate or review", exact: true }),
+  ];
   await expect(titleWant).toBeEnabled();
   await failAction(reader, "watch-status", message);
   await press(titleWant);
@@ -502,7 +509,7 @@ test("a failed entry, comment, or title action shows its error beside that contr
     await expectErrorBeside(reader, {
       container: hero,
       failed: titleWant,
-      controls: [titleRecommend, titleWant],
+      controls: titleControls,
       message,
       screenshot: "action-error-title",
     });

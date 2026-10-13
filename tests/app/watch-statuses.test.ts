@@ -236,10 +236,12 @@ test("progress statuses replace Want to watch and coexist with Recommend", async
 // current status themselves.
 test("Want to watch replaces a progress status without a database trigger", async () => {
   const { alice } = await setup();
+  // The profile top 10 guard (#198) only removes top 10 entries.
   assert.deepEqual(
     (
       await db.query(
-        "SELECT tgname FROM pg_trigger WHERE tgrelid='feed_item'::regclass AND NOT tgisinternal",
+        `SELECT tgname FROM pg_trigger WHERE tgrelid='feed_item'::regclass
+        AND NOT tgisinternal AND tgname<>'feed_item_leave_top_ten'`,
       )
     ).rows,
     [],

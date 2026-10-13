@@ -18,6 +18,15 @@ export type Trailer = { key: string; name: string };
 // TMDB's seasons and episodes for a TV discussion post's label.
 export type Season = { number: number; name: string };
 export type Episode = { number: number; name: string };
+// An entry in a member's profile top 10 (docs/profile-top-ten.md): the
+// title's identity, public details, and rank, never the Recommend entry
+// behind it. db/025-profile-top-ten.sql enforces the limit.
+export type TopTenEntry = Pick<Title, "id" | "name" | "poster_path"> & {
+  rank: number;
+};
+export const topTenLimit = 10;
+export const topTenChanges = ["add", "remove", "up", "down"] as const;
+export type TopTenChange = (typeof topTenChanges)[number];
 export const codeLimitMessage =
   "Too many codes requested. Try again later, or continue with Google.";
 export const watchCategories = [
@@ -60,7 +69,11 @@ export type ViewingTitle<T extends Title = Title> = T & {
 };
 export type ViewingAccess = "available" | "unmatched" | "unknown";
 export type TitleSuggestion = Title & {
-  recommended_by: Pick<Person, "username" | "display_name">[];
+  // Direct friends who recommend the title, with their profile top 10 rank
+  // for it: top 10 recommenders first, best rank first, then by username.
+  recommended_by: (Pick<Person, "username" | "display_name"> & {
+    rank: number | null;
+  })[];
   wanted_by: Pick<Person, "username" | "display_name">[];
   // Direct friends Watching or Caught up.
   watching_by: Pick<Person, "username" | "display_name">[];
@@ -70,8 +83,11 @@ export type TitleSuggestion = Title & {
 };
 // A title that current direct friends recommend, for Friends recommend.
 export type FriendsRecommendation = Title & {
-  // Recommending friends, most recent recommendation first.
-  recommended_by: Pick<Person, "username" | "display_name">[];
+  // Recommending friends with their profile top 10 rank for the title: top
+  // 10 recommenders first, best rank first, then most recent first.
+  recommended_by: (Pick<Person, "username" | "display_name"> & {
+    rank: number | null;
+  })[];
   // The viewer's own current status and Recommend for the title.
   viewer_status: WatchStatus | null;
   viewer_recommended: boolean;
@@ -147,6 +163,8 @@ export type Conversation = {
   viewer_recommended: boolean;
   // The reader's own current status for the entry's title.
   viewer_status: WatchStatus | null;
+  // The entry's title's rank in the reader's own top 10.
+  viewer_top_ten_rank: number | null;
   username: string;
   display_name: string;
   photo: string | null;
@@ -174,9 +192,11 @@ export type Comment = {
   reactions: ReactionSummary[];
 };
 export type Thread = { conversation: Conversation; comments: Comment[] };
-// A friend's active Recommend or Want to watch entry on a title page.
+// A friend's active Recommend or Want to watch entry on a title page, with
+// the title's rank in that friend's top 10 for a Recommend.
 export type FriendAction = Pick<Person, "user_id" | "display_name"> & {
   item: string;
+  rank: number | null;
 };
 export type FriendActivity = {
   recommended: FriendAction[];

@@ -33,6 +33,7 @@ import { saveServices } from "./streaming-services";
 import {
   setFinishedDate,
   updateTitleActivity,
+  updateTopTen,
   updateWatchStatus,
 } from "./title-actions";
 import { findTitles } from "./title-viewing";
@@ -291,6 +292,22 @@ const actions: Record<string, Action> = {
   "remove-review": write({
     input: ({ title }) => id(title),
     run: (title, { userId }) => removeReview(userId, title),
+  }),
+  // `change` is add, remove, up, or down. Adding to a full list names the
+  // listed title to remove as `replace`.
+  "top-ten": write({
+    input: ({ title, change, replace }) => ({
+      title: id(title),
+      change,
+      replace,
+    }),
+    run: async ({ title, change, replace }, { userId }) =>
+      updateTopTen(
+        userId,
+        change === "add" ? await ensureTitle(title) : title,
+        change,
+        replace,
+      ),
   }),
   "title-comment": write({
     input: ({ title, body, spoiler, season, episode }) => ({

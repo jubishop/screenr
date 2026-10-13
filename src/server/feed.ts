@@ -68,6 +68,7 @@ export const itemQuery = `SELECT c.*,p.username,p.display_name,screenr_photo(p.u
   EXISTS (SELECT 1 FROM feed_item own WHERE own.owner_id=$1 AND own.title_id=c.title_id
     AND own.item_type='recommended' AND own.active) AS viewer_recommended,
   ${viewerStatus("c.title_id")} AS viewer_status,
+  (SELECT own.rank FROM top_ten own WHERE own.owner_id=$1 AND own.title_id=c.title_id) AS viewer_top_ten_rank,
   date_trunc('milliseconds', CASE WHEN c.item_type='earlier' THEN coalesce(replies.activity,replies.placeholder_activity,c.created_at)
     ELSE greatest(c.activity_at,coalesce(replies.activity,c.activity_at)) END) AS visible_activity,
   coalesce(replies.comments,'[]') AS comments,
@@ -123,24 +124,33 @@ export async function conversations(
 
 // The title page friend line comes from the viewer's title feed, so it lists
 // only current friends under the same audience and blocking checks. The
-// header already shows the viewer's own choice. Newest action first.
+// header already shows the viewer's own choice. Recommenders with the title
+// in their top 10 (`ranks`, by user ID) come first, best rank first; then
+// newest action first.
 export function friendActivity(
   viewer: string,
   items: FeedItem[],
+  ranks: Map<string, number>,
 ): FriendActivity {
-  const group = (type: "recommended" | "want_to_watch") =>
-    items
+  const time = (c: FeedItem) => new Date(c.activity_at).getTime();
+  const group = (type: "recommended" | "want_to_watch") => {
+    const rank = (c: FeedItem) =>
+      (type === "recommended" && ranks.get(c.owner_id)) || null;
+    return items
       .filter((c) => c.item_type === type && c.active && c.owner_id !== viewer)
       .sort(
         (a, b) =>
-          new Date(b.activity_at).getTime() -
-            new Date(a.activity_at).getTime() || a.id.localeCompare(b.id),
+          (rank(a) ?? Infinity) - (rank(b) ?? Infinity) ||
+          time(b) - time(a) ||
+          a.id.localeCompare(b.id),
       )
       .map((c) => ({
         item: c.id,
         user_id: c.owner_id,
         display_name: c.display_name,
+        rank: rank(c),
       }));
+  };
   return {
     recommended: group("recommended"),
     want_to_watch: group("want_to_watch"),

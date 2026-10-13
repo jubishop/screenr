@@ -260,6 +260,130 @@ a.person:hover strong {
 .invitation-created [role="status"] {
   margin-bottom: 0;
 }
+/* The profile top 10: a scrolling row of numbered posters beneath the
+   header, and a ranked list with move and remove controls while editing. */
+.top-ten {
+  margin-bottom: 28px;
+}
+.top-ten .section-heading {
+  margin-bottom: 10px;
+}
+.top-ten-edit-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+}
+.top-ten-edit-button .icon {
+  width: 16px;
+  height: 16px;
+}
+.top-ten-empty {
+  margin: 0;
+}
+/* The padding keeps focus rings inside the scrolling area. */
+.top-ten-row {
+  display: flex;
+  gap: 14px;
+  margin: 0 -6px;
+  padding: 6px 6px 8px;
+  list-style: none;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x proximity;
+  scroll-padding: 0 6px;
+}
+.top-ten-row li {
+  flex: none;
+  width: 104px;
+  scroll-snap-align: start;
+}
+.top-ten-row a {
+  display: block;
+}
+.top-ten-row a:focus-visible {
+  outline-offset: 2px;
+}
+.top-ten-row a:hover {
+  text-decoration: none;
+}
+.top-ten-row a:hover .top-ten-name {
+  text-decoration: underline;
+}
+.top-ten-poster {
+  position: relative;
+  display: block;
+}
+.top-ten-row .poster {
+  width: 104px;
+  height: 156px;
+}
+/* Rank numbers have their own fill, so they stay readable over any poster. */
+.top-ten-rank {
+  flex: none;
+  min-width: 32px;
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: var(--ink);
+  color: var(--surface);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 20px;
+  text-align: center;
+}
+.top-ten-poster .top-ten-rank {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+}
+.top-ten-name {
+  display: -webkit-box;
+  margin-top: 6px;
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+.top-ten-edit {
+  max-width: 560px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.top-ten-edit li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line);
+}
+.top-ten-edit .poster {
+  width: 40px;
+  height: 60px;
+  border-radius: 4px;
+}
+.top-ten-edit .poster > span {
+  font-size: 18px;
+}
+.top-ten-edit .top-ten-name {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  font-size: 14px;
+}
+.top-ten-controls {
+  display: flex;
+  flex: none;
+  gap: 2px;
+}
+.top-ten-controls .icon-button {
+  width: 44px;
+  height: 44px;
+}
 @media (max-width: 560px) {
   .profile-heading {
     --avatar-size: 56px;
@@ -279,5 +403,19 @@ a.person:hover strong {
   }
   .invite-form label {
     min-width: 120px;
+  }
+  .top-ten-row li {
+    width: 84px;
+  }
+  .top-ten-row .poster {
+    width: 84px;
+    height: 126px;
+  }
+  .top-ten-edit li {
+    gap: 8px;
+  }
+  .top-ten-controls .icon-button {
+    width: 40px;
+    height: 40px;
   }
 }

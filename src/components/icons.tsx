@@ -50,6 +50,16 @@ const icons = {
   chevron: <path d="m9 5 7 7-7 7" />,
   // A menu button that opens beneath it, such as the watch status.
   expand: <path d="m7 10 5 5 5-5" />,
+  // Profile top 10 editing: Edit, Move up, Move down, and Remove.
+  edit: (
+    <>
+      <path d="M4 20h4L19 9l-4-4L4 16v4Z" />
+      <path d="m13 7 4 4" />
+    </>
+  ),
+  up: <path d="M12 19V5m-6 6 6-6 6 6" />,
+  down: <path d="M12 5v14m-6-6 6 6 6-6" />,
+  remove: <path d="M6 6l12 12M18 6 6 18" />,
   // Placeholder avatar for a person who is not available.
   person: (
     <>

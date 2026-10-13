@@ -18,6 +18,7 @@ import { ConfirmAction } from "./confirmation";
 import { around, useRemovalFocus, type FocusTarget } from "./removal-focus";
 import { ReviewStars, reviewPhrase } from "./review";
 import { entryPath, memberPath } from "../member-routes";
+import { leavingTopTen } from "./top-ten";
 
 // A TV comment's label, such as "Season 2" or "Season 2, Episode 4".
 function discussionLabel(season: number, episode: number | null) {
@@ -251,9 +252,15 @@ function FeedEntry({
   }, [shown, item]);
   const [copying, setCopying] = useState(false);
   const [copyMessage, setCopyMessage] = useState("");
-  // Delete waits for its confirmation beneath the entry's action line.
-  const [confirming, setConfirming] = useState(false);
+  // Delete waits for its confirmation beneath the entry's action line, and so
+  // does a title action that would take the title out of the reader's top 10.
+  const [confirming, setConfirming] = useState<
+    "delete" | "recommended" | "want_to_watch" | null
+  >(null);
   const deleteButton = useRef<HTMLButtonElement>(null);
+  const wantButton = useRef<HTMLButtonElement>(null);
+  const recommendButton = useRef<HTMLButtonElement>(null);
+  const ranked = !!item?.viewer_recommended && !!item.viewer_top_ten_rank;
   const entry = useRef<HTMLElement>(null);
   const removal = useRemovalFocus();
   // Where focus goes when this entry's content leaves with its control: the
@@ -319,6 +326,18 @@ function FeedEntry({
     (deletable || item?.item_type === "review") && !!item && !item.active;
   const canDelete =
     deletable && !!item?.active && item.owner_id === user.user_id;
+  // Saving to Want to watch, or removing it, from a friend's entry.
+  const saveWantToWatch = async () => {
+    if (item && title)
+      await activity(
+        title.id,
+        "want_to_watch",
+        !item.viewer_want_to_watch,
+        item.item_type === "recommended" && item.active
+          ? "friend_recommendation"
+          : "friend_entry",
+      );
+  };
   // Compact title page entries leave the title actions to the page header
   // and move the copy link to the author line.
   const titleActions = item && (!compact || canDelete) && (
@@ -329,7 +348,7 @@ function FeedEntry({
           className="text-button muted"
           ref={deleteButton}
           disabled={!interactive}
-          onClick={() => setConfirming(true)}
+          onClick={() => setConfirming("delete")}
         >
           Delete
         </button>
@@ -344,22 +363,17 @@ function FeedEntry({
             </Link>
           ) : (
             <ActionButton
+              ref={wantButton}
               className="text-button"
               disabled={!interactive}
               unavailable={busy}
               aria-describedby={failure.describedBy("want_to_watch")}
-              onClick={() =>
-                void failure.run("want_to_watch", () =>
-                  activity(
-                    title.id,
-                    "want_to_watch",
-                    !item.viewer_want_to_watch,
-                    item.item_type === "recommended" && item.active
-                      ? "friend_recommendation"
-                      : "friend_entry",
-                  ),
-                )
-              }
+              onClick={() => {
+                if (ranked && !item.viewer_want_to_watch) {
+                  failure.clear();
+                  setConfirming("want_to_watch");
+                } else void failure.run("want_to_watch", saveWantToWatch);
+              }}
             >
               {item.viewer_want_to_watch
                 ? "✓ Want to watch"
@@ -367,15 +381,20 @@ function FeedEntry({
             </ActionButton>
           )}
           <ActionButton
+            ref={recommendButton}
             className="text-button"
             disabled={!interactive}
             unavailable={busy}
             aria-describedby={failure.describedBy("recommended")}
-            onClick={() =>
-              void failure.run("recommended", () =>
-                activity(title.id, "recommended", !item.viewer_recommended),
-              )
-            }
+            onClick={() => {
+              if (ranked) {
+                failure.clear();
+                setConfirming("recommended");
+              } else
+                void failure.run("recommended", () =>
+                  activity(title.id, "recommended", !item.viewer_recommended),
+                );
+            }}
           >
             {item.viewer_recommended ? "✓ Recommended" : "+ Recommend"}
           </ActionButton>
@@ -520,7 +539,7 @@ function FeedEntry({
             titleActions && <div className="item-actions">{titleActions}</div>
           )}
           {failure.alert}
-          {canDelete && confirming && (
+          {canDelete && confirming === "delete" && (
             <ConfirmAction
               message={`Delete this ${item.item_type === "post" ? "post" : "comment"}? Its text will be erased.`}
               action="Delete"
@@ -535,15 +554,49 @@ function FeedEntry({
                 await refresh();
               }}
               onDone={() => {
-                setConfirming(false);
+                setConfirming(null);
                 removal.done();
               }}
               onCancel={() => {
-                setConfirming(false);
+                setConfirming(null);
                 deleteButton.current?.focus();
               }}
             />
           )}
+          {/* Closes on its own once the title leaves the reader's top 10
+              elsewhere. Either way, focus returns to the action. */}
+          {(confirming === "recommended" || confirming === "want_to_watch") &&
+            ranked &&
+            title && (
+              <ConfirmAction
+                key={confirming}
+                {...leavingTopTen(
+                  confirming === "recommended" ? "withdraw" : "switch",
+                  title.name,
+                  item.viewer_top_ten_rank!,
+                )}
+                busy={busy}
+                run={async () => {
+                  if (confirming === "recommended")
+                    await activity(title.id, "recommended", false);
+                  else await saveWantToWatch();
+                }}
+                onDone={() => {
+                  setConfirming(null);
+                  (confirming === "recommended"
+                    ? recommendButton
+                    : wantButton
+                  ).current?.focus();
+                }}
+                onCancel={() => {
+                  setConfirming(null);
+                  (confirming === "recommended"
+                    ? recommendButton
+                    : wantButton
+                  ).current?.focus();
+                }}
+              />
+            )}
         </header>
       )}
       <ThreadView

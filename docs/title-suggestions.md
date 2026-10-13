@@ -284,6 +284,9 @@ behavior. It describes engineering choices, not additional interview answers.
 ### Ordering and presentation
 
 - Sort descending by `3 * direct_recommenders + second_degree_recommenders`,
+  where a
+  [top 10 Recommend](profile-top-ten.md#rank-based-weight--2026-10-12)
+  counts 1.5 at #10 up to 1.95 at #1,
   then `3 * direct_want_to_watch + second_degree_want_to_watch`, then
   `3 * direct_watching + second_degree_watching`, then the latest activation
   of an eligible, currently active action or Watching status. Second-degree
@@ -317,8 +320,10 @@ behavior. It describes engineering choices, not additional interview answers.
 It separates current direct friends from unique eligible second-degree
 people, then filters active actions and Watching or Caught up entries in
 `watch_progress`, drops titles the viewer has a current choice for, drops
-second-degree groups below the minimum, and aggregates the rest. It reads
-names only for direct-friend attribution. Its explicit response fields contain public title metadata,
+second-degree groups below the minimum, and aggregates the rest. It sums recommendations in twentieths: 20 for a plain
+Recommend or `40 - rank` for a profile top 10 one, times the group weight. It
+reads names only for direct-friend attribution, and each named recommender
+carries their top 10 rank, top 10 recommenders first. Its explicit response fields contain public title metadata,
 direct-friend names/usernames, and anonymous second-degree counts. Ranking scores, second-degree identities, and connecting paths are
 not returned. `src/server/screens.ts` includes these suggestions for `/search`
 with the [Friends recommend](interface-design.md#friends-recommend-as-a-find-a-title-tab--2026-10-12)
@@ -353,7 +358,7 @@ returning from a result restores its query and results
 ([#135](https://github.com/jubishop/screenr/issues/135)).
 
 `tests/app/title-suggestions.test.ts` exercises the public screen loader
-against PostgreSQL, including weighting, unique connections, current choices,
+against PostgreSQL, including weighting, top 10 weights, unique connections, current choices,
 blocking, the second-degree minimum, preserved discussions, 205 eligible
 titles, and watch statuses as sources, exclusions, and a ranking tier.
 Browser coverage in `tests/browser/title-suggestions.spec.ts` uses the real

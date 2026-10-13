@@ -345,6 +345,12 @@ recipients. A full run checks:
   fades in across the top at phone and desktop widths. The next screen's
   focused heading is not busy. Background refreshes show no bar, and reduced
   motion keeps it still.
+- The profile top 10 shows a scrolling row of numbered posters beneath the
+  header, and its edit mode moves and removes entries with focus following
+  them, at phone and desktop widths. Title pages add titles, replace one
+  through the full-list prompt, and confirm, like full feed entries, before a
+  top 10 title loses its Recommend. Ranks appear beside friends' names in the
+  friend line, suggestions, and Friends recommend.
 - Search and Watch together rows clamp descriptions to two lines and end in a
   chevron. Watch together prompts a viewer without saved services to save
   them on Account.
@@ -353,10 +359,10 @@ recipients. A full run checks:
   from title pages with the `friends_recommend` surface. Its tab survives
   searches, history, and reloads. It hides a title finished on its title
   page; Show finished keeps its state across tabs and starts off after a
-  reload. `tests/app/friends-recommend.test.ts` covers the order, the
-  current-friend audience, which actions count, the viewer's own status, the
-  response fields, and which titles the Finished filter hides, with its empty
-  messages.
+  reload. `tests/app/friends-recommend.test.ts` covers the order, top 10
+  weights, the current-friend audience, which actions count, the viewer's own
+  status, the response fields, and which titles the Finished filter hides,
+  with its empty messages.
 - Invitations can be created and revoked.
 - In both the light and dark color schemes, every visible text meets 4.5:1
   and only theme colors are painted. This covers sign-in, setup, credits, and

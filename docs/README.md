@@ -85,7 +85,8 @@ both memory and design documents.
 - [Usage telemetry](usage-telemetry.md): accepted storage, measure definitions,
   attribution, and reporting for issue #105, and their implementation.
 - [Profile top 10](profile-top-ten.md): accepted ranked list, rank-based
-  recommendation weight, and member-visible exception for issue #99.
+  recommendation weight, and member-visible exception for issue #99, and
+  their implementation.
 - [Application stack](application-stack.md): selected core stack, alternatives,
   tradeoffs, and implementation conventions.
 - [Development workflow](development-workflow.md): repository setup, the

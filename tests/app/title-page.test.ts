@@ -6,7 +6,8 @@ import { useDatabase, db, friend, person } from "./social-fixture";
 import type { FriendAction, FriendActivity } from "../../src/shared";
 const { loadScreen } = await import("../../src/server/screens");
 const { changeRelationship } = await import("../../src/server/relationships");
-const { updateTitleActivity } = await import("../../src/server/title-actions");
+const { updateTitleActivity, updateTopTen } =
+  await import("../../src/server/title-actions");
 const { createTitleComment } = await import("../../src/server/comments");
 const { TitleFriends } = await import("../../src/components/title-friends");
 
@@ -143,11 +144,47 @@ test("the title friend line follows the title feed's friendship and blocking rul
   ]);
 });
 
+test("the title friend line shows top 10 ranks, best first, then the rest newest first", async () => {
+  await titles();
+  const [viewer, maya, sam, theo, ana, kai] = await people(
+    "viewer",
+    "maya",
+    "sam",
+    "theo",
+    "ana",
+    "kai",
+  );
+  for (const id of [maya, sam, theo, ana, kai]) await friend(viewer, id);
+  await updateTitleActivity(maya, "movie:1", "recommended", true);
+  await updateTopTen(sam, "movie:2", "add");
+  await updateTopTen(sam, "movie:1", "add"); // #2
+  await updateTitleActivity(theo, "movie:1", "recommended", true);
+  await updateTopTen(ana, "movie:1", "add"); // #1
+  await updateTitleActivity(kai, "movie:1", "want_to_watch", true);
+  // The viewer's own top 10 does not add them to the line.
+  await updateTopTen(viewer, "movie:1", "add");
+  const ranks = (group: FriendAction[]) => group.map((f) => f.rank);
+  let line = await friendLine(viewer);
+  assert.deepEqual(line.recommended, ["ana", "sam", "theo", "maya"]);
+  assert.deepEqual(ranks(line.data.friends.recommended), [1, 2, null, null]);
+  assert.deepEqual(line.want_to_watch, ["kai"]);
+  assert.deepEqual(ranks(line.data.friends.want_to_watch), [null]);
+
+  // Leaving the list returns a friend to the newest-first order, and a rank
+  // follows its owner's list.
+  await updateTopTen(ana, "movie:1", "remove");
+  await updateTopTen(sam, "movie:2", "remove");
+  line = await friendLine(viewer);
+  assert.deepEqual(line.recommended, ["sam", "ana", "theo", "maya"]);
+  assert.deepEqual(ranks(line.data.friends.recommended), [1, null, null, null]);
+});
+
 const friendsNamed = (prefix: string, count: number): FriendAction[] =>
   Array.from({ length: count }, (_, index) => ({
     item: `${prefix}-${index}`,
     user_id: `${prefix}-user-${index}`,
     display_name: `${prefix.toUpperCase()}${index + 1}`,
+    rank: null,
   }));
 function render(activity: FriendActivity) {
   return renderToStaticMarkup(
@@ -189,4 +226,20 @@ test("the title friend line names up to three friends per group, then counts the
       ...friendsNamed("w", Math.min(wanted, 3)).map((f) => f.item),
     ]);
   }
+});
+
+test("the title friend line shows each recommender's top 10 rank beside their name", () => {
+  const markup = render({
+    recommended: [
+      { item: "a", user_id: "maya", display_name: "Maya Chen", rank: 1 },
+      { item: "b", user_id: "sam", display_name: "Sam Okafor", rank: null },
+    ],
+    want_to_watch: friendsNamed("w", 1),
+  });
+  assert.equal(
+    text(markup),
+    "Recommended by Maya Chen (#1) and Sam Okafor · W1 wants to watch",
+  );
+  // The link names the friend; the rank follows it.
+  assert.match(markup, /<a href="#item-a">Maya Chen<\/a> \(#1\)/);
 });

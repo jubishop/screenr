@@ -2,8 +2,14 @@ import { randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
 import { AppError, db, transaction } from "./db";
 import { viewerStatus } from "./feed";
-import type { ProgressStatus, SaveSurface, WatchStatus } from "../shared";
-import { progressStatuses, saveSurfaces } from "../shared";
+import { joinTopTen, leaveTopTen, moveInTopTen } from "./top-ten";
+import type {
+  ProgressStatus,
+  SaveSurface,
+  TopTenChange,
+  WatchStatus,
+} from "../shared";
+import { progressStatuses, saveSurfaces, topTenChanges } from "../shared";
 
 const pacificToday = "(now() AT TIME ZONE 'America/Los_Angeles')::date";
 
@@ -91,6 +97,34 @@ export async function updateWatchStatus(
         [viewer, titleId],
       );
     return row.id as string;
+  });
+}
+
+// Changes the member's profile top 10 (docs/profile-top-ten.md). Adding
+// recommends the title through the usual Recommend path, which clears Want
+// to watch; a full list needs `replace`, the listed title to remove, which
+// stays recommended. Removing keeps the Recommend. None of these changes
+// adds a feed entry or notification of its own.
+export async function updateTopTen(
+  viewer: string,
+  titleId: string,
+  change: unknown,
+  replace?: unknown,
+) {
+  if (
+    !topTenChanges.includes(change as TopTenChange) ||
+    (replace != null && typeof replace !== "string")
+  )
+    throw new AppError("Invalid top 10 change.");
+  await transaction(async (client) => {
+    if (change === "remove") await leaveTopTen(client, viewer, titleId);
+    else if (change === "up" || change === "down")
+      await moveInTopTen(client, viewer, titleId, change);
+    else {
+      await titleKind(client, titleId);
+      await joinTopTen(client, viewer, titleId, replace ?? null);
+      await setAction(client, viewer, titleId, "recommended", true);
+    }
   });
 }
 
@@ -200,6 +234,10 @@ async function setAction(
       [viewer, titleId, surface ?? null],
     );
   await anchor(client, viewer, titleId);
+  // A top 10 entry is a current Recommend, so withdrawing the Recommend, or
+  // switching to Want to watch, removes the entry and closes its gap.
+  if (field === "recommended" ? !value : value)
+    await leaveTopTen(client, viewer, titleId);
   // Recommend and Want to watch are exclusive. Withdraw the other entry
   // first so the unique active-action index holds; it keeps its replies
   // and activity date for a later switch back. Want to watch is also a

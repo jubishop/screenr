@@ -17,7 +17,8 @@ The [shared-feed implementation and migration](title-feed.md#shared-feed-impleme
 describe item identity, old-link redirects, and compatibility with the previous
 release. Shared reads and writes live in `src/server/` by area: `profiles.ts`,
 `relationships.ts`, `feed.ts` (the shared feed read path), `title-actions.ts`
-(Recommend and [watch statuses](title-feed.md#watch-progress-entries)),
+(Recommend, [watch statuses](title-feed.md#watch-progress-entries), and the
+[profile top 10](profile-top-ten.md#implementation) lifecycle), `top-ten.ts`,
 `reviews.ts` ([ratings and reviews](title-feed.md#reviews)), `comments.ts`,
 and `reactions.ts`. PostgreSQL functions
 `screenr_can_read` and `screenr_blocked` apply the same current relationship
@@ -171,6 +172,12 @@ direction, and counts only the visible people. Profile visibility and the
 friend list use one database snapshot. The list refreshes with the profile;
 viewing it does not grant access to private activity or pending requests.
 
+A profile's [top 10](profile-top-ten.md#reads-and-ranking) loads for every
+signed-in member who can see the profile, including nonfriends, with only
+title details and ranks. The Recommend entries behind it and their
+discussions keep the friends-only audience, and a blocked profile shows
+neither.
+
 The People page includes **People you may know**, based on two accepted
 friendships. Each suggestion lists all eligible mutual friends and links to
 their profiles. Suggestions exclude the viewer, existing friends, pending
@@ -194,12 +201,12 @@ statuses, comments, and the viewer's own Recommend count for nothing.
 
 Titles sort by the sum of each recommending friend's contribution, then the
 most recent active Recommend, then the title name and ID. Contributions use
-the [integer twentieths](profile-top-ten.md#ranking): each Recommend adds 20
-until the profile top 10
-([#99](https://github.com/jubishop/screenr/issues/99)) replaces a top 10
-Recommend's 20 with `40 - rank` and adds ranks beside names. Each title lists
-its friends' usernames and display names, most recent Recommend first, with
-the viewer's current status and whether the viewer recommends it. The
+the [integer twentieths](profile-top-ten.md#ranking): a Recommend adds 20, or
+`40 - rank` when it is in the friend's
+[profile top 10](profile-top-ten.md#reads-and-ranking). Each title lists its
+friends' usernames, display names, and top 10 ranks, top 10 recommenders
+first by rank and then the most recent Recommend first, with the viewer's
+current status and whether the viewer recommends it. The
 response holds no scores, feed item IDs, or account IDs. The viewer's
 statuses do not remove titles from the response. The view hides titles the
 viewer marked Finished from that status, so its Show finished switch

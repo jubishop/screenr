@@ -84,7 +84,7 @@ test("find a title suggests direct and anonymous second-degree choices before se
     ["movie:1", "tv:1"],
   );
   assert.deepEqual(result[0].recommended_by, [
-    { username: "ben", display_name: "ben" },
+    { username: "ben", display_name: "ben", rank: null },
   ]);
   assert.deepEqual(result[1].wanted_by, []);
   assert.equal(result[1].second_degree_wanted, 3);
@@ -150,7 +150,7 @@ test("suggestions rank recommendations first with 3:1 weights, distinct people, 
   assert.equal(result[0].recommended_by.length, 2);
   assert.equal(result[0].second_degree_recommended, 0);
   assert.deepEqual(result[2].recommended_by, [
-    { username: "ben", display_name: "ben" },
+    { username: "ben", display_name: "ben", rank: null },
   ]);
   assert.deepEqual(result[2].wanted_by, [
     { username: "cam", display_name: "cam" },
@@ -225,9 +225,122 @@ test("one or two friends of friends cannot qualify, rank, or label a title; thre
     [0, 3],
   ]);
   assert.deepEqual(result[2].recommended_by, [
-    { username: "ben", display_name: "ben" },
+    { username: "ben", display_name: "ben", rank: null },
   ]);
   for (const name of [dee, eli, fay, gia, hal])
+    assert.ok(!JSON.stringify(result).includes(`"${name}"`));
+});
+
+// Recommends a title and stores its rank in the owner's top 10 directly, so
+// a test can pick any rank. tests/app/top-ten.test.ts covers the list rules.
+async function rankIn(owner: string, id: string, rank: number) {
+  await updateTitleActivity(owner, id, "recommended", true);
+  await db.query(
+    "INSERT INTO top_ten(owner_id,title_id,rank) VALUES($1,$2,$3)",
+    [owner, id, rank],
+  );
+}
+
+test("top 10 Recommends count 1.5× at #10 up to 1.95× at #1 in groups that meet the minimum", async () => {
+  for (const name of ["alice", "ben", "cam", "dee"]) await person(name);
+  for (const name of ["ben", "cam", "dee"]) await friend("alice", name);
+  const [eve, fin, gus, hep, ivy] = await friendsOf(
+    "ben",
+    "eve",
+    "fin",
+    "gus",
+    "hep",
+    "ivy",
+  );
+  for (const [id, name] of [
+    [1, "A direct #1"],
+    [2, "B direct #10"],
+    [3, "C direct plain"],
+    [4, "D second-degree #1"],
+    [5, "E second-degree #2, #5, #10"],
+    [6, "F two second-degree #1"],
+    [7, "G second-degree plain"],
+    [8, "H direct mixed"],
+    [9, "I wanted"],
+  ] as const)
+    await title(`movie:${id}`, name);
+  // Scores in twentieths: a plain Recommend is 20 and #N is 40 - N, times
+  // 3 for a direct friend or 1 for a friend of a friend.
+  await rankIn("ben", "movie:1", 1); // 3 × 39 = 117
+  await rankIn("cam", "movie:2", 10); // 3 × 30 = 90
+  await updateTitleActivity("dee", "movie:3", "recommended", true); // 60
+  for (const name of [eve, fin, gus]) await rankIn(name, "movie:4", 1); // 117
+  await rankIn(eve, "movie:5", 2); // 38
+  await rankIn(fin, "movie:5", 5); // + 35
+  await rankIn(gus, "movie:5", 10); // + 30 = 103
+  // Two friends of friends are below the minimum, so their #1 boost is
+  // ignored with the rest of their signal: 60, not 60 + 78.
+  await updateTitleActivity("dee", "movie:6", "recommended", true);
+  for (const name of [hep, ivy]) await rankIn(name, "movie:6", 1);
+  for (const name of [eve, fin, gus])
+    await updateTitleActivity(name, "movie:7", "recommended", true); // 60
+  await updateTitleActivity("ben", "movie:8", "recommended", true);
+  await rankIn("cam", "movie:8", 3);
+  await rankIn("dee", "movie:8", 2); // 60 + 111 + 114 = 285
+  // Recommendation totals still come before Want to watch totals.
+  for (const name of ["ben", "cam", "dee"])
+    await updateTitleActivity(name, "movie:9", "want_to_watch", true);
+  await db.query("UPDATE feed_item SET activity_at='2026-01-01'");
+
+  const result = await suggestions();
+  // Equal scores fall back to the title name.
+  assert.deepEqual(
+    result.map((entry) => entry.id),
+    [8, 1, 4, 5, 2, 3, 6, 7, 9].map((n) => `movie:${n}`),
+  );
+  const byId = new Map(result.map((entry) => [entry.id, entry]));
+  // Direct friends carry their rank, top 10 first by rank, then by username.
+  assert.deepEqual(byId.get("movie:8")!.recommended_by, [
+    { username: "dee", display_name: "dee", rank: 2 },
+    { username: "cam", display_name: "cam", rank: 3 },
+    { username: "ben", display_name: "ben", rank: null },
+  ]);
+  assert.deepEqual(byId.get("movie:1")!.recommended_by, [
+    { username: "ben", display_name: "ben", rank: 1 },
+  ]);
+  assert.deepEqual(byId.get("movie:6")!.recommended_by, [
+    { username: "dee", display_name: "dee", rank: null },
+  ]);
+  // Second-degree counts stay plain counts, and nothing returns a score or
+  // a friend of a friend's rank.
+  assert.equal(byId.get("movie:4")!.second_degree_recommended, 3);
+  assert.equal(byId.get("movie:5")!.second_degree_recommended, 3);
+  assert.equal(byId.get("movie:6")!.second_degree_recommended, 0);
+  for (const entry of result) {
+    assert.deepEqual(Object.keys(entry).sort(), [
+      "id",
+      "kind",
+      "name",
+      "overview",
+      "poster_path",
+      "recommended_by",
+      "release_date",
+      "second_degree_recommended",
+      "second_degree_wanted",
+      "second_degree_watching",
+      "tmdb_id",
+      "viewing",
+      "wanted_by",
+      "watching_by",
+    ]);
+    for (const friend of entry.recommended_by)
+      assert.deepEqual(Object.keys(friend).sort(), [
+        "display_name",
+        "rank",
+        "username",
+      ]);
+    for (const friend of [...entry.wanted_by, ...entry.watching_by])
+      assert.deepEqual(Object.keys(friend).sort(), [
+        "display_name",
+        "username",
+      ]);
+  }
+  for (const name of [eve, fin, gus, hep, ivy])
     assert.ok(!JSON.stringify(result).includes(`"${name}"`));
 });
 

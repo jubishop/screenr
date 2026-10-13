@@ -33,12 +33,14 @@ function phrase(action: ReasonAction, singular: boolean, also: boolean) {
     : `${extra}${singular ? "wants" : "want"} to watch this`;
 }
 
+// Direct friends by name, recommenders with their top 10 rank, as in
+// "Maya Chen (#1)"; friends of friends only as a count.
 function Reason({
   people,
   secondDegree,
   action,
 }: {
-  people: TitleSuggestion["recommended_by"];
+  people: (TitleSuggestion["wanted_by"][number] & { rank?: number | null })[];
   secondDegree: number;
   action: ReasonAction;
 }) {
@@ -46,7 +48,12 @@ function Reason({
     <>
       {people.length > 0 && (
         <p>
-          {people.map((person) => person.display_name).join(", ")}{" "}
+          {people
+            .map(
+              (person) =>
+                person.display_name + (person.rank ? ` (#${person.rank})` : ""),
+            )
+            .join(", ")}{" "}
           {phrase(action, people.length === 1, false)}.
         </p>
       )}

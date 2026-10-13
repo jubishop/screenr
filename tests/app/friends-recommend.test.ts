@@ -8,7 +8,7 @@ const { loadScreen } = await import("../../src/server/screens");
 const { FriendsRecommend } =
   await import("../../src/components/friends-recommend");
 const { changeRelationship } = await import("../../src/server/relationships");
-const { updateTitleActivity, updateWatchStatus } =
+const { updateTitleActivity, updateWatchStatus, updateTopTen } =
   await import("../../src/server/title-actions");
 const { addComment, createTitleComment } =
   await import("../../src/server/comments");
@@ -101,7 +101,7 @@ test("Friends recommend sorts by recommending friends, then the most recent reco
       overview: "",
       poster_path: null,
       release_date: "",
-      recommended_by: [{ username: "ana", display_name: "ana" }],
+      recommended_by: [{ username: "ana", display_name: "ana", rank: null }],
       viewer_status: null,
       viewer_recommended: false,
       viewing: show.viewing,
@@ -117,6 +117,99 @@ test("Friends recommend sorts by recommending friends, then the most recent reco
     ["movie:4", ["theo"]],
     ["movie:2", ["theo"]],
   ]);
+});
+
+// Recommends a title and stores its rank in the owner's top 10 directly, so
+// a test can pick any rank. tests/app/top-ten.test.ts covers the list rules.
+async function rankIn(owner: string, title: string, rank: number) {
+  await recommend(owner, title);
+  await db.query(
+    "INSERT INTO top_ten(owner_id,title_id,rank) VALUES($1,$2,$3)",
+    [owner, title, rank],
+  );
+}
+
+test("Friends recommend sums top 10 weights, then the most recent recommendation, naming top 10 friends first by rank", async () => {
+  await titles(8);
+  const [viewer, maya, sam, theo, ana, kai] = await people(
+    "viewer",
+    "maya",
+    "sam",
+    "theo",
+    "ana",
+    "kai",
+  );
+  for (const id of [maya, sam, theo, ana, kai]) await friend(viewer, id);
+  // In twentieths: a plain Recommend is 20 and #N in a top 10 is 40 - N.
+  await rankIn(theo, "movie:2", 1);
+  await rankIn(ana, "movie:2", 10);
+  await recommend(sam, "movie:2"); // 39 + 30 + 20 = 89
+  for (const id of [maya, sam, kai]) await recommend(id, "movie:3"); // 60
+  for (const id of [maya, sam]) await recommend(id, "movie:1"); // 40
+  await rankIn(kai, "movie:4", 1); // 39
+  await rankIn(maya, "movie:5", 10); // 30
+  await recommend(sam, "movie:6"); // 20
+  await rankIn(theo, "movie:7", 5); // 35
+  await rankIn(kai, "movie:8", 5); // 35, and newer
+  await db.query(
+    `UPDATE feed_item SET activity_at=CASE WHEN title_id='movie:8'
+      THEN '2026-01-05'::timestamptz ELSE '2026-01-01'::timestamptz END`,
+  );
+  await db.query(
+    "UPDATE feed_item SET activity_at='2026-01-03' WHERE owner_id=$1 AND title_id='movie:2'",
+    [sam],
+  );
+
+  // Two top 10 picks outrank three plain Recommends, #1 outranks #10, and a
+  // plain Recommend comes last; equal sums fall back to the newer one.
+  assert.deepEqual(
+    (await recommendations(viewer)).map((title) => [
+      title.id,
+      title.recommended_by.map((friend) => [friend.display_name, friend.rank]),
+    ]),
+    [
+      [
+        "movie:2",
+        [
+          ["theo", 1],
+          ["ana", 10],
+          ["sam", null],
+        ],
+      ],
+      [
+        "movie:3",
+        [
+          ["kai", null],
+          ["maya", null],
+          ["sam", null],
+        ],
+      ],
+      [
+        "movie:1",
+        [
+          ["maya", null],
+          ["sam", null],
+        ],
+      ],
+      ["movie:4", [["kai", 1]]],
+      ["movie:8", [["kai", 5]]],
+      ["movie:7", [["theo", 5]]],
+      ["movie:5", [["maya", 10]]],
+      ["movie:6", [["sam", null]]],
+    ],
+  );
+  // A rank leaves with its place in the list.
+  await updateTopTen(theo, "movie:2", "remove");
+  const [first] = await recommendations(viewer);
+  assert.deepEqual(
+    first.recommended_by.map((friend) => [friend.display_name, friend.rank]),
+    [
+      ["ana", 10],
+      ["sam", null],
+      ["theo", null],
+    ],
+  );
+  assert.ok(!JSON.stringify(await recommendations(viewer)).includes("score"));
 });
 
 test("Friends recommend counts only current, unblocked direct friends", async () => {

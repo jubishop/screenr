@@ -3,10 +3,12 @@ import { viewerStatus } from "./feed";
 import type { FriendsRecommendation } from "../shared";
 
 // Titles that the viewer's current, unblocked direct friends actively
-// recommend. Scores use integer twentieths so rank weights stay exact: each
-// Recommend contributes 20 (docs/profile-top-ten.md#ranking). Ties break on
-// the most recent recommendation, then the title name and ID. The viewer's
-// own status and Recommend never hide a title.
+// recommend. Scores use integer twentieths so rank weights stay exact: a
+// Recommend contributes 20, or 40 - rank when it is in the friend's profile
+// top 10 (docs/profile-top-ten.md#ranking). Ties break on the most recent
+// recommendation, then the title name and ID. Friends with a top 10 rank are
+// named first, best rank first, then newest first. The viewer's own status
+// and Recommend never hide a title.
 export async function friendsRecommend(
   viewer: string,
 ): Promise<FriendsRecommendation[]> {
@@ -18,14 +20,16 @@ export async function friendsRecommend(
         AND NOT screenr_blocked(low_id,high_id)
     ), recommendations AS (
       -- feed_item holds at most one Recommend per person and title.
-      SELECT f.title_id,f.activity_at,20 AS contribution,p.username,p.display_name
+      SELECT f.title_id,f.activity_at,coalesce(40-e.rank,20) AS contribution,
+        e.rank,p.username,p.display_name
       FROM feed_item f JOIN direct_friends d ON d.user_id=f.owner_id
       JOIN profile p ON p.user_id=f.owner_id
+      LEFT JOIN top_ten e ON e.owner_id=f.owner_id AND e.title_id=f.title_id
       WHERE f.item_type='recommended' AND f.active
     ), totals AS (
       SELECT title_id,sum(contribution) AS score,max(activity_at) AS latest,
-        jsonb_agg(jsonb_build_object('username',username,'display_name',display_name)
-          ORDER BY activity_at DESC,username) AS recommended_by
+        jsonb_agg(jsonb_build_object('username',username,'display_name',display_name,'rank',rank)
+          ORDER BY rank NULLS LAST,activity_at DESC,username) AS recommended_by
       FROM recommendations GROUP BY title_id
     )
     SELECT jsonb_build_object(

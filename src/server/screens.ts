@@ -18,6 +18,7 @@ import { withViewingOptions } from "./title-viewing";
 import { activityEmail, unreadNotifications } from "./notifications";
 import { logFailure } from "./log";
 import { watchStatus } from "./title-actions";
+import { topTen, topTenRanks } from "./top-ten";
 import { parseMemberRoute, type MemberRoute } from "../member-routes";
 import type { Person, Title } from "../shared";
 
@@ -141,32 +142,44 @@ async function loadContent(userId: string, route: MemberRoute) {
     const { id } = route;
     // Catalog requests run together to fit the client's refresh deadline.
     const stored = getTitle(id);
-    const [title, threads, trailer, availability, watch] = await Promise.all([
-      stored,
-      conversations(userId, { title: id }),
-      getTitleTrailer(id, stored),
-      getTitleAvailability(id, Infinity, stored),
-      watchStatus(userId, id),
-    ]);
+    const [title, threads, trailer, availability, watch, own, ranks] =
+      await Promise.all([
+        stored,
+        conversations(userId, { title: id }),
+        getTitleTrailer(id, stored),
+        getTitleAvailability(id, Infinity, stored),
+        watchStatus(userId, id),
+        topTen(userId),
+        topTenRanks(id),
+      ]);
     return {
       kind: "title" as const,
       title,
       trailer,
       availability,
       watch,
+      // The viewer's own top 10, for its control and full-list prompt.
+      topTen: own,
       conversations: threads,
-      friends: friendActivity(userId, threads),
+      friends: friendActivity(userId, threads, ranks),
       ...linkTarget(threads, route),
     };
   }
   if (route.kind === "profile") {
     const profile = await profileFor(userId, route.username);
+    // The top 10 is visible to every member who can see the profile; the
+    // entries and discussions behind it stay friends-only.
+    const [list, entries] = await Promise.all([
+      topTen(profile.user_id),
+      profile.can_read
+        ? conversations(userId, { owner: profile.user_id })
+        : Promise.resolve([]),
+    ]);
     return {
       kind: "profile" as const,
       profile,
-      conversations: profile.can_read
-        ? await conversations(userId, { owner: profile.user_id })
-        : [],
+      topTen: list,
+      conversations: entries,
     };
   }
   if (route.kind === "conversation")

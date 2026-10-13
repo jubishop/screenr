@@ -205,7 +205,8 @@ ordinary link. The tabs are links in a navigation landmark, with
 `aria-current="page"` on the selected one, and searching hides them with the
 tab content.
 `src/components/friends-recommend.tsx` lists each title in the shared title
-card, with "Recommended by" and the friends' names, then one action beneath
+card, with "Recommended by" and the friends' names, each top 10 rank beside
+its name as in "Maya Chen (#1)", then one action beneath
 the card's link. The action is the feed's one-tap **+ Want to watch**, which
 reads **✓ Want to watch** and removes it on a second tap. A viewer with
 another status sees it instead, and a viewer who recommends the title sees
@@ -340,7 +341,9 @@ by A, B, C, and 2 more · D and E want to watch". Each name is an in-page link
 to the entry, which it scrolls to and focuses. When the entry is still
 waiting behind New activity, choosing the name shows the pending activity
 first. The line follows refreshes, so it can name a friend's new action
-before New activity is chosen.
+before New activity is chosen. [Issue #99](https://github.com/jubishop/screenr/issues/99)
+adds each recommender's top 10 rank, as in "Maya Chen (#1)", and lists top
+10 recommenders first by rank.
 
 ### Watch status button on title pages — 2026-10-12
 

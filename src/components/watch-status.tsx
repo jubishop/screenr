@@ -1,5 +1,12 @@
 "use client";
-import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
+import {
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type RefObject,
+} from "react";
 import type { ProgressStatus, WatchStatus } from "../shared";
 import { Icon } from "./icons";
 import { ActionButton } from "./action-button";
@@ -67,6 +74,7 @@ export function WatchStatusMenu({
   disabled,
   unavailable,
   describedBy,
+  buttonRef,
   onStatus,
   onDate,
 }: {
@@ -78,13 +86,16 @@ export function WatchStatusMenu({
   disabled: boolean;
   unavailable: boolean;
   describedBy?: string;
+  // Lets the page return focus to the button, such as after a confirmation.
+  buttonRef?: RefObject<HTMLButtonElement | null>;
   onStatus: (status: WatchStatus | null) => void;
   onDate: (date: string | null) => void;
 }) {
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState("");
   const start = useRef(0);
-  const button = useRef<HTMLButtonElement>(null);
+  const ownButton = useRef<HTMLButtonElement>(null);
+  const button = buttonRef ?? ownButton;
   const container = useRef<HTMLDivElement>(null);
   const panel = useRef<HTMLDivElement>(null);
   const menu = useRef<HTMLDivElement>(null);
