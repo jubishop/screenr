@@ -200,7 +200,7 @@ final class SettingsTests: XCTestCase {
     XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 10))
     for control in [
       app.switches["Email me about new activity"], app.buttons["Connect Apple"],
-      app.buttons["Send feedback"], app.buttons["Sign out"],
+      app.buttons["Send feedback"], app.buttons["Sign out"], app.buttons["Delete account"],
     ] {
       app.scrollTo(control)
     }
@@ -232,22 +232,24 @@ extension XCUIApplication {
   // The accessibility audit for Settings, its sheets, and Invite friends. On
   // the iOS 27 Simulator, the audit flags the system's grouped list text, such
   // as section headers, footers, and rows, as not scaling with Dynamic Type
-  // or as clipping, though it uses text styles; `testFitsTheLargestTextSize`
-  // checks those screens at the largest size instead. It also passes over
-  // contrast reports it cannot place or that the glass covers: failures with
-  // no element, which these long lists raise for rows sampled beneath the
+  // or as clipping, though it uses text styles, so it leaves out those two
+  // checks; `testFitsTheLargestTextSize` checks those screens at the largest
+  // size instead. Leaving them out also keeps the list still: the Dynamic
+  // Type check changes the text size, which scrolls a long list while the
+  // contrast check samples its colors. The audit passes over contrast
+  // reports it cannot place or that the glass covers: failures with no
+  // element, which these long lists raise for rows sampled beneath the
   // navigation bar's blur or the sheet's bottom edge, and failures on an
   // element beneath the navigation bar or the keyboard, or past the screen's
   // edge, as `performShellAudit` does. A failure on an element in view still
   // fails, once `performSettledAudit` has audited the settled screen again.
   @MainActor
   func performSettingsAudit() throws {
-    try performSettledAudit {
+    try performSettledAudit(for: .all.subtracting([.dynamicType, .textClipped])) {
       let screen = windows.firstMatch.frame
       let covers = glassCovers()
       return { issue in
         switch issue.auditType {
-        case .dynamicType, .textClipped: return true
         case .contrast:
           guard let frame = issue.element?.frame else { return true }
           return !screen.contains(frame) || covers.contains { $0.intersects(frame) }

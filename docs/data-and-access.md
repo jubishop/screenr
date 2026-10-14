@@ -676,8 +676,17 @@ app uses the same action
   then asks before deleting. Code requests count toward the usual
   [login-code limits](running-screenr.md#provider-configuration). The web
   ends on the sign-in page with "Your Screenr account was deleted."
-- **iPhone app:** it signs in again with any method, stores the new bearer
-  token, and sends the request with it. Success ends the session.
+- **iPhone app:** Delete account in You → Settings signs in again with an
+  email code to the account's address or a sign-in method connected to the
+  account, without an invitation. The app keeps the new bearer token only
+  when the sign-in response's `user.id` is the signed-in member, and sends
+  the request with it; a sign-in that reaches another account is signed out
+  again, so it can never delete that account. A confirmation then asks
+  before deleting. Success ends the session: the app removes its token and
+  any kept invitation from the Keychain, empties its caches, and returns to
+  sign-in with "Your Screenr account was deleted." A 403 asks for a new
+  sign-in, and the 503 keeps the confirmation to try again
+  ([Settings](../ios/README.md#account-deletion)).
 - **Apple:** deletion first calls `revokeAppleTokens`
   ([Apple tokens](#native-sign-in)). Apple requires revocation, and the
   tokens live in the rows deletion erases, so when Apple does not confirm,

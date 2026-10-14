@@ -22,12 +22,14 @@ enum SettingsEditor: Identifiable {
   case profile(ProfileEditorModel)
   case streamingServices(StreamingServicesModel)
   case feedback(FeedbackModel)
+  case deleteAccount(AccountDeletionModel)
 
   var id: ObjectIdentifier {
     switch self {
     case .profile(let model): ObjectIdentifier(model)
     case .streamingServices(let model): ObjectIdentifier(model)
     case .feedback(let model): ObjectIdentifier(model)
+    case .deleteAccount(let model): ObjectIdentifier(model)
     }
   }
 }

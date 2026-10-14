@@ -86,6 +86,113 @@ struct SessionTests {
     #expect(test.transport.requests.first?.url?.path() == "/api/screenr/delete-account")
     #expect(try test.keychain.read() == nil)
     #expect(test.session.phase == .signedOut)
+    #expect(test.session.ending == .accountDeleted)
+  }
+
+  // The sign-in screen says why the last session ended until the next
+  // sign-in.
+  @Test func remembersHowTheSessionEndedUntilTheNextSignIn() async throws {
+    let test = try TestClient(
+      token: "signed-token",
+      replies: [
+        try .json(200, ["success": true]),
+        try .json(200, ["token": "unsigned"], headers: ["set-auth-token": "next-token"]),
+      ]
+    )
+    #expect(test.session.ending == nil)
+
+    _ = try await test.client.send(.signOut)
+    #expect(test.session.ending == .signedOut)
+    _ = try await test.client.send(.signIn(email: "alice@example.test", code: "123456"))
+
+    #expect(test.session.ending == nil)
+  }
+
+  @Test func keepsTheNewTokenWhenASignInConfirmsTheSameMember() async throws {
+    let test = try TestClient(
+      token: "earlier-token",
+      replies: [
+        try .json(
+          200,
+          ["token": "unsigned", "user": ["id": "user-alice"]],
+          headers: ["set-auth-token": "fresh-token"]
+        )
+      ]
+    )
+    var ended = 0
+    test.session.onEnd { ended += 1 }
+
+    _ = try await test.client.send(
+      .signIn(email: "alice@example.test", code: "123456", invitation: "invite-1")
+        .confirming(userId: "user-alice")
+    )
+
+    #expect(try test.keychain.read() == "fresh-token")
+    #expect(test.session.phase == .signedIn)
+    #expect(ended == 0)
+    // Confirming an account never joins one.
+    #expect(test.header("Screenr-Invitation") == nil)
+  }
+
+  // Sign in with Apple or Google can reach a different account than the one
+  // signed in. Confirming the member keeps their session, and ends the other
+  // account's new session instead of leaving it behind.
+  @Test func keepsTheMembersSessionWhenASignInConfirmsAnotherAccount() async throws {
+    let test = try TestClient(
+      token: "member-token",
+      replies: [
+        try .json(
+          200,
+          ["redirect": false, "token": "unsigned", "user": ["id": "user-ben"]],
+          headers: ["set-auth-token": "other-token"]
+        ),
+        try .json(200, ["success": true]),
+      ]
+    )
+    var ended = 0
+    test.session.onEnd { ended += 1 }
+
+    let error = await #expect(throws: APIError.self) {
+      try await test.client.send(
+        .signInWithGoogle(idToken: "id-token", nonce: "nonce-1").confirming(userId: "user-alice")
+      )
+    }
+
+    #expect(error?.kind == .otherAccount)
+    #expect(
+      error?.explanation(otherwise: "")
+        == "That sign-in is for a different Screenr account. Use one of this account’s sign-in methods."
+    )
+    #expect(try test.keychain.read() == "member-token")
+    #expect(test.session.phase == .signedIn)
+    #expect(ended == 0)
+    #expect(
+      test.transport.requests.map { $0.url?.path() } == [
+        "/api/auth/sign-in/social", "/api/auth/sign-out",
+      ]
+    )
+    #expect(test.header("Authorization", request: 1) == "Bearer other-token")
+  }
+
+  // A sign-in that does not say whose it is cannot confirm the member.
+  @Test func keepsTheMembersSessionWhenASignInNamesNoOne() async throws {
+    let test = try TestClient(
+      token: "member-token",
+      replies: [
+        try .json(200, ["token": "unsigned"], headers: ["set-auth-token": "unknown-token"]),
+        try .json(200, ["success": true]),
+      ]
+    )
+
+    let error = await #expect(throws: APIError.self) {
+      try await test.client.send(
+        .signIn(email: "alice@example.test", code: "123456").confirming(userId: "user-alice")
+      )
+    }
+
+    #expect(error?.kind == .invalidResponse)
+    #expect(try test.keychain.read() == "member-token")
+    #expect(test.header("Authorization", request: 1) == "Bearer unknown-token")
   }
 
   @Test func keepsTheTokenWhenDeletionNeedsANewSignIn() async throws {

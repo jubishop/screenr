@@ -95,8 +95,17 @@ public enum SessionChange: Hashable, Sendable {
   case none
   // Stores the token from the `set-auth-token` header.
   case signIn
+  // A sign-in that confirms it's the signed-in member again, such as before
+  // deleting the account. It stores the new token only when the response
+  // names this user. A sign-in to another account, which Sign in with Apple
+  // or Google can reach, keeps the member's session, ends the other one, and
+  // fails with `otherAccount`.
+  case confirmSignIn(userId: String)
   // Removes the token the request sent.
   case signOut
+  // Removes the token, as signing out does, after deleting the account, and
+  // the session's `ending` says so.
+  case accountDeleted
 }
 
 // What a 401 response to a signed-in request means.

@@ -236,11 +236,13 @@ effective date in the same change. `src/app/privacy/page.tsx` holds the text.
 
 - **Operator:** the policy names Justin Bishop as the person who runs
   Screenr, with `screenr@jubishop.com` as the contact.
-- **Account deletion:** until members can
-  [delete their own account](#account-deletion--2026-10-13), the policy says
-  deletion is coming soon and asks them to email `screenr@jubishop.com`.
-  [Issue #236](https://github.com/jubishop/screenr/issues/236) updates that
-  section when self-service deletion ships.
+- **Account deletion:** until members could
+  [delete their own account](#account-deletion--2026-10-13), the policy said
+  deletion was coming soon and asked them to email `screenr@jubishop.com`.
+  [Issue #236](https://github.com/jubishop/screenr/issues/236) and
+  [issue #237](https://github.com/jubishop/screenr/issues/237) replaced that
+  with the website's and the iPhone app's deletion steps as each shipped;
+  email still works.
 - **Usage telemetry:** the policy describes the
   [usage measurement](usage-telemetry.md), although that decision added no
   notice inside the app.

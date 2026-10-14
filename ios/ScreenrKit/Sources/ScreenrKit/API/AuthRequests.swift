@@ -119,6 +119,24 @@ extension APIRequest where Response == Acknowledgement {
   }
 }
 
+extension APIRequest where Response == Acknowledgement {
+  // This sign-in, made to confirm it's the signed-in member again, such as
+  // before deleting the account: it sends no invitation, since confirming
+  // never joins, and keeps the new session only when it is `userId`'s.
+  public func confirming(userId: String) -> Self {
+    APIRequest(
+      method: method,
+      endpoint: endpoint,
+      query: query,
+      body: body,
+      sessionChange: .confirmSignIn(userId: userId),
+      visit: visit,
+      unauthorized: unauthorized,
+      route: route
+    )
+  }
+}
+
 extension APIRequest where Response == InvitationAvailability {
   // Whether an invitation link can still be used to join, asked when the app
   // opens one, since requesting a code answers the same either way. It works

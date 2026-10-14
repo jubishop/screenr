@@ -1,0 +1,16 @@
+{
+  "description": "Apple did not confirm revoking Sign in with Apple, so nothing was deleted, and the member can try again later.",
+  "viewer": "alice",
+  "request": {
+    "method": "POST",
+    "action": "delete-account",
+    "path": "/api/screenr/delete-account",
+    "body": {}
+  },
+  "response": {
+    "status": 503,
+    "body": {
+      "error": "Sign in with Apple could not be disconnected, so your account was not deleted. Please try again later."
+    }
+  }
+}

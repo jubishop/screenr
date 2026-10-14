@@ -28,7 +28,7 @@ struct AccountView: View {
           SignInMethodsSection(settings)
           FeedbackSection(settings)
           SignOutSection(settings)
-          // Delete account goes here.
+          DeleteAccountSection(settings)
         }
       }
     }
@@ -37,6 +37,7 @@ struct AccountView: View {
       case .profile(let model): ProfileEditorSheet(model: model)
       case .streamingServices(let model): StreamingServicesSheet(model: model)
       case .feedback(let model): FeedbackSheet(model: model)
+      case .deleteAccount(let model): AccountDeletionSheet(model: model)
       }
     }
   }

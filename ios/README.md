@@ -193,8 +193,11 @@ try await api.send(.comment(conversation: item.id, body: text, spoiler: false))
   marks a [visit](#visits) also sends `Screenr-Visit: 1`.
 - **Session:** a sign-in request stores the token from `set-auth-token` in
   the Keychain, and `.signOut` removes it, as does a successful
-  `.deleteAccount`. A 401 to a request that carried a token removes that
-  token, unless a newer one replaced it. Linking a sign-in method is the
+  `.deleteAccount`. `SessionStore.ending` then says how the session ended,
+  `.signedOut` or `.accountDeleted`, until the next sign-in. A sign-in made
+  `.confirming(userId:)` keeps its new token only when the response names
+  that user; see [account deletion](#account-deletion). A 401 to a request
+  that carried a token removes that token, unless a newer one replaced it. Linking a sign-in method is the
   exception: its request's `unauthorized` is `.rejectsCredential`, so a 401
   for the provider's token, such as `INVALID_TOKEN`, is
   `.rejected(status: 401)` and keeps the session. Only Better Auth's
@@ -262,7 +265,9 @@ avatars show initials.
 The signed-out screen, `Screenr/SignIn/SignInView.swift`, offers Sign in
 with Apple, Google, and an email code
 ([decision](../docs/ios-app.md#email-code-sign-in-with-apple-and-google--2026-10-13)).
-Its behavior lives in ScreenrKit's `SignIn/` folder:
+Those controls are `SignInControls`, which
+[account deletion](#account-deletion) reuses to confirm it's the member.
+Their behavior lives in ScreenrKit's `SignIn/` folder:
 
 | Piece | What it does |
 | --- | --- |
@@ -544,10 +549,12 @@ models.
 | Sign-in methods | `AccountLinkModel` | Connect Google runs the sign-in flow's PKCE code flow, and Sign in with Apple uses the system button; each posts the credential to `link-social`. Against the fixture API, both use the sign-in stubs. |
 | Feedback | `FeedbackModel` | Send feedback opens a sheet for a message and up to three screenshots, sent to Sentry with recent log tails; see [Feedback](#feedback). |
 | Sign out | `SignOutModel` | `SignOutButton`. |
+| Delete account | `AccountDeletionModel` | A sheet that confirms it's the member with a new sign-in, then deletes the account after a confirmation; see [account deletion](#account-deletion). |
 
 A new setting adds its section to `AccountView`'s list in one line, such as
 `PushSettingsSection(settings)`, at the comment that marks its place: push
-notification settings after Invitations, and Delete account last. A section that edits a draft opens its editor with
+notification settings after Invitations. Delete account stays last. A
+section that edits a draft opens its editor with
 `settings.open(_:)` after adding a case to `SettingsEditor`. `AccountView`
 presents those sheets outside `ScreenContent`, so a failed read, which
 replaces the sections with the error, keeps an open draft.
@@ -563,11 +570,12 @@ such as Remove photo, uses `.danger`, since the system's red falls short of
 and removing a photo, creating and revoking an invitation, connecting Sign in
 with Apple, sending feedback, and signing out. They check what each write sent in the fixture
 API's request log, since a screen read after a write still returns the
-fixture. Their `performSettingsAudit()` passes over reports the iOS 27
-Simulator raises for the system's list text: Dynamic Type and clipping for
-headers, footers, and rows, and contrast failures for rows beneath the
-navigation bar's blur or past the screen's edge, with or without an element,
-using the same `glassCovers()` as `performShellAudit()`.
+fixture. Their `performSettingsAudit()` leaves out the Dynamic Type and
+clipping checks, which the iOS 27 Simulator fails for the system's list text
+in headers, footers, and rows, and whose text size changes scroll a long list
+while the contrast check samples it. It passes over contrast failures for rows
+beneath the navigation bar's blur or past the screen's edge, with or without
+an element, using the same `glassCovers()` as `performShellAudit()`.
 `testFitsTheLargestTextSize` instead reaches every control at the largest
 accessibility text size. Both audits run through `performSettledAudit`: the
 audit samples colors from the screen, so text still moving after a swipe can
@@ -609,6 +617,43 @@ whose behavior is ScreenrKit's `FeedbackModel`, in `Feedback/`. It follows the
   screenshot and log tail attachments, the user ID with no name or email,
   and the release and dist. No test sends feedback to Sentry.
   `SettingsTests.testSendsFeedback` sends feedback against the fixture API.
+
+### Account deletion
+
+Delete account, last in Settings, follows the web's
+[account deletion](../docs/data-and-access.md#account-deletion). The server
+deletes only from a sign-in in the last ten minutes, so
+`AccountDeletionSheet` (`Screens/Settings/DeleteAccountSection.swift`) takes
+three steps, which `AccountDeletionModel` (ScreenrKit `Settings/`) tracks:
+
+1. **Confirm it's you:** the sign-in screen's `SignInControls`
+   (`Screenr/SignIn/`), driven by a `SignInModel` made with
+   `confirming: MemberConfirmation`. It offers only the account's methods:
+   an email code to the account's address, which cannot change, and Apple
+   or Google when they are connected. It sends no invitation, and each
+   sign-in is `.confirming(userId:)`: the client keeps the new token only
+   when Better Auth's response names the signed-in member. A sign-in that
+   reaches another account, which Sign in with Apple or Google can, fails
+   with `APIError.Kind.otherAccount`, keeps the member's session, and signs
+   the other account's new session out.
+2. **Confirm the deletion:** Delete my account opens a confirmation dialog,
+   which iOS 27 shows as a popover.
+3. **Delete:** `.deleteAccount` ends the session with `ending`
+   `.accountDeleted`. The client removes the token and its screen cache, and
+   the `SessionStore.onEnd` handlers empty the image cache, forget any kept
+   invitation, clear the error-reporting user, and reset the shell. Sign-in
+   then says "Your Screenr account was deleted." The server erases the
+   account's push devices with its sessions. The app does not register for
+   push yet; when it does, its registration forgets its own state in an
+   `onEnd` handler.
+
+A 403, a sign-in more than ten minutes old, returns to step 1 with the
+server's message. Any other failure, such as the 503 when Sign in with Apple
+could not be disconnected, keeps step 2 with its message, so the member can
+try again. `AccountDeletionModelTests` cover the steps against canned
+replies and the fixture API, and `AccountDeletionTests` take the journeys
+with the `actions/delete-account` fixtures: success, `stale-sign-in`, and
+`apple-unavailable`.
 
 ## Conversations
 

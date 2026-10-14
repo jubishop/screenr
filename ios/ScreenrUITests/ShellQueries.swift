@@ -61,14 +61,15 @@ extension XCUIApplication {
   // swipe, can fail contrast, and a busy Mac can run the audit out of time.
   // After such a failure, the screen settles and the audit runs once more
   // with a new handler, and only a second failure fails the test, so a real
-  // problem, which fails both times, still does.
+  // problem, which fails both times, still does. `types` limits the audit.
   func performSettledAudit(
+    for types: XCUIAccessibilityAuditType = .all,
     expecting: () throws -> (XCUIAccessibilityAuditIssue) -> Bool
   ) throws {
     var failed = false
     do {
       let isExpected = try expecting()
-      try performAccessibilityAudit { issue in
+      try performAccessibilityAudit(for: types) { issue in
         if !isExpected(issue) { failed = true }
         return true
       }
@@ -80,7 +81,7 @@ extension XCUIApplication {
       let settled = XCTestExpectation(description: "The screen settles")
       settled.isInverted = true
       _ = XCTWaiter.wait(for: [settled], timeout: 2)
-      try performAccessibilityAudit(try expecting())
+      try performAccessibilityAudit(for: types, try expecting())
     }
   }
 

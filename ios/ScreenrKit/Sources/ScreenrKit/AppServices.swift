@@ -58,6 +58,11 @@ public struct AppServices: Sendable {
     self.trailers = trailers
     imageSession = URLSession(configuration: Self.imageConfiguration(cache: imageCache))
     session.onEnd { imageCache.removeAllCachedResponses() }
+    // A deleted account leaves nothing in the Keychain. The client removed
+    // the session token, and an invitation link kept for joining goes too.
+    session.onEnd { [weak session] in
+      if session?.ending == .accountDeleted { invitation.finish() }
+    }
   }
 
   // The live client and Keychain session and invitation, or in Screenr Dev,

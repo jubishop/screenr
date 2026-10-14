@@ -10,6 +10,7 @@ import {
   friend,
   bearerFor,
   cookieFor,
+  signIn,
   assertRouteError,
   captureFailures,
   denied,
@@ -571,6 +572,32 @@ test("deletion needs a sign-in from the last ten minutes", async () => {
     Cookie: await cookieFor(departing),
     Origin: origin,
   });
+  assert.equal(response.status, 200, await response.clone().text());
+  assert.deepEqual(await references(departing), []);
+});
+
+test("the iPhone app signs in again while signed in, then deletes with the new token", async () => {
+  const departing = await person("departing");
+  const stale = await bearer(departing);
+  await db.query(
+    `UPDATE session SET "createdAt"=now()-interval '11 minutes' WHERE "userId"=$1`,
+    [departing],
+  );
+  await assertRouteError(await deleteAccount(stale), {
+    status: 403,
+    message:
+      "To delete your account, confirm it’s you again with a new sign-in.",
+  });
+
+  // The app sends its bearer token, and no Origin, with the new sign-in. The
+  // response names the member, which the app checks before keeping the new
+  // token, so a sign-in to another account can never delete that one.
+  const confirmed = await signIn(departing, stale);
+  assert.equal((await confirmed.json()).user.id, departing);
+  const token = confirmed.headers.get("set-auth-token");
+  assert.ok(token);
+
+  const response = await deleteAccount({ Authorization: `Bearer ${token}` });
   assert.equal(response.status, 200, await response.clone().text());
   assert.deepEqual(await references(departing), []);
 });
