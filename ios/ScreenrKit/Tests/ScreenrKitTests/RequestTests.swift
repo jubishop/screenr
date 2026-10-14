@@ -27,6 +27,14 @@ struct RequestTests {
 
   static let shapes: [Shape] = [
     Shape("actions/activity-email/default", .activityEmail(enabled: false)),
+    Shape(
+      "auth/email-otp/send-verification-otp/rate-limited",
+      .sendCode(email: "alice@example.test")
+    ),
+    Shape(
+      "auth/sign-in/email-otp/invalid-code",
+      .signIn(email: "alice@example.test", code: "000000")
+    ),
     Shape("actions/activity/recommend", .activity(title: "movie:105", .recommended, value: true)),
     Shape(
       "actions/activity/want-to-watch",
@@ -149,7 +157,8 @@ struct RequestTests {
     let recorded = try Fixture(name: shape.fixture, data: data).request
 
     #expect(shape.method == recorded.method)
-    #expect(shape.endpoint == .action(recorded.action))
+    let auth = shape.fixture.hasPrefix("auth/")
+    #expect(shape.endpoint == (auth ? .auth(recorded.action) : .action(recorded.action)))
     switch shape.body {
     case .json(let body): #expect(body == recorded.body)
     case .upload(let data, let contentType):

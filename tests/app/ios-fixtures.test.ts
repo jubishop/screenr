@@ -30,6 +30,7 @@ const { readVersion } = await import("../../src/server/screens");
 const { parseMemberRoute } = await import("../../src/member-routes");
 const { migrate } = await import("../../scripts/migrate");
 const { updateTopTen } = await import("../../src/server/title-actions");
+const { createAuth } = await import("../../src/server/auth");
 
 type Query = Record<string, string | string[]>;
 type Body = Record<string, unknown>;
@@ -799,6 +800,134 @@ const errors: Record<string, Case> = {
   },
 };
 
+// Better Auth's sign-in errors, which the app shows as the server words them.
+// Each case starts from the saved world, with the request limits on and no
+// requests counted yet. `before` sends the requests that lead up to the
+// recorded one, through the same auth instance; `codes` holds the codes it
+// emailed.
+type AuthPost = (
+  path: string,
+  body: Body,
+  headers?: Record<string, string>,
+) => Promise<Response>;
+type AuthCase = {
+  description: string;
+  status: number;
+  body: Body;
+  before?: (post: AuthPost, codes: string[]) => Promise<void>;
+};
+const signInCode = { email: "alice@example.test", type: "sign-in" };
+const requestCodes = async (post: AuthPost, emails: string[], ip?: number) => {
+  for (const [index, email] of emails.entries())
+    assert.equal(
+      (
+        await post(
+          "email-otp/send-verification-otp",
+          { email, type: "sign-in" },
+          // A client address per request keeps the per-IP limit out of a
+          // per-address case.
+          ip === undefined
+            ? {}
+            : { "X-Forwarded-For": `192.0.2.${ip + index}` },
+        )
+      ).status,
+      200,
+    );
+};
+const authErrors: Record<string, Record<string, AuthCase>> = {
+  "email-otp/send-verification-otp": {
+    "rate-limited": {
+      description:
+        "A fourth code request for one address within 15 minutes is refused, with Screenr's message.",
+      status: 429,
+      body: signInCode,
+      before: (post) => requestCodes(post, Array(3).fill(signInCode.email), 10),
+    },
+    "too-many-requests": {
+      description:
+        "A fourth code request from one client within a minute is refused, with Better Auth's message.",
+      status: 429,
+      body: signInCode,
+      before: (post) =>
+        requestCodes(
+          post,
+          ["ben", "cam", "dana"].map((name) => `${name}@example.test`),
+        ),
+    },
+  },
+  "sign-in/email-otp": {
+    "invalid-code": {
+      description: "A code that does not match the address's code.",
+      status: 400,
+      body: { email: "alice@example.test", otp: "000000" },
+    },
+    "too-many-attempts": {
+      description:
+        "After five wrong codes, even the right code is refused until the member requests a new one.",
+      status: 403,
+      body: { email: "alice@example.test", otp: "000000" },
+      before: async (post, codes) => {
+        await requestCodes(post, [signInCode.email]);
+        const wrong = codes.at(-1) === "000000" ? "111111" : "000000";
+        for (let attempt = 0; attempt < 5; attempt++)
+          assert.equal(
+            (
+              await post("sign-in/email-otp", {
+                email: "alice@example.test",
+                otp: wrong,
+              })
+            ).status,
+            400,
+          );
+      },
+    },
+  },
+};
+
+async function recordAuth(file: string, path: string, item: AuthCase) {
+  const codes: string[] = [];
+  const auth = createAuth({
+    sendCode: async ({ otp }) => {
+      codes.push(otp);
+    },
+  });
+  // Like the app, without a cookie or Origin.
+  const post: AuthPost = (path, body, headers) =>
+    auth.handler(
+      new Request(`${origin}/api/auth/${path}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...headers },
+        body: JSON.stringify(body),
+      }),
+    );
+  // The world's own sign-ins used up shared request limits.
+  await db.query('TRUNCATE "rateLimit", login_code_request');
+  await item.before?.(post, codes);
+  const response = await post(path, item.body);
+  const text = await response.text();
+  assert.equal(response.status, item.status, `${file} responded ${text}`);
+  const fixture: Fixture = world.placeholders.scrub({
+    description: item.description,
+    viewer: null,
+    request: {
+      method: "POST",
+      action: path,
+      path: `/api/auth/${path}`,
+      body: item.body,
+    },
+    response: { status: response.status, body: JSON.parse(text) },
+  });
+  await verifyFixture(file, fixture);
+}
+
+const authCases = Object.entries(authErrors).flatMap(([path, variants]) =>
+  Object.entries(variants).map(([name, item]): [string, string, AuthCase] => [
+    `auth/${path}/${name}.json`,
+    path,
+    item,
+  ]),
+);
+
 const cases: [string, Case][] = [
   ...Object.entries(screens).flatMap(([kind, variants]) =>
     Object.entries(variants).map(([name, item]): [string, Case] => [
@@ -908,6 +1037,11 @@ for (const [file, item] of cases.filter(([, item]) => item.method === "POST"))
     await saved.restore();
     await record(file, item, world);
   });
+for (const [file, path, item] of authCases)
+  test(file, async () => {
+    await saved.restore();
+    await recordAuth(file, path, item);
+  });
 
 // The case tables' types require an entry for each route kind and action.
 test("every screen route and action has a fixture case", () => {
@@ -919,4 +1053,6 @@ test("every screen route and action has a fixture case", () => {
 });
 
 test("every iPhone fixture has a case", () =>
-  verifyNoStaleFixtures(new Set(cases.map(([file]) => file))));
+  verifyNoStaleFixtures(
+    new Set([...cases, ...authCases].map(([file]) => file)),
+  ));

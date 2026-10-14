@@ -1,0 +1,19 @@
+{
+  "description": "A fourth code request for one address within 15 minutes is refused, with Screenr's message.",
+  "viewer": null,
+  "request": {
+    "method": "POST",
+    "action": "email-otp/send-verification-otp",
+    "path": "/api/auth/email-otp/send-verification-otp",
+    "body": {
+      "email": "alice@example.test",
+      "type": "sign-in"
+    }
+  },
+  "response": {
+    "status": 429,
+    "body": {
+      "message": "Too many codes requested. Try again later, or continue with Google."
+    }
+  }
+}

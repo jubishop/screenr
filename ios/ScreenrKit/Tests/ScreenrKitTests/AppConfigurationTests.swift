@@ -7,6 +7,7 @@ struct AppConfigurationTests {
     "ScreenrVariant": "dev",
     "ScreenrServerURL": "http://localhost:3000",
     "ScreenrAppGroup": "group.com.artisanalsoftware.Screenr.dev",
+    "ScreenrGoogleClientID": "1083-abc.apps.googleusercontent.com",
     "CFBundleShortVersionString": "1.0",
     "CFBundleVersion": "7",
   ]
@@ -17,6 +18,7 @@ struct AppConfigurationTests {
     #expect(configuration.variant == .dev)
     #expect(configuration.serverURL.absoluteString == "http://localhost:3000")
     #expect(configuration.appGroup == "group.com.artisanalsoftware.Screenr.dev")
+    #expect(configuration.googleClientID == "1083-abc.apps.googleusercontent.com")
     #expect(configuration.version == "1.0")
     #expect(configuration.build == "7")
   }
@@ -46,8 +48,8 @@ struct AppConfigurationTests {
   }
 
   @Test(arguments: [
-    "ScreenrVariant", "ScreenrServerURL", "ScreenrAppGroup", "CFBundleShortVersionString",
-    "CFBundleVersion",
+    "ScreenrVariant", "ScreenrServerURL", "ScreenrAppGroup", "ScreenrGoogleClientID",
+    "CFBundleShortVersionString", "CFBundleVersion",
   ])
   func reportsAMissingValue(key: String) {
     var info = dev
@@ -62,6 +64,10 @@ struct AppConfigurationTests {
     ("ScreenrVariant", "staging"),
     ("ScreenrServerURL", "localhost"),
     ("ScreenrAppGroup", ""),
+    ("ScreenrGoogleClientID", ""),
+    ("ScreenrGoogleClientID", ".apps.googleusercontent.com"),
+    ("ScreenrGoogleClientID", "1083-abc"),
+    ("ScreenrGoogleClientID", "1083 abc.apps.googleusercontent.com"),
     ("CFBundleShortVersionString", ""),
     ("CFBundleShortVersionString", "1.0 beta"),
     ("CFBundleVersion", "1.2"),

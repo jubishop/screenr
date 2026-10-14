@@ -46,7 +46,11 @@ public struct FixtureScenario: Hashable, Sendable {
 //   as overrides or the failure.
 // - A fixture's ETag in `If-None-Match` gets 304, as on the server.
 // - Better Auth's routes succeed: requesting a code, signing in, which returns
-//   `FixtureTransport.token` in `set-auth-token`, and signing out.
+//   `FixtureTransport.token` in `set-auth-token`, and signing out. An `auth/`
+//   override answers its route instead, such as
+//   `auth/email-otp/send-verification-otp/rate-limited`. Apple and Google
+//   sign-in accept only `FixtureIdentity`'s stub credentials.
+// - Google's token endpoint redeems `FixtureWebAuthenticator`'s stub codes.
 public struct FixtureTransport: HTTPTransport {
   public static let token = "fixture-session"
 
@@ -66,9 +70,10 @@ public struct FixtureTransport: HTTPTransport {
 
   public func send(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {
     guard let url = request.url else { throw URLError(.badURL) }
+    if url.host() == GoogleSignIn.tokenHost { return try googleToken(request, url: url) }
     let path = url.path()
     if path.hasPrefix("/api/auth/") {
-      return try auth(String(path.dropFirst("/api/auth/".count)), url: url)
+      return try auth(String(path.dropFirst("/api/auth/".count)), request: request, url: url)
     }
     guard path.hasPrefix("/api/screenr/") else {
       return try reply(url: url, status: 404, body: ["error": "Not found."])
@@ -118,7 +123,7 @@ public struct FixtureTransport: HTTPTransport {
       body = Self.json(request)
     }
 
-    private static func json(_ request: URLRequest) -> JSONValue? {
+    static func json(_ request: URLRequest) -> JSONValue? {
       guard let data = request.httpBody,
         request.value(forHTTPHeaderField: "Content-Type") == "application/json"
       else { return nil }
@@ -186,7 +191,8 @@ public struct FixtureTransport: HTTPTransport {
   // Shared errors, such as a missing profile, and requests with extra headers,
   // such as an old build's, answer only as overrides or the scenario's failure.
   private static func answersAnyRequest(_ fixture: Fixture) -> Bool {
-    !fixture.name.hasPrefix("errors/") && fixture.request.headers == nil
+    !fixture.name.hasPrefix("errors/") && !fixture.name.hasPrefix("auth/")
+      && fixture.request.headers == nil
   }
 
   private static func pathname(_ path: String?) -> Substring? {
@@ -199,10 +205,25 @@ public struct FixtureTransport: HTTPTransport {
     return fixtures.first { $0.name == name }
   }
 
-  private func auth(_ route: String, url: URL) throws -> (Data, HTTPURLResponse) {
+  private func auth(
+    _ route: String,
+    request: URLRequest,
+    url: URL
+  ) throws -> (Data, HTTPURLResponse) {
+    let override = fixtures.first { fixture in
+      fixture.name.hasPrefix("auth/") && fixture.request.action == route
+        && scenario.overrides.contains(fixture.name)
+    }
+    if let override { return try reply(url: url, fixture: override, requestID: nil) }
     switch route {
     case "email-otp/send-verification-otp", "sign-out":
       return try reply(url: url, status: 200, body: ["success": true])
+    case "sign-in/social" where !FixtureIdentity.accepts(Incoming.json(request)):
+      return try reply(
+        url: url,
+        status: 401,
+        body: ["code": "INVALID_TOKEN", "message": "Invalid token"]
+      )
     case "sign-in/email-otp", "sign-in/social":
       return try reply(
         url: url,
@@ -215,6 +236,28 @@ public struct FixtureTransport: HTTPTransport {
     default:
       return try reply(url: url, status: 404, body: ["message": "Not found"])
     }
+  }
+
+  private func googleToken(_ request: URLRequest, url: URL) throws -> (Data, HTTPURLResponse) {
+    let form = FormEncoding.decode(String(decoding: request.httpBody ?? Data(), as: UTF8.self))
+    guard request.httpMethod == "POST", url.path() == "/token",
+      let idToken = FixtureIdentity.redeem(form)
+    else {
+      return try reply(
+        url: url,
+        status: 400,
+        body: ["error": "invalid_grant", "error_description": "Bad Request"]
+      )
+    }
+    return try reply(
+      url: url,
+      status: 200,
+      body: [
+        "access_token": "fixture-google-access", "expires_in": 3599,
+        "id_token": .string(idToken), "scope": .string(GoogleSignIn.scopes),
+        "token_type": "Bearer",
+      ]
+    )
   }
 
   private func reply(

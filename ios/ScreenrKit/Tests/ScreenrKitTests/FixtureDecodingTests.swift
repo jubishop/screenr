@@ -85,7 +85,8 @@ struct FixtureDecodingTests {
     }
     guard (200..<300).contains(status) else {
       let error = try Self.decodeBody(ErrorBody.self, from: data)
-      #expect(error.error?.isEmpty == false)
+      // Screenr's errors name an `error`; Better Auth's, a `message`.
+      #expect((error.error ?? error.message)?.isEmpty == false)
       return
     }
     let model = try #require(
@@ -309,6 +310,22 @@ struct FixtureDecodingTests {
       from: try Self.data("errors/update-required")
     )
     #expect(outdated.minimumBuild == 42)
+  }
+
+  @Test func readsSignInErrors() throws {
+    let limited = try Self.decodeBody(
+      ErrorBody.self,
+      from: try Self.data("auth/email-otp/send-verification-otp/rate-limited")
+    )
+    #expect(
+      limited.message == "Too many codes requested. Try again later, or continue with Google."
+    )
+    let attempts = try Self.decodeBody(
+      ErrorBody.self,
+      from: try Self.data("auth/sign-in/email-otp/too-many-attempts")
+    )
+    #expect(attempts.code == "TOO_MANY_ATTEMPTS")
+    #expect(attempts.message == "Too many attempts")
   }
 
   // Both timestamp forms in the fixtures name this instant.

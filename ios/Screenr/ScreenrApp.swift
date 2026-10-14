@@ -39,11 +39,13 @@ struct ScreenrApp: App {
     } catch {
       fatalError("Screenr could not start its API client: \(error)")
     }
+    // Error reports stop naming the member once the session ends.
+    services.session.onEnd { telemetry.signOut() }
   }
 
   var body: some Scene {
     WindowGroup {
-      WordmarkView()
+      AppRoot()
         .screenrServices(services)
     }
   }

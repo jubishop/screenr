@@ -153,10 +153,10 @@ try await api.send(.comment(conversation: item.id, body: text, spoiler: false))
 | `APIRequest<Response>` | `API/MemberRequests.swift`, `API/AuthRequests.swift` | One static function per action, such as `.screen(path:)`, `.topTen(title:_:)`, `.signIn(email:code:)`, and `.signOut`. |
 | `SessionStore` | `Session/SessionStore.swift` | `@MainActor @Observable`. Its `phase` is `.signedOut`, `.signedIn`, or `.updateRequired(minimumBuild:)`. |
 | `KeychainStorage` | `Session/KeychainStorage.swift` | The token's Keychain item: `SystemKeychain(accessGroup:)`, or `InMemoryKeychain` in tests. |
-| `APIError` | `API/APIError.swift` | `kind`, the server's `message`, and the `requestID` the request sent. `isPermanent` says whether polling should stop. |
+| `APIError` | `API/APIError.swift` | `kind`, the server's `message`, Better Auth's `code`, and the `requestID` the request sent. `isPermanent` says whether polling should stop, and `explanation(otherwise:)` words the failure for the member. |
 | `APIRequestObserver` | `API/APIRequestObserver.swift` | Sees every finished request: route pattern, request ID, status, duration, and error. The app's observer is `Telemetry`; see [Sentry](#sentry). |
 | Models | `Models/` | `Screens.swift`, `Feed.swift`, `Titles.swift`, `People.swift` (members and notifications), and `Results.swift` (other actions and `ErrorBody`). |
-| `AppServices` | `AppServices.swift` | The client and session together, injected with `.screenrServices(_:)`. |
+| `AppServices` | `AppServices.swift` | The client, session, pending invitation, identity providers, and image session together, injected with `.screenrServices(_:)`. |
 
 - **Headers:** every request sends `Screenr-Client: ios/<version>/<build>`
   and a new `Screenr-Request-Id`, plus `Authorization: Bearer <token>` while
@@ -201,10 +201,58 @@ uses it when launched with these arguments; Release builds ignore them:
 
 In UI tests, `app.launch(with: FixtureLaunch(viewer: "nora"))` passes them,
 with the directory found from the test's source path. The fixture API keeps
-the session in memory, and signing in always succeeds. A request gets the
-fixture with the same action and query or body, then falls back to the
-screen's path or to a successful fixture for the action. A matching ETag
-gets 304.
+the session in memory. A request gets the fixture with the same action and
+query or body, then falls back to the screen's path or to a successful
+fixture for the action. A matching ETag gets 304.
+
+Requesting a code and signing in with one succeed, unless an `auth/`
+override answers the route, such as
+`auth/email-otp/send-verification-otp/rate-limited`. Apple and Google sign-in
+accept only the stub credentials described in [Sign-in](#sign-in).
+
+## Sign-in
+
+The signed-out screen, `Screenr/SignIn/SignInView.swift`, offers Sign in
+with Apple, Google, and an email code
+([decision](../docs/ios-app.md#email-code-sign-in-with-apple-and-google--2026-10-13)).
+Its behavior lives in ScreenrKit's `SignIn/` folder:
+
+| Piece | What it does |
+| --- | --- |
+| `SignInModel` | The screen's `@Observable` model. The email code takes two steps, and the second offers a new code. It shows the server's messages, such as the code limits, as the server words them. |
+| `PendingInvitation` | The token of the invitation link a new member opened. Every sign-in request sends it as `Screenr-Invitation`. |
+| `AppleNonce`, `AppleCredential` | Sign in with Apple's request gets the SHA-256 hex digest of a new nonce. The server gets the raw nonce, the identity token, the authorization code, and on the first sign-in the person's name. |
+| `GoogleSignIn` | Google's authorization code flow with PKCE (S256) for the iOS client, without Google's SDK. A `WebAuthenticator` opens Google's page; the app's is SwiftUI's web authentication session. It redeems the code at Google's token endpoint with no client secret and returns the ID token and nonce. |
+| `SignOutModel` | Signs out on the server. If the server does not confirm, the session stays and an alert says why, as on the web. |
+
+`Config/Screenr.xcconfig` sets the
+[iOS OAuth client](../docs/running-screenr.md#google) for both variants, and
+`Info.plist` registers its reversed client ID as a URL scheme. Google
+redirects to `com.googleusercontent.apps.<client>:/oauthredirect`.
+
+When the session ends, by signing out or because the server ended it, the
+client clears its screen cache and `SessionStore.onEnd` handlers run.
+`AppServices` empties the image cache there, and error reporting clears its
+user there. Posters and profile photos load through `AppServices.imageSession`,
+which `.screenrServices(_:)` sets as the `AsyncImage` session.
+
+Against the fixture API, which only Screenr Dev runs,
+`IdentityProviders.authorization` is `.fixture`, so UI tests reach the
+network boundary without an Apple ID or Google account:
+
+- **Apple:** a plain "Sign in with Apple" button replaces the system one,
+  since UI tests cannot drive Apple's sheet. It posts
+  `FixtureIdentity.appleCredential(hashedNonce:)`, whose identity token names
+  the hashed nonce. The fixture API accepts it only with the matching raw
+  nonce and the stub authorization code.
+- **Google:** `FixtureWebAuthenticator` stands in for Google's page. It
+  redirects with the request's state and a code that names the PKCE challenge
+  and nonce. The fixture API's Google token endpoint redeems that code only
+  with the matching verifier and returns an ID token that names the nonce.
+  Sign-in accepts the token only with that nonce.
+
+Real Apple and Google sign-in need a device or Simulator with an Apple ID or
+Google account, so they are checked on TestFlight builds.
 
 ## Fixtures
 
@@ -279,9 +327,10 @@ Sentry organization `artisanal-software`, under these
   accessibility identifiers, and Sentry's URLSession, file, Core Data, view
   controller, and user interaction instrumentation.
 - **Identity:** `telemetry.signIn(userID:)` makes the opaque Screenr user ID
-  the Sentry user, and `telemetry.signOut()` clears it. Events carry no other
-  user data, and Sentry's installation ID never stands in for a signed-out
-  user. Sentry's session counts still use that random ID.
+  the Sentry user, and `telemetry.signOut()` clears it whenever the session
+  ends, from `SessionStore.onEnd`. Events carry no other user data, and
+  Sentry's installation ID never stands in for a signed-out user. Sentry's
+  session counts still use that random ID.
 - **Request IDs:** the app passes `Telemetry` to `AppServices` as the API
   client's `APIRequestObserver`. For each finished call, Telemetry logs the
   method, route pattern, `Screenr-Request-Id`, status, and duration. In
