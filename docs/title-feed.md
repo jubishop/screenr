@@ -487,7 +487,10 @@ addressed-person label still passes the current access checks. A placeholder
 cannot be a reply target, and it never grants access to the feed item.
 
 `src/components/feed.tsx` and `src/components/thread.tsx` supply the shared
-interface. The initial preview contains the latest three eligible direct
+interface. The iPhone app follows the same rules in its
+[conversation components](../ios/README.md#conversations)
+([issue #229](https://github.com/jubishop/screenr/issues/229)). The initial
+preview contains the latest three eligible direct
 comments. Nested replies do not consume preview places. Parent placeholders
 supply context without counting as live comments. **Show earlier comments**
 expands earlier groups inline. Each group's **View N replies** control expands

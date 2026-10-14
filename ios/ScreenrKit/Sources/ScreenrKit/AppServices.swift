@@ -5,7 +5,7 @@ import SwiftUI
 // fakes. The app builds them once and injects them with `.screenrServices(_:)`;
 // views read `@Environment(\.screenrAPI)`, `@Environment(SessionStore.self)`,
 // `@Environment(PendingInvitation.self)`, `@Environment(\.identityProviders)`,
-// and `@Environment(\.visitTracker)`.
+// `@Environment(\.visitTracker)`, and `@Environment(\.imageSource)`.
 public struct AppServices: Sendable {
   public let api: any ScreenrAPI
   public let session: SessionStore
@@ -17,6 +17,8 @@ public struct AppServices: Sendable {
   public let imageSession: URLSession
   // The app reports its scene phase here, for the visits the client marks.
   public let visits: VisitTracker
+  // The poster and profile photo requests for `AsyncImage`.
+  public let images: ImageSource
 
   @MainActor
   public init(
@@ -25,7 +27,8 @@ public struct AppServices: Sendable {
     invitation: PendingInvitation = PendingInvitation(),
     identity: IdentityProviders,
     imageCache: URLCache = URLCache(memoryCapacity: 16 << 20, diskCapacity: 0),
-    visits: VisitTracker = VisitTracker()
+    visits: VisitTracker = VisitTracker(),
+    images: ImageSource = .none
   ) {
     self.api = api
     self.session = session
@@ -33,6 +36,7 @@ public struct AppServices: Sendable {
     self.identity = identity
     self.imageCache = imageCache
     self.visits = visits
+    self.images = images
     imageSession = URLSession(configuration: Self.imageConfiguration(cache: imageCache))
     session.onEnd { imageCache.removeAllCachedResponses() }
   }
@@ -76,6 +80,17 @@ public struct AppServices: Sendable {
     }
     let session = try SessionStore(keychain: keychain)
     let visits = VisitTracker()
+    let images: ImageSource =
+      switch source {
+      case .network:
+        ImageSource(
+          serverURL: configuration.serverURL,
+          clientHeader: configuration.clientHeader,
+          session: session
+        )
+      // The fixture API serves no images, so tests never reach the network.
+      case .fixtures: .none
+      }
     self.init(
       api: ScreenrClient(
         serverURL: configuration.serverURL,
@@ -92,7 +107,8 @@ public struct AppServices: Sendable {
         google: GoogleSignIn(clientID: configuration.googleClientID, transport: transport)
       ),
       imageCache: imageCache,
-      visits: visits
+      visits: visits,
+      images: images
     )
   }
 
@@ -171,6 +187,7 @@ extension EnvironmentValues {
   @Entry public var identityProviders: IdentityProviders?
   // Nil outside `.screenrServices(_:)`.
   @Entry public var visitTracker: VisitTracker?
+  @Entry public var imageSource = ImageSource.none
 }
 
 extension View {
@@ -180,6 +197,7 @@ extension View {
       .environment(services.invitation)
       .environment(\.identityProviders, services.identity)
       .environment(\.visitTracker, services.visits)
+      .environment(\.imageSource, services.images)
       .asyncImageURLSession(services.imageSession)
   }
 }

@@ -30,6 +30,8 @@ struct FixtureLaunch {
   var link: String?
   // A file where the fixture API writes a line for each API request.
   var requestLog: URL?
+  // A content size category, such as "UICTContentSizeCategoryAccessibilityXXXL".
+  var textSize: String?
 
   static let directory = URL(filePath: #filePath)
     .deletingLastPathComponent()  // ScreenrUITests
@@ -45,6 +47,7 @@ struct FixtureLaunch {
     if let failure { arguments += ["-ScreenrFixtureFailure", failure] }
     if let requestLog { arguments += ["-ScreenrFixtureLog", requestLog.path()] }
     if let link { arguments += ["-ScreenrOpenURL", link] }
+    if let textSize { arguments += ["-UIPreferredContentSizeCategoryName", textSize] }
     return arguments
   }
 }
