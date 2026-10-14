@@ -2,9 +2,10 @@
 """Build and test the iPhone app, failing on any warning.
 
 Runs ScreenrKit's tests with swift test on the Mac, builds the Release variant
-for the Simulator, then runs the Screenr scheme's tests (ScreenrKit and the UI
-tests) in an iPhone Simulator. Without --simulator, the check creates its own
-Simulator and deletes it afterward, so concurrent checkouts never share one.
+for the Simulator, then boots an iPhone Simulator, waits for it to finish
+booting, and runs the Screenr scheme's tests (ScreenrKit and the UI tests) in
+it. Without --simulator, the check creates its own Simulator and deletes it
+afterward, so concurrent checkouts never share one.
 Build output, logs, and result bundles stay in ios/build/, which Git ignores.
 """
 
@@ -132,6 +133,9 @@ def main():
     check_results("Release build", release, tests=False)
     udid = args.simulator or create_simulator()
     try:
+        # A new Simulator keeps setting itself up after xcodebuild boots it, and
+        # on a slow Mac that can outlast a UI test's app launch timeout.
+        run("Simulator boot", ["xcrun", "simctl", "bootstatus", udid, "-b"])
         tests = OUTPUT / "Tests.xcresult"
         run("Simulator tests", [*XCODEBUILD, "-configuration", "Debug", "-destination",
                                 f"platform=iOS Simulator,id={udid}", "-parallel-testing-enabled", "NO",

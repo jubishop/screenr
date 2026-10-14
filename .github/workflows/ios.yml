@@ -1,0 +1,72 @@
+name: iOS checks
+
+# The release script reads this workflow's result for a commit; see
+# docs/development-workflow.md#ios-ci. Keep the file and job names stable.
+on:
+  push:
+    branches: [main]
+    # The server's payload fixtures live in ios/ScreenrKit/Fixtures.
+    paths: &ios-paths
+      - "ios/**"
+      - bin/check-ios
+      - bin/format-swift
+      - .github/workflows/ios.yml
+  pull_request:
+    paths: *ios-paths
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  # Separate from the check workflow, so cancelling never touches a deploy.
+  group: ios-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ios:
+    # GitHub's preview image with macOS 27, Xcode 27, and the iOS 27
+    # Simulator. Move to the macOS 27 label once that image is GA.
+    runs-on: xcode-27
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Select the newest stable Xcode
+        # Betas and release candidates install under suffixed names, such as
+        # Xcode_27.2_beta_2.app, behind plain-named links like Xcode_27.2.app.
+        run: |
+          xcode=$(
+            for app in /Applications/Xcode_*.app; do realpath "$app"; done | sort -u |
+              grep -E '/Xcode_[0-9.]+\.app$' |
+              while read -r app; do
+                version=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' \
+                  "$app/Contents/Info.plist")
+                printf '%s %s\n' "$version" "$app"
+              done | sort -V | tail -n 1 | cut -d ' ' -f 2-
+          )
+          test -n "$xcode"
+          sudo xcode-select --switch "$xcode"
+          xcodebuild -version
+      - name: Install an iOS Simulator runtime if none is available
+        # The image ships one; download only when a new Xcode lacks it.
+        run: |
+          if ! xcrun simctl list --json runtimes | python3 -c '
+          import json, sys
+          runtimes = json.load(sys.stdin)["runtimes"]
+          sys.exit(not any(r["platform"] == "iOS" and r["isAvailable"]
+                           and int(r["version"].split(".")[0]) >= 27 for r in runtimes))'
+          then
+            xcodebuild -downloadPlatform iOS
+          fi
+          xcrun simctl list runtimes
+      - name: Check iOS app
+        run: bin/check-ios
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: failure()
+        with:
+          name: ios-check-${{ github.run_id }}
+          path: ios/build/check/
+          retention-days: 7
+          if-no-files-found: ignore

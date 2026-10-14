@@ -52,7 +52,9 @@ labels, and change the label set only with the user's approval.
 `bin/check --full` runs `bin/check-application`: shell lint for `ops/`, Python
 tests, formatting, typechecking, application and browser tests, and the
 build. On a Mac it also runs `bin/check-ios` when `ios/` changed. CI uses
-this full mode. Require successful full CI before merge and deployment, and
+this full mode, and a separate
+[iOS workflow](docs/development-workflow.md#ios-ci) runs `bin/check-ios` when
+iOS files change. Require successful full CI before merge and deployment, and
 follow the
 [validation policy](docs/development-workflow.md#local-and-ci-validation).
 Checkout isolation also covers required generated types, included deliberately.

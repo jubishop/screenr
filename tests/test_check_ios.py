@@ -58,6 +58,9 @@ if arguments[:2] == ['simctl', 'list']:
 elif arguments[:2] == ['simctl', 'create']:
     record('xcrun', *arguments)
     print('NEW-UDID')
+elif arguments[:2] == ['simctl', 'bootstatus']:
+    record('xcrun', *arguments)
+    finish('BOOTSTATUS')
 elif arguments[0] == 'simctl':
     record('xcrun', *arguments)
 elif arguments[:3] == ['xcresulttool', 'get', 'build-results']:
@@ -125,17 +128,26 @@ class CheckIOSTests(unittest.TestCase):
         self.assertEqual(events[2][:3], ["xcrun", "simctl", "create"])
         self.assertTrue(events[2][3].startswith("screenr-check-checkout-"))
         self.assertEqual(events[2][4:], ["iphone-18-pro", "runtime-27-0"])
-        self.assertEqual(events[3], ["xcodebuild", *project, "-configuration", "Debug", "-destination",
+        # A new Simulator finishes its first boot before tests launch the app.
+        self.assertEqual(events[3], ["xcrun", "simctl", "bootstatus", "NEW-UDID", "-b"])
+        self.assertEqual(events[4], ["xcodebuild", *project, "-configuration", "Debug", "-destination",
                                      "platform=iOS Simulator,id=NEW-UDID", "-parallel-testing-enabled", "NO",
                                      "-resultBundlePath", build + "/check/Tests.xcresult", "test"])
-        self.assertEqual(events[4:], [["xcrun", "simctl", "shutdown", "NEW-UDID"],
+        self.assertEqual(events[5:], [["xcrun", "simctl", "shutdown", "NEW-UDID"],
                                       ["xcrun", "simctl", "delete", "NEW-UDID"]])
 
     def test_uses_a_given_simulator_and_leaves_it_in_place(self):
         result = self.check("--simulator", "MY-UDID")
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(self.steps(), ["swift", "xcodebuild", "xcodebuild"])
+        self.assertEqual(self.steps(), ["swift", "xcodebuild", "simctl bootstatus", "xcodebuild"])
+        self.assertEqual(self.recorded()[2], ["xcrun", "simctl", "bootstatus", "MY-UDID", "-b"])
         self.assertIn("platform=iOS Simulator,id=MY-UDID", self.recorded()[-1])
+
+    def test_a_failed_boot_still_deletes_its_simulator(self):
+        result = self.check(FAKE_STATUS_BOOTSTATUS="1")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("Simulator boot failed with status 1", result.stderr)
+        self.assertEqual(self.steps()[-3:], ["simctl bootstatus", "simctl shutdown", "simctl delete"])
 
     def test_fails_on_a_warning_line_and_still_deletes_its_simulator(self):
         warning = "/checkout/ios/Screenr/App.swift:3:7: warning: variable 'x' was never used"
