@@ -8,9 +8,22 @@ import { activeInvitation, invitationHash } from "./invitations";
 import { queueCode } from "./email";
 import { copyGooglePhoto } from "./photos";
 
-export function tokenFromCookie(headers?: Headers) {
+// The invitation a signup request names, which every invite-only check reads:
+// code delivery, account creation for each sign-in method, and setup
+// (docs/data-and-access.md#invitation-tokens). The web keeps it in the
+// `screenr-invite` cookie that /join sets. The iPhone app sends it in the
+// `Screenr-Invitation` header, which counts only on native requests: bearer
+// requests and those without an Origin. There it takes precedence, and any
+// value it holds is the invitation. A native request without it falls back
+// to the cookie, because Google's web sign-in callback also arrives without
+// an Origin.
+export function invitationToken(headers?: Headers) {
+  if (!headers) return undefined;
+  const header = headers.get("screenr-invitation");
+  if (header && (bearerRequest(headers) || !headers.has("origin")))
+    return header;
   const token = headers
-    ?.get("cookie")
+    .get("cookie")
     ?.split(";")
     .map((value) => value.trim())
     .find((value) => value.startsWith("screenr-invite="))
@@ -202,7 +215,7 @@ export function createAuth(
         sendVerificationOTP: async (data, context) => {
           // Password reset codes would be unusable.
           if (data.type === "forget-password") return;
-          const token = tokenFromCookie(
+          const token = invitationToken(
             context?.headers ?? context?.request?.headers,
           );
           const existing = await db.query(
@@ -227,7 +240,7 @@ export function createAuth(
       user: {
         create: {
           before: async (user, context) => {
-            const token = tokenFromCookie(
+            const token = invitationToken(
               context?.headers ?? context?.request?.headers,
             );
             const hash = token ? invitationHash(token) : "";

@@ -1,4 +1,4 @@
-import { tokenFromCookie } from "./auth";
+import { invitationToken } from "./auth";
 import { ensureTitle, seasonEpisodes, titleSeasons } from "./catalog";
 import {
   addComment,
@@ -144,7 +144,7 @@ const actions = {
   setup: signup({
     input: ({ name, username }) => ({ name, username }),
     run: ({ name, username }, { userId, headers }) =>
-      completeSignup(userId, name, username, tokenFromCookie(headers)),
+      completeSignup(userId, name, username, invitationToken(headers)),
   }),
   screen: read({
     input: (query) => query.get("path") ?? "/",

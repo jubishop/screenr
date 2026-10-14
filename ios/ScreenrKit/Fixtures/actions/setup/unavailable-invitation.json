@@ -1,0 +1,22 @@
+{
+  "description": "An invitation that is unknown, expired, revoked, or used up.",
+  "viewer": "pat",
+  "request": {
+    "method": "POST",
+    "action": "setup",
+    "path": "/api/screenr/setup",
+    "headers": {
+      "Screenr-Invitation": "5KiDd6iIIhQxYucpZgJMIybOTfq8FhG462kOYHEsgcU"
+    },
+    "body": {
+      "name": "Pat Morgan",
+      "username": "pat"
+    }
+  },
+  "response": {
+    "status": 403,
+    "body": {
+      "error": "This invitation is no longer available. Ask for a new link."
+    }
+  }
+}

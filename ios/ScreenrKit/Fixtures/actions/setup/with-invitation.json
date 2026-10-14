@@ -1,0 +1,22 @@
+{
+  "description": "Completing the profile with Alice's invitation, which the app opened.",
+  "viewer": "pat",
+  "request": {
+    "method": "POST",
+    "action": "setup",
+    "path": "/api/screenr/setup",
+    "headers": {
+      "Screenr-Invitation": "8FdwRYhlFy9tcqxOibjISU88FZTgsFeusFjHMbgJ1As"
+    },
+    "body": {
+      "name": "Pat Morgan",
+      "username": "pat"
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "ok": true
+    }
+  }
+}

@@ -2,6 +2,7 @@ import { test, before, after, afterEach, mock } from "node:test";
 import assert from "node:assert/strict";
 import { db } from "./social-fixture";
 import {
+  labelToken,
   saveDatabase,
   verifyFixture,
   verifyNoStaleFixtures,
@@ -94,6 +95,18 @@ const write = (
   request: async (world) => ({ action, body: await resolve(body, world) }),
 });
 
+// A case whose request also sends these headers.
+const withHeaders = (
+  item: Case,
+  headers: Maybe<Record<string, string>>,
+): Case => ({
+  ...item,
+  request: async (world) => ({
+    ...(await item.request(world)),
+    headers: await resolve(headers, world),
+  }),
+});
+
 const origin = process.env.BETTER_AUTH_URL!;
 async function send(
   world: World,
@@ -105,14 +118,15 @@ async function send(
   for (const [name, value] of Object.entries(request.query ?? {}))
     for (const item of [value].flat()) query.append(name, item);
   const path = `/api/screenr/${request.action}${query.size ? `?${query}` : ""}`;
+  // Like the app, a request names its session with a bearer token and sends
+  // no cookie or Origin.
   const headers = new Headers(request.headers);
-  if (viewer) headers.set("Cookie", world.cookies[viewer]);
+  if (viewer) headers.set("Authorization", `Bearer ${world.tokens[viewer]}`);
   const context = { params: Promise.resolve({ action: request.action }) };
   let response: Response;
   if (method === "GET")
     response = await GET(new Request(origin + path, { headers }), context);
   else {
-    headers.set("Origin", origin);
     headers.set(
       "Content-Type",
       request.upload?.contentType ?? "application/json",
@@ -314,6 +328,25 @@ const actions: Record<Exclude<ActionName, "screen">, Record<string, Case>> = {
       "pat",
       { name: "Pat Morgan", username: "pat" },
       "Completing the profile after joining.",
+    ),
+    "with-invitation": withHeaders(
+      write(
+        "setup",
+        "pat",
+        { name: "Pat Morgan", username: "pat" },
+        "Completing the profile with Alice's invitation, which the app opened.",
+      ),
+      (world) => ({ "Screenr-Invitation": world.invitations.spare }),
+    ),
+    "unavailable-invitation": withHeaders(
+      write(
+        "setup",
+        "pat",
+        { name: "Pat Morgan", username: "pat" },
+        "An invitation that is unknown, expired, revoked, or used up.",
+        403,
+      ),
+      { "Screenr-Invitation": labelToken("invitation/unavailable") },
     ),
     "username-taken": write(
       "setup",
