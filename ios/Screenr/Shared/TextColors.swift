@@ -14,12 +14,13 @@ extension ShapeStyle where Self == Color {
     )
   }
 
-  // Destructive actions and failure messages.
+  // Destructive actions and failure messages, also on a bordered button's
+  // gray fill.
   static var danger: Color {
     Color(
       uiColor: UIColor { traits in
         traits.userInterfaceStyle == .dark
-          ? UIColor(red: 1, green: 0.47, blue: 0.44, alpha: 1)
+          ? UIColor(red: 1, green: 0.63, blue: 0.6, alpha: 1)
           : UIColor(red: 0.72, green: 0.09, blue: 0.09, alpha: 1)
       }
     )

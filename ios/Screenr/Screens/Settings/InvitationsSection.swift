@@ -20,6 +20,7 @@ struct InvitationsSection: View {
       Text(
         "Share an invitation link to bring friends to Screenr. When someone signs up through your link, you become friends."
       )
+      .foregroundStyle(.muted)
     }
   }
 }

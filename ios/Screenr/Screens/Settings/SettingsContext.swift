@@ -51,7 +51,8 @@ struct SettingRow: View {
   }
 }
 
-// A section's footer: the last change's failure, or else what it did.
+// A section's footer: the last change's failure, or else what it did. The
+// system's footer gray falls short of 4.5:1 contrast, so footers use `.muted`.
 struct SettingsFooter: View {
   var text: String?
   var failure: String?
@@ -66,6 +67,7 @@ struct SettingsFooter: View {
         Text(status)
       }
     }
+    .foregroundStyle(.muted)
     .onChange(of: failure) { _, failure in
       if let failure { AccessibilityNotification.Announcement(failure).post() }
     }

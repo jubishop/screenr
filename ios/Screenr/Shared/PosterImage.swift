@@ -16,16 +16,18 @@ struct PosterImage: View {
       // AsyncImage hosts its content apart, so it is hidden here too.
       if case .success(let image) = phase {
         image.resizable().scaledToFill().accessibilityHidden(true)
-      } else {
-        Text(String(name.prefix(1)))
-          .font(.title2.weight(.semibold))
-          .foregroundStyle(.primary)
-          .frame(maxWidth: .infinity, maxHeight: .infinity)
-          .background(Color(uiColor: .secondarySystemFill))
-          .accessibilityHidden(true)
       }
     }
     .frame(width: width * scale, height: width * scale * 1.5)
+    // The initial sits outside AsyncImage, whose hosted content can escape
+    // the hiding below, and shows until a poster covers it.
+    .background {
+      Text(String(name.prefix(1)))
+        .font(.title2.weight(.semibold))
+        .foregroundStyle(.primary)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color(uiColor: .secondarySystemFill))
+    }
     .clipShape(RoundedRectangle(cornerRadius: 8))
     .accessibilityHidden(true)
   }
