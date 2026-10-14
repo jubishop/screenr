@@ -16,16 +16,23 @@ struct TelemetryTests {
     Telemetry(variant: variant, router: router, sessionRoll: roll, start: capture.start)
   }
 
-  private static func screenRequest(status: Int) throws -> FinishedRequest {
-    let url = try #require(
-      URL(string: "https://screenr.club/api/screenr/screen?path=%2Fpeople%2Falice&q=dune")
-    )
-    return FinishedRequest(
+  // A screen read whose route still holds a username and a search, which Telemetry reduces in
+  // case a caller passes a raw path.
+  private static func screenRequest(
+    status: Int?,
+    error: APIError.Kind? = nil
+  ) -> APIRequestRecord {
+    var failure: APIError?
+    if let error {
+      failure = APIError(kind: error, requestID: "3f2a9c")
+    }
+    return APIRequestRecord(
       method: "GET",
-      route: RoutePattern(url: url),
+      route: "/api/screenr/screen?path=%2Fpeople%2Falice&q=dune",
       requestID: "3f2a9c",
-      outcome: .response(status: status),
-      duration: .milliseconds(120)
+      status: status,
+      duration: .milliseconds(120),
+      error: failure
     )
   }
 
@@ -59,7 +66,7 @@ struct TelemetryTests {
       )
     }
     capture.addBreadcrumb(category: "touch", data: ["title": "Alice Smith", "view": "Button"])
-    telemetry.requestFinished(try Self.screenRequest(status: 503))
+    telemetry.requestFinished(Self.screenRequest(status: 503))
 
     telemetry.capture(Failure.noResults(query: "dune"), requestID: "3f2a9c")
 
@@ -73,7 +80,7 @@ struct TelemetryTests {
     let crumbs = try #require(json["breadcrumbs"] as? [[String: Any]])
     let urls = crumbs.compactMap { ($0["data"] as? [String: Any])?["url"] as? String }
     #expect(urls.contains("https://screenr.club/search"))
-    #expect(urls.contains("https://screenr.club/api/screenr/screen?path=/people/:username"))
+    #expect(urls.contains("/api/screenr/screen?path=/people/:username"))
     for leak in [
       "alice@example.com", "Alice Smith", "Alice's iPhone", "203.0.113.7", "ip_address",
       "\"email\"", "\"username\"", "dune", "alice", "q=",
@@ -87,7 +94,7 @@ struct TelemetryTests {
     let telemetry = telemetry(.dev, roll: 0)
 
     telemetry.signIn(userID: "user-7f3a")
-    telemetry.requestFinished(try Self.screenRequest(status: 503))
+    telemetry.requestFinished(Self.screenRequest(status: 503))
     Log(.app, router: router).fault("Broken")
     telemetry.capture(Failure.noResults(query: "dune"), requestID: "3f2a9c")
     telemetry.signOut()
@@ -102,6 +109,8 @@ struct TelemetryTests {
       "ScreenrVariant": "dev",
       "ScreenrServerURL": "http://localhost:3000",
       "ScreenrAppGroup": "group.com.artisanalsoftware.Screenr.dev",
+      "CFBundleShortVersionString": "1.0",
+      "CFBundleVersion": "1",
     ])
 
     let telemetry = Telemetry(configuration: configuration, router: router)
@@ -134,7 +143,7 @@ struct TelemetryTests {
     router.add(sink)
     let telemetry = telemetry(.release, roll: 0)
 
-    telemetry.requestFinished(try Self.screenRequest(status: 200))
+    telemetry.requestFinished(Self.screenRequest(status: 200))
 
     let transaction = try #require(try await capture.items(ofType: "transaction", count: 1).only)
     let json = try transaction.json
@@ -156,8 +165,24 @@ struct TelemetryTests {
     #expect(
       line.text
         == "Request finished method=GET"
-        + " route=https://screenr.club/api/screenr/screen?path=/people/:username"
+        + " route=/api/screenr/screen?path=/people/:username"
         + " request_id=3f2a9c status=200 duration_ms=120.0"
+    )
+  }
+
+  @Test func logsAFailedCallAsAWarningAndACancelledOneAsInfo() throws {
+    let sink = CapturingSink()
+    router.add(sink)
+    let telemetry = telemetry(.dev)
+
+    telemetry.requestFinished(Self.screenRequest(status: nil, error: .offline))
+    telemetry.requestFinished(Self.screenRequest(status: nil, error: .cancelled))
+
+    let lines = sink.entries.filter { $0.category == .api }
+    #expect(lines.map(\.level) == [.warning, .info])
+    #expect(
+      lines.map { $0.fields.first { $0.name == "outcome" }?.value }
+        == [.string("failed"), .string("cancelled")]
     )
   }
 
@@ -166,7 +191,7 @@ struct TelemetryTests {
     defer { capture.close() }
     let telemetry = telemetry(.release, roll: roll)
 
-    telemetry.requestFinished(try Self.screenRequest(status: 200))
+    telemetry.requestFinished(Self.screenRequest(status: 200))
 
     #expect(try await capture.items(ofType: "transaction", count: 1).count == 1)
   }
@@ -178,7 +203,7 @@ struct TelemetryTests {
     defer { capture.close() }
     let telemetry = telemetry(.release, roll: roll)
 
-    telemetry.requestFinished(try Self.screenRequest(status: 200))
+    telemetry.requestFinished(Self.screenRequest(status: 200))
 
     #expect(try capture.items(ofType: "transaction").isEmpty)
   }

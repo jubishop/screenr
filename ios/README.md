@@ -147,7 +147,7 @@ try await api.send(.comment(conversation: item.id, body: text, spoiler: false))
 | `SessionStore` | `Session/SessionStore.swift` | `@MainActor @Observable`. Its `phase` is `.signedOut`, `.signedIn`, or `.updateRequired(minimumBuild:)`. |
 | `KeychainStorage` | `Session/KeychainStorage.swift` | The token's Keychain item: `SystemKeychain(accessGroup:)`, or `InMemoryKeychain` in tests. |
 | `APIError` | `API/APIError.swift` | `kind`, the server's `message`, and the `requestID` the request sent. `isPermanent` says whether polling should stop. |
-| `APIRequestObserver` | `API/APIRequestObserver.swift` | Sees every finished request: route pattern, request ID, status, duration, and error. Logging attaches here. |
+| `APIRequestObserver` | `API/APIRequestObserver.swift` | Sees every finished request: route pattern, request ID, status, duration, and error. The app's observer is `Telemetry`; see [Sentry](#sentry). |
 | Models | `Models/` | `Screens.swift`, `Feed.swift`, `Titles.swift`, `People.swift` (members and notifications), and `Results.swift` (other actions and `ErrorBody`). |
 | `AppServices` | `AppServices.swift` | The client and session together, injected with `.screenrServices(_:)`. |
 
@@ -273,14 +273,15 @@ Sentry organization `artisanal-software`, under these
   the Sentry user, and `telemetry.signOut()` clears it. Events carry no other
   user data, and Sentry's installation ID never stands in for a signed-out
   user. Sentry's session counts still use that random ID.
-- **Request IDs:** the API client reports each finished call to
-  `telemetry.requestFinished(_:)` as a `FinishedRequest`: the method, route
-  pattern, `Screenr-Request-Id`, outcome, and duration. Telemetry logs the
-  call, adds an `http` breadcrumb, and in traced launches records an
-  `http.client` transaction named by its route, such as
+- **Request IDs:** the app passes `Telemetry` to `AppServices` as the API
+  client's `APIRequestObserver`. For each finished call, Telemetry logs the
+  method, route pattern, `Screenr-Request-Id`, status, and duration. In
+  Release builds it also adds an `http` breadcrumb and, in traced launches,
+  records an `http.client` transaction named by its route, such as
   `GET /api/screenr/screen?path=/people/:username`. Both carry a `request_id`
   tag, the tag the server's failure reports use, as does an error captured
-  with its request ID.
+  with its request ID. A failed call logs a warning, and a cancelled one logs
+  at info.
 - **Scrubbing:** `SentryPrivacy` runs as Sentry's `beforeSend`,
   `beforeBreadcrumb`, `beforeSendSpan`, and `beforeSendLog`. It keeps only the
   user ID, and reduces every URL to its `RoutePattern`, such as

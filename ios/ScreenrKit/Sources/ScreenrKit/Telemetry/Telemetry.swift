@@ -5,7 +5,7 @@ import Sentry
 // builds. Dev builds never start Sentry, so they send nothing. What Release builds send is
 // pseudonymous and holds no member content: the user is the opaque Screenr user ID, URLs become
 // route patterns, and SentryPrivacy checks every event, breadcrumb, span, and log line.
-public final class Telemetry: Sendable {
+public final class Telemetry: APIRequestObserver {
   public enum State: String, Sendable, Equatable, CaseIterable {
     case off
     case reporting
@@ -69,60 +69,58 @@ public final class Telemetry: Sendable {
   }
 
   // Logs a finished API call and adds it to Sentry as a breadcrumb and, in traced sessions, a
-  // transaction, each tagged with its request ID. The API client calls this for every call.
-  public func requestFinished(_ request: FinishedRequest) {
+  // transaction, each tagged with its request ID. The API client reports every call here. Its
+  // route is already a pattern; reducing it again keeps a raw path from reaching Sentry.
+  public func requestFinished(_ record: APIRequestRecord) {
+    let route = RoutePattern(path: record.route)
     var fields: [LogField] = [
-      LogField(name: "method", value: .string(request.method)),
-      .route(request.route),
-      .identifier("request_id", request.requestID),
+      LogField(name: "method", value: .string(record.method)),
+      .route(route),
+      .identifier("request_id", record.requestID),
     ]
     let level: LogLevel
     let breadcrumbLevel: SentryLevel
     let spanStatus: SentrySpanStatus
-    switch request.outcome {
-    case .response(let status):
+    switch (record.status, record.error?.kind) {
+    case (let status?, _):
       fields.append(.int("status", status))
       level = status >= 500 ? .warning : .info
       breadcrumbLevel = status >= 500 ? .error : status >= 400 ? .warning : .info
       spanStatus = Self.spanStatus(forHTTPStatus: status)
-    case .failed:
-      fields.append(.constant("outcome", "failed"))
-      level = .warning
-      breadcrumbLevel = .error
-      spanStatus = .unavailable
-    case .cancelled:
+    case (nil, .cancelled?):
       fields.append(.constant("outcome", "cancelled"))
       level = .info
       breadcrumbLevel = .info
       spanStatus = .cancelled
+    case (nil, _):
+      fields.append(.constant("outcome", "failed"))
+      level = .warning
+      breadcrumbLevel = .error
+      spanStatus = .unavailable
     }
-    fields.append(.duration("duration_ms", request.duration))
+    fields.append(.duration("duration_ms", record.duration))
     api.write(level, "Request finished", fields)
 
     guard let reporter else { return }
     let breadcrumb = Breadcrumb(level: breadcrumbLevel, category: "http")
     breadcrumb.type = "http"
-    breadcrumb.setData(value: request.method, key: "method")
-    breadcrumb.setData(value: request.route.value, key: "url")
-    breadcrumb.setData(value: request.requestID, key: "request_id")
-    breadcrumb.setData(value: request.duration.milliseconds, key: "duration_ms")
-    if case .response(let status) = request.outcome {
-      breadcrumb.setData(value: status, key: "status_code")
-    }
+    breadcrumb.setData(value: record.method, key: "method")
+    breadcrumb.setData(value: route.value, key: "url")
+    breadcrumb.setData(value: record.requestID, key: "request_id")
+    breadcrumb.setData(value: record.duration.milliseconds, key: "duration_ms")
+    breadcrumb.setData(value: record.status, key: "status_code")
     reporter.add(breadcrumb)
 
     let end = Date.now
-    let start = end.addingTimeInterval(-request.duration.milliseconds / 1_000)
+    let start = end.addingTimeInterval(-record.duration.milliseconds / 1_000)
     let context = TransactionContext(
-      name: "\(request.method) \(request.route.path)",
+      name: "\(record.method) \(route.path)",
       operation: "http.client"
     )
     reporter.recordTransaction(context) { transaction in
       transaction.startTimestamp = start
-      transaction.setTag(value: request.requestID, key: "request_id")
-      if case .response(let status) = request.outcome {
-        transaction.setData(value: status, key: "http.response.status_code")
-      }
+      transaction.setTag(value: record.requestID, key: "request_id")
+      transaction.setData(value: record.status, key: "http.response.status_code")
       transaction.finish(status: spanStatus)
     }
   }
