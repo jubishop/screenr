@@ -161,7 +161,7 @@ The worker sends pushes directly to APNs
 `src/server/apns.ts` holds the APNs client, and `src/server/push.ts` holds
 the jobs and their delivery.
 
-- **Jobs:** migration `028-push-jobs.sql` adds `push_job`. A trigger on
+- **Jobs:** migration `029-push-jobs.sql` adds `push_job`. A trigger on
   `notification` queues one job per device of the recipient when the bell
   receives a notification, in the same transaction. Deleting the device or
   the notification deletes its jobs.
