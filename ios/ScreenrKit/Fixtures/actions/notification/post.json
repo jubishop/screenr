@@ -1,0 +1,35 @@
+{
+  "description": "A comment on a post without a title.",
+  "viewer": "alice",
+  "request": {
+    "method": "GET",
+    "action": "notification",
+    "path": "/api/screenr/notification?id=23",
+    "query": {
+      "id": "23"
+    }
+  },
+  "response": {
+    "status": 200,
+    "etag": "W/\"ORyC0RDph_Xc2ZoFhPfh9VMqgil24w52uoI-z10mN4s\"",
+    "body": {
+      "visible": true,
+      "notification": {
+        "id": "23",
+        "kind": "comment",
+        "actor": "Ben Ortiz",
+        "actorId": "user-ben",
+        "actorPhoto": "8fc275dfeaca5cf8",
+        "message": "Ben Ortiz commented on your post.",
+        "href": "/?item=872a205a-bab2-48f8-8c27-b737397eb469&reply=8",
+        "createdAt": "2026-10-13T12:00:00.000000+00:00",
+        "read": false,
+        "title": null,
+        "excerpt": "Try Paper Lanterns.",
+        "spoiler": false,
+        "thread": "872a205a-bab2-48f8-8c27-b737397eb469",
+        "comment": "8"
+      }
+    }
+  }
+}

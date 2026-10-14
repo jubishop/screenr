@@ -1,0 +1,19 @@
+{
+  "description": "Any notification the viewer cannot see gets this same answer.",
+  "viewer": "alice",
+  "request": {
+    "method": "GET",
+    "action": "notification",
+    "path": "/api/screenr/notification?id=2",
+    "query": {
+      "id": "2"
+    }
+  },
+  "response": {
+    "status": 200,
+    "etag": "W/\"knYeH2_J94T7rvdF4tGL86CjgN83-8g0YBoz3_HzqSc\"",
+    "body": {
+      "visible": false
+    }
+  }
+}

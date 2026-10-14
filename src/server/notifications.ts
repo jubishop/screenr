@@ -123,6 +123,66 @@ export async function readNotification(viewer: string, id: unknown) {
   });
 }
 
+// The push alert's excerpt is one line of at most this many characters.
+const excerptLength = 160;
+const graphemes = new Intl.Segmenter(undefined, { granularity: "grapheme" });
+// Runs of whitespace become one space. Longer text ends at a word with an
+// ellipsis, and a cut never splits a character.
+function excerpt(body: string) {
+  const parts = Array.from(
+    graphemes.segment(body.replace(/\s+/g, " ").trim()),
+    ({ segment }) => segment,
+  );
+  if (parts.length <= excerptLength) return parts.join("");
+  let end = excerptLength - 1;
+  const space = parts.lastIndexOf(" ", end);
+  if (parts[end] !== " " && space > end / 2) end = space;
+  return `${parts.slice(0, end).join("").trimEnd()}…`;
+}
+
+// One notification for the iPhone Notification Service Extension
+// (docs/data-and-access.md#single-notification-read). It is the bell's item
+// under the same visibility rules, with the comment's excerpt and what a reply
+// needs. A spoiler flag on the comment or on its entry omits the excerpt.
+// Every notification the viewer cannot see, for any reason, gets the same
+// answer. Reading it marks nothing read.
+export async function notification(viewer: string, id: unknown) {
+  const notificationId = identifier(id);
+  const row = (
+    await db.query<{
+      content:
+        | (NotificationRow & { body: string | null; spoiler: boolean | null })
+        | null;
+    }>(
+      `SELECT to_jsonb(content) AS content FROM (
+         SELECT n.*,cm.body,cm.spoiler OR coalesce(tc.spoiler,r.spoiler,dp.spoiler,false) AS spoiler
+         FROM (SELECT ${columns} FROM visible_notification
+           WHERE recipient_id=$1 AND id=$2) n
+         LEFT JOIN comment cm ON cm.id=n.comment_id::bigint
+         LEFT JOIN title_comment tc ON tc.id=cm.title_comment_id
+         LEFT JOIN review r ON r.id=cm.review_id
+         LEFT JOIN discussion_post dp ON dp.id=cm.discussion_post_id
+       ) content`,
+      [viewer, notificationId],
+    )
+  ).rows[0]?.content;
+  if (!row) return { visible: false } as const;
+  const spoiler = row.spoiler ?? false;
+  return {
+    visible: true,
+    notification: {
+      ...present(row),
+      title: row.title_name,
+      excerpt: row.body === null || spoiler ? null : excerpt(row.body),
+      spoiler,
+      // The entry, which groups its notifications and is the `conversation`
+      // of a reply; the comment is its `replyTo`.
+      thread: row.item_id,
+      comment: row.comment_id,
+    },
+  } as const;
+}
+
 // The visible view lists a friend request only while it is pending, so a stale
 // Decline cannot end the friendship that an earlier Accept created.
 export async function respondToFriendRequest(

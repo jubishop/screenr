@@ -358,6 +358,38 @@ const actions: Record<Exclude<ActionName, "screen">, Record<string, Case>> = {
       "Only unread notifications.",
     ),
   },
+  notification: {
+    comment: read(
+      "notification",
+      "alice",
+      (world) => ({ id: world.ids.commentNotification }),
+      "One notification for the push extension: a comment with its excerpt.",
+    ),
+    spoiler: read(
+      "notification",
+      "alice",
+      (world) => ({ id: world.ids.spoilerNotification }),
+      "A spoiler reply has no excerpt.",
+    ),
+    post: read(
+      "notification",
+      "alice",
+      (world) => ({ id: world.ids.postNotification }),
+      "A comment on a post without a title.",
+    ),
+    "friend-request": read(
+      "notification",
+      "alice",
+      (world) => ({ id: world.ids.friendRequest }),
+      "A friend request has no title, excerpt, thread, or comment.",
+    ),
+    hidden: read(
+      "notification",
+      "alice",
+      (world) => ({ id: world.ids.othersNotification }),
+      "Any notification the viewer cannot see gets this same answer.",
+    ),
+  },
   "read-notification": {
     default: write(
       "read-notification",

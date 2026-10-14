@@ -112,10 +112,13 @@ Comments notify their content owner and addressed commenter, excluding the
 actor and duplicate recipients. Watch status changes and reviews notify no
 one; comments on a progress entry, review, or post without a title notify like
 comments on other entries. Migration `024-discussion-posts.sql` finds a post's
-owner for the trigger and the visible list. Notifications use current names and access;
-they contain no comment text. Withdrawn requests and deleted or inaccessible
-comments disappear from lists and counts. Restoring comment access preserves
-the notification's read state.
+owner for the trigger and the visible list. Notifications use current names
+and access. The bell and activity email contain no comment text; the iPhone
+push extension's
+[single notification read](data-and-access.md#single-notification-read) adds
+a short excerpt, except for spoilers. Withdrawn requests and deleted or
+inaccessible comments disappear from lists and counts. Restoring comment
+access preserves the notification's read state.
 
 ### Activity email
 

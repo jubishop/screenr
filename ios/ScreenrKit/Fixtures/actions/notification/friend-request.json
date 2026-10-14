@@ -1,0 +1,35 @@
+{
+  "description": "A friend request has no title, excerpt, thread, or comment.",
+  "viewer": "alice",
+  "request": {
+    "method": "GET",
+    "action": "notification",
+    "path": "/api/screenr/notification?id=14",
+    "query": {
+      "id": "14"
+    }
+  },
+  "response": {
+    "status": 200,
+    "etag": "W/\"xP1ydGnbH8BnuauYYnGorD4gGZPdL6HrO77YFAlnJ0A\"",
+    "body": {
+      "visible": true,
+      "notification": {
+        "id": "14",
+        "kind": "friend_request",
+        "actor": "Fay Chen",
+        "actorId": "user-fay",
+        "actorPhoto": null,
+        "message": "Fay Chen sent you a friend request.",
+        "href": "/people/fay",
+        "createdAt": "2026-10-13T12:00:00.000000+00:00",
+        "read": false,
+        "title": null,
+        "excerpt": null,
+        "spoiler": false,
+        "thread": null,
+        "comment": null
+      }
+    }
+  }
+}
