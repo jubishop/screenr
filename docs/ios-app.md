@@ -415,8 +415,9 @@ the app. Without the app, the link opens the web as it does today.
 `src/app/.well-known/apple-app-site-association/route.ts` serves the file as
 `application/json`, without the sign-in redirect that member routes use. It
 lists the exclusions before the claimed paths because Apple applies the first
-match. The claimed paths also include `/people`, the Friends page. Item
-permalinks match as title and feed paths with query parameters.
+match. The claimed paths also include `/people`, the Friends page, because
+`/people/*` does not match the bare path. Item permalinks match as title and
+feed paths with query parameters.
 `tests/app/universal-links.test.ts` checks the list against every member
 route. The file names only the Release app,
 `34TKMKM889.com.artisanalsoftware.Screenr`. Screenr Dev uses its
@@ -805,8 +806,10 @@ fastlane to a Node repository.
 - **Linking errors:** the app sends a request ID with every API call. An app
   error and the server failure behind it carry the same ID.
 
-**Why:** The user accepted the recommendation. Server failures now go only to
-the systemd journal, and only service failures trigger email alerts.
+**Why:** The user accepted the recommendation. Server failures now reach Sentry
+as well as the systemd journal
+([failure reports](deployment.md#failure-reports-in-sentry)). Email alerts are
+a separate channel; see [failure alerts](deployment.md#failure-alerts).
 
 **Rejected alternatives:**
 
