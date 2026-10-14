@@ -26,6 +26,7 @@ import {
   uploadPhoto,
 } from "./photos";
 import { updateDisplayName, updateProfile } from "./profiles";
+import { changePushDevice, savePushSettings } from "./push";
 import { setReaction } from "./reactions";
 import { changeRelationship } from "./relationships";
 import { removeReview, saveReview } from "./reviews";
@@ -47,7 +48,8 @@ import type { Person } from "../shared";
 
 type Query = URLSearchParams;
 type Body = Record<string, unknown>;
-type SignedIn = { userId: string; headers: Headers };
+// `sessionId` names the request's Better Auth session row.
+type SignedIn = { userId: string; sessionId: string; headers: Headers };
 type Member = SignedIn & { user: Person };
 
 type Definition<Source, Input, Context> = {
@@ -199,6 +201,28 @@ const actions = {
   "activity-email": write({
     input: ({ enabled }) => enabled,
     run: (enabled, { userId }) => saveActivityEmail(userId, enabled),
+  }),
+  // The iPhone app's `register` or `remove` of its APNs device token.
+  "push-device": write({
+    input: ({ action, token, environment, topic, build }) => ({
+      action,
+      token,
+      environment,
+      topic,
+      build,
+    }),
+    run: (fields, { userId, sessionId }) =>
+      changePushDevice(userId, sessionId, fields),
+  }),
+  // Turns push kinds on or off; kinds the body leaves out keep their values.
+  "push-settings": write({
+    input: ({ friendRequest, friendAccepted, comment, reply }) => ({
+      friendRequest,
+      friendAccepted,
+      comment,
+      reply,
+    }),
+    run: (fields, { userId }) => savePushSettings(userId, fields),
   }),
   "streaming-services": write({
     input: ({ serviceIds }) => serviceIds,

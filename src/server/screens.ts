@@ -16,6 +16,7 @@ import { friendsRecommend } from "./friends-recommend";
 import { savedServices, streamingServices } from "./streaming-services";
 import { withViewingOptions } from "./title-viewing";
 import { activityEmail, unreadNotifications } from "./notifications";
+import { pushSettings } from "./push";
 import { logFailure } from "./log";
 import { watchStatus } from "./title-actions";
 import { topTen, topTenRanks } from "./top-ten";
@@ -126,6 +127,8 @@ async function loadContent(userId: string, route: MemberRoute) {
     return {
       kind: "account" as const,
       activityEmail: await activityEmail(userId),
+      // The iPhone app's per-kind push settings.
+      pushSettings: await pushSettings(userId),
       services: streamingServices,
       serviceIds: await savedServices(userId),
       googleEnabled: !!(

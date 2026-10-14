@@ -1,0 +1,19 @@
+{
+  "description": "Removing the app's registered device token.",
+  "viewer": "alice",
+  "request": {
+    "method": "POST",
+    "action": "push-device",
+    "path": "/api/screenr/push-device",
+    "body": {
+      "action": "remove",
+      "token": "5ce7e1d2a0b94c3f8e6d7a1b2c3d4e5f60718293a4b5c6d7e8f9011223344556"
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "ok": true
+    }
+  }
+}

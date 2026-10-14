@@ -74,7 +74,11 @@ async function handle(
       throw new AppError("Invalid request origin.", 403);
     const session = await requestSession(request.headers);
     if (!session) throw new AppError("Sign in to continue.", 401);
-    const context = { userId: session.user.id, headers: request.headers };
+    const context = {
+      userId: session.user.id,
+      sessionId: session.session.id,
+      headers: request.headers,
+    };
     if (action && !action.profile) {
       if (action.usage) await recordActiveDay(context.userId);
       const input = action.upload
