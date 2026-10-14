@@ -13,6 +13,8 @@ import unittest
 
 SOURCE = Path(__file__).resolve().parents[1]
 SCRIPTS = ("format:check", "typecheck", "test", "test:browser")
+# A recorded pass for the same iOS files lets bin/check-ios skip itself.
+IOS_CHECK = ["check-ios", "--reuse"]
 
 
 class CheckApplicationTests(unittest.TestCase):
@@ -22,7 +24,8 @@ class CheckApplicationTests(unittest.TestCase):
         base = Path(temporary.name)
         self.repo = base / "checkout"
         (self.repo / "bin").mkdir(parents=True)
-        shutil.copy2(SOURCE / "bin/check-application", self.repo / "bin/check-application")
+        for name in ("bin/check-application", "bin/_ios_check_records.py"):
+            shutil.copy2(SOURCE / name, self.repo / name)
         shutil.copy2(SOURCE / "package.json", self.repo / "package.json")
         (self.repo / "ops").mkdir()
         (self.repo / "ops/deploy.sh").write_text("#!/bin/sh\nexit 0\n")
@@ -58,7 +61,7 @@ class CheckApplicationTests(unittest.TestCase):
         check_ios = self.repo / "bin/check-ios"
         check_ios.write_text("#!" + sys.executable + "\n"
                              "import json, os, sys\n"
-                             "open(os.environ['CHECK_EVENTS'], 'a').write(json.dumps(['check-ios']) + '\\n')\n"
+                             "open(os.environ['CHECK_EVENTS'], 'a').write(json.dumps(['check-ios', *sys.argv[1:]]) + '\\n')\n"
                              "sys.exit(19 if 'FAIL_IOS' in os.environ else 0)\n")
         check_ios.chmod(0o755)
 
@@ -87,8 +90,8 @@ class CheckApplicationTests(unittest.TestCase):
     def assert_ios_checks_run_last(self):
         result = self.check()
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(self.recorded()[-2:], [["npm", "run", SCRIPTS[-1]], ["check-ios"]])
-        self.assertIn("Running iOS checks: ios/ differs from origin/main", result.stdout)
+        self.assertEqual(self.recorded()[-2:], [["npm", "run", SCRIPTS[-1]], IOS_CHECK])
+        self.assertIn("Running iOS checks: the iOS files differ from origin/main", result.stdout)
 
     def check(self, *args, **extra):
         return subprocess.run([str(self.repo / "bin/check-application"), *args], cwd=self.repo,
@@ -168,7 +171,7 @@ class CheckApplicationTests(unittest.TestCase):
             with self.subTest(part=part):
                 result = self.check("--part", part)
                 self.assertEqual(result.returncode, 0, result.stderr)
-                self.assertNotIn(["check-ios"], self.recorded())
+                self.assertNotIn("check-ios", [event[0] for event in self.recorded()])
 
     def test_invalid_parts_and_shards_stop_before_any_check(self):
         for args in (["--part", "ios"], ["--shard", "1/2"], ["--part", "static", "--shard", "1/2"],
@@ -193,7 +196,7 @@ class CheckApplicationTests(unittest.TestCase):
         (self.repo / "ios/Changed.swift").write_text("struct Changed {}\n")
         result = self.check()
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertNotIn(["check-ios"], self.recorded())
+        self.assertNotIn("check-ios", [event[0] for event in self.recorded()])
         self.assertIn("Skipping iOS checks: they need macOS with Xcode.", result.stdout)
 
     def test_runs_ios_checks_on_a_mac_for_a_committed_ios_change(self):
@@ -221,23 +224,39 @@ class CheckApplicationTests(unittest.TestCase):
         self.git("commit", "--quiet", "--all", "--message", "Web only")
         result = self.check()
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertNotIn(["check-ios"], self.recorded())
-        self.assertIn("Skipping iOS checks: ios/ matches origin/main", result.stdout)
+        self.assertNotIn("check-ios", [event[0] for event in self.recorded()])
+        self.assertIn("Skipping iOS checks: the iOS files match origin/main", result.stdout)
+
+    def test_skips_ios_checks_on_a_mac_for_markdown_only_ios_changes(self):
+        self.on_mac_with_main()
+        (self.repo / "ios/README.md").write_text("# The iPhone app\n")
+        self.git("add", "--all")
+        self.git("commit", "--quiet", "--message", "Document the app")
+        (self.repo / "ios/Screenr/Notes.md").write_text("Draft notes.\n")
+        result = self.check()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertNotIn("check-ios", [event[0] for event in self.recorded()])
+        self.assertIn("Skipping iOS checks: the iOS files match origin/main", result.stdout)
+
+    def test_runs_ios_checks_on_a_mac_for_a_check_script_change(self):
+        self.on_mac_with_main()
+        (self.repo / "bin/format-swift").write_text("#!/bin/sh\n# Stricter.\n")
+        self.assert_ios_checks_run_last()
 
     def test_runs_ios_checks_on_a_mac_without_origin_main(self):
         self.on_mac_with_main()
         self.git("update-ref", "-d", "refs/remotes/origin/main")
         result = self.check()
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(self.recorded()[-1], ["check-ios"])
-        self.assertIn("Running iOS checks: there is no origin/main to compare ios/ with.", result.stdout)
+        self.assertEqual(self.recorded()[-1], IOS_CHECK)
+        self.assertIn("Running iOS checks: there is no origin/main to compare the iOS files with.", result.stdout)
 
     def test_ios_check_failures_fail_the_application_checks(self):
         self.on_mac_with_main()
         self.edit_app()
         result = self.check(FAIL_IOS="1")
         self.assertNotEqual(result.returncode, 0)
-        self.assertEqual(self.recorded()[-1], ["check-ios"])
+        self.assertEqual(self.recorded()[-1], IOS_CHECK)
         self.assertNotIn("Application checks passed", result.stdout)
 
 
@@ -251,7 +270,7 @@ class WorkflowTests(unittest.TestCase):
     def test_ci_runs_the_foundation_and_every_part_and_shard(self):
         script = ast.parse((SOURCE / "bin/check-application").read_text())
         parts = next(ast.literal_eval(node.value) for node in script.body
-                     if isinstance(node, ast.Assign) and node.targets[0].id == "PARTS")
+                     if isinstance(node, ast.Assign) and getattr(node.targets[0], "id", None) == "PARTS")
         self.assertIn("        run: ./bin/check\n", self.jobs["static"])
         for part in parts:
             with self.subTest(part=part):

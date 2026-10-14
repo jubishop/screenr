@@ -7,6 +7,14 @@ booting, and runs the Screenr scheme's tests (ScreenrKit and the UI tests) in
 it. Without --simulator, the check creates its own Simulator and deletes it
 afterward, so concurrent checkouts never share one.
 Build output, logs, and result bundles stay in ios/build/, which Git ignores.
+
+A failing test reports at once, without collecting a sysdiagnose. Each step
+runs in its own process group, and a Simulator test run that outlasts
+--test-timeout, or an interrupted check, stops that whole group.
+
+A pass on a checkout whose iOS files match HEAD is recorded for those exact
+files and this Xcode. With --reuse, the check skips itself when such a pass
+is recent; the pre-push hook and bin/ios-testflight rely on the same records.
 """
 
 import argparse
@@ -15,14 +23,26 @@ import os
 from pathlib import Path
 import re
 import shutil
+import signal
 import subprocess
 import sys
+import threading
+import time
+
+sys.dont_write_bytecode = True
+import _ios_check_records as records  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 BUILD = ROOT / "ios/build"
 OUTPUT = BUILD / "check"
 MINIMUM_XCODE = 27
-WARNING = re.compile(r"warning:", re.IGNORECASE)
+# The Simulator tests took 13 minutes on the user's Mac on 2026-10-14; a run
+# that takes much longer is stuck.
+TEST_TIMEOUT_MINUTES = 40
+BOOT_TIMEOUT_MINUTES = 10
+# How long a stopped step's processes get to exit before SIGKILL.
+STOP_GRACE_SECONDS = 5
+WARNING =re.compile(r"warning:", re.IGNORECASE)
 # The App Intents extractor prints this for targets that do not link App
 # Intents. It is not a build diagnostic, and result bundles do not count it.
 NOT_A_WARNING = re.compile(
@@ -44,19 +64,57 @@ def capture(*command):
                           capture_output=True, text=True).stdout
 
 
-def run(label, command):
-    """Run a step with its output in a log, and fail on an error status or a warning line."""
+def stop(process):
+    """End a step's process group: SIGTERM, then SIGKILL for whatever is left after the grace period."""
+    deadline = time.monotonic() + STOP_GRACE_SECONDS
+    for stop_signal in (signal.SIGTERM, signal.SIGKILL):
+        try:
+            os.killpg(process.pid, stop_signal)
+            while time.monotonic() < deadline:
+                process.poll()
+                time.sleep(0.1)
+                os.killpg(process.pid, 0)
+        except ProcessLookupError:
+            return
+        except PermissionError:
+            continue
+
+
+def run(label, command, timeout_minutes=None):
+    """Run a step with its output in a log, and fail on an error status, a warning line, or a timeout."""
     print(f"==> {label}", flush=True)
     log = OUTPUT / (label.lower().replace(" ", "-") + ".log")
     warnings = []
+    expired = threading.Event()
     with log.open("w") as stream:
-        process = subprocess.Popen(command, cwd=ROOT, env=ENVIRONMENT, text=True,
+        # Its own process group, so stopping the step reaches every process it started.
+        process = subprocess.Popen(command, cwd=ROOT, env=ENVIRONMENT, text=True, start_new_session=True,
                                    stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-        for line in process.stdout:
-            stream.write(line)
-            if WARNING.search(line) and not NOT_A_WARNING.search(line.rstrip()):
-                warnings.append(line.rstrip())
-        status = process.wait()
+        watchdog = None
+        if timeout_minutes:
+            def expire():
+                if process.poll() is None:
+                    expired.set()
+                    stop(process)
+            watchdog = threading.Timer(timeout_minutes * 60, expire)
+            watchdog.daemon = True
+            watchdog.start()
+        try:
+            for line in process.stdout:
+                stream.write(line)
+                if WARNING.search(line) and not NOT_A_WARNING.search(line.rstrip()):
+                    warnings.append(line.rstrip())
+            status = process.wait()
+        except BaseException:
+            stop(process)
+            raise
+        finally:
+            if watchdog:
+                watchdog.cancel()
+    if expired.is_set():
+        tail = log.read_text().splitlines()[-40:]
+        raise CheckFailure("\n".join([*tail, f"{label}: stopped after {timeout_minutes:g} minutes without "
+                                             f"finishing; see {log}"]))
     if status:
         tail = log.read_text().splitlines()[-40:]
         raise CheckFailure("\n".join([*tail, f"{label} failed with status {status}; see {log}"]))
@@ -116,13 +174,30 @@ def main():
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--simulator", metavar="UDID",
                         help="run the Simulator tests on this existing Simulator, which is left in place")
+    parser.add_argument("--reuse", action="store_true",
+                        help="skip the check when these exact iOS files passed it with this Xcode "
+                             f"in the last {records.LIFETIME.days} days")
+    parser.add_argument("--test-timeout", type=float, default=TEST_TIMEOUT_MINUTES, metavar="MINUTES",
+                        help="stop the Simulator tests and fail after this many minutes "
+                             f"(default {TEST_TIMEOUT_MINUTES})")
     args = parser.parse_args()
+    if args.test_timeout <= 0:
+        parser.error("--test-timeout must be positive")
     if not shutil.which("xcodebuild"):
         raise CheckFailure("bin/check-ios needs macOS with Xcode 27 or later.")
-    version = re.match(r"Xcode (\d+)", capture("xcodebuild", "-version"))
+    xcode = capture("xcodebuild", "-version")
+    version = re.match(r"Xcode (\d+)", xcode)
     if not version or int(version[1]) < MINIMUM_XCODE:
         raise CheckFailure(f"Xcode {MINIMUM_XCODE} or later is required. Select it with xcode-select "
                            "or DEVELOPER_DIR.")
+    xcode = " ".join(xcode.split())
+    key = records.working_key(ROOT)
+    found = records.passed(ROOT, key, xcode) if args.reuse else None
+    if found:
+        print(f"iOS checks already passed for these iOS files with {xcode} at {found['passedAt']} "
+              f"in {found.get('checkout')}; skipping. Run bin/check-ios without --reuse to check again.",
+              flush=True)
+        return
     shutil.rmtree(OUTPUT, ignore_errors=True)
     OUTPUT.mkdir(parents=True)
     run("ScreenrKit tests", ["swift", "test", "--package-path", "ios/ScreenrKit",
@@ -135,21 +210,44 @@ def main():
     try:
         # A new Simulator keeps setting itself up after xcodebuild boots it, and
         # on a slow Mac that can outlast a UI test's app launch timeout.
-        run("Simulator boot", ["xcrun", "simctl", "bootstatus", udid, "-b"])
+        run("Simulator boot", ["xcrun", "simctl", "bootstatus", udid, "-b"], BOOT_TIMEOUT_MINUTES)
         tests = OUTPUT / "Tests.xcresult"
+        # Collecting diagnostics after a failed UI test took about 10 minutes
+        # and sometimes never finished.
         run("Simulator tests", [*XCODEBUILD, "-configuration", "Debug", "-destination",
                                 f"platform=iOS Simulator,id={udid}", "-parallel-testing-enabled", "NO",
-                                "-resultBundlePath", str(tests), "test"])
+                                "-collect-test-diagnostics", "never",
+                                "-resultBundlePath", str(tests), "test"], args.test_timeout)
         check_results("Simulator tests", tests, tests=True)
     finally:
         if not args.simulator:
             delete_simulator(udid)
     print(f"iOS checks passed with no warnings. Logs and result bundles are in {OUTPUT}.", flush=True)
+    if key and records.working_key(ROOT) == key:
+        try:
+            records.record(ROOT, key, xcode)
+        except (OSError, subprocess.CalledProcessError) as error:
+            print(f"This pass could not be recorded for reuse: {error}", flush=True)
+            return
+        print("Recorded this pass for these iOS files; bin/check-ios --reuse and pushes of them "
+              "will not run the check again.", flush=True)
+    else:
+        print("This pass is not recorded for reuse, since ios/ or bin/format-swift differs from HEAD "
+              "or is not in Git.", flush=True)
+
+
+def interrupt(signum, frame):
+    raise KeyboardInterrupt
 
 
 if __name__ == "__main__":
+    # A terminated check stops its running step and deletes its Simulator, as Control-C does.
+    signal.signal(signal.SIGTERM, interrupt)
     try:
         main()
+    except KeyboardInterrupt:
+        print("bin/check-ios stopped before it finished.", file=sys.stderr)
+        sys.exit(130)
     except (CheckFailure, OSError, ValueError, KeyError, subprocess.CalledProcessError) as error:
         detail = getattr(error, "stderr", None)
         print("\n".join(part for part in (str(error), detail) if part), file=sys.stderr)

@@ -4,9 +4,11 @@ import json
 import os
 from pathlib import Path
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 
 SOURCE = Path(__file__).resolve().parents[1]
@@ -49,6 +51,16 @@ bundle.mkdir(parents=True)
     {'errorCount': 0, 'warningCount': 0, 'analyzerWarningCount': 0})))
 (bundle / 'summary.json').write_text(os.environ.get('FAKE_TEST_SUMMARY', json.dumps(
     {'result': 'Passed', 'passedTests': 6, 'failedTests': 0, 'skippedTests': 0})))
+if os.environ.get('FAKE_HANG_' + step):
+    # Hang with a child that ignores SIGTERM, as a stuck test run can, and
+    # report both process IDs.
+    import signal, subprocess, time
+    signal.signal(signal.SIGTERM, signal.SIG_IGN)
+    child = subprocess.Popen([sys.executable, '-c', 'import signal, time; '
+                              'signal.signal(signal.SIGTERM, signal.SIG_IGN); time.sleep(600)'])
+    print('Testing started', flush=True)
+    Path(os.environ['FAKE_HANG_' + step]).write_text(f'{os.getpid()} {child.pid}')
+    time.sleep(600)
 finish(step)
 """
 XCRUN = RECORD + """
@@ -83,14 +95,16 @@ class CheckIOSTests(unittest.TestCase):
         base = Path(temporary.name).resolve()
         self.repo = base / "checkout"
         (self.repo / "bin").mkdir(parents=True)
-        shutil.copy2(SOURCE / "bin/check-ios", self.repo / "bin/check-ios")
+        for name in ("bin/check-ios", "bin/_ios_check_records.py"):
+            shutil.copy2(SOURCE / name, self.repo / name)
         self.events = base / "events.jsonl"
         self.tools = base / "tools"
         self.tools.mkdir()
         (self.tools / "python3").symlink_to(sys.executable)
         for name, body in (("xcodebuild", XCODEBUILD), ("xcrun", XCRUN), ("swift", SWIFT)):
             self.tool(name, body)
-        self.env = {key: value for key, value in os.environ.items() if not key.startswith("FAKE_")}
+        self.env = {key: value for key, value in os.environ.items()
+                    if not key.startswith("FAKE_") and not key.startswith("GIT_")}
         self.env.update(PATH=str(self.tools), CHECK_EVENTS=str(self.events), PYTHONDONTWRITEBYTECODE="1",
                         FAKE_RUNTIMES=json.dumps(RUNTIMES),
                         SDKROOT="/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform")
@@ -132,6 +146,8 @@ class CheckIOSTests(unittest.TestCase):
         self.assertEqual(events[3], ["xcrun", "simctl", "bootstatus", "NEW-UDID", "-b"])
         self.assertEqual(events[4], ["xcodebuild", *project, "-configuration", "Debug", "-destination",
                                      "platform=iOS Simulator,id=NEW-UDID", "-parallel-testing-enabled", "NO",
+                                     # A failure reports at once instead of gathering a sysdiagnose.
+                                     "-collect-test-diagnostics", "never",
                                      "-resultBundlePath", build + "/check/Tests.xcresult", "test"])
         self.assertEqual(events[5:], [["xcrun", "simctl", "shutdown", "NEW-UDID"],
                                       ["xcrun", "simctl", "delete", "NEW-UDID"]])
@@ -196,6 +212,47 @@ class CheckIOSTests(unittest.TestCase):
                 self.assertIn("Simulator tests: " + message, result.stderr)
                 self.assertEqual(self.steps()[-1], "simctl delete")
 
+    def assert_stopped(self, pids):
+        """Require that the hung xcodebuild and its child have exited."""
+        for pid in pids.read_text().split():
+            deadline = time.monotonic() + 5
+            while True:
+                state = subprocess.run(["ps", "-o", "stat=", "-p", pid], capture_output=True, text=True)
+                if state.returncode or state.stdout.strip().startswith("Z"):
+                    break
+                self.assertLess(time.monotonic(), deadline, f"process {pid} is still running")
+                time.sleep(0.05)
+
+    def test_a_hung_test_run_is_stopped_with_its_processes_and_its_simulator_deleted(self):
+        pids = self.events.parent / "hung.pids"
+        started = time.monotonic()
+        result = self.check("--test-timeout", "0.05", FAKE_HANG_TEST=str(pids))
+        self.assertNotEqual(result.returncode, 0)
+        self.assertLess(time.monotonic() - started, 40)
+        self.assertIn("Testing started", result.stderr)
+        self.assertIn("Simulator tests: stopped after 0.05 minutes without finishing", result.stderr)
+        self.assert_stopped(pids)
+        self.assertEqual(self.steps()[-2:], ["simctl shutdown", "simctl delete"])
+
+    def test_stopping_the_check_stops_its_test_run_and_deletes_its_simulator(self):
+        for stop in (signal.SIGINT, signal.SIGTERM):
+            with self.subTest(signal=stop.name):
+                self.events.unlink(missing_ok=True)
+                pids = self.events.parent / f"{stop.name}.pids"
+                process = subprocess.Popen([str(self.repo / "bin/check-ios")], cwd=self.repo,
+                                           env=self.env | {"FAKE_HANG_TEST": str(pids)}, text=True,
+                                           stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                deadline = time.monotonic() + 30
+                while not (pids.exists() and pids.read_text()):
+                    self.assertLess(time.monotonic(), deadline, "the test run never started")
+                    time.sleep(0.05)
+                process.send_signal(stop)
+                _, error = process.communicate(timeout=30)
+                self.assertNotEqual(process.returncode, 0)
+                self.assertIn("bin/check-ios stopped", error)
+                self.assert_stopped(pids)
+                self.assertEqual(self.steps()[-2:], ["simctl shutdown", "simctl delete"])
+
     def test_requires_xcode_27_and_an_ios_27_runtime(self):
         result = self.check(FAKE_XCODE_VERSION="Xcode 26.4\nBuild version 17E192")
         self.assertNotEqual(result.returncode, 0)
@@ -209,6 +266,59 @@ class CheckIOSTests(unittest.TestCase):
         result = self.check()
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("bin/check-ios needs macOS with Xcode 27 or later.", result.stderr)
+
+    def committed_checkout(self):
+        """Commit the checkout, with an app and the formatter, to a Git repository."""
+        (self.tools / "git").symlink_to(shutil.which("git"))
+        self.env.update(GIT_CONFIG_GLOBAL=os.devnull, GIT_CONFIG_NOSYSTEM="1")
+        (self.repo / "ios").mkdir()
+        (self.repo / "ios/App.swift").write_text("struct App {}\n")
+        (self.repo / "bin/format-swift").write_text("#!/bin/sh\n")
+        (self.repo / ".gitignore").write_text("/ios/build/\n")
+        for args in (("init", "--quiet", "--initial-branch=main"), ("add", "--all"),
+                     ("-c", "user.name=Check", "-c", "user.email=check@example.invalid", "commit",
+                      "--quiet", "--message", "Main")):
+            subprocess.run(["git", *args], cwd=self.repo, env=self.env, check=True, capture_output=True)
+
+    def test_a_pass_on_committed_files_is_recorded_and_reused_with_the_same_xcode(self):
+        self.committed_checkout()
+        result = self.check()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("Recorded this pass for these iOS files", result.stdout)
+        [record] = (self.repo / ".git/screenr-ios-checks").glob("*.json")
+        self.assertEqual(json.loads(record.read_text())["xcode"], "Xcode 27.0 Build version 27A266a")
+        self.events.unlink()
+        # Markdown under ios/ is not an iOS file, committed or not.
+        (self.repo / "ios/Notes.md").write_text("Draft notes.\n")
+        result = self.check("--reuse")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("iOS checks already passed for these iOS files with Xcode 27.0", result.stdout)
+        self.assertEqual(self.recorded(), [])
+        # Without --reuse, or with another Xcode, the check runs again.
+        for args, extra in (((), {}), (("--reuse",), {"FAKE_XCODE_VERSION": "Xcode 27.1\nBuild version 27B5"})):
+            with self.subTest(args=args, extra=extra):
+                self.events.unlink(missing_ok=True)
+                result = self.check(*args, **extra)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(self.steps()[0], "swift")
+
+    def test_a_pass_with_uncommitted_ios_files_is_not_recorded_or_reused(self):
+        self.committed_checkout()
+        self.assertEqual(self.check().returncode, 0)
+        for name in ("ios/App.swift", "ios/Draft.swift", "bin/format-swift"):
+            with self.subTest(name=name):
+                original = (self.repo / name).read_text() if (self.repo / name).exists() else None
+                (self.repo / name).write_text("// draft\n")
+                self.events.unlink(missing_ok=True)
+                result = self.check("--reuse")
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(self.steps()[0], "swift")
+                self.assertIn("This pass is not recorded for reuse", result.stdout)
+                if original is None:
+                    (self.repo / name).unlink()
+                else:
+                    (self.repo / name).write_text(original)
+        self.assertEqual(len(list((self.repo / ".git/screenr-ios-checks").glob("*.json"))), 1)
 
 
 if __name__ == "__main__":

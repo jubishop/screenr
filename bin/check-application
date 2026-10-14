@@ -15,6 +15,9 @@ import shutil
 import subprocess
 import sys
 
+sys.dont_write_bytecode = True
+import _ios_check_records as records  # noqa: E402
+
 ROOT = Path(__file__).resolve().parents[1]
 PARTS = ("static", "app", "browser")
 
@@ -46,20 +49,21 @@ def git(*args):
 
 
 def ios_checks_needed():
-    """Report whether this Mac should run bin/check-ios: ios/ differs from where this branch left main."""
+    """Report whether this Mac should run bin/check-ios: its files differ from where this branch left main."""
     if not shutil.which("xcodebuild"):
         print("Skipping iOS checks: they need macOS with Xcode.", flush=True)
         return False
     try:
         base = git("merge-base", "HEAD", "origin/main").strip()
     except subprocess.CalledProcessError:
-        print("Running iOS checks: there is no origin/main to compare ios/ with.", flush=True)
+        print("Running iOS checks: there is no origin/main to compare the iOS files with.", flush=True)
         return True
     # Committed, staged, and unstaged changes to tracked files, then untracked files.
-    if git("diff", "--name-only", base, "--", "ios") or git("ls-files", "--others", "--exclude-standard", "--", "ios"):
-        print(f"Running iOS checks: ios/ differs from origin/main at {base[:12]}.", flush=True)
+    if (git("diff", "--name-only", base, "--", *records.PATHSPEC)
+            or git("ls-files", "--others", "--exclude-standard", "--", *records.PATHSPEC)):
+        print(f"Running iOS checks: the iOS files differ from origin/main at {base[:12]}.", flush=True)
         return True
-    print(f"Skipping iOS checks: ios/ matches origin/main at {base[:12]}.", flush=True)
+    print(f"Skipping iOS checks: the iOS files match origin/main at {base[:12]}.", flush=True)
     return False
 
 
@@ -95,7 +99,8 @@ def main():
               flush=True)
         return
     if ios_checks_needed():
-        run(str(ROOT / "bin/check-ios"))
+        # A recent pass for these exact iOS files, such as the pre-push hook's, counts.
+        run(str(ROOT / "bin/check-ios"), "--reuse")
     print("Application checks passed.", flush=True)
 
 

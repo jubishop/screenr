@@ -1,12 +1,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { generateKeyPairSync } from "node:crypto";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
-  checkIosCI,
-  iosCheckPaths,
   marketingVersion,
   nextBuild,
   release,
@@ -18,7 +16,6 @@ import type { Environment } from "../../scripts/app-store-connect";
 
 const head = "c".repeat(40);
 const older = "b".repeat(40);
-const oldest = "a".repeat(40);
 
 type Call = {
   command: string;
@@ -51,29 +48,6 @@ function fakeShell(rules: [RegExp, Answer | ((call: Call) => Answer)][]) {
   return { exec, calls, lines };
 }
 
-const runs = (...list: object[]) => ({ stdout: JSON.stringify(list) });
-const run = (
-  sha: string,
-  conclusion: string,
-  extra: { databaseId?: number; status?: string; event?: string } = {},
-) => {
-  const databaseId = extra.databaseId ?? sha.charCodeAt(0);
-  return {
-    databaseId,
-    headSha: sha,
-    status: "completed",
-    conclusion,
-    event: "push",
-    url: `https://github.com/jubishop/screenr/actions/runs/${databaseId}`,
-    ...extra,
-  };
-};
-// Commits a and b are ancestors of c; ios/ changed between a and b only.
-const history: [RegExp, Answer][] = [
-  [/^git merge-base --is-ancestor [abc]{40} c{40}$/, {}],
-  [/^git diff --quiet [bc]{40} c{40} -- /, {}],
-  [/^git diff --quiet a{40} c{40} -- /, { status: 1 }],
-];
 const quiet = { sleep: async () => {}, log: () => {} };
 
 test("build numbers follow the highest ios-v*b* tag", () => {
@@ -155,113 +129,6 @@ test("What to Test lists the app and server API changes testers can see", () => 
   assert.match(notes, new RegExp(`\\n- And ${200 - shown} more changes\\.$`));
 });
 
-test("the release gate checks the same paths as the iOS workflow's filter", async () => {
-  const workflow = await readFile(".github/workflows/ios.yml", "utf8");
-  const filter = workflow.match(/paths: &ios-paths\n((?:\s+- .+\n)+)/)?.[1];
-  assert.ok(filter);
-  assert.deepEqual(
-    [...filter.matchAll(/- "?([^"\n]+?)(?:\/\*\*)?"?\n/g)].map(
-      (match) => match[1],
-    ),
-    iosCheckPaths,
-  );
-});
-
-test("an older successful run counts when the iOS files are unchanged", async () => {
-  const shell = fakeShell([
-    [
-      /^gh run list .*--workflow ios\.yml --branch main/,
-      runs(run(older, "success"), run(oldest, "success")),
-    ],
-    ...history,
-  ]);
-  await checkIosCI(shell.exec, head, quiet);
-  assert.ok(!shell.lines().some((line) => /workflow run|run watch/.test(line)));
-
-  const changed = fakeShell([
-    [
-      /^gh run list .*--workflow ios\.yml --branch main/,
-      runs(run(oldest, "success")),
-    ],
-    ...history,
-    [/^gh workflow run ios\.yml --repo jubishop\/screenr --ref main$/, {}],
-    [
-      /^gh run list .*--event workflow_dispatch --commit c{40}/,
-      runs(
-        run(head, "", {
-          databaseId: 77,
-          status: "queued",
-          event: "workflow_dispatch",
-        }),
-      ),
-    ],
-    [/^gh run watch 77 /, {}],
-  ]);
-  await checkIosCI(changed.exec, head, quiet);
-  const watch = changed.calls.find(({ args }) => args[1] === "watch");
-  assert.deepEqual(watch?.args, [
-    "run",
-    "watch",
-    "77",
-    "--repo",
-    "jubishop/screenr",
-    "--exit-status",
-    "--interval",
-    "30",
-  ]);
-});
-
-test("a failed or running iOS check decides the gate before a new run", async () => {
-  const failed = fakeShell([
-    [
-      /^gh run list .*--branch main/,
-      runs(run(older, "failure"), run(oldest, "success")),
-    ],
-    ...history,
-  ]);
-  await assert.rejects(checkIosCI(failed.exec, head, quiet), {
-    message: `iOS checks failed for ${older.slice(0, 12)}, which has this commit's iOS files: https://github.com/jubishop/screenr/actions/runs/98`,
-  });
-
-  const running = fakeShell([
-    [
-      /^gh run list .*--branch main/,
-      runs(
-        run(head, "", { status: "in_progress", databaseId: 12 }),
-        run(older, "cancelled"),
-      ),
-    ],
-    ...history,
-    [/^gh run watch 12 /, { status: 1 }],
-  ]);
-  await assert.rejects(checkIosCI(running.exec, head, quiet), {
-    message:
-      "iOS checks did not pass: https://github.com/jubishop/screenr/actions/runs/12",
-  });
-
-  // A cancelled run says nothing, so the gate starts a run for this commit and
-  // waits for that one rather than an earlier manual run.
-  const cancelled = fakeShell([
-    [
-      /^gh run list .*--branch main/,
-      runs(
-        run(head, "cancelled", { databaseId: 5, event: "workflow_dispatch" }),
-      ),
-    ],
-    ...history,
-    [/^gh workflow run ios\.yml/, {}],
-    [
-      /^gh run list .*--event workflow_dispatch/,
-      runs(
-        run(head, "", { databaseId: 6, status: "queued" }),
-        run(head, "cancelled", { databaseId: 5 }),
-      ),
-    ],
-    [/^gh run watch 6 /, {}],
-  ]);
-  await checkIosCI(cancelled.exec, head, quiet);
-});
-
 // A checkout with Version.xcconfig and an API key, a clean main at c, and
 // tags through build 3 on commit b. Rules added first override the defaults.
 async function releaseFixture(
@@ -295,8 +162,7 @@ async function releaseFixture(
       /^git log --format=%s ios-v1\.0b3\.\.c{40} -- ios src\/server src\/app\/api$/,
       { stdout: "✨ feat(ios): Add the You tab (#301)\n" },
     ],
-    [/^gh run list .*--branch main/, runs(run(head, "success"))],
-    ...history,
+    [/\/bin\/check-ios --reuse$/, {}],
     [/^xcodebuild /, {}],
     [/^git tag --annotate /, {}],
     [/^git push origin refs\/tags\/ios-v1\.0b4$/, {}],
@@ -333,6 +199,18 @@ test("a release archives and uploads the next build, then tags and pushes the co
         message:
           /No App Store Connect app has the bundle ID com\.artisanalsoftware\.Screenr\.\nios-v1\.0b4 is uploaded and tagged\. Run bin\/ios-testflight --distribute-only to retry\./,
       },
+    );
+    // The gate runs bin/check-ios in the terminal before anything is built.
+    const gate = fixture.shell.calls.findIndex(
+      ({ command }) => command === join(fixture.root, "bin/check-ios"),
+    );
+    assert.deepEqual(fixture.shell.calls[gate]?.args, ["--reuse"]);
+    assert.equal(fixture.shell.calls[gate]?.output, "terminal");
+    assert.ok(
+      gate <
+        fixture.shell.calls.findIndex(
+          ({ command }) => command === "xcodebuild",
+        ),
     );
     const [archive, upload] = fixture.shell.calls.filter(
       ({ command }) => command === "xcodebuild",
@@ -399,7 +277,7 @@ test("a release archives and uploads the next build, then tags and pushes the co
   }
 });
 
-test("a release refuses a dirty, stale, or released checkout and tags nothing after a failed upload", async () => {
+test("a release refuses a dirty, stale, released, or failing checkout and tags nothing after a failed upload", async () => {
   const cases: [string, [RegExp, Answer][], RegExp][] = [
     [
       "dirty",
@@ -417,18 +295,27 @@ test("a release refuses a dirty, stale, or released checkout and tags nothing af
       /already released as ios-v1\.0b3\. Run bin\/ios-testflight --distribute-only/,
     ],
     [
+      "iOS checks",
+      [[/\/bin\/check-ios --reuse$/, { status: 1 }]],
+      /^bin\/check-ios failed with status 1\. Fix the iOS checks on main before releasing\.$/,
+    ],
+    [
       "upload",
       [[/^xcodebuild .*-exportArchive/, { status: 70 }]],
       /Uploading failed with status 70\. See .*upload\.log/,
     ],
   ];
-  for (const [, overrides, message] of cases) {
+  for (const [name, overrides, message] of cases) {
     const fixture = await releaseFixture(overrides);
     try {
       await assert.rejects(
         release({ distributeOnly: false, submitReview: false }, fixture.io),
         { message },
       );
+      if (name !== "upload")
+        assert.ok(
+          !fixture.shell.calls.some((call) => call.command === "xcodebuild"),
+        );
       assert.ok(
         !fixture.shell
           .lines()
@@ -460,7 +347,9 @@ test("--distribute-only retries the newest tag's build without building", async 
       !fixture.shell
         .lines()
         .some((line) =>
-          /^(xcodebuild|gh|git (status|tag --annotate|push))/.test(line),
+          /^(xcodebuild|\S+\/bin\/check-ios|git (status|tag --annotate|push))/.test(
+            line,
+          ),
         ),
     );
     // Its notes cover the commits between the previous tag and this one.
