@@ -32,6 +32,10 @@ struct RequestTests {
       .sendCode(email: "alice@example.test")
     ),
     Shape(
+      "auth/invitation/available",
+      .invitation(token: "8FdwRYhlFy9tcqxOibjISU88FZTgsFeusFjHMbgJ1As")
+    ),
+    Shape(
       "auth/sign-in/email-otp/invalid-code",
       .signIn(email: "alice@example.test", code: "000000")
     ),
@@ -108,6 +112,7 @@ struct RequestTests {
     Shape("actions/search/results", .search("night")),
     Shape("actions/seasons/default", .seasons(title: "tv:201")),
     Shape("actions/setup/complete", .setup(name: "Pat Morgan", username: "pat")),
+    Shape("actions/setup-details/default", .setupDetails),
     Shape(
       "actions/setup/with-invitation",
       .setup(

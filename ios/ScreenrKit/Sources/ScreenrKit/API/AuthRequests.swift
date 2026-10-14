@@ -86,6 +86,15 @@ extension APIRequest where Response == Acknowledgement {
   }
 }
 
+extension APIRequest where Response == InvitationAvailability {
+  // Whether an invitation link can still be used to join, asked when the app
+  // opens one, since requesting a code answers the same either way. It works
+  // signed out and uses nothing up.
+  public static func invitation(token: String) -> Self {
+    APIRequest(method: .get, endpoint: .auth("invitation"), query: ["token": token])
+  }
+}
+
 // The name Apple shares on a person's first Sign in with Apple.
 public struct AppleName: Hashable, Sendable {
   public let first: String?

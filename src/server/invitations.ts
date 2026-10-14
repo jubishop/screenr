@@ -7,6 +7,7 @@ import {
   isUuid,
   usernameText,
 } from "./db";
+import { photoSetup } from "./photos";
 
 export const invitationHash = (token: string) =>
   createHash("sha256").update(token).digest("hex");
@@ -121,6 +122,16 @@ export async function completeSignup(
       userId,
     ]);
   });
+}
+
+// What setup starts from: the name a sign-in gave the account, its photo,
+// such as a Google signup's copy, and whether Google can supply one.
+export async function setupDetails(userId: string) {
+  const { rows } = await db.query<{ name: string }>(
+    'SELECT name FROM "user" WHERE id=$1',
+    [userId],
+  );
+  return { userId, name: rows[0]?.name ?? "", ...(await photoSetup(userId)) };
 }
 
 export async function listInvitations(userId: string) {

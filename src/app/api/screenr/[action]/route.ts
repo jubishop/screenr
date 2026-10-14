@@ -82,6 +82,10 @@ async function handle(
     };
     const client = requestClient(request.headers);
     if (action && !action.profile) {
+      if (action.method === "GET") {
+        const query = new URL(request.url).searchParams;
+        return json((await action.respond(query, context)) ?? { ok: true });
+      }
       if (action.usage) await recordActiveDay(context.userId, client);
       const input = action.upload
         ? { upload: await read(request, action.upload) }

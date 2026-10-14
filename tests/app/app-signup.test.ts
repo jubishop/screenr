@@ -15,7 +15,8 @@ const { createAuth } = await import("../../src/server/auth");
 const { createInvitation, completeSignup, revokeInvitation } =
   await import("../../src/server/invitations");
 const { profileFor } = await import("../../src/server/profiles");
-const { POST } = await import("../../src/app/api/screenr/[action]/route");
+const { uploadPhoto } = await import("../../src/server/photos");
+const { GET, POST } = await import("../../src/app/api/screenr/[action]/route");
 
 useDatabase();
 
@@ -122,6 +123,12 @@ function setup(username: string, headers: Fields) {
     }),
     { params: Promise.resolve({ action: "setup" }) },
   );
+}
+
+function setupDetails(headers: Fields) {
+  return GET(new Request(`${origin}/api/screenr/setup-details`, { headers }), {
+    params: Promise.resolve({ action: "setup-details" }),
+  });
 }
 
 async function assertJoined(userId: string, id: string) {
@@ -238,6 +245,103 @@ test("unknown, expired, revoked, and used-up invitations are refused without rev
     );
   }
   assert.equal(await uses(valid.id), 0);
+});
+
+test("setup starts from the account's name, its photo, and whether Google can supply one", async () => {
+  const { token } = await createInvitation(await person("inviter"));
+  const userId = await pending("pat", token);
+  await db.query('UPDATE "user" SET name=$2 WHERE id=$1', [
+    userId,
+    "Pat Morgan",
+  ]);
+  const session = { Authorization: `Bearer ${await bearerFor(userId)}` };
+  const before = await setupDetails(session);
+  assert.equal(before.status, 200);
+  assert.equal(before.headers.get("Cache-Control"), "private, no-store");
+  assert.deepEqual(await before.json(), {
+    userId,
+    name: "Pat Morgan",
+    photo: null,
+    google: false,
+  });
+  // A Google signup copies its picture before setup.
+  const jpeg = Buffer.alloc(3000, 5);
+  jpeg.set([0xff, 0xd8, 0xff, 0xe0]);
+  const { photo } = await uploadPhoto(userId, jpeg);
+  await db.query(
+    `INSERT INTO account(id,"accountId","providerId","userId","createdAt","updatedAt")
+    VALUES('pat-google','pat-subject','google',$1,now(),now())`,
+    [userId],
+  );
+  assert.deepEqual(await (await setupDetails(session)).json(), {
+    userId,
+    name: "Pat Morgan",
+    photo,
+    google: true,
+  });
+  await assertRouteError(await setupDetails({}), denied.signedOut);
+});
+
+// A code request never says whether its invitation counts, so the app asks
+// before sign-in, as the web's /join link does.
+function checkInvitation(
+  auth: ReturnType<typeof createAuth>,
+  token: string,
+  ip = "192.0.2.20",
+) {
+  return auth.handler(
+    new Request(
+      `${origin}/api/auth/invitation?token=${encodeURIComponent(token)}`,
+      { headers: { "X-Forwarded-For": ip } },
+    ),
+  );
+}
+
+test("the app asks whether an invitation link can still be used to join", async () => {
+  const auth = createAuth({ rateLimit: false });
+  const inviter = await person("inviter");
+  const valid = await createInvitation(inviter);
+  const expired = await createInvitation(inviter);
+  await db.query("UPDATE invitation SET expires_at=now() WHERE id=$1", [
+    expired.id,
+  ]);
+  const revoked = await createInvitation(inviter);
+  await revokeInvitation(inviter, revoked.id);
+  const usedUp = await createInvitation(inviter);
+  await completeSignup(await pending("guest", usedUp.token), "Guest", "guest");
+  for (const [condition, token, available] of [
+    ["active", valid.token, true],
+    ["unknown", randomBytes(32).toString("base64url"), false],
+    ["malformed", "not-an-invitation", false],
+    ["empty", "", false],
+    ["expired", expired.token, false],
+    ["revoked", revoked.token, false],
+    ["used up", usedUp.token, false],
+  ] as const) {
+    const response = await checkInvitation(auth, token);
+    assert.equal(response.status, 200, condition);
+    assert.equal(response.headers.get("Cache-Control"), "private, no-store");
+    assert.deepEqual(await response.json(), { available }, condition);
+  }
+  // Checking signs no one up and uses nothing.
+  assert.equal(await uses(valid.id), 0);
+  assert.equal(await accounts(), 2);
+});
+
+test("invitation checks are limited to ten per client each minute", async () => {
+  await db.query('TRUNCATE "rateLimit"');
+  const auth = createAuth();
+  const { token } = await createInvitation(await person("inviter"));
+  for (let index = 0; index < 10; index++)
+    assert.equal((await checkInvitation(auth, token)).status, 200);
+  const limited = await checkInvitation(auth, token);
+  assert.equal(limited.status, 429);
+  assert.ok(Number(limited.headers.get("X-Retry-After")) > 0);
+  assert.equal(
+    (await checkInvitation(auth, token, "192.0.2.21")).status,
+    200,
+    "Another client has its own limit",
+  );
 });
 
 test("web requests keep the invitation cookie and ignore the Screenr-Invitation header", async () => {

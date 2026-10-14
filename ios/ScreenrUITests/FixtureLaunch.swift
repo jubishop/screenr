@@ -11,9 +11,16 @@ struct FixtureLaunch {
     case signedOut
   }
 
+  enum Profile: String {
+    case complete
+    // The viewer has no profile until a setup request succeeds.
+    case pending
+  }
+
   // The member whose fixtures answer first, such as alice, nora, or pat.
   var viewer = "alice"
   var session = Session.signedIn
+  var profile = Profile.complete
   // Fixture names that answer first, such as "screen/feed/empty".
   var overrides: [String] = []
   // A fixture that answers every API request, such as "errors/update-required".
@@ -32,7 +39,7 @@ struct FixtureLaunch {
   var arguments: [String] {
     var arguments = [
       "-ScreenrFixtures", Self.directory.path(), "-ScreenrFixtureViewer", viewer,
-      "-ScreenrFixtureSession", session.rawValue,
+      "-ScreenrFixtureSession", session.rawValue, "-ScreenrFixtureProfile", profile.rawValue,
     ]
     for name in overrides { arguments += ["-ScreenrFixtureOverride", name] }
     if let failure { arguments += ["-ScreenrFixtureFailure", failure] }

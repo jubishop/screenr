@@ -15,7 +15,7 @@ repository root.
 | --- | --- |
 | `Screenr.xcodeproj` | The Screenr app and ScreenrUITests targets, and the shared Screenr scheme. |
 | `Config/` | The `.xcconfig` build settings, the app's entitlements, and the release export options. |
-| `Screenr/` | The app target: the [app shell](#app-shell) in `Shell/`, feature screens in `Screens/`, the app lifecycle, assets, and `Info.plist`. |
+| `Screenr/` | The app target: the [app shell](#app-shell) in `Shell/`, feature screens in `Screens/`, components several features share in `Shared/`, the app lifecycle, assets, and `Info.plist`. |
 | `ScreenrUITests/` | XCUITest UI tests. |
 | `ScreenrKit/` | A local Swift package: `Sources/ScreenrKit`, `Tests/ScreenrKitTests`, and `Fixtures/`. |
 | `build/` | Build output, check logs, and result bundles. Git ignores it. |
@@ -175,6 +175,10 @@ try await api.send(.comment(conversation: item.id, body: text, spoiler: false))
   person who has not finished setup gets `.forbidden` with "Complete your
   profile first." from every action except `setup`, `delete-account`, and
   the photo actions.
+- **Photos:** `.photo(userId:version:)` returns a profile photo's JPEG as
+  `Data`, sent with the session's token like any request, since the server
+  shows a photo only to signed-in people who may see it. A person's `photo`
+  is the version to ask for.
 - **Models:** properties use the camelCase form of the server's keys, such as
   `userId` for `user_id`. Unknown enum values decode as `.unknown`, and an
   unknown screen kind as `.unknown(kind:)`. Timestamps are `Date` in either
@@ -197,6 +201,7 @@ uses it when launched with these arguments; Release builds ignore them:
 | `-ScreenrFixtures` | The fixtures directory. |
 | `-ScreenrFixtureViewer` | The member whose fixtures answer first: `alice` (default), or `nora` for empty screens. |
 | `-ScreenrFixtureSession` | `signedIn` (default) or `signedOut`. |
+| `-ScreenrFixtureProfile` | `complete` (default), or `pending` for a viewer without a profile, such as `pat`: member actions get `errors/incomplete-profile`, as on the server, until a setup request succeeds. |
 | `-ScreenrFixtureOverride` | A fixture that answers first, such as `screen/feed/empty`. Repeatable. |
 | `-ScreenrFixtureFailure` | A fixture that answers every `/api/screenr` request, such as `errors/update-required`. |
 | `-ScreenrFixtureLog` | A file that gets a line per `/api/screenr` request, such as `GET /api/screenr/screen?path=%2F`, with ` visit` after the app's [visit](#visits). |
@@ -209,10 +214,12 @@ A request gets the fixture with the same action and
 query or body, then falls back to the screen's path or to a successful
 fixture for the action. A matching ETag gets 304.
 
-Requesting a code and signing in with one succeed, unless an `auth/`
-override answers the route, such as
-`auth/email-otp/send-verification-otp/rate-limited`. Apple and Google sign-in
-accept only the stub credentials described in [Sign-in](#sign-in).
+Requesting a code and signing in with one succeed, and every invitation
+link is available, unless an `auth/` override answers the route, such as
+`auth/email-otp/send-verification-otp/rate-limited` or
+`auth/invitation/unavailable`. Apple and Google sign-in accept only the stub
+credentials described in [Sign-in](#sign-in). Photos are not served, so
+avatars show initials.
 
 ## Sign-in
 
@@ -224,7 +231,7 @@ Its behavior lives in ScreenrKit's `SignIn/` folder:
 | Piece | What it does |
 | --- | --- |
 | `SignInModel` | The screen's `@Observable` model. The email code takes two steps, and the second offers a new code. It shows the server's messages, such as the code limits, as the server words them. |
-| `PendingInvitation` | The token of the invitation link a new member opened. Every sign-in request sends it as `Screenr-Invitation`. |
+| `PendingInvitation` | The token of the invitation link a new member opened, which every sign-in request sends as `Screenr-Invitation`. See [invitations and setup](#invitations-and-setup). |
 | `AppleNonce`, `AppleCredential` | Sign in with Apple's request gets the SHA-256 hex digest of a new nonce. The server gets the raw nonce, the identity token, the authorization code, and on the first sign-in the person's name. |
 | `GoogleSignIn` | Google's authorization code flow with PKCE (S256) for the iOS client, without Google's SDK. A `WebAuthenticator` opens Google's page; the app's is SwiftUI's web authentication session. It redeems the code at Google's token endpoint with no client secret and returns the ID token and nonce. |
 | `SignOutModel` | Signs out on the server. If the server does not confirm, the session stays and an alert says why, as on the web. |
@@ -270,7 +277,7 @@ ScreenrApp            builds AppServices and ShellModel, opens -ScreenrOpenURL
    ├─ RequiredUpdateView        .updateRequired (a 426)
    ├─ SignInView                .signedOut (SignIn/)
    └─ signed in, by ShellModel.account
-      ├─ SetupView              .needsSetup (a 403 on the feed)
+      ├─ SetupView              .needsSetup (a 403 on the feed; Screens/)
       └─ MainTabView            .ready
          ├─ Circle, Friends, You, Find a title (the search-role tab)
          │  └─ NavigationStack(path: $router[stack: tab])
@@ -314,7 +321,7 @@ The Settings placeholder holds `SignOutButton` until Settings is built.
 | `/invites`, `/watch-together` | Pushed on Friends. |
 | `/account` | Settings over You. |
 | `/titles/…`, `/people/<other>`, `/conversations/…`, unknown paths | Pushed on the current tab. A conversation shows the entry it redirects to in its place. |
-| `/join/<token>` | Keeps the token in `PendingInvitation` for sign-in and setup. A member who has a profile lands in Circle, as on the web. |
+| `/join/<token>` | Keeps the token in `PendingInvitation` for sign-in and setup, and checks it with the server. A member who has a profile lands in Circle, as on the web, and the app forgets the token. |
 
 Tab roots never change destination; a link adds to a stack or, for Find,
 sets `router.findSearch`. SwiftUI did not report a root as appearing when its
@@ -388,6 +395,53 @@ marks the visit for `ShellTests`.
    tabs with `app.performShellAudit()`. `ShellTests` check the shell through
    navigation titles and `FixtureLaunch(requestLog:)`, so they hold when a
    placeholder changes; keep `DestinationView`'s navigation titles.
+
+## Invitations and setup
+
+A person joins from an invitation link, `https://screenr.club/join/<token>`
+in Screenr or `screenr-dev://join/<token>` in Screenr Dev
+([decision](../docs/ios-app.md#full-parity-including-signup--2026-10-13)):
+
+1. **The link:** `Router.open(_:)` hands the token to `PendingInvitation`,
+   which keeps it in the Keychain (`SystemKeychain.invitation(accessGroup:)`)
+   until setup succeeds, so it survives a relaunch. `AppRootView` then
+   checks it with `GET /api/auth/invitation`, as it does a token an earlier
+   launch kept, because requesting a code answers the same whether or not
+   the invitation counts
+   ([invitation tokens](../docs/data-and-access.md#invitation-tokens)). Its
+   `status` is `checking`, `available`, `unconfirmed` when the check failed,
+   such as offline, or `unavailable`, which forgets the token.
+2. **Sign-in:** `SignInView` says "You’re invited" while a token waits, or
+   the web's "That invitation is no longer available" notice. Every sign-in
+   request sends the token.
+3. **Setup:** a signed-in person without a profile gets `SetupView`, whose
+   `SetupModel` starts from `setup-details`: the name the sign-in gave the
+   account, and its photo. Joining sends the name, username, and token to
+   `setup`, and shows the server's words for any problem. A 403 checks the
+   invitation again, so one that is gone is forgotten. Once setup succeeds,
+   `PendingInvitation.finish()` forgets the token and `shell.checkAccount()`
+   shows Circle, where the inviter is already a friend.
+
+A member who already has a profile and follows a link lands in Circle, and
+the app forgets the token. The web's setup can also confirm an unverified
+email address. Apple and Google report verified addresses, and an email code
+verifies its address, so the app leaves that step out; if setup ever answers
+"Verify your email before joining.", signing in again with an email code
+verifies the address.
+
+### Profile photos
+
+Setup and Settings share the member's own photo:
+
+| Piece | Where | What it does |
+| --- | --- | --- |
+| `PhotoPreparation` | ScreenrKit `Photos/` | Turns a library photo upright, crops the center square, and encodes a 512×512 JPEG under 60 KB, lowering the quality and then the size (384, then 256) as the web does. It runs off the main actor. |
+| `ProfilePhotoModel` | ScreenrKit `Photos/` | `@Observable`: the photo version, its JPEG once loaded or saved, and `upload`, `useGoogle`, and `remove`, which save at once and report the web's status messages. `show(userId:version:google:)` takes the server's latest values. |
+| `ProfilePhotoEditor` | `Screenr/Shared/Photo/` | The photo or initial with Add or Replace photo (`PhotosPicker`), Use my Google photo, and Remove photo. |
+| `ProfilePhotoView` | `Screenr/Shared/Photo/` | A decorative circle with a member's photo over their initial. |
+
+UI tests cannot drive the photo picker, so `ProfilePhotoModelTests` and
+`PhotoPreparationTests` cover choosing a photo.
 
 ## Fixtures
 

@@ -123,6 +123,13 @@ public enum SaveSurface: String, Hashable, Sendable {
   case watchTogether = "watch_together"
 }
 
+extension APIRequest where Response == SetupDetails {
+  // What first-time setup starts from. It works before the profile exists.
+  public static var setupDetails: Self {
+    APIRequest(method: .get, endpoint: .action("setup-details"))
+  }
+}
+
 extension APIRequest where Response == Acknowledgement {
   // Completes a new member's profile. `invitation` is the token of the link
   // they joined through.
@@ -295,6 +302,18 @@ extension APIRequest where Response == PhotoVersion {
   public static var removePhoto: Self { .write("remove-photo", [:]) }
 
   public static var googlePhoto: Self { .write("google-photo", [:]) }
+}
+
+extension APIRequest where Response == Data {
+  // A person's profile photo, as a person's `photo` names its version. The
+  // server shows it only to signed-in people who can see the profile.
+  public static func photo(userId: String, version: String) -> Self {
+    APIRequest(
+      method: .get,
+      endpoint: .photo(userId: userId, version: version),
+      route: "/api/photos/:user/:version"
+    )
+  }
 }
 
 extension APIRequest where Response == CreatedInvitation {

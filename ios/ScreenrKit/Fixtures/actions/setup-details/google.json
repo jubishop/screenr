@@ -1,0 +1,19 @@
+{
+  "description": "Pat signed up with Google, which supplied his photo.",
+  "viewer": "pat",
+  "request": {
+    "method": "GET",
+    "action": "setup-details",
+    "path": "/api/screenr/setup-details",
+    "query": {}
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "userId": "user-pat",
+      "name": "Pat Morgan",
+      "photo": "4136d3dfc694c315",
+      "google": true
+    }
+  }
+}

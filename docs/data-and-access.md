@@ -43,7 +43,8 @@ result becomes the JSON response; an action without one responds
 2. A POST must come from the app's origin (403), unless it carries a
    [bearer token](#native-client-sessions).
 3. The request needs a session (401).
-4. Every action except profile setup, photo changes, and
+4. Every action except profile setup and its
+   [details](#invitation-tokens), photo changes, and
    [account deletion](#account-deletion) needs a completed profile (403).
 5. An unknown action, or a known one with another method, returns 404.
 6. Usage telemetry records the day, with the client that sent the request,
@@ -54,7 +55,8 @@ result becomes the JSON response; an action without one responds
    A photo upload's body is the image itself, at most 200 KB.
 
 Add an action as one entry, using `read` for a member GET, `write` for a
-member POST, `signup` for a POST that runs before profile setup, `photo`
+member POST, `signup` for a POST that runs before profile setup,
+`signupRead` for a GET that runs before it, `photo`
 for a photo change, which works before and after setup, or `erasure` for
 account deletion, which also works either way and records no usage. Its
 `run` receives the user ID, the request's session ID, and the request
@@ -291,6 +293,26 @@ remaining and must be neither expired nor revoked.
   `{"error": "This invitation is no longer available. Ask for a new link."}`.
   Setup uses up the invitation and makes the new member its creator's
   friend in one transaction ([write lock](#write-lock-and-refresh-behavior)).
+
+Because a code request answers the same either way, the app asks about each
+link it opens, as the web's `/join` route checks it
+([issue #228](https://github.com/jubishop/screenr/issues/228)).
+`GET /api/auth/invitation?token=<token>`, a Better Auth endpoint in
+`src/server/auth.ts`, answers `{"available": true}` or `{"available": false}`
+with `Cache-Control: private, no-store`. It needs no session, uses nothing
+up, and reveals nothing that `/join` does not: the web's join page names no
+inviter, so neither does the answer. A malformed token is unavailable. Better
+Auth's per-client rate limit allows ten checks a minute. The app keeps the
+token in the Keychain until setup succeeds, checks a kept token again at
+launch, and forgets one the server reports unavailable
+([iPhone setup](../ios/README.md#invitations-and-setup)).
+
+Setup in the app starts from `GET /api/screenr/setup-details`, which works
+before the profile exists and answers what the web's setup page reads:
+`{"userId", "name", "photo", "google"}`. `name` is the name the sign-in gave
+the account, such as Google's or Apple's, or empty; `photo` is the photo
+version, such as a Google signup's copy, or `null`; and `google` says
+whether a Google account can supply a photo.
 
 ## Push devices and settings
 

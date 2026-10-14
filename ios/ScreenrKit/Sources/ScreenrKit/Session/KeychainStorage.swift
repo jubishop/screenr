@@ -2,8 +2,9 @@ import Foundation
 import Security
 import Synchronization
 
-// The Keychain item that holds the session token. The app and its extensions
-// share it through the Keychain access group, which is the app group.
+// A Keychain item that holds one string, such as the session token. The app
+// and its extensions share it through the Keychain access group, which is the
+// app group.
 public protocol KeychainStorage: Sendable {
   func read() throws(KeychainError) -> String?
   func write(_ token: String) throws(KeychainError)
@@ -20,19 +21,29 @@ public struct KeychainError: Error, Hashable, Sendable {
 
 // The system Keychain. The item is readable after the first unlock, so the
 // notification extension can read it while the iPhone is locked, and it never
-// leaves this device in a backup.
+// leaves this device in a backup. The default item is the session token.
 public struct SystemKeychain: KeychainStorage {
   private let accessGroup: String
+  private let service: String
+  private let account: String
 
-  public init(accessGroup: String) {
+  public init(accessGroup: String, service: String = "Screenr session", account: String = "bearer")
+  {
     self.accessGroup = accessGroup
+    self.service = service
+    self.account = account
+  }
+
+  // The token of the invitation link a new member opened.
+  public static func invitation(accessGroup: String) -> SystemKeychain {
+    SystemKeychain(accessGroup: accessGroup, service: "Screenr invitation", account: "token")
   }
 
   private var item: [String: Any] {
     [
       kSecClass as String: kSecClassGenericPassword,
-      kSecAttrService as String: "Screenr session",
-      kSecAttrAccount as String: "bearer",
+      kSecAttrService as String: service,
+      kSecAttrAccount as String: account,
       kSecAttrAccessGroup as String: accessGroup,
       kSecUseDataProtectionKeychain as String: true,
     ]
@@ -75,7 +86,7 @@ public struct SystemKeychain: KeychainStorage {
 }
 
 // A Keychain in memory, for tests and the fixture API, which have no
-// entitlements and must not touch the device's session.
+// entitlements and must not touch the device's session or invitation.
 public final class InMemoryKeychain: KeychainStorage {
   private let token: Mutex<String?>
 

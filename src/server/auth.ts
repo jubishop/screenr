@@ -1,6 +1,10 @@
 import { createHash } from "node:crypto";
 import { betterAuth, type BetterAuthPlugin } from "better-auth";
-import { APIError, createAuthMiddleware } from "better-auth/api";
+import {
+  APIError,
+  createAuthEndpoint,
+  createAuthMiddleware,
+} from "better-auth/api";
 import { bearer, emailOTP } from "better-auth/plugins";
 import { codeLimitMessage } from "../shared";
 import { freshSignInSeconds } from "./account-deletion";
@@ -13,6 +17,9 @@ import { db, transaction } from "./db";
 import { activeInvitation, invitationHash } from "./invitations";
 import { queueCode } from "./email";
 import { copyGooglePhoto } from "./photos";
+
+// Every invitation token is 32 random bytes in base64url.
+const invitationFormat = /^[a-zA-Z0-9_-]{43}$/;
 
 // The invitation a signup request names, which every invite-only check reads:
 // code delivery, account creation for each sign-in method, and setup
@@ -34,7 +41,7 @@ export function invitationToken(headers?: Headers) {
     .map((value) => value.trim())
     .find((value) => value.startsWith("screenr-invite="))
     ?.slice(15);
-  return token && /^[a-zA-Z0-9_-]{43}$/.test(token) ? token : undefined;
+  return token && invitationFormat.test(token) ? token : undefined;
 }
 
 // Apple's beta review signs in to this seeded demo account
@@ -139,6 +146,32 @@ const nativeTokenOnly = {
         }),
       },
     ],
+  },
+} satisfies BetterAuthPlugin;
+
+// Whether an invitation link can still be used to join: GET
+// /api/auth/invitation?token=<token> answers `{ "available": true|false }`
+// (docs/data-and-access.md#invitation-tokens). The iPhone app asks when it
+// opens a /join link, as the web's /join route checks, because a code request
+// answers the same with or without a valid invitation. It reveals nothing
+// about the invitation beyond what /join does, uses nothing up, and counts
+// toward Better Auth's per-client rate limit.
+const invitationCheck = {
+  id: "invitation-check",
+  endpoints: {
+    invitationAvailability: createAuthEndpoint(
+      "/invitation",
+      { method: "GET" },
+      async (ctx) => {
+        const token = ctx.query?.token;
+        const available =
+          typeof token === "string" &&
+          invitationFormat.test(token) &&
+          Boolean(await activeInvitation(invitationHash(token)));
+        ctx.setHeader("Cache-Control", "private, no-store");
+        return ctx.json({ available });
+      },
+    ),
   },
 } satisfies BetterAuthPlugin;
 
@@ -248,6 +281,7 @@ export function createAuth(
       max: 100,
       customRules: {
         "/email-otp/send-verification-otp": { window: 60, max: 3 },
+        "/invitation": { window: 60, max: 10 },
       },
     },
     hooks: {
@@ -280,6 +314,7 @@ export function createAuth(
       // session row's stored token alone never signs anyone in.
       bearer({ requireSignature: true }),
       nativeTokenOnly,
+      invitationCheck,
       emailOTP({
         expiresIn: 600,
         allowedAttempts: 5,

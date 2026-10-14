@@ -75,6 +75,17 @@ private struct SignInForm: View {
           : "Welcome back. Sign in to your circle. New members need an invitation."
       )
       .multilineTextAlignment(.center)
+      if let notice = model.invitationNotice {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+          Image(systemName: "exclamationmark.triangle.fill")
+            .foregroundStyle(.red)
+            .accessibilityHidden(true)
+          Text(notice)
+        }
+        .font(.callout)
+        .multilineTextAlignment(.center)
+        .onAppear { AccessibilityNotification.Announcement(notice).post() }
+      }
     }
   }
 
@@ -195,7 +206,7 @@ private struct SignInForm: View {
 }
 
 // A full-width button label that shows a spinner while its request runs.
-private struct ProgressLabel: View {
+struct ProgressLabel: View {
   let title: String
   let systemImage: String?
   let busy: Bool

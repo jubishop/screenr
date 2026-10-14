@@ -8,6 +8,15 @@ public struct FixtureScenario: Hashable, Sendable {
     case signedOut
   }
 
+  // Whether the viewer has set up a profile.
+  public enum Profile: String, Hashable, Sendable {
+    case complete
+    // Like a new member on the server, the viewer gets
+    // `errors/incomplete-profile` from every action but setup, its details,
+    // photo changes, and account deletion, until a setup request succeeds.
+    case pending
+  }
+
   // The member whose fixtures answer first, such as `alice`, the usual
   // viewer, `nora`, who has no friends or activity, or `pat`, who has not
   // finished setup.
@@ -15,6 +24,7 @@ public struct FixtureScenario: Hashable, Sendable {
   // The session the app starts with. Signing in through the fixture API
   // always succeeds.
   public var session: Session
+  public var profile: Profile
   // Fixtures that answer their action, and for `screen` their path, before
   // any other, such as `screen/feed/empty` or `actions/setup/username-taken`.
   public var overrides: [String]
@@ -28,12 +38,14 @@ public struct FixtureScenario: Hashable, Sendable {
   public init(
     viewer: String = "alice",
     session: Session = .signedIn,
+    profile: Profile = .complete,
     overrides: [String] = [],
     failure: String? = nil,
     requestLog: URL? = nil
   ) {
     self.viewer = viewer
     self.session = session
+    self.profile = profile
     self.overrides = overrides
     self.failure = failure
     self.requestLog = requestLog
@@ -69,10 +81,23 @@ final class FixtureRequestLog: Sendable {
   }
 }
 
+// Whether a viewer who started without a profile has set one up.
+final class FixtureSetup: Sendable {
+  private let done = Mutex(false)
+
+  var isDone: Bool { done.withLock { $0 } }
+
+  func complete() {
+    done.withLock { $0 = true }
+  }
+}
+
 // An in-process Screenr server that answers from the checked-in fixtures, so
 // the app runs its real client against recorded responses.
 //
 // - `/api/screenr` requests without a bearer token get `errors/signed-out`.
+// - A viewer whose profile is pending gets `errors/incomplete-profile` from
+//   member actions until a setup request succeeds.
 // - Otherwise the fixture with the same action and the same query or body
 //   answers, preferring the scenario's viewer. A `screen` path with other
 //   query parameters falls back to its path alone. Other GETs and POSTs fall
@@ -81,17 +106,25 @@ final class FixtureRequestLog: Sendable {
 //   as overrides or the failure.
 // - A fixture's ETag in `If-None-Match` gets 304, as on the server.
 // - Better Auth's routes succeed: requesting a code, signing in, which returns
-//   `FixtureTransport.token` in `set-auth-token`, and signing out. An `auth/`
-//   override answers its route instead, such as
-//   `auth/email-otp/send-verification-otp/rate-limited`. Apple and Google
-//   sign-in accept only `FixtureIdentity`'s stub credentials.
+//   `FixtureTransport.token` in `set-auth-token`, signing out, and checking
+//   an invitation, which is available. An `auth/` override answers its route
+//   instead, such as `auth/email-otp/send-verification-otp/rate-limited` or
+//   `auth/invitation/unavailable`. Apple and Google sign-in accept only
+//   `FixtureIdentity`'s stub credentials.
 // - Google's token endpoint redeems `FixtureWebAuthenticator`'s stub codes.
 public struct FixtureTransport: HTTPTransport {
   public static let token = "fixture-session"
 
+  // The actions a member without a profile can use, as on the server.
+  private static let beforeProfile: Set = [
+    "setup", "setup-details", "photo", "remove-photo", "google-photo", "delete-account",
+  ]
+
   private let fixtures: [Fixture]
   private let scenario: FixtureScenario
   private let log: FixtureRequestLog?
+  // Set while the viewer's profile is pending.
+  private let setup: FixtureSetup?
 
   public init(directory: URL, scenario: FixtureScenario = FixtureScenario()) throws {
     fixtures = try Fixture.all(in: directory)
@@ -101,6 +134,7 @@ public struct FixtureTransport: HTTPTransport {
     } else {
       log = nil
     }
+    setup = scenario.profile == .pending ? FixtureSetup() : nil
     var named = scenario.overrides
     if let failure = scenario.failure { named.append(failure) }
     let names = Set(fixtures.map(\.name))
@@ -132,6 +166,11 @@ public struct FixtureTransport: HTTPTransport {
       return try reply(url: url, fixture: signedOut, requestID: requestID)
     }
     let action = String(path.dropFirst("/api/screenr/".count))
+    if let setup, !setup.isDone, !Self.beforeProfile.contains(action),
+      let incomplete = fixture(named: "errors/incomplete-profile")
+    {
+      return try reply(url: url, fixture: incomplete, requestID: requestID)
+    }
     let incoming = Incoming(request: request, action: action)
     guard let fixture = match(incoming) else {
       let error: JSONValue =
@@ -143,6 +182,7 @@ public struct FixtureTransport: HTTPTransport {
     {
       return try reply(url: url, status: 304, etag: etag, requestID: requestID)
     }
+    if action == "setup", (200..<300).contains(fixture.response.status) { setup?.complete() }
     return try reply(url: url, fixture: fixture, requestID: requestID)
   }
 
@@ -260,6 +300,8 @@ public struct FixtureTransport: HTTPTransport {
     switch route {
     case "email-otp/send-verification-otp", "sign-out":
       return try reply(url: url, status: 200, body: ["success": true])
+    case "invitation":
+      return try reply(url: url, status: 200, body: ["available": true])
     case "sign-in/social" where !FixtureIdentity.accepts(Incoming.json(request)):
       return try reply(
         url: url,

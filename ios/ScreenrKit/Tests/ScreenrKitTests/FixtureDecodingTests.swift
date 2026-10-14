@@ -42,6 +42,8 @@ struct FixtureDecodingTests {
       model(.removeComment(id: "")),
       model(.reaction(item: "", kind: nil)),
       model(.setup(name: "", username: "")),
+      model(.setupDetails),
+      model(.invitation(token: "")),
       model(.deleteAccount),
     ]
   )
@@ -49,8 +51,11 @@ struct FixtureDecodingTests {
   private static func model<Response>(
     _ request: APIRequest<Response>
   ) -> (String, any (Decodable & Sendable).Type) {
-    guard case .action(let name) = request.endpoint else { return ("", Response.self) }
-    return (name, Response.self)
+    switch request.endpoint {
+    case .action(let name): (name, Response.self)
+    case .auth(let path): ("auth/" + path, Response.self)
+    case .photo: ("photos", Response.self)
+    }
   }
 
   static func fixtureNames() -> [String] {
@@ -89,8 +94,9 @@ struct FixtureDecodingTests {
       #expect((error.error ?? error.message)?.isEmpty == false)
       return
     }
+    let action = name.hasPrefix("auth/") ? "auth/" + fixture.request.action : fixture.request.action
     let model = try #require(
-      Self.models[fixture.request.action],
+      Self.models[action],
       "ScreenrKit has no request or model for the \(fixture.request.action) action"
     )
     let body = try Self.decodeBody(model, from: data)

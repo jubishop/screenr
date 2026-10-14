@@ -133,7 +133,8 @@ public final class ScreenrClient: ScreenrAPI {
     var urlRequest = URLRequest(url: url.absoluteURL)
     urlRequest.httpMethod = request.method.rawValue
     urlRequest.httpShouldHandleCookies = false
-    urlRequest.setValue("application/json", forHTTPHeaderField: "Accept")
+    let accept = if case .photo = request.endpoint { "image/jpeg" } else { "application/json" }
+    urlRequest.setValue(accept, forHTTPHeaderField: "Accept")
     urlRequest.setValue(clientHeader, forHTTPHeaderField: "Screenr-Client")
     urlRequest.setValue(requestID, forHTTPHeaderField: "Screenr-Request-Id")
     if let token { urlRequest.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
@@ -175,7 +176,7 @@ public final class ScreenrClient: ScreenrAPI {
   ) async throws(APIError) -> Response {
     switch response.statusCode {
     case 200..<300:
-      let value = try Self.decode(Response.self, from: data, requestID: context.requestID)
+      let value = try Self.decode(request, from: data, requestID: context.requestID)
       if let cacheKey = context.cacheKey, let etag = response.value(forHTTPHeaderField: "ETag") {
         cache.withLock { $0[cacheKey] = CachedRead(etag: etag, value: value) }
       }
@@ -238,13 +239,20 @@ public final class ScreenrClient: ScreenrAPI {
     }
   }
 
-  private static func decode<Value: Decodable>(
-    _ type: Value.Type,
+  // A photo's response is its JPEG; every other response is JSON.
+  private static func decode<Response>(
+    _ request: APIRequest<Response>,
     from data: Data,
     requestID: String
-  ) throws(APIError) -> Value {
+  ) throws(APIError) -> Response {
+    if case .photo = request.endpoint {
+      guard let bytes = data as? Response else {
+        throw APIError(kind: .invalidResponse, requestID: requestID)
+      }
+      return bytes
+    }
     do {
-      return try ScreenrJSON.decoder().decode(type, from: data)
+      return try ScreenrJSON.decoder().decode(Response.self, from: data)
     } catch {
       throw APIError(kind: .invalidResponse, requestID: requestID)
     }

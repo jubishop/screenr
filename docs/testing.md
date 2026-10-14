@@ -248,8 +248,8 @@ from the real API
 `tests/app/ios-fixtures.test.ts` sends each case through the
 `/api/screenr/[action]` handler as the app does, with the viewer's
 [bearer token](data-and-access.md#native-client-sessions) and no cookie or
-`Origin`. Sign-in error cases go through Better Auth's handler instead, with
-its request limits on. The test compares each response with its file under
+`Origin`. Sign-in error cases and the invitation check go through Better
+Auth's handler instead, with its request limits on. The test compares each response with its file under
 `ios/ScreenrKit/Fixtures/`. It runs in `npm test`, so `bin/check --full` and
 CI fail when a response no longer matches its fixture, when a case has no
 file, or when a file has no case. The failure shows the changed fields.
@@ -287,9 +287,11 @@ Each file holds one case, named for the state it shows, such as `default`,
   `update-required.json` also has `minimumBuild`.
 - `auth/<route>/<case>.json`: Better Auth's sign-in errors that the app shows
   as the server words them, such as the code request limits and too many
-  wrong codes. `<route>` is the path under `/api/auth/`, which the request's
-  `action` also names. A body is `{"message": "<message>"}`, with Better
-  Auth's `code` when it sends one. The
+  wrong codes, and the
+  [invitation check](data-and-access.md#invitation-tokens)'s answers.
+  `<route>` is the path under `/api/auth/`, which the request's `action` also
+  names. An error body is `{"message": "<message>"}`, with Better Auth's
+  `code` when it sends one. The
   [fixture API](../ios/README.md#fixture-api) answers with them only as
   overrides.
 
@@ -332,13 +334,16 @@ joined, notifications, saved services, a photo, and a linked Google account.
 The entries include an edited spoiler review, season and episode labels,
 spoiler and removed replies, a deleted post, a blocked author's reply, and
 reactions. Erin has
-a full top 10, and Nora has no friends or activity. A loopback TMDB
+a full top 10, and Nora has no friends or activity. Pat has signed in but
+not set up a profile; the `joined` screens show him after he joins through
+Alice's spare link, which makes them friends. A loopback TMDB
 stand-in serves the titles, trailers, providers, seasons, and episodes, and
 a replaced `fetch` stands in for Google's image server. Every person and
 title is fictional.
 
-GET cases share the world. Each POST case first restores a saved copy of the
-database, so no case sees another's changes.
+GET cases share the world. Each POST case, and each GET case marked
+`changesWorld` because its request changes the world first, restores a saved
+copy of the database, so no case sees another's changes.
 
 Volatile values become placeholders, so regenerating without a payload
 change produces no diff:

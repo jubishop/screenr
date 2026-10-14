@@ -1,0 +1,45 @@
+{
+  "description": "Pat's own profile after joining through Alice's link, with Alice as his friend.",
+  "viewer": "pat",
+  "request": {
+    "method": "GET",
+    "action": "screen",
+    "path": "/api/screenr/screen?path=%2Fpeople%2Fpat",
+    "query": {
+      "path": "/people/pat"
+    }
+  },
+  "response": {
+    "status": 200,
+    "etag": "W/\"bL-Q5D15Dr6cn5563ZP01RpJ0guGzBVLCOgi2Z0pYJ4\"",
+    "body": {
+      "kind": "profile",
+      "profile": {
+        "user_id": "user-pat",
+        "username": "pat",
+        "display_name": "Pat Morgan",
+        "photo": null,
+        "can_read": true,
+        "requested_by": null,
+        "accepted_at": null,
+        "friends": [
+          {
+            "photo": "486e0212c15728ee",
+            "user_id": "user-alice",
+            "username": "alice",
+            "display_name": "Alice Park"
+          }
+        ]
+      },
+      "topTen": [],
+      "conversations": [],
+      "unreadNotifications": 0,
+      "user": {
+        "user_id": "user-pat",
+        "username": "pat",
+        "display_name": "Pat Morgan",
+        "photo": null
+      }
+    }
+  }
+}
