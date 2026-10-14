@@ -8,6 +8,7 @@ import {
   denied,
   pending,
   cookieFor,
+  bearerFor,
 } from "./social-fixture";
 import { updateProfile } from "../../src/server/profiles";
 import { changeRelationship } from "../../src/server/relationships";
@@ -15,11 +16,15 @@ import { updateTitleActivity } from "../../src/server/title-actions";
 import {
   addComment,
   removeComment,
+  createDiscussionPost,
   createTitleComment,
 } from "../../src/server/comments";
 import { setReaction } from "../../src/server/reactions";
+import { saveReview } from "../../src/server/reviews";
+import { uploadPhoto } from "../../src/server/photos";
 import { loadScreen } from "../../src/server/screens";
 import {
+  notification,
   notifications,
   type NotificationPage,
   readNotification,
@@ -386,4 +391,190 @@ test("friend-request notifications identify the requester and answer only that p
     respondToFriendRequest(alice, sent.id, "accept"),
     denied.pendingRequest,
   );
+});
+
+// The iPhone push extension's single-notification read
+// (docs/data-and-access.md#single-notification-read).
+const hidden = { visible: false };
+async function shown(viewer: string, id: string) {
+  const content = await notification(viewer, id);
+  assert.ok(content.visible, `notification ${id} is hidden`);
+  return content.notification;
+}
+async function isRead(id: string) {
+  return (
+    await db.query<{ read: boolean }>(
+      "SELECT read_at IS NOT NULL AS read FROM notification WHERE id=$1",
+      [id],
+    )
+  ).rows[0].read;
+}
+
+test("the push extension's read gives the bell's notification with its excerpt and reply target, without marking it read", async () => {
+  const { alice, ben, conversation } = await setup();
+  await friend(alice, ben);
+  const bytes = Buffer.alloc(4000, 7);
+  bytes.set([0xff, 0xd8, 0xff, 0xe0]);
+  const { photo } = await uploadPhoto(ben, bytes);
+  const comment = await addComment(
+    ben,
+    conversation,
+    "  Loved\n\nthis   one. ",
+    false,
+  );
+  const [commented] = (await notifications(alice)).items;
+  assert.equal(commented.kind, "comment");
+  assert.equal(commented.actorPhoto, photo);
+  assert.deepEqual(await notification(alice, commented.id), {
+    visible: true,
+    notification: {
+      ...commented,
+      title: "Test Movie",
+      excerpt: "Loved this one.",
+      spoiler: false,
+      thread: conversation,
+      comment,
+    },
+  });
+  assert.equal(await isRead(commented.id), false);
+
+  // A long reply ends at a word with an ellipsis and never splits a
+  // character.
+  const words = `${"🎬 scene ".repeat(40)}final`;
+  const own = await addComment(alice, conversation, "Agreed", false, comment);
+  const answer = await addComment(ben, conversation, words, false, own);
+  const [replied] = (await notifications(alice)).items;
+  const reply = await shown(alice, replied.id);
+  assert.equal(reply.kind, "reply");
+  assert.equal(reply.thread, conversation);
+  assert.equal(reply.comment, answer);
+  const excerpt = reply.excerpt!;
+  assert.ok(excerpt.endsWith(" scene…"), excerpt);
+  assert.ok(excerpt.isWellFormed());
+  assert.ok([...new Intl.Segmenter().segment(excerpt)].length <= 160);
+  assert.ok(words.startsWith(excerpt.slice(0, -1)));
+
+  // Friendships have no title, excerpt, thread, or comment.
+  await changeRelationship(ben, alice, "remove");
+  await changeRelationship(ben, alice, "request");
+  const [request] = (await notifications(alice)).items;
+  assert.equal(request.kind, "friend_request");
+  assert.deepEqual(await notification(alice, request.id), {
+    visible: true,
+    notification: {
+      ...request,
+      title: null,
+      excerpt: null,
+      spoiler: false,
+      thread: null,
+      comment: null,
+    },
+  });
+  await changeRelationship(alice, ben, "accept");
+  const [accepted] = (await notifications(ben)).items;
+  assert.equal(accepted.kind, "friend_accepted");
+  assert.equal((await shown(ben, accepted.id)).href, "/people/alice");
+  assert.equal(await isRead(request.id), false);
+});
+
+test("the push extension's read omits the excerpt of a spoiler reply and of every reply in a spoiler entry's thread", async () => {
+  const { alice, ben } = await setup();
+  await friend(alice, ben);
+  const post = await createTitleComment(alice, "movie:1", "Plain post", false);
+  const marked = await addComment(ben, post, "The twist is a dream", true);
+  const covered = [
+    await createTitleComment(alice, "movie:1", "Twist", true),
+    await saveReview(alice, "movie:1", 4, "Ending reveal", true),
+    await createDiscussionPost(alice, "Finale talk", true),
+  ];
+  for (const entry of covered)
+    await addComment(ben, entry, "The twist is a dream", false);
+  const replies = (await notifications(alice)).items.filter(
+    (item) => item.kind === "comment",
+  );
+  assert.equal(replies.length, 4);
+  for (const item of replies) {
+    const content = await shown(alice, item.id);
+    assert.equal(content.spoiler, true);
+    assert.equal(content.excerpt, null);
+    assert.ok(!JSON.stringify(content).includes("dream"));
+  }
+  // The extension can still reply to a spoiler.
+  const spoiler = await shown(alice, replies.at(-1)!.id);
+  assert.deepEqual([spoiler.thread, spoiler.comment], [post, marked]);
+});
+
+test("the push extension's read hides notifications from blocked and unfriended actors, of removed comments, and of other members alike", async () => {
+  const { alice, ben, cam, outsider, conversation } = await setup();
+  await friend(alice, ben);
+  await friend(alice, cam);
+  const parent = await addComment(ben, conversation, "Nice pick", false);
+  const reply = await addComment(cam, conversation, "Agreed", false, parent);
+  const [toBen] = (await notifications(ben)).items;
+  assert.equal(toBen.kind, "reply");
+  assert.equal((await shown(ben, toBen.id)).excerpt, "Agreed");
+
+  // Blocking in either direction hides it until unblocked.
+  await changeRelationship(ben, cam, "block");
+  assert.deepEqual(await notification(ben, toBen.id), hidden);
+  await changeRelationship(ben, cam, "unblock");
+  await shown(ben, toBen.id);
+  await changeRelationship(cam, ben, "block");
+  assert.deepEqual(await notification(ben, toBen.id), hidden);
+  await changeRelationship(cam, ben, "unblock");
+  await shown(ben, toBen.id);
+
+  // Unfriending hides the actor's comments and the acceptance.
+  const [toAlice] = (await notifications(alice)).items;
+  assert.equal(toAlice.actorId, cam);
+  const accepted = (await notifications(alice)).items.find(
+    (item) => item.kind === "friend_accepted" && item.actorId === cam,
+  )!;
+  await shown(alice, accepted.id);
+  await changeRelationship(alice, cam, "remove");
+  assert.deepEqual(await notification(alice, toAlice.id), hidden);
+  assert.deepEqual(await notification(alice, accepted.id), hidden);
+  assert.deepEqual(await notification(ben, toBen.id), hidden);
+  await friend(alice, cam);
+  await shown(alice, toAlice.id);
+
+  // A removed comment, another member's notification, and an unknown ID give
+  // the same answer, so the read reveals nothing about which applies.
+  for (const viewer of [ben, cam, outsider])
+    assert.deepEqual(await notification(viewer, toAlice.id), hidden);
+  assert.deepEqual(await notification(alice, "999999"), hidden);
+  await removeComment(cam, reply);
+  assert.deepEqual(await notification(alice, toAlice.id), hidden);
+  for (const invalid of [null, "", "-1", "oops", "9223372036854775808"])
+    await assert.rejects(notification(alice, invalid), /Invalid notification/);
+  assert.equal(await isRead(toAlice.id), false);
+  assert.equal(await isRead(toBen.id), false);
+});
+
+test("the push extension reads one notification with its bearer token, with one response for every hidden notification", async () => {
+  const { alice, ben, conversation } = await setup();
+  await friend(alice, ben);
+  await addComment(ben, conversation, "Nice pick", false);
+  const [commented] = (await notifications(alice)).items;
+  async function request(token: string, id: string) {
+    const response = await GET(
+      new Request(`http://localhost:3000/api/screenr/notification?id=${id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      }),
+      { params: Promise.resolve({ action: "notification" }) },
+    );
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get("Cache-Control"), "private, no-store");
+    return {
+      version: response.headers.get("ETag"),
+      body: (await response.json()) as unknown,
+    };
+  }
+  const own = await request(await bearerFor(alice), commented.id);
+  assert.deepEqual(own.body, await notification(alice, commented.id));
+  const other = await bearerFor(ben);
+  const unknown = await request(other, "999999");
+  assert.deepEqual(unknown.body, hidden);
+  assert.deepEqual(await request(other, commented.id), unknown);
+  assert.equal(await isRead(commented.id), false);
 });

@@ -53,6 +53,41 @@ member POST, `signup` for a POST that runs before profile setup, or `photo`
 for a photo change, which works before and after setup. Give it an
 [iPhone API fixture](testing.md#iphone-api-fixtures) case in the same change.
 
+### Single notification read
+
+The iPhone Notification Service Extension reads one notification to build
+its alert ([decision](ios-app.md#the-extension-fetches-push-content--2026-10-13),
+[issue #242](https://github.com/jubishop/screenr/issues/242)):
+`GET /api/screenr/notification?id=<notification ID>` with the app's bearer
+token. It applies the bell's rules from the `visible_notification` view when
+it is read, so blocking, unfriending, and removed comments take effect at
+once. It records no usage and marks nothing read.
+
+A visible notification answers
+`{ "visible": true, "notification": { … } }`. The object holds the bell's
+fields (`id`, `kind`, `actor`, `actorId`, `actorPhoto`, `message`, `href`,
+`createdAt`, and `read`) and these:
+
+- `title`: the movie or show's name, or `null`.
+- `excerpt`: the comment's text on one line, at most 160 characters, ending
+  at a word with "…" when cut. It is `null` for friendships and spoilers.
+- `spoiler`: whether the comment or its entry is marked as a spoiler. A flag
+  on a post or review covers its whole thread. The server omits a spoiler's
+  text, so it never reaches the device before the reader reveals it.
+- `thread`: the entry's ID, or `null` for friendships. It groups an entry's
+  notifications and is the `conversation` of a reply.
+- `comment`: the comment's ID, or `null`; a reply's `replyTo`.
+
+`kind` is `friend_request`, `friend_accepted`, `comment` (on the
+recipient's entry), or `reply` (addressed to the recipient). `actorPhoto` is
+the photo version for `/api/photos/<actorId>/<version>`, or `null`.
+
+Every notification the viewer cannot see answers `200` with
+`{ "visible": false }`, whether it belongs to someone else, does not exist,
+or is hidden by access rules. The single answer reveals nothing about which
+applies, and the extension shows its generic alert. An ID that is not a
+positive 64-bit integer answers `400`.
+
 ## Native client sessions
 
 The iPhone app signs in with Better Auth's bearer plugin instead of the

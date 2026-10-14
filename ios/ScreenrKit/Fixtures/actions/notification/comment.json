@@ -1,0 +1,35 @@
+{
+  "description": "One notification for the push extension: a comment with its excerpt.",
+  "viewer": "alice",
+  "request": {
+    "method": "GET",
+    "action": "notification",
+    "path": "/api/screenr/notification?id=18",
+    "query": {
+      "id": "18"
+    }
+  },
+  "response": {
+    "status": 200,
+    "etag": "W/\"5aQsjF5QOILEfLFwhoushZ7mUmeEIjOW8FEMXUTmHME\"",
+    "body": {
+      "visible": true,
+      "notification": {
+        "id": "18",
+        "kind": "comment",
+        "actor": "Ben Ortiz",
+        "actorId": "user-ben",
+        "actorPhoto": "8fc275dfeaca5cf8",
+        "message": "Ben Ortiz commented on your post about Harbor Lights.",
+        "href": "/titles/tv/201?item=e22cb5a7-a2dd-4582-8f62-db3e31f2761b&reply=3",
+        "createdAt": "2026-10-13T12:00:00.000000+00:00",
+        "read": false,
+        "title": "Harbor Lights",
+        "excerpt": "Wait until season 2.",
+        "spoiler": false,
+        "thread": "e22cb5a7-a2dd-4582-8f62-db3e31f2761b",
+        "comment": "3"
+      }
+    }
+  }
+}

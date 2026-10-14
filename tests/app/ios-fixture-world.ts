@@ -481,14 +481,21 @@ export async function buildWorld() {
   for (const title of topTenTitles) await updateTopTen(u.erin, title.id, "add");
 
   const notifications = (
-    await db.query<{ id: string; kind: string; actor_id: string }>(
-      "SELECT id::text,kind,actor_id FROM notification WHERE recipient_id=$1 ORDER BY id",
+    await db.query<{
+      id: string;
+      kind: string;
+      actor_id: string;
+      comment_id: string | null;
+    }>(
+      "SELECT id::text,kind,actor_id,comment_id::text FROM notification WHERE recipient_id=$1 ORDER BY id",
       [u.alice],
     )
   ).rows;
   const notification = (kind: string, actor: string) =>
     notifications.find((row) => row.kind === kind && row.actor_id === actor)!
       .id;
+  const about = (comment: string) =>
+    notifications.find((row) => row.comment_id === comment)!.id;
   const ids = {
     benNight,
     benAnswer,
@@ -501,6 +508,15 @@ export async function buildWorld() {
     friendRequest: notification("friend_request", u.fay),
     commentNotification: notification("comment", u.ben),
     latestNotification: notifications.at(-1)!.id,
+    spoilerNotification: about(benSpoiler),
+    postNotification: about(benSuggestion),
+    // A notification of Ben's, which Alice cannot see.
+    othersNotification: (
+      await db.query<{ id: string }>(
+        "SELECT min(id)::text AS id FROM notification WHERE recipient_id=$1",
+        [u.ben],
+      )
+    ).rows[0].id,
   };
   await readNotification(u.alice, notification("friend_accepted", u.ben));
 

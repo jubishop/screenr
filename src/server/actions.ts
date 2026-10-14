@@ -12,6 +12,7 @@ import {
   revokeInvitation,
 } from "./invitations";
 import {
+  notification,
   notifications,
   readAllNotifications,
   readNotification,
@@ -175,6 +176,12 @@ const actions = {
     }),
     run: ({ before, unread, through }, { userId }) =>
       notifications(userId, before, unread, through),
+  }),
+  // One notification for the iPhone push extension. A notification the
+  // viewer cannot see answers `{ visible: false }`; reading marks nothing.
+  notification: read({
+    input: (query) => query.get("id"),
+    run: (id, { userId }) => notification(userId, id),
   }),
   "read-notification": write({
     input: (body) => body.id,
