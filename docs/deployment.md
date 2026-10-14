@@ -453,7 +453,8 @@ entries.
 
 Follow the [main branch workflow](development-workflow.md#main-branch-delivery).
 Direct pushes to `main` run full checks and, by default, package a Linux x64
-release. A separate `deploy` job starts only after checks pass. Nonfunctional
+release in the `release` job alongside them. A separate `deploy` job starts
+only after every [check job](development-workflow.md#ci-jobs) passes. Nonfunctional
 changes can skip packaging and deployment with the documented commit trailers;
 checks still run. PR workflows only run checks. **Run workflow** on `main`
 forces a checked deployment when needed. There is no local deployment command.
@@ -474,7 +475,7 @@ from the checked Git revision with `git show`, the same way as
 archive. [Issue #110](https://github.com/jubishop/screenr/issues/110) tracks
 the work.
 
-**Why:** The check job packages `ops/` after `npm ci` runs third-party code. A
+**Why:** The release job packages `ops/` after `npm ci` runs third-party code. A
 compromised dependency could change the archive's copies and gain root on the
 shared host, even though build jobs hold no production secrets.
 
@@ -583,7 +584,8 @@ leaves both paths untouched until the first deployment.
 Create a GitHub Actions environment named `production` in `jubishop/screenr`.
 Allow only the **branch** `main` through its deployment branch policy. Do not
 add required deployment reviewers or require a PR for direct main delivery.
-The successful full check job gates production deployment.
+The `check` job, which passes only when every check job passed, gates
+production deployment.
 
 Add these environment secrets:
 

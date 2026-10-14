@@ -165,10 +165,11 @@ test("TypeScript isolates checkout inputs with fresh and warm caches", async (t)
 
 test("application tests run one shard of their files when SCREENR_TEST_SHARD names it", async (t) => {
   const project = await fixture(t);
+  // A shard applies to this run only; tests that run npm test get every file.
   for (const name of ["second", "third", "fourth"])
     await project.write(
       `tests/app/${name}.test.ts`,
-      `import { test } from "node:test";\ntest("${name} application test", () => {});\n`,
+      `import assert from "node:assert/strict";\nimport { test } from "node:test";\ntest("${name} application test", () => assert.equal(process.env.SCREENR_TEST_SHARD, undefined));\n`,
     );
   async function ran(shard?: string) {
     const { stdout } = await execute("npm", ["run", "test"], {

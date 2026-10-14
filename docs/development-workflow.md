@@ -87,8 +87,9 @@ labels. A third, `docker` entry updates the Caddy image that CI copies; see
 [CI Caddy](#ci-caddy).
 
 Dependabot pull requests run [the check workflow](../.github/workflows/check.yml),
-including `bin/check --full`, like any other pull request. GitHub gives them
-a read-only token and no Actions secrets, and the check job needs neither.
+including every check `bin/check --full` runs, like any other pull request.
+GitHub gives them a read-only token and no Actions secrets, and the check jobs
+need neither.
 They cannot deploy: `bin/deployment-decision` selects deployment only for
 pushes and manual runs on `main`, and the `production` environment accepts
 only `main`. Merging an update pull request pushes to `main`, which runs full
@@ -108,10 +109,10 @@ files; on Linux it skips the iOS checks. The
 [iPhone app guide](../ios/README.md#checks) describes `bin/check-ios`, and
 `tests/test_check_ios.py` covers it with simulated Xcode tools.
 
-GitHub Actions runs `bin/check --full` on pull requests and pushes to `main` through
-[the existing workflow](../.github/workflows/check.yml). Application formatting,
-types, PostgreSQL tests, browser verification and the production build run after
-the foundation checks. That Linux job skips the iOS checks; [iOS CI](#ios-ci)
+GitHub Actions runs the same checks on pull requests and pushes to `main`
+through [the check workflow](../.github/workflows/check.yml), split into
+[parallel jobs](#ci-jobs) that keep CI under 10 minutes. Those Linux jobs skip
+the iOS checks; [iOS CI](#ios-ci)
 runs them on a Mac. See [running checks](testing.md#running-checks)
 for requirements. GitHub issues track shared work; [td](foundation/task-tracking.md)
 records local progress and handoffs.
@@ -437,7 +438,8 @@ freshness, environment, and resource ownership requirements.
 
 Run relevant application checks explicitly during implementation. Neither
 routine mode should start application tooling or a package manager. CI runs
-`bin/check --full`, preserving the full validation gate before deployment.
+everything `bin/check --full` runs, in [parallel jobs](#ci-jobs), preserving
+the full validation gate before deployment.
 
 **Why:** Routine checks should give quick feedback without automatically
 starting the complete browser suite and build. Matching Project Starter's
@@ -464,19 +466,72 @@ in CI. Resolve it and obtain a successful full CI result for the code being
 merged; a fast or focused pass alone does not satisfy that gate. Preserve the
 full CI requirements when changing the check commands.
 
+### CI jobs
+
+**Decision — 2026-10-14:** Remote CI stays under 10 minutes of wall-clock
+time, both for pull request checks and for checks plus deployment on `main`.
+A change that pushes a run over must cut it back in the same change, or file
+an issue at once ([#292](https://github.com/jubishop/screenr/issues/292)).
+
+**Why:** The user decided that remote CI longer than 10 minutes must be cut
+down. One `check` job ran `bin/check --full` in sequence, and its runs on
+`main` had grown to 10 to 13 minutes, one of them 20.
+
+The check workflow runs these jobs. The first four start together, and
+together they run everything `bin/check --full` runs on Linux:
+
+| Job | Work |
+| --- | --- |
+| `static` | `bin/check`, then `bin/check-application --part static`: shell lint for `ops/`, Python tests, formatting, and typechecking. |
+| `app (I/N)` | `bin/check-application --part app --shard I/N`: one shard of the application and PostgreSQL test files, with the [pinned Caddy](#ci-caddy) and Playwright's Chromium for the browser harness tests. |
+| `browser (I/N)` | `bin/check-application --part browser --shard I/N`: one Playwright shard against a production build. |
+| `release` | Runs [`bin/deployment-decision`](#main-branch-delivery). When it deploys, the job builds, runs the [packaging check](deployment.md#build-and-activate-a-release), and uploads the release. |
+| `check` | Passes only when every job above passed. Pull requests show it, and `bin/deploy-ci` requires it. |
+| `deploy` | Waits for `check` and deploys the package from `release`. |
+
+`bin/check-application --shard I/N` passes Playwright's `--shard` to the
+browser command, and sets `SCREENR_TEST_SHARD` so `npm test` passes Node's
+`--test-shard`. The tests themselves do not inherit the variable, so a test
+that runs `npm test` gets every file. Node splits the application test files
+by their sorted position; Playwright splits browser tests evenly. Each matrix job uses its
+`strategy.job-total` as N, so adding a `shard` entry adds a shard.
+`tests/test_check_application.py` checks that the workflow runs the foundation
+checks and every part and shard, and that `check` covers every other job.
+
+Each browser shard builds its own production artifact, as the
+[browser harness](testing.md#browser-harness) requires, and the `release` job
+builds the one it ships. A build takes about 12 seconds on a runner, less than
+sharing one artifact between jobs would cost. Only `setup-node`'s npm cache is
+kept: Playwright's browser download takes about 9 seconds, so a browser cache
+would save little and add a dependency. Every check job has an 8-minute
+timeout, so a stuck job fails before the run passes 10 minutes.
+
+Measured on 2026-10-14, the single job took about 11 minutes: a minute of
+setup, then 55 seconds of Python tests, 7 seconds of formatting and types,
+258 seconds of serial application tests, and 301 seconds to build and run the
+browser suite with two workers. Packaging took 25 seconds and deployment 50.
+In the split workflow, TIMING_PLACEHOLDER
+
+To bring a run back under budget, find the slowest job with
+`gh run view <run> --json jobs`, then add a shard to its matrix or move work
+off the longest path. Shards cost queue time: GitHub Free runs at most 20
+Linux jobs at once for the account, and each run uses up to 7.
+
 ### CI dependency sources
 
-The Ubuntu 24.04 check job installs [.github/ci-apt.conf](../.github/ci-apt.conf)
-before Playwright or the ShellCheck step runs APT. It selects only the runner's
+The Ubuntu 24.04 `static`, `app`, and `browser` jobs install
+[.github/ci-apt.conf](../.github/ci-apt.conf) before ShellCheck or Playwright
+runs APT. It selects only the runner's
 `/etc/apt/sources.list.d/ubuntu.sources`. That file retains Ubuntu's mirrors,
 suites, components (including `universe` for ShellCheck), and signing key. Other
-runner sources, such as Google Chrome, do not participate. The job fails if
-the Ubuntu source file is missing or empty. Playwright's `--with-deps` install
-refreshes the package index under this policy, and the ShellCheck step reuses
-it instead of running `apt-get update` again. The runner image already
-includes ShellCheck, so that step normally changes nothing.
+runner sources, such as Google Chrome, do not participate. A job fails if
+the Ubuntu source file is missing or empty. The `static` job refreshes the
+package index under this policy with `apt-get update` before it installs
+ShellCheck, and Playwright's `--with-deps` install refreshes it the same way in
+each app and browser job. The runner image already includes ShellCheck, so that
+install normally changes nothing.
 
-The configuration applies only to the disposable check runner. It does not
+The configuration applies only to the disposable check runners. It does not
 change developer machines, the deploy job, or production. APT signature and
 checksum verification remain enabled. Every required-source update error,
 including a transient failure with a cached index, stops installation.
@@ -498,7 +553,7 @@ The proxy test validates `ops/Caddyfile` against the Caddy release production
 runs. Production's host updater installs Caddy's newest stable release once it
 has been public for seven days, checking each Tuesday; see vps-infra's
 [Caddy updates](https://github.com/jubishop/vps-infra/blob/main/docs/caddy.md).
-The check job copies `/usr/bin/caddy` from the official `caddy` Docker image
+Each `app` job copies `/usr/bin/caddy` from the official `caddy` Docker image
 that [`.github/caddy/Dockerfile`](../.github/caddy/Dockerfile) pins by release
 tag and digest. The digest fixes the image contents, and that image holds the
 same release binary as production's package. On 2026-10-12, CI and production
@@ -531,7 +586,7 @@ the tag follows the same minor releases without anyone bumping it, as the
 prefers. Unlike [CI Caddy](#ci-caddy), the checks depend only on the major
 version, so a pinned digest and its update pull requests would add work
 without catching a production difference. Change the tag in `compose.yml` and
-`.github/workflows/check.yml` with production's major version
+in each service of `.github/workflows/check.yml` with production's major version
 ([#124](https://github.com/jubishop/screenr/issues/124)).
 
 ## Main branch delivery
@@ -579,8 +634,9 @@ CI still runs. Never use `[skip ci]` for this purpose. A manual
 even if its commit has a skip trailer.
 
 [`bin/deployment-decision`](../bin/deployment-decision) makes this choice in
-the check job. That job checks out full history and has `deployments: read`
-permission to query the deployment history.
+the `release` job, which runs alongside the [check jobs](#ci-jobs). That job
+checks out full history and has `deployments: read` permission to query the
+deployment history.
 
 ## Project Starter
 

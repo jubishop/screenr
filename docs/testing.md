@@ -52,7 +52,9 @@ checkout is running application tests. The browser harness already owns a
 checkout-specific database and port range. `npm test` discovers all application
 `*.test.ts` files and keeps file execution serial; `npm run test:browser`
 discovers all browser `*.spec.ts` files with two workers and full parallel
-scheduling.
+scheduling. CI splits both suites into shards on separate runners: set
+`SCREENR_TEST_SHARD=2/3` for the second of three application shards, or pass
+`-- --shard=2/3` to the browser command. See [CI jobs](development-workflow.md#ci-jobs).
 
 Long scenarios that follow the same saved entries, drafts, or identities
 through later changes stay as one scenario. Their later checks depend on the

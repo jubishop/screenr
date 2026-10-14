@@ -174,8 +174,9 @@ Complete the [app setup](docs/running-screenr.md#local-setup) and install
 Playwright Chromium, as the [testing guide](docs/testing.md#running-checks)
 describes, before using `--full`. Full mode also runs
 `bin/check-application`: shell lint, Python tests, app formatting, TypeScript,
-PostgreSQL and browser tests, and a production build. GitHub Actions uses `--full` on pull requests and pushes to
-`main`. Follow the [local and CI validation policy](docs/development-workflow.md#local-and-ci-validation)
+PostgreSQL and browser tests, and a production build. GitHub Actions runs the
+same checks in [parallel jobs](docs/development-workflow.md#ci-jobs) on pull
+requests and pushes to `main`. Follow the [local and CI validation policy](docs/development-workflow.md#local-and-ci-validation)
 when choosing checks during development.
 
 Use `git knowledge search "term"` from any subdirectory. Run `bin/qmd-index`
