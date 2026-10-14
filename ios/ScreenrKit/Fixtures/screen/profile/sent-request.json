@@ -1,0 +1,38 @@
+{
+  "description": "A member Alice has asked to be her friend.",
+  "viewer": "alice",
+  "request": {
+    "method": "GET",
+    "action": "screen",
+    "path": "/api/screenr/screen?path=%2Fpeople%2Fgus",
+    "query": {
+      "path": "/people/gus"
+    }
+  },
+  "response": {
+    "status": 200,
+    "etag": "W/\"FUiRDYvQ2kWTMmNUiQy03eLJEDbiBI0f7pZC7FpS6XA\"",
+    "body": {
+      "kind": "profile",
+      "profile": {
+        "user_id": "user-gus",
+        "username": "gus",
+        "display_name": "Gus Novak",
+        "photo": null,
+        "can_read": false,
+        "requested_by": "user-alice",
+        "accepted_at": null,
+        "friends": []
+      },
+      "topTen": [],
+      "conversations": [],
+      "unreadNotifications": 6,
+      "user": {
+        "user_id": "user-alice",
+        "username": "alice",
+        "display_name": "Alice Park",
+        "photo": "486e0212c15728ee"
+      }
+    }
+  }
+}

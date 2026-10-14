@@ -340,6 +340,11 @@ const screens: Record<MemberRoute["kind"], Record<string, Case>> = {
       "/people/fay",
       "A member who has asked to be Alice's friend.",
     ),
+    "sent-request": screen(
+      "alice",
+      "/people/gus",
+      "A member Alice has asked to be her friend.",
+    ),
     joined: afterPatJoins(
       screen(
         "pat",

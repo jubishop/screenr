@@ -30,6 +30,9 @@ public final class ShellModel {
   // is. The root view reports it once for every screen, so a screen that
   // appears during a change reads the current value.
   public private(set) var isAppActive = false
+  // Results that a screen shows when it next appears, such as "You blocked
+  // Ben Ortiz." on Friends after Block closes the profile.
+  public private(set) var notices: [Destination: String] = [:]
 
   @ObservationIgnored public let api: any ScreenrAPI
   @ObservationIgnored private let clock: any Clock<Duration>
@@ -76,6 +79,7 @@ public final class ShellModel {
     account = .checking
     viewer = nil
     unreadNotifications = 0
+    notices = [:]
     router.reset()
   }
 
@@ -115,6 +119,16 @@ public final class ShellModel {
   // notifications, which changes the unread count every screen carries.
   public func refreshLiveReads() {
     liveRefreshes += 1
+  }
+
+  // Leaves a result for the screen at `destination`, which shows it until
+  // the reader dismisses it or leaves that screen.
+  public func leaveNotice(_ message: String, on destination: Destination) {
+    notices[destination] = message
+  }
+
+  public func dismissNotice(on destination: Destination) {
+    if notices[destination] != nil { notices[destination] = nil }
   }
 
   public func appActivityChanged(_ isActive: Bool) {

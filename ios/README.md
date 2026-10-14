@@ -438,9 +438,13 @@ marks the visit for `ShellTests`.
    choosing fixtures with `viewer` and `overrides`, and audit screens in the
    tabs with `app.performShellAudit()`. It passes over what the audit cannot
    measure in a scrolling screen, as [Conversations](#conversations)
-   describes. While a list row reaches beneath a bar or the keyboard, it also
-   passes over contrast and clipping issues without an element, which are in
-   parts of a row that VoiceOver reads with the rest of the row. `ShellTests`
+   describes. While a list row or control reaches beneath a bar or the
+   keyboard or past the screen's edge, it also passes over contrast,
+   clipping, and text detection issues without an element, which are in parts
+   of a row that VoiceOver reads with the rest of the row or in text cut off
+   at that edge, such as the next poster in a row that scrolls sideways. In a
+   screen that scrolls, it passes over Dynamic Type issues without an element
+   too. `ShellTests`
    check the shell through navigation titles and `FixtureLaunch(requestLog:)`,
    so they hold when a placeholder changes; keep `DestinationView`'s
    navigation titles. To check dark mode, launch with
@@ -730,8 +734,8 @@ ScreenContent(model: model) { screen in
   `RequestLog.wrote(_:_:)`, which waits for a write's logged JSON body and a
   read after it. `performShellAudit()` passes over what the audit cannot
   measure in a scrolling screen: text beneath the glass bars or the
-  keyboard, and Dynamic Type for scrolling content, which larger text moves
-  past the screen's ends. To check large text, launch with
+  keyboard or past the screen's edges, and Dynamic Type for scrolling
+  content, which larger text moves past the screen's ends. To check large text, launch with
   `FixtureLaunch(textSize: "UICTContentSizeCategoryAccessibilityXXXL")` and
   audit there, as `FeedTests` does. Audit a composer after typing, once the
   keyboard has settled. ScreenrKit's `Support/FeedSupport.swift` has
@@ -869,6 +873,58 @@ their controls instead.
 `screen/title/full-top-ten` shows Winter Garden while Alice's top 10 is full,
 and `screen/title/finished-review` shows Paper Lanterns, which Alice finished,
 reviewed, and ranks #2.
+
+## Friends and profiles
+
+Friends, profiles, and Watch together follow the web's People, profile, and
+Watch together pages. Their screens are `FriendsView`, `ProfileView`, and
+`WatchTogetherView` in `Screenr/Screens/`, with their parts in
+`Screenr/People/`, and their behavior is in ScreenrKit's `People/`.
+
+| Piece | Where | What it does |
+| --- | --- | --- |
+| `FriendsSections`, `FriendsModel` | ScreenrKit `People/` | Friends in the web's order: Requests, Friends, Sent requests, People you may know with their mutual friends, and Blocked people. Accept, Decline after a confirmation, Cancel, Send friend request, and Unblock go through `relationship`, one at a time, and the page reads again after each. A failed action's message stays with its person. `searchDestination` opens an exact username's profile. |
+| `Relationship`, `ProfileModel` | ScreenrKit `People/` | `Relationship(profile, viewer:)` is `own`, `friend`, `requestSent`, `requestReceived`, or `none`, and gives the visible `action`, such as Watch together or Accept friend request, and the More actions `menu`. Unfriend and Block confirm in the web's words. |
+| `WatchTogetherFilter`, `WatchTogetherSection` | ScreenrKit `People/` | All, Movies, and TV; Ready to watch, Not on your services, and Availability unknown; the count and empty states; and each shared title's `viewingLines`, which mark the services either person saved. |
+| `TopTenSection`, `TopTenRow` | `Screenr/Shared/TopTen/` | A profile's Top 10 heading and its row of ranked posters, each a link named like "#1 Night Crossing" that opens the title. The row only displays the list. Another member's empty list shows nothing; the owner's explains how to start one. `TopTenSection(entries:owner: .viewer(edit:))` adds Edit to the heading. |
+| `PersonLabel` | `Screenr/Shared/` | A member's avatar, name, and @username for a list row; `.nameOnly` for a blocked person. |
+| `PeopleHeading`, `ProfileLinksText` | `Screenr/People/` | A section heading as a list row, and a line of text whose names link to profiles, such as "Mutual friends: Ben Ortiz (@ben), Cam Rivera (@cam)". |
+
+- **Privacy:** the screens show what the server sends, which already applies
+  the [privacy boundary](../docs/product-brief.md#privacy-and-the-known-people-circle--2026-09-07).
+  Anyone who can see a profile gets the person, the relationship action, the
+  top 10, and the friends list. Activity shows only when `canRead`; others
+  read "You’ll see their activity after you become friends." A blocked
+  person shows only their name, without a link.
+- **Activity:** a profile's entries use the shared `FeedList` in its full
+  style, with the profile's header, top 10, and friends above them.
+- **Block:** Block hides the profile, so after it succeeds, `ProfileModel`
+  closes the person's profile and Watch together on every tab with
+  `Router.close(where:)`, leaves "You blocked …" for Friends with
+  `ShellModel.leaveNotice(_:on:)`, and opens Friends. Friends shows the
+  notice until it is dismissed or Friends is left.
+- **The member's own profile:** the You tab's root is `ProfileView` with
+  `Relationship.own`: no relationship action or More actions, and the top
+  10's empty state. Its `editTopTen` closure adds Edit to the Top 10 heading
+  while the list has titles; the top 10 editor sheet hooks in there, for
+  example by giving `DestinationView`'s profile case a closure that presents
+  it.
+- **Watch together:** a friend's profile links to
+  `/watch-together?with=<username>`. Save your streaming services opens
+  Settings over the tab, and each title opens its page. Title pages opened
+  from it do not yet report the web's `watch_together` save surface, since
+  `Destination.title` carries no `from`.
+- **Tests:** `FriendsModelTests`, `ProfileModelTests`, and
+  `WatchTogetherTests` cover the models against the fixtures and
+  `RecordingAPI`. The UI tests `FriendsTests`, `ProfileTests`, and
+  `WatchTogetherTests` drive the journeys, check each write in the request
+  log, audit at the largest text size, and render every `screen/people`,
+  `screen/profile`, and `screen/watch-together` fixture. `app.person(_:)`
+  finds a Friends row by username, and `ScreenFixtureFile` reads a screen
+  fixture's viewer, path, and body.
+- **iOS 27 controls:** a confirmation dialog is a popover without Cancel;
+  tap `PopoverDismissRegion` to cancel, and `app.popovers.buttons[…]` to
+  confirm.
 
 ## Share extension
 

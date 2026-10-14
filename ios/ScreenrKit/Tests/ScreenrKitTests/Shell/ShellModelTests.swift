@@ -171,13 +171,28 @@ struct ShellModelTests {
     let (shell, _) = try shell()
     await shell.checkAccount()
     shell.router.open(.title(id: "tv:201"))
+    shell.leaveNotice("You blocked Ben Ortiz.", on: .people)
 
     shell.sessionEnded()
 
+    #expect(shell.notices.isEmpty)
     #expect(shell.account == .checking)
     #expect(shell.viewer == nil)
     #expect(shell.unreadNotifications == 0)
     #expect(shell.router.paths.values.allSatisfy { $0.isEmpty })
     #expect(shell.router.root(of: .you) == nil)
+  }
+
+  // A result waits for its screen until the reader dismisses it.
+  @Test func keepsANoticeForItsScreen() throws {
+    let (shell, _) = try shell()
+
+    shell.leaveNotice("You blocked Ben Ortiz.", on: .people)
+    #expect(shell.notices == [.people: "You blocked Ben Ortiz."])
+    shell.dismissNotice(on: .feed())
+    #expect(shell.notices[.people] == "You blocked Ben Ortiz.")
+
+    shell.dismissNotice(on: .people)
+    #expect(shell.notices.isEmpty)
   }
 }

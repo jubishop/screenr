@@ -11,10 +11,11 @@ extension XCUIApplication {
   // they do their titles, and the large content viewer shows it larger; and
   // the audit flags the system's search field as clipping at large text
   // sizes. It also passes over what it cannot measure in a scrolling screen:
-  // the contrast and clipping of text beneath the glass bars or the keyboard,
-  // and Dynamic Type for scrolling content, which larger text moves past the
-  // screen's ends. Launch with `FixtureLaunch(textSize:)` to audit a screen
-  // at the largest text size instead.
+  // the contrast, clipping, and detection of text beneath the glass bars or
+  // the keyboard or past the screen's edges, and Dynamic Type for scrolling
+  // content, which larger text moves past the screen's ends. Launch with
+  // `FixtureLaunch(textSize:)` to audit a screen at the largest text size
+  // instead.
   func performShellAudit() throws {
     try performSettledAudit {
       let screen = windows.firstMatch.frame
@@ -24,19 +25,23 @@ extension XCUIApplication {
         let top = tabBars.firstMatch.frame.minY
         covers.append(CGRect(x: 0, y: top, width: screen.width, height: screen.maxY - top))
       }
-      let scrolling = scrollViews.firstMatch.exists ? scrollViews.firstMatch.frame : .null
+      // A list is a collection view, which scrolls like a scroll view.
+      let scrolling = [scrollViews.firstMatch, collectionViews.firstMatch].filter(\.exists)
+        .reduce(CGRect.null) { $0.union($1.frame) }
       let isCovered = { (frame: CGRect) in
         !screen.contains(frame) || covers.contains { $0.intersects(frame) }
       }
-      // An issue without an element is in a part of a list row that VoiceOver
-      // reads with the rest of the row, so the audit cannot place it. It
-      // counts as covered while any row reaches beneath a cover. One snapshot
-      // finds the rows, since querying elements while the audit runs can
-      // outlast it.
-      let rowsCovered = Self.cells(in: try snapshot()).contains { isCovered($0.frame) }
+      // An issue without an element is one the audit cannot place: a part of a
+      // list row that VoiceOver reads with the rest of the row, or text that a
+      // cover or the screen's edge cuts off, such as the next poster in a row
+      // that scrolls sideways. It counts as covered while any row or control in
+      // the content reaches beneath a cover or past the screen's edge, and as
+      // scrolling in a screen that scrolls. One snapshot finds the rows and
+      // controls, since querying elements while the audit runs can outlast it.
+      let partsCovered = Self.contentParts(in: try snapshot()).contains { isCovered($0.frame) }
       return { issue in
-        var covered = rowsCovered
-        var scrolls = false
+        var covered = partsCovered
+        var scrolls = !scrolling.isNull
         if let frame = issue.element?.frame {
           covered = isCovered(frame)
           scrolls = scrolling.contains(frame)
@@ -46,7 +51,7 @@ extension XCUIApplication {
           return issue.element?.label == "screenr" || scrolls
         case .textClipped:
           return issue.element?.elementType == .searchField || covered
-        case .contrast:
+        case .contrast, .elementDetection:
           return covered
         default:
           return false
@@ -85,9 +90,15 @@ extension XCUIApplication {
     }
   }
 
-  private static func cells(in snapshot: any XCUIElementSnapshot) -> [any XCUIElementSnapshot] {
-    let inner = snapshot.children.flatMap { cells(in: $0) }
-    return snapshot.elementType == .cell ? [snapshot] + inner : inner
+  // The list rows and controls in a screen's content, apart from the bars and
+  // the keyboard that cover it.
+  private static func contentParts(
+    in snapshot: any XCUIElementSnapshot
+  ) -> [any XCUIElementSnapshot] {
+    let covers: [XCUIElement.ElementType] = [.navigationBar, .tabBar, .keyboard]
+    guard !covers.contains(snapshot.elementType) else { return [] }
+    let inner = snapshot.children.flatMap { contentParts(in: $0) }
+    return [.cell, .button].contains(snapshot.elementType) ? [snapshot] + inner : inner
   }
 
   // The parts of the screen that content scrolls beneath, the status and

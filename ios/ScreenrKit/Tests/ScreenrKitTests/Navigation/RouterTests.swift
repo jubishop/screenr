@@ -151,4 +151,20 @@ struct RouterTests {
     #expect(router.root(of: .you) == nil)
     #expect(router.sheet == nil)
   }
+
+  // A destination that no longer loads closes on every tab, with whatever
+  // was opened above it.
+  @Test func closesDestinationsOnEveryTab() {
+    let router = Router()
+    router[stack: .circle] = [.title(id: "tv:201"), .profile(username: "ben"), .feed()]
+    router[stack: .friends] = [.profile(username: "ben")]
+    router[stack: .find] = [.title(id: "tv:201")]
+
+    router.close { $0 == .profile(username: "ben") }
+
+    #expect(router[stack: .circle] == [.title(id: "tv:201")])
+    #expect(router[stack: .friends] == [])
+    #expect(router[stack: .find] == [.title(id: "tv:201")])
+    #expect(router.selectedTab == .circle)
+  }
 }
