@@ -302,6 +302,11 @@ struct FixtureDecodingTests {
     let body = try Self.decodeBody(ErrorBody.self, from: try Self.data("errors/signed-out"))
     #expect(body.error == "Sign in to continue.")
     #expect(body.minimumBuild == nil)
+    let outdated = try Self.decodeBody(
+      ErrorBody.self,
+      from: try Self.data("errors/update-required")
+    )
+    #expect(outdated.minimumBuild == 42)
   }
 
   // Both timestamp forms in the fixtures name this instant.

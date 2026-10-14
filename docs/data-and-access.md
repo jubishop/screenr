@@ -38,16 +38,18 @@ from the query or JSON body, and calls the services that validate them. Its
 result becomes the JSON response; an action without one responds
 `{ ok: true }`. The route applies the shared rules in this order:
 
-1. A POST must come from the app's origin (403), unless it carries a
+1. A `Screenr-Client` header must name an iPhone app build at or above the
+   minimum (400 or 426); see [client headers](#client-headers).
+2. A POST must come from the app's origin (403), unless it carries a
    [bearer token](#native-client-sessions).
-2. The request needs a session (401).
-3. Every action except profile setup and photo changes needs a completed
+3. The request needs a session (401).
+4. Every action except profile setup and photo changes needs a completed
    profile (403).
-4. An unknown action, or a known one with another method, returns 404.
-5. Usage telemetry records the day for member POST actions, photo changes by
+5. An unknown action, or a known one with another method, returns 404.
+6. Usage telemetry records the day for member POST actions, photo changes by
    members, and title searches
    ([active days](usage-telemetry.md#active-days)).
-6. A POST body must be a JSON object of at most 16,000 bytes (400 or 413).
+7. A POST body must be a JSON object of at most 16,000 bytes (400 or 413).
    A photo upload's body is the image itself, at most 200 KB.
 
 Add an action as one entry, using `read` for a member GET, `write` for a
@@ -90,6 +92,49 @@ Every notification the viewer cannot see answers `200` with
 or is hidden by access rules. The single answer reveals nothing about which
 applies, and the extension shows its generic alert. An ID that is not a
 positive 64-bit integer answers `400`.
+
+### Client headers
+
+`src/server/api-route.ts` reads two request headers on every
+`/api/screenr` and `/api/photos` request, before the route's own checks
+([issue #213](https://github.com/jubishop/screenr/issues/213)):
+
+- **`Screenr-Client: ios/<version>/<build>`:** the iPhone app sends its
+  version and its whole-number build, such as `ios/1.4.0/42`. Requests
+  without the header, such as the web's, are never gated. A value in another
+  form gets 400 with `Invalid client header.` When the server environment
+  sets `SCREENR_IOS_MINIMUM_BUILD`, an older build gets HTTP 426 before the
+  origin and session checks, with this body:
+
+  ```json
+  {"error":"Update Screenr to continue.","minimumBuild":42}
+  ```
+
+  The app answers any 426 with its required-update screen. An unset or empty
+  minimum serves every build.
+- **`Screenr-Request-Id`:** a client may name each request with 1 to 64
+  letters, digits, underscores, or hyphens, such as a UUID. Otherwise the
+  server generates a UUID. Every response carries the ID in the same header,
+  and each [failure log](deployment.md#failure-logs) line written while the
+  request runs names it as `requestId`. An app error report and the server
+  failure behind it carry the same ID
+  ([Sentry decision](ios-app.md#sentry-for-the-app-and-the-server--2026-10-13)).
+
+### Changes that app builds depend on
+
+Installed iPhone app builds lag the continuously deployed web, so keep
+changes to screen payloads and action results additive
+([decision](ios-app.md#additive-payloads-and-a-minimum-build--2026-10-13)):
+
+- Add fields or enum values. The app treats new fields as optional and
+  decodes an unknown enum value to a fallback.
+- Do not remove, rename, or retype a field, change its meaning, or make an
+  existing request require a new field.
+
+When a breaking change is unavoidable, first ship an app build that reads
+the new shape. Then set `SCREENR_IOS_MINIMUM_BUILD` in `/etc/screenr/app.env`
+to that build and deploy the change: activation checks the value and
+restarts `screenr-web`, so both take effect together.
 
 ## Native client sessions
 

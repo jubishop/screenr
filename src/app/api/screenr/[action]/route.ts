@@ -1,5 +1,6 @@
 import { bearerRequest, requestSession } from "../../../../server/auth";
 import { findAction } from "../../../../server/actions";
+import { apiRoute } from "../../../../server/api-route";
 import { AppError } from "../../../../server/db";
 import { logFailure } from "../../../../server/log";
 import { member } from "../../../../server/profiles";
@@ -111,5 +112,5 @@ async function handle(
     return json({ error: "Something went wrong. Please try again." }, 500);
   }
 }
-export const GET = handle;
-export const POST = handle;
+export const GET = apiRoute(handle);
+export const POST = apiRoute(handle);

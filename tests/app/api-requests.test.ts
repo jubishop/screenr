@@ -1,5 +1,7 @@
-import { test } from "node:test";
+import { test, type TestContext } from "node:test";
 import assert from "node:assert/strict";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import {
   useDatabase,
   db,
@@ -13,6 +15,8 @@ import {
 
 const { POST, GET } = await import("../../src/app/api/screenr/[action]/route");
 const { auth } = await import("../../src/server/auth");
+const { GET: photoRoute } =
+  await import("../../src/app/api/photos/[user]/[version]/route");
 const { initialScreen } = await import("../../src/server/screens");
 useDatabase();
 
@@ -23,10 +27,12 @@ function send(
   cookie: string,
   body?: BodyInit,
   requestOrigin: string | null = origin,
+  extra: Record<string, string> = {},
 ) {
   const headers = new Headers({
     "Content-Type": "application/json",
     Cookie: cookie,
+    ...extra,
   });
   if (requestOrigin) headers.set("Origin", requestOrigin);
   // Node requires half duplex for streamed bodies; the DOM types omit it.
@@ -41,12 +47,27 @@ function send(
   });
 }
 
-function get(action: string, cookie: string, query = "") {
+function get(
+  action: string,
+  cookie: string,
+  query = "",
+  extra: Record<string, string> = {},
+) {
   return GET(
     new Request(`${origin}/api/screenr/${action}${query}`, {
-      headers: { Cookie: cookie },
+      headers: { Cookie: cookie, ...extra },
     }),
     { params: Promise.resolve({ action }) },
+  );
+}
+
+function photo(cookie: string, extra: Record<string, string> = {}) {
+  const params = { user: "someone", version: "v1" };
+  return photoRoute(
+    new Request(`${origin}/api/photos/${params.user}/${params.version}`, {
+      headers: { Cookie: cookie, ...extra },
+    }),
+    { params: Promise.resolve(params) },
   );
 }
 
@@ -307,4 +328,166 @@ test("invalid, unsigned, and signed-out bearer tokens get 401", async () => {
     query: profilePath,
   });
   assert.equal(remaining.status, 200);
+});
+
+// The iPhone app names its build on every request, and the server refuses
+// builds below a configured minimum: docs/data-and-access.md#client-headers
+function minimumBuild(t: TestContext) {
+  const previous = process.env.SCREENR_IOS_MINIMUM_BUILD;
+  const set = (value: string | undefined) => {
+    if (value === undefined) delete process.env.SCREENR_IOS_MINIMUM_BUILD;
+    else process.env.SCREENR_IOS_MINIMUM_BUILD = value;
+  };
+  t.after(() => set(previous));
+  return set;
+}
+const app = (build: string) => ({ "Screenr-Client": `ios/1.4.0/${build}` });
+
+test("iPhone app builds below the minimum get 426 before any other check", async (t) => {
+  minimumBuild(t)("42");
+  // Signed out, without an origin, and with an invalid body: the build check
+  // answers first.
+  for (const response of [
+    await get("screen", "", "?path=%2F", app("41")),
+    await send("activity-email", "", "{", null, app("41")),
+    await send("unknown", "", "{", null, app("7")),
+    await photo("", app("41")),
+  ]) {
+    assert.equal(response.status, 426);
+    assert.equal(response.headers.get("Cache-Control"), "private, no-store");
+    assert.deepEqual(await response.json(), {
+      error: "Update Screenr to continue.",
+      minimumBuild: 42,
+    });
+  }
+});
+
+test("iPhone app builds at or above the minimum, and requests without the client header, are served as before", async (t) => {
+  const setMinimum = minimumBuild(t);
+  const cookie = await cookieFor(await person("alice"));
+  const enable = JSON.stringify({ enabled: true });
+  for (const [minimum, clients] of [
+    ["42", [{}, app("42"), app("43"), app("100000")]],
+    // Without a usable minimum, every build is served.
+    [undefined, [app("0"), app("1")]],
+    ["", [app("1")]],
+    ["not a build", [app("1")]],
+  ] as const) {
+    setMinimum(minimum);
+    for (const client of clients) {
+      const label = `${minimum} ${JSON.stringify(client)}`;
+      const read = await get("notifications", cookie, "", client);
+      assert.equal(read.status, 200, label);
+      const saved = await send(
+        "activity-email",
+        cookie,
+        enable,
+        origin,
+        client,
+      );
+      assert.equal(saved.status, 200, label);
+      assert.deepEqual(await saved.json(), { activityEmail: true });
+      // A signed-out photo request reaches the session check.
+      assert.equal((await photo("", client)).status, 401, label);
+    }
+  }
+});
+
+test("a client header that does not name an iPhone app build gets 400", async () => {
+  const cookie = await cookieFor(await person("alice"));
+  for (const client of [
+    "",
+    "ios",
+    "ios/1.4.0",
+    "ios/1.4.0/",
+    "ios//42",
+    "ios/1.4.0/42/1",
+    "ios/1.4.0/4.2",
+    "ios/1.4.0/forty-two",
+    "ios/1.4.0/1234567890123456",
+    "android/1.4.0/42",
+  ]) {
+    const headers = { "Screenr-Client": client };
+    for (const response of [
+      await get("notifications", cookie, "", headers),
+      await photo(cookie, headers),
+    ])
+      await assertRouteError(response, {
+        status: 400,
+        message: "Invalid client header.",
+      });
+  }
+});
+
+const generatedId =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+
+test("API responses echo the client's request ID, or carry a new one", async (t) => {
+  minimumBuild(t)("42");
+  const cookie = await cookieFor(await person("alice"));
+  // Successes, expected errors, and the client header checks.
+  const responses = async (id: Record<string, string>) => [
+    await get("notifications", cookie, "", id),
+    await send("activity-email", cookie, '{"enabled":true}', origin, id),
+    await send("activity-email", cookie, "{", origin, id),
+    await get("unknown", cookie, "", id),
+    await photo(cookie, id),
+    await photo("", id),
+    await get("notifications", "", "", { ...id, ...app("41") }),
+    await get("notifications", cookie, "", { ...id, "Screenr-Client": "ios" }),
+  ];
+  for (const sent of ["6F9619FF-8B86-D011-B42D-00C04FC964FF", "a", "A_b-9"])
+    for (const response of await responses({ "Screenr-Request-Id": sent }))
+      assert.equal(response.headers.get("Screenr-Request-Id"), sent);
+
+  // A missing, empty, or unsafe ID is replaced, never echoed.
+  const seen = new Set<string>();
+  for (const sent of [
+    undefined,
+    "",
+    "x".repeat(65),
+    "two words",
+    '"quoted"',
+    "<id>",
+  ]) {
+    const id: Record<string, string> =
+      sent === undefined ? {} : { "Screenr-Request-Id": sent };
+    for (const response of await responses(id)) {
+      const echoed = response.headers.get("Screenr-Request-Id") ?? "";
+      assert.match(echoed, generatedId);
+      assert.ok(!seen.has(echoed), "Each request gets its own ID");
+      seen.add(echoed);
+    }
+  }
+});
+
+test("deployment rejects a minimum iPhone build that is not a whole number", async () => {
+  const env = {
+    ...process.env,
+    BETTER_AUTH_URL: "https://screenr.example",
+    GOOGLE_CLIENT_ID: "client",
+    GOOGLE_CLIENT_SECRET: "secret",
+    TMDB_READ_TOKEN: "token",
+    EMAIL_TRANSPORT: "resend",
+    EMAIL_FROM: "Screenr <screenr@example.test>",
+    RESEND_API_KEY: "key",
+  };
+  const check = (minimum: string) =>
+    promisify(execFile)(
+      process.execPath,
+      ["--import", "tsx", "scripts/validate-config.ts"],
+      { env: { ...env, SCREENR_IOS_MINIMUM_BUILD: minimum }, timeout: 15_000 },
+    );
+  await Promise.all([
+    ...["", "42"].map(check),
+    ...["42a", "4.2", "-1", "1e3", "1234567890123456"].map((minimum) =>
+      assert.rejects(check(minimum), (error: { stderr: string }) => {
+        assert.match(
+          error.stderr,
+          /SCREENR_IOS_MINIMUM_BUILD must be a whole number of at most 15 digits\./,
+        );
+        return true;
+      }),
+    ),
+  ]);
 });

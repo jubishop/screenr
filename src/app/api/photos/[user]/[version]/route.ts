@@ -1,3 +1,4 @@
+import { apiRoute } from "../../../../../server/api-route";
 import { requestSession } from "../../../../../server/auth";
 import { viewablePhoto } from "../../../../../server/photos";
 
@@ -12,7 +13,7 @@ const unavailable = (status: number) =>
     status,
     headers: { "Cache-Control": "private, no-store", Vary: vary },
   });
-export async function GET(
+async function servePhoto(
   request: Request,
   { params }: { params: Promise<{ user: string; version: string }> },
 ) {
@@ -33,3 +34,4 @@ export async function GET(
     headers: { ...headers, "Content-Type": photo.content_type },
   });
 }
+export const GET = apiRoute(servePhoto);

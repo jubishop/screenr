@@ -67,7 +67,11 @@ function upload(cookie: string, body: BodyInit, requestOrigin = origin) {
     { params: Promise.resolve({ action: "photo" }) },
   );
 }
-function change(cookie: string, action: "remove-photo" | "google-photo") {
+function change(
+  cookie: string,
+  action: "remove-photo" | "google-photo",
+  headers: Record<string, string> = {},
+) {
   return POST(
     new Request(`${origin}/api/screenr/${action}`, {
       method: "POST",
@@ -75,6 +79,7 @@ function change(cookie: string, action: "remove-photo" | "google-photo") {
         "Content-Type": "application/json",
         Origin: origin,
         Cookie: cookie,
+        ...headers,
       },
       body: "{}",
     }),
@@ -608,6 +613,37 @@ test("Use my Google photo replaces an upload, needs a Google picture, and report
       },
     ],
   );
+
+  // Through the API, the line names the request ID that the reply carries.
+  mock.restoreAll();
+  const logged = captureFailures();
+  mock.method(
+    globalThis,
+    "fetch",
+    async () => new Response(null, { status: 404 }),
+  );
+  const failed = await change(cookie, "google-photo", {
+    "Screenr-Request-Id": "photo-request-1",
+  });
+  assert.equal(failed.headers.get("Screenr-Request-Id"), "photo-request-1");
+  await assertRouteError(failed, {
+    status: 502,
+    message: "Your Google photo could not be copied. Please try again.",
+  });
+  assert.deepEqual(
+    logged.map((line) => JSON.parse(line)),
+    [
+      {
+        event: "google photo copy failed",
+        requestId: "photo-request-1",
+        user: alice,
+        trigger: "choice",
+        reason: "status",
+        status: 404,
+      },
+    ],
+  );
+  mock.restoreAll();
 
   const image = jpeg(3000, 2);
   const result = await chooseGooglePhoto(
