@@ -22,7 +22,7 @@ struct AccountView: View {
           ProfileSection(settings)
           PhotoSection(settings)
           InvitationsSection(settings)
-          // Push notification settings go here.
+          PushSettingsSection(settings)
           ActivityEmailSection(settings)
           StreamingServicesSection(settings)
           SignInMethodsSection(settings)

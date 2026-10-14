@@ -378,7 +378,9 @@ body.
   time.
 - **Remove:** `push-device` with `{"action": "remove", "token": "<hex>"}`
   responds `{"ok": true}`. It deletes the token only from the member's own
-  devices, and an unknown token changes nothing.
+  devices, and an unknown token changes nothing. The app removes its device
+  when the member turns Screenr's notifications off in iOS Settings; signing
+  out needs no request, since deleting the session deletes its devices.
 - **Save settings:** `push-settings` with one or more of `friendRequest`,
   `friendAccepted`, `comment`, and `reply`, each a boolean, responds
   `{"pushSettings": {...}}` with all four. Kinds the body leaves out keep

@@ -111,6 +111,32 @@ final class SettingsTests: XCTestCase {
     )
   }
 
+  // The fixture launch's member has not decided about notifications, and
+  // allows them when asked.
+  @MainActor
+  func testTurnsOnNotificationsAndChangesAKind() throws {
+    let log = RequestLog.temporary()
+    let app = openSettings(log: log)
+    let turnOn = app.buttons["Turn on notifications"]
+    let comments = app.switches["Comments on your posts"]
+    try app.performSettingsAudit()
+    app.scrollTo(turnOn)
+    for kind in [
+      "Friend requests", "Accepted friend requests", "Replies to your comments",
+      "Comments on your posts",
+    ] {
+      app.scrollTo(app.switches[kind])
+      XCTAssertEqual(app.switches[kind].value as? String, "1")
+    }
+
+    comments.switches.firstMatch.tap()
+
+    wait(for: [log.wrote("push-settings", #"{"comment":false}"#)], timeout: 10)
+    app.scrollTo(turnOn)
+    turnOn.tap()
+    XCTAssertTrue(turnOn.waitForNonExistence(timeout: 10))
+  }
+
   @MainActor
   func testConnectsSignInWithApple() throws {
     let app = openSettings(log: RequestLog.temporary())
@@ -119,7 +145,11 @@ final class SettingsTests: XCTestCase {
 
     connect.tap()
 
-    XCTAssertTrue(app.staticTexts["Apple connected."].waitForExistence(timeout: 10))
+    // The section's footer reports it, which the screen's next read can
+    // leave below the bottom of the list.
+    let connected = app.staticTexts["Apple connected."]
+    app.scrollTo(connected)
+    XCTAssertTrue(connected.exists)
   }
 
   // Under the fixture API, feedback goes to the request log instead of
@@ -199,6 +229,7 @@ final class SettingsTests: XCTestCase {
 
     XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 10))
     for control in [
+      app.buttons["Turn on notifications"], app.switches["Replies to your comments"],
       app.switches["Email me about new activity"], app.buttons["Connect Apple"],
       app.buttons["Send feedback"], app.buttons["Sign out"], app.buttons["Delete account"],
     ] {

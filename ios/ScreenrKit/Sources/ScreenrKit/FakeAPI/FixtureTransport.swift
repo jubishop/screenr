@@ -35,6 +35,8 @@ public struct FixtureScenario: Hashable, Sendable {
   // `GET /api/screenr/screen?path=%2F`, so UI tests can see when the app reads
   // and what it writes.
   public var requestLog: URL?
+  // The notification permission the app finds; see `FixturePushSystem`.
+  public var push: Push
 
   public init(
     viewer: String = "alice",
@@ -42,7 +44,8 @@ public struct FixtureScenario: Hashable, Sendable {
     profile: Profile = .complete,
     overrides: [String] = [],
     failure: String? = nil,
-    requestLog: URL? = nil
+    requestLog: URL? = nil,
+    push: Push = .undecided
   ) {
     self.viewer = viewer
     self.session = session
@@ -50,6 +53,7 @@ public struct FixtureScenario: Hashable, Sendable {
     self.overrides = overrides
     self.failure = failure
     self.requestLog = requestLog
+    self.push = push
   }
 }
 

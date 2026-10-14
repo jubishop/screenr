@@ -7,9 +7,13 @@ import SwiftUI
 // the screen beneath as it was.
 struct NotificationsView: View {
   @Environment(ShellModel.self) private var shell
+  @Environment(PushNotifications.self) private var push
 
   var body: some View {
     NotificationsList(shell: shell)
+      // The first time the member opens the bell, iOS asks whether Screenr
+      // may send these as notifications too.
+      .task { await push.askForPermission() }
   }
 }
 

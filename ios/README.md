@@ -15,7 +15,7 @@ repository root.
 | --- | --- |
 | `Screenr.xcodeproj` | The Screenr app, ScreenrShare extension, and ScreenrUITests targets, and the shared Screenr scheme. |
 | `Config/` | The `.xcconfig` build settings, the app's and extension's entitlements, and the release export options. |
-| `Screenr/` | The app target: the [app shell](#app-shell) in `Shell/`, feature screens in `Screens/` with their parts in a folder named for the feature, such as `Find/` and the [title page](#title-pages)'s `TitlePage/`, components several features share in `Shared/`, such as the [title list views](#title-lists), the [conversations](#conversations) that the feed, title pages, and profiles share in `Conversation/`, the app lifecycle, assets, and `Info.plist`. |
+| `Screenr/` | The app target: the [app shell](#app-shell) in `Shell/`, feature screens in `Screens/` with their parts in a folder named for the feature, such as `Find/` and the [title page](#title-pages)'s `TitlePage/`, components several features share in `Shared/`, such as the [title list views](#title-lists), the [conversations](#conversations) that the feed, title pages, and profiles share in `Conversation/`, the iOS side of [push notifications](#push-notifications) in `Push/`, the app lifecycle, assets, and `Info.plist`. |
 | `ScreenrShare/` | The [share extension](#share-extension), which the app embeds: its view controller, views, and `Info.plist`. |
 | `ScreenrUITests/` | XCUITest UI tests. |
 | `ScreenrKit/` | A local Swift package: `Sources/ScreenrKit`, `Tests/ScreenrKitTests`, and `Fixtures/`. |
@@ -50,8 +50,10 @@ a configuration named Debug, so the names stay Debug and Release.
 1, and release builds take the next number from the release tags, which the
 extension shares. `Screenr/Info.plist` passes the variant, server, and app
 group to the app, which reads them through ScreenrKit's `AppConfiguration`,
-as `ScreenrShare/Info.plist` does for the extension. Xcode preprocesses both
-files, so Dev-only keys sit in an `#if SCREENR_DEV` block.
+as `ScreenrShare/Info.plist` does for the extension. The app's also passes
+its APNs environment, which `AppConfiguration.pushTarget(infoDictionary:)`
+reads. Xcode preprocesses both files, so Dev-only keys sit in an
+`#if SCREENR_DEV` block.
 
 ## Checks
 
@@ -241,12 +243,16 @@ uses it when launched with these arguments; Release builds ignore them:
 | `-ScreenrFixtureOverride` | A fixture that answers first, such as `screen/feed/empty`. Repeatable. |
 | `-ScreenrFixtureFailure` | A fixture that answers every `/api/screenr` request, such as `errors/update-required`. |
 | `-ScreenrFixtureLog` | A file that gets a line per `/api/screenr` request, such as `GET /api/screenr/screen?path=%2F`, with ` visit` after the app's [visit](#visits) and a write's JSON body, keys sorted, after the write: `POST /api/screenr/read-notification {"id":"18"}`. An upload has its type and size instead: `POST /api/screenr/photo image/jpeg 41250 bytes`. Sent [feedback](#feedback) adds a `FEEDBACK` line. A [trailer](#trailers)'s player adds `WEB <url>` for each page it asks for. |
+| `-ScreenrFixturePush` | The notification permission the app finds: `undecided` (default), `allowed`, or `denied`; or `system` for iOS's own permission and APNs registration. See [push notifications](#push-notifications). |
 | `-ScreenrOpenURL` | A link the app opens at launch, as if the system delivered it, such as `screenr-dev://titles/tv/201`. |
 | `-ScreenrAppearance` | `dark` or `light`, in place of the system's appearance, which a Simulator changes for its apps only after it restarts. |
+| `-ScreenrPushTap` | A notification ID the app opens at launch, as if the member had tapped its push, such as `18`. |
 
 In UI tests, `app.launch(with: FixtureLaunch(viewer: "nora"))` passes them,
 with the directory found from the test's source path; `requestLog`, `link`,
-and `appearance` pass the last three. The fixture API keeps the session in memory.
+`appearance`, and `pushTap` pass `-ScreenrFixtureLog`, `-ScreenrOpenURL`,
+`-ScreenrAppearance`, and `-ScreenrPushTap`. The fixture API keeps the
+session in memory.
 A request gets the fixture with the same action and
 query or body, then falls back to the screen's path or to a successful
 fixture for the action. A matching ETag gets 304. Apart from setup, writes
@@ -339,7 +345,7 @@ reporting, and whose username makes the You tab. When the session ends,
 | --- | --- | --- |
 | `Destination` | ScreenrKit `Navigation/` | One case per member route, plus `join` and `notFound`. `Destination(path:)` and `path` match the web's member routes, `Destination(url:)` reads universal links and `screenr-dev://` links, `shareURL` builds a screenr.club link, and `pageName(for:)` names the page. |
 | `Router` | ScreenrKit `Navigation/` | `@Observable`: the selected tab, each tab's stack, and the sheet. `open(_:)` takes links from outside the app, and puts an invitation link's token in `PendingInvitation`. |
-| `ShellModel` | ScreenrKit `Shell/` | `@Observable`: the account check, the viewer, the bell's unread count, the app's activity, `screenModel(for:)`, `pushArrived()`, and `refreshLiveReads()`. Views read it with `@Environment(ShellModel.self)`. |
+| `ShellModel` | ScreenrKit `Shell/` | `@Observable`: the account check, the viewer, the bell's unread count, the app's activity, `screenModel(for:)`, `pushArrived()`, `refreshLiveReads()`, and `onUnreadCount(_:)`, which reports each unread count, such as for the app icon's badge. Views read it with `@Environment(ShellModel.self)`. |
 | `LiveRead`, `ScreenModel` | ScreenrKit `Shell/` | A GET request's `phase` (`loading`, `loaded`, or `failed`) and its polling. `ScreenModel` is `LiveRead<Screen>`; other live reads, such as the notifications sheet's, use `LiveRead(.notifications(), api:)`. |
 | `IncomingActivity` | ScreenrKit `Shell/` | Which activity the reader accepted; the rest waits behind a control. |
 | `DestinationView` | `Screenr/Shell/` | Maps each destination to its screen, owns its `ScreenModel`, and adds polling, the navigation title, and redirects. |
@@ -480,6 +486,106 @@ One action runs at a time. A failed one shows an alert with the server's
 message, and the page reads again. Closing the sheet leaves the screen
 beneath and its state, such as an unsent draft, untouched.
 
+## Push notifications
+
+The app's side of [push delivery](../docs/notifications.md#push-delivery) and
+[push devices](../docs/data-and-access.md#push-devices-and-settings). Its
+behavior is ScreenrKit's `PushNotifications` (`Push/`), with iOS behind the
+`PushSystem` protocol. `Screenr/Push/` holds `SystemPush`, which wraps
+`UNUserNotificationCenter` and `UIApplication`, and the app's `AppDelegate`,
+in `Shell/`, receives the APNs device token and the notification center's
+callbacks.
+`ScreenrApp` builds one `PushNotifications`, hands it to `AppDelegate.push`
+before launch finishes, and puts it in the environment.
+
+- **Permission:** the app asks for alerts, badges, and sounds only when the
+  member can see why: as Circle opens for a new member who just finished
+  setup, the first time a member opens the bell, and from Turn on
+  notifications in [Settings](#settings). It never asks at launch or before
+  sign-in. iOS shows its prompt once; after that, Settings offers Open iOS
+  Settings while notifications are off.
+- **Registration:** while the tabs show, each launch and each return to the
+  foreground reads the permission. When notifications are allowed, the app
+  asks APNs for the device token, and `AppDelegate` passes it to
+  `received(token:)`, which registers it with `push-device` once per session:
+  the token in lowercase hex, and the environment, topic, and build of the
+  `PushTarget` that `AppConfiguration.pushTarget(infoDictionary:)` reads. A failed registration tries again on the next return. If
+  the member turns notifications off in iOS Settings after this launch
+  registered, the next return removes the device. Signing out ends the
+  session, and the server deletes the session's devices with it; the app
+  clears Notification Center and the badge, and the next member registers
+  the device again.
+- **Environment:** `SCREENR_APS_ENVIRONMENT` in `Dev.xcconfig` and
+  `Release.xcconfig` sets both the `aps-environment` entitlement and the
+  `ScreenrAPSEnvironment` Info.plist key, so a token always names the APNs
+  environment that issued it: `development` (`sandbox`) for Screenr Dev,
+  which runs in the Simulator, and `production` for the Release builds that
+  TestFlight and the App Store install. The topic is the bundle ID. Only the
+  app reads them: the share extension handles no notifications, so its
+  `AppServices.push` is nil.
+- **Categories:** at launch, `AppDelegate` registers
+  `PushCategory.notificationCategories`: `FRIEND_REQUEST` and `COMMENT`, the
+  categories the worker names, with no actions yet. Notification actions add
+  their `UNNotificationAction`s in `PushCategory.notificationCategory` and
+  handle their identifiers in `AppDelegate`'s
+  `userNotificationCenter(_:didReceive:)`, which routes only the default
+  action, a tap, today.
+- **Taps:** `PushTap(userInfo:)` reads the payload's `notificationId`, and
+  `open(_:)` reads that notification with `GET /api/screenr/notification`.
+  It opens the notification's `href` with `shell.router.open(_:)`, as the
+  bell does, then sends `read-notification` and refreshes the live screens.
+  A notification the member can no longer see, a payload without an ID, or
+  a failed read opens the bell instead; while signed out or with a required
+  update, a tap does nothing. A tap that launches the app works the same
+  way: the router keeps the destination until the tabs show.
+- **While open:** a push that arrives while the app is open shows its
+  banner, sound, and badge as usual, and calls `shell.pushArrived()`, so the
+  visible screen reads again.
+- **Badge:** `ShellModel.onUnreadCount` reports every unread count the app
+  reads, and `PushNotifications` sets the app icon's badge to it with
+  `setBadgeCount`, skipping repeats except for the first count after each
+  return to the foreground. When the session ends, the badge goes to 0. The
+  worker's [badge-only updates](../docs/notifications.md#badge-only-updates)
+  keep it current while the app is closed.
+
+### Push tests
+
+`PushNotificationsTests` and `PushSettingsModelTests` cover the behavior with
+`RecordingPushSystem` and `RecordingAPI`. Fixture launches use
+`FixturePushSystem` instead of iOS, so UI tests never meet the permission
+prompt: `-ScreenrFixturePush` sets the permission the app finds, a member who
+has not decided allows notifications when asked, and no device token
+arrives, so nothing registers. `PushTests` follow a tap with
+`FixtureLaunch(pushTap: "18")`, which passes `-ScreenrPushTap`.
+
+To see a real push in your Simulator against the fixture API, launch with
+`-ScreenrFixturePush system`, which keeps iOS's permission and APNs
+registration, allow notifications when the bell asks, and send a payload
+shaped like the worker's with `xcrun simctl push`:
+
+```sh
+xcrun simctl launch "$udid" com.artisanalsoftware.Screenr.dev \
+  -ScreenrFixtures "$PWD/ios/ScreenrKit/Fixtures" -ScreenrFixturePush system
+cat > payload.apns <<'EOF'
+{
+  "aps": {
+    "alert": { "body": "New activity on Screenr" },
+    "badge": 6,
+    "sound": "default",
+    "mutable-content": 1,
+    "category": "COMMENT",
+    "thread-id": "e22cb5a7-a2dd-4582-8f62-db3e31f2761b"
+  },
+  "notificationId": "18"
+}
+EOF
+xcrun simctl push "$udid" com.artisanalsoftware.Screenr.dev payload.apns
+```
+
+Tapping the notification opens Harbor Lights at Ben's reply. The fixture
+request log, from `-ScreenrFixtureLog`, shows the registration and the tap's
+requests.
+
 ## Invitations and setup
 
 A person joins from an invitation link, `https://screenr.club/join/<token>`
@@ -548,6 +654,7 @@ models.
 | Your profile | `ProfileEditorModel` | Edit profile opens a sheet that saves the display name and username together, with signup's rules and the server's messages. |
 | Profile photo | `ProfilePhotoModel` | The [photo editor](#profile-photos) that setup shares. |
 | Invitations | `InvitationsModel` | Invite friends pushes `/invites`: a link for 1 to 12 signups, `ShareLink` for each active link, and Revoke with a confirmation. |
+| Push notifications | `PushSettingsModel`, `PushNotifications` | A switch for each kind (friend requests, acceptances, comments, replies) through `push-settings`; each shows the choice being saved and ignores changes until its save finishes. Turn on notifications shows iOS's prompt while the member has not decided, and Open iOS Settings goes to Screenr's notification settings once they turned them off. See [push notifications](#push-notifications). |
 | Activity emails | `ActivityEmailModel` | The switch shows the choice being saved and ignores changes until the save finishes. |
 | Streaming services | `StreamingServicesModel` | A sheet with search, the selection, and Clear selections. |
 | Sign-in methods | `AccountLinkModel` | Connect Google runs the sign-in flow's PKCE code flow, and Sign in with Apple uses the system button; each posts the credential to `link-social`. Against the fixture API, both use the sign-in stubs. |
@@ -556,9 +663,8 @@ models.
 | Delete account | `AccountDeletionModel` | A sheet that confirms it's the member with a new sign-in, then deletes the account after a confirmation; see [account deletion](#account-deletion). |
 
 A new setting adds its section to `AccountView`'s list in one line, such as
-`PushSettingsSection(settings)`, at the comment that marks its place: push
-notification settings after Invitations. Delete account stays last. A
-section that edits a draft opens its editor with
+`PushSettingsSection(settings)`; Delete account stays last. A section that
+edits a draft opens its editor with
 `settings.open(_:)` after adding a case to `SettingsEditor`. `AccountView`
 presents those sheets outside `ScreenContent`, so a failed read, which
 replaces the sections with the error, keeps an open draft.
@@ -571,10 +677,11 @@ such as Remove photo, uses `.danger`, since the system's red falls short of
 4.5:1 on the button's gray fill.
 
 `SettingsTests` cover the journeys: changing the name and username, uploading
-and removing a photo, creating and revoking an invitation, connecting Sign in
-with Apple, sending feedback, and signing out. They check what each write sent in the fixture
-API's request log, since a screen read after a write still returns the
-fixture. Their `performSettingsAudit()` leaves out the Dynamic Type and
+and removing a photo, creating and revoking an invitation, turning on
+notifications and changing a push setting, connecting Sign in with Apple,
+sending feedback, and signing out. They check what each write sent in the
+fixture API's request log, since a screen read after a write still returns
+the fixture. Their `performSettingsAudit()` leaves out the Dynamic Type and
 clipping checks, which the iOS 27 Simulator fails for the system's list text
 in headers, footers, and rows, and whose text size changes scroll a long list
 while the contrast check samples it. It passes over contrast failures for rows

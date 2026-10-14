@@ -7,14 +7,18 @@ struct ScreenrApp: App {
   @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
   private let services: AppServices
   private let shell: ShellModel
+  private let push: PushNotifications
   private let logFile: LogFile?
   private let telemetry: Telemetry
   private let colorScheme: ColorScheme?
 
   init() {
     let configuration: AppConfiguration
+    let pushTarget: PushTarget
     do {
-      configuration = try AppConfiguration(infoDictionary: Bundle.main.infoDictionary ?? [:])
+      let info = Bundle.main.infoDictionary ?? [:]
+      configuration = try AppConfiguration(infoDictionary: info)
+      pushTarget = try AppConfiguration.pushTarget(infoDictionary: info)
     } catch {
       fatalError("The build's Screenr settings are invalid: \(error)")
     }
@@ -43,7 +47,8 @@ struct ScreenrApp: App {
         arguments: arguments,
         observer: telemetry,
         feedback: telemetry.feedback,
-        logFile: logFile
+        logFile: logFile,
+        push: SystemPush()
       )
     } catch {
       fatalError("Screenr could not start its API client: \(error)")
@@ -70,9 +75,22 @@ struct ScreenrApp: App {
       onScreen: { screen in spotlight.screenLoaded(screen) }
     )
     self.shell = shell
+    // The app passes its push system, so the services always have one.
+    guard let pushSystem = services.push else {
+      fatalError("Screenr started without its push system")
+    }
+    let push = PushNotifications(
+      api: services.api,
+      shell: shell,
+      system: pushSystem,
+      target: pushTarget
+    )
+    self.push = push
+    AppDelegate.push = push
     services.session.onEnd {
       telemetry.signOut()
       shell.sessionEnded()
+      push.sessionEnded()
     }
     // Siri and the Shortcuts app run the intents in this process, which
     // registers what their `@Dependency` properties read before any runs.
@@ -88,6 +106,9 @@ struct ScreenrApp: App {
       shell.router.open(link)
     }
     colorScheme = LaunchAppearance.colorScheme(in: arguments, variant: configuration.variant)
+    if let tap = PushTap.launch(arguments, variant: configuration.variant) {
+      Task { await push.open(tap) }
+    }
   }
 
   var body: some Scene {
@@ -95,6 +116,7 @@ struct ScreenrApp: App {
       AppRootView()
         .screenrServices(services)
         .environment(shell)
+        .environment(push)
         .preferredColorScheme(colorScheme)
     }
   }

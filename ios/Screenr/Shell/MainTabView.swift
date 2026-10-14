@@ -5,6 +5,7 @@ import SwiftUI
 // Find a title is the search-role tab, which sits apart in the tab bar.
 struct MainTabView: View {
   @Environment(ShellModel.self) private var shell
+  @Environment(PushNotifications.self) private var push
 
   var body: some View {
     @Bindable var router = shell.router
@@ -34,6 +35,11 @@ struct MainTabView: View {
     .onChange(of: router.invitation.token, initial: true) { _, token in
       router.invitation.finish()
       if token != nil { router.open(.feed()) }
+    }
+    // The tabs show a member with a profile, whose device registers for
+    // pushes on each launch and each return to the foreground.
+    .task(id: shell.isAppActive) {
+      if shell.isAppActive { await push.memberReady() }
     }
   }
 }

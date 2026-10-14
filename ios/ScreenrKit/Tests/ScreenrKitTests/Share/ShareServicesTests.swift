@@ -18,6 +18,18 @@ struct ShareServicesTests {
     UserDefaults(suiteName: suite)?.removePersistentDomain(forName: suite)
   }
 
+  // The extension's Info.plist settings, which have no APNs environment.
+  private func configuration() throws -> AppConfiguration {
+    try AppConfiguration(infoDictionary: [
+      "ScreenrVariant": "dev",
+      "ScreenrServerURL": "http://localhost:3000",
+      "ScreenrAppGroup": "group.com.artisanalsoftware.Screenr.dev",
+      "ScreenrGoogleClientID": "1083-abc.apps.googleusercontent.com",
+      "CFBundleShortVersionString": "1.0",
+      "CFBundleVersion": "1",
+    ])
+  }
+
   @Test func devHandsTheAppsFixtureArgumentsToItsExtension() throws {
     defer { forget() }
     try handoff(.dev)
@@ -64,14 +76,7 @@ struct ShareServicesTests {
     }
     let log = directory.appending(path: "requests.log")
     let services = try AppServices(
-      configuration: AppConfiguration(infoDictionary: [
-        "ScreenrVariant": "dev",
-        "ScreenrServerURL": "http://localhost:3000",
-        "ScreenrAppGroup": "group.com.artisanalsoftware.Screenr.dev",
-        "ScreenrGoogleClientID": "1083-abc.apps.googleusercontent.com",
-        "CFBundleShortVersionString": "1.0",
-        "CFBundleVersion": "1",
-      ]),
+      configuration: configuration(),
       arguments: [
         "ScreenrShare", "-ScreenrFixtures", TestFixtures.directory.path(), "-ScreenrFixtureLog",
         log.path(),
@@ -85,5 +90,20 @@ struct ShareServicesTests {
       try String(contentsOf: log, encoding: .utf8)
         == "GET /api/screenr/screen?path=%2Ftitles%2Ftv%2F201\n"
     )
+  }
+
+  // The extension handles no notifications, so it has no push system, even
+  // when the app's fixture arguments choose a permission.
+  @Test func theExtensionHasNoPushSystem() throws {
+    let services = try AppServices(
+      configuration: configuration(),
+      arguments: [
+        "ScreenrShare", "-ScreenrFixtures", TestFixtures.directory.path(), "-ScreenrFixturePush",
+        "allowed",
+      ],
+      host: .shareExtension
+    )
+
+    #expect(services.push == nil)
   }
 }
