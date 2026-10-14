@@ -858,9 +858,9 @@ VPS in three places:
 - **Working copy:** `~/.config/screenr/` on the owner's Mac, in two files.
   `production.env` mirrors `/etc/screenr/app.env`, including
   `BETTER_AUTH_SECRET`, the Resend and TMDB keys, the Google client secret,
-  and the Apple keys, including the APNs key in `APNS_PRIVATE_KEY`. `backup.env` mirrors `/etc/screenr/backup.env`, including the
-  restic repository, `RESTIC_PASSWORD`, and the R2 keys. Both files are
-  mode 0600.
+  and the Apple keys, including the APNs key in `APNS_PRIVATE_KEY`.
+  `backup.env` mirrors `/etc/screenr/backup.env`, including the restic
+  repository, `RESTIC_PASSWORD`, and the R2 keys. Both files are mode 0600.
 - **Home repository:** the owner's private home repository already tracks
   `~/.config/screenr/`, so its remote also holds both files.
 - **1Password:** documents "Screenr production.env" and "Screenr
