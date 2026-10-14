@@ -924,6 +924,22 @@ deployment within the existing allowance; do not enable a paid upgrade or buy
 more VPS capacity without a new decision. Restic retention does not itself
 enforce an account-wide spending cap.
 
+### Account deletion and backups
+
+[Account deletion](data-and-access.md#account-deletion) erases a member from
+the live database at once. Snapshots taken earlier still hold their data,
+encrypted in R2, until [retention](#backup-storage-warning) forgets them:
+seven daily and four weekly snapshots, so about a month after the deletion.
+Nothing edits existing snapshots. The
+[privacy policy](https://screenr.club/privacy) tells members this.
+
+The weekly restore check restores into a temporary database and drops it, so
+it never brings a deleted account back. A production
+[restore](restore-and-patching.md#restore-on-the-existing-host) from a
+snapshot taken before a deletion would bring that account back. Screenr keeps
+no record of deleted accounts, so such a restore cannot redo the deletion;
+the member would need to delete the account again.
+
 ### Run time limits
 
 [Issue #119](https://github.com/jubishop/screenr/issues/119) bounds the

@@ -43,8 +43,8 @@ result becomes the JSON response; an action without one responds
 2. A POST must come from the app's origin (403), unless it carries a
    [bearer token](#native-client-sessions).
 3. The request needs a session (401).
-4. Every action except profile setup and photo changes needs a completed
-   profile (403).
+4. Every action except profile setup, photo changes, and
+   [account deletion](#account-deletion) needs a completed profile (403).
 5. An unknown action, or a known one with another method, returns 404.
 6. Usage telemetry records the day for member POST actions, photo changes by
    members, and title searches
@@ -53,10 +53,12 @@ result becomes the JSON response; an action without one responds
    A photo upload's body is the image itself, at most 200 KB.
 
 Add an action as one entry, using `read` for a member GET, `write` for a
-member POST, `signup` for a POST that runs before profile setup, or `photo`
-for a photo change, which works before and after setup. Its `run` receives
-the user ID, the request's session ID, and the request headers. Give it an
-[iPhone API fixture](testing.md#iphone-api-fixtures) case in the same change.
+member POST, `signup` for a POST that runs before profile setup, `photo`
+for a photo change, which works before and after setup, or `erasure` for
+account deletion, which also works either way and records no usage. Its
+`run` receives the user ID, the request's session ID, and the request
+headers. Give it an [iPhone API fixture](testing.md#iphone-api-fixtures)
+case in the same change.
 
 ### Single notification read
 
@@ -220,7 +222,9 @@ cookies, and the response returns the
   AES-256-GCM under a key derived from `BETTER_AUTH_SECRET`. Account deletion
   calls `revokeAppleTokens(userId)` in `src/server/apple.ts` before deleting
   the user. It revokes each token with Apple and clears it; when Apple does
-  not confirm, it throws and keeps the token for a retry. An uninvited
+  not confirm, it throws and keeps the token for a retry. A token sealed
+  under an earlier `BETTER_AUTH_SECRET` can never be read or revoked, so it
+  logs `apple token unreadable` and skips it. An uninvited
   person's code is never redeemed, so Screenr keeps no token for them.
 
 Rejections answer with a JSON body naming a `code` from Better Auth or a
@@ -594,6 +598,80 @@ works the same way and shows **Post removed**.
 Entries without visible, nonremoved replies disappear. The original spoiler
 flag still protects the remaining discussion. This behavior is shared across
 title, friends, and author-profile feeds, including open-page refreshes.
+A member who [deletes their account](#account-deletion) leaves the same
+placeholder, without an author, for each of their comments that has replies.
+
+## Account deletion
+
+Members delete their own account from Account on the web, and the iPhone
+app uses the same action
+([decision](product-brief.md#account-deletion--2026-10-13),
+[issue #236](https://github.com/jubishop/screenr/issues/236)).
+`src/server/account-deletion.ts` holds the rules;
+`tests/app/account-deletion.test.ts` and
+`tests/browser/account-deletion.spec.ts` cover them.
+
+- **Fresh sign-in:** `POST /api/screenr/delete-account` with `{}` needs a
+  session created in the last ten minutes, the same window as Better Auth's
+  `freshAge`. An older session gets 403 with "To delete your account,
+  confirm it’s you again with a new sign-in." and nothing changes. The
+  action works with or without a completed profile, records no usage, and
+  responds `{"ok": true}`.
+- **Web:** Delete account on Account emails a sign-in code to the address
+  the account screen reports as `email`. Entering it signs this browser in
+  again, which starts the fresh session; an
+  [in-page confirmation](interface-design.md#confirm-other-destructive-actions--2026-10-12)
+  then asks before deleting. Code requests count toward the usual
+  [login-code limits](running-screenr.md#provider-configuration). The web
+  ends on the sign-in page with "Your Screenr account was deleted."
+- **iPhone app:** it signs in again with any method, stores the new bearer
+  token, and sends the request with it. Success ends the session.
+- **Apple:** deletion first calls `revokeAppleTokens`
+  ([Apple tokens](#native-sign-in)). Apple requires revocation, and the
+  tokens live in the rows deletion erases, so when Apple does not confirm,
+  deletion logs `apple revoke failed`, erases nothing, and responds 503 with
+  "Sign in with Apple could not be disconnected, so your account was not
+  deleted. Please try again later." A retry revokes the kept token.
+
+One transaction under the [write lock](#write-lock-and-refresh-behavior)
+then erases the person with `eraseAccounts`:
+
+- **Entries:** their Recommends, Want to watch, watch statuses, reviews,
+  standalone comments, posts, and top 10 go, each with its whole
+  conversation, including other members' replies and reactions.
+- **Comments elsewhere:** a top-level comment of theirs with someone else's
+  nonremoved reply becomes a "Comment removed" placeholder with no author, so
+  the replies remain. Their other comments go, along with removed replies
+  beneath them. Replies that addressed them no longer name anyone.
+- **Connections:** friendships and requests, blocks in both directions, and
+  their invitations go. So do the signup records of people who joined through
+  those invitations; those members keep their accounts.
+- **Sign-in data:** pending codes and sign-in states in Better Auth's
+  `verification` table, and queued code emails, which name the address only
+  by a hash.
+- **The account:** deleting the `user` row cascades to the profile with its
+  settings, push settings, and demo flag, and to the photo, sessions, push
+  devices, sign-in accounts, saved services, notifications, reactions, usage
+  rows, and activity emails.
+
+Rows that limit code requests hold only a hash of the address and expire
+within a day, so they stay and keep limiting requests. Afterward the address
+can join again only with a valid invitation, like anyone new. Deleted data
+stays in [encrypted backups](deployment.md#account-deletion-and-backups)
+until they expire. Reseeding the
+[demo circle](running-screenr.md#demo-circle-for-apple-review) removes the
+previous demo accounts with the same erasure.
+
+Migration `030-account-deletion.sql` lets a removed comment have no author.
+Feeds show such a placeholder with `author_id`, `username`, `display_name`,
+and `photo` null, `removed` true, and `unavailable` false, and the web
+labels it "Comment removed". The previous release leaves it out of
+conversations, as if it had no replies.
+
+`tests/app/account-deletion.test.ts` reads from the schema every column whose
+foreign keys lead to a person, and every text column, so its checks cover
+new tables. Give its departing member rows in any new table that refers to
+members.
 
 ## Schema migrations
 

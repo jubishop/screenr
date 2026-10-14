@@ -1,0 +1,16 @@
+{
+  "description": "Deleting the account with a session from a sign-in in the last ten minutes. The token then signs no one in.",
+  "viewer": "alice",
+  "request": {
+    "method": "POST",
+    "action": "delete-account",
+    "path": "/api/screenr/delete-account",
+    "body": {}
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "ok": true
+    }
+  }
+}

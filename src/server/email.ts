@@ -11,6 +11,12 @@ type Mail = { to: string; subject: string; text: string };
 const encrypt = (mail: Mail) => seal("screenr-email", JSON.stringify(mail));
 const decrypt = (payload: string): Mail =>
   JSON.parse(unseal("screenr-email", payload));
+// A queued code email names its recipient only by this hash, which keeps one
+// pending code of each type per address. Better Auth sends these types;
+// Screenr skips its password reset codes.
+export const codeTypes = ["sign-in", "email-verification"];
+export const codeRecipientHash = (type: string, email: string) =>
+  createHash("sha256").update(`${type}:${email.toLowerCase()}`).digest("hex");
 export async function queueCode({
   email,
   otp,
@@ -47,13 +53,7 @@ export async function queueCode({
     ON CONFLICT(recipient_hash) WHERE sent_at IS NULL DO UPDATE SET
     id=excluded.id,payload=excluded.payload,expires_at=excluded.expires_at,
     available_at=now(),attempts=0,last_error=NULL`,
-    [
-      randomUUID(),
-      encrypt(mail),
-      createHash("sha256")
-        .update(`${type}:${email.toLowerCase()}`)
-        .digest("hex"),
-    ],
+    [randomUUID(), encrypt(mail), codeRecipientHash(type, email)],
   );
 }
 

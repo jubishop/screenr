@@ -215,10 +215,11 @@ export default function Privacy() {
 
         <h2>Deleting your account</h2>
         <p>
-          Account deletion is coming soon to Account on the website and to You
-          &rarr; Settings in the iPhone app. Until then, email{" "}
-          <a href="mailto:screenr@jubishop.com">screenr@jubishop.com</a> to
-          delete your account.
+          Delete your account from Account on the website. Screenr first emails
+          you a sign-in code to confirm it&rsquo;s you, then asks you to confirm
+          the deletion. Deletion from You &rarr; Settings in the iPhone app is
+          coming soon; until then, use the website or email{" "}
+          <a href="mailto:screenr@jubishop.com">screenr@jubishop.com</a>.
         </p>
         <p>
           Deleting an account is permanent. It erases your sessions and push

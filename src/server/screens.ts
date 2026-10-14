@@ -126,6 +126,13 @@ async function loadContent(userId: string, route: MemberRoute) {
   if (route.kind === "account")
     return {
       kind: "account" as const,
+      // Where sign-in codes go, including the one that confirms deletion.
+      email: (
+        await db.query<{ email: string }>(
+          'SELECT email FROM "user" WHERE id=$1',
+          [userId],
+        )
+      ).rows[0].email,
       activityEmail: await activityEmail(userId),
       // The iPhone app's per-kind push settings.
       pushSettings: await pushSettings(userId),

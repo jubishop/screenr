@@ -41,6 +41,7 @@ struct RequestTests {
         replyTo: "2"
       )
     ),
+    Shape("actions/delete-account/default", .deleteAccount),
     Shape(
       "actions/discussion-post/default",
       .discussionPost(body: "Movie night at my place on Friday?", spoiler: false)

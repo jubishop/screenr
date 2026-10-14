@@ -336,7 +336,8 @@ revocation, it signs a five-minute client secret naming the app's bundle ID,
 so no secret needs renewal. Each account's newest refresh token is stored
 encrypted for account deletion to revoke. Changing `BETTER_AUTH_SECRET` makes
 the stored tokens unreadable, like queued email, until each member's next
-Apple sign-in stores a new one. Apple sign-in has no web button, return URL,
+Apple sign-in stores a new one; deleting an account meanwhile skips its
+unreadable token. Apple sign-in has no web button, return URL,
 or domain to register.
 
 ### Apple key files
@@ -446,10 +447,11 @@ outside the circle.
 
 **Reset.** Every run replaces the circle. It deletes each demo account,
 including anyone who joined through a demo invitation, with everything they
-made, their sessions, and their notifications, then seeds a fresh circle in
-new accounts. A signed-in reviewer is signed out. The accounts and
-friendships commit together; the activity follows through the same
-services, so if a run fails partway, run it again.
+made, their sessions, and their notifications, through the same erasure as
+[account deletion](data-and-access.md#account-deletion). It then seeds a
+fresh circle in new accounts. A signed-in reviewer is signed out. The
+accounts and friendships commit together; the activity follows through the
+same services, so if a run fails partway, run it again.
 
 **Sign-in code.** `REVIEW_SIGN_IN_CODE` holds the reviewer's fixed six-digit
 code. Set it only in the production environment, and put the code in App
