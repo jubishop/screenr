@@ -34,18 +34,21 @@ def snapshots(*ages):
 
 
 class BackupAgeTests(unittest.TestCase):
-    def execute(self, output):
+    def execute(self, *outputs):
+        # Each restic call takes the next output; the last one repeats.
         calls = []
+        self.waits = []
 
         def run(command, **options):
             calls.append(command)
+            output = outputs[min(len(calls), len(outputs)) - 1]
             if isinstance(output, BaseException):
                 raise output
             return subprocess.CompletedProcess(command, 0, stdout=output)
 
         stdout, stderr = io.StringIO(), io.StringIO()
         with patch('subprocess.run', run), patch('time.time', return_value=NOW), \
-                redirect_stdout(stdout), redirect_stderr(stderr):
+                patch('time.sleep', self.waits.append), redirect_stdout(stdout), redirect_stderr(stderr):
             try:
                 runpy.run_path(str(AGE_CHECK), run_name='__main__')
             except SystemExit as result:
@@ -88,27 +91,46 @@ class BackupAgeTests(unittest.TestCase):
                 self.assertIn('Backup age check failed', errors)
 
     def test_fails_when_restic_cannot_list_snapshots(self):
-        for error in [subprocess.CalledProcessError(1, 'restic'), FileNotFoundError('restic'),
-                      subprocess.TimeoutExpired('restic', 300)]:
+        for error, attempts in [(subprocess.CalledProcessError(1, 'restic'), 2), (FileNotFoundError('restic'), 1),
+                                (subprocess.TimeoutExpired('restic', 300), 2)]:
             with self.subTest(error=type(error).__name__):
-                code, output, errors, _ = self.execute(error)
+                code, output, errors, calls = self.execute(error)
                 self.assertEqual(code, 1)
                 self.assertEqual(output, '')
                 self.assertIn('Backup age check failed', errors)
+                self.assertEqual(len(calls), attempts)
+
+    def test_retries_a_failed_snapshot_listing_once_after_a_minute(self):
+        # A brief storage error, such as R2 answering 502 Bad Gateway, sends no alert.
+        for error in [subprocess.CalledProcessError(1, 'restic'), subprocess.TimeoutExpired('restic', 300)]:
+            with self.subTest(error=type(error).__name__):
+                code, output, errors, calls = self.execute(error, snapshots(HOUR))
+                self.assertEqual(code, 0, errors)
+                self.assertIn('snap0', output)
+                self.assertEqual(len(calls), 2)
+                self.assertEqual(self.waits, [60])
 
 
 class BackupScriptTests(unittest.TestCase):
     DUMP = '/var/lib/screenr-backup/screenr.dump'
 
-    def execute(self, dump=':'):
+    def execute(self, dump=':', fail='', times=0):
         # External commands are the boundary; ops/backup.sh runs unchanged.
+        # The restic step named by FAIL fails its first TIMES runs.
         wrapper = '''
 pg_dump() { echo "pg_dump"; eval "$DUMP"; }
-restic() { echo "restic $1"; }
+restic() {
+    echo "restic $1"
+    [ "$1" = "$FAIL" ] && [ "$TIMES" -gt 0 ] || return 0
+    TIMES=$((TIMES - 1))
+    return 1
+}
+sleep() { echo "sleep $*"; }
 rm() { echo "rm $*"; }
 . "$SCRIPT"
 '''
-        environment = {**os.environ, 'SCRIPT': str(ROOT / 'ops/backup.sh'), 'DUMP': dump}
+        environment = {**os.environ, 'SCRIPT': str(ROOT / 'ops/backup.sh'), 'DUMP': dump,
+                       'FAIL': fail, 'TIMES': str(times)}
         return subprocess.run(['sh', '-c', wrapper], text=True, capture_output=True,
                               env=environment, timeout=10)
 
@@ -117,6 +139,25 @@ rm() { echo "rm $*"; }
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(result.stdout.splitlines(),
                          ['pg_dump', 'restic backup', 'restic forget', f'rm -f {self.DUMP}'])
+
+    def test_backup_retries_a_failed_storage_step_once_after_a_minute(self):
+        # A brief storage error, such as R2 answering 502 Bad Gateway, sends no alert.
+        for step, expected in (
+                ('backup', ['pg_dump', 'restic backup', 'sleep 60', 'restic backup', 'restic forget']),
+                ('forget', ['pg_dump', 'restic backup', 'restic forget', 'sleep 60', 'restic forget'])):
+            with self.subTest(step=step):
+                result = self.execute(fail=step, times=1)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(result.stdout.splitlines(), expected + [f'rm -f {self.DUMP}'])
+
+    def test_backup_fails_when_its_retry_fails(self):
+        for step, expected in (
+                ('backup', ['pg_dump', 'restic backup', 'sleep 60', 'restic backup']),
+                ('forget', ['pg_dump', 'restic backup', 'restic forget', 'sleep 60', 'restic forget'])):
+            with self.subTest(step=step):
+                result = self.execute(fail=step, times=2)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertEqual(result.stdout.splitlines(), expected + [f'rm -f {self.DUMP}'])
 
     def test_stopped_backup_fails_and_removes_the_dump_once(self):
         # The signal can arrive while a command that still succeeds runs. The
@@ -129,7 +170,7 @@ rm() { echo "rm $*"; }
 
 
 class RestoreCheckTests(unittest.TestCase):
-    def execute(self, *, age, profiles='3', restore=':', fail=''):
+    def execute(self, *, age, profiles='3', restore=':', fail='', times=9):
         # External commands are the boundary. The restore and age check scripts run.
         directory = tempfile.TemporaryDirectory()
         self.addCleanup(directory.cleanup)
@@ -147,7 +188,15 @@ python3() {
 }
 # FAIL names the step that exits non-zero, as for a damaged repository, an
 # unreadable dump, or a restored schema without the core tables or function.
-restic() { echo "restic $1"; [ "restic $1" != "$FAIL" ]; }
+# A restic step fails its first TIMES runs. It and sleep log to stderr,
+# because the script writes restic's output to the dump.
+restic() {
+    echo "restic $1" >&2
+    [ "restic $1" = "$FAIL" ] && [ "$TIMES" -gt 0 ] || return 0
+    TIMES=$((TIMES - 1))
+    return 1
+}
+sleep() { echo "sleep $*" >&2; }
 mktemp() { echo "$FIXTURE/restore.dump"; }
 createdb() { echo "createdb $*"; }
 dropdb() { echo "dropdb $*"; }
@@ -162,11 +211,14 @@ psql() {
 '''
         environment = {**os.environ, 'FIXTURE': str(base), 'PYTHON': sys.executable,
                        'AGE_CHECK': str(AGE_CHECK), 'SCRIPT': str(ROOT / 'ops/restore-check.sh'),
-                       'PROFILES': profiles, 'RESTORE': restore, 'FAIL': fail,
+                       'PROFILES': profiles, 'RESTORE': restore, 'FAIL': fail, 'TIMES': str(times),
                        'SNAPSHOTS': json.dumps([{'time': stamp.isoformat().replace('+00:00', 'Z'),
                                                  'short_id': 'fixture'}])}
         return subprocess.run(['sh', '-c', wrapper], text=True, capture_output=True,
                               env=environment, timeout=10)
+
+    def storage_steps(self, result):
+        return [line for line in result.stderr.splitlines() if line.startswith(('restic ', 'sleep '))]
 
     def temporary_databases(self, output, command):
         return [line.split()[-1] for line in output.splitlines() if line.startswith(command + ' ')]
@@ -208,6 +260,19 @@ psql() {
                 created = self.temporary_databases(result.stdout, 'createdb')
                 self.assertEqual(len(created), databases)
                 self.assertEqual(self.temporary_databases(result.stdout, 'dropdb'), created)
+                if failure.startswith('restic '):
+                    self.assertEqual(self.storage_steps(result)[-3:], [failure, 'sleep 60', failure])
+
+    def test_restore_retries_a_failed_storage_step_once_after_a_minute(self):
+        # A brief storage error, such as R2 answering 502 Bad Gateway, sends no alert.
+        for failure, expected in (
+                ('restic check', ['restic check', 'sleep 60', 'restic check', 'restic dump']),
+                ('restic dump', ['restic check', 'restic dump', 'sleep 60', 'restic dump'])):
+            with self.subTest(failure=failure):
+                result = self.execute(age=HOUR, fail=failure, times=1)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn('restore passed', result.stdout)
+                self.assertEqual(self.storage_steps(result), expected)
 
     def test_stopped_restore_fails_and_drops_temporary_database_once(self):
         # A timeout makes systemd send SIGTERM to the script and to pg_restore,

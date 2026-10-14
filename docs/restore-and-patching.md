@@ -79,7 +79,7 @@ as_backup() {
     -p StateDirectory=screenr-backup -p StateDirectoryMode=0700 \
     -E RESTIC_CACHE_DIR=/var/lib/screenr-backup/cache \
     -E PGHOST=/run/screenr-db -E PGPORT=5439 -E PGUSER=screenr-db \
-    -E PATH=/usr/lib/postgresql/18/bin:/usr/bin:/bin "$@"
+    -E PATH=/usr/lib/postgresql/18/bin:/usr/local/bin:/usr/bin:/bin "$@"
 }
 ```
 
@@ -323,10 +323,15 @@ These facts were verified on the host on 2026-10-12:
   libraries. On 2026-10-10 it restarted `screenr-db` after a libxml2 security
   update. The web and worker units require the database unit, so every
   database restart also restarts them, with a few seconds of downtime.
-- restic is Ubuntu's universe package, so its security fixes arrive through
-  `noble-security`. It runs only during backup jobs, so the next job uses
-  the new version. Install a non-security update by hand with
-  `apt-get install --only-upgrade restic` when one matters.
+- restic comes from its official releases, because Ubuntu's universe package
+  stays on 0.16.4 for noble. Since 2026-10-14, vps-infra's
+  [restic updater](https://github.com/jubishop/vps-infra/blob/main/docs/restic.md)
+  keeps the latest stable release, after a seven-day soak, at
+  `/usr/local/bin/restic`. Screenr's backup scripts put `/usr/local/bin`
+  ahead of `/usr/bin`, and restic runs only during backup jobs, so the next
+  job uses the new version. Ubuntu's package, which
+  [provisioning](deployment.md#provisioning) installs, remains only as a
+  fallback.
 - Screenr's ops scripts run Ubuntu's `/usr/bin/python3`, which these upgrades
   cover.
 - Host updaters keep the shared Node runtime and Caddy on current releases,

@@ -873,15 +873,18 @@ class RunTimeBoundTests(unittest.TestCase):
 
     def test_restic_waits_for_another_runs_lock_within_the_unit_limit(self):
         # The weekly restore check holds an exclusive repository lock, so a
-        # deployment backup at that time waits for it instead of failing.
+        # deployment backup at that time waits for it instead of failing. A
+        # failed restic step runs again after the retry delay, waiting again.
         for script, unit in (('ops/backup.sh', 'screenr-backup.service'),
                              ('ops/restore-check.sh', 'screenr-restore-check.service')):
             with self.subTest(script=script):
-                commands = [line.split() for line in (ROOT / script).read_text().splitlines()
-                            if line.startswith('restic ')]
+                text = (ROOT / script).read_text()
+                commands = [line.split() for line in text.splitlines()
+                            if re.match(r'\s*(retry )?restic ', line)]
                 self.assertTrue(commands)
+                delay = seconds(re.search(r'^ *sleep (\d+)$', text, re.M)[1] + 's')
                 waits = []
                 for command in commands:
                     self.assertIn('--retry-lock', command)
-                    waits.append(seconds(command[command.index('--retry-lock') + 1]))
+                    waits.append(2 * seconds(command[command.index('--retry-lock') + 1]) + delay)
                 self.assertLess(sum(waits), self.time_limit(unit))

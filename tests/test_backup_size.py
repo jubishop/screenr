@@ -235,6 +235,7 @@ class BackupJobTests(unittest.TestCase):
         wrapper = '''
 pg_dump() { echo dump; [ "$failure" != dump ]; }
 restic() { echo "restic $*"; [ "$1" != "$failure" ]; }
+sleep() { echo "sleep $*"; }
 python3() { echo "monitor $*"; [ "$failure" != monitor ]; }
 rm() { echo cleanup; }
 script=$1

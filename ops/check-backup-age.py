@@ -11,6 +11,9 @@ import sys
 import time
 
 MAX_AGE = 30 * 3600
+# Seconds before listing again after restic fails, so a brief storage outage,
+# such as R2 answering 502 Bad Gateway, sends no failure alert.
+RETRY_DELAY = 60
 SNAPSHOTS = ('restic', 'snapshots', '--no-lock', '--host', 'bishop', '--tag', 'screenr',
              '--latest', '1', '--json')
 # restic writes Go RFC 3339 times, which can carry nanoseconds.
@@ -27,10 +30,18 @@ def snapshot_time(snapshot):
     return moment.timestamp() + float('0.' + (fraction or '0'))
 
 
+def list_snapshots():
+    return subprocess.run(SNAPSHOTS, check=True, stdout=subprocess.PIPE, text=True, timeout=300).stdout
+
+
 def newest_backup():
     """Return the newest snapshot's short ID and its age in seconds."""
-    output = subprocess.run(SNAPSHOTS, check=True, stdout=subprocess.PIPE, text=True,
-                            timeout=300).stdout
+    try:
+        output = list_snapshots()
+    except subprocess.SubprocessError as error:
+        print(f'Listing snapshots failed ({error}); retrying in {RETRY_DELAY} seconds', file=sys.stderr)
+        time.sleep(RETRY_DELAY)
+        output = list_snapshots()
     snapshots = json.loads(output)
     if not isinstance(snapshots, list) or not snapshots:
         raise ValueError('No Screenr backup snapshots found')

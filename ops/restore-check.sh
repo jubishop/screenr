@@ -3,7 +3,8 @@ set -eu
 umask 077
 export PGHOST=/run/screenr-db PGPORT=5439 PGUSER=screenr-db
 export RESTIC_CACHE_DIR=/var/lib/screenr-backup/cache
-export PATH=/usr/lib/postgresql/18/bin:/usr/bin:/bin
+# vps-infra keeps the latest restic in /usr/local/bin.
+export PATH=/usr/lib/postgresql/18/bin:/usr/local/bin:/usr/bin:/bin
 database=screenr_restore_check_$$
 dump=$(mktemp /var/lib/screenr-backup/restore.XXXXXX)
 created=false
@@ -16,10 +17,22 @@ trap cleanup EXIT
 # systemd sends SIGTERM when the run passes its time limit. Exit, so cleanup
 # runs once.
 trap 'exit 1' HUP INT TERM
+# Run a storage step again after a minute when it fails, so a brief outage,
+# such as R2 answering 502 Bad Gateway, sends no failure alert.
+retry() {
+    "$@" && return
+    echo "Retrying in 60 seconds: $*" >&2
+    sleep 60
+    "$@"
+}
+# Each attempt rewrites the whole dump.
+fetch_dump() {
+    restic dump --retry-lock 3m --host bishop --tag screenr latest /var/lib/screenr-backup/screenr.dump >"$dump"
+}
 python3 /opt/screenr/current/ops/check-backup-age.py
 # Wait for a backup's repository lock instead of failing.
-restic check --retry-lock 5m --read-data
-restic dump --retry-lock 5m --host bishop --tag screenr latest /var/lib/screenr-backup/screenr.dump >"$dump"
+retry restic check --retry-lock 3m --read-data
+retry fetch_dump
 createdb --owner=screenr "$database"
 created=true
 pg_restore --exit-on-error --no-owner --no-acl --role=screenr --dbname="$database" "$dump"

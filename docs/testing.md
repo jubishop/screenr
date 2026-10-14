@@ -658,6 +658,8 @@ schema changes begin. A failed configuration check or migration stops
 activation before the release link switches. The restore check fails, and drops
 any temporary database, when restic cannot check or read the backup,
 `pg_restore` fails, the restore has no profiles, or its access query fails.
+The backup, restore check, and stale-backup check run a failed restic step
+once more after a minute, and fail only when that retry fails too.
 Release packaging runs only in Linux CI, so
 `tests/app/release-package.test.ts` checks locally that the package includes
 every module its maintenance scripts load

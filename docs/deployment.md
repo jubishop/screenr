@@ -112,7 +112,8 @@ units in `main` before the next deployment.
 
 Install PostgreSQL 18 binaries from the official PostgreSQL Ubuntu repository
 and `restic`. Avoid creating an unused automatically started PostgreSQL cluster.
-[Patching](restore-and-patching.md#patching) covers their updates.
+[Patching](restore-and-patching.md#patching) covers their updates, including
+the newer restic that vps-infra installs in `/usr/local/bin`.
 Screenr uses the host's shared Node runtime at `/opt/node/current`, which must
 exist before provisioning; `ops/provision.sh` links `/opt/screenr/node` to it
 instead of installing a separate copy.
@@ -381,6 +382,18 @@ rather than `start-limit-hit`.
 It includes no journal lines. Delivery makes up to three attempts with one
 idempotency key, and has no saved state. Every failure sends a new email, so
 each deployment blocked by a failing backup sends one.
+
+**Decision — 2026-10-14:** Retry each R2 step of the backup, restore check,
+and stale-backup check once, a minute after it fails, before the job fails
+and alerts. `ops/backup.sh` and `ops/restore-check.sh` run each restic command
+through `retry`, and `ops/check-backup-age.py` lists snapshots a second time.
+A step that fails twice still fails its job, which alerts and, for a
+deployment backup, fails the deploy.
+
+**Why:** On 2026-10-13 at 21:09 PDT, R2 answered a deployment backup with
+Cloudflare's `502 Bad Gateway` page. Rerunning the deploy backed up normally a
+few minutes later, but the failure had already emailed the owner, who asked
+for a retry after a short wait before any email.
 
 `screenr-backup-age.timer` runs the stale-backup check daily around
 12:00 PDT / 11:00 PST, seven hours after backups. `screenr-backup-age.service`
@@ -958,11 +971,13 @@ hold the deploy lock indefinitely:
   stopped, the restore check drops its temporary database with
   `dropdb --force`, because the restore's server connection can briefly
   outlive `pg_restore`.
-- Each restic command that locks the repository waits up to five minutes
-  for another run's lock with `--retry-lock 5m`. A deployment during the
-  weekly restore check therefore waits for that check's exclusive lock
-  instead of failing, and the waits in each script fit inside its unit's
-  limit.
+- Each restic command that locks the repository waits for another run's
+  lock, up to two minutes in the backup with `--retry-lock 2m` and three in
+  the restore check with `--retry-lock 3m`. A deployment during the weekly
+  restore check therefore waits for that check's exclusive lock instead of
+  failing. A failed restic step
+  [runs once more after a minute](#failure-alerts), and the waits of both
+  attempts in each script fit inside its unit's limit.
 - [Migrations](data-and-access.md#schema-migrations) bound their lock waits
   and statements.
 
