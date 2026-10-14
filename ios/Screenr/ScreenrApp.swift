@@ -36,7 +36,9 @@ struct ScreenrApp: App {
       services = try AppServices(
         configuration: configuration,
         arguments: arguments,
-        observer: telemetry
+        observer: telemetry,
+        feedback: telemetry.feedback,
+        logFile: logFile
       )
     } catch {
       fatalError("Screenr could not start its API client: \(error)")

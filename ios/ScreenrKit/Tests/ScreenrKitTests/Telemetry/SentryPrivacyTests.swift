@@ -183,6 +183,8 @@ struct SentryPrivacyTests {
     defer { capture.close() }
     _ = Telemetry(
       variant: .release,
+      version: "1.0",
+      build: "7",
       router: LogRouter(),
       sessionRoll: 0,
       start: capture.start

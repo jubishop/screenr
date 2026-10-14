@@ -11,6 +11,9 @@ import Testing
 final class SentryEnvelopeCapture: Sendable {
   struct Item: Sendable {
     let type: String
+    // An attachment's name and type.
+    var filename: String?
+    var contentType: String?
     let payload: Data
 
     var json: [String: Any] {
@@ -155,7 +158,14 @@ final class SentryEnvelopeCapture: Sendable {
         header["length"] as? Int
         ?? (envelope[start...].firstIndex(of: 0x0A) ?? envelope.endIndex) - start
       let payload = envelope[start..<min(start + length, envelope.endIndex)]
-      items.append(Item(type: header["type"] as? String ?? "", payload: Data(payload)))
+      items.append(
+        Item(
+          type: header["type"] as? String ?? "",
+          filename: header["filename"] as? String,
+          contentType: header["content_type"] as? String,
+          payload: Data(payload)
+        )
+      )
       cursor = start + length + 1
     }
     return items
@@ -202,6 +212,10 @@ private final class HubReporter: SentryReporter, @unchecked Sendable {
     let scope = Scope(scope: hub.scope)
     scope.setTags(tags)
     hub.capture(error: error, scope: scope)
+  }
+
+  func capture(feedback: sending SentryFeedback) {
+    hub.capture(feedback: feedback)
   }
 
   func log(_ level: SentryLog.Level, _ body: String, attributes: sending [String: Any]) {

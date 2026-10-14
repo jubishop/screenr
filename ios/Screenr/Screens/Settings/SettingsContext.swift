@@ -21,11 +21,13 @@ struct SettingsContext {
 enum SettingsEditor: Identifiable {
   case profile(ProfileEditorModel)
   case streamingServices(StreamingServicesModel)
+  case feedback(FeedbackModel)
 
   var id: ObjectIdentifier {
     switch self {
     case .profile(let model): ObjectIdentifier(model)
     case .streamingServices(let model): ObjectIdentifier(model)
+    case .feedback(let model): ObjectIdentifier(model)
     }
   }
 }

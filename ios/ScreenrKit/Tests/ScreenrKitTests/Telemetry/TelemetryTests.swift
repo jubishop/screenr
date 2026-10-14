@@ -13,7 +13,14 @@ struct TelemetryTests {
   private let router = LogRouter()
 
   private func telemetry(_ variant: AppConfiguration.Variant, roll: Double = 0.99) -> Telemetry {
-    Telemetry(variant: variant, router: router, sessionRoll: roll, start: capture.start)
+    Telemetry(
+      variant: variant,
+      version: "1.0",
+      build: "7",
+      router: router,
+      sessionRoll: roll,
+      start: capture.start
+    )
   }
 
   // A screen read whose route still holds a username and a search, which Telemetry reduces in
@@ -233,9 +240,11 @@ struct TelemetryTests {
   }
 
   @Test func sendsTracesOfAppLaunchAndAPICallsOnly() {
-    let options = Telemetry.options(traced: true)
+    let options = Telemetry.options(traced: true, version: "1.0", build: "7")
 
     #expect(options.dsn == Telemetry.releaseDSN)
+    #expect(options.releaseName == "com.artisanalsoftware.Screenr@1.0+7")
+    #expect(options.dist == "7")
     #expect(options.enableAutoPerformanceTracing)
     #expect(!options.enableNetworkTracking)
     #expect(!options.enableFileIOTracing)
@@ -250,7 +259,7 @@ struct TelemetryTests {
   }
 
   @Test func turnsOffPersonalDataAndCapturesAndTurnsOnHangsAndMetricKit() {
-    let options = Telemetry.options(traced: false)
+    let options = Telemetry.options(traced: false, version: "1.0", build: "7")
 
     #expect(!options.sendDefaultPii)
     #expect(!options.enableNetworkBreadcrumbs)

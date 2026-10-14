@@ -945,6 +945,13 @@ member text cannot reach it. `tests/test_sentry_feedback_issues.py` covers
 the body, deduplication, and failures. Run the script with `--dry-run` to
 list what it would file.
 
+The app's form is in Settings
+([issue #248](https://github.com/jubishop/screenr/issues/248)), as
+[Feedback](../ios/README.md#feedback) describes. Each feedback item's
+release and dist name the build that the workflow copies. Screenr Dev never
+starts Sentry, so its form sends nothing and says that TestFlight builds send
+feedback.
+
 **Why:** The user asked to match PodHaven's flow. Public issues that quoted
 feedback could expose friends' names or comments. Earlier the same day the user
 made the repository private for this reason. They then reversed that once the

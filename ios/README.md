@@ -208,7 +208,7 @@ uses it when launched with these arguments; Release builds ignore them:
 | `-ScreenrFixtureProfile` | `complete` (default), or `pending` for a viewer without a profile, such as `pat`: member actions get `errors/incomplete-profile`, as on the server, until a setup request succeeds. |
 | `-ScreenrFixtureOverride` | A fixture that answers first, such as `screen/feed/empty`. Repeatable. |
 | `-ScreenrFixtureFailure` | A fixture that answers every `/api/screenr` request, such as `errors/update-required`. |
-| `-ScreenrFixtureLog` | A file that gets a line per `/api/screenr` request, such as `GET /api/screenr/screen?path=%2F`, with ` visit` after the app's [visit](#visits) and a write's JSON body, keys sorted, after the write: `POST /api/screenr/read-notification {"id":"18"}`. An upload has its type and size instead: `POST /api/screenr/photo image/jpeg 41250 bytes`. |
+| `-ScreenrFixtureLog` | A file that gets a line per `/api/screenr` request, such as `GET /api/screenr/screen?path=%2F`, with ` visit` after the app's [visit](#visits) and a write's JSON body, keys sorted, after the write: `POST /api/screenr/read-notification {"id":"18"}`. An upload has its type and size instead: `POST /api/screenr/photo image/jpeg 41250 bytes`. Sent [feedback](#feedback) adds a `FEEDBACK` line. |
 | `-ScreenrOpenURL` | A link the app opens at launch, as if the system delivered it, such as `screenr-dev://titles/tv/201`. |
 
 In UI tests, `app.launch(with: FixtureLaunch(viewer: "nora"))` passes them,
@@ -498,7 +498,8 @@ Settings is the `/account` screen in the sheet that the You tab's gear opens.
 view in `Screens/Settings/` that takes a `SettingsContext`: the loaded
 `AccountScreen`, the signed-in `Person`, `refresh()` to read the screen after
 a change, and `open(_:)` for an editor sheet. Its behavior lives in
-ScreenrKit's `Settings/`, `Photos/`, and `Invitations/` view models.
+ScreenrKit's `Settings/`, `Photos/`, `Invitations/`, and `Feedback/` view
+models.
 
 | Section | View model | What it does |
 | --- | --- | --- |
@@ -508,12 +509,12 @@ ScreenrKit's `Settings/`, `Photos/`, and `Invitations/` view models.
 | Activity emails | `ActivityEmailModel` | The switch shows the choice being saved and ignores changes until the save finishes. |
 | Streaming services | `StreamingServicesModel` | A sheet with search, the selection, and Clear selections. |
 | Sign-in methods | `AccountLinkModel` | Connect Google runs the sign-in flow's PKCE code flow, and Sign in with Apple uses the system button; each posts the credential to `link-social`. Against the fixture API, both use the sign-in stubs. |
+| Feedback | `FeedbackModel` | Send feedback opens a sheet for a message and up to three screenshots, sent to Sentry with recent log tails; see [Feedback](#feedback). |
 | Sign out | `SignOutModel` | `SignOutButton`. |
 
 A new setting adds its section to `AccountView`'s list in one line, such as
 `PushSettingsSection(settings)`, at the comment that marks its place: push
-notification settings after Invitations, Send feedback before Sign out, and
-Delete account last. A section that edits a draft opens its editor with
+notification settings after Invitations, and Delete account last. A section that edits a draft opens its editor with
 `settings.open(_:)` after adding a case to `SettingsEditor`. `AccountView`
 presents those sheets outside `ScreenContent`, so a failed read, which
 replaces the sections with the error, keeps an open draft.
@@ -524,7 +525,7 @@ that text needs.
 
 `SettingsTests` cover the journeys: changing the name and username, uploading
 and removing a photo, creating and revoking an invitation, connecting Sign in
-with Apple, and signing out. They check what each write sent in the fixture
+with Apple, sending feedback, and signing out. They check what each write sent in the fixture
 API's request log, since a screen read after a write still returns the
 fixture. Their `performSettingsAudit()` passes over reports the iOS 27
 Simulator raises for the system's list text: Dynamic Type and clipping for
@@ -532,6 +533,41 @@ headers, footers, and rows, the nearly passing contrast of footers, and
 contrast failures with no element, for rows sampled beneath the navigation
 bar's blur. `testFitsTheLargestTextSize` instead reaches every control at the
 largest accessibility text size.
+
+### Feedback
+
+Send feedback opens `FeedbackSheet`, in `Screens/Settings/FeedbackSection.swift`,
+whose behavior is ScreenrKit's `FeedbackModel`, in `Feedback/`. It follows the
+[feedback flow](../docs/ios-app.md#public-repository-with-feedback-issues-that-link-to-sentry--2026-10-13):
+
+- **Form:** the member writes a message and can attach up to three images
+  from the library's screenshots, through `PhotosPicker`.
+  `ScreenshotPreparation` redraws each one as a JPEG at most 2048 pixels on
+  its long side and under 1 MB, without the original's metadata, such as a
+  location. Send needs a message. A swipe cannot close the sheet while it
+  holds a draft, and once the feedback is sent the sheet thanks the member.
+- **Logs:** sending attaches `LogFile.recentTails(maximumBytes:)`: up to
+  256 KB of the newest complete lines of each log in the app group's log
+  directory, the app's and any other process's, such as the notification
+  extension's. A log that cannot be read stays behind.
+- **Sentry:** `Telemetry.feedback` sends Sentry user feedback from a custom
+  form, with `screenshot-1.jpg` and so on, and `app.ndjson` for each log,
+  as attachments. It has no name or email; its user is the opaque user ID.
+  Its `release`, `com.artisanalsoftware.Screenr@<version>+<build>`, and its
+  `dist`, the build, are what the daily workflow copies into the GitHub
+  issue. Sentry skips `beforeSend` for feedback, so it relies on the scope's
+  user holding only that ID. Sentry queues the feedback and sends it, or
+  keeps it on disk until the device is online.
+- **Screenr Dev:** it never starts Sentry, so `Telemetry.feedback` is nil.
+  Its form says that TestFlight builds send feedback, and Send stays off.
+  Under the fixture API, feedback goes to the request log instead, as
+  `FEEDBACK {"logs":["app"],"message":"…","screenshots":1}`, and Attach
+  screenshots attaches `FixturePhoto`.
+- **Tests:** `FeedbackTests` read the envelope that the Release options
+  produce from `SentryEnvelopeCapture`'s local transport: the feedback, its
+  screenshot and log tail attachments, the user ID with no name or email,
+  and the release and dist. No test sends feedback to Sentry.
+  `SettingsTests.testSendsFeedback` sends feedback against the fixture API.
 
 ## Conversations
 
@@ -716,9 +752,10 @@ holds one JSON object per line: `time`, `level`, `category`, `message`,
 `launch` (an ID for each launch), and `fields`. One task writes the file in
 order, so logging never waits on the disk. When the file would pass 256 KB it
 becomes `app.1.ndjson`, so the log keeps at most two files.
-`LogFile.recentTail(maximumBytes:)` returns the newest complete lines, which
-the feedback form attaches. Another process, such as the notification
-extension, writes a file of its own name in the same directory.
+`LogFile.recentTail(maximumBytes:)` returns the newest complete lines.
+Another process, such as the notification extension, writes a file of its
+own name in the same directory, and `recentTails(maximumBytes:)` returns
+each file's newest lines for the [feedback form](#feedback).
 
 To read the Dev app's log in your Simulator:
 
@@ -743,8 +780,12 @@ Sentry organization `artisanal-software`, under these
   Release variant, with the project's public DSN in ScreenrKit. Screenr Dev
   never starts it, so Dev builds send nothing.
 - **Reports:** crashes, errors that `telemetry.capture(_:requestID:)`
-  reports, app hangs, MetricKit diagnostics, and Sentry logs at warning and
-  above. Traces cover app launch and API calls, for one launch in five.
+  reports, app hangs, MetricKit diagnostics, Sentry logs at warning and
+  above, and user feedback from the [feedback form](#feedback). Traces cover
+  app launch and API calls, for one launch in five.
+- **Build:** every report names its build with the release
+  `com.artisanalsoftware.Screenr@<version>+<build>`, Sentry's default form,
+  set from `AppConfiguration`, and with the build as its dist.
 - **Off:** `sendDefaultPii`, screenshots, the view hierarchy, session replay,
   accessibility identifiers, and Sentry's URLSession, file, Core Data, view
   controller, and user interaction instrumentation.

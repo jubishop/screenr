@@ -6,6 +6,7 @@ protocol SentryReporter: Sendable {
   func setUser(_ user: sending User?)
   func add(_ breadcrumb: sending Breadcrumb)
   func capture(error: any Error, tags: [String: String])
+  func capture(feedback: sending SentryFeedback)
   func log(_ level: SentryLog.Level, _ body: String, attributes: sending [String: Any])
   // Starts a transaction and hands it to configure, which finishes it.
   func recordTransaction(_ context: sending TransactionContext, configure: (any Span) -> Void)
@@ -30,6 +31,10 @@ struct SentrySDKReporter: SentryReporter {
     SentrySDK.capture(error: error) { scope in
       scope.setTags(tags)
     }
+  }
+
+  func capture(feedback: sending SentryFeedback) {
+    SentrySDK.capture(feedback: feedback)
   }
 
   func log(_ level: SentryLog.Level, _ body: String, attributes: sending [String: Any]) {

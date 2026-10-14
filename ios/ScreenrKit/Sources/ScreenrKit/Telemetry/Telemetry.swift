@@ -16,6 +16,9 @@ public final class Telemetry: APIRequestObserver {
     "https://7835b8d6ce485bae558bdc65d7f373ee@o4508469263663104.ingest.us.sentry.io/4512251383513088"
   // The share of sessions, that is, app launches, whose app launch and API calls are traced.
   static let tracedShare = 0.2
+  // Only Release builds report, so the release name, like Sentry's default, starts with their
+  // bundle ID.
+  static let bundleID = "com.artisanalsoftware.Screenr"
 
   public let state: State
   private let reporter: (any SentryReporter)?
@@ -24,6 +27,8 @@ public final class Telemetry: APIRequestObserver {
   public convenience init(configuration: AppConfiguration, router: LogRouter = .shared) {
     self.init(
       variant: configuration.variant,
+      version: configuration.version,
+      build: configuration.build,
       router: router,
       sessionRoll: Double.random(in: 0..<1),
       start: SentrySDKReporter.start
@@ -33,6 +38,8 @@ public final class Telemetry: APIRequestObserver {
   // sessionRoll, from 0 up to 1, decides whether this session is traced.
   init(
     variant: AppConfiguration.Variant,
+    version: String,
+    build: String,
     router: LogRouter,
     sessionRoll: Double,
     start: (sending Options) -> any SentryReporter
@@ -43,7 +50,9 @@ public final class Telemetry: APIRequestObserver {
       reporter = nil
       state = .off
     case .release:
-      let reporter = start(Self.options(traced: sessionRoll < Self.tracedShare))
+      let reporter = start(
+        Self.options(traced: sessionRoll < Self.tracedShare, version: version, build: build)
+      )
       router.add(SentryLogSink(reporter: reporter))
       self.reporter = reporter
       state = .reporting
@@ -66,6 +75,12 @@ public final class Telemetry: APIRequestObserver {
     var tags: [String: String] = [:]
     if let requestID { tags["request_id"] = requestID }
     reporter?.capture(error: error, tags: tags)
+  }
+
+  // Sends the Send feedback form's reports to Sentry, or nil in Dev builds, which send nothing.
+  public var feedback: (any FeedbackSender)? {
+    guard let reporter else { return nil }
+    return SentryFeedbackSender(reporter: reporter)
   }
 
   // Logs a finished API call and adds it to Sentry as a breadcrumb and, in traced sessions, a
@@ -125,10 +140,14 @@ public final class Telemetry: APIRequestObserver {
     }
   }
 
-  static func options(traced: Bool) -> Options {
+  static func options(traced: Bool, version: String, build: String) -> Options {
     let options = Options()
     options.dsn = releaseDSN
     options.environment = "production"
+    // The release and dist name the build, in Sentry's default form but from the build's
+    // settings. The feedback issue workflow reads them.
+    options.releaseName = "\(bundleID)@\(version)+\(build)"
+    options.dist = build
     options.sendDefaultPii = false
     // Sentry's URLSession instrumentation would record full URLs and queries. Telemetry records
     // API calls itself, with route patterns.
@@ -210,5 +229,36 @@ struct SentryLogSink: LogSink {
       }
     }
     reporter.log(level, entry.message, attributes: attributes)
+  }
+}
+
+// Sends feedback as Sentry user feedback, with the screenshots and log tails as attachments. It
+// names no one: the feedback has no name or email, and its user is the opaque Screenr user ID
+// that Telemetry set. Sentry skips beforeSend for feedback, so this relies on the scope's user
+// holding only that ID.
+struct SentryFeedbackSender: FeedbackSender {
+  let reporter: any SentryReporter
+
+  func send(_ feedback: Feedback) {
+    var attachments: [Attachment] = []
+    for (index, jpeg) in feedback.screenshots.enumerated() {
+      attachments.append(
+        Attachment(data: jpeg, filename: "screenshot-\(index + 1).jpg", contentType: "image/jpeg")
+      )
+    }
+    for log in feedback.logs {
+      attachments.append(
+        Attachment(data: log.data, filename: log.filename, contentType: "application/x-ndjson")
+      )
+    }
+    reporter.capture(
+      feedback: SentryFeedback(
+        message: feedback.message,
+        name: nil,
+        email: nil,
+        source: .custom,
+        attachments: attachments
+      )
+    )
   }
 }
