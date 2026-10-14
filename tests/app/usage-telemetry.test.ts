@@ -13,8 +13,11 @@ import {
   person,
   setup,
   cookieFor,
+  bearerFor,
+  pending,
 } from "./social-fixture";
 const { POST, GET } = await import("../../src/app/api/screenr/[action]/route");
+const { createInvitation } = await import("../../src/server/invitations");
 const { changeRelationship } = await import("../../src/server/relationships");
 const { updateTitleActivity, updateWatchStatus } =
   await import("../../src/server/title-actions");
@@ -53,6 +56,41 @@ function get(cookie: string, action: string, query = "") {
     { params: Promise.resolve({ action }) },
   );
 }
+// The iPhone app's requests: a bearer token and its client header, with no
+// cookie or Origin.
+function app(token: string) {
+  const sent = {
+    Authorization: `Bearer ${token}`,
+    "Screenr-Client": "ios/1.0/7",
+  };
+  return {
+    get: (action: string, query = "", headers: Record<string, string> = {}) =>
+      GET(
+        new Request(`http://localhost:3000/api/screenr/${action}${query}`, {
+          headers: { ...sent, ...headers },
+        }),
+        { params: Promise.resolve({ action }) },
+      ),
+    post: (action: string, data: unknown) =>
+      POST(
+        new Request(`http://localhost:3000/api/screenr/${action}`, {
+          method: "POST",
+          headers: { ...sent, "Content-Type": "application/json" },
+          body: JSON.stringify(data),
+        }),
+        { params: Promise.resolve({ action }) },
+      ),
+  };
+}
+// The flag on the app's first screen read after launch or a return to the
+// foreground.
+const visit = { "Screenr-Visit": "1" };
+const webDay = (user_id: string) => ({
+  user_id,
+  day: pacificToday(),
+  web: true,
+  ios: false,
+});
 async function activeDays() {
   return (
     await db.query(
@@ -109,12 +147,12 @@ test("actions record one Pacific day per member with no page or time; background
       .status,
     400,
   );
-  assert.deepEqual(await activeDays(), [{ user_id: ben, day: pacificToday() }]);
+  assert.deepEqual(await activeDays(), [webDay(ben)]);
 
   // Submitting a title search is a member action.
   await db.query("DELETE FROM member_active_day");
   assert.equal((await get(cookie, "search", "?q=x")).status, 200);
-  assert.deepEqual(await activeDays(), [{ user_id: ben, day: pacificToday() }]);
+  assert.deepEqual(await activeDays(), [webDay(ben)]);
 
   // Requests without a member session record nothing.
   await db.query("DELETE FROM member_active_day");
@@ -122,6 +160,67 @@ test("actions record one Pacific day per member with no page or time; background
     await post("reaction", "", { item: conversation }),
     denied.signedOut,
   );
+  assert.deepEqual(await activeDays(), []);
+});
+
+test("app visits and actions record the day and the client used; app polls record nothing", async () => {
+  const { alice, ben, conversation } = await setup();
+  await friend(alice, ben);
+  const phone = app(await bearerFor(ben));
+  const appDay = { user_id: ben, day: pacificToday(), web: false, ios: true };
+  const bothDay = { ...appDay, web: true };
+
+  // Background polls, and a visit flag on any other read or with another
+  // value, record nothing.
+  assert.equal((await phone.get("screen", "?path=%2F")).status, 200);
+  assert.equal((await phone.get("notifications", "", visit)).status, 200);
+  assert.equal(
+    (await phone.get("screen", "?path=%2F", { "Screenr-Visit": "0" })).status,
+    200,
+  );
+  assert.deepEqual(await activeDays(), []);
+
+  const first = await phone.get("screen", "?path=%2F", visit);
+  assert.equal(first.status, 200);
+  assert.deepEqual(await activeDays(), [appDay]);
+
+  // A visit to an unchanged screen gets 304 and still records the day.
+  await db.query("DELETE FROM member_active_day");
+  const unchanged = await phone.get("screen", "?path=%2F", {
+    ...visit,
+    "If-None-Match": first.headers.get("ETag")!,
+  });
+  assert.equal(unchanged.status, 304);
+  assert.deepEqual(await activeDays(), [appDay]);
+
+  // App actions count as the app, and a day used on both clients shows both,
+  // whichever came first.
+  await db.query("DELETE FROM member_active_day");
+  assert.equal(
+    (await phone.post("reaction", { item: conversation, kind: "like" })).status,
+    200,
+  );
+  assert.deepEqual(await activeDays(), [appDay]);
+  const cookie = await cookieFor(ben);
+  assert.equal(
+    (await post("reaction", cookie, { item: conversation, kind: "like" }))
+      .status,
+    200,
+  );
+  assert.deepEqual(await activeDays(), [bothDay]);
+  assert.equal((await phone.get("screen", "?path=%2F", visit)).status, 200);
+  assert.deepEqual(await activeDays(), [bothDay]);
+  await db.query("DELETE FROM member_active_day");
+  assert.equal((await get(cookie, "search", "?q=x")).status, 200);
+  assert.deepEqual(await activeDays(), [webDay(ben)]);
+  assert.equal((await phone.get("screen", "?path=%2F", visit)).status, 200);
+  assert.deepEqual(await activeDays(), [bothDay]);
+
+  // Someone who has not finished setup records nothing.
+  await db.query("DELETE FROM member_active_day");
+  const { token } = await createInvitation(null);
+  const newcomer = app(await bearerFor(await pending("newcomer", token)));
+  assert.equal((await newcomer.get("screen", "?path=%2F", visit)).status, 403);
   assert.deepEqual(await activeDays(), []);
 });
 
@@ -232,22 +331,22 @@ test("weekly returns use Monday-to-Sunday Pacific weeks and count the week befor
     "dana",
     "erin",
   );
-  for (const [user, day] of [
-    [dana, "2026-10-18"],
-    [dana, "2026-10-19"],
-    [alice, "2026-10-25"],
-    [alice, "2026-10-26"],
-    [cam, "2026-10-26"],
-    [cam, "2026-10-28"],
-    [ben, "2026-11-01"],
-    [ben, "2026-11-02"],
-    [cam, "2026-11-08"],
-    [erin, "2026-11-09"],
-  ])
-    await db.query("INSERT INTO member_active_day(user_id,day) VALUES($1,$2)", [
-      user,
-      day,
-    ]);
+  for (const [user, day, web, ios] of [
+    [dana, "2026-10-18", false, true],
+    [dana, "2026-10-19", true, false],
+    [alice, "2026-10-25", false, true],
+    [alice, "2026-10-26", true, true],
+    [cam, "2026-10-26", true, false],
+    [cam, "2026-10-28", false, true],
+    [ben, "2026-11-01", true, false],
+    [ben, "2026-11-02", false, true],
+    [cam, "2026-11-08", false, true],
+    [erin, "2026-11-09", true, true],
+  ] as const)
+    await db.query(
+      "INSERT INTO member_active_day(user_id,day,web,ios) VALUES($1,$2,$3,$4)",
+      [user, day, web, ios],
+    );
   const weeks = await usageReport({ weeks: 3, through: "2026-11-08" });
   assert.deepEqual(
     weeks.map((w) => [
@@ -260,6 +359,16 @@ test("weekly returns use Monday-to-Sunday Pacific weeks and count the week befor
       ["2026-10-19", false, 2, 1],
       ["2026-10-26", false, 3, 1],
       ["2026-11-02", false, 2, 2],
+    ],
+  );
+  // A member who used the website and the app in the same week, on one day
+  // or on different days, counts as both.
+  assert.deepEqual(
+    weeks.map((w) => [w.week, w.webOnly, w.appOnly, w.webAndApp]),
+    [
+      ["2026-10-19", 1, 1, 0],
+      ["2026-10-26", 1, 0, 2],
+      ["2026-11-02", 0, 2, 0],
     ],
   );
   // Any day selects its whole week; the current week is marked in progress.
@@ -521,15 +630,20 @@ test("npm run report:usage prints weekly totals without identifying members", as
     "UPDATE feed_item SET created_at='2026-10-20T12:00:00Z' WHERE id=$1",
     [recommendation],
   );
-  for (const [user, day] of [
-    [alice, "2026-10-28"],
-    [ben, "2026-10-28"],
-    [ben, "2026-11-03"],
-  ])
-    await db.query("INSERT INTO member_active_day(user_id,day) VALUES($1,$2)", [
-      user,
-      day,
-    ]);
+  // A day recorded without a client, as before the client split, is a
+  // website day.
+  await db.query("INSERT INTO member_active_day(user_id,day) VALUES($1,$2)", [
+    alice,
+    "2026-10-28",
+  ]);
+  for (const [user, day, web] of [
+    [ben, "2026-10-28", false],
+    [ben, "2026-11-03", true],
+  ] as const)
+    await db.query(
+      "INSERT INTO member_active_day(user_id,day,web,ios) VALUES($1,$2,$3,true)",
+      [user, day, web],
+    );
   await db.query(
     `INSERT INTO want_to_watch_save(user_id,title_id,saved_on,surface,friend_recommending,followed_through)
     VALUES($1,'movie:1','2026-10-28','friend_recommendation',true,true),
@@ -567,6 +681,12 @@ Members who return each week
 Week of     Active members  Also active the week before
 2026-10-26               2                            0
 2026-11-02               1                            1
+
+Where active members used Screenr
+Week of     Website only  iPhone app only  Both
+2026-10-26             1                1     0
+2026-11-02             0                0     1
+Both: the website and the iPhone app in the same week.
 
 Want to watch saves from friends' recommendations
 Week of     Saves  Observed  Inferred

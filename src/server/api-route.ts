@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { withRequestId } from "./log";
+import type { UsageClient } from "./usage";
 
 // The client headers of /api/screenr and /api/photos requests:
 // docs/data-and-access.md#client-headers
@@ -22,6 +23,12 @@ export function apiRoute<Context>(
     response.headers.set("Screenr-Request-Id", requestId);
     return response;
   };
+}
+
+// The client that sent a request, for usage telemetry: the iPhone app names
+// itself in Screenr-Client, and the website sends no such header.
+export function requestClient(headers: Headers): UsageClient {
+  return iosClient.test(headers.get("Screenr-Client") ?? "") ? "ios" : "web";
 }
 
 function checkClient(request: Request) {

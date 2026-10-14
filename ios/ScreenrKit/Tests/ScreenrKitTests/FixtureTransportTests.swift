@@ -224,7 +224,8 @@ struct FixtureTransportTests {
     }
   }
 
-  // UI tests read the log to see when the app polls.
+  // UI tests read the log to see when the app polls, and which read was its
+  // visit.
   @Test func logsEachAPIRequest() async throws {
     let directory = FileManager.default.temporaryDirectory
       .appending(path: UUID().uuidString, directoryHint: .isDirectory)
@@ -245,7 +246,7 @@ struct FixtureTransportTests {
 
     #expect(
       try String(contentsOf: log, encoding: .utf8) == """
-        GET /api/screenr/screen?path=%2F
+        GET /api/screenr/screen?path=%2F visit
         GET /api/screenr/screen?path=%2Ftitles%2Ftv%2F201
 
         """

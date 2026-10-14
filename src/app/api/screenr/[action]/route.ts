@@ -1,6 +1,6 @@
 import { bearerRequest, requestSession } from "../../../../server/auth";
 import { findAction } from "../../../../server/actions";
-import { apiRoute } from "../../../../server/api-route";
+import { apiRoute, requestClient } from "../../../../server/api-route";
 import { AppError } from "../../../../server/db";
 import { logFailure } from "../../../../server/log";
 import { member } from "../../../../server/profiles";
@@ -80,8 +80,9 @@ async function handle(
       sessionId: session.session.id,
       headers: request.headers,
     };
+    const client = requestClient(request.headers);
     if (action && !action.profile) {
-      if (action.usage) await recordActiveDay(context.userId);
+      if (action.usage) await recordActiveDay(context.userId, client);
       const input = action.upload
         ? { upload: await read(request, action.upload) }
         : await body(request);
@@ -89,7 +90,15 @@ async function handle(
     }
     const user = await member(context.userId);
     if (!action) throw new AppError("Action not found.", 404);
-    if (action.usage) await recordActiveDay(context.userId);
+    // A visit records the day before the read, so an unchanged screen's 304
+    // records it too.
+    if (
+      action.usage ||
+      (action.method === "GET" &&
+        action.visits &&
+        request.headers.get("Screenr-Visit") === "1")
+    )
+      await recordActiveDay(context.userId, client);
     if (action.method === "GET") {
       const query = new URL(request.url).searchParams;
       const result = await action.respond(query, { ...context, user });

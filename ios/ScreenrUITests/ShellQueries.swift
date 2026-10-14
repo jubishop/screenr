@@ -23,8 +23,9 @@ extension XCUIApplication {
 }
 
 // The fixture API's request log, a line per API request, such as
-// `GET /api/screenr/screen?path=%2Fpeople`. It shows which screens the app
-// read, and when, whatever the screens look like.
+// `GET /api/screenr/screen?path=%2Fpeople`, with ` visit` after the app's
+// visit. It shows which screens the app read, and when, whatever the screens
+// look like.
 struct RequestLog {
   let file: URL
 
@@ -35,16 +36,37 @@ struct RequestLog {
     )
   }
 
-  // The member path of each screen the app read, in order.
-  func screenPaths() throws -> [String] {
+  private struct ScreenRead {
+    let path: String
+    // Words after the request, such as `visit`.
+    let marks: ArraySlice<Substring>
+  }
+
+  // Each screen the app read, in order.
+  private func screenReads() throws -> [ScreenRead] {
     try String(contentsOf: file, encoding: .utf8)
       .split(separator: "\n")
-      .compactMap { line -> String? in
-        guard line.hasPrefix("GET /api/screenr/screen?"),
-          let components = URLComponents(string: String(line.dropFirst("GET ".count)))
+      .compactMap { line -> ScreenRead? in
+        let words = line.split(separator: " ")
+        guard words.count >= 2, words[0] == "GET",
+          words[1].hasPrefix("/api/screenr/screen?"),
+          let components = URLComponents(string: String(words[1])),
+          let path = components.queryItems?.first(where: { $0.name == "path" })?.value
         else { return nil }
-        return components.queryItems?.first { $0.name == "path" }?.value
+        return ScreenRead(path: path, marks: words.dropFirst(2))
       }
+  }
+
+  // The member path of each screen the app read, in order.
+  func screenPaths() throws -> [String] {
+    try screenReads().map(\.path)
+  }
+
+  // The positions, among the screen reads, of the reads sent as visits.
+  func visits() throws -> [Int] {
+    try screenReads().enumerated()
+      .filter { $0.element.marks.contains("visit") }
+      .map(\.offset)
   }
 
   // Fulfilled once `isMet` holds for the screens read so far. A log the app

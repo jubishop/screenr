@@ -200,16 +200,19 @@ final class ShellTests: XCTestCase {
   }
 
   // The visible screen polls every three seconds while the app is active,
-  // stops in the background, and reads again on returning. ScreenrKit's
-  // ScreenModelTests cover the timing with a test clock.
+  // stops in the background, and reads again on returning. Only the first
+  // screen read after launch, and the first after the return, is a visit for
+  // usage telemetry. ScreenrKit's ScreenModelTests cover the timing with a
+  // test clock, and VisitTests the visit rules.
   @MainActor
-  func testPollsOnlyWhileTheAppIsActive() throws {
+  func testPollsOnlyWhileTheAppIsActiveAndMarksVisits() throws {
     let log = RequestLog.temporary()
     let app = XCUIApplication()
     app.launch(with: FixtureLaunch(requestLog: log.file))
     XCTAssertTrue(app.navigationBars["Your circle"].waitForExistence(timeout: 10))
     // The account check, the feed's first read, and a poll.
     wait(for: [log.screenReads(atLeast: 3)], timeout: 15)
+    XCTAssertEqual(try log.visits(), [0])
 
     XCUIDevice.shared.press(.home)
     let background = NSPredicate { _, _ in app.state != .runningForeground }
@@ -220,7 +223,9 @@ final class ShellTests: XCTestCase {
     wait(for: [pollInBackground], timeout: 7)
 
     app.activate()
-    wait(for: [log.screenReads(atLeast: reads + 1)], timeout: 5)
+    // The read on returning, and a poll.
+    wait(for: [log.screenReads(atLeast: reads + 2)], timeout: 8)
+    XCTAssertEqual(try log.visits(), [0, reads])
   }
 
   // Opens a screenr-dev:// link and checks the screen it read, its title, and

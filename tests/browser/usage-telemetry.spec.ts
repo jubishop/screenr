@@ -19,6 +19,15 @@ test("page loads and navigation count as active days, background refreshes do no
       ])
     ).rowCount;
   expect(await activeDays()).toBe(1);
+  // A page load is a website day.
+  expect(
+    (
+      await db.query(
+        "SELECT web, ios FROM member_active_day WHERE user_id=$1",
+        [viewer],
+      )
+    ).rows,
+  ).toEqual([{ web: true, ios: false }]);
 
   await db.query("DELETE FROM member_active_day WHERE user_id=$1", [viewer]);
   await nextAccountRefreshForPath(page, "/");

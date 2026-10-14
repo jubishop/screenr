@@ -6,12 +6,14 @@ import Foundation
 extension APIRequest where Response == Screen {
   // The view model for a member path, such as `/`, `/titles/tv/201`, or
   // `/people/ben`. Repeated reads of a path send its ETag, and an unchanged
-  // screen returns the cached copy.
+  // screen returns the cached copy. The first read after launch or a return
+  // to the foreground is the app's visit.
   public static func screen(path: String) -> Self {
     APIRequest(
       method: .get,
       endpoint: .action("screen"),
       query: ["path": path],
+      visit: .whenDue,
       route: "/api/screenr/screen?path=" + MemberPath.pattern(of: path)
     )
   }

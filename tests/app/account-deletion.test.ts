@@ -314,7 +314,7 @@ async function departingMember(t: TestContext) {
       build: 1,
     },
   );
-  await recordActiveDay(departing);
+  await recordActiveDay(departing, "ios");
   await db.query(
     `INSERT INTO email_job(id,payload,expires_at,notification_recipient)
     VALUES($1,'',now()+interval '1 day',$2)`,
