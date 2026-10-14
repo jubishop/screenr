@@ -87,7 +87,7 @@ struct RequestTests {
       .reaction(item: "872a205a-bab2-48f8-8c27-b737397eb469", reply: "8", kind: .care)
     ),
     Shape("actions/read-notification/default", .readNotification(id: "18")),
-    Shape("actions/read-notifications/default", .readNotifications(through: "5")),
+    Shape("actions/read-notifications/default", .readNotifications(through: "23")),
     Shape("actions/relationship/request", .relationship(target: "user-erin", .request)),
     Shape("actions/remove-comment/default", .removeComment(id: "4")),
     Shape("actions/remove-photo/default", .removePhoto),

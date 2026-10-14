@@ -492,7 +492,8 @@ export async function buildWorld() {
       actor_id: string;
       comment_id: string | null;
     }>(
-      "SELECT id::text,kind,actor_id,comment_id::text FROM notification WHERE recipient_id=$1 ORDER BY id",
+      // Newest last, by number rather than by the text the IDs become.
+      "SELECT id::text,kind,actor_id,comment_id::text FROM notification WHERE recipient_id=$1 ORDER BY notification.id",
       [u.alice],
     )
   ).rows;

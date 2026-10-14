@@ -103,6 +103,12 @@ public final class ShellModel {
   // A push notification arrived while the app is open: the visible screen
   // reads again at once.
   public func pushArrived() {
+    refreshLiveReads()
+  }
+
+  // The visible screen reads again at once, such as after reading
+  // notifications, which changes the unread count every screen carries.
+  public func refreshLiveReads() {
     liveRefreshes += 1
   }
 

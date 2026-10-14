@@ -275,8 +275,8 @@ struct FixtureTransportTests {
     }
   }
 
-  // UI tests read the log to see when the app polls, and which read was its
-  // visit.
+  // UI tests read the log to see when the app polls, which read was its
+  // visit, and what it writes.
   @Test func logsEachAPIRequest() async throws {
     let directory = FileManager.default.temporaryDirectory
       .appending(path: UUID().uuidString, directoryHint: .isDirectory)
@@ -294,11 +294,13 @@ struct FixtureTransportTests {
     _ = try await services.api.send(.screen(path: "/"))
     _ = try await services.api.send(.screen(path: "/titles/tv/201"))
     _ = try await services.api.send(.sendCode(email: "alice@example.com"))
+    _ = try await services.api.send(.respondToFriendRequest(notification: "14", .accept))
 
     #expect(
       try String(contentsOf: log, encoding: .utf8) == """
         GET /api/screenr/screen?path=%2F visit
         GET /api/screenr/screen?path=%2Ftitles%2Ftv%2F201
+        POST /api/screenr/respond-friend-request {"action":"accept","id":"14"}
 
         """
     )

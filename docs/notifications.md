@@ -105,6 +105,16 @@ paging, and boundary without rendering again
 ([issue #199](https://github.com/jubishop/screenr/issues/199)). Changing the
 view or a failed read clears the version, so the next read is whole.
 
+The iPhone app's bell, at the root of every tab, opens the same panel as a
+sheet over the current screen
+([bell decision](ios-app.md#bell-in-every-tab-and-find-as-the-search-tab--2026-10-13),
+[issue #235](https://github.com/jubishop/screenr/issues/235)). It has the
+same filters, pages, boundary, polling, and friend request controls, with
+the system's confirmation for Decline. Selecting a notification closes the
+sheet and opens its item on the current tab, or a feed entry on Circle; a
+failed action shows its message in an alert. The
+[iPhone guide](../ios/README.md#notifications-sheet) describes the code.
+
 Migration `010-notifications.sql` creates notification records and transaction
 triggers for friendship and comment events. It seeds existing pending friend
 requests without sending email. It does not backfill old comments or accepted
