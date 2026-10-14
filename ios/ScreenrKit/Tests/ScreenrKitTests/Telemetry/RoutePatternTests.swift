@@ -16,7 +16,14 @@ struct RoutePatternTests {
     ("/people/alice", "/people/:username"),
     ("/conversations/1b4e28ba-2fa1", "/conversations/:id"),
     ("/join/secret-invitation-token", "/join/:token"),
-    ("/api/screenr/screen?path=%2Fpeople%2Falice", "/api/screenr/screen"),
+    ("/api/screenr/screen?path=%2Fpeople%2Falice", "/api/screenr/screen?path=/people/:username"),
+    (
+      "/api/screenr/screen?path=%2Ftitles%2Fmovie%2F1%3Fitem%3D9&q=dune",
+      "/api/screenr/screen?path=/titles/:kind/:id"
+    ),
+    ("/api/screenr/screen?path=/people/:username", "/api/screenr/screen?path=/people/:username"),
+    ("/api/screenr/screen", "/api/screenr/screen"),
+    ("/api/screenr/search?q=dune", "/api/screenr/search"),
     ("/api/screenr/top-ten", "/api/screenr/top-ten"),
     ("/api/screenr/Alice%20Smith", "/api/screenr/:action"),
     ("/api/photos/user-alice/3", "/api/photos/:user/:version"),

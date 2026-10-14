@@ -3,7 +3,9 @@ import Foundation
 // A URL reduced to the route it names, such as /titles/:kind/:id or /people/:username. The
 // pattern keeps the origin and the fixed parts of a Screenr route, and drops the query, the
 // fragment, credentials, and every segment that could name a member, a title, a search, or a
-// secret token. A path that matches no Screenr route keeps none of its segments.
+// secret token. A path that matches no Screenr route keeps none of its segments. The screen API
+// keeps its path parameter, reduced to a pattern too, as in
+// /api/screenr/screen?path=/people/:username.
 public struct RoutePattern: Sendable, Hashable, CustomStringConvertible {
   // The origin, if the URL had one, and the path pattern.
   public let value: String
@@ -19,13 +21,20 @@ public struct RoutePattern: Sendable, Hashable, CustomStringConvertible {
       origin = "\(scheme)://\(components?.host ?? "")"
       if let port = components?.port { origin += ":\(port)" }
     }
-    path = Self.pattern(forPath: components?.percentEncodedPath ?? "")
+    path = Self.pattern(
+      forPath: components?.percentEncodedPath ?? "",
+      query: components?.queryItems
+    )
     value = origin + path
   }
 
   public init(path: String) {
-    let end = path.firstIndex { $0 == "?" || $0 == "#" } ?? path.endIndex
-    self.path = Self.pattern(forPath: String(path[..<end]))
+    if let components = URLComponents(string: path) {
+      self.path = Self.pattern(forPath: components.percentEncodedPath, query: components.queryItems)
+    } else {
+      let end = path.firstIndex { $0 == "?" || $0 == "#" } ?? path.endIndex
+      self.path = Self.pattern(forPath: String(path[..<end]), query: nil)
+    }
     value = self.path
   }
 
@@ -67,6 +76,15 @@ public struct RoutePattern: Sendable, Hashable, CustomStringConvertible {
     "search", "people", "invites", "account", "watch-together", "credits", "login", "privacy",
     "setup",
   ]
+
+  private static func pattern(forPath path: String, query: [URLQueryItem]?) -> String {
+    let pattern = pattern(forPath: path)
+    // The screen API's path parameter is the member route whose screen it loads.
+    guard pattern == "/api/screenr/screen",
+      let screen = query?.first(where: { $0.name == "path" })?.value
+    else { return pattern }
+    return "\(pattern)?path=\(RoutePattern(path: screen).path)"
+  }
 
   private static func pattern(forPath path: String) -> String {
     let segments = path.split(separator: "/", omittingEmptySubsequences: true).map(String.init)

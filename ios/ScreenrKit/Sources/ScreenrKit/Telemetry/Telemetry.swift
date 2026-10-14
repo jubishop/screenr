@@ -5,7 +5,7 @@ import Sentry
 // builds. Dev builds never start Sentry, so they send nothing. What Release builds send is
 // pseudonymous and holds no member content: the user is the opaque Screenr user ID, URLs become
 // route patterns, and SentryPrivacy checks every event, breadcrumb, span, and log line.
-public final class Telemetry: APIRequestObserver {
+public final class Telemetry: Sendable {
   public enum State: String, Sendable, Equatable, CaseIterable {
     case off
     case reporting
@@ -68,7 +68,9 @@ public final class Telemetry: APIRequestObserver {
     reporter?.capture(error: error, tags: tags)
   }
 
-  public func requestFinished(_ request: APIRequestRecord) {
+  // Logs a finished API call and adds it to Sentry as a breadcrumb and, in traced sessions, a
+  // transaction, each tagged with its request ID. The API client calls this for every call.
+  public func requestFinished(_ request: FinishedRequest) {
     var fields: [LogField] = [
       LogField(name: "method", value: .string(request.method)),
       .route(request.route),
@@ -83,12 +85,16 @@ public final class Telemetry: APIRequestObserver {
       level = status >= 500 ? .warning : .info
       breadcrumbLevel = status >= 500 ? .error : status >= 400 ? .warning : .info
       spanStatus = Self.spanStatus(forHTTPStatus: status)
-    case .failed(let code):
-      fields.append(.int("error_code", code))
-      let cancelled = code == URLError.cancelled.rawValue
-      level = cancelled ? .info : .warning
-      breadcrumbLevel = cancelled ? .info : .error
-      spanStatus = cancelled ? .cancelled : .unavailable
+    case .failed:
+      fields.append(.constant("outcome", "failed"))
+      level = .warning
+      breadcrumbLevel = .error
+      spanStatus = .unavailable
+    case .cancelled:
+      fields.append(.constant("outcome", "cancelled"))
+      level = .info
+      breadcrumbLevel = .info
+      spanStatus = .cancelled
     }
     fields.append(.duration("duration_ms", request.duration))
     api.write(level, "Request finished", fields)

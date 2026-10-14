@@ -16,11 +16,11 @@ struct TelemetryTests {
     Telemetry(variant: variant, router: router, sessionRoll: roll, start: capture.start)
   }
 
-  private static func screenRequest(status: Int) throws -> APIRequestRecord {
+  private static func screenRequest(status: Int) throws -> FinishedRequest {
     let url = try #require(
       URL(string: "https://screenr.club/api/screenr/screen?path=%2Fpeople%2Falice&q=dune")
     )
-    return APIRequestRecord(
+    return FinishedRequest(
       method: "GET",
       route: RoutePattern(url: url),
       requestID: "3f2a9c",
@@ -73,10 +73,10 @@ struct TelemetryTests {
     let crumbs = try #require(json["breadcrumbs"] as? [[String: Any]])
     let urls = crumbs.compactMap { ($0["data"] as? [String: Any])?["url"] as? String }
     #expect(urls.contains("https://screenr.club/search"))
-    #expect(urls.contains("https://screenr.club/api/screenr/screen"))
+    #expect(urls.contains("https://screenr.club/api/screenr/screen?path=/people/:username"))
     for leak in [
       "alice@example.com", "Alice Smith", "Alice's iPhone", "203.0.113.7", "ip_address",
-      "\"email\"", "\"username\"", "dune", "people", "q=", "path=",
+      "\"email\"", "\"username\"", "dune", "alice", "q=",
     ] {
       #expect(!event.text.contains(leak), "The event contains \(leak).")
     }
@@ -138,7 +138,9 @@ struct TelemetryTests {
 
     let transaction = try #require(try await capture.items(ofType: "transaction", count: 1).only)
     let json = try transaction.json
-    #expect(json["transaction"] as? String == "GET /api/screenr/screen")
+    #expect(
+      json["transaction"] as? String == "GET /api/screenr/screen?path=/people/:username"
+    )
     let trace = (json["contexts"] as? [String: Any])?["trace"] as? [String: Any]
     #expect(trace?["op"] as? String == "http.client")
     #expect(trace?["status"] as? String == "ok")
@@ -153,7 +155,8 @@ struct TelemetryTests {
     #expect(line.level == .info)
     #expect(
       line.text
-        == "Request finished method=GET route=https://screenr.club/api/screenr/screen"
+        == "Request finished method=GET"
+        + " route=https://screenr.club/api/screenr/screen?path=/people/:username"
         + " request_id=3f2a9c status=200 duration_ms=120.0"
     )
   }

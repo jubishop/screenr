@@ -273,13 +273,14 @@ Sentry organization `artisanal-software`, under these
   the Sentry user, and `telemetry.signOut()` clears it. Events carry no other
   user data, and Sentry's installation ID never stands in for a signed-out
   user. Sentry's session counts still use that random ID.
-- **Request IDs:** the API client reports each finished call to Telemetry,
-  its `APIRequestObserver`, as an `APIRequestRecord`: the method, route
-  pattern, `Screenr-Request-Id`, status, and duration. Telemetry logs the
+- **Request IDs:** the API client reports each finished call to
+  `telemetry.requestFinished(_:)` as a `FinishedRequest`: the method, route
+  pattern, `Screenr-Request-Id`, outcome, and duration. Telemetry logs the
   call, adds an `http` breadcrumb, and in traced launches records an
-  `http.client` transaction. Both carry a `request_id` tag, the tag the
-  server's failure reports use, as does an error captured with its request
-  ID.
+  `http.client` transaction named by its route, such as
+  `GET /api/screenr/screen?path=/people/:username`. Both carry a `request_id`
+  tag, the tag the server's failure reports use, as does an error captured
+  with its request ID.
 - **Scrubbing:** `SentryPrivacy` runs as Sentry's `beforeSend`,
   `beforeBreadcrumb`, `beforeSendSpan`, and `beforeSendLog`. It keeps only the
   user ID, and reduces every URL to its `RoutePattern`, such as
