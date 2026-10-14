@@ -393,12 +393,12 @@ test("real members cannot see the demo circle, and the reviewer cannot see them"
   const real = await updateTitleActivity(alice, "movie:1", "recommended", true);
   await addComment(ben, real, "A real reply.", false);
   await updateTitleActivity(ben, "movie:1", "want_to_watch", true);
-  await recordActiveDay(ben);
+  await recordActiveDay(ben, "web");
   await seedDemoCircle();
   const review = await reviewerAccount();
   const friends = await demoFriends(review.id);
-  await recordActiveDay(review.id);
-  for (const member of friends) await recordActiveDay(member.user_id);
+  await recordActiveDay(review.id, "ios");
+  for (const member of friends) await recordActiveDay(member.user_id, "web");
 
   // Profiles and friend requests stay out of reach both ways.
   for (const username of [review.username, ...friends.map((f) => f.username)])

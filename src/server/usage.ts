@@ -12,14 +12,23 @@ const observedSurfaces: SaveSurface[] = [
   "suggestion_recommendation",
 ];
 
-// Signed-in page renders and member actions call this; background screen and
-// notification refreshes do not. Rows hold only the member and the date.
-// Someone who has not finished setup has no profile, so no day is recorded.
-export async function recordActiveDay(userId: string) {
+// The client a member used: the website, or the iPhone app.
+export type UsageClient = "web" | "ios";
+
+// Signed-in page renders, member actions, and the app's visits call this;
+// background screen and notification refreshes do not. Rows hold only the
+// member, the date, and which clients they used that day. Someone who has
+// not finished setup has no profile, so no day is recorded.
+export async function recordActiveDay(userId: string, client: UsageClient) {
+  // The update runs only when the day gains a client.
   await db.query(
-    `INSERT INTO member_active_day(user_id) SELECT user_id FROM profile
-    WHERE user_id=$1 ON CONFLICT DO NOTHING`,
-    [userId],
+    `INSERT INTO member_active_day(user_id,web,ios)
+    SELECT user_id,$2,$3 FROM profile WHERE user_id=$1
+    ON CONFLICT (user_id,day) DO UPDATE
+    SET web=member_active_day.web OR excluded.web, ios=member_active_day.ios OR excluded.ios
+    WHERE (excluded.web AND NOT member_active_day.web)
+      OR (excluded.ios AND NOT member_active_day.ios)`,
+    [userId, client === "web", client === "ios"],
   );
 }
 
@@ -36,6 +45,10 @@ export type UsageWeek = {
   inProgress: boolean;
   activeMembers: number;
   activePreviousWeek: number;
+  // Active members by the clients they used that week.
+  webOnly: number;
+  appOnly: number;
+  webAndApp: number;
   saves: number;
   observedSaves: number;
   inferredSaves: number;
@@ -76,7 +89,7 @@ export async function usageReport({
         (week + 7)::timestamp AT TIME ZONE 'America/Los_Angeles' AS ends
       FROM weeks
     ), active AS (
-      SELECT user_id, day FROM member_active_day
+      SELECT user_id, day, web, ios FROM member_active_day
       WHERE user_id NOT IN (SELECT user_id FROM demo)
     ), saved AS (
       SELECT * FROM want_to_watch_save WHERE user_id NOT IN (SELECT user_id FROM demo)
@@ -107,6 +120,8 @@ export async function usageReport({
           SELECT 1 FROM active p
           WHERE p.user_id = a.user_id AND p.day >= s.week - 7 AND p.day < s.week
         ))::int AS "activePreviousWeek",
+      clients.web_only AS "webOnly", clients.app_only AS "appOnly",
+      clients.web_and_app AS "webAndApp",
       saves.total AS saves, saves.observed AS "observedSaves", saves.inferred AS "inferredSaves",
       saves.followed AS "followedSaves", saves.followed_observed AS "followedObserved",
       saves.followed_inferred AS "followedInferred",
@@ -117,6 +132,17 @@ export async function usageReport({
           WHERE earlier.author_id = c.author_id AND earlier.created_at < s.starts
         ))::int AS "repeatCommenters"
     FROM spans s
+    CROSS JOIN LATERAL (
+      -- A member who used both clients that week, on one day or on
+      -- different days, counts once as both.
+      SELECT (count(*) FILTER (WHERE web AND NOT ios))::int AS web_only,
+        (count(*) FILTER (WHERE ios AND NOT web))::int AS app_only,
+        (count(*) FILTER (WHERE web AND ios))::int AS web_and_app
+      FROM (
+        SELECT bool_or(a.web) AS web, bool_or(a.ios) AS ios FROM active a
+        WHERE a.day >= s.week AND a.day < s.week + 7 GROUP BY a.user_id
+      ) member_clients
+    ) clients
     CROSS JOIN LATERAL (
       -- Toggling Want to watch off and on again in one week counts once.
       -- Follow-through counts in the week of the save, whenever it happened.
@@ -197,6 +223,12 @@ export function formatUsageReport(weeks: UsageWeek[]) {
         ["Active members", "Also active the week before"],
         (week) => [week.activeMembers, week.activePreviousWeek],
       ),
+      `${section(
+        "Where active members used Screenr",
+        ["Website only", "iPhone app only", "Both"],
+        (week) => [week.webOnly, week.appOnly, week.webAndApp],
+      )}
+Both: the website and the iPhone app in the same week.`,
       `${section(
         "Want to watch saves from friends' recommendations",
         ["Saves", "Observed", "Inferred"],

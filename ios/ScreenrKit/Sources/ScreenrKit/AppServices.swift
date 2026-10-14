@@ -4,7 +4,8 @@ import SwiftUI
 // The protocol-typed clients the app's views use, which tests replace with
 // fakes. The app builds them once and injects them with `.screenrServices(_:)`;
 // views read `@Environment(\.screenrAPI)`, `@Environment(SessionStore.self)`,
-// `@Environment(PendingInvitation.self)`, and `@Environment(\.identityProviders)`.
+// `@Environment(PendingInvitation.self)`, `@Environment(\.identityProviders)`,
+// and `@Environment(\.visitTracker)`.
 public struct AppServices: Sendable {
   public let api: any ScreenrAPI
   public let session: SessionStore
@@ -14,6 +15,8 @@ public struct AppServices: Sendable {
   // in `imageCache`. The cache empties when the session ends.
   public let imageCache: URLCache
   public let imageSession: URLSession
+  // The app reports its scene phase here, for the visits the client marks.
+  public let visits: VisitTracker
 
   @MainActor
   public init(
@@ -21,13 +24,15 @@ public struct AppServices: Sendable {
     session: SessionStore,
     invitation: PendingInvitation = PendingInvitation(),
     identity: IdentityProviders,
-    imageCache: URLCache = URLCache(memoryCapacity: 16 << 20, diskCapacity: 0)
+    imageCache: URLCache = URLCache(memoryCapacity: 16 << 20, diskCapacity: 0),
+    visits: VisitTracker = VisitTracker()
   ) {
     self.api = api
     self.session = session
     self.invitation = invitation
     self.identity = identity
     self.imageCache = imageCache
+    self.visits = visits
     imageSession = URLSession(configuration: Self.imageConfiguration(cache: imageCache))
     session.onEnd { imageCache.removeAllCachedResponses() }
   }
@@ -64,20 +69,23 @@ public struct AppServices: Sendable {
       imageCache = URLCache(memoryCapacity: 16 << 20, diskCapacity: 0)
     }
     let session = try SessionStore(keychain: keychain)
+    let visits = VisitTracker()
     self.init(
       api: ScreenrClient(
         serverURL: configuration.serverURL,
         clientHeader: configuration.clientHeader,
         session: session,
         transport: transport,
-        observer: observer
+        observer: observer,
+        visits: visits
       ),
       session: session,
       identity: IdentityProviders(
         authorization: authorization,
         google: GoogleSignIn(clientID: configuration.googleClientID, transport: transport)
       ),
-      imageCache: imageCache
+      imageCache: imageCache,
+      visits: visits
     )
   }
 
@@ -148,6 +156,8 @@ extension EnvironmentValues {
   @Entry public var screenrAPI: any ScreenrAPI = MissingAPI()
   // Nil outside `.screenrServices(_:)`.
   @Entry public var identityProviders: IdentityProviders?
+  // Nil outside `.screenrServices(_:)`.
+  @Entry public var visitTracker: VisitTracker?
 }
 
 extension View {
@@ -156,6 +166,7 @@ extension View {
       .environment(services.session)
       .environment(services.invitation)
       .environment(\.identityProviders, services.identity)
+      .environment(\.visitTracker, services.visits)
       .asyncImageURLSession(services.imageSession)
   }
 }

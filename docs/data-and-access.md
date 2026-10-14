@@ -46,8 +46,9 @@ result becomes the JSON response; an action without one responds
 4. Every action except profile setup, photo changes, and
    [account deletion](#account-deletion) needs a completed profile (403).
 5. An unknown action, or a known one with another method, returns 404.
-6. Usage telemetry records the day for member POST actions, photo changes by
-   members, and title searches
+6. Usage telemetry records the day, with the client that sent the request,
+   for member POST actions, photo changes by members, title searches, and
+   `screen` reads flagged as the app's visits
    ([active days](usage-telemetry.md#active-days)).
 7. A POST body must be a JSON object of at most 16,000 bytes (400 or 413).
    A photo upload's body is the image itself, at most 200 KB.
@@ -121,6 +122,12 @@ positive 64-bit integer answers `400`.
   request runs names it as `requestId`. An app error report and the server
   failure behind it carry the same ID
   ([Sentry decision](ios-app.md#sentry-for-the-app-and-the-server--2026-10-13)).
+
+The action route also reads `Screenr-Visit: 1` on `screen` reads. The app
+sends it on its first screen read after launch and after each return to the
+foreground, and the route records the member's
+[active day](usage-telemetry.md#active-days) for it. Other values, and the
+header on other actions, are ignored.
 
 ### Changes that app builds depend on
 

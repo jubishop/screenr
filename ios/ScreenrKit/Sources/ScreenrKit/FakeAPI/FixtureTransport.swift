@@ -40,7 +40,9 @@ public struct FixtureScenario: Hashable, Sendable {
   }
 }
 
-// Appends each request the fixture API answers to the scenario's log file.
+// Appends each request the fixture API answers to the scenario's log file,
+// such as `GET /api/screenr/screen?path=%2F`, with ` visit` after the app's
+// visit.
 final class FixtureRequestLog: Sendable {
   private let file: URL
   private let lock = Mutex(())
@@ -56,6 +58,7 @@ final class FixtureRequestLog: Sendable {
   func record(_ request: URLRequest, path: String) throws {
     var line = (request.httpMethod ?? "GET") + " " + path
     if let query = request.url?.query(percentEncoded: true) { line += "?" + query }
+    if request.value(forHTTPHeaderField: "Screenr-Visit") != nil { line += " visit" }
     // A handle that fails before closing closes when it is released.
     try lock.withLock { _ in
       let handle = try FileHandle(forWritingTo: file)

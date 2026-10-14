@@ -67,6 +67,8 @@ export type Action =
       method: "GET";
       profile: true;
       usage: boolean;
+      // Records the day when the request carries `Screenr-Visit: 1`.
+      visits: boolean;
       respond: (query: Query, context: Member) => Promise<unknown>;
     }
   | {
@@ -86,16 +88,22 @@ export type Action =
     };
 
 // Member reads count toward usage telemetry only when `usage` is set. Screen
-// and notification reads, which clients repeat in the background, do not.
+// and notification reads, which clients repeat in the background, do not,
+// except a read with `visits` set that the client flags as a visit.
 function read<Input>({
   input,
   run,
   usage = false,
-}: Definition<Query, Input, Member> & { usage?: boolean }): Action {
+  visits = false,
+}: Definition<Query, Input, Member> & {
+  usage?: boolean;
+  visits?: boolean;
+}): Action {
   return {
     method: "GET",
     profile: true,
     usage,
+    visits,
     respond: (query, context) => run(input(query), context),
   };
 }
@@ -167,7 +175,10 @@ const actions = {
     input: () => undefined,
     run: (_, { userId, sessionId }) => deleteAccount(userId, sessionId),
   }),
+  // The iPhone app flags its first screen read after launch, and after each
+  // return to the foreground, as a visit.
   screen: read({
+    visits: true,
     input: (query) => query.get("path") ?? "/",
     run: async (path, { userId, user }) =>
       screenResponse(await loadScreen(userId, path), user),

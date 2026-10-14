@@ -156,11 +156,12 @@ try await api.send(.comment(conversation: item.id, body: text, spoiler: false))
 | `APIError` | `API/APIError.swift` | `kind`, the server's `message`, Better Auth's `code`, and the `requestID` the request sent. `isPermanent` says whether polling should stop, and `explanation(otherwise:)` words the failure for the member. |
 | `APIRequestObserver` | `API/APIRequestObserver.swift` | Sees every finished request: route pattern, request ID, status, duration, and error. The app's observer is `Telemetry`; see [Sentry](#sentry). |
 | Models | `Models/` | `Screens.swift`, `Feed.swift`, `Titles.swift`, `People.swift` (members and notifications), and `Results.swift` (other actions and `ErrorBody`). |
-| `AppServices` | `AppServices.swift` | The client, session, pending invitation, identity providers, and image session together, injected with `.screenrServices(_:)`. |
+| `AppServices` | `AppServices.swift` | The client, session, pending invitation, identity providers, image session, and visit tracker together, injected with `.screenrServices(_:)`. |
 
 - **Headers:** every request sends `Screenr-Client: ios/<version>/<build>`
   and a new `Screenr-Request-Id`, plus `Authorization: Bearer <token>` while
-  signed in. It never sends cookies or an `Origin`.
+  signed in. It never sends cookies or an `Origin`. The screen read that
+  marks a [visit](#visits) also sends `Screenr-Visit: 1`.
 - **Session:** a sign-in request stores the token from `set-auth-token` in
   the Keychain, and `.signOut` removes it, as does a successful
   `.deleteAccount`. A 401 to a request that carried a token removes that
@@ -198,7 +199,7 @@ uses it when launched with these arguments; Release builds ignore them:
 | `-ScreenrFixtureSession` | `signedIn` (default) or `signedOut`. |
 | `-ScreenrFixtureOverride` | A fixture that answers first, such as `screen/feed/empty`. Repeatable. |
 | `-ScreenrFixtureFailure` | A fixture that answers every `/api/screenr` request, such as `errors/update-required`. |
-| `-ScreenrFixtureLog` | A file that gets a line per `/api/screenr` request, such as `GET /api/screenr/screen?path=%2F`. |
+| `-ScreenrFixtureLog` | A file that gets a line per `/api/screenr` request, such as `GET /api/screenr/screen?path=%2F`, with ` visit` after the app's [visit](#visits). |
 | `-ScreenrOpenURL` | A link the app opens at launch, as if the system delivered it, such as `screenr-dev://titles/tv/201`. |
 
 In UI tests, `app.launch(with: FixtureLaunch(viewer: "nora"))` passes them,
@@ -341,6 +342,24 @@ Each read gives up after ten seconds. A failed read replaces the content with
 the error; passing failures keep polling, and a permanent error stops it until
 a read succeeds. An unchanged screen keeps its `phase`, so nothing renders
 again. `ScreenModelTests` cover the timing with a `TestClock`.
+
+### Visits
+
+Polls never count as activity, so the app marks its visits for
+[usage telemetry](../docs/usage-telemetry.md#active-days)
+([decision](../docs/ios-app.md#app-visits-and-client-split-in-usage-telemetry--2026-10-13)).
+`VisitTracker` in ScreenrKit's `API/` folder gives the first `screen` read
+after launch, and the first after each return from the background,
+`Screenr-Visit: 1`; the server records the member's day for it, as for a
+page load on the website. `AppRootView` reports each scene phase to
+`AppServices.visits` before the screens read again. A pause that keeps the
+app in the foreground, such as Control Center, is not a return. Only one
+read carries the visit at a time, and a visit that gets no successful
+answer, such as offline or the 403 before setup, moves to the next screen
+read. `.screen(path:)` asks for the visit with `visit: .whenDue`; no other
+request does, and a client built without a tracker, such as an extension's,
+sends none. `VisitTests` cover the rules, and the fixture API's request log
+marks the visit for `ShellTests`.
 
 ### Add a feature screen
 

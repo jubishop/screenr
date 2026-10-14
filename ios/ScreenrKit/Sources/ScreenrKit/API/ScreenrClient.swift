@@ -13,6 +13,7 @@ public protocol ScreenrAPI: Sendable {
 // - `Screenr-Client: ios/<version>/<build>`, which the server checks against
 //   its minimum build.
 // - A new `Screenr-Request-Id`, which errors and the observer report.
+// - `Screenr-Visit: 1` on the screen read that `visits` marks as a visit.
 // GET responses are cached in memory with their ETags. A repeated GET sends
 // its ETag, and a 304 returns the cached value.
 public final class ScreenrClient: ScreenrAPI {
@@ -26,22 +27,26 @@ public final class ScreenrClient: ScreenrAPI {
   private let session: SessionStore
   private let transport: any HTTPTransport
   private let observer: (any APIRequestObserver)?
+  private let visits: VisitTracker?
   // Keyed by path and query, such as `/api/screenr/screen?path=%2F`.
   private let cache = Mutex<[String: CachedRead]>([:])
 
-  // `clientHeader` is `AppConfiguration.clientHeader`.
+  // `clientHeader` is `AppConfiguration.clientHeader`. Without `visits`, as
+  // in an extension, no read is a visit.
   public init(
     serverURL: URL,
     clientHeader: String,
     session: SessionStore,
     transport: any HTTPTransport = URLSessionTransport(),
-    observer: (any APIRequestObserver)? = nil
+    observer: (any APIRequestObserver)? = nil,
+    visits: VisitTracker? = nil
   ) {
     self.serverURL = serverURL
     self.clientHeader = clientHeader
     self.session = session
     self.transport = transport
     self.observer = observer
+    self.visits = visits
   }
 
   // Runs off the caller's actor, so decoding a large screen never blocks the
@@ -50,7 +55,13 @@ public final class ScreenrClient: ScreenrAPI {
   public func send<Response>(_ request: APIRequest<Response>) async throws(APIError) -> Response {
     let requestID = UUID().uuidString
     let start = ContinuousClock.now
-    let (status, result) = await perform(request, requestID: requestID)
+    let visit: VisitTracker.Visit? =
+      switch request.visit {
+      case .never: nil
+      case .whenDue: visits?.startRead()
+      }
+    let (status, result) = await perform(request, requestID: requestID, visit: visit)
+    if let visit { visits?.finish(visit, status: status) }
     let error: APIError? =
       switch result {
       case .success: nil
@@ -70,7 +81,8 @@ public final class ScreenrClient: ScreenrAPI {
 
   private func perform<Response>(
     _ request: APIRequest<Response>,
-    requestID: String
+    requestID: String,
+    visit: VisitTracker.Visit?
   ) async -> (status: Int?, result: Result<Response, APIError>) {
     let token = await session.token
     let cacheKey = request.method == .get ? request.pathAndQuery : nil
@@ -82,7 +94,8 @@ public final class ScreenrClient: ScreenrAPI {
         request,
         requestID: requestID,
         token: token,
-        etag: cached?.etag
+        etag: cached?.etag,
+        visit: visit
       )
     } catch {
       return (nil, .failure(error))
@@ -111,7 +124,8 @@ public final class ScreenrClient: ScreenrAPI {
     _ request: APIRequest<Response>,
     requestID: String,
     token: String?,
-    etag: String?
+    etag: String?,
+    visit: VisitTracker.Visit?
   ) throws(APIError) -> URLRequest {
     guard let url = URL(string: request.pathAndQuery, relativeTo: serverURL) else {
       throw APIError(kind: .invalidRequest, requestID: requestID)
@@ -127,6 +141,7 @@ public final class ScreenrClient: ScreenrAPI {
       urlRequest.setValue(invitation, forHTTPHeaderField: "Screenr-Invitation")
     }
     if let etag { urlRequest.setValue(etag, forHTTPHeaderField: "If-None-Match") }
+    if visit != nil { urlRequest.setValue("1", forHTTPHeaderField: "Screenr-Visit") }
     switch request.body {
     case .json(let value):
       do {

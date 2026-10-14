@@ -12,6 +12,7 @@ public struct APIRequest<Response: Decodable & Sendable>: Sendable {
   // `Screenr-Invitation` while a new member signs up.
   public let invitation: String?
   public let sessionChange: SessionChange
+  public let visit: VisitSignal
   // The endpoint without member content, such as search text or usernames,
   // for logs: `/api/screenr/screen?path=/people/:username`.
   public let route: String
@@ -23,6 +24,7 @@ public struct APIRequest<Response: Decodable & Sendable>: Sendable {
     body: RequestBody? = nil,
     invitation: String? = nil,
     sessionChange: SessionChange = .none,
+    visit: VisitSignal = .never,
     route: String? = nil
   ) {
     self.method = method
@@ -31,6 +33,7 @@ public struct APIRequest<Response: Decodable & Sendable>: Sendable {
     self.body = body
     self.invitation = invitation
     self.sessionChange = sessionChange
+    self.visit = visit
     self.route = route ?? endpoint.path
   }
 
@@ -69,6 +72,14 @@ public enum RequestBody: Hashable, Sendable {
   case json(JSONValue)
   // A file sent as the raw body, such as a JPEG for `photo`.
   case upload(Data, contentType: String)
+}
+
+// Whether a request can carry the app's visit for usage telemetry, as
+// `VisitTracker` describes.
+public enum VisitSignal: Hashable, Sendable {
+  case never
+  // Carries `Screenr-Visit: 1` when a visit is due.
+  case whenDue
 }
 
 // What a successful response does to the stored session.

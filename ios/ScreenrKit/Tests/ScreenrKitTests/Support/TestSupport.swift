@@ -93,7 +93,11 @@ struct TestClient {
   let observer = RecordingObserver()
   let client: ScreenrClient
 
-  init(token: String? = nil, replies: [RecordingTransport.Reply]) throws {
+  init(
+    token: String? = nil,
+    visits: VisitTracker? = nil,
+    replies: [RecordingTransport.Reply]
+  ) throws {
     keychain = InMemoryKeychain(token: token)
     session = try SessionStore(keychain: keychain)
     transport = RecordingTransport(replies)
@@ -102,7 +106,8 @@ struct TestClient {
       clientHeader: "ios/1.0/7",
       session: session,
       transport: transport,
-      observer: observer
+      observer: observer,
+      visits: visits
     )
   }
 

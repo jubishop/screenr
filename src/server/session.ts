@@ -14,14 +14,15 @@ export async function signedIn(next?: string) {
   return session;
 }
 // Member page renders, including client navigation, count as an active day
-// for usage telemetry. Background screen refreshes use the API instead. The
-// member page and its not-found view share this lookup in each request.
+// on the website for usage telemetry. Background screen refreshes use the
+// API instead. The member page and its not-found view share this lookup in
+// each request.
 const requestMember = cache(async () => {
   const session = await auth().api.getSession({ headers: await headers() });
   if (!session) return "signed out" as const;
   try {
     const person = await member(session.user.id);
-    await recordActiveDay(person.user_id);
+    await recordActiveDay(person.user_id, "web");
     return person;
   } catch (error) {
     if (error instanceof AppError && error.status === 403)

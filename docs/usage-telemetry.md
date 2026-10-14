@@ -137,27 +137,46 @@ for 90 days.
 
 ## Implementation
 
-Migration `db/015-usage-telemetry.sql` adds the two tables below, and
+Migration `db/015-usage-telemetry.sql` adds the two tables below,
 `db/021-save-follow-through.sql` adds the
-[follow-through](#save-follow-through) flag to saves. The previous release
-ignores them, so activation and rollback stay compatible.
-`src/server/usage.ts` records active days, prunes old rows, and builds the
-report.
+[follow-through](#save-follow-through) flag to saves, and
+`db/031-active-day-clients.sql` adds the [clients](#active-days) to active
+days. The previous release ignores them, so activation and rollback stay
+compatible. `src/server/usage.ts` records active days, prunes old rows, and
+builds the report.
 
 ### Active days
 
-`member_active_day` holds one row per member and Pacific date, with no other
-columns. Recording inserts the row only when it is missing, outside the shared
-domain lock. Each member page render records the day through `currentMember`
-in `src/server/session.ts`. That covers loading a signed-in page and client
+`member_active_day` holds one row per member and Pacific date, with two
+other columns: `web` and `ios`, whether the member used the website or the
+iPhone app that day. A day used on both has both. Recording inserts the row
+when it is missing, and otherwise sets the client only when the row lacks it,
+outside the shared domain lock. Migration 031 marks the days recorded before
+it as website days. Its column defaults let the previous release, which
+inserts only the member, keep recording during a rollback; those days count
+as website days too.
+
+Each member page render records a website day through `currentMember` in
+`src/server/session.ts`. That covers loading a signed-in page and client
 navigation, which renders the page on the server. The action route in
 `src/app/api/screenr/[action]/route.ts` records the day for every member POST
 action declared in `src/server/actions.ts`, including rejected ones, and for
-title searches. Screen and notification
-reads, which clients repeat in the background while a page or the
-notification panel stays open, never record activity. Profile setup records
-nothing; the member page that follows it does. Photo changes record the day
-once the person has a profile, so a photo added during setup records nothing.
+title searches. A request with a valid iPhone
+[`Screenr-Client` header](data-and-access.md#client-headers) records an
+iPhone app day; any other records a website day.
+
+Screen and notification reads, which clients repeat in the background while
+a page, an app screen, or the notification panel stays open, record nothing,
+with one exception: a `screen` read that carries `Screenr-Visit: 1`. The
+iPhone app sends that header on its first screen read after launch and after
+each return to the foreground, and nowhere else
+([app visits](../ios/README.md#visits)). The route records the day before
+reading, so a 304 for an unchanged screen records it too. Any other value of
+the header, or the header on another read, records nothing. Profile setup
+records nothing; the member page that follows it does, and so does the app's
+next screen read, since a visit that gets no successful answer, such as the
+403 before setup, moves to the next one. Photo changes record the day once
+the person has a profile, so a photo added during setup records nothing.
 
 ### Save attribution
 
@@ -228,12 +247,16 @@ systemd-run --quiet --wait --pipe --collect --uid=screenr \
 The report only reads data. Every figure leaves out the
 [demo circle for Apple review](running-screenr.md#demo-circle-for-apple-review):
 demo accounts' active days and saves, and entries and comments they posted.
-It prints a table for each measure, and a second one for saves, with one row
-per week and an asterisk on the week in progress:
+It prints a table for each measure, a second one for saves, and one for app
+adoption, with one row per week and an asterisk on the week in progress:
 
 - **Members who return each week:** members with an active day that week, and
   how many of them also had one the week before, even when that week falls
   outside the range shown.
+- **Where active members used Screenr:** those members split by the clients
+  they used that week: the website only, the iPhone app only, or both, on
+  the same day or on different days. The three add up to the week's active
+  members.
 - **Want to watch saves:** saves that week, observed saves (the surfaces
   marked Observed above), and inferred saves (`friend_recommending`). Each
   counts a member and title once per week, so turning Want to watch off and on
@@ -258,17 +281,23 @@ per week and an asterisk on the week in progress:
 
 About once a minute, the worker's existing cleanup in `scripts/worker.ts`
 deletes expired email jobs and then active days and saves dated before the
-Pacific date 12 months earlier. A save's follow-through flag goes with it.
+Pacific date 12 months earlier. A day's clients and a save's follow-through
+flag go with them.
 
 `tests/app/usage-telemetry.test.ts` covers the recording rules through the
-action route, including background reads, row contents, and save attribution
-for friends, pending requests, and inactive or own Recommends. It covers
-follow-through recorded by the status write, including statuses chosen before
-the save, other members' statuses, Stopped watching, and Watching then Stopped
-watching, and migration 021's marking of earlier saves. It covers each report
-figure at Monday boundaries, including a week that ends after daylight saving
-time ends, the printed command output without member identities, and
-12-month cleanup. `tests/browser/usage-telemetry.spec.ts` checks that page
-loads and client navigation record a day while background refreshes do not,
-and the feed and title page surfaces. `tests/browser/title-suggestions.spec.ts`
-checks the suggestion tile surface.
+action route, including background reads, the app's visits and polls, a
+visit answered with 304, the client of each day and a day used on both, row
+contents, and save attribution for friends, pending requests, and inactive
+or own Recommends. It covers follow-through recorded by the status write,
+including statuses chosen before the save, other members' statuses, Stopped
+watching, and Watching then Stopped watching, and migration 021's marking of
+earlier saves. It covers each report figure at Monday boundaries, including
+a week that ends after daylight saving time ends and the client split, the
+printed command output without member identities, and 12-month cleanup.
+`tests/browser/usage-telemetry.spec.ts` checks that page loads record a
+website day, that client navigation records a day while background refreshes
+do not, and the feed and title page surfaces.
+`tests/browser/title-suggestions.spec.ts` checks the suggestion tile surface.
+In the app, ScreenrKit's `VisitTests` cover which screen reads carry the
+visit, and `ShellTests` checks it across a launch and a return from the
+background.
