@@ -41,9 +41,12 @@ final class ShellTests: XCTestCase {
     try app.performSettingsAudit()
     app.buttons["Close"].tap()
 
+    // Find a title opens with its search active, which hides the bar's
+    // buttons until the search closes.
     app.tab("Find a title").tap()
     XCTAssertTrue(app.navigationBars["Find a title"].waitForExistence(timeout: 10))
-    XCTAssertTrue(app.buttons["bell"].exists)
+    app.buttons["Close"].tap()
+    XCTAssertTrue(app.buttons["bell"].waitForExistence(timeout: 10))
     try app.performShellAudit()
 
     app.buttons["bell"].tap()

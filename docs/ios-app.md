@@ -501,6 +501,15 @@ Photos are cropped and compressed as on the web. See
 - Find as an ordinary tab with a search field at the top.
 - A bell on the Circle tab only.
 
+**Implementation note:** [Issue #231](https://github.com/jubishop/screenr/issues/231)
+built Find a title; [Find a title](../ios/README.md#find-a-title) in the
+iPhone guide describes it. Selecting the tab at its root activates the search
+field, and the active search hides the bar's bell until it closes. Unlike the
+web, where typing alone does not search
+([decision](title-suggestions.md#switching-between-suggestions-and-search--2026-09-07)),
+typing searches once the member pauses, and the keyboard's Search key
+searches at once. Clearing the field shows the lists again, as on the web.
+
 ### Top 10 editing in a list sheet — 2026-10-13
 
 **Decision:** On the member's own profile, an Edit button opens a sheet. The

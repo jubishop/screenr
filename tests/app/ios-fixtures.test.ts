@@ -223,6 +223,11 @@ const screens: Record<MemberRoute["kind"], Record<string, Case>> = {
       "Find a title: suggestions and Friends recommend, with viewing options and saved services.",
     ),
     empty: screen("nora", "/search", "Find a title with no friends' activity."),
+    "viewer-statuses": screen(
+      "cam",
+      "/search",
+      "Cam's Find a title: his own Want to watch and Caught up on friends' recommendations, free options, unknown availability, a title without a poster, and no saved services.",
+    ),
   },
   people: {
     default: screen(
