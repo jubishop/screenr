@@ -14,9 +14,9 @@ process.env.DATABASE_URL = testDatabaseURL;
 process.env.BETTER_AUTH_SECRET = "screenr-test-secret-only-32-characters-long";
 process.env.BETTER_AUTH_URL = "http://localhost:3000";
 // A developer shell may export real provider credentials. Clear them so no
-// application test reaches TMDB, Resend, Google, or Sentry. Suites that
-// exercise a provider set fake values and use a loopback server or a replaced
-// fetch.
+// application test reaches TMDB, Resend, Google, Apple, or Sentry. Suites
+// that exercise a provider set fake values and use a loopback server or a
+// replaced fetch.
 for (const name of [
   "TMDB_READ_TOKEN",
   "SCREENR_TEST_TMDB_URL",
@@ -25,6 +25,10 @@ for (const name of [
   "EMAIL_FROM",
   "GOOGLE_CLIENT_ID",
   "GOOGLE_CLIENT_SECRET",
+  "GOOGLE_IOS_CLIENT_ID",
+  "APPLE_TEAM_ID",
+  "APPLE_KEY_ID",
+  "APPLE_PRIVATE_KEY",
   "SENTRY_DSN",
 ])
   delete process.env[name];
@@ -154,6 +158,22 @@ export const denied = {
   origin: { status: 403, message: "Invalid request origin." },
   signedOut: { status: 401, message: "Sign in to continue." },
 } as const;
+
+// Better Auth rejections name their reason in the body: Screenr's own hooks
+// by message, and Better Auth's checks by code.
+export async function assertAuthError(
+  response: Response,
+  status: number,
+  reason: { message: string } | { code: string },
+) {
+  assert.equal(response.status, status);
+  const body = await response.json();
+  for (const [key, value] of Object.entries(reason))
+    assert.equal(body[key], value);
+}
+export const invitationRequired = {
+  message: "A valid invitation is required to join Screenr.",
+};
 
 // Asserts the exact JSON error that an API route returns.
 export async function assertRouteError(

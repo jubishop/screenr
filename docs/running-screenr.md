@@ -314,6 +314,25 @@ Apple's relay delivers mail only from registered sources. The registered
 `screenr@jubishop.com` passes SPF. Register a new sender before changing
 `EMAIL_FROM`, or relay addresses stop receiving Screenr's email.
 
+**Sign in with Apple settings:** the server offers
+[native Apple sign-in](data-and-access.md#native-sign-in) when `app.env` sets
+all three of these. Without them, as in development and CI, the app starts
+and Apple sign-in returns 404; activation does not require them.
+
+| Setting | Value |
+| --- | --- |
+| `APPLE_TEAM_ID` | `34TKMKM889` |
+| `APPLE_KEY_ID` | `738SADC362`, the Sign in with Apple key |
+| `APPLE_PRIVATE_KEY` | That key in the [single-line form](#apple-key-files) |
+
+The server accepts ID tokens for both App IDs. For each code exchange and
+revocation, it signs a five-minute client secret naming the app's bundle ID,
+so no secret needs renewal. Each account's newest refresh token is stored
+encrypted for account deletion to revoke. Changing `BETTER_AUTH_SECRET` makes
+the stored tokens unreadable, like queued email, until each member's next
+Apple sign-in stores a new one. Apple sign-in has no web button, return URL,
+or domain to register.
+
 ### Apple key files
 
 Apple allows each `.p8` key to be downloaded only once. The original files
@@ -357,11 +376,22 @@ client has no secret, and its client ID is public:
 
 The app requests Google ID tokens with it, and the server accepts it as their
 audience through `GOOGLE_IOS_CLIENT_ID`
-([#216](https://github.com/jubishop/screenr/issues/216)).
+([#216](https://github.com/jubishop/screenr/issues/216)). With that setting,
+the server accepts ID tokens issued to either the iOS or the
+[web client](#provider-configuration), so
+[native Google sign-in](data-and-access.md#native-sign-in) needs no Google
+SDK or client secret in the app. The app redeems Google's authorization code
+itself with PKCE, so the server registers no redirect URI for it. The setting
+is optional: without it, tokens issued to the iOS client fail and web sign-in
+is unchanged.
 
-**Known limitation:** the project's Google Auth Platform audience is in the
-Testing publishing status with no test users, which limits Google sign-in to
-listed test users.
+**Publishing status:** with the owner's approval, the project's Google Auth
+Platform app was published on 2026-10-13. It is "In production" with the
+External user type, and its branding links `https://screenr.club` and
+`https://screenr.club/privacy`. Any Google account can therefore sign in,
+subject to Screenr's invite-only rules. Screenr requests only basic scopes,
+so the app needed no Google verification. Uploading a logo would require
+verification.
 
 ### Sentry
 
