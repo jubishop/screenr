@@ -244,7 +244,9 @@ The iPhone app's Swift models are tested by decoding checked-in responses
 from the real API
 ([decision](ios-app.md#hand-written-models-checked-against-server-fixtures--2026-10-13)).
 `tests/app/ios-fixtures.test.ts` sends each case through the
-`/api/screenr/[action]` handler and compares the response with its file under
+`/api/screenr/[action]` handler as the app does, with the viewer's
+[bearer token](data-and-access.md#native-client-sessions) and no cookie or
+`Origin`, and compares the response with its file under
 `ios/ScreenrKit/Fixtures/`. It runs in `npm test`, so `bin/check --full` and
 CI fail when a response no longer matches its fixture, when a case has no
 file, or when a file has no case. The failure shows the changed fields.
@@ -298,7 +300,7 @@ Each file is one JSON object, shown here with a shortened body:
 - `request` always has `method`, `action`, and `path`. A GET has `query`. A
   POST has its JSON `body`, or `upload` (`contentType` and `bytes`) when the
   body is a file, as for photo uploads. `headers` lists any extra request
-  headers, such as `If-None-Match`.
+  headers, such as `If-None-Match` or `Screenr-Invitation`.
 - `response` has the HTTP `status` and the JSON `body`, which is `null` for
   a 304. A GET's `etag` is the version the server computes for that body.
 

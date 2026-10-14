@@ -122,6 +122,47 @@ session cookie ([decision](ios-app.md#bearer-sessions-in-the-keychain--2026-10-1
   cookie, with the same 30-day lifetime. `POST /api/auth/sign-out` with the
   bearer header deletes that row and ends only that session.
 
+## Invitation tokens
+
+The iPhone app joins without the web's `screenr-invite` cookie
+([decision](ios-app.md#full-parity-including-signup--2026-10-13),
+[issue #214](https://github.com/jubishop/screenr/issues/214)). It sends the
+token from the `/join/<token>` link as `Screenr-Invitation: <token>` on each
+request that signup checks, until setup succeeds:
+
+- `POST /api/auth/email-otp/send-verification-otp`, requesting a code.
+- `POST /api/auth/sign-in/email-otp`, the code sign-in that creates the
+  account.
+- `POST /api/auth/sign-in/social` with an ID token, for Google and Sign in
+  with Apple.
+- `POST /api/screenr/setup`.
+
+`invitationToken` in `src/server/auth.ts` supplies the invitation to every
+invite-only check. The header counts only on a native request: one with a
+bearer token or without an `Origin`. There it takes precedence over the
+cookie, and whatever it holds is the invitation. Browser requests carry an
+`Origin`, so the web keeps using only the cookie. A native request without
+the header falls back to the cookie, because Google's web sign-in callback
+also arrives without an `Origin`.
+
+The header follows the cookie's rules: the invitation must have uses
+remaining and must be neither expired nor revoked.
+
+- **Code request:** an address without an account gets a code only with a
+  valid invitation. Otherwise nothing is sent, and the response is the same
+  `200` with `{"success": true}` that a member's address gets, so it never
+  reveals which addresses have accounts.
+- **New account:** with any sign-in method, creating an account without a
+  valid invitation fails with 403 and
+  `{"message": "A valid invitation is required to join Screenr."}`. Existing
+  accounts sign in without one. Sign-in records the invitation on the new
+  account without using it up.
+- **Setup:** uses the header's invitation, or else the one the account joined
+  with. An unavailable invitation gets 403 and
+  `{"error": "This invitation is no longer available. Ask for a new link."}`.
+  Setup uses up the invitation and makes the new member its creator's
+  friend in one transaction ([write lock](#write-lock-and-refresh-behavior)).
+
 ## Push devices and settings
 
 The iPhone app registers its APNs device token and saves the member's

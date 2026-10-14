@@ -1,6 +1,6 @@
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
-import { db, pending, cookieFor, friend } from "./social-fixture";
+import { db, pending, bearerFor, friend } from "./social-fixture";
 import { Placeholders, labelToken, labelUuid } from "./ios-fixtures";
 
 // The members, titles, and activity that the iPhone fixture cases read
@@ -543,10 +543,13 @@ export async function buildWorld() {
   for (const { id, label } of rows) placeholders.add(id, labelUuid(label));
 
   // Sessions are part of the saved world, so restoring it keeps them valid.
-  const cookies = {} as Record<Viewer, string>;
+  // Each viewer signs in as the app does and keeps a bearer token.
+  const tokens = {} as Record<Viewer, string>;
   for (const viewer of Object.keys(users) as Viewer[])
-    cookies[viewer] = await cookieFor(users[viewer]);
-  return { users, ids, placeholders, cookies };
+    tokens[viewer] = await bearerFor(users[viewer]);
+  // Alice's unused one-signup link, which a setup case sends.
+  const invitations = { spare: spare.token };
+  return { users, ids, placeholders, tokens, invitations };
 }
 export type World = Awaited<ReturnType<typeof buildWorld>>;
 

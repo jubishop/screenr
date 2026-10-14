@@ -63,7 +63,8 @@ central to Screenr ([launch platform](product-brief.md#launch-platform--2026-09-
 - A read-mostly first version that sends some actions to the web.
 
 **Consequence:** The server must accept an invitation token through the
-API, not only through the `screenr-invite` browser cookie. Invitation links
+API, not only through the `screenr-invite` browser cookie
+([invitation tokens](data-and-access.md#invitation-tokens)). Invitation links
 must also open the app as universal links.
 
 ### Monorepo under `ios/` — 2026-10-13
