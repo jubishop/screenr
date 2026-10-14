@@ -63,7 +63,10 @@ export async function usageReport({
   if (through !== undefined && !/^\d{4}-\d{2}-\d{2}$/.test(through))
     throw new Error("Give the last week as a date, such as 2026-10-12.");
   const { rows } = await db.query<UsageWeek>(
-    `WITH weeks AS (
+    `WITH demo AS (
+      -- Every figure leaves out the demo circle for Apple's review.
+      SELECT user_id FROM profile WHERE demo
+    ), weeks AS (
       SELECT (last_week - 7 * n)::date AS week, last_week - 7 * n = current_week AS in_progress
       FROM (SELECT date_trunc('week', coalesce($2::date, ${pacificToday})::timestamp)::date AS last_week,
         date_trunc('week', ${pacificToday}::timestamp)::date AS current_week) bounds,
@@ -72,16 +75,24 @@ export async function usageReport({
       SELECT week, in_progress, week::timestamp AT TIME ZONE 'America/Los_Angeles' AS starts,
         (week + 7)::timestamp AT TIME ZONE 'America/Los_Angeles' AS ends
       FROM weeks
+    ), active AS (
+      SELECT user_id, day FROM member_active_day
+      WHERE user_id NOT IN (SELECT user_id FROM demo)
+    ), saved AS (
+      SELECT * FROM want_to_watch_save WHERE user_id NOT IN (SELECT user_id FROM demo)
     ), entries AS (
-      SELECT id, owner_id, created_at FROM feed_item
-      UNION ALL SELECT id, owner_id, created_at FROM title_comment
-      UNION ALL SELECT id, owner_id, created_at FROM watch_progress
-      UNION ALL SELECT id, owner_id, created_at FROM review
-      UNION ALL SELECT id, owner_id, created_at FROM discussion_post
+      SELECT * FROM (
+        SELECT id, owner_id, created_at FROM feed_item
+        UNION ALL SELECT id, owner_id, created_at FROM title_comment
+        UNION ALL SELECT id, owner_id, created_at FROM watch_progress
+        UNION ALL SELECT id, owner_id, created_at FROM review
+        UNION ALL SELECT id, owner_id, created_at FROM discussion_post
+      ) e WHERE owner_id NOT IN (SELECT user_id FROM demo)
     ), comments AS (
       -- Removed comments still count as activity when they were posted.
       SELECT coalesce(feed_item_id, title_comment_id, watch_progress_id, review_id, discussion_post_id) AS entry,
         author_id, created_at FROM comment
+      WHERE author_id NOT IN (SELECT user_id FROM demo)
     ), posts AS (
       -- An entry's owner posts the entry itself; everyone else posts comments.
       SELECT e.id AS entry, e.owner_id AS author, e.created_at FROM entries e
@@ -89,11 +100,11 @@ export async function usageReport({
       UNION ALL SELECT entry, author_id, created_at FROM comments
     )
     SELECT s.week::text AS week, s.in_progress AS "inProgress",
-      (SELECT count(DISTINCT a.user_id) FROM member_active_day a
+      (SELECT count(DISTINCT a.user_id) FROM active a
         WHERE a.day >= s.week AND a.day < s.week + 7)::int AS "activeMembers",
-      (SELECT count(DISTINCT a.user_id) FROM member_active_day a
+      (SELECT count(DISTINCT a.user_id) FROM active a
         WHERE a.day >= s.week AND a.day < s.week + 7 AND EXISTS (
-          SELECT 1 FROM member_active_day p
+          SELECT 1 FROM active p
           WHERE p.user_id = a.user_id AND p.day >= s.week - 7 AND p.day < s.week
         ))::int AS "activePreviousWeek",
       saves.total AS saves, saves.observed AS "observedSaves", saves.inferred AS "inferredSaves",
@@ -117,7 +128,7 @@ export async function usageReport({
           FILTER (WHERE w.followed_through AND w.surface = ANY($3)))::int AS followed_observed,
         (count(DISTINCT (w.user_id, w.title_id))
           FILTER (WHERE w.followed_through AND w.friend_recommending))::int AS followed_inferred
-      FROM want_to_watch_save w WHERE w.saved_on >= s.week AND w.saved_on < s.week + 7
+      FROM saved w WHERE w.saved_on >= s.week AND w.saved_on < s.week + 7
     ) saves
     CROSS JOIN LATERAL (
       -- Participants are the owner and every commenter by the week's end.

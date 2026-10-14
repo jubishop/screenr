@@ -225,8 +225,11 @@ systemd-run --quiet --wait --pipe --collect --uid=screenr \
   /opt/screenr/node/bin/npm run --silent report:usage -- --weeks 12
 ```
 
-The report only reads data. It prints a table for each measure, and a second
-one for saves, with one row per week and an asterisk on the week in progress:
+The report only reads data. Every figure leaves out the
+[demo circle for Apple review](running-screenr.md#demo-circle-for-apple-review):
+demo accounts' active days and saves, and entries and comments they posted.
+It prints a table for each measure, and a second one for saves, with one row
+per week and an asterisk on the week in progress:
 
 - **Members who return each week:** members with an active day that week, and
   how many of them also had one the week before, even when that week falls

@@ -163,6 +163,7 @@ describes the records behind them.
 | `APNS_KEY_ID` | Key ID of the APNs auth key | [#240](https://github.com/jubishop/screenr/issues/240) |
 | `APNS_PRIVATE_KEY` | APNs auth key, which signs the provider tokens for push requests | [#240](https://github.com/jubishop/screenr/issues/240) |
 | `GOOGLE_IOS_CLIENT_ID` | iOS OAuth client ID, accepted as the audience of the app's Google ID tokens | [#216](https://github.com/jubishop/screenr/issues/216) |
+| `REVIEW_SIGN_IN_CODE` | Fixed six-digit sign-in code for the [demo circle](running-screenr.md#demo-circle-for-apple-review)'s reviewer, given in App Store Connect's review notes | [#247](https://github.com/jubishop/screenr/issues/247) |
 
 Both private keys use the
 [single-line form](running-screenr.md#apple-key-files). Like the other
@@ -643,7 +644,21 @@ systemd-run --quiet --wait --pipe --collect --uid=screenr \
 ```
 
 Do not paste the resulting invitation into a public issue or PR. The
-[usage report](usage-telemetry.md#owner-report) runs the same way.
+[usage report](usage-telemetry.md#owner-report) runs the same way, and so
+does the command that seeds or resets the
+[demo circle for Apple review](running-screenr.md#demo-circle-for-apple-review):
+
+```sh
+systemd-run --quiet --wait --pipe --collect --uid=screenr \
+  --working-directory=/opt/screenr/current \
+  -p EnvironmentFile=/etc/screenr/app.env -p Environment=NODE_ENV=production \
+  /opt/screenr/node/bin/node --import tsx scripts/seed-review.ts
+```
+
+Its fixed code, `REVIEW_SIGN_IN_CODE`, lives in `/etc/screenr/app.env` with
+the other production secrets, so update their
+[off-server copies](#encrypted-backups-and-restore-check) with it, and restart
+`screenr-web` after setting or changing it.
 
 ## Independent acceptance
 

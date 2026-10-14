@@ -623,7 +623,7 @@ Release packaging runs only in Linux CI, so
 every module its maintenance scripts load
 ([#201](https://github.com/jubishop/screenr/issues/201)). It parses the
 scripts production runs from the release (`validate-config`, `migrate`,
-`worker`, `bootstrap`, and `report-usage` in `scripts/`) with TypeScript's
+`worker`, `bootstrap`, `report-usage`, and `seed-review` in `scripts/`) with TypeScript's
 parser and follows their `import`, `export … from`, and literal `import()`
 specifiers, including extensionless and index paths. It skips `import type`,
 `export type`, comments, and strings. It fails when a reached local module is

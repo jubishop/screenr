@@ -31,6 +31,25 @@ export function invitationToken(headers?: Headers) {
   return token && /^[a-zA-Z0-9_-]{43}$/.test(token) ? token : undefined;
 }
 
+// Apple's beta review signs in to this seeded demo account
+// (docs/ios-app.md#isolated-demo-circle-for-apple-review--2026-10-13). The
+// demo friends use a reserved domain that can never receive email.
+export const reviewerEmail = "review@screenr.club";
+export const demoFriendDomain = "demo.screenr.invalid";
+
+// The reviewer's fixed sign-in code from the private environment, when it is
+// six digits like every other code. Never print it.
+export function reviewSignInCode() {
+  const code = process.env.REVIEW_SIGN_IN_CODE;
+  return code && /^[0-9]{6}$/.test(code) ? code : undefined;
+}
+
+// The seeded demo addresses never receive email: the reviewer types the
+// fixed code from the review notes, and demo friends never sign in.
+const seededDemoAddress = (email: string) =>
+  email.toLowerCase() === reviewerEmail ||
+  email.toLowerCase().endsWith(`@${demoFriendDomain}`);
+
 // Login-code email limits over rolling windows. They keep most of the shared
 // Resend allowance for activity email and other applications.
 const codeLimits = { recipient15Minutes: 3, recipientDay: 10, screenrDay: 40 };
@@ -127,6 +146,7 @@ export function createAuth(
 ) {
   // Tests and fixtures that disable rate limits also skip the code caps.
   const limited = options.rateLimit ?? true;
+  const reviewCode = reviewSignInCode();
   return betterAuth({
     appName: "Screenr",
     baseURL: process.env.BETTER_AUTH_URL,
@@ -212,9 +232,18 @@ export function createAuth(
         allowedAttempts: 5,
         rateLimit: { window: 60, max: 10 },
         storeOTP: "hashed",
+        // A sign-in code request for the reviewer stores the fixed code, when
+        // configured, in place of a random one. It expires, counts attempts,
+        // and is limited like any other code. Every other address and code
+        // type gets a random code.
+        generateOTP: ({ email, type }) =>
+          type === "sign-in" && email.toLowerCase() === reviewerEmail
+            ? reviewCode
+            : undefined,
         sendVerificationOTP: async (data, context) => {
           // Password reset codes would be unusable.
           if (data.type === "forget-password") return;
+          if (seededDemoAddress(data.email)) return;
           const token = invitationToken(
             context?.headers ?? context?.request?.headers,
           );

@@ -35,6 +35,7 @@ const maintenanceScripts = [
   "scripts/worker.ts",
   "scripts/bootstrap.ts",
   "scripts/report-usage.ts",
+  "scripts/seed-review.ts",
 ];
 
 // The specifiers of imports that load at runtime, in source order. Declarations
