@@ -167,6 +167,37 @@ export async function getTitle(id: string): Promise<Title> {
   return title;
 }
 
+// The movie or show TMDB lists under an IMDb ID, such as `tt0111161`, as a
+// title ID. An episode's or season's ID names its show. Null when TMDB has
+// none.
+export async function findImdbTitle(imdbId: string): Promise<string | null> {
+  if (!/^tt\d{7,9}$/.test(imdbId)) return null;
+  let data: unknown;
+  try {
+    data = await fetchCatalog(`/find/${imdbId}?external_source=imdb_id`, 5000);
+  } catch (error) {
+    if (error instanceof AppError && error.status === 404) return null;
+    throw error;
+  }
+  if (!isRecord(data))
+    throw new AppError("The catalog returned an invalid title.", 502);
+  const first = (key: string, field = "id") => {
+    const list = data[key];
+    const value =
+      Array.isArray(list) && isRecord(list[0]) ? list[0][field] : undefined;
+    return Number.isSafeInteger(value) && Number(value) > 0
+      ? Number(value)
+      : null;
+  };
+  const movie = first("movie_results");
+  if (movie) return `movie:${movie}`;
+  const show =
+    first("tv_results") ??
+    first("tv_episode_results", "show_id") ??
+    first("tv_season_results", "show_id");
+  return show ? `tv:${show}` : null;
+}
+
 // Actions and comments need only a stored title, even with stale details.
 // Returns the stored ID, fetching the title only if it was never stored.
 export async function ensureTitle(id: string): Promise<string> {

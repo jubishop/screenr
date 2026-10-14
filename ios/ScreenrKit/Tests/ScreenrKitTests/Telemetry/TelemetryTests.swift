@@ -195,6 +195,19 @@ struct TelemetryTests {
     )
   }
 
+  // The share extension's telemetry logs its calls and reports nothing.
+  @Test func localOnlyTelemetryLogsCallsWithoutSentry() {
+    let sink = CapturingSink()
+    router.add(sink)
+    let telemetry = Telemetry.localOnly(router: router)
+
+    telemetry.requestFinished(Self.screenRequest(status: 200))
+
+    #expect(telemetry.state == .off)
+    #expect(telemetry.feedback == nil)
+    #expect(sink.entries.filter { $0.category == .api }.map(\.level) == [.info])
+  }
+
   @Test(arguments: [0.0, 0.19])
   func tracesTheAPICallsOfOneSessionInFive(roll: Double) async throws {
     defer { capture.close() }

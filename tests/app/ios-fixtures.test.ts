@@ -455,6 +455,26 @@ const actions: Record<Exclude<ActionName, "screen">, Record<string, Case>> = {
       "A query too short to search returns no titles.",
     ),
   },
+  "resolve-title": {
+    tmdb: read(
+      "resolve-title",
+      "alice",
+      { url: "https://www.themoviedb.org/tv/201-harbor-lights" },
+      "A TMDB link shared to the share extension names its title.",
+    ),
+    imdb: read(
+      "resolve-title",
+      "alice",
+      { url: "https://www.imdb.com/title/tt0000101/?ref_=ext_shr_lnk" },
+      "An IMDb link resolves to its title through TMDB.",
+    ),
+    search: read(
+      "resolve-title",
+      "alice",
+      { url: "https://www.netflix.com/title/80000001", text: "Netflix" },
+      "A Netflix link maps to no TMDB title, so the name on its page becomes a search.",
+    ),
+  },
   seasons: {
     default: read(
       "seasons",

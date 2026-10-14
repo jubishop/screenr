@@ -35,6 +35,14 @@ public final class Telemetry: APIRequestObserver {
     )
   }
 
+  // Logs finished API calls, as every build does, but never starts Sentry: the share extension's
+  // telemetry. Its log file is what the app's feedback form attaches from it.
+  public static func localOnly(router: LogRouter = .shared) -> Telemetry {
+    Telemetry(variant: .dev, version: "", build: "", router: router, sessionRoll: 1) { _ in
+      preconditionFailure("Local-only telemetry never starts Sentry")
+    }
+  }
+
   // sessionRoll, from 0 up to 1, decides whether this session is traced.
   init(
     variant: AppConfiguration.Variant,

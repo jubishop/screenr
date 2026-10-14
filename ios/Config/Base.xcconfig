@@ -5,6 +5,14 @@
 // Local builds are build 1. The release script passes the next build number.
 CURRENT_PROJECT_VERSION = 1
 
+// The Google OAuth client "Screenr iOS", which both variants sign in with. An
+// iOS client has no secret, and its ID is public. Google redirects an iOS
+// client only to its reversed ID, which Screenr/Info.plist registers. The
+// share extension's Info.plist carries the ID too, for AppConfiguration.
+SCREENR_GOOGLE_CLIENT = 1083033132977-i7pofqgq76lrnahd4l5q6bht51uhtc3o
+SCREENR_GOOGLE_CLIENT_ID = $(SCREENR_GOOGLE_CLIENT).apps.googleusercontent.com
+SCREENR_GOOGLE_URL_SCHEME = com.googleusercontent.apps.$(SCREENR_GOOGLE_CLIENT)
+
 DEVELOPMENT_TEAM = 34TKMKM889
 CODE_SIGN_STYLE = Automatic
 CODE_SIGN_IDENTITY = Apple Development

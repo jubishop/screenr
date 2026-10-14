@@ -13,16 +13,18 @@ repository root.
 
 | Path | Contents |
 | --- | --- |
-| `Screenr.xcodeproj` | The Screenr app and ScreenrUITests targets, and the shared Screenr scheme. |
-| `Config/` | The `.xcconfig` build settings, the app's entitlements, and the release export options. |
+| `Screenr.xcodeproj` | The Screenr app, ScreenrShare extension, and ScreenrUITests targets, and the shared Screenr scheme. |
+| `Config/` | The `.xcconfig` build settings, the app's and extension's entitlements, and the release export options. |
 | `Screenr/` | The app target: the [app shell](#app-shell) in `Shell/`, feature screens in `Screens/` with their parts in a folder named for the feature, such as `Find/` and the [title page](#title-pages)'s `TitlePage/`, components several features share in `Shared/`, such as the [title list views](#title-lists), the [conversations](#conversations) that the feed, title pages, and profiles share in `Conversation/`, the app lifecycle, assets, and `Info.plist`. |
+| `ScreenrShare/` | The [share extension](#share-extension), which the app embeds: its view controller, views, and `Info.plist`. |
 | `ScreenrUITests/` | XCUITest UI tests. |
 | `ScreenrKit/` | A local Swift package: `Sources/ScreenrKit`, `Tests/ScreenrKitTests`, and `Fixtures/`. |
 | `build/` | Build output, check logs, and result bundles. Git ignores it. |
 
-`Screenr/` and `ScreenrUITests/` are synchronized folders: a file added on
-disk joins its target with no `project.pbxproj` change. The Screenr scheme
-builds the app and tests both ScreenrKit and the UI tests. Xcode also lists
+`Screenr/`, `ScreenrShare/`, and `ScreenrUITests/` are synchronized folders:
+a file added on disk joins its target with no `project.pbxproj` change. The
+Screenr scheme builds the app with its extension and tests both ScreenrKit
+and the UI tests. Xcode also lists
 an automatic ScreenrKit scheme for the package.
 
 ## Variants
@@ -34,6 +36,7 @@ a configuration named Debug, so the names stay Debug and Release.
 | Setting | Screenr Dev (Debug) | Screenr (Release) |
 | --- | --- | --- |
 | Bundle ID | `com.artisanalsoftware.Screenr.dev` | `com.artisanalsoftware.Screenr` |
+| Share extension | `com.artisanalsoftware.Screenr.dev.Share` | `com.artisanalsoftware.Screenr.Share` |
 | Server | `http://localhost:3000` | `https://screenr.club` |
 | App group and Keychain group | `group.com.artisanalsoftware.Screenr.dev` | `group.com.artisanalsoftware.Screenr` |
 | APNs | `development` | `production` |
@@ -41,13 +44,14 @@ a configuration named Debug, so the names stay Debug and Release.
 | Icon | `DevAppIcon`, lime | `AppIcon`, deep green |
 
 `Config/Base.xcconfig` holds the shared settings, `Dev.xcconfig` and
-`Release.xcconfig` the variant values, and `Screenr.xcconfig` and
-`ScreenrUITests.xcconfig` the target settings. `Config/Version.xcconfig` holds
-the marketing version; local builds are build 1, and release builds take the
-next number from the release tags. `Screenr/Info.plist` passes the variant,
-server, and app group to the app, which reads them through ScreenrKit's
-`AppConfiguration`. Xcode preprocesses that file, so Dev-only keys sit in an
-`#if SCREENR_DEV` block.
+`Release.xcconfig` the variant values, and `Screenr.xcconfig`,
+`ScreenrShare.xcconfig`, and `ScreenrUITests.xcconfig` the target settings.
+`Config/Version.xcconfig` holds the marketing version; local builds are build
+1, and release builds take the next number from the release tags, which the
+extension shares. `Screenr/Info.plist` passes the variant, server, and app
+group to the app, which reads them through ScreenrKit's `AppConfiguration`,
+as `ScreenrShare/Info.plist` does for the extension. Xcode preprocesses both
+files, so Dev-only keys sit in an `#if SCREENR_DEV` block.
 
 ## Checks
 
@@ -268,7 +272,7 @@ Its behavior lives in ScreenrKit's `SignIn/` folder:
 | `GoogleSignIn` | Google's authorization code flow with PKCE (S256) for the iOS client, without Google's SDK. A `WebAuthenticator` opens Google's page; the app's is SwiftUI's web authentication session. It redeems the code at Google's token endpoint with no client secret and returns the ID token and nonce. |
 | `SignOutModel` | Signs out on the server. If the server does not confirm, the session stays and an alert says why, as on the web. |
 
-`Config/Screenr.xcconfig` sets the
+`Config/Base.xcconfig` sets the
 [iOS OAuth client](../docs/running-screenr.md#google) for both variants, and
 `Info.plist` registers its reversed client ID as a URL scheme. Google
 redirects to `com.googleusercontent.apps.<client>:/oauthredirect`.
@@ -399,8 +403,8 @@ app in the foreground, such as Control Center, is not a return. Only one
 read carries the visit at a time, and a visit that gets no successful
 answer, such as offline or the 403 before setup, moves to the next screen
 read. `.screen(path:)` asks for the visit with `visit: .whenDue`; no other
-request does, and a client built without a tracker, such as an extension's,
-sends none. `VisitTests` cover the rules, and the fixture API's request log
+request does, and a client built without a tracker, such as the share
+extension's from `AppServices(…, host: .shareExtension)`, sends none. `VisitTests` cover the rules, and the fixture API's request log
 marks the visit for `ShellTests`.
 
 ### Add a feature screen
@@ -821,6 +825,71 @@ their controls instead.
 and `screen/title/finished-review` shows Paper Lanterns, which Alice finished,
 reviewed, and ranks #2.
 
+## Share extension
+
+`ScreenrShare`, which the app embeds, puts Screenr (Screenr Dev in the
+Simulator) in every app's share sheet for one web link or for text
+([decision](../docs/ios-app.md#sharing-and-later-native-extras--2026-10-13)).
+A link from Netflix, IMDb, TMDB, JustWatch, or Safari opens its title, where
+the member can Recommend it or mark it Want to watch:
+
+1. **Reading the share:** `SharedContent.load(from:)` takes the first web
+   link and the first text: a text attachment, or else the item's own text
+   or title, which is where Safari puts the page's title.
+2. **Finding the title:** `ShareModel` sends both to `resolve-title`, which
+   places TMDB, IMDb, and JustWatch links and gives a search for the rest
+   ([shared links](../docs/title-catalog.md#shared-links)). It gives up after
+   `ShareTiming.deadline`, 20 seconds, since the server may read a JustWatch
+   page and TMDB. A search starts from the server's `query` in a `FindModel`,
+   as Find a title's does, and a result opens its title. A failure offers Try
+   again and Search for it.
+3. **The title:** `ShareTitleModel` reads the title page once with a
+   `ScreenModel`, without polling, and keeps a `TitlePageModel` for Recommend
+   and Want to watch, so the title page's rules hold: Want to watch replaces
+   another status, withdrawing or switching a top 10 title's Recommend asks
+   first, and every write reads the page again. Want to watch reports the
+   `title` save surface. Friends who recommend the title or want to watch it
+   show beneath.
+4. **The session:** the extension reads the app's session token from the
+   shared Keychain group and never signs in. Signed out, it asks the member
+   to sign in in the app; a 426 shows Update Screenr; a member without a
+   profile gets the server's 403, and is sent to the app to finish joining.
+
+| Piece | Where | What it does |
+| --- | --- | --- |
+| `ShareViewController` | `ScreenrShare/` | The principal class. It builds `AppServices(…, host: .shareExtension)`, whose client marks no [visits](#visits), with `Telemetry.localOnly()`, logs to `share.ndjson` in the app group's log directory, hosts `ShareView`, and closes the sheet. |
+| `ShareView`, `ShareSearchView`, `ShareTitleView` | `ScreenrShare/` | The views, in a navigation stack with the system Close button. Large text stacks posters above names. |
+| `SharedContent`, `ShareModel`, `ShareTitleModel` | ScreenrKit `Share/` | The behavior above. |
+| `FixtureHandoff` | ScreenrKit `FakeAPI/` | Screenr Dev keeps its fixture launch arguments in the app group, so the extension, which the system starts without arguments, answers from the same fixtures. A launch without fixtures forgets them; Release builds neither keep nor read them. |
+
+- **Activation:** its `Info.plist` accepts at most one web link
+  (`NSExtensionActivationSupportsWebURLWithMaxCount`) or text
+  (`NSExtensionActivationSupportsText`).
+- **Extension rules:** `Config/ScreenrShare.xcconfig` sets
+  `APPLICATION_EXTENSION_API_ONLY`, and ScreenrKit uses nothing that
+  extensions cannot. The extension shares the app's version and build, and
+  the app's `Assets.xcassets` through a target membership exception, for the
+  `AccentColor` tint; the icon sets compile only into the app.
+- **Sentry:** the extension never starts Sentry. `Telemetry.localOnly()` logs
+  its API calls, and the [feedback form](#feedback) attaches its log.
+- **Signing:** the bundle ID is the app's with `.Share`, and
+  `Config/ScreenrShare.entitlements` holds only the app group. See
+  [Apple Developer](../docs/running-screenr.md#apple-developer).
+- **Tests:** `SharedContentTests`, `ShareModelTests`, and `ShareServicesTests`
+  cover ScreenrKit's part, and `tests/app/shared-links.test.ts` the server's.
+  No UI test drives the extension: the system starts it only from another
+  app's share sheet, and Safari's needs a live page. Check it in your
+  Simulator instead: launch Screenr Dev with fixture arguments, such as
+  `-ScreenrFixtures "$PWD/ios/ScreenrKit/Fixtures" -ScreenrFixtureLog
+  /tmp/requests.log`, open a TMDB or IMDb title in Safari, and choose Page
+  Menu, Share, then Screenr Dev. The fixture API answers `resolve-title`
+  with the fixture for the same query, or another title's, and the request
+  log shows what the extension sent and wrote. Real links resolve only
+  against a server, such as `npm run dev` with a TMDB token. Use a
+  Simulator you will not pass to `bin/check-ios --simulator`: the
+  extension's log stays in the app group, and `SettingsTests` expects
+  feedback to attach only the app's.
+
 ## Fixtures
 
 Server tests write JSON fixtures into `ScreenrKit/Fixtures/`. The directory
@@ -862,9 +931,10 @@ holds one JSON object per line: `time`, `level`, `category`, `message`,
 order, so logging never waits on the disk. When the file would pass 256 KB it
 becomes `app.1.ndjson`, so the log keeps at most two files.
 `LogFile.recentTail(maximumBytes:)` returns the newest complete lines.
-Another process, such as the notification extension, writes a file of its
-own name in the same directory, and `recentTails(maximumBytes:)` returns
-each file's newest lines for the [feedback form](#feedback).
+Another process writes a file of its own name in the same directory, such
+as the [share extension](#share-extension)'s `share.ndjson`, and
+`recentTails(maximumBytes:)` returns each file's newest lines for the
+[feedback form](#feedback).
 
 To read the Dev app's log in your Simulator:
 

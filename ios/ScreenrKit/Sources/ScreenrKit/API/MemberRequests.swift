@@ -25,6 +25,17 @@ extension APIRequest where Response == [ViewingTitle] {
   }
 }
 
+extension APIRequest where Response == TitleResolution {
+  // The share extension's link and text, either of which may be empty. Logs
+  // name only the route, never what was shared.
+  public static func resolveTitle(url: String, text: String) -> Self {
+    var query: [String: String] = [:]
+    if !url.isEmpty { query["url"] = url }
+    if !text.isEmpty { query["text"] = text }
+    return APIRequest(method: .get, endpoint: .action("resolve-title"), query: query)
+  }
+}
+
 extension APIRequest where Response == SeasonList {
   // The TV discussion composer's Season picker.
   public static func seasons(title: String) -> Self {

@@ -1,0 +1,28 @@
+{
+  "description": "A TMDB link shared to the share extension names its title.",
+  "viewer": "alice",
+  "request": {
+    "method": "GET",
+    "action": "resolve-title",
+    "path": "/api/screenr/resolve-title?url=https%3A%2F%2Fwww.themoviedb.org%2Ftv%2F201-harbor-lights",
+    "query": {
+      "url": "https://www.themoviedb.org/tv/201-harbor-lights"
+    }
+  },
+  "response": {
+    "status": 200,
+    "etag": "W/\"qfYzMEJP_lsLVS2lNgES-9FIvc5JH6ZWe-vILHLCc84\"",
+    "body": {
+      "title": {
+        "id": "tv:201",
+        "kind": "tv",
+        "tmdb_id": 201,
+        "name": "Harbor Lights",
+        "overview": "A lighthouse town keeps its secrets through the fog.",
+        "poster_path": "/harbor-lights.jpg",
+        "release_date": "2021-09-30"
+      },
+      "query": ""
+    }
+  }
+}

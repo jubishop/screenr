@@ -304,16 +304,21 @@ Every record belongs to Apple developer team `34TKMKM889`.
 | --- | --- | --- |
 | App ID `com.artisanalsoftware.Screenr` | The Release app, and the primary App ID for Sign in with Apple | Apple Developer account |
 | App ID `com.artisanalsoftware.Screenr.dev` | The Dev variant; its Sign in with Apple is grouped with the primary | Apple Developer account |
+| App ID `com.artisanalsoftware.Screenr.Share` | The Release app's [share extension](../ios/README.md#share-extension), with only the App Groups capability | Apple Developer account |
 | App group `group.com.artisanalsoftware.Screenr` | Storage and Keychain items shared by the app and its extensions | Apple Developer account |
 | APNs key "Screenr APNs", key ID `YP5RTHDXQR` | Signs the worker's push requests ([#240](https://github.com/jubishop/screenr/issues/240)) | [Key files](#apple-key-files) and `APNS_PRIVATE_KEY` |
 | Sign in with Apple key "Screenr Sign in with Apple", key ID `738SADC362` | Signs the client secret for Apple's token and revoke endpoints ([#215](https://github.com/jubishop/screenr/issues/215)) | [Key files](#apple-key-files) and `APPLE_PRIVATE_KEY` |
 | Private email relay source `screenr@jubishop.com` | Lets Hide My Email addresses receive sign-in codes and activity email | Apple Developer account |
 
-Both App IDs have the App Groups, Associated Domains, Push Notifications,
+Both app App IDs have the App Groups, Associated Domains, Push Notifications,
 Sign in with Apple, and Communication Notifications capabilities. Keychain
 sharing is not an App ID capability; the app group doubles as the Keychain
-access group. Automatic signing registers the App IDs of the notification
-service and share extensions when they are added. The APNs key is team
+access group. Automatic signing registers an extension's App ID when the
+extension is added. On 2026-10-14 the App Store Connect API key's archive
+failed with "Authentication failed" while registering the share extension's,
+and an archive signed through the Mac's Xcode account registered it, with
+the app group; the key's archive has signed it since. Expect the same for the
+notification service extension. The APNs key is team
 scoped and works with both the sandbox and production APNs.
 
 Apple's relay delivers mail only from registered sources. The registered
@@ -392,8 +397,8 @@ the server accepts ID tokens issued to either the iOS or the
 SDK or client secret in the app. The app redeems Google's authorization code
 itself with PKCE, so the server registers no redirect URI for it. The setting
 is optional: without it, tokens issued to the iOS client fail and web sign-in
-is unchanged. The app's `ios/Config/Screenr.xcconfig` holds the same client
-ID for both variants and registers its reversed form,
+is unchanged. The app's `ios/Config/Base.xcconfig` holds the same client ID
+for both variants, and `ios/Screenr/Info.plist` registers its reversed form,
 `com.googleusercontent.apps.<client>`, as the redirect scheme.
 
 **Publishing status:** with the owner's approval, the project's Google Auth

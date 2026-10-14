@@ -109,6 +109,18 @@ struct RequestTests {
       "actions/revoke-invite/default",
       .revokeInvite(id: "a93ecb20-a553-4bee-8e54-0c690ca36d03")
     ),
+    Shape(
+      "actions/resolve-title/imdb",
+      .resolveTitle(url: "https://www.imdb.com/title/tt0000101/?ref_=ext_shr_lnk", text: "")
+    ),
+    Shape(
+      "actions/resolve-title/search",
+      .resolveTitle(url: "https://www.netflix.com/title/80000001", text: "Netflix")
+    ),
+    Shape(
+      "actions/resolve-title/tmdb",
+      .resolveTitle(url: "https://www.themoviedb.org/tv/201-harbor-lights", text: "")
+    ),
     Shape("actions/search/results", .search("night")),
     Shape("actions/seasons/default", .seasons(title: "tv:201")),
     Shape("actions/setup/complete", .setup(name: "Pat Morgan", username: "pat")),
