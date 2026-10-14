@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { AppError, isBigintId, isUuid, text, transaction } from "./db";
 import { belongsTo, entryColumn, feedEntries, itemQuery } from "./feed";
+import { queueBadgePush } from "./push";
 
 export async function addComment(
   viewer: string,
@@ -63,6 +64,18 @@ export async function removeComment(viewer: string, id: string) {
   const reply = isBigintId(id);
   if (!reply && !isUuid(id)) throw new AppError("Comment not found.", 404);
   await transaction(async (client) => {
+    // Removing a reply hides its notifications, lowering the count of each
+    // member who has one unread. A removed entry keeps its replies and their
+    // notifications.
+    const unread = reply
+      ? (
+          await client.query<{ recipient_id: string }>(
+            `SELECT recipient_id FROM visible_notification
+            WHERE comment_id=$1::bigint AND read_at IS NULL`,
+            [id],
+          )
+        ).rows
+      : [];
     const result = reply
       ? await client.query(
           `UPDATE comment cm SET removed_at=coalesce(removed_at,now()),body='[removed]'
@@ -83,6 +96,8 @@ export async function removeComment(viewer: string, id: string) {
           [id, viewer],
         );
     if (!result.rowCount) throw new AppError("Comment not found.", 404);
+    for (const { recipient_id } of unread)
+      await queueBadgePush(recipient_id, client);
   });
 }
 

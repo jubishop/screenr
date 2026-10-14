@@ -636,12 +636,15 @@ exits cleanly on SIGTERM.
 environment, that speak HTTP/2 without TLS on loopback. It checks each kind's
 payload and headers, verifies the provider token's signature with the test
 key's public key and its 50-minute reuse, and covers per-kind settings,
-visibility, read state, expired sessions, and moved tokens at send time. It
-also checks that rejected tokens delete their device, that other rejections
-and retryable failures are logged without tokens, badge-only updates, and
-reconnection after GOAWAY or a lost connection. Each read action, from the
-web and from the app, queues a badge-only update that carries the new count,
-and reads that leave the count unchanged or fail queue none.
+including badge-only updates for kinds turned off, and visibility, read
+state, expired sessions, and moved tokens at send time. It also checks that
+rejected tokens delete their device, that other rejections and retryable
+failures are logged without tokens, badge-only updates, and reconnection
+after GOAWAY or a lost connection. Each read action, friendship change, and
+reply removal, from the web and from the app, sends a badge-only update with
+the new count to each member whose count it changed, including people sent
+a reply on the changed friends' entries. Changes that leave every count
+unchanged, and failed ones, queue none.
 Operational tests check activation rollback after a stalled health request, a
 failed signed-out session request, or a web or worker service that crashes on
 startup. They also check a production-down report when the restored release

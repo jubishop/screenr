@@ -1,4 +1,5 @@
 import { AppError, db, transaction } from "./db";
+import { trackRelationshipBadges } from "./push";
 import type { Person } from "../shared";
 
 export async function people(viewer: string) {
@@ -68,6 +69,12 @@ export async function changeRelationship(
     )
       throw new AppError("Person not found.", 404);
     const pair = [viewer, target];
+    // A request's own push carries the count; the other changes can hide or
+    // restore notifications (docs/notifications.md#badge-only-updates).
+    const queueBadges =
+      action === "request"
+        ? undefined
+        : await trackRelationshipBadges(client, viewer, target);
     if (action === "block") {
       await client.query(
         "INSERT INTO block(blocker_id,blocked_id) VALUES($1,$2) ON CONFLICT DO NOTHING",
@@ -111,5 +118,6 @@ export async function changeRelationship(
           throw new AppError("Friend request not found.", 404);
       }
     }
+    await queueBadges?.();
   });
 }

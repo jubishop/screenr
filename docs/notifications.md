@@ -166,12 +166,14 @@ the jobs and their delivery.
   receives a notification, in the same transaction. Deleting the device or
   the notification deletes its jobs.
 - **When it sends:** a separate loop in `screenr-worker` claims due jobs about
-  once a second and sends up to 50 at a time. It sends an alert only while the
-  notification is visible to the device's current member under the bell's
-  rules and still unread, while the device's session is live, and while that
-  member allows the notification's kind. Otherwise it deletes the job without
-  sending. A phone that another member has since signed in to therefore never
-  receives the first member's notification.
+  once a second and sends up to 50 at a time. It sends a notification's push
+  only while the notification is visible to the device's current member under
+  the bell's rules and still unread, and while the device's session is live.
+  Otherwise it deletes the job without sending. A phone that another member
+  has since signed in to therefore never receives the first member's
+  notification. The push is an alert when that member allows the
+  notification's kind; for a kind they turned off, it is a
+  [badge-only update](#badge-only-updates) with the new count.
 - **Environments:** each device goes to its own APNs host:
   `api.sandbox.push.apple.com` for `sandbox` devices and `api.push.apple.com`
   for `production` devices. The worker keeps one HTTP/2 connection per host
@@ -238,26 +240,49 @@ build the visible alert
   retried alert replaces the first rather than showing twice, and it becomes
   the delivered notification's request identifier on the phone.
 
-`queueBadgePush(userId, client?)` queues a badge-only update to each of the
-member's devices
+#### Badge-only updates
+
+Every change to a member's unread count reaches their devices
 ([unread badge](ios-app.md#unread-badge-kept-in-sync--2026-10-13),
-[issue #241](https://github.com/jubishop/screenr/issues/241)). Call it with
-the transaction client that changes read state, so the job commits with the
-change and the worker counts after it. The read actions call it on every
-client, the web and the app alike:
+[issue #241](https://github.com/jubishop/screenr/issues/241),
+[issue #277](https://github.com/jubishop/screenr/issues/277)). A new
+notification's own push carries the new count, as an alert or, for a kind
+the member turned off, as a badge-only update. Any other change queues a
+badge-only update with `queueBadgePush(userId, client?)`, which queues one
+for each of the member's devices. Call it with the transaction client that
+makes the change, so the job commits with the change and the worker counts
+after it. These actions queue one on every client, the web and the app
+alike:
 
 - `read-notification` queues an update only when the notification was
   unread, so selecting one read earlier sends nothing.
 - `read-notifications` queues one only when it marks at least one
   notification read.
-- `respond-friend-request` always queues one. The answered request leaves
-  the bell even if it was read, and accepting can restore the requester's
-  comments from an earlier friendship, which keep their read state.
-- A failed action rolls back and queues nothing.
+- `respond-friend-request`, and the `relationship` action's `accept`,
+  `remove`, `block`, and `unblock` from the People page or a profile, change
+  what two people see from each other: the request, acceptances, and
+  comments, which keep their read state when access returns. The friendship
+  also decides whether others still see the replies either one sent them on
+  the other's entries. Each of these actions queues an update for every
+  member whose count it changed, the two people or those reply recipients,
+  and none for a count that stayed the same, as when accepting an unread
+  request restores one earlier comment.
+- `remove-comment` on a reply queues an update for each member who had its
+  notification unread: the entry's owner and the person it answered.
+  Removing a discussion post or a standalone top-level comment keeps its
+  replies and their notifications, so it sends nothing, and neither does
+  removing a reply again.
+- A friend `request` sends only its alert, and a failed action rolls back
+  and queues nothing.
 
-Other changes to the count, such as accepting a request from the People page
-or a profile, unfriending, blocking, or a removed comment, queue no update;
-the next push carries the current count.
+`trackRelationshipBadges(client, a, b)` finds those members for a
+friendship or block change, and `trackBadges(client, members)` serves any
+other change that hides or restores notifications. Call either inside the
+transaction before the change: it counts the unread notifications of the
+members who have a device, and the function it returns, called after the
+change, counts again and queues an update for each count that changed. It
+leaves out notifications the change creates, such as an acceptance, because
+their own pushes carry the count.
 
 The update's payload is only `{"aps": {"badge": 2}}`, sent with
 `apns-push-type: alert`, which Apple specifies for badge updates, and
