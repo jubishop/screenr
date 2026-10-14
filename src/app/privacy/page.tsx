@@ -145,10 +145,11 @@ export default function Privacy() {
             server. App reports identify you only by an opaque Screenr user ID,
             with no name, email address, or IP address, and contain no
             screenshots, searches, or anything you write. Server reports contain
-            only the type of error and where in Screenr&rsquo;s code it
-            happened. If you send feedback from the iPhone app, Sentry also
-            receives your message, any screenshots you attach, and recent app
-            logs, which contain no user content.
+            only technical details, such as the type of error, where in
+            Screenr&rsquo;s code it happened, and sometimes an opaque user ID.
+            They never include anything you write. If you send feedback from the
+            iPhone app, Sentry also receives your message, any screenshots you
+            attach, and recent app logs, which contain no user content.
           </li>
           <li>
             <strong>YouTube</strong> plays trailers. Nothing loads from YouTube
