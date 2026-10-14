@@ -1,0 +1,191 @@
+#!/usr/bin/env python3
+"""File one GitHub issue for each new unresolved Sentry feedback item.
+
+The repository is public, so an issue holds only the Sentry link, the date,
+and the app build. What members write, who they are, and what they attach
+stay in Sentry. See docs/ios-app.md, "Public repository with feedback issues
+that link to Sentry".
+"""
+
+import argparse
+from datetime import datetime
+import json
+import os
+import re
+import subprocess
+import sys
+import urllib.error
+import urllib.parse
+import urllib.request
+from zoneinfo import ZoneInfo
+
+ORGANIZATION = "artisanal-software"
+PROJECT = "screenr-ios"
+PROJECT_ID = "4512251383513088"  # The project in the app's public DSN.
+SENTRY_API = "https://us.sentry.io/api/0"
+FEEDBACK_QUERY = "issue.category:feedback is:unresolved"
+LOOKBACK = "90d"  # Sentry's event retention.
+LABELS = ("investigation", "area: ios")
+PACIFIC = ZoneInfo("America/Los_Angeles")
+
+# Sentry values are copied into an issue only when they match these patterns,
+# which no sentence of member text can.
+NUMERIC_ID = re.compile(r"[0-9]+")
+SHORT_ID = re.compile(r"[A-Z0-9-]+")
+RELEASE = re.compile(r"[A-Za-z0-9._@+-]{1,200}")
+DIST = re.compile(r"[A-Za-z0-9._-]{1,64}")
+
+# An issue tracks feedback through its hidden marker or its Sentry link.
+FILED = re.compile(rf"<!-- sentry-feedback:{PROJECT}:([0-9]+) -->|feedbackSlug={PROJECT}%3A([0-9]+)&")
+NEXT_PAGE = re.compile(r'<([^>]+)>;\s*rel="next";\s*results="true"')
+ISSUES_QUERY = """query($owner: String!, $name: String!, $endCursor: String) {
+  repository(owner: $owner, name: $name) {
+    issues(first: 100, after: $endCursor) {
+      nodes { number body }
+      pageInfo { hasNextPage endCursor }
+    }
+  }
+}"""
+
+
+def unexpected(what):
+    return RuntimeError(f"Sentry returned an unexpected {what}.")
+
+
+def sentry_get(api, token, url):
+    """Return a Sentry response's JSON and the URL of its next page, if any."""
+    request = urllib.request.Request(url, headers={"Authorization": f"Bearer {token}"})
+    try:
+        with urllib.request.urlopen(request, timeout=30) as response:
+            payload = json.load(response)
+            link = response.headers.get("Link") or ""
+    except urllib.error.HTTPError as error:
+        # The response body is not reported; it could echo feedback.
+        raise RuntimeError(f"Sentry returned HTTP {error.code} for "
+                           f"{urllib.parse.urlsplit(url).path}.") from None
+    except ValueError:
+        raise unexpected("response") from None
+    following = NEXT_PAGE.search(link)
+    if following is None:
+        return payload, None
+    if urllib.parse.urlsplit(following[1]).netloc != urllib.parse.urlsplit(api).netloc:
+        raise unexpected("next page")
+    return payload, following[1]
+
+
+def feedback_item(raw):
+    """Keep only a feedback issue's ID, short ID, and Pacific date."""
+    try:
+        issue_id, short_id = raw["id"], raw["shortId"]
+        seen = datetime.fromisoformat(raw["firstSeen"])
+    except (TypeError, KeyError, ValueError):
+        raise unexpected("feedback item") from None
+    if (not isinstance(issue_id, str) or not NUMERIC_ID.fullmatch(issue_id)
+            or not isinstance(short_id, str) or not SHORT_ID.fullmatch(short_id)
+            or seen.tzinfo is None):
+        raise unexpected("feedback item")
+    return {"id": issue_id, "short_id": short_id,
+            "date": seen.astimezone(PACIFIC).date().isoformat()}
+
+
+def unresolved_feedback(api, token):
+    query = urllib.parse.urlencode({"project": PROJECT_ID, "query": FEEDBACK_QUERY,
+                                    "statsPeriod": LOOKBACK, "limit": 100})
+    url, items = f"{api}/organizations/{ORGANIZATION}/issues/?{query}", []
+    while url:
+        page, url = sentry_get(api, token, url)
+        if not isinstance(page, list):
+            raise unexpected("feedback list")
+        items.extend(feedback_item(raw) for raw in page)
+    return sorted(items, key=lambda item: int(item["id"]))
+
+
+def build(api, token, issue_id):
+    """Describe the app build from the feedback event's release and dist tags."""
+    url = f"{api}/organizations/{ORGANIZATION}/issues/{issue_id}/events/latest/"
+    event, _ = sentry_get(api, token, url)
+    tags = event.get("tags") if isinstance(event, dict) else None
+    values = {tag.get("key"): tag.get("value") for tag in tags
+              if isinstance(tag, dict)} if isinstance(tags, list) else {}
+    release, dist = values.get("release"), values.get("dist")
+    if not isinstance(release, str) or not RELEASE.fullmatch(release):
+        return "unknown"
+    if isinstance(dist, str) and DIST.fullmatch(dist):
+        return f"`{release}` (dist `{dist}`)"
+    return f"`{release}`"
+
+
+def issue_body(item, app_build):
+    link = (f"https://{ORGANIZATION}.sentry.io/feedback/"
+            f"?feedbackSlug={PROJECT}%3A{item['id']}&project={PROJECT_ID}")
+    return (f"<!-- sentry-feedback:{PROJECT}:{item['id']} -->\n"
+            f"- **Feedback:** [{item['short_id']}]({link})\n"
+            f"- **Date:** {item['date']} (Pacific)\n"
+            f"- **Build:** {app_build}\n"
+            "\n"
+            "This repository is public. Read the feedback in Sentry, and describe it here "
+            "only in paraphrase without names.\n")
+
+
+def gh(*args, body=None):
+    return subprocess.run(["gh", *args], input=body, stdin=None if body is not None else subprocess.DEVNULL,
+                          check=True, stdout=subprocess.PIPE, text=True, timeout=120).stdout
+
+
+def filed_feedback(repository):
+    """Map each Sentry feedback ID already in an open or closed issue to that issue."""
+    owner, _, name = repository.partition("/")
+    pages = json.loads(gh("api", "graphql", "--paginate", "--slurp", "-f", f"owner={owner}",
+                          "-f", f"name={name}", "-f", f"query={ISSUES_QUERY}"))
+    filed = {}
+    for page in pages:
+        for issue in page["data"]["repository"]["issues"]["nodes"]:
+            for match in FILED.finditer(issue.get("body") or ""):
+                filed.setdefault(match[1] or match[2], issue["number"])
+    return filed
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--dry-run", action="store_true",
+                        help="list the issues that would be filed without filing them")
+    args = parser.parse_args()
+    token = os.environ.get("SENTRY_AUTH_TOKEN")
+    if not token:
+        raise RuntimeError("SENTRY_AUTH_TOKEN is required.")
+    api = os.environ.get("SENTRY_API_URL", SENTRY_API).rstrip("/")
+    repository = os.environ.get("GH_REPO") or "jubishop/screenr"
+
+    feedback = unresolved_feedback(api, token)
+    filed = filed_feedback(repository) if feedback else {}
+    created = 0
+    for item in feedback:
+        if item["id"] in filed:
+            print(f"Already filed: {item['short_id']} in #{filed[item['id']]}")
+            continue
+        title = f"Triage Sentry feedback {item['short_id']}"
+        body = issue_body(item, build(api, token, item["id"]))
+        if args.dry_run:
+            print(f"Would file: {title}")
+            continue
+        labels = [argument for label in LABELS for argument in ("--label", label)]
+        url = gh("issue", "create", "--repo", repository, "--title", title,
+                 "--body-file", "-", *labels, body=body).strip()
+        created += 1
+        print(f"Filed {url} for {item['short_id']}")
+
+    summary = (f"Found {len(feedback)} unresolved feedback item(s); "
+               f"filed {created} new issue(s).")
+    print(summary)
+    if os.environ.get("GITHUB_STEP_SUMMARY"):
+        with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as output:
+            output.write(f"## Sentry feedback\n\n{summary}\n")
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except (OSError, KeyError, TypeError, ValueError, RuntimeError,
+            subprocess.SubprocessError) as error:
+        print(error, file=sys.stderr)
+        sys.exit(1)
