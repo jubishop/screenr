@@ -172,6 +172,29 @@ final class NotificationsTests: XCTestCase {
     XCTAssertFalse(app.buttons["Accept"].exists)
   }
 
+  // An unsent comment on the screen beneath survives opening and closing the
+  // sheet.
+  @MainActor
+  func testKeepsAnUnsentCommentBeneathTheSheet() throws {
+    let log = RequestLog.temporary()
+    let app = XCUIApplication()
+    app.launch(with: FixtureLaunch(requestLog: log.file))
+    let entry = app.entry(FeedFixture.benRecommend)
+    XCTAssertTrue(entry.waitForExistence(timeout: 10))
+    entry.buttons["Comment"].tap()
+    let field = app.composerField("Add your reply")
+    XCTAssertTrue(field.waitForExistence(timeout: 5))
+    field.typeText("Saw it twice.")
+
+    app.buttons["bell"].tap()
+    XCTAssertTrue(app.navigationBars["Notifications"].waitForExistence(timeout: 10))
+    app.buttons["Close"].tap()
+
+    XCTAssertTrue(app.navigationBars["Your circle"].waitForExistence(timeout: 10))
+    XCTAssertEqual(app.composerField("Add your reply").value as? String, "Saw it twice.")
+    XCTAssertEqual(try log.lines().filter { $0.hasPrefix("POST") }, [])
+  }
+
   private static func isNotificationsRead(_ line: String) -> Bool {
     line.hasPrefix("GET /api/screenr/notifications")
   }

@@ -352,12 +352,12 @@ While its screen is visible and the app's scene is active, it reads when the
 screen appears and every three seconds after, sending the cached ETag. It
 stops in the background or when the screen disappears, and reads again when
 either returns, on pull-to-refresh, and when `ShellModel.pushArrived()` or
-`refreshLiveReads()` runs. A refresh replaces a read already in flight, which
-may have started before a write. Each read gives up after ten seconds. A
-failed read replaces the content with the error; passing failures keep
-polling, and a permanent error stops it until a read succeeds. An unchanged
-screen keeps its `phase`, so nothing renders again. `ScreenModelTests` cover
-the timing with a `TestClock`.
+`refreshLiveReads()` runs. Each of these, except a return, replaces a read
+already in flight, which may have started before a write or the push. Each
+read gives up after ten seconds. A failed read replaces the content with the
+error; passing failures keep polling, and a permanent error stops it until a
+read succeeds. An unchanged screen keeps its `phase`, so nothing renders
+again. `ScreenModelTests` cover the timing with a `TestClock`.
 
 ### Visits
 

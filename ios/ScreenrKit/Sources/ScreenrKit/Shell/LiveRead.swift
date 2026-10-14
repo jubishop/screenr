@@ -89,12 +89,14 @@ public final class LiveRead<Value: Decodable & Hashable & Sendable> {
   public func refresh() async {
     await read(replacing: true)
     guard isLive, pollTask == nil, !isPermanentlyFailed else { return }
-    startPolling(readFirst: false)
+    startPolling(.later)
   }
 
-  // Reads now if the view is live, such as when a push notification arrives.
+  // Reads now if the view is live, such as when a push notification arrives
+  // or a write elsewhere changes the screen. A read already in flight may
+  // have started too early, so it is replaced.
   public func refreshIfLive() {
-    restart()
+    restart(.replacing)
   }
 
   private var isPermanentlyFailed: Bool {
@@ -102,10 +104,10 @@ public final class LiveRead<Value: Decodable & Hashable & Sendable> {
     return error.isPermanent
   }
 
-  private func restart() {
+  private func restart(_ first: FirstRead = .joining) {
     guard isLive else { return }
     pollTask?.cancel()
-    startPolling(readFirst: true)
+    startPolling(first)
   }
 
   private func stop() {
@@ -115,23 +117,31 @@ public final class LiveRead<Value: Decodable & Hashable & Sendable> {
     readTask?.cancel()
   }
 
-  private func startPolling(readFirst: Bool) {
+  // How polling begins: at once, with the read in flight or a new one, or
+  // after an interval.
+  private enum FirstRead {
+    case joining
+    case replacing
+    case later
+  }
+
+  private func startPolling(_ first: FirstRead) {
     pollGeneration += 1
     let generation = pollGeneration
     pollTask = Task {
-      await poll(readFirst: readFirst)
+      await poll(first)
       if pollGeneration == generation { pollTask = nil }
     }
   }
 
-  private func poll(readFirst: Bool) async {
-    var readNow = readFirst
+  private func poll(_ first: FirstRead) async {
+    var next = first
     while !Task.isCancelled {
-      if readNow {
-        await read()
+      if next != .later {
+        await read(replacing: next == .replacing)
         if isPermanentlyFailed || Task.isCancelled { return }
       }
-      readNow = true
+      next = .joining
       do {
         try await clock.sleep(for: LiveReadTiming.interval)
       } catch {
