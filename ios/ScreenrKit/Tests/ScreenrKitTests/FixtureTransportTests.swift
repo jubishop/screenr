@@ -129,6 +129,57 @@ struct FixtureTransportTests {
     #expect(services.session.phase == .signedOut)
   }
 
+  @Test func reportsInvitationsAvailableUnlessOverridden() async throws {
+    let services = try services("-ScreenrFixtureSession", "signedOut")
+    let unavailable = try self.services(
+      "-ScreenrFixtureSession",
+      "signedOut",
+      "-ScreenrFixtureOverride",
+      "auth/invitation/unavailable"
+    )
+
+    #expect(try await services.api.send(.invitation(token: "any-link")).available)
+    #expect(try await !unavailable.api.send(.invitation(token: "any-link")).available)
+  }
+
+  // A new member's account, like the server's, answers only setup, its
+  // details, and photo changes until setup succeeds.
+  @Test func asksANewMemberToSetUpUntilSetupSucceeds() async throws {
+    let services = try services("-ScreenrFixtureViewer", "pat", "-ScreenrFixtureProfile", "pending")
+
+    let beforeSetup = await #expect(throws: APIError.self) {
+      try await services.api.send(.screen(path: "/"))
+    }
+    let details = try await services.api.send(.setupDetails)
+    let taken = await #expect(throws: APIError.self) {
+      try await services.api.send(.setup(name: "Pat Morgan", username: "alice"))
+    }
+    let stillPending = await #expect(throws: APIError.self) {
+      try await services.api.send(.screen(path: "/"))
+    }
+    _ = try await services.api.send(.setup(name: "Pat Morgan", username: "pat", invitation: "link"))
+    let feed = try await services.api.send(.screen(path: "/"))
+    let profile = try await services.api.send(.screen(path: "/people/pat"))
+
+    #expect(beforeSetup?.kind == .forbidden)
+    #expect(beforeSetup?.message == "Complete your profile first.")
+    #expect(
+      details == SetupDetails(userId: "user-pat", name: "Pat Morgan", photo: nil, google: false)
+    )
+    #expect(taken?.message == "That username is already taken.")
+    #expect(stillPending?.kind == .forbidden)
+    // Pat joined through Alice's link, so she is his friend and her entries
+    // fill his feed.
+    #expect(feed.user.username == "pat")
+    #expect(feed.feed?.conversations.isEmpty == false)
+    #expect(feed.feed?.conversations.allSatisfy { $0.username == "alice" } == true)
+    guard case .profile(let page) = profile.content else {
+      Issue.record("Expected Pat's profile, not \(profile.content)")
+      return
+    }
+    #expect(page.profile.friends.map(\.username) == ["alice"])
+  }
+
   @Test func answersSignInWithAnAuthOverride() async throws {
     let services = try services(
       "-ScreenrFixtureSession",
@@ -275,7 +326,7 @@ struct APISourceTests {
         "-ScreenrFixtureSession", "signedOut", "-ScreenrFixtureOverride", "screen/feed/empty",
         "-ScreenrFixtureOverride", "screen/people/empty", "-ScreenrFixtureFailure",
         "errors/signed-out", "-ScreenrFixtureLog", "/tmp/requests.log", "-AppleLanguages", "(en)",
-        "-ScreenrOpenURL", "screenr-dev://people",
+        "-ScreenrOpenURL", "screenr-dev://people", "-ScreenrFixtureProfile", "pending",
       ],
       variant: .dev
     )
@@ -287,6 +338,7 @@ struct APISourceTests {
           scenario: FixtureScenario(
             viewer: "nora",
             session: .signedOut,
+            profile: .pending,
             overrides: ["screen/feed/empty", "screen/people/empty"],
             failure: "errors/signed-out",
             requestLog: URL(filePath: "/tmp/requests.log")

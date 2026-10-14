@@ -5,12 +5,15 @@ import SwiftUI
 // first-time setup, or the tabs. Sign-in and setup are their own screens, so
 // they change without touching the tabs. Links open here in every state; the
 // router keeps them until the tabs show, and an invitation's token waits in
-// `PendingInvitation` for sign-in and setup. The scene phase reaches the live
-// screens, and the visit tracker, which marks the first screen read after
-// each return to the foreground as a visit.
+// `PendingInvitation` for sign-in and setup. Each invitation link, and one an
+// earlier launch kept, is checked with the server as it arrives. The scene
+// phase reaches the live screens, and the visit tracker, which marks the
+// first screen read after each return to the foreground as a visit.
 struct AppRootView: View {
   @Environment(SessionStore.self) private var session
   @Environment(ShellModel.self) private var shell
+  @Environment(PendingInvitation.self) private var invitation
+  @Environment(\.screenrAPI) private var api
   @Environment(\.visitTracker) private var visits
   @Environment(\.scenePhase) private var scenePhase
 
@@ -26,6 +29,7 @@ struct AppRootView: View {
       }
     }
     .onOpenURL { url in shell.router.open(url) }
+    .task(id: invitation.token) { await invitation.check(using: api) }
     .onChange(of: scenePhase, initial: true) { _, phase in
       // The tracker learns of a return before the screens read again.
       visits?.sceneChanged(to: phase)

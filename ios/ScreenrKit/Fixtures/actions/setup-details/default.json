@@ -1,0 +1,19 @@
+{
+  "description": "Setup's starting values for Pat: the name his sign-in gave him, no photo, and no Google sign-in.",
+  "viewer": "pat",
+  "request": {
+    "method": "GET",
+    "action": "setup-details",
+    "path": "/api/screenr/setup-details",
+    "query": {}
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "userId": "user-pat",
+      "name": "Pat Morgan",
+      "photo": null,
+      "google": false
+    }
+  }
+}

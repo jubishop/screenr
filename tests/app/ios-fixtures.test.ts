@@ -31,6 +31,8 @@ const { parseMemberRoute } = await import("../../src/member-routes");
 const { migrate } = await import("../../scripts/migrate");
 const { updateTopTen } = await import("../../src/server/title-actions");
 const { createAuth } = await import("../../src/server/auth");
+const { completeSignup } = await import("../../src/server/invitations");
+const { uploadPhoto } = await import("../../src/server/photos");
 
 type Query = Record<string, string | string[]>;
 type Body = Record<string, unknown>;
@@ -47,6 +49,9 @@ type Case = {
   viewer: Viewer | null;
   status: number;
   request: (world: World) => ApiRequest | Promise<ApiRequest>;
+  // A read whose request changes the world, so it starts from the saved
+  // world like a write.
+  changesWorld?: true;
 };
 type Maybe<T> = T | ((world: World) => T | Promise<T>);
 const resolve = <T>(value: Maybe<T>, world: World) =>
@@ -108,6 +113,22 @@ const withHeaders = (
   }),
 });
 
+// A read after Pat joins through Alice's one-signup link, which makes them
+// friends, as the iPhone app's invitation journey ends.
+const afterPatJoins = (item: Case): Case => ({
+  ...item,
+  changesWorld: true,
+  request: async (world) => {
+    await completeSignup(
+      world.users.pat,
+      "Pat Morgan",
+      "pat",
+      world.invitations.spare,
+    );
+    return item.request(world);
+  },
+});
+
 const origin = process.env.BETTER_AUTH_URL!;
 async function send(
   world: World,
@@ -160,6 +181,13 @@ const screens: Record<MemberRoute["kind"], Record<string, Case>> = {
       "Alice's feed: Recommends with top 10 ranks, Want to watch, progress, an edited spoiler review, TV comments with season and episode labels, spoiler and removed replies, a blocked author's reply shown as unavailable, reactions, a post, and a deleted post that keeps its reply.",
     ),
     empty: screen("nora", "/", "A member with no friends or activity."),
+    joined: afterPatJoins(
+      screen(
+        "pat",
+        "/",
+        "Pat's feed after joining through Alice's link: Alice is his friend, so her entries appear.",
+      ),
+    ),
     "linked-reply": screen(
       "hana",
       (world) =>
@@ -288,6 +316,13 @@ const screens: Record<MemberRoute["kind"], Record<string, Case>> = {
       "/people/fay",
       "A member who has asked to be Alice's friend.",
     ),
+    joined: afterPatJoins(
+      screen(
+        "pat",
+        "/people/pat",
+        "Pat's own profile after joining through Alice's link, with Alice as his friend.",
+      ),
+    ),
     "not-found": screen(
       "alice",
       "/people/nobody",
@@ -356,6 +391,32 @@ const actions: Record<Exclude<ActionName, "screen">, Record<string, Case>> = {
       "A username someone else has.",
       400,
     ),
+  },
+  "setup-details": {
+    default: read(
+      "setup-details",
+      "pat",
+      {},
+      "Setup's starting values for Pat: the name his sign-in gave him, no photo, and no Google sign-in.",
+    ),
+    google: {
+      ...read(
+        "setup-details",
+        "pat",
+        {},
+        "Pat signed up with Google, which supplied his photo.",
+      ),
+      changesWorld: true,
+      request: async (world) => {
+        await uploadPhoto(world.users.pat, jpeg(3000, 3));
+        await db.query(
+          `INSERT INTO account(id,"accountId","providerId","userId","createdAt","updatedAt")
+          VALUES('fixture-pat-google','fixture-pat-subject','google',$1,now(),now())`,
+          [world.users.pat],
+        );
+        return { action: "setup-details", query: {} };
+      },
+    },
   },
   search: {
     results: read(
@@ -928,6 +989,55 @@ const authCases = Object.entries(authErrors).flatMap(([path, variants]) =>
   ]),
 );
 
+// Screenr's own Better Auth reads, which the app sends before sign-in:
+// whether an invitation link can still be used to join.
+type AuthRead = {
+  description: string;
+  query: (world: World) => Record<string, string>;
+};
+const unavailableToken = labelToken("invitation/unavailable");
+const authReads: Record<string, Record<string, AuthRead>> = {
+  invitation: {
+    available: {
+      description: "An invitation link that can still be used to join.",
+      query: (world) => ({ token: world.invitations.spare }),
+    },
+    unavailable: {
+      description:
+        "An invitation link that is unknown, expired, revoked, or used up.",
+      query: () => ({ token: unavailableToken }),
+    },
+  },
+};
+
+async function recordAuthRead(file: string, path: string, item: AuthRead) {
+  const query = item.query(world);
+  const url = `/api/auth/${path}?${new URLSearchParams(query)}`;
+  // The world's own sign-ins used up shared request limits.
+  await db.query('TRUNCATE "rateLimit"');
+  // Like the app, without a cookie or Origin.
+  const response = await createAuth().handler(new Request(origin + url));
+  const text = await response.text();
+  assert.equal(response.status, 200, `${file} responded ${text}`);
+  // The made-up token keeps its value in the path and the query.
+  world.placeholders.add(unavailableToken, unavailableToken);
+  const fixture: Fixture = world.placeholders.scrub({
+    description: item.description,
+    viewer: null,
+    request: { method: "GET", action: path, path: url, query },
+    response: { status: response.status, body: JSON.parse(text) },
+  });
+  await verifyFixture(file, fixture);
+}
+
+const authReadCases = Object.entries(authReads).flatMap(([path, variants]) =>
+  Object.entries(variants).map(([name, item]): [string, string, AuthRead] => [
+    `auth/${path}/${name}.json`,
+    path,
+    item,
+  ]),
+);
+
 const cases: [string, Case][] = [
   ...Object.entries(screens).flatMap(([kind, variants]) =>
     Object.entries(variants).map(([name, item]): [string, Case] => [
@@ -1028,11 +1138,12 @@ after(async () => {
   await db.end();
 });
 
-// Reads share the world. Each write starts from the saved world, so no case
-// sees another's changes.
-for (const [file, item] of cases.filter(([, item]) => item.method === "GET"))
+// Reads share the world. Each write, and each read that changes the world,
+// starts from the saved world, so no case sees another's changes.
+const changes = (item: Case) => item.method === "POST" || item.changesWorld;
+for (const [file, item] of cases.filter(([, item]) => !changes(item)))
   test(file, () => record(file, item, world));
-for (const [file, item] of cases.filter(([, item]) => item.method === "POST"))
+for (const [file, item] of cases.filter(([, item]) => changes(item)))
   test(file, async () => {
     await saved.restore();
     await record(file, item, world);
@@ -1041,6 +1152,11 @@ for (const [file, path, item] of authCases)
   test(file, async () => {
     await saved.restore();
     await recordAuth(file, path, item);
+  });
+for (const [file, path, item] of authReadCases)
+  test(file, async () => {
+    await saved.restore();
+    await recordAuthRead(file, path, item);
   });
 
 // The case tables' types require an entry for each route kind and action.
@@ -1054,5 +1170,5 @@ test("every screen route and action has a fixture case", () => {
 
 test("every iPhone fixture has a case", () =>
   verifyNoStaleFixtures(
-    new Set([...cases, ...authCases].map(([file]) => file)),
+    new Set([...cases, ...authCases, ...authReadCases].map(([file]) => file)),
   ));

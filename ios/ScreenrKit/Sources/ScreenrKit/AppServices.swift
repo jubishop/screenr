@@ -37,9 +37,10 @@ public struct AppServices: Sendable {
     session.onEnd { imageCache.removeAllCachedResponses() }
   }
 
-  // The live client and Keychain session, or in Screenr Dev, the fixture API
-  // when the launch arguments name a fixtures directory. The fixture API also
-  // stands in for Apple's and Google's authorization.
+  // The live client and Keychain session and invitation, or in Screenr Dev,
+  // the fixture API when the launch arguments name a fixtures directory. The
+  // fixture API also stands in for Apple's and Google's authorization, and
+  // keeps the invitation in memory.
   @MainActor
   public init(
     configuration: AppConfiguration,
@@ -48,12 +49,16 @@ public struct AppServices: Sendable {
   ) throws {
     let source = try APISource(arguments: arguments, variant: configuration.variant)
     let keychain: any KeychainStorage
+    let invitation: PendingInvitation
     let transport: any HTTPTransport
     let authorization: IdentityProviders.Authorization
     let imageCache: URLCache
     switch source {
     case .network:
       keychain = SystemKeychain(accessGroup: configuration.appGroup)
+      invitation = PendingInvitation(
+        storage: SystemKeychain.invitation(accessGroup: configuration.appGroup)
+      )
       transport = URLSessionTransport()
       authorization = .system
       imageCache = URLCache(
@@ -64,6 +69,7 @@ public struct AppServices: Sendable {
     case .fixtures(let directory, let scenario):
       let token = scenario.session == .signedIn ? FixtureTransport.token : nil
       keychain = InMemoryKeychain(token: token)
+      invitation = PendingInvitation()
       transport = try FixtureTransport(directory: directory, scenario: scenario)
       authorization = .fixture
       imageCache = URLCache(memoryCapacity: 16 << 20, diskCapacity: 0)
@@ -80,6 +86,7 @@ public struct AppServices: Sendable {
         visits: visits
       ),
       session: session,
+      invitation: invitation,
       identity: IdentityProviders(
         authorization: authorization,
         google: GoogleSignIn(clientID: configuration.googleClientID, transport: transport)
@@ -107,6 +114,7 @@ public struct AppServices: Sendable {
 //   -ScreenrFixtures <path to ios/ScreenrKit/Fixtures>
 //   -ScreenrFixtureViewer <username>          (default alice)
 //   -ScreenrFixtureSession signedIn|signedOut (default signedIn)
+//   -ScreenrFixtureProfile complete|pending   (default complete)
 //   -ScreenrFixtureOverride <fixture name>    (repeatable)
 //   -ScreenrFixtureFailure <fixture name>
 //   -ScreenrFixtureLog <file for a line per API request>
@@ -140,6 +148,11 @@ public enum APISource: Hashable, Sendable {
           throw ArgumentError(description: "\(argument) is signedIn or signedOut, not \(value)")
         }
         scenario.session = session
+      case "-ScreenrFixtureProfile":
+        guard let profile = FixtureScenario.Profile(rawValue: value) else {
+          throw ArgumentError(description: "\(argument) is complete or pending, not \(value)")
+        }
+        scenario.profile = profile
       default:
         throw ArgumentError(description: "Unknown launch argument \(argument)")
       }

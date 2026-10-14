@@ -333,6 +333,11 @@ export async function buildWorld() {
   ] as const)
     await join(username, (await createInvitation(null)).token);
   const u = users;
+  // Pat's sign-in named him, which setup offers as his display name.
+  await db.query('UPDATE "user" SET name=$2 WHERE id=$1', [
+    u.pat,
+    "Pat Morgan",
+  ]);
   const link = await createInvitation(u.alice, 3);
   placeholders.add(link.token, labelToken("invitation/alice/1"));
   await join("hana", link.token);

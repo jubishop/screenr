@@ -45,7 +45,13 @@ public final class SignInModel {
   }
 
   public var authorization: IdentityProviders.Authorization { providers.authorization }
+  // Whether the person opened an invitation link that may still be used.
   public var isInvited: Bool { invitation.token != nil }
+  // The web's words for an invitation link the server no longer accepts.
+  public var invitationNotice: String? {
+    invitation.status == .unavailable
+      ? "That invitation is no longer available. Existing members can still sign in." : nil
+  }
   public var canSendCode: Bool { activity == .idle && Self.isAddress(trimmedEmail) }
   public var canCheckCode: Bool { activity == .idle && code.count == Self.codeLength }
 

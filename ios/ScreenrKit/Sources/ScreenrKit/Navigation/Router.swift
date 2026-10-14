@@ -85,7 +85,7 @@ public final class Router {
   public func open(_ destination: Destination) {
     switch destination {
     case .join(let token):
-      invitation.token = token
+      invitation.open(token)
       return
     case .account:
       show(.you)

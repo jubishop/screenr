@@ -55,6 +55,33 @@ struct SignInModelTests {
     #expect(test.header("Screenr-Invitation", request: 1) == "invite-1")
   }
 
+  @Test func saysWhenTheInvitationCannotBeUsed() async throws {
+    let test = try TestClient(replies: [try .json(200, ["available": false])])
+    let invitation = PendingInvitation(storage: InMemoryKeychain())
+    invitation.open("used-up-link")
+    let model = SignInModel(
+      api: test.client,
+      invitation: invitation,
+      providers: IdentityProviders(
+        authorization: .system,
+        google: GoogleSignIn(
+          clientID: GoogleSignInTests.clientID,
+          transport: RecordingTransport([])
+        )
+      )
+    )
+    #expect(model.isInvited)
+    #expect(model.invitationNotice == nil)
+
+    await invitation.check(using: test.client)
+
+    #expect(!model.isInvited)
+    #expect(
+      model.invitationNotice
+        == "That invitation is no longer available. Existing members can still sign in."
+    )
+  }
+
   @Test func waitsForAnAddressAndSixDigits() async throws {
     let test = try TestClient(replies: [try .json(200, ["success": true])])
     let model = model(test)

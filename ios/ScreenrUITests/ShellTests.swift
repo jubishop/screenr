@@ -183,7 +183,7 @@ final class ShellTests: XCTestCase {
     let app = XCUIApplication()
     app.launch(with: FixtureLaunch(viewer: "pat", failure: "errors/incomplete-profile"))
 
-    XCTAssertTrue(app.staticTexts["Set up your profile"].waitForExistence(timeout: 10))
+    XCTAssertTrue(app.staticTexts["What should friends call you?"].waitForExistence(timeout: 10))
     XCTAssertFalse(app.tabBars.firstMatch.exists)
     try app.performAccessibilityAudit()
   }

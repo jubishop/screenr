@@ -67,6 +67,16 @@ API, not only through the `screenr-invite` browser cookie
 ([invitation tokens](data-and-access.md#invitation-tokens)). Invitation links
 must also open the app as universal links.
 
+**Implementation:** The app keeps an opened link's token in the Keychain
+until setup succeeds. A code request answers the same whether or not the
+invitation counts, so the app checks each link with
+`GET /api/auth/invitation`, which answers only whether it is available, and
+shows the web's notice for one that is not. Setup starts from
+`setup-details` and sends the token to `setup`, which makes the new member
+the inviter's friend
+([issue #228](https://github.com/jubishop/screenr/issues/228); see
+[invitations and setup](../ios/README.md#invitations-and-setup)).
+
 ### Monorepo under `ios/` — 2026-10-13
 
 **Decision:** The app lives in this repository under `ios/`. Its issues go in

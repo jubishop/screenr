@@ -49,6 +49,30 @@ public struct CreatedInvitation: Codable, Hashable, Sendable {
   public let token: String
 }
 
+// `/api/auth/invitation`: whether an invitation link can still be used to
+// join. An unknown, expired, revoked, or used-up link cannot.
+public struct InvitationAvailability: Codable, Hashable, Sendable {
+  public let available: Bool
+}
+
+// `setup-details`: what first-time setup starts from. `name` is the name the
+// sign-in gave the account, such as Google's, or empty. `photo` is a photo
+// the account already has, such as a Google signup's copy, and `google` says
+// whether Google can supply one.
+public struct SetupDetails: Codable, Hashable, Sendable {
+  public let userId: String
+  public let name: String
+  public let photo: String?
+  public let google: Bool
+
+  public init(userId: String, name: String, photo: String?, google: Bool) {
+    self.userId = userId
+    self.name = name
+    self.photo = photo
+    self.google = google
+  }
+}
+
 public struct ActivityEmailSetting: Codable, Hashable, Sendable {
   public let activityEmail: Bool
 }

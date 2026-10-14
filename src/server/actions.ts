@@ -11,6 +11,7 @@ import {
   completeSignup,
   createInvitation,
   revokeInvitation,
+  setupDetails,
 } from "./invitations";
 import {
   notification,
@@ -78,6 +79,12 @@ export type Action =
       respond: (body: Body, context: Member) => Promise<unknown>;
     }
   | {
+      method: "GET";
+      profile: false;
+      usage: false;
+      respond: (query: Query, context: SignedIn) => Promise<unknown>;
+    }
+  | {
       method: "POST";
       profile: false;
       // Records the day only once the person has a profile.
@@ -129,6 +136,20 @@ function signup<Input>({
   };
 }
 
+// A read that runs before the signed-in person has a profile, and records no
+// usage.
+function signupRead<Input>({
+  input,
+  run,
+}: Definition<Query, Input, SignedIn>): Action {
+  return {
+    method: "GET",
+    profile: false,
+    usage: false,
+    respond: (query, context) => run(input(query), context),
+  };
+}
+
 // Account deletion works with or without a profile. It records no usage,
 // since it erases the person's usage rows with everything else.
 function erasure<Input>({
@@ -168,6 +189,12 @@ const actions = {
     input: ({ name, username }) => ({ name, username }),
     run: ({ name, username }, { userId, headers }) =>
       completeSignup(userId, name, username, invitationToken(headers)),
+  }),
+  // What the iPhone app's setup starts from, as the web's setup page reads
+  // it: the account's name, its photo, and whether Google can supply one.
+  "setup-details": signupRead({
+    input: () => undefined,
+    run: (_, { userId }) => setupDetails(userId),
   }),
   // Deletes the signed-in person's account. The session must come from a
   // sign-in in the last ten minutes.

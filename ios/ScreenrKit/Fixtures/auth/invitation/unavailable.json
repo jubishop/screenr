@@ -1,0 +1,18 @@
+{
+  "description": "An invitation link that is unknown, expired, revoked, or used up.",
+  "viewer": null,
+  "request": {
+    "method": "GET",
+    "action": "invitation",
+    "path": "/api/auth/invitation?token=5KiDd6iIIhQxYucpZgJMIybOTfq8FhG462kOYHEsgcU",
+    "query": {
+      "token": "5KiDd6iIIhQxYucpZgJMIybOTfq8FhG462kOYHEsgcU"
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "available": false
+    }
+  }
+}

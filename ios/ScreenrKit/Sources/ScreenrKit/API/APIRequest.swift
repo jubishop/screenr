@@ -59,11 +59,16 @@ public enum APIEndpoint: Hashable, Sendable {
   case action(String)
   // `/api/auth/<path>`, Better Auth's routes.
   case auth(String)
+  // `/api/photos/<user ID>/<version>`, a profile photo's JPEG, which the
+  // client returns as its bytes.
+  case photo(userId: String, version: String)
 
   public var path: String {
     switch self {
     case .action(let name): "/api/screenr/\(name)"
     case .auth(let path): "/api/auth/\(path)"
+    case .photo(let userId, let version):
+      "/api/photos/\(PathEncoding.component(userId))/\(PathEncoding.component(version))"
     }
   }
 }

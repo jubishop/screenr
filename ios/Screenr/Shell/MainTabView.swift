@@ -30,11 +30,10 @@ struct MainTabView: View {
       }
     }
     // A member with a profile who follows an invitation link lands in Circle,
-    // as on the web.
+    // as on the web, and the app forgets the link.
     .onChange(of: router.invitation.token, initial: true) { _, token in
-      guard token != nil else { return }
-      router.invitation.token = nil
-      router.open(.feed())
+      router.invitation.finish()
+      if token != nil { router.open(.feed()) }
     }
   }
 }

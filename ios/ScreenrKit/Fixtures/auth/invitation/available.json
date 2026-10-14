@@ -1,0 +1,18 @@
+{
+  "description": "An invitation link that can still be used to join.",
+  "viewer": null,
+  "request": {
+    "method": "GET",
+    "action": "invitation",
+    "path": "/api/auth/invitation?token=8FdwRYhlFy9tcqxOibjISU88FZTgsFeusFjHMbgJ1As",
+    "query": {
+      "token": "8FdwRYhlFy9tcqxOibjISU88FZTgsFeusFjHMbgJ1As"
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "available": true
+    }
+  }
+}
