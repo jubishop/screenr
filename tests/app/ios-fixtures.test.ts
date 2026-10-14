@@ -201,7 +201,7 @@ const screens: Record<MemberRoute["kind"], Record<string, Case>> = {
     default: screen(
       "alice",
       "/account",
-      "Account settings with Google connected, activity email on, and saved services.",
+      "Account settings with Google connected, activity email off, saved services, and every push kind on.",
     ),
   },
   "watch-together": {
@@ -295,6 +295,15 @@ const screens: Record<MemberRoute["kind"], Record<string, Case>> = {
       404,
     ),
   },
+};
+
+// A Dev build's registration, which uses the sandbox APNs environment.
+const pushDevice = {
+  action: "register",
+  token: "5ce7e1d2a0b94c3f8e6d7a1b2c3d4e5f60718293a4b5c6d7e8f9011223344556",
+  environment: "sandbox",
+  topic: "com.artisanalsoftware.Screenr.dev",
+  build: 42,
 };
 
 // The screen action's cases are the screens above.
@@ -420,6 +429,37 @@ const actions: Record<Exclude<ActionName, "screen">, Record<string, Case>> = {
       "alice",
       { enabled: false },
       "Turning activity email off.",
+    ),
+  },
+  "push-device": {
+    register: write(
+      "push-device",
+      "alice",
+      pushDevice,
+      "Registering the Dev app's APNs device token for this session.",
+    ),
+    remove: write(
+      "push-device",
+      "alice",
+      async (world) => {
+        const registered = await send(
+          world,
+          "alice",
+          { action: "push-device", body: pushDevice },
+          "POST",
+        );
+        assert.equal(registered.status, 200);
+        return { action: "remove", token: pushDevice.token };
+      },
+      "Removing the app's registered device token.",
+    ),
+  },
+  "push-settings": {
+    default: write(
+      "push-settings",
+      "alice",
+      { comment: false },
+      "Turning comment pushes off returns every push setting.",
     ),
   },
   "streaming-services": {

@@ -1,0 +1,23 @@
+{
+  "description": "Turning comment pushes off returns every push setting.",
+  "viewer": "alice",
+  "request": {
+    "method": "POST",
+    "action": "push-settings",
+    "path": "/api/screenr/push-settings",
+    "body": {
+      "comment": false
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "pushSettings": {
+        "friendRequest": true,
+        "friendAccepted": true,
+        "comment": false,
+        "reply": true
+      }
+    }
+  }
+}

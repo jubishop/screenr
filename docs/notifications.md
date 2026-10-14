@@ -140,3 +140,14 @@ delivery with access, preference, and read changes and prioritizes sign-in codes
 Activity jobs expire after 24 hours, or at once when Resend rejects them
 permanently; their notifications remain in the app.
 The current worker and Resend configuration need no new service or credentials.
+
+### Push notifications
+
+The server stores each member's iPhone push devices and per-kind push
+settings for friend requests, acceptances, comments, and replies. Every kind
+is on by default, and the settings are separate from activity email. The
+account screen payload includes them, and the `push-settings` action saves
+them; see
+[push devices and settings](data-and-access.md#push-devices-and-settings).
+Signing out deletes that session's devices. The worker does not send pushes
+yet ([issue #240](https://github.com/jubishop/screenr/issues/240)).

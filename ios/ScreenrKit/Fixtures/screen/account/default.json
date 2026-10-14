@@ -1,5 +1,5 @@
 {
-  "description": "Account settings with Google connected, activity email on, and saved services.",
+  "description": "Account settings with Google connected, activity email off, saved services, and every push kind on.",
   "viewer": "alice",
   "request": {
     "method": "GET",
@@ -11,10 +11,16 @@
   },
   "response": {
     "status": 200,
-    "etag": "W/\"hWPPOhb63FcAJxgbjQJAk4txD-QZiKo13ZnS4Zq_1UM\"",
+    "etag": "W/\"UuHmWVwMhL3TwuJhgEFiONMrUQPtnXPoBabUmpSKX2Q\"",
     "body": {
       "kind": "account",
       "activityEmail": false,
+      "pushSettings": {
+        "friendRequest": true,
+        "friendAccepted": true,
+        "comment": true,
+        "reply": true
+      },
       "services": [
         {
           "id": "service:a-e",

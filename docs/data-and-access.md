@@ -50,7 +50,8 @@ result becomes the JSON response; an action without one responds
 
 Add an action as one entry, using `read` for a member GET, `write` for a
 member POST, `signup` for a POST that runs before profile setup, or `photo`
-for a photo change, which works before and after setup. Give it an
+for a photo change, which works before and after setup. Its `run` receives
+the user ID, the request's session ID, and the request headers. Give it an
 [iPhone API fixture](testing.md#iphone-api-fixtures) case in the same change.
 
 ### Single notification read
@@ -120,6 +121,61 @@ session cookie ([decision](ios-app.md#bearer-sessions-in-the-keychain--2026-10-1
 - **Session rows:** a token names the same Postgres `session` row as a
   cookie, with the same 30-day lifetime. `POST /api/auth/sign-out` with the
   bearer header deletes that row and ends only that session.
+
+## Push devices and settings
+
+The iPhone app registers its APNs device token and saves the member's
+per-kind push settings
+([push scope](ios-app.md#push-every-notification-immediately--2026-10-13),
+[APNs delivery](ios-app.md#in-house-apns-delivery-from-the-worker--2026-10-13),
+[issue #239](https://github.com/jubishop/screenr/issues/239)). Migration
+`027-push-devices.sql` adds the storage, and `src/server/push.ts` holds the
+reads and writes.
+
+- **Device records:** `push_device` holds one row per token, stored as
+  lowercase hex of 32 to 100 bytes. It records the member, the session that
+  registered it, the APNs environment (`sandbox` or `production`), and the
+  app's bundle ID, which APNs requests name as their `topic`. The bundle ID
+  is `com.artisanalsoftware.Screenr` for Release builds or
+  `com.artisanalsoftware.Screenr.dev` for Dev builds. The row also records
+  the app build and the last time the app registered.
+- **One owner per token:** a token belongs to one app on one phone, so it is
+  the primary key. Registering a token that another session or member holds
+  moves it to the current member and session. Registering a new token from
+  the same session and bundle ID deletes the earlier token, which APNs
+  replaced.
+- **Signing out:** the row references its `session` row with
+  `ON DELETE CASCADE`. Signing out, or anything else that deletes the
+  session, deletes the device even when the app cannot reach the API. A
+  device whose session expired but remains stored receives nothing.
+- **Settings:** the `profile` columns `push_friend_request`,
+  `push_friend_accepted`, `push_comment`, and `push_reply` hold the per-kind
+  settings, all on by default. The account screen reports them as
+  `pushSettings`, an object with the `friendRequest`, `friendAccepted`,
+  `comment`, and `reply` booleans.
+
+Both actions are member writes, so they need a completed profile and accept
+the bearer token or the cookie. Invalid values return 400 with the usual error
+body.
+
+- **Register:** `push-device` with `{"action": "register", "token": "<hex>",
+  "environment": "sandbox", "topic": "com.artisanalsoftware.Screenr.dev",
+  "build": 42}` responds `{"ok": true}`. The build is a positive integer.
+  The app registers on each launch, which refreshes the build and last-seen
+  time.
+- **Remove:** `push-device` with `{"action": "remove", "token": "<hex>"}`
+  responds `{"ok": true}`. It deletes the token only from the member's own
+  devices, and an unknown token changes nothing.
+- **Save settings:** `push-settings` with one or more of `friendRequest`,
+  `friendAccepted`, `comment`, and `reply`, each a boolean, responds
+  `{"pushSettings": {...}}` with all four. Kinds the body leaves out keep
+  their values.
+
+Delivery uses three helpers. `pushDevices(userId, kind?, client?)` lists the
+member's devices on live sessions as `{token, environment, topic, build}`;
+with a notification kind, it returns none when the member turned that kind
+off. `removePushDevice(token, client?)` deletes a token that APNs rejects.
+`pushSettings(userId)` reads the settings.
 
 ## Sign-in return path
 
