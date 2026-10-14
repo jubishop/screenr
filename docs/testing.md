@@ -631,7 +631,9 @@ key's public key and its 50-minute reuse, and covers per-kind settings,
 visibility, read state, expired sessions, and moved tokens at send time. It
 also checks that rejected tokens delete their device, that other rejections
 and retryable failures are logged without tokens, badge-only updates, and
-reconnection after GOAWAY or a lost connection.
+reconnection after GOAWAY or a lost connection. Each read action, from the
+web and from the app, queues a badge-only update that carries the new count,
+and reads that leave the count unchanged or fail queue none.
 Operational tests check activation rollback after a stalled health request, a
 failed signed-out session request, or a web or worker service that crashes on
 startup. They also check a production-down report when the restored release

@@ -200,8 +200,9 @@ const categories: Partial<Record<PushKind, string>> = {
   reply: "COMMENT",
 };
 
-// An alert carries only the notification ID; the app's extension fetches
-// what it shows. A badge-only update carries only the count.
+// An alert carries only the notification ID and plays the default sound; the
+// app's extension fetches what it shows. A badge-only update carries only the
+// count, silently.
 function payload(job: PushJob) {
   if (!job.notification) return { aps: { badge: job.badge } };
   const category = categories[job.kind!];
@@ -209,6 +210,7 @@ function payload(job: PushJob) {
     aps: {
       alert,
       badge: job.badge,
+      sound: "default",
       "mutable-content": 1,
       ...(category && { category }),
       ...(job.thread && { "thread-id": job.thread }),

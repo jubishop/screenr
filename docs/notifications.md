@@ -207,6 +207,7 @@ build the visible alert
   "aps": {
     "alert": { "body": "New activity on Screenr" },
     "badge": 3,
+    "sound": "default",
     "mutable-content": 1,
     "category": "COMMENT",
     "thread-id": "0b6f7a52-6c1e-4f0e-9a51-3d2f4c8e1a77"
@@ -217,6 +218,8 @@ build the visible alert
 
 - **Badge:** the member's unread count when the push is sent, the same count
   as the bell's.
+- **Sound:** every alert plays the phone's default notification sound, the
+  user's choice on 2026-10-13. Badge-only updates are silent.
 - **Category:** the app registers the categories and their
   [actions](ios-app.md#notification-actions--2026-10-13):
 
@@ -236,11 +239,27 @@ build the visible alert
   the delivered notification's request identifier on the phone.
 
 `queueBadgePush(userId, client?)` queues a badge-only update to each of the
-member's devices, for read changes on other clients
+member's devices
 ([unread badge](ios-app.md#unread-badge-kept-in-sync--2026-10-13),
 [issue #241](https://github.com/jubishop/screenr/issues/241)). Call it with
-the transaction client that changes read state, so the worker counts after
-the change commits. Its payload is only `{"aps": {"badge": 2}}`, sent with
+the transaction client that changes read state, so the job commits with the
+change and the worker counts after it. The read actions call it on every
+client, the web and the app alike:
+
+- `read-notification` queues an update only when the notification was
+  unread, so selecting one read earlier sends nothing.
+- `read-notifications` queues one only when it marks at least one
+  notification read.
+- `respond-friend-request` always queues one. The answered request leaves
+  the bell even if it was read, and accepting can restore the requester's
+  comments from an earlier friendship, which keep their read state.
+- A failed action rolls back and queues nothing.
+
+Other changes to the count, such as accepting a request from the People page
+or a profile, unfriending, blocking, or a removed comment, queue no update;
+the next push carries the current count.
+
+The update's payload is only `{"aps": {"badge": 2}}`, sent with
 `apns-push-type: alert`, which Apple specifies for badge updates, and
 `apns-priority: 5`, which lets the phone defer it to save power. It has no
 collapse ID, sends regardless of the per-kind settings, and is skipped for a
