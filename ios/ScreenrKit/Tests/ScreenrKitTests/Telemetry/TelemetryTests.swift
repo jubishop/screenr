@@ -36,7 +36,7 @@ struct TelemetryTests {
     )
   }
 
-  @Test func sendsAnErrorEventWithNoPersonalDataContentOrScreenshot() throws {
+  @Test func sendsAnErrorEventWithNoPersonalDataContentOrScreenshot() async throws {
     defer { capture.close() }
     let telemetry = telemetry(.release)
     telemetry.signIn(userID: "user-7f3a")
@@ -70,7 +70,8 @@ struct TelemetryTests {
 
     telemetry.capture(Failure.noResults(query: "dune"), requestID: "3f2a9c")
 
-    let items = try capture.items()
+    // Attachments travel in the event's envelope, so they have arrived with it.
+    let items = try await capture.items { items in items.contains { $0.type == "event" } }
     #expect(capture.starts == 1)
     #expect(items.filter { $0.type == "attachment" }.isEmpty)
     let event = try #require(items.filter { $0.type == "event" }.only)
@@ -119,7 +120,7 @@ struct TelemetryTests {
     #expect(!SentrySDK.isEnabled)
   }
 
-  @Test func setsOnlyTheOpaqueUserIDAndClearsItOnSignOut() throws {
+  @Test func setsOnlyTheOpaqueUserIDAndClearsItOnSignOut() async throws {
     defer { capture.close() }
     let telemetry = telemetry(.release)
 
@@ -128,7 +129,7 @@ struct TelemetryTests {
     telemetry.signOut()
     telemetry.capture(Failure.noResults(query: "two"), requestID: "signed-out")
 
-    let events = try capture.items(ofType: "event").map { try $0.json }
+    let events = try await capture.items(ofType: "event", count: 2).map { try $0.json }
     let byRequest = Dictionary(
       events.map { (($0["tags"] as? [String: String])?["request_id"] ?? "", $0) },
       uniquingKeysWith: { first, _ in first }
@@ -208,7 +209,7 @@ struct TelemetryTests {
     #expect(try capture.items(ofType: "transaction").isEmpty)
   }
 
-  @Test func sendsWarningsAndAboveToSentryLogs() throws {
+  @Test func sendsWarningsAndAboveToSentryLogs() async throws {
     defer { capture.close() }
     let telemetry = telemetry(.release)
     let log = Log(.api, router: router)
@@ -220,10 +221,9 @@ struct TelemetryTests {
     log.fault("Broken")
 
     #expect(telemetry.state == .reporting)
-    let logs = try capture.items(ofType: "log")
-      .flatMap { item in
-        try item.json["items"] as? [[String: Any]] ?? []
-      }
+    let logs = try Self.logs(
+      in: await capture.items { items in try Self.logs(in: items).count >= 3 }
+    )
     #expect(logs.map { $0["body"] as? String } == ["Slow", "Failed", "Broken"])
     #expect(logs.map { $0["level"] as? String } == ["warn", "error", "fatal"])
     let attributes = try #require(logs.first?["attributes"] as? [String: [String: Any]])
@@ -264,5 +264,13 @@ struct TelemetryTests {
     #expect(options.sessionReplay.sessionSampleRate == 0)
     #expect(options.sessionReplay.onErrorSampleRate == 0)
     #endif
+  }
+
+  // The log entries in every log item, in the order Sentry sent them.
+  private static func logs(in items: [SentryEnvelopeCapture.Item]) throws -> [[String: Any]] {
+    try items.filter { $0.type == "log" }
+      .flatMap { item in
+        try item.json["items"] as? [[String: Any]] ?? []
+      }
   }
 }

@@ -9,7 +9,7 @@ import Testing
 // envelopes Sentry would have sent. Each client receives the options Telemetry builds, so its
 // callbacks and privacy settings are the ones Release builds use.
 final class SentryEnvelopeCapture: Sendable {
-  struct Item {
+  struct Item: Sendable {
     let type: String
     let payload: Data
 
@@ -76,38 +76,53 @@ final class SentryEnvelopeCapture: Sendable {
     }
   }
 
-  // Sends everything the clients have queued and returns the items of every envelope.
+  // Sends everything the clients have queued and returns the items of every envelope. Use it to
+  // show that nothing was sent; to find what was, wait with items(until:).
   func items() throws -> [Item] {
-    for reporter in reporters.withLock({ $0 }) {
-      reporter.flush()
-    }
-    return try CapturingURLProtocol.bodies(for: host).flatMap(Self.items(in:))
+    flush(timeout: 10)
+    return try received()
   }
 
   func items(ofType type: String) throws -> [Item] {
     try items().filter { $0.type == type }
   }
 
-  // Sentry hands finished transactions to a background queue before it sends them, so a flush
-  // can come too early. This waits for each envelope to arrive until count items of the type
-  // have, for at most ten seconds.
-  func items(ofType type: String, count: Int) async throws -> [Item] {
+  // Sentry sends from background queues, and on a busy machine a flush can return before an
+  // envelope goes out. This flushes, then waits for each envelope to arrive until done accepts
+  // the items so far, for at most a minute.
+  func items(until done: @escaping @Sendable ([Item]) throws -> Bool) async throws -> [Item] {
     try await withThrowingTaskGroup(of: [Item].self) { group in
       group.addTask {
-        var found = try self.items(ofType: type)
+        self.flush(timeout: 1)
+        var found = try self.received()
         var arrived = self.arrivals.makeAsyncIterator()
-        while found.count < count, await arrived.next() != nil {
-          found = try self.items(ofType: type)
+        while try !done(found), await arrived.next() != nil {
+          found = try self.received()
         }
         return found
       }
       group.addTask {
-        try await Task.sleep(for: .seconds(10))
+        try await Task.sleep(for: .seconds(60))
         throw Timeout()
       }
       defer { group.cancelAll() }
       return try await group.next() ?? []
     }
+  }
+
+  func items(ofType type: String, count: Int) async throws -> [Item] {
+    try await items { items in items.count { $0.type == type } >= count }
+      .filter { $0.type == type }
+  }
+
+  private func flush(timeout: TimeInterval) {
+    for reporter in reporters.withLock({ $0 }) {
+      reporter.flush(timeout: timeout)
+    }
+  }
+
+  private func received() throws -> [Item] {
+    try CapturingURLProtocol.bodies(for: host).flatMap(Self.items(in:))
   }
 
   func close() {
@@ -209,8 +224,8 @@ private final class HubReporter: SentryReporter, @unchecked Sendable {
     hub.configureScope(configure)
   }
 
-  func flush() {
-    hub.getClient()?.flush(timeout: 10)
+  func flush(timeout: TimeInterval) {
+    hub.getClient()?.flush(timeout: timeout)
   }
 
   func close() {
