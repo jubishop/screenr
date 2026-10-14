@@ -11,6 +11,10 @@ const inherited = {
   EMAIL_FROM: "Inherited <inherited@example.test>",
   GOOGLE_CLIENT_ID: "inherited-google-client",
   GOOGLE_CLIENT_SECRET: "inherited-google-secret",
+  GOOGLE_IOS_CLIENT_ID: "inherited-google-ios-client",
+  APPLE_TEAM_ID: "INHERITED1",
+  APPLE_KEY_ID: "INHERITED2",
+  APPLE_PRIVATE_KEY: "aW5oZXJpdGVkLWtleQ==",
   SENTRY_DSN: "https://inherited-key@sentry.example.test/1",
 };
 Object.assign(process.env, inherited);

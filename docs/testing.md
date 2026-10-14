@@ -178,12 +178,14 @@ session. Specs import these helpers instead of defining their own copies.
   server modules load, the module validates the test database, exported as
   `testDatabaseURL`, and sets authentication configuration. It also clears
   provider settings inherited from the shell: the TMDB token and catalog URL,
-  the email transport, Resend key and sender, the Google client, and the
-  Sentry DSN. Tests therefore never call TMDB, Resend, Google, or Sentry, even
-  when a developer shell exports real credentials. A suite that exercises a
-  provider sets fake values after the import and answers with a loopback
-  server or a replaced `fetch`; `tests/app/failure-logs.test.ts` runs a
-  loopback Sentry endpoint.
+  the email transport, Resend key and sender, the Google web and iOS clients,
+  the Sign in with Apple settings, and the Sentry DSN. Tests therefore never
+  call TMDB, Resend, Google, Apple, or Sentry, even when a developer shell
+  exports real credentials. A suite that exercises a provider sets fake values
+  after the import and answers with a loopback server or a replaced `fetch`;
+  `tests/app/failure-logs.test.ts` runs a loopback Sentry endpoint, and
+  [identity-providers.ts](../tests/app/identity-providers.ts) fakes Apple's
+  and Google's key, token, and revoke endpoints with keys generated per run.
   `tests/app/social-fixture.test.ts` covers the clearing.
 - Suites call `useDatabase()` once at file scope to register the migration,
   per-test user/verification reset, and final pool shutdown. A suite that
@@ -586,7 +588,8 @@ recipients. A full run checks:
   stars. Removal asks first and keeps an entry with replies.
 
 Database tests additionally cover concurrent signup limits, rollback after
-username conflicts, expiry, code/account identity, explicit Google linking,
+username conflicts, expiry, code/account identity, explicit Google and Apple
+linking, native Apple and Google ID-token sign-in with Apple token revocation,
 one-level reply grouping, host removal, and encrypted email delivery retries.
 They verify automatic inviter friendships for email and Google signup, legacy
 links, and replacement invitations. Retrying setup does not consume another

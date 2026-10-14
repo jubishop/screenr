@@ -159,7 +159,7 @@ describes the records behind them.
 | `SENTRY_DSN` | DSN of the `screenr-server` Sentry project, for [failure reports](#failure-reports-in-sentry). Optional: without it, failures are only logged | [#223](https://github.com/jubishop/screenr/issues/223) |
 | `APPLE_TEAM_ID` | Apple developer team ID, the issuer of tokens signed with either Apple key | [#215](https://github.com/jubishop/screenr/issues/215), [#240](https://github.com/jubishop/screenr/issues/240) |
 | `APPLE_KEY_ID` | Key ID of the Sign in with Apple key | [#215](https://github.com/jubishop/screenr/issues/215) |
-| `APPLE_PRIVATE_KEY` | Sign in with Apple key, which signs the client secret for Apple's token endpoint | [#215](https://github.com/jubishop/screenr/issues/215) |
+| `APPLE_PRIVATE_KEY` | Sign in with Apple key, which signs the client secret for Apple's token and revoke endpoints | [#215](https://github.com/jubishop/screenr/issues/215) |
 | `APNS_KEY_ID` | Key ID of the APNs auth key | [#240](https://github.com/jubishop/screenr/issues/240) |
 | `APNS_PRIVATE_KEY` | APNs auth key, which signs the provider tokens for push requests | [#240](https://github.com/jubishop/screenr/issues/240) |
 | `GOOGLE_IOS_CLIENT_ID` | iOS OAuth client ID, accepted as the audience of the app's Google ID tokens | [#216](https://github.com/jubishop/screenr/issues/216) |

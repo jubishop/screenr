@@ -1,48 +1,16 @@
-import {
-  createCipheriv,
-  createDecipheriv,
-  createHash,
-  randomBytes,
-  randomUUID,
-} from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { db, domainLock } from "./db";
 import { logFailure } from "./log";
 import { notificationEmail, queueNotificationEmails } from "./notifications";
+import { seal, unseal } from "./sealing";
 import { pruneUsage } from "./usage";
 
 type Mail = { to: string; subject: string; text: string };
-function encryptionKey() {
-  const secret = process.env.BETTER_AUTH_SECRET;
-  if (!secret || secret.length < 32)
-    throw new Error("Set BETTER_AUTH_SECRET to at least 32 random characters.");
-  return createHash("sha256").update(`screenr-email:${secret}`).digest();
-}
-function encrypt(mail: Mail) {
-  const iv = randomBytes(12);
-  const cipher = createCipheriv("aes-256-gcm", encryptionKey(), iv);
-  const encrypted = Buffer.concat([
-    cipher.update(JSON.stringify(mail)),
-    cipher.final(),
-  ]);
-  return Buffer.concat([iv, cipher.getAuthTag(), encrypted]).toString("base64");
-}
-function decrypt(payload: string): Mail {
-  const bytes = Buffer.from(payload, "base64");
-  const cipher = createDecipheriv(
-    "aes-256-gcm",
-    encryptionKey(),
-    bytes.subarray(0, 12),
-  );
-  cipher.setAuthTag(bytes.subarray(12, 28));
-  return JSON.parse(
-    Buffer.concat([
-      cipher.update(bytes.subarray(28)),
-      cipher.final(),
-    ]).toString(),
-  );
-}
+const encrypt = (mail: Mail) => seal("screenr-email", JSON.stringify(mail));
+const decrypt = (payload: string): Mail =>
+  JSON.parse(unseal("screenr-email", payload));
 export async function queueCode({
   email,
   otp,

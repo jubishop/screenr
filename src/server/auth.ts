@@ -3,6 +3,11 @@ import { betterAuth, type BetterAuthPlugin } from "better-auth";
 import { APIError, createAuthMiddleware } from "better-auth/api";
 import { bearer, emailOTP } from "better-auth/plugins";
 import { codeLimitMessage } from "../shared";
+import {
+  appleBundleIds,
+  appleConfigured,
+  sealAppleRefreshToken,
+} from "./apple";
 import { db, transaction } from "./db";
 import { activeInvitation, invitationHash } from "./invitations";
 import { queueCode } from "./email";
@@ -136,6 +141,53 @@ const nativeTokenOnly = {
   },
 } satisfies BetterAuthPlugin;
 
+// Google accepts ID tokens issued to the web client, whose secret also runs
+// the web's redirect sign-in, and to the iPhone app's client. Each configured
+// client ID adds its audience.
+function googleProvider() {
+  const {
+    GOOGLE_CLIENT_ID: web,
+    GOOGLE_CLIENT_SECRET: secret,
+    GOOGLE_IOS_CLIENT_ID: ios,
+  } = process.env;
+  const clientId = [web && secret ? web : "", ios ?? ""].filter(Boolean);
+  if (!clientId.length) return {};
+  return {
+    google: { clientId, clientSecret: web && secret ? secret : undefined },
+  };
+}
+
+// Sign in with Apple accepts ID tokens from both iPhone apps. Better Auth
+// gets no client secret: Screenr signs its own for each code exchange.
+function appleProvider() {
+  if (!appleConfigured()) return {};
+  return { apple: { clientId: appleBundleIds } };
+}
+
+const appleOnlyInApp =
+  "Sign in with Apple is available only in the iPhone app.";
+
+// The sign-in that creates or updates an Apple account row also exchanges its
+// authorization code, which the app posts as
+// `additionalData.authorizationCode`. Better Auth has verified the ID token
+// by then, and a new user has passed the invitation check.
+async function withAppleRefreshToken<T extends { idToken?: string | null }>(
+  account: T,
+  context: {
+    body?: { additionalData?: { authorizationCode?: unknown } };
+  } | null,
+) {
+  return {
+    data: {
+      ...account,
+      refreshToken: await sealAppleRefreshToken(
+        account.idToken,
+        context?.body?.additionalData?.authorizationCode,
+      ),
+    },
+  };
+}
+
 export function createAuth(
   options: {
     sendCode?: typeof queueCode;
@@ -165,15 +217,7 @@ export function createAuth(
       "/forget-password/email-otp",
       "/email-otp/reset-password",
     ],
-    socialProviders:
-      process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET
-        ? {
-            google: {
-              clientId: process.env.GOOGLE_CLIENT_ID,
-              clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-            },
-          }
-        : {},
+    socialProviders: { ...googleProvider(), ...appleProvider() },
     user: {
       additionalFields: {
         invitationHash: {
@@ -206,9 +250,17 @@ export function createAuth(
       },
     },
     hooks: {
-      // Runs before Better Auth replaces the address's current code, so a
-      // limited request leaves an already delivered code usable.
       before: createAuthMiddleware(async (ctx) => {
+        // The web has no Sign in with Apple; its redirect sign-in would
+        // otherwise fail for want of a client secret.
+        if (
+          (ctx.path === "/sign-in/social" || ctx.path === "/link-social") &&
+          ctx.body?.provider === "apple" &&
+          !ctx.body?.idToken
+        )
+          throw new APIError("NOT_FOUND", { message: appleOnlyInApp });
+        // Runs before Better Auth replaces the address's current code, so a
+        // limited request leaves an already delivered code usable.
         const email = ctx.body?.email;
         if (
           limited &&
@@ -282,7 +334,21 @@ export function createAuth(
         },
       },
       account: {
+        update: {
+          // Each later Apple sign-in, or a link to an already linked Apple
+          // ID, stores the newest refresh token.
+          before: async (account, context) => {
+            if (account.providerId === "apple" && account.idToken)
+              return withAppleRefreshToken(account, context);
+          },
+        },
         create: {
+          // An Apple account row is created only with its refresh token. A
+          // failed exchange rolls back a new user, or fails a link.
+          before: async (account, context) => {
+            if (account.providerId === "apple")
+              return withAppleRefreshToken(account, context);
+          },
           // A Google signup or link copies the Google picture once, unless
           // the person already has a photo or removed one. Better Auth runs
           // this after its transaction commits; failures keep the initial.

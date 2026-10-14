@@ -1,6 +1,13 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { useDatabase, db, denied, person } from "./social-fixture";
+import {
+  useDatabase,
+  db,
+  denied,
+  person,
+  assertAuthError,
+  invitationRequired,
+} from "./social-fixture";
 const { createAuth } = await import("../../src/server/auth");
 const { loadScreen } = await import("../../src/server/screens");
 const { createInvitation, completeSignup, revokeInvitation } =
@@ -8,22 +15,6 @@ const { createInvitation, completeSignup, revokeInvitation } =
 const { profileFor } = await import("../../src/server/profiles");
 
 useDatabase();
-
-// Better Auth rejections name their reason in the body: Screenr's own hooks
-// by message, and Better Auth's checks by code.
-async function assertAuthError(
-  response: Response,
-  status: number,
-  reason: { message: string } | { code: string },
-) {
-  assert.equal(response.status, status);
-  const body = await response.json();
-  for (const [key, value] of Object.entries(reason))
-    assert.equal(body[key], value);
-}
-const invitationRequired = {
-  message: "A valid invitation is required to join Screenr.",
-};
 
 async function accountScreen(userId: string) {
   const screen = await loadScreen(userId, "/account");

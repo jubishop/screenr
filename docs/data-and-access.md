@@ -124,6 +124,77 @@ session cookie ([decision](ios-app.md#bearer-sessions-in-the-keychain--2026-10-1
   cookie, with the same 30-day lifetime. `POST /api/auth/sign-out` with the
   bearer header deletes that row and ends only that session.
 
+## Native sign-in
+
+Besides the email code, the iPhone app signs in with Apple or Google
+([decision](ios-app.md#email-code-sign-in-with-apple-and-google--2026-10-13),
+issues [#215](https://github.com/jubishop/screenr/issues/215) and
+[#216](https://github.com/jubishop/screenr/issues/216)). It posts the
+provider's ID token to `POST /api/auth/sign-in/social` without an `Origin` or
+cookies, and the response returns the
+[bearer token](#native-client-sessions) in `set-auth-token`.
+
+- **Same rules as the web:** a new person needs an invitation, sent in the
+  [`Screenr-Invitation` header](#invitation-tokens), which the user-creation
+  hook that every signup shares checks. A matching email
+  address never links an existing account. A signed-in member links a
+  provider explicitly by posting the same body to `POST /api/auth/link-social`
+  with their bearer token; the provider's address must be verified and match
+  the account's.
+- **Token checks:** Better Auth verifies the ID token's signature against the
+  provider's published keys, and its issuer, audience, and expiry. It also
+  requires an issue time within the last hour.
+- **Sign in with Apple:** the app posts
+  `{"provider": "apple", "idToken": {"token", "nonce", "user"}, "additionalData": {"authorizationCode"}}`
+  with the credential's identity token and authorization code as strings.
+  - The audience must be `com.artisanalsoftware.Screenr` or
+    `com.artisanalsoftware.Screenr.dev`.
+  - The app sets the authorization request's nonce to the SHA-256 hex digest
+    of a random value and posts that raw value as `nonce`. The server checks a
+    posted nonce, so the app always sends one.
+  - Apple gives the person's name only on the first authorization. The app
+    posts it then as `user: {"name": {"firstName", "lastName"}}`; it becomes
+    the account's name, separate from the display name chosen in setup.
+  - Every Apple sign-in and link needs the authorization code from the same
+    authorization. After the ID token passes and a new person's invitation
+    is accepted, the server redeems the code at Apple's token endpoint with a
+    client secret it signs for the token's bundle ID, and requires Apple's
+    reply to name the same person.
+  - A Hide My Email relay address is stored like any other address.
+  - The web offers no Apple sign-in. A request for Apple without an ID token
+    returns 404.
+- **Google:** the app posts `{"provider": "google", "idToken": {"token",
+  "nonce"}}`. It gets the ID token through `ASWebAuthenticationSession` by
+  running Google's authorization code flow with PKCE for the iOS client and
+  redeeming the code at Google's token endpoint itself, so the server never
+  sees the code or verifier. The audience may be the iOS client
+  (`GOOGLE_IOS_CLIENT_ID`) or the web client. A nonce the app put in the
+  authorization request is posted as `nonce` and must match exactly.
+- **Apple tokens:** the Apple `account` row's `refreshToken` column holds the
+  newest refresh token and the bundle ID it was issued to, encrypted with
+  AES-256-GCM under a key derived from `BETTER_AUTH_SECRET`. Account deletion
+  calls `revokeAppleTokens(userId)` in `src/server/apple.ts` before deleting
+  the user. It revokes each token with Apple and clears it; when Apple does
+  not confirm, it throws and keeps the token for a retry. An uninvited
+  person's code is never redeemed, so Screenr keeps no token for them.
+
+Rejections answer with a JSON body naming a `code` from Better Auth or a
+`message` from Screenr:
+
+| Status | Body                                                                      | Cause                                                                                                        |
+| ------ | ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| 401    | `code` `INVALID_TOKEN`                                                    | The signature, issuer, audience, expiry, age, or nonce check failed.                                         |
+| 403    | `message` "A valid invitation is required to join Screenr."               | A new person had no valid invitation.                                                                        |
+| 401    | `code` `OAUTH_LINK_ERROR`                                                 | The address belongs to an account without this provider ID linked.                                           |
+| 400    | `message` "Sign in with Apple needs its authorization code."              | No `additionalData.authorizationCode`.                                                                       |
+| 401    | `message` "Apple did not confirm this sign-in. Try again."                | Apple rejected the code, which expires after five minutes and works once, or it belongs to another Apple ID. |
+| 503    | `message` "Sign in with Apple is unavailable right now. Try again later." | Apple's token endpoint failed or rejected Screenr's key. The failure is logged.                              |
+| 404    | `code` `PROVIDER_NOT_FOUND`                                               | The server has no settings for the provider.                                                                 |
+| 417    | `code` `LINKING_FAILED`                                                   | A new Apple link whose code was not redeemed.                                                                |
+
+Linking keeps Better Auth's other errors, such as `UNAUTHORIZED` without a
+session and `LINKING_DIFFERENT_EMAILS_NOT_ALLOWED`.
+
 ## Invitation tokens
 
 The iPhone app joins without the web's `screenr-invite` cookie
