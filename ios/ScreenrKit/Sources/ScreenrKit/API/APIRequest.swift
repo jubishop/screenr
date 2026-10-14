@@ -13,6 +13,7 @@ public struct APIRequest<Response: Decodable & Sendable>: Sendable {
   public let invitation: String?
   public let sessionChange: SessionChange
   public let visit: VisitSignal
+  public let unauthorized: Unauthorized
   // The endpoint without member content, such as search text or usernames,
   // for logs: `/api/screenr/screen?path=/people/:username`.
   public let route: String
@@ -25,6 +26,7 @@ public struct APIRequest<Response: Decodable & Sendable>: Sendable {
     invitation: String? = nil,
     sessionChange: SessionChange = .none,
     visit: VisitSignal = .never,
+    unauthorized: Unauthorized = .endsSession,
     route: String? = nil
   ) {
     self.method = method
@@ -34,6 +36,7 @@ public struct APIRequest<Response: Decodable & Sendable>: Sendable {
     self.invitation = invitation
     self.sessionChange = sessionChange
     self.visit = visit
+    self.unauthorized = unauthorized
     self.route = route ?? endpoint.path
   }
 
@@ -94,6 +97,17 @@ public enum SessionChange: Hashable, Sendable {
   case signIn
   // Removes the token the request sent.
   case signOut
+}
+
+// What a 401 response to a signed-in request means.
+public enum Unauthorized: Hashable, Sendable {
+  // The session ended, so the client removes its token.
+  case endsSession
+  // Better Auth rejected a credential the request carried, such as the ID
+  // token of a sign-in method being linked. Only Better Auth's `UNAUTHORIZED`
+  // code, for a missing or ended session, ends the session; other 401s are
+  // `.rejected(status: 401)`.
+  case rejectsCredential
 }
 
 private enum QueryEncoding {

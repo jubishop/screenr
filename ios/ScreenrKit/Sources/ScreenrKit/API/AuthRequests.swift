@@ -75,6 +75,39 @@ extension APIRequest where Response == Acknowledgement {
     )
   }
 
+  // Links Sign in with Apple to the signed-in account, so it signs in to the
+  // same account. The Apple ID's email address must match the account's.
+  public static func linkApple(
+    identityToken: String,
+    authorizationCode: String,
+    nonce: String
+  ) -> Self {
+    APIRequest(
+      method: .post,
+      endpoint: .auth("link-social"),
+      body: .json([
+        "provider": "apple",
+        "idToken": ["token": .string(identityToken), "nonce": .string(nonce)],
+        "additionalData": ["authorizationCode": .string(authorizationCode)],
+      ]),
+      unauthorized: .rejectsCredential
+    )
+  }
+
+  // Links a Google account whose email address matches the signed-in
+  // account's.
+  public static func linkGoogle(idToken: String, nonce: String) -> Self {
+    APIRequest(
+      method: .post,
+      endpoint: .auth("link-social"),
+      body: .json([
+        "provider": "google",
+        "idToken": ["token": .string(idToken), "nonce": .string(nonce)],
+      ]),
+      unauthorized: .rejectsCredential
+    )
+  }
+
   // Ends this device's session on the server, then removes its token.
   public static var signOut: Self {
     APIRequest(

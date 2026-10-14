@@ -1,5 +1,5 @@
 {
-  "description": "Account settings with Google connected, activity email off, saved services, and every push kind on.",
+  "description": "Account settings with Google connected, Apple not connected, activity email off, saved services, and every push kind on.",
   "viewer": "alice",
   "request": {
     "method": "GET",
@@ -11,7 +11,7 @@
   },
   "response": {
     "status": 200,
-    "etag": "W/\"9YAQ5_VUG2RTd_e32dcLWIJJcdQVa1lYDtsiJbAd3Tw\"",
+    "etag": "W/\"ZasDqVzQ8ijWp1hlTozrucUSyCzYJOMvoESOPH4z-mU\"",
     "body": {
       "kind": "account",
       "email": "alice@example.test",
@@ -1090,6 +1090,8 @@
       ],
       "googleEnabled": true,
       "googleConnected": true,
+      "appleEnabled": true,
+      "appleConnected": false,
       "unreadNotifications": 6,
       "user": {
         "user_id": "user-alice",

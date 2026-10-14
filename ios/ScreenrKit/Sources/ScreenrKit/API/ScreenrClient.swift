@@ -188,11 +188,18 @@ public final class ScreenrClient: ScreenrAPI {
       }
       return value
     default:
-      let error = APIError(
-        status: response.statusCode,
-        body: Self.errorBody(data),
-        requestID: context.requestID
-      )
+      let body = Self.errorBody(data)
+      var error = APIError(status: response.statusCode, body: body, requestID: context.requestID)
+      if error.kind == .signedOut, request.unauthorized == .rejectsCredential,
+        error.code != "UNAUTHORIZED"
+      {
+        error = APIError(
+          kind: .rejected(status: response.statusCode),
+          message: error.message,
+          code: error.code,
+          requestID: context.requestID
+        )
+      }
       switch error.kind {
       case .signedOut:
         // Only a request that carried a token learns its session is gone; a

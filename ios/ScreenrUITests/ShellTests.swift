@@ -38,7 +38,7 @@ final class ShellTests: XCTestCase {
 
     app.buttons["Settings"].tap()
     XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 10))
-    try app.performShellAudit()
+    try app.performSettingsAudit()
     app.buttons["Close"].tap()
 
     app.tab("Find a title").tap()

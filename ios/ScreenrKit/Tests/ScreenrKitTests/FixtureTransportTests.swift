@@ -307,6 +307,56 @@ struct FixtureTransportTests {
     )
   }
 
+  // UI tests read what each write sent: a JSON body with sorted keys, or an
+  // upload's type and size.
+  @Test func logsEachWritesBody() async throws {
+    let directory = FileManager.default.temporaryDirectory
+      .appending(path: UUID().uuidString, directoryHint: .isDirectory)
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    defer {
+      do {
+        try FileManager.default.removeItem(at: directory)
+      } catch {
+        Issue.record("Could not remove \(directory.path()): \(error)")
+      }
+    }
+    let log = directory.appending(path: "requests.log")
+    let services = try services("-ScreenrFixtureLog", log.path())
+
+    _ = try await services.api.send(.profile(name: "Alice Park", username: "alice/p"))
+    _ = try await services.api.send(.uploadPhoto(jpeg: Data([0xFF, 0xD8, 0xFF, 0xE0])))
+    _ = try await services.api.send(.removePhoto)
+
+    #expect(
+      try String(contentsOf: log, encoding: .utf8) == """
+        POST /api/screenr/profile {"name":"Alice Park","username":"alice/p"}
+        POST /api/screenr/photo image/jpeg 4 bytes
+        POST /api/screenr/remove-photo {}
+
+        """
+    )
+  }
+
+  @Test func linksOnlyTheStubCredentials() async throws {
+    let services = try services()
+    let nonce = AppleNonce()
+
+    _ = try await services.api.send(
+      .linkApple(
+        identityToken: FixtureIdentity.appleCredential(hashedNonce: nonce.hashed).identityToken,
+        authorizationCode: "fixture-apple-code",
+        nonce: nonce.raw
+      )
+    )
+    let error = await #expect(throws: APIError.self) {
+      try await services.api.send(.linkGoogle(idToken: "real-google-token", nonce: "nonce"))
+    }
+
+    #expect(error?.kind == .rejected(status: 401))
+    #expect(error?.code == "INVALID_TOKEN")
+    #expect(services.session.phase == .signedIn)
+  }
+
   @Test func rejectsAMissingFixtureName() {
     #expect(throws: FixtureError.self) {
       try FixtureTransport(

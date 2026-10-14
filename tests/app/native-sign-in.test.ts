@@ -20,6 +20,7 @@ const { revokeAppleTokens } = await import("../../src/server/apple");
 const { createInvitation, completeSignup } =
   await import("../../src/server/invitations");
 const { profileFor } = await import("../../src/server/profiles");
+const { loadScreen } = await import("../../src/server/screens");
 
 useDatabase();
 
@@ -52,6 +53,13 @@ function client(auth: ReturnType<typeof createAuth>) {
     );
 }
 const invited = (token: string) => ({ "Screenr-Invitation": token });
+
+// What the app's Settings show about Sign in with Apple.
+async function appleSettings(userId: string) {
+  const screen = await loadScreen(userId, "/account");
+  assert.ok(screen.kind === "account");
+  return { enabled: screen.appleEnabled, connected: screen.appleConnected };
+}
 
 const userCount = async () =>
   (await db.query('SELECT count(*)::int AS n FROM "user"')).rows[0].n;
@@ -191,6 +199,10 @@ test("Sign in with Apple accepts the Dev app and links an existing account only 
     { code: "OAUTH_LINK_ERROR" },
   );
   assert.equal(apple.exchanged.length, 0);
+  assert.deepEqual(await appleSettings(member), {
+    enabled: true,
+    connected: false,
+  });
   const session = { Authorization: `Bearer ${await bearerFor(member)}` };
   // Like every Apple sign-in, a link needs a code that Apple confirms.
   const { token } = fromDev();
@@ -202,6 +214,10 @@ test("Sign in with Apple accepts the Dev app and links an existing account only 
   assert.equal(await storedAppleToken(member), null);
   const linked = await post("link-social", appleSignIn(fromDev()), session);
   assert.equal(linked.status, 200, await linked.clone().text());
+  assert.deepEqual(await appleSettings(member), {
+    enabled: true,
+    connected: true,
+  });
   const signin = await post("sign-in/social", appleSignIn(fromDev()));
   assert.equal(signin.status, 200, await signin.clone().text());
   assert.equal((await signin.json()).user.id, member);
