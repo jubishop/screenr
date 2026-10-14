@@ -36,6 +36,7 @@ export default async function Login({
         !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET)
       }
       initialError={initialError}
+      notice={query.deleted ? "Your Screenr account was deleted." : ""}
       next={returnPath(query.next)}
     />
   );

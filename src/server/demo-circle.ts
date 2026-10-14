@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto";
 import type { PoolClient } from "pg";
+import { eraseAccounts } from "./account-deletion";
 import { demoFriendDomain, reviewerEmail } from "./auth";
 import { ensureTitle } from "./catalog";
 import { addComment } from "./comments";
@@ -80,34 +81,15 @@ async function refuseOutsiders(client: PoolClient) {
 }
 
 // Deletes every demo account, including people who joined through a demo
-// invitation, and everything they made. The circle is closed, so nothing a
-// real member made refers to it.
+// invitation, and everything they made, as account deletion does. The
+// circle is closed, so nothing a real member made refers to it.
 async function removeDemoCircle(client: PoolClient) {
   const ids = (
     await client.query<{ ids: string[] }>(
       "SELECT coalesce(array_agg(user_id),'{}') AS ids FROM profile WHERE demo",
     )
   ).rows[0].ids;
-  for (const statement of [
-    `DELETE FROM comment WHERE author_id=ANY($1)
-      OR conversation_id IN (SELECT id FROM conversation WHERE owner_id=ANY($1))
-      OR discussion_post_id IN (SELECT id FROM discussion_post WHERE owner_id=ANY($1))`,
-    "DELETE FROM feed_item WHERE owner_id=ANY($1)",
-    "DELETE FROM review WHERE owner_id=ANY($1)",
-    "DELETE FROM watch_progress WHERE owner_id=ANY($1)",
-    "DELETE FROM title_comment WHERE owner_id=ANY($1)",
-    "DELETE FROM discussion_post WHERE owner_id=ANY($1)",
-    "DELETE FROM top_ten WHERE owner_id=ANY($1)",
-    "DELETE FROM conversation WHERE owner_id=ANY($1)",
-    "DELETE FROM friendship WHERE low_id=ANY($1) OR high_id=ANY($1)",
-    "DELETE FROM block WHERE blocker_id=ANY($1) OR blocked_id=ANY($1)",
-    `DELETE FROM invitation_signup WHERE user_id=ANY($1)
-      OR invitation_id IN (SELECT id FROM invitation WHERE creator_id=ANY($1))`,
-    "DELETE FROM invitation WHERE creator_id=ANY($1)",
-    // Profiles, sessions, notifications, and the rest cascade.
-    'DELETE FROM "user" WHERE id=ANY($1)',
-  ])
-    await client.query(statement, [ids]);
+  await eraseAccounts(client, ids);
 }
 
 async function createMembers(client: PoolClient) {

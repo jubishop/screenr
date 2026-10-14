@@ -162,8 +162,9 @@ try await api.send(.comment(conversation: item.id, body: text, spoiler: false))
   and a new `Screenr-Request-Id`, plus `Authorization: Bearer <token>` while
   signed in. It never sends cookies or an `Origin`.
 - **Session:** a sign-in request stores the token from `set-auth-token` in
-  the Keychain, and `.signOut` removes it. A 401 to a request that carried a
-  token removes that token, unless a newer one replaced it.
+  the Keychain, and `.signOut` removes it, as does a successful
+  `.deleteAccount`. A 401 to a request that carried a token removes that
+  token, unless a newer one replaced it.
 - **Caching:** each GET's response is kept in memory with its ETag. Reading
   the same path again sends `If-None-Match`, and a 304 returns the cached
   value. Signing in or out clears the cache.
@@ -171,7 +172,8 @@ try await api.send(.comment(conversation: item.id, body: text, spoiler: false))
   kind, as do no response, a timeout, cancellation, and an unreadable body.
   A 426 also moves `SessionStore.phase` to `.updateRequired`. A signed-in
   person who has not finished setup gets `.forbidden` with "Complete your
-  profile first." from every action except `setup` and the photo actions.
+  profile first." from every action except `setup`, `delete-account`, and
+  the photo actions.
 - **Models:** properties use the camelCase form of the server's keys, such as
   `userId` for `user_id`. Unknown enum values decode as `.unknown`, and an
   unknown screen kind as `.unknown(kind:)`. Timestamps are `Date` in either

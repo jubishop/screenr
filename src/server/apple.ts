@@ -140,7 +140,9 @@ export async function sealAppleRefreshToken(idToken: unknown, code: unknown) {
 // Revokes the person's Sign in with Apple tokens, which ends Screenr's
 // authorization in their Apple ID settings. Account deletion calls this
 // before deleting the user, whose account rows hold the tokens. It throws if
-// Apple does not confirm, and keeps that token so a retry can revoke it.
+// Apple does not confirm, and keeps that token so a retry can revoke it. A
+// token sealed under an earlier BETTER_AUTH_SECRET can never be read or
+// revoked, so it is logged and skipped rather than blocking deletion.
 export async function revokeAppleTokens(userId: string) {
   const { rows } = await db.query<{ id: string; refreshToken: string }>(
     `SELECT id, "refreshToken" FROM account
@@ -148,9 +150,14 @@ export async function revokeAppleTokens(userId: string) {
     [userId],
   );
   for (const row of rows) {
-    const { clientId, refreshToken }: StoredToken = JSON.parse(
-      unseal(sealPurpose, row.refreshToken),
-    );
+    let stored: StoredToken;
+    try {
+      stored = JSON.parse(unseal(sealPurpose, row.refreshToken));
+    } catch (error) {
+      logFailure("apple token unreadable", {}, error);
+      continue;
+    }
+    const { clientId, refreshToken } = stored;
     const response = await post("/auth/revoke", clientId, {
       token: refreshToken,
       token_type_hint: "refresh_token",

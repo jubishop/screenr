@@ -80,6 +80,9 @@ public struct InvitesScreen: Codable, Hashable, Sendable {
 
 // Account settings, at `/account`.
 public struct AccountScreen: Codable, Hashable, Sendable {
+  // The address that receives sign-in codes, such as the one that confirms
+  // account deletion.
+  public let email: String?
   public let activityEmail: Bool
   public let pushSettings: PushSettings?
   // Every service a member can save, and the viewer's saved ones.

@@ -213,7 +213,10 @@ export function ThreadView({
     );
   }
   function renderComment(comment: Comment) {
-    // Comments without an available author show a neutral placeholder.
+    // Comments without an available author show a neutral placeholder. A
+    // removed comment whose author deleted their account has no author but
+    // is not unavailable; its heading alone says it was removed.
+    const deletedAuthor = !comment.unavailable && !comment.author_id;
     const author =
       !comment.unavailable && comment.author_id
         ? {
@@ -240,7 +243,9 @@ export function ThreadView({
                 <span className="muted">@{comment.username}</span>
               </Link>
             ) : (
-              <span className="muted">Comment unavailable</span>
+              <span className="muted">
+                {deletedAuthor ? "Comment removed" : "Comment unavailable"}
+              </span>
             )}
           </span>
           {!comment.unavailable && (
@@ -256,7 +261,7 @@ export function ThreadView({
             Replying to @{comment.addressed_username}
           </p>
         )}
-        {comment.unavailable ? null : comment.removed ? (
+        {comment.unavailable || deletedAuthor ? null : comment.removed ? (
           <p className="muted" id={`removed-${comment.id}`} tabIndex={-1}>
             Comment removed
           </p>

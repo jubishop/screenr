@@ -196,6 +196,20 @@ extension APIRequest where Response == Acknowledgement {
   }
 }
 
+extension APIRequest where Response == Acknowledgement {
+  // Permanently deletes the signed-in account, then removes the token. The
+  // session must come from a sign-in in the last ten minutes; an older one
+  // gets 403, and the member signs in again first.
+  public static var deleteAccount: Self {
+    APIRequest(
+      method: .post,
+      endpoint: .action("delete-account"),
+      body: .json([:]),
+      sessionChange: .signOut
+    )
+  }
+}
+
 extension APIRequest where Response == ActivityEmailSetting {
   public static func activityEmail(enabled: Bool) -> Self {
     .write("activity-email", ["enabled": .bool(enabled)])

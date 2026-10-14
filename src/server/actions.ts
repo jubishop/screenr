@@ -1,3 +1,4 @@
+import { deleteAccount } from "./account-deletion";
 import { invitationToken } from "./auth";
 import { ensureTitle, seasonEpisodes, titleSeasons } from "./catalog";
 import {
@@ -120,6 +121,20 @@ function signup<Input>({
   };
 }
 
+// Account deletion works with or without a profile. It records no usage,
+// since it erases the person's usage rows with everything else.
+function erasure<Input>({
+  input,
+  run,
+}: Definition<Body, Input, SignedIn>): Action {
+  return {
+    method: "POST",
+    profile: false,
+    usage: false,
+    respond: (body, context) => run(input(body), context),
+  };
+}
+
 // Photo changes work during setup, before the profile exists, and later on
 // Account. They count toward usage telemetry once the profile exists.
 function photo<Input>({
@@ -145,6 +160,12 @@ const actions = {
     input: ({ name, username }) => ({ name, username }),
     run: ({ name, username }, { userId, headers }) =>
       completeSignup(userId, name, username, invitationToken(headers)),
+  }),
+  // Deletes the signed-in person's account. The session must come from a
+  // sign-in in the last ten minutes.
+  "delete-account": erasure({
+    input: () => undefined,
+    run: (_, { userId, sessionId }) => deleteAccount(userId, sessionId),
   }),
   screen: read({
     input: (query) => query.get("path") ?? "/",

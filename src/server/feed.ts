@@ -76,8 +76,10 @@ export const itemQuery = `SELECT c.*,p.username,p.display_name,screenr_photo(p.u
   FROM ${feedEntries} c JOIN profile p ON p.user_id=c.owner_id LEFT JOIN title t ON t.id=c.title_id
   LEFT JOIN LATERAL (
     WITH candidates AS (
-      SELECT cm.*,screenr_can_read(cm.author_id,c.owner_id)
-        AND NOT screenr_blocked($1,cm.author_id) AS accessible
+      -- A removed comment whose author deleted their account has no author;
+      -- it shows as removed, without one, while its replies remain.
+      SELECT cm.*,cm.author_id IS NULL OR (screenr_can_read(cm.author_id,c.owner_id)
+        AND NOT screenr_blocked($1,cm.author_id)) AS accessible
       FROM comment cm WHERE ${belongsTo("cm", "c.id")}
     ), retained AS (
       SELECT cm.* FROM candidates cm
@@ -101,7 +103,7 @@ export const itemQuery = `SELECT c.*,p.username,p.display_name,screenr_photo(p.u
       'reactions',${reactionSummary(true)}) ORDER BY cm.created_at,cm.id) AS comments,
       max(cm.created_at) FILTER (WHERE cm.accessible AND cm.removed_at IS NULL) AS activity,
       max(cm.created_at) AS placeholder_activity
-    FROM retained cm JOIN profile author ON author.user_id=cm.author_id
+    FROM retained cm LEFT JOIN profile author ON author.user_id=cm.author_id
     LEFT JOIN profile addressed ON addressed.user_id=cm.addressed_id
   ) replies ON true
   WHERE screenr_can_read($1,c.owner_id)

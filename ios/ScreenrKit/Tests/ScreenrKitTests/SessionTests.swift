@@ -77,6 +77,34 @@ struct SessionTests {
     #expect(test.session.phase == .signedOut)
   }
 
+  @Test func removesTheTokenAfterDeletingTheAccount() async throws {
+    let test = try TestClient(token: "signed-token", replies: [try .json(200, ["ok": true])])
+
+    _ = try await test.client.send(.deleteAccount)
+
+    #expect(test.header("Authorization") == "Bearer signed-token")
+    #expect(test.transport.requests.first?.url?.path() == "/api/screenr/delete-account")
+    #expect(try test.keychain.read() == nil)
+    #expect(test.session.phase == .signedOut)
+  }
+
+  @Test func keepsTheTokenWhenDeletionNeedsANewSignIn() async throws {
+    let test = try TestClient(
+      token: "signed-token",
+      replies: [
+        try .json(
+          403,
+          ["error": "To delete your account, confirm it’s you again with a new sign-in."]
+        )
+      ]
+    )
+
+    await #expect(throws: APIError.self) { try await test.client.send(.deleteAccount) }
+
+    #expect(try test.keychain.read() == "signed-token")
+    #expect(test.session.phase == .signedIn)
+  }
+
   @Test func keepsTheTokenWhenSignOutFails() async throws {
     let test = try TestClient(token: "signed-token", replies: [.failure(URLError(.timedOut))])
 

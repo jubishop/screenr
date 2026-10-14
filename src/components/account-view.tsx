@@ -9,6 +9,7 @@ import { AccountProfileEditor } from "./account-profile-editor";
 import { PhotoEditor, type PhotoChange } from "./photo-editor";
 import { StreamingServicesEditor } from "./streaming-services-editor";
 import { ActivityEmailSetting } from "./activity-email-setting";
+import { AccountDeletion } from "./account-deletion";
 export function AccountView({
   data,
   user,
@@ -131,6 +132,7 @@ export function AccountView({
           {signOutFailure.alert}
         </section>
       )}
+      {data?.kind === "account" && <AccountDeletion email={data.email} />}
     </>
   );
 }

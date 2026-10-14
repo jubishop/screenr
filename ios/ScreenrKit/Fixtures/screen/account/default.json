@@ -11,9 +11,10 @@
   },
   "response": {
     "status": 200,
-    "etag": "W/\"UuHmWVwMhL3TwuJhgEFiONMrUQPtnXPoBabUmpSKX2Q\"",
+    "etag": "W/\"9YAQ5_VUG2RTd_e32dcLWIJJcdQVa1lYDtsiJbAd3Tw\"",
     "body": {
       "kind": "account",
+      "email": "alice@example.test",
       "activityEmail": false,
       "pushSettings": {
         "friendRequest": true,

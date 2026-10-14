@@ -731,6 +731,27 @@ const actions: Record<Exclude<ActionName, "screen">, Record<string, Case>> = {
       "Reacting to a reply.",
     ),
   },
+  "delete-account": {
+    default: write(
+      "delete-account",
+      "alice",
+      {},
+      "Deleting the account with a session from a sign-in in the last ten minutes. The token then signs no one in.",
+    ),
+    "stale-sign-in": write(
+      "delete-account",
+      "alice",
+      async (world) => {
+        await db.query(
+          `UPDATE session SET "createdAt"=now()-interval '11 minutes' WHERE token=$1`,
+          [decodeURIComponent(world.tokens.alice).split(".")[0]],
+        );
+        return {};
+      },
+      "A session older than ten minutes must sign in again before deleting the account.",
+      403,
+    ),
+  },
 };
 
 // Errors every action can return share one shape.

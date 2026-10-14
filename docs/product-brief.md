@@ -606,6 +606,9 @@ requires in-app account deletion once the
 - A 30-day deactivation before erasure.
 - Deferring the rules to a separate decision.
 
+**Implementation:** [account deletion](data-and-access.md#account-deletion)
+and [backups](deployment.md#account-deletion-and-backups).
+
 ### Automatic inviter friendship — 2026-09-07
 
 **Decision:** When a new member completes signup through a member's invitation,

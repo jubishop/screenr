@@ -42,6 +42,7 @@ struct FixtureDecodingTests {
       model(.removeComment(id: "")),
       model(.reaction(item: "", kind: nil)),
       model(.setup(name: "", username: "")),
+      model(.deleteAccount),
     ]
   )
 
@@ -290,6 +291,7 @@ struct FixtureDecodingTests {
       return
     }
     #expect(account.pushSettings?.comment == true)
+    #expect(account.email == "alice@example.test")
     let saved = try Self.decodeBody(
       SavedPushSettings.self,
       from: try Self.data("actions/push-settings/default")

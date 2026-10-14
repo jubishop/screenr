@@ -11,11 +11,14 @@ export function SignIn({
   invited,
   googleEnabled,
   initialError,
+  notice = "",
   next,
 }: {
   invited: boolean;
   googleEnabled: boolean;
   initialError: string;
+  // A result to report on arrival, such as a deleted account.
+  notice?: string;
   next?: string;
 }) {
   const interactive = useInteractive();
@@ -67,6 +70,7 @@ export function SignIn({
             ? "You’re invited. Sign in to find your people and something worth watching."
             : "Welcome back. Sign in to your circle. New members need an invitation."}
         </p>
+        {notice && <p role="status">{notice}</p>}
         {googleEnabled && (
           <ActionButton
             className="secondary wide"

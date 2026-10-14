@@ -3,6 +3,7 @@ import { betterAuth, type BetterAuthPlugin } from "better-auth";
 import { APIError, createAuthMiddleware } from "better-auth/api";
 import { bearer, emailOTP } from "better-auth/plugins";
 import { codeLimitMessage } from "../shared";
+import { freshSignInSeconds } from "./account-deletion";
 import {
   appleBundleIds,
   appleConfigured,
@@ -237,7 +238,7 @@ export function createAuth(
     },
     session: {
       expiresIn: 60 * 60 * 24 * 30,
-      freshAge: 60 * 10,
+      freshAge: freshSignInSeconds,
       cookieCache: { enabled: false },
     },
     rateLimit: {
