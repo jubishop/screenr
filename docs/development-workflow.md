@@ -59,7 +59,9 @@ security updates. Add weekly Dependabot version updates for the `npm` and
 `github-actions` ecosystems. They keep exact npm versions and commit-SHA
 Action pins. Group minor and patch updates into one pull request per
 ecosystem, and open major updates separately. Every update pull request runs
-the full CI gate and merges only after review and passing CI.
+the full validation gate and merges only after review and full validation
+under [local and CI validation](#local-and-ci-validation), including its
+confirmed capacity exception.
 
 **Why:** The user chose automatic update pull requests so security fixes and
 routine releases do not depend on someone noticing them. This follows the
@@ -427,8 +429,9 @@ result from full application validation.
 ### Local and CI validation
 
 **Decision — 2026-09-08:** For ordinary code changes, run focused local
-application checks and require successful full CI validation before merge and
-deployment. Run the full suite locally for test/build infrastructure changes
+application checks and require successful full validation before merge,
+normally through CI. Deployment still requires successful full CI. Run the
+full suite locally for test/build infrastructure changes
 or when focused checks leave material uncertainty. Documentation-only changes
 use the applicable document checks locally.
 
@@ -437,9 +440,20 @@ retains broad coverage without routinely running the complete browser suite
 both locally and in CI for every ordinary change.
 
 **Tradeoff:** A regression outside the focused local checks may first appear
-in CI. Resolve it and obtain a successful full CI result for the code being
+in CI. Resolve it and obtain successful full validation for the code being
 merged; a fast or focused pass alone does not satisfy that gate. Preserve the
-full CI requirements when changing the check commands.
+full validation requirements when changing the check commands.
+
+**Update — 2026-10-14: GitHub CI capacity exception.**
+
+If GitHub CI is blocked solely by confirmed Actions quota exhaustion or
+GitHub rate limiting, run `bin/check --full` and all equivalent required
+checks locally on the exact revision being delivered. Once they pass,
+continue the normal review, merge, and cleanup process without waiting for
+hosted CI. Record the blocker, tested revision, commands, and results; report
+CI as unavailable, not passed. Actual test failures, unknown failures, and
+checks that cannot be validated locally remain blockers. Do not bypass
+enforced branch protections, required approvals, or deployment gates.
 
 ### CI jobs
 

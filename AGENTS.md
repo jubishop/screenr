@@ -53,9 +53,10 @@ labels, and change the label set only with the user's approval.
 tests, formatting, typechecking, application and browser tests, and the
 build. On a Mac it also runs `bin/check-ios` when `ios/` changed. CI runs
 the same checks, except the iOS checks, in parallel jobs. Require successful
-full CI before merge and deployment, and
-follow the
-[validation policy](docs/development-workflow.md#local-and-ci-validation).
+full validation before merge under the
+[validation policy](docs/development-workflow.md#local-and-ci-validation),
+including its narrow exception for confirmed GitHub quota or rate-limit
+blockers. Production deployment still requires successful full CI.
 
 iOS changes: run `bin/check-ios` locally before every push; a pre-push hook
 enforces it. Never use `--no-verify`. There is no remote iOS CI. See
