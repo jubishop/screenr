@@ -224,6 +224,32 @@ of title activity are excluded. People discovery and anonymous title
 suggestion signals have separate, limited scopes; neither expands the
 audience for private activity.
 
+### Public privacy policy — 2026-10-13
+
+**Decision:** The public privacy policy at
+[`/privacy`](https://screenr.club/privacy) is the member-facing statement of
+Screenr's data practices. It is served signed out, like the credits page,
+and the sign-in page and sidebar link to it. The owner approved its wording
+on 2026-10-13. A change to what Screenr collects, who can see it, which
+services receive it, or how long it is kept must update the policy and its
+effective date in the same change. `src/app/privacy/page.tsx` holds the text.
+
+- **Operator:** the policy names Justin Bishop as the person who runs
+  Screenr, with `screenr@jubishop.com` as the contact.
+- **Account deletion:** until members can
+  [delete their own account](#account-deletion--2026-10-13), the policy says
+  deletion is coming soon and asks them to email `screenr@jubishop.com`.
+  [Issue #236](https://github.com/jubishop/screenr/issues/236) updates that
+  section when self-service deletion ships.
+- **Usage telemetry:** the policy describes the
+  [usage measurement](usage-telemetry.md), although that decision added no
+  notice inside the app.
+
+**Why:** Publishing Google sign-in to production needs a privacy policy link
+on the Google Auth Platform Branding page. TestFlight external testing and
+the App Store listing need a privacy policy URL too
+([issue #263](https://github.com/jubishop/screenr/issues/263)).
+
 ### Mutual friendships — 2026-09-04
 
 **Decision:** A friendship exists only after one user requests it and the

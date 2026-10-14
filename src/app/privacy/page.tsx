@@ -4,8 +4,8 @@ import Link from "next/link";
 export const metadata: Metadata = { title: "Privacy policy · Screenr" };
 
 // A public page, like the credits, so sign-in providers and app listings can
-// link to it. Each statement follows an accepted decision in docs/; change the
-// effective date with the text.
+// link to it. A change to data practices updates this text and its effective
+// date in the same change: docs/product-brief.md#public-privacy-policy--2026-10-13
 export default function Privacy() {
   return (
     <main className="auth-page">
@@ -18,8 +18,8 @@ export default function Privacy() {
           Effective <time dateTime="2026-10-13">October 13, 2026</time>
         </p>
         <p>
-          Screenr is a private, invite-only social app for TV and movies. One
-          person runs it as a non-commercial project. This policy covers the
+          Screenr is a private, invite-only social app for TV and movies. Justin
+          Bishop runs it as a non-commercial project. This policy covers the
           website at screenr.club and the Screenr iPhone app: what Screenr
           collects, who can see it, which services help run it, and how to
           delete it.
@@ -184,7 +184,9 @@ export default function Privacy() {
         <p>
           The website uses a cookie to keep you signed in and another to
           remember an invitation while you join. The iPhone app keeps its
-          sign-in token in the iPhone&rsquo;s Keychain. Screenr uses no
+          sign-in token in the iPhone&rsquo;s Keychain. Screenr&rsquo;s sign-in
+          records the IP address and browser of each session, and uses IP
+          addresses to limit repeated sign-in requests. Screenr uses no
           advertising or tracking cookies.
         </p>
 
@@ -212,19 +214,20 @@ export default function Privacy() {
 
         <h2>Deleting your account</h2>
         <p>
-          You can delete your account from Account on the website or from You
-          &rarr; Settings in the iPhone app. After you confirm it&rsquo;s you
-          with an email code or a fresh sign-in, deletion is immediate and
-          permanent. It erases your sessions and push devices, profile and
-          photo, friendships, invitations, blocks, recommendations, watch
-          statuses, reviews, top 10, reactions, notifications, and usage
-          records.
+          Account deletion is coming soon to Account on the website and to You
+          &rarr; Settings in the iPhone app. Until then, email{" "}
+          <a href="mailto:screenr@jubishop.com">screenr@jubishop.com</a> to
+          delete your account.
         </p>
         <p>
-          Your posts and reviews are removed along with their conversations.
-          Your comments are erased; one that has replies becomes &ldquo;Comment
-          removed&rdquo; so the replies remain. If you used Sign in with Apple,
-          Screenr also revokes its access with Apple.
+          Deleting an account is permanent. It erases your sessions and push
+          devices, profile and photo, friendships, invitations, blocks,
+          recommendations, watch statuses, reviews, top 10, reactions,
+          notifications, and usage records. Your posts and reviews are removed
+          along with their conversations. Your comments are erased; one that has
+          replies becomes &ldquo;Comment removed&rdquo; so the replies remain.
+          If you used Sign in with Apple, Screenr also revokes its access with
+          Apple.
         </p>
         <p>
           Deleted information stays in Screenr&rsquo;s encrypted backups until

@@ -117,6 +117,11 @@ first-party and aggregate, within a private, non-commercial circle.
 **Rejected alternatives:** A short note on the Account page, and a note with
 an opt-out switch.
 
+**Updated — 2026-10-13:** The
+[public privacy policy](product-brief.md#public-privacy-policy--2026-10-13)
+describes this measurement and its 12-month retention. The owner approved that
+wording. The app still shows no notice and offers no opt-out.
+
 ### Twelve-month retention — 2026-10-12
 
 **Decision:** The worker's existing cleanup deletes active-day and
