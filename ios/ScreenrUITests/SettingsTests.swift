@@ -234,19 +234,25 @@ extension XCUIApplication {
   // as section headers, footers, and rows, as not scaling with Dynamic Type
   // or as clipping, though it uses text styles; `testFitsTheLargestTextSize`
   // checks those screens at the largest size instead. It also passes over
-  // two contrast reports: the nearly passing secondary color of section
-  // footers, which darkens when Increase Contrast is on, and failures with
+  // contrast reports it cannot place or that the glass covers: failures with
   // no element, which these long lists raise for rows sampled beneath the
-  // navigation bar's blur or the sheet's bottom edge. A failure on an
-  // element still fails.
+  // navigation bar's blur or the sheet's bottom edge, and failures on an
+  // element beneath the navigation bar or the keyboard, or past the screen's
+  // edge, as `performShellAudit` does. A failure on an element in view still
+  // fails, once `performSettledAudit` has audited the settled screen again.
   @MainActor
   func performSettingsAudit() throws {
-    try performAccessibilityAudit { issue in
-      switch issue.auditType {
-      case .dynamicType, .textClipped: true
-      case .contrast:
-        issue.compactDescription == "Contrast nearly passed" || issue.element == nil
-      default: false
+    try performSettledAudit {
+      let screen = windows.firstMatch.frame
+      let covers = glassCovers()
+      return { issue in
+        switch issue.auditType {
+        case .dynamicType, .textClipped: return true
+        case .contrast:
+          guard let frame = issue.element?.frame else { return true }
+          return !screen.contains(frame) || covers.contains { $0.intersects(frame) }
+        default: return false
+        }
       }
     }
   }

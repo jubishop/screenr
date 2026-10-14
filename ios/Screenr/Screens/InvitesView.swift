@@ -96,6 +96,7 @@ private struct InvitationsScreen: View {
           Text(status)
         }
       }
+      .foregroundStyle(.muted)
     }
   }
 }
@@ -132,7 +133,7 @@ private struct InvitationSection: View {
         }
       }
       Button(role: .destructive, action: revoke) {
-        Label("Revoke invitation", systemImage: "xmark.circle")
+        DestructiveLabel(title: "Revoke invitation", systemImage: "xmark.circle")
       }
     } header: {
       if let header { SectionHeading(header) }

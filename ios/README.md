@@ -546,7 +546,10 @@ replaces the sections with the error, keeps an open draft.
 
 Section headings use `SectionHeading`, and a setting's value `SettingRow`,
 which keep the primary color: the system's gray falls short of the contrast
-that text needs.
+that text needs. Footers, through `SettingsFooter` or their own text, use
+`.muted` for the same reason, and a destructive action on a bordered button,
+such as Remove photo, uses `.danger`, since the system's red falls short of
+4.5:1 on the button's gray fill.
 
 `SettingsTests` cover the journeys: changing the name and username, uploading
 and removing a photo, creating and revoking an invitation, connecting Sign in
@@ -554,10 +557,15 @@ with Apple, sending feedback, and signing out. They check what each write sent i
 API's request log, since a screen read after a write still returns the
 fixture. Their `performSettingsAudit()` passes over reports the iOS 27
 Simulator raises for the system's list text: Dynamic Type and clipping for
-headers, footers, and rows, the nearly passing contrast of footers, and
-contrast failures with no element, for rows sampled beneath the navigation
-bar's blur. `testFitsTheLargestTextSize` instead reaches every control at the
-largest accessibility text size.
+headers, footers, and rows, and contrast failures for rows beneath the
+navigation bar's blur or past the screen's edge, with or without an element,
+using the same `glassCovers()` as `performShellAudit()`.
+`testFitsTheLargestTextSize` instead reaches every control at the largest
+accessibility text size. Both audits run through `performSettledAudit`: the
+audit samples colors from the screen, so text still moving after a swipe can
+fail contrast once, and a busy Mac can run the audit out of time. After a
+failure, it audits the settled screen again and fails only when both audits
+fail, so a real problem still fails.
 
 ### Feedback
 

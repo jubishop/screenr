@@ -57,7 +57,10 @@ struct ProfilePhotoEditor: View {
         Button(role: .destructive) {
           Task { await model.remove() }
         } label: {
-          Label(model.activity == .removing ? "Removing…" : "Remove photo", systemImage: "trash")
+          DestructiveLabel(
+            title: model.activity == .removing ? "Removing…" : "Remove photo",
+            systemImage: "trash"
+          )
         }
       }
       if let status = model.status {

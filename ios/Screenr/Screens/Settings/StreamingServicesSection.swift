@@ -45,6 +45,7 @@ struct StreamingServicesSection: View {
       Text(
         "Choose the services you have. Free options are always included when finding something to watch."
       )
+      .foregroundStyle(.muted)
     }
   }
 }
@@ -83,7 +84,7 @@ struct StreamingServicesSheet: View {
         } header: {
           SectionHeading("\(model.selected.count) selected")
         } footer: {
-          if let failure = model.failure { FailureLabel(failure) }
+          if let failure = model.failure { FailureLabel(failure).foregroundStyle(.muted) }
         }
       }
       .searchable(text: $model.query, placement: .navigationBarDrawer, prompt: "Find a service")

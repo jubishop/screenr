@@ -22,6 +22,7 @@ struct FeedbackSection: View {
       SectionHeading("Feedback")
     } footer: {
       Text("Tell us what works, what doesn't, and what you'd like Screenr to do.")
+        .foregroundStyle(.muted)
     }
   }
 }
@@ -101,6 +102,7 @@ struct FeedbackSheet: View {
         Text(
           "Recent app logs go with your feedback. They show what the app did, such as which screens loaded, and never what anyone wrote."
         )
+        .foregroundStyle(.muted)
       }
       Section {
         ForEach(Array(model.screenshots.enumerated()), id: \.element.id) { index, screenshot in
@@ -117,6 +119,7 @@ struct FeedbackSheet: View {
         SectionHeading("Screenshots")
       } footer: {
         Text("Attach up to \(FeedbackModel.maximumScreenshots) screenshots.")
+          .foregroundStyle(.muted)
       }
     }
     .disabled(model.phase == .sending)

@@ -61,6 +61,7 @@ struct ProfileEditorSheet: View {
             if let failure = model.failure { FailureLabel(failure) }
             Text(ProfileEditorModel.usernameHelp)
           }
+          .foregroundStyle(.muted)
         }
       }
       .navigationTitle("Edit profile")
