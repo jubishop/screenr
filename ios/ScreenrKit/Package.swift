@@ -18,11 +18,18 @@ let package = Package(
   products: [
     .library(name: "ScreenrKit", targets: ["ScreenrKit"])
   ],
+  dependencies: [
+    .package(url: "https://github.com/getsentry/sentry-cocoa.git", exact: "9.30.1")
+  ],
   targets: [
-    .target(name: "ScreenrKit", swiftSettings: swiftSettings),
+    .target(
+      name: "ScreenrKit",
+      dependencies: [.product(name: "Sentry", package: "sentry-cocoa")],
+      swiftSettings: swiftSettings
+    ),
     .testTarget(
       name: "ScreenrKitTests",
-      dependencies: ["ScreenrKit"],
+      dependencies: ["ScreenrKit", .product(name: "Sentry", package: "sentry-cocoa")],
       swiftSettings: swiftSettings
     ),
   ],

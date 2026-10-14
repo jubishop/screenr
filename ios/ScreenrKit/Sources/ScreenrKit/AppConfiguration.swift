@@ -2,7 +2,7 @@ import Foundation
 
 // The variant's build settings, which the app's Info.plist carries from its .xcconfig files.
 public struct AppConfiguration: Equatable, Sendable {
-  public enum Variant: String, Equatable, Sendable {
+  public enum Variant: String, Equatable, Sendable, CaseIterable {
     case dev
     case release
   }

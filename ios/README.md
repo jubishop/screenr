@@ -147,7 +147,7 @@ try await api.send(.comment(conversation: item.id, body: text, spoiler: false))
 | `SessionStore` | `Session/SessionStore.swift` | `@MainActor @Observable`. Its `phase` is `.signedOut`, `.signedIn`, or `.updateRequired(minimumBuild:)`. |
 | `KeychainStorage` | `Session/KeychainStorage.swift` | The token's Keychain item: `SystemKeychain(accessGroup:)`, or `InMemoryKeychain` in tests. |
 | `APIError` | `API/APIError.swift` | `kind`, the server's `message`, and the `requestID` the request sent. `isPermanent` says whether polling should stop. |
-| `APIRequestObserver` | `API/APIRequestObserver.swift` | Sees every finished request: route pattern, request ID, status, duration, and error. Logging attaches here. |
+| `APIRequestObserver` | `API/APIRequestObserver.swift` | Sees every finished request: route pattern, request ID, status, duration, and error. The app's observer is `Telemetry`; see [Sentry](#sentry). |
 | Models | `Models/` | `Screens.swift`, `Feed.swift`, `Titles.swift`, `People.swift` (members and notifications), and `Results.swift` (other actions and `ErrorBody`). |
 | `AppServices` | `AppServices.swift` | The client and session together, injected with `.screenrServices(_:)`. |
 
@@ -206,6 +206,109 @@ This works under `swift test` and in the Simulator, which reads the Mac's
 file system. `FixtureDecodingTests` decodes every fixture as the model its
 action returns, and `RequestTests` checks that the request functions build
 the recorded requests.
+
+## Logging
+
+ScreenrKit's `Log` wraps `os.Logger`, with a logger per category:
+`Log.app`, `Log.api`, `Log.session`, `Log.push`, and `Log.telemetry`. A
+feature can add its own category with `LogCategory("name")`.
+
+```swift
+Log.api.warning("Request failed", .int("status", 503), .identifier("request_id", id))
+```
+
+Log lines never hold user content. The message is a string literal, and each
+field is one of these:
+
+- **Numbers:** `.int`, `.double`, `.bool`, and `.duration`, in milliseconds.
+- **Constants:** `.constant` for a string literal, and `.label` for an enum
+  case.
+- **Opaque IDs:** `.identifier` for a request ID or a Screenr user ID. Never
+  pass a username, email address, display name, or anything a member typed.
+- **Routes and errors:** `.route` for a `RoutePattern`, and `.error` for an
+  error's domain and code, without its message.
+
+Each line goes to the unified log under subsystem
+`com.artisanalsoftware.Screenr`. Lines at info and above also go to the log
+file, and in Release builds, lines at warning and above go to Sentry logs.
+
+The log file, `Library/Logs/Screenr/app.ndjson` in the app group container,
+holds one JSON object per line: `time`, `level`, `category`, `message`,
+`launch` (an ID for each launch), and `fields`. One task writes the file in
+order, so logging never waits on the disk. When the file would pass 256 KB it
+becomes `app.1.ndjson`, so the log keeps at most two files.
+`LogFile.recentTail(maximumBytes:)` returns the newest complete lines, which
+the feedback form attaches. Another process, such as the notification
+extension, writes a file of its own name in the same directory.
+
+To read the Dev app's log in your Simulator:
+
+```sh
+container=$(xcrun simctl get_app_container "$udid" \
+  com.artisanalsoftware.Screenr.dev group.com.artisanalsoftware.Screenr.dev)
+cat "$container/Library/Logs/Screenr/app.ndjson"
+xcrun simctl spawn "$udid" log stream \
+  --predicate 'subsystem == "com.artisanalsoftware.Screenr"'
+```
+
+## Sentry
+
+`sentry-cocoa`, the only third-party package, is a ScreenrKit dependency
+pinned to one release in `ScreenrKit/Package.swift` and
+`ScreenrKit/Package.resolved`. It also builds for macOS, so `swift test`
+covers `Telemetry`. Release builds report to the `screenr-ios` project in
+Sentry organization `artisanal-software`, under these
+[privacy rules](../docs/ios-app.md#pseudonymous-sentry-data-without-content--2026-10-13):
+
+- **Release only:** `Telemetry(configuration:)` starts Sentry only for the
+  Release variant, with the project's public DSN in ScreenrKit. Screenr Dev
+  never starts it, so Dev builds send nothing.
+- **Reports:** crashes, errors that `telemetry.capture(_:requestID:)`
+  reports, app hangs, MetricKit diagnostics, and Sentry logs at warning and
+  above. Traces cover app launch and API calls, for one launch in five.
+- **Off:** `sendDefaultPii`, screenshots, the view hierarchy, session replay,
+  accessibility identifiers, and Sentry's URLSession, file, Core Data, view
+  controller, and user interaction instrumentation.
+- **Identity:** `telemetry.signIn(userID:)` makes the opaque Screenr user ID
+  the Sentry user, and `telemetry.signOut()` clears it. Events carry no other
+  user data, and Sentry's installation ID never stands in for a signed-out
+  user. Sentry's session counts still use that random ID.
+- **Request IDs:** the app passes `Telemetry` to `AppServices` as the API
+  client's `APIRequestObserver`. For each finished call, Telemetry logs the
+  method, route pattern, `Screenr-Request-Id`, status, and duration. In
+  Release builds it also adds an `http` breadcrumb and, in traced launches,
+  records an `http.client` transaction named by its route, such as
+  `GET /api/screenr/screen?path=/people/:username`. Both carry a `request_id`
+  tag, the tag the server's failure reports use, as does an error captured
+  with its request ID. A failed call logs a warning, and a cancelled one logs
+  at info.
+- **Scrubbing:** `SentryPrivacy` runs as Sentry's `beforeSend`,
+  `beforeBreadcrumb`, `beforeSendSpan`, and `beforeSendLog`. It keeps only the
+  user ID, and reduces every URL to its `RoutePattern`, such as
+  `/titles/:kind/:id` or `/people/:username`, without a query or fragment.
+  Breadcrumbs keep only data that names no content, so titles, view
+  descriptions, and accessibility identifiers are dropped. A captured error
+  keeps its domain and code, but not its description or user info.
+
+Report errors and log only through `Telemetry` and `Log`; do not call
+`SentrySDK` elsewhere.
+
+### Symbols
+
+The Screenr target's last build phase runs only when archiving. It calls
+`bin/upload-ios-symbols`, which uploads a Release device archive's dSYMs to
+`screenr-ios` with `sentry-cli`. sentry-cli reads its auth token from
+`SENTRY_AUTH_TOKEN` or `~/.sentryclirc`. Without sentry-cli or a token, the
+script prints a warning and skips the upload; a failed upload fails the
+archive. To confirm that Sentry has an archive's symbols:
+
+```sh
+sentry-cli debug-files upload --org artisanal-software --project screenr-ios \
+  path/to/Screenr.xcarchive/dSYMs
+```
+
+It reports "Nothing to upload, all files are on the server" when they are
+there.
 
 ## Signing
 

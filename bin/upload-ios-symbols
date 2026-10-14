@@ -1,0 +1,33 @@
+#!/bin/sh
+# Upload the iPhone app's debug symbols to Sentry, so crash reports from
+# Release builds show symbolicated stack traces. The Screenr target's last
+# build phase runs this in install builds, which only archives make, and it
+# does nothing outside a Release device archive. Without sentry-cli or a
+# Sentry auth token it skips the upload with a warning; a failed upload fails
+# the archive. sentry-cli reads the token from SENTRY_AUTH_TOKEN or
+# ~/.sentryclirc.
+set -eu
+
+if [ "${ACTION-}" != install ] || [ "${CONFIGURATION-}" != Release ] ||
+  [ "${PLATFORM_NAME-}" != iphoneos ]; then
+  echo "Skipping the Sentry symbol upload: it runs only for Release device archives."
+  exit 0
+fi
+
+if ! command -v sentry-cli >/dev/null 2>&1; then
+  echo "warning: sentry-cli is not installed, so this archive's symbols were not uploaded" \
+    "to Sentry. Install it with: brew install getsentry/tools/sentry-cli"
+  exit 0
+fi
+
+if sentry-cli info --config-status-json | tr -d ' \n' | grep -q '"auth":{"type":null'; then
+  echo "warning: No Sentry auth token is set, so this archive's symbols were not uploaded" \
+    "to Sentry. Set SENTRY_AUTH_TOKEN, or run sentry-cli login."
+  exit 0
+fi
+
+if ! sentry-cli debug-files upload --org artisanal-software --project screenr-ios \
+  "${DWARF_DSYM_FOLDER_PATH:?}"; then
+  echo "error: Uploading this archive's symbols to Sentry failed."
+  exit 1
+fi

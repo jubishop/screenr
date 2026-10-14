@@ -408,7 +408,7 @@ address scrubbing and data scrubbing enabled.
 | --- | --- | --- |
 | Project `screenr-ios` (Apple iOS) | App crashes, errors, performance, and feedback ([#222](https://github.com/jubishop/screenr/issues/222)) | DSN compiled into Release builds |
 | Project `screenr-server` (Node) | Server [failure reports](deployment.md#failure-reports-in-sentry) ([#223](https://github.com/jubishop/screenr/issues/223)) | DSN in production `SENTRY_DSN` |
-| The owner's Sentry user token | Uploads dSYMs from archive builds ([#222](https://github.com/jubishop/screenr/issues/222)) | `SENTRY_AUTH_TOKEN` in the owner's shell on the Mac |
+| The owner's Sentry user token | Uploads dSYMs from archive builds ([#222](https://github.com/jubishop/screenr/issues/222)) | `SENTRY_AUTH_TOKEN` in the owner's shell, or `~/.sentryclirc`, on the Mac. See [symbols](../ios/README.md#symbols) |
 | Read-only personal token with `event:read`, `project:read`, and `org:read` | The daily feedback workflow ([#249](https://github.com/jubishop/screenr/issues/249)) | GitHub repository secret `SENTRY_AUTH_TOKEN` |
 
 The `screenr-ios` DSN is public, because the Release app contains it:
