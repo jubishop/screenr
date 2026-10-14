@@ -217,6 +217,25 @@ struct ScreenModelTests {
     #expect(model.phase == .loaded(emptyFeed))
   }
 
+  // A push, or a write elsewhere in the app such as reading notifications,
+  // can follow a poll already in flight, so reading at once replaces that
+  // read instead of joining it.
+  @Test func refreshesAtOnceWithANewReadInsteadOfJoiningOneInFlight() async throws {
+    let api = ScriptedAPI([.screen(feed), .hang, .screen(emptyFeed)])
+    let clock = TestClock()
+    let model = ScreenModel(path: "/", api: api, clock: clock)
+    model.appeared(appActive: true)
+    await clock.waitForSleep(until: .seconds(3))
+    clock.advance(by: .seconds(3))
+    await api.waitForReads(2)
+
+    model.refreshIfLive()
+    await clock.waitForSleep(until: .seconds(6))
+
+    #expect(api.reads.count == 3)
+    #expect(model.phase == .loaded(emptyFeed))
+  }
+
   @Test func ignoresAPushWhileHidden() async throws {
     let api = ScriptedAPI([.screen(feed)])
     let clock = TestClock()

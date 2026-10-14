@@ -168,6 +168,7 @@ private struct NotificationRow: View {
           Text(row.item.createdAt.formatted(.relative(presentation: .named)))
         }
         .font(.subheadline)
+        .foregroundStyle(.muted)
       }
       Spacer(minLength: 0)
       if row.isUnread {
