@@ -90,6 +90,10 @@ public struct AccountScreen: Codable, Hashable, Sendable {
   public let serviceIds: [String]
   public let googleEnabled: Bool
   public let googleConnected: Bool
+  // Sign in with Apple, which only the app offers. Nil from a server that
+  // does not report it yet.
+  public let appleEnabled: Bool?
+  public let appleConnected: Bool?
 }
 
 // Watch together, at `/watch-together?with=<username>`.

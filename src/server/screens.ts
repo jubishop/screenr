@@ -17,6 +17,7 @@ import { savedServices, streamingServices } from "./streaming-services";
 import { withViewingOptions } from "./title-viewing";
 import { activityEmail, unreadNotifications } from "./notifications";
 import { pushSettings } from "./push";
+import { appleConfigured } from "./apple";
 import { logFailure } from "./log";
 import { watchStatus } from "./title-actions";
 import { topTen, topTenRanks } from "./top-ten";
@@ -145,6 +146,14 @@ async function loadContent(userId: string, route: MemberRoute) {
         await db.query(
           'SELECT 1 FROM account WHERE "userId"=$1 AND "providerId"=$2 LIMIT 1',
           [userId, "google"],
+        )
+      ).rowCount,
+      // Sign in with Apple, which only the iPhone app offers and links.
+      appleEnabled: appleConfigured(),
+      appleConnected: !!(
+        await db.query(
+          'SELECT 1 FROM account WHERE "userId"=$1 AND "providerId"=$2 LIMIT 1',
+          [userId, "apple"],
         )
       ).rowCount,
     };

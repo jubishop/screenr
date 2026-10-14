@@ -114,6 +114,99 @@ struct ScreenrClientTests {
     #expect(test.transport.requests.first?.httpBody == jpeg)
   }
 
+  @Test func revalidatesAPhotoWithItsETag() async throws {
+    let jpeg = Data([0xFF, 0xD8, 0xFF, 0xE0, 1, 2])
+    let test = try TestClient(
+      token: "signed-token",
+      replies: [
+        .response(status: 200, headers: ["ETag": "\"486e0212c15728ee\""], body: jpeg),
+        .response(status: 304, headers: ["ETag": "\"486e0212c15728ee\""]),
+      ]
+    )
+
+    let photo = try await test.client.send(
+      .photo(userId: "user-alice", version: "486e0212c15728ee")
+    )
+    let again = try await test.client.send(
+      .photo(userId: "user-alice", version: "486e0212c15728ee")
+    )
+
+    #expect(photo == jpeg)
+    #expect(again == jpeg)
+    #expect(
+      test.transport.requests.first?.url?.absoluteString
+        == "http://localhost:3000/api/photos/user-alice/486e0212c15728ee"
+    )
+    #expect(test.header("Authorization") == "Bearer signed-token")
+    #expect(test.header("If-None-Match", request: 1) == "\"486e0212c15728ee\"")
+    #expect(
+      test.observer.records.map(\.route) == Array(repeating: "/api/photos/:user/:version", count: 2)
+    )
+  }
+
+  // Linking a sign-in method gets 401 when the provider's token fails, which
+  // leaves the member signed in. Only Better Auth's missing session ends it.
+  @Test func keepsTheSessionWhenALinkedProviderIsRejected() async throws {
+    let test = try TestClient(
+      token: "signed-token",
+      replies: [
+        try .json(401, ["code": "LINKING_DIFFERENT_EMAILS_NOT_ALLOWED", "message": "Not linked"]),
+        try .json(401, ["message": "Apple did not confirm this sign-in. Try again."]),
+        try .json(401, ["code": "UNAUTHORIZED", "message": "Unauthorized"]),
+      ]
+    )
+    let link = APIRequest.linkGoogle(idToken: "google-token", nonce: "nonce")
+
+    let different = await #expect(throws: APIError.self) { try await test.client.send(link) }
+    let unconfirmed = await #expect(throws: APIError.self) {
+      try await test.client.send(
+        .linkApple(identityToken: "apple-token", authorizationCode: "code", nonce: "nonce")
+      )
+    }
+    #expect(test.session.phase == .signedIn)
+    let ended = await #expect(throws: APIError.self) { try await test.client.send(link) }
+
+    #expect(different?.kind == .rejected(status: 401))
+    #expect(different?.code == "LINKING_DIFFERENT_EMAILS_NOT_ALLOWED")
+    #expect(unconfirmed?.kind == .rejected(status: 401))
+    #expect(unconfirmed?.message == "Apple did not confirm this sign-in. Try again.")
+    #expect(ended?.kind == .signedOut)
+    #expect(test.session.phase == .signedOut)
+    #expect(try test.keychain.read() == nil)
+  }
+
+  @Test func linksSignInMethodsWithTheSignInBodies() async throws {
+    let test = try TestClient(
+      token: "signed-token",
+      replies: [
+        try .json(200, ["url": "", "status": true, "redirect": false]),
+        try .json(200, ["url": "", "status": true, "redirect": false]),
+      ]
+    )
+
+    _ = try await test.client.send(.linkGoogle(idToken: "google-token", nonce: "google-nonce"))
+    _ = try await test.client.send(
+      .linkApple(identityToken: "apple-token", authorizationCode: "apple-code", nonce: "raw")
+    )
+
+    let requests = test.transport.requests
+    #expect(requests.map { $0.url?.path() } == ["/api/auth/link-social", "/api/auth/link-social"])
+    #expect(
+      try requests[0].json == [
+        "provider": "google", "idToken": ["token": "google-token", "nonce": "google-nonce"],
+      ]
+    )
+    #expect(
+      try requests[1].json == [
+        "provider": "apple", "idToken": ["token": "apple-token", "nonce": "raw"],
+        "additionalData": ["authorizationCode": "apple-code"],
+      ]
+    )
+    #expect(test.header("Authorization", request: 1) == "Bearer signed-token")
+    #expect(test.header("Origin", request: 1) == nil)
+    #expect(test.session.phase == .signedIn)
+  }
+
   @Test func encodesEveryReservedCharacterInScreenPaths() async throws {
     let test = try TestClient(
       token: "signed-token",

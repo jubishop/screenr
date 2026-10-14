@@ -253,6 +253,13 @@ Rejections answer with a JSON body naming a `code` from Better Auth or a
 Linking keeps Better Auth's other errors, such as `UNAUTHORIZED` without a
 session and `LINKING_DIFFERENT_EMAILS_NOT_ALLOWED`.
 
+The `/account` screen reports `appleEnabled` and `appleConnected` beside
+`googleEnabled` and `googleConnected`, so the app's Settings offer Connect
+Apple only while Apple can be linked. A rejected link answers 401 like a
+rejected sign-in, but the member is still signed in, so the app ends its
+session only for the `UNAUTHORIZED` code
+([Settings](../ios/README.md#settings)).
+
 ## Invitation tokens
 
 The iPhone app joins without the web's `screenr-invite` cookie
@@ -446,6 +453,8 @@ reported type and size, its decoded dimensions, the limit, and each attempt's
 JPEG size or missing image, but never the file name. Reading
 the file through `createImageBitmap` needs no `blob:` or `data:` image URL,
 which the [content security policy](deployment.md#provisioning) would block.
+The iPhone app prepares a photo the same way with ImageIO and drops its
+metadata ([profile photos](../ios/README.md#profile-photos)).
 The `photo` action receives the JPEG as the raw request body. The server
 reads at most 200 KB (413) and accepts only bytes that start with the JPEG
 signature, whatever the request's content type says (415). Photo changes

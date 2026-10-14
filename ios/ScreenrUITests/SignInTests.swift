@@ -78,9 +78,12 @@ final class SignInTests: XCTestCase {
     XCTAssertTrue(app.tab("You").waitForExistence(timeout: 10))
     app.tab("You").tap()
     app.buttons["Settings"].tap()
+    XCTAssertTrue(app.buttons["Edit profile"].waitForExistence(timeout: 10))
     let signOut = app.buttons["Sign out"]
-    XCTAssertTrue(signOut.waitForExistence(timeout: 10))
-    try app.performAccessibilityAudit()
+    app.scrollTo(signOut)
+    try app.performSettingsAudit()
+    // The audit can scroll the list.
+    app.scrollTo(signOut)
 
     signOut.tap()
 

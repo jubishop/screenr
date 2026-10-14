@@ -73,11 +73,17 @@ final class FixtureRequestLog: Sendable {
     if let query = request.url?.query(percentEncoded: true) { line += "?" + query }
     if request.value(forHTTPHeaderField: "Screenr-Visit") != nil { line += " visit" }
     // A JSON body follows on one line, with sorted keys, such as
-    // `POST /api/screenr/read-notifications {"through":"23"}`.
+    // `POST /api/screenr/read-notifications {"through":"23"}`, and an
+    // upload's type and size, such as `POST /api/screenr/photo image/jpeg
+    // 41250 bytes`.
     if let body {
       let encoder = JSONEncoder()
       encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
       line += " " + String(decoding: try encoder.encode(body), as: UTF8.self)
+    } else if let upload = request.httpBody,
+      let type = request.value(forHTTPHeaderField: "Content-Type")
+    {
+      line += " \(type) \(upload.count) bytes"
     }
     // A handle that fails before closing closes when it is released.
     try lock.withLock { _ in
@@ -114,11 +120,12 @@ final class FixtureSetup: Sendable {
 //   as overrides or the failure.
 // - A fixture's ETag in `If-None-Match` gets 304, as on the server.
 // - Better Auth's routes succeed: requesting a code, signing in, which returns
-//   `FixtureTransport.token` in `set-auth-token`, signing out, and checking
-//   an invitation, which is available. An `auth/` override answers its route
-//   instead, such as `auth/email-otp/send-verification-otp/rate-limited` or
-//   `auth/invitation/unavailable`. Apple and Google sign-in accept only
-//   `FixtureIdentity`'s stub credentials.
+//   `FixtureTransport.token` in `set-auth-token`, linking a sign-in method,
+//   signing out, and checking an invitation, which is available. An `auth/`
+//   override answers its route instead, such as
+//   `auth/email-otp/send-verification-otp/rate-limited` or
+//   `auth/invitation/unavailable`. Apple and Google sign-in and linking accept
+//   only `FixtureIdentity`'s stub credentials.
 // - Google's token endpoint redeems `FixtureWebAuthenticator`'s stub codes.
 public struct FixtureTransport: HTTPTransport {
   public static let token = "fixture-session"
@@ -325,6 +332,20 @@ public struct FixtureTransport: HTTPTransport {
         ],
         headers: ["set-auth-token": Self.token]
       )
+    case "link-social" where request.value(forHTTPHeaderField: "Authorization") == nil:
+      return try reply(
+        url: url,
+        status: 401,
+        body: ["code": "UNAUTHORIZED", "message": "Unauthorized"]
+      )
+    case "link-social" where !FixtureIdentity.accepts(Incoming.json(request)):
+      return try reply(
+        url: url,
+        status: 401,
+        body: ["code": "INVALID_TOKEN", "message": "Invalid token"]
+      )
+    case "link-social":
+      return try reply(url: url, status: 200, body: ["url": "", "status": true, "redirect": false])
     default:
       return try reply(url: url, status: 404, body: ["message": "Not found"])
     }

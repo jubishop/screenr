@@ -5,12 +5,14 @@ import SwiftUI
 // fakes. The app builds them once and injects them with `.screenrServices(_:)`;
 // views read `@Environment(\.screenrAPI)`, `@Environment(SessionStore.self)`,
 // `@Environment(PendingInvitation.self)`, `@Environment(\.identityProviders)`,
-// `@Environment(\.visitTracker)`, and `@Environment(\.imageSource)`.
+// `@Environment(\.visitTracker)`, `@Environment(\.imageSource)`, and
+// `@Environment(\.photoLibrary)`.
 public struct AppServices: Sendable {
   public let api: any ScreenrAPI
   public let session: SessionStore
   public let invitation: PendingInvitation
   public let identity: IdentityProviders
+  public let photoLibrary: PhotoLibrary
   // Posters and profile photos load through `imageSession`, which keeps them
   // in `imageCache`. The cache empties when the session ends.
   public let imageCache: URLCache
@@ -26,6 +28,7 @@ public struct AppServices: Sendable {
     session: SessionStore,
     invitation: PendingInvitation = PendingInvitation(),
     identity: IdentityProviders,
+    photoLibrary: PhotoLibrary = .system,
     imageCache: URLCache = URLCache(memoryCapacity: 16 << 20, diskCapacity: 0),
     visits: VisitTracker = VisitTracker(),
     images: ImageSource = .none
@@ -34,6 +37,7 @@ public struct AppServices: Sendable {
     self.session = session
     self.invitation = invitation
     self.identity = identity
+    self.photoLibrary = photoLibrary
     self.imageCache = imageCache
     self.visits = visits
     self.images = images
@@ -56,6 +60,7 @@ public struct AppServices: Sendable {
     let invitation: PendingInvitation
     let transport: any HTTPTransport
     let authorization: IdentityProviders.Authorization
+    let photoLibrary: PhotoLibrary
     let imageCache: URLCache
     switch source {
     case .network:
@@ -65,6 +70,7 @@ public struct AppServices: Sendable {
       )
       transport = URLSessionTransport()
       authorization = .system
+      photoLibrary = .system
       imageCache = URLCache(
         memoryCapacity: 32 << 20,
         diskCapacity: 256 << 20,
@@ -76,6 +82,7 @@ public struct AppServices: Sendable {
       invitation = PendingInvitation()
       transport = try FixtureTransport(directory: directory, scenario: scenario)
       authorization = .fixture
+      photoLibrary = .fixture
       imageCache = URLCache(memoryCapacity: 16 << 20, diskCapacity: 0)
     }
     let session = try SessionStore(keychain: keychain)
@@ -106,6 +113,7 @@ public struct AppServices: Sendable {
         authorization: authorization,
         google: GoogleSignIn(clientID: configuration.googleClientID, transport: transport)
       ),
+      photoLibrary: photoLibrary,
       imageCache: imageCache,
       visits: visits,
       images: images
@@ -188,6 +196,7 @@ extension EnvironmentValues {
   // Nil outside `.screenrServices(_:)`.
   @Entry public var visitTracker: VisitTracker?
   @Entry public var imageSource = ImageSource.none
+  @Entry public var photoLibrary: PhotoLibrary = .system
 }
 
 extension View {
@@ -198,6 +207,7 @@ extension View {
       .environment(\.identityProviders, services.identity)
       .environment(\.visitTracker, services.visits)
       .environment(\.imageSource, services.images)
+      .environment(\.photoLibrary, services.photoLibrary)
       .asyncImageURLSession(services.imageSession)
   }
 }

@@ -244,7 +244,7 @@ const screens: Record<MemberRoute["kind"], Record<string, Case>> = {
     default: screen(
       "alice",
       "/account",
-      "Account settings with Google connected, activity email off, saved services, and every push kind on.",
+      "Account settings with Google connected, Apple not connected, activity email off, saved services, and every push kind on.",
     ),
   },
   "watch-together": {

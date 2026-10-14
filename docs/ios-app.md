@@ -474,6 +474,13 @@ reason.
 - Four tabs that match the web, with the profile behind an avatar button.
 - Five tabs that include Notifications.
 
+**Implementation note:** [Issue #234](https://github.com/jubishop/screenr/issues/234)
+built Settings behind the gear, with the web Account page's profile, photo,
+activity email, streaming services, and sign-in methods, plus Invite friends
+and Sign out. It also links Sign in with Apple, which only the app offers.
+Photos are cropped and compressed as on the web. See
+[Settings](../ios/README.md#settings).
+
 ### Bell in every tab and Find as the search tab — 2026-10-13
 
 **Decision:**

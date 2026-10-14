@@ -7,10 +7,13 @@ import { Placeholders, labelToken, labelUuid } from "./ios-fixtures";
 // (docs/testing.md#iphone-api-fixtures), and a TMDB stand-in that serves the
 // titles.
 
-// Google sign-in is configured, as in production, so the account screen
-// offers it. No request reaches Google.
+// Google sign-in and Sign in with Apple are configured, as in production, so
+// the account screen offers them. No request reaches Google or Apple.
 process.env.GOOGLE_CLIENT_ID = "fixture-google-client";
 process.env.GOOGLE_CLIENT_SECRET = "fixture-google-secret";
+process.env.APPLE_TEAM_ID = "fixture-team";
+process.env.APPLE_KEY_ID = "fixture-key";
+process.env.APPLE_PRIVATE_KEY = "fixture-private-key";
 
 const { createInvitation, completeSignup } =
   await import("../../src/server/invitations");

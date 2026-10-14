@@ -150,7 +150,7 @@ try await api.send(.comment(conversation: item.id, body: text, spoiler: false))
 | Piece | Where | What it does |
 | --- | --- | --- |
 | `ScreenrAPI`, `ScreenrClient` | `API/ScreenrClient.swift` | One method, `send(_:) async throws(APIError) -> Response`. The client runs off the caller's actor. |
-| `APIRequest<Response>` | `API/MemberRequests.swift`, `API/AuthRequests.swift` | One static function per action, such as `.screen(path:)`, `.topTen(title:_:)`, `.signIn(email:code:)`, and `.signOut`. |
+| `APIRequest<Response>` | `API/MemberRequests.swift`, `API/AuthRequests.swift` | One static function per action, such as `.screen(path:)`, `.topTen(title:_:)`, `.signIn(email:code:)`, `.linkGoogle(idToken:nonce:)`, and `.signOut`. |
 | `SessionStore` | `Session/SessionStore.swift` | `@MainActor @Observable`. Its `phase` is `.signedOut`, `.signedIn`, or `.updateRequired(minimumBuild:)`. |
 | `KeychainStorage` | `Session/KeychainStorage.swift` | The token's Keychain item: `SystemKeychain(accessGroup:)`, or `InMemoryKeychain` in tests. |
 | `APIError` | `API/APIError.swift` | `kind`, the server's `message`, Better Auth's `code`, and the `requestID` the request sent. `isPermanent` says whether polling should stop, and `explanation(otherwise:)` words the failure for the member. |
@@ -165,7 +165,11 @@ try await api.send(.comment(conversation: item.id, body: text, spoiler: false))
 - **Session:** a sign-in request stores the token from `set-auth-token` in
   the Keychain, and `.signOut` removes it, as does a successful
   `.deleteAccount`. A 401 to a request that carried a token removes that
-  token, unless a newer one replaced it.
+  token, unless a newer one replaced it. Linking a sign-in method is the
+  exception: its request's `unauthorized` is `.rejectsCredential`, so a 401
+  for the provider's token, such as `INVALID_TOKEN`, is
+  `.rejected(status: 401)` and keeps the session. Only Better Auth's
+  `UNAUTHORIZED` code ends it.
 - **Caching:** each GET's response is kept in memory with its ETag. Reading
   the same path again sends `If-None-Match`, and a 304 returns the cached
   value. Signing in or out clears the cache.
@@ -204,7 +208,7 @@ uses it when launched with these arguments; Release builds ignore them:
 | `-ScreenrFixtureProfile` | `complete` (default), or `pending` for a viewer without a profile, such as `pat`: member actions get `errors/incomplete-profile`, as on the server, until a setup request succeeds. |
 | `-ScreenrFixtureOverride` | A fixture that answers first, such as `screen/feed/empty`. Repeatable. |
 | `-ScreenrFixtureFailure` | A fixture that answers every `/api/screenr` request, such as `errors/update-required`. |
-| `-ScreenrFixtureLog` | A file that gets a line per `/api/screenr` request, such as `GET /api/screenr/screen?path=%2F`, with ` visit` after the app's [visit](#visits) and a write's JSON body, keys sorted, after the write: `POST /api/screenr/read-notification {"id":"18"}`. |
+| `-ScreenrFixtureLog` | A file that gets a line per `/api/screenr` request, such as `GET /api/screenr/screen?path=%2F`, with ` visit` after the app's [visit](#visits) and a write's JSON body, keys sorted, after the write: `POST /api/screenr/read-notification {"id":"18"}`. An upload has its type and size instead: `POST /api/screenr/photo image/jpeg 41250 bytes`. |
 | `-ScreenrOpenURL` | A link the app opens at launch, as if the system delivered it, such as `screenr-dev://titles/tv/201`. |
 
 In UI tests, `app.launch(with: FixtureLaunch(viewer: "nora"))` passes them,
@@ -294,7 +298,7 @@ server sends every member without a profile, shows setup; otherwise the
 feed's `user` is the viewer, whose opaque user ID the app gives error
 reporting, and whose username makes the You tab. When the session ends,
 `SessionStore.onEnd` resets the shell, so the next member starts at Circle.
-The Settings placeholder holds `SignOutButton` until Settings is built.
+[Settings](#settings) ends with `SignOutButton`.
 
 | Piece | Where | What it does |
 | --- | --- | --- |
@@ -473,8 +477,56 @@ Setup and Settings share the member's own photo:
 | `ProfilePhotoEditor` | `Screenr/Shared/Photo/` | The photo or initial with Add or Replace photo (`PhotosPicker`), Use my Google photo, and Remove photo. |
 | `ProfilePhotoView` | `Screenr/Shared/Photo/` | A decorative circle with a member's photo over their initial. |
 
-UI tests cannot drive the photo picker, so `ProfilePhotoModelTests` and
-`PhotoPreparationTests` cover choosing a photo.
+`ProfilePhotoModelTests` and `PhotoPreparationTests` cover choosing a photo,
+and `FixturePhotoTests` check that the prepared JPEG carries none of the
+original's metadata, such as its location. UI tests cannot drive the photo
+picker, so against the fixture API, where `AppServices.photoLibrary` is
+`.fixture`, Add and Replace photo choose `FixturePhoto.jpeg()` instead: a
+deterministic 900×1200 JPEG of a gradient under heavy noise, which goes
+through the same preparation and upload. The request log records the
+upload's size.
+
+## Settings
+
+Settings is the `/account` screen in the sheet that the You tab's gear opens.
+`Screenr/Screens/AccountView.swift` lists its sections, and each section is a
+view in `Screens/Settings/` that takes a `SettingsContext`: the loaded
+`AccountScreen`, the signed-in `Person`, `refresh()` to read the screen after
+a change, and `open(_:)` for an editor sheet. Its behavior lives in
+ScreenrKit's `Settings/`, `Photos/`, and `Invitations/` view models.
+
+| Section | View model | What it does |
+| --- | --- | --- |
+| Your profile | `ProfileEditorModel` | Edit profile opens a sheet that saves the display name and username together, with signup's rules and the server's messages. |
+| Profile photo | `ProfilePhotoModel` | The [photo editor](#profile-photos) that setup shares. |
+| Invitations | `InvitationsModel` | Invite friends pushes `/invites`: a link for 1 to 12 signups, `ShareLink` for each active link, and Revoke with a confirmation. |
+| Activity emails | `ActivityEmailModel` | The switch shows the choice being saved and ignores changes until the save finishes. |
+| Streaming services | `StreamingServicesModel` | A sheet with search, the selection, and Clear selections. |
+| Sign-in methods | `AccountLinkModel` | Connect Google runs the sign-in flow's PKCE code flow, and Sign in with Apple uses the system button; each posts the credential to `link-social`. Against the fixture API, both use the sign-in stubs. |
+| Sign out | `SignOutModel` | `SignOutButton`. |
+
+A new setting adds its section to `AccountView`'s list in one line, such as
+`PushSettingsSection(settings)`, at the comment that marks its place: push
+notification settings after Invitations, Send feedback before Sign out, and
+Delete account last. A section that edits a draft opens its editor with
+`settings.open(_:)` after adding a case to `SettingsEditor`. `AccountView`
+presents those sheets outside `ScreenContent`, so a failed read, which
+replaces the sections with the error, keeps an open draft.
+
+Section headings use `SectionHeading`, and a setting's value `SettingRow`,
+which keep the primary color: the system's gray falls short of the contrast
+that text needs.
+
+`SettingsTests` cover the journeys: changing the name and username, uploading
+and removing a photo, creating and revoking an invitation, connecting Sign in
+with Apple, and signing out. They check what each write sent in the fixture
+API's request log, since a screen read after a write still returns the
+fixture. Their `performSettingsAudit()` passes over reports the iOS 27
+Simulator raises for the system's list text: Dynamic Type and clipping for
+headers, footers, and rows, the nearly passing contrast of footers, and
+contrast failures with no element, for rows sampled beneath the navigation
+bar's blur. `testFitsTheLargestTextSize` instead reaches every control at the
+largest accessibility text size.
 
 ## Conversations
 
