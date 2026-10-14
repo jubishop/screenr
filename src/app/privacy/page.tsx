@@ -15,7 +15,7 @@ export default function Privacy() {
       <article className="auth-card policy">
         <h1>Privacy policy</h1>
         <p className="muted">
-          Effective <time dateTime="2026-10-13">October 13, 2026</time>
+          Effective <time dateTime="2026-10-14">October 14, 2026</time>
         </p>
         <p>
           Screenr is a private, invite-only social app for TV and movies. Justin
@@ -185,10 +185,12 @@ export default function Privacy() {
         <p>
           The website uses a cookie to keep you signed in and another to
           remember an invitation while you join. The iPhone app keeps its
-          sign-in token in the iPhone&rsquo;s Keychain. Screenr&rsquo;s sign-in
-          records the IP address and browser of each session, and uses IP
-          addresses to limit repeated sign-in requests. Screenr uses no
-          advertising or tracking cookies.
+          sign-in token in the iPhone&rsquo;s Keychain. It also adds the movies
+          and shows you have interacted with to Spotlight search on your iPhone;
+          that index stays on the iPhone and is removed when you sign out or
+          delete your account. Screenr&rsquo;s sign-in records the IP address
+          and browser of each session, and uses IP addresses to limit repeated
+          sign-in requests. Screenr uses no advertising or tracking cookies.
         </p>
 
         <h2>No ads or selling</h2>

@@ -170,7 +170,10 @@ a page, an app screen, or the notification panel stays open, record nothing,
 with one exception: a `screen` read that carries `Screenr-Visit: 1`. The
 iPhone app sends that header on its first screen read after launch and after
 each return to the foreground, and nowhere else
-([app visits](../ios/README.md#visits)). The route records the day before
+([app visits](../ios/README.md#visits)). Its
+[Siri and Shortcuts actions](../ios/README.md#siri-shortcuts-and-spotlight)
+read screens without it; their searches and saves record the day as any
+search or save does. The route records the day before
 reading, so a 304 for an unchanged screen records it too. Any other value of
 the header, or the header on another read, records nothing. Profile setup
 records nothing; the member page that follows it does, and so does the app's
@@ -199,6 +202,7 @@ The client sends one of these surfaces with the Want to watch action:
 | `watch_together` | A title page opened from Watch together | No |
 | `title` | A title page reached another way, such as search or a feed link | No |
 | `friends_recommend` | The Friends recommend tab on Find a title, or a title page opened from it | Yes |
+| `shortcut` | The iPhone app's Add to Want to watch action in Siri or the Shortcuts app | No |
 
 Suggestion tiles and Watch together have no inline title actions, so their
 links add `?from=<surface>` to the title page address. Friends recommend

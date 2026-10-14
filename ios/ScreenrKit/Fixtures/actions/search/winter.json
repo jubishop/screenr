@@ -1,0 +1,59 @@
+{
+  "description": "Search results for a movie Alice has not saved and a show she is watching.",
+  "viewer": "alice",
+  "request": {
+    "method": "GET",
+    "action": "search",
+    "path": "/api/screenr/search?q=winter",
+    "query": {
+      "q": "winter"
+    }
+  },
+  "response": {
+    "status": 200,
+    "etag": "W/\"VtA9XsRZICT8mvsMbWgP_qEqjoucUQ-2UhGtqyhk2Wk\"",
+    "body": [
+      {
+        "id": "movie:105",
+        "kind": "movie",
+        "tmdb_id": 105,
+        "name": "Winter Garden",
+        "overview": "A botanist tends a greenhouse through the polar night.",
+        "poster_path": "/winter-garden.jpg",
+        "release_date": "2019-12-06",
+        "viewing": {
+          "status": "ok",
+          "checked_at": "2026-10-13T12:00:00.000Z",
+          "sections": [
+            {
+              "key": "subs",
+              "label": "Subs",
+              "services": [
+                {
+                  "id": "service:netflix",
+                  "name": "Netflix",
+                  "logo_path": "/rK1KljqmbvO9HQa1PBFLILWah72.png",
+                  "route_note": null
+                }
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "id": "tv:202",
+        "kind": "tv",
+        "tmdb_id": 202,
+        "name": "The Long Winter",
+        "overview": "A mountain village waits out a winter that will not end.",
+        "poster_path": "/long-winter.jpg",
+        "release_date": "2020-01-10",
+        "viewing": {
+          "status": "ok",
+          "checked_at": "2026-10-13T12:00:00.000Z",
+          "sections": []
+        }
+      }
+    ]
+  }
+}

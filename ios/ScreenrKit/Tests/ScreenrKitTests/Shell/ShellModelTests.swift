@@ -120,6 +120,34 @@ struct ShellModelTests {
     #expect(viewers.withLock { $0 } == ["user-alice", "user-nora"])
   }
 
+  // Spotlight sees every screen that loads, polls included.
+  @Test func reportsEveryLoadedScreen() async throws {
+    let seen = Mutex<[String]>([])
+    let api = ScriptedAPI([
+      .screen(try screen("screen/feed/default")), .screen(try screen("screen/title/tv")),
+    ])
+    let clock = TestClock()
+    let shell = ShellModel(
+      api: api,
+      clock: clock,
+      onScreen: { screen in
+        let name = if case .title(let page) = screen.content { page.title.id } else { "feed" }
+        seen.withLock { $0.append(name) }
+      }
+    )
+
+    await shell.checkAccount()
+    let model = try #require(shell.screenModel(for: .title(id: "tv:201")))
+    model.appeared(appActive: true)
+    await clock.waitForSleep(until: .seconds(3))
+    clock.advance(by: .seconds(3))
+    await api.waitForReads(3)
+    await clock.waitForSleep(until: .seconds(6))
+    model.disappeared()
+
+    #expect(seen.withLock { $0 } == ["feed", "tv:201", "tv:201"])
+  }
+
   @Test func followsTheAppsActivity() throws {
     let (shell, _) = try shell()
     #expect(!shell.isAppActive)

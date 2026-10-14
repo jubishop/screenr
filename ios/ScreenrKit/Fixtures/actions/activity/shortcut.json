@@ -1,0 +1,21 @@
+{
+  "description": "Saving a title to Want to watch from Siri or the Shortcuts app.",
+  "viewer": "alice",
+  "request": {
+    "method": "POST",
+    "action": "activity",
+    "path": "/api/screenr/activity",
+    "body": {
+      "title": "movie:105",
+      "field": "want_to_watch",
+      "value": true,
+      "surface": "shortcut"
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "id": "00000000-0000-4000-8000-000000000001"
+    }
+  }
+}

@@ -1,3 +1,4 @@
+import AppIntents
 import ScreenrKit
 import SwiftUI
 
@@ -47,17 +48,42 @@ struct ScreenrApp: App {
     } catch {
       fatalError("Screenr could not start its API client: \(error)")
     }
+    // Spotlight on this device finds the titles the member's screens show
+    // they interacted with, with posters the image cache already holds. It
+    // forgets them when the session ends.
+    let images = services.images
+    let imageCache = services.imageCache
+    let spotlight = TitleSpotlight(
+      index: SpotlightIndex { path in
+        guard let request = images.poster(path) else { return nil }
+        return imageCache.cachedResponse(for: request)?.data
+      },
+      session: services.session
+    )
     // Error reports name the signed-in member's opaque user ID once a screen
     // shows who they are, and stop when the session ends; the next member
     // starts over at the friends feed.
-    let shell = ShellModel(api: services.api, router: Router(invitation: services.invitation)) {
-      viewer in telemetry.signIn(userID: viewer.userId)
-    }
+    let shell = ShellModel(
+      api: services.api,
+      router: Router(invitation: services.invitation),
+      onViewer: { viewer in telemetry.signIn(userID: viewer.userId) },
+      onScreen: { screen in spotlight.screenLoaded(screen) }
+    )
     self.shell = shell
     services.session.onEnd {
       telemetry.signOut()
       shell.sessionEnded()
     }
+    // Siri and the Shortcuts app run the intents in this process, which
+    // registers what their `@Dependency` properties read before any runs.
+    // The framework declares its shared manager `nonisolated(unsafe)`.
+    let shortcuts = ShortcutActions(
+      api: services.api,
+      session: services.session,
+      router: shell.router,
+      spotlight: spotlight
+    )
+    unsafe AppDependencyManager.shared.add(dependency: shortcuts)
     if let link = LaunchLink.url(in: arguments, variant: configuration.variant) {
       shell.router.open(link)
     }

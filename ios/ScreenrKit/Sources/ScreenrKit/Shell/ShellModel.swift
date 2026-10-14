@@ -34,19 +34,23 @@ public final class ShellModel {
   @ObservationIgnored public let api: any ScreenrAPI
   @ObservationIgnored private let clock: any Clock<Duration>
   @ObservationIgnored private let onViewer: @MainActor (Person) -> Void
+  @ObservationIgnored private let onScreen: @MainActor (Screen) -> Void
 
   // `onViewer` learns who is signed in each time a new member's first screen
-  // loads, such as to name the opaque user ID in error reports.
+  // loads, such as to name the opaque user ID in error reports. `onScreen`
+  // sees every screen that loads, each poll included, such as for Spotlight.
   public init(
     api: any ScreenrAPI,
     router: Router = Router(),
     clock: any Clock<Duration> = ContinuousClock(),
-    onViewer: @escaping @MainActor (Person) -> Void = { _ in }
+    onViewer: @escaping @MainActor (Person) -> Void = { _ in },
+    onScreen: @escaping @MainActor (Screen) -> Void = { _ in }
   ) {
     self.api = api
     self.router = router
     self.clock = clock
     self.onViewer = onViewer
+    self.onScreen = onScreen
   }
 
   // Reads the friends feed. A member without a profile gets 403 from every
@@ -93,6 +97,7 @@ public final class ShellModel {
       router.viewerUsername = screen.user.username
     }
     if let unread = screen.unreadNotifications { setUnreadNotifications(unread) }
+    onScreen(screen)
   }
 
   // Such as after marking notifications read, or from a push's badge.
