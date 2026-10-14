@@ -225,11 +225,13 @@ export default function Privacy() {
           Deleting an account is permanent. It erases your sessions and push
           devices, profile and photo, friendships, invitations, blocks,
           recommendations, watch statuses, reviews, top 10, reactions,
-          notifications, and usage records. Your posts and reviews are removed
-          along with their conversations. Your comments are erased; one that has
-          replies becomes &ldquo;Comment removed&rdquo; so the replies remain.
-          If you used Sign in with Apple, Screenr also revokes its access with
-          Apple.
+          notifications, and usage records. Your posts, reviews, and comments
+          about titles are removed along with their conversations, as are the
+          conversations on your recommendations and watch statuses. Your
+          comments in other members&rsquo; conversations are erased; one that
+          has replies becomes &ldquo;Comment removed&rdquo; so the replies
+          remain. If you used Sign in with Apple, Screenr also revokes its
+          access with Apple.
         </p>
         <p>
           Deleted information stays in Screenr&rsquo;s encrypted backups until
