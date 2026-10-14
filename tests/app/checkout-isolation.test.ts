@@ -163,6 +163,35 @@ test("TypeScript isolates checkout inputs with fresh and warm caches", async (t)
   await check("--incremental", "false");
 });
 
+test("application tests run one shard of their files when SCREENR_TEST_SHARD names it", async (t) => {
+  const project = await fixture(t);
+  for (const name of ["second", "third", "fourth"])
+    await project.write(
+      `tests/app/${name}.test.ts`,
+      `import { test } from "node:test";\ntest("${name} application test", () => {});\n`,
+    );
+  async function ran(shard?: string) {
+    const { stdout } = await execute("npm", ["run", "test"], {
+      cwd: project.root,
+      timeout: 30_000,
+      maxBuffer: 4 * 1024 * 1024,
+      env: {
+        ...process.env,
+        NODE_TEST_CONTEXT: undefined,
+        SCREENR_TEST_SHARD: shard,
+      },
+    });
+    return [...new Set(stdout.match(/\w+ application test/g))].sort();
+  }
+  const all = await ran();
+  assert.equal(all.length, 4);
+  const first = await ran("1/2");
+  const second = await ran("2/2");
+  assert.equal(first.length, 2);
+  assert.equal(second.length, 2);
+  assert.deepEqual([...first, ...second].sort(), all);
+});
+
 test("formatting and test commands stay within their source directories", async (t) => {
   const project = await fixture(t);
   for (const path of unrelated)

@@ -17,7 +17,7 @@
     "dev": "next dev --hostname 127.0.0.1",
     "build": "next build",
     "typecheck": "tsc --noEmit",
-    "test": "tsx scripts/test-database.ts && tsx --test --test-concurrency=1 tests/app/*.test.ts",
+    "test": "tsx scripts/test-database.ts && tsx --test --test-concurrency=1 ${SCREENR_TEST_SHARD:+--test-shard=$SCREENR_TEST_SHARD} tests/app/*.test.ts",
     "test:coverage": "tsx scripts/test-database.ts && tsx scripts/test-coverage.ts",
     "fixtures:ios": "tsx scripts/test-database.ts && SCREENR_WRITE_IOS_FIXTURES=1 tsx --test tests/app/ios-fixtures.test.ts",
     "db:migrate": "tsx --env-file=.env scripts/migrate.ts",

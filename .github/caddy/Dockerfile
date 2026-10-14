@@ -1,4 +1,4 @@
-# The check job copies /usr/bin/caddy from this image for the proxy test;
+# The app test jobs copy /usr/bin/caddy from this image for the proxy test;
 # nothing builds it. The official image holds the release binary production
 # runs. Dependabot updates the tag and digest together. See
 # docs/development-workflow.md#ci-caddy.

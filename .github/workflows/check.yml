@@ -14,15 +14,46 @@ concurrency:
   # Cancel superseded PR checks, but let a production deployment finish.
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
+env:
+  NEXT_TELEMETRY_DISABLED: "1"
+
+# Parallel jobs run what bin/check --full runs locally, so checks and
+# deployment stay under 10 minutes. See docs/development-workflow.md#ci-jobs.
 jobs:
-  check:
+  static:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
-    permissions:
-      contents: read
-      deployments: read # Find the last successful production deployment.
-    outputs:
-      deploy: ${{ steps.release.outputs.deploy }}
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: lts/*
+          check-latest: true
+          cache: npm
+      - run: npm ci
+      - name: Isolate CI APT sources
+        run: |
+          test -s /etc/apt/sources.list.d/ubuntu.sources
+          sudo install -m 0644 .github/ci-apt.conf /etc/apt/apt.conf.d/99-screenr-ci
+      - name: Install ShellCheck
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes shellcheck
+      - name: Check foundation
+        run: ./bin/check
+      - name: Check shell scripts, Python, formatting, and types
+        run: bin/check-application --part static
+
+  app:
+    name: app (${{ matrix.shard }}/${{ strategy.job-total }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
     services:
       postgres:
         # Production's PostgreSQL major; the tag follows its minor releases.
@@ -38,12 +69,55 @@ jobs:
           --health-interval 2s --health-timeout 3s --health-retries 20
     env:
       TEST_DATABASE_URL: postgresql://screenr:screenr-ci-only@127.0.0.1:5432/screenr_test
-      NEXT_TELEMETRY_DISABLED: "1"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          fetch-depth: 0 # A skip must cover every commit since that deployment.
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: lts/*
+          check-latest: true
+          cache: npm
+      - run: npm ci
+      - name: Install Caddy
+        # Production's Caddy release, from the image .github/caddy/Dockerfile pins.
+        run: |
+          image=$(sed -n 's/^FROM //p' .github/caddy/Dockerfile)
+          container=$(docker create --quiet "$image")
+          docker cp --quiet "$container:/usr/bin/caddy" "$RUNNER_TEMP/caddy"
+          docker rm "$container"
+          sudo install -m 0755 "$RUNNER_TEMP/caddy" /usr/local/bin/caddy
+          caddy version
+      - name: Run application and database tests
+        run: bin/check-application --part app --shard ${{ matrix.shard }}/${{ strategy.job-total }}
+
+  browser:
+    name: browser (${{ matrix.shard }}/${{ strategy.job-total }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
+    services:
+      postgres:
+        # Production's PostgreSQL major; the tag follows its minor releases.
+        # See docs/development-workflow.md#ci-postgresql.
+        image: postgres:18
+        env:
+          POSTGRES_USER: screenr
+          POSTGRES_PASSWORD: screenr-ci-only
+          POSTGRES_DB: screenr_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U screenr -d screenr_test"
+          --health-interval 2s --health-timeout 3s --health-retries 20
+    env:
+      TEST_DATABASE_URL: postgresql://screenr:screenr-ci-only@127.0.0.1:5432/screenr_test
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: lts/*
@@ -55,40 +129,66 @@ jobs:
           test -s /etc/apt/sources.list.d/ubuntu.sources
           sudo install -m 0644 .github/ci-apt.conf /etc/apt/apt.conf.d/99-screenr-ci
       - run: npx playwright install --with-deps chromium
-      - name: Install ShellCheck
-        # Playwright's --with-deps step just refreshed the isolated APT index.
-        run: sudo apt-get install --yes shellcheck
-      - name: Install Caddy
-        # Production's Caddy release, from the image .github/caddy/Dockerfile pins.
-        run: |
-          image=$(sed -n 's/^FROM //p' .github/caddy/Dockerfile)
-          container=$(docker create --quiet "$image")
-          docker cp --quiet "$container:/usr/bin/caddy" "$RUNNER_TEMP/caddy"
-          docker rm "$container"
-          sudo install -m 0755 "$RUNNER_TEMP/caddy" /usr/local/bin/caddy
-          caddy version
-      - name: Check repository
-        run: ./bin/check --full
+      - name: Build and run browser tests
+        run: bin/check-application --part browser --shard ${{ matrix.shard }}/${{ strategy.job-total }}
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: failure()
+        with:
+          name: browser-failure-${{ github.run_id }}-${{ matrix.shard }}
+          path: test-results/
+          retention-days: 7
+          if-no-files-found: ignore
+
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    permissions:
+      contents: read
+      deployments: read # Find the last successful production deployment.
+    outputs:
+      deploy: ${{ steps.decision.outputs.deploy }}
+    services:
+      postgres:
+        # Packaging migrates this database and starts the packaged server.
+        # See docs/development-workflow.md#ci-postgresql.
+        image: postgres:18
+        env:
+          POSTGRES_USER: screenr
+          POSTGRES_PASSWORD: screenr-ci-only
+          POSTGRES_DB: screenr_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U screenr -d screenr_test"
+          --health-interval 2s --health-timeout 3s --health-retries 20
+    env:
+      TEST_DATABASE_URL: postgresql://screenr:screenr-ci-only@127.0.0.1:5432/screenr_test
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0 # A skip must cover every commit since that deployment.
       - name: Decide whether to deploy
-        id: release
+        id: decision
         env:
           GH_TOKEN: ${{ github.token }}
           EVENT_NAME: ${{ github.event_name }}
           REF: ${{ github.ref }}
           REVISION: ${{ github.sha }}
         run: bin/deployment-decision "$EVENT_NAME" "$REF" "$REVISION" >> "$GITHUB_OUTPUT"
-      - name: Package Linux release
-        if: steps.release.outputs.deploy == 'true' && github.repository == 'jubishop/screenr'
-        run: npm run release:package
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        if: failure()
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        if: steps.decision.outputs.deploy == 'true' && github.repository == 'jubishop/screenr'
         with:
-          name: browser-failure-${{ github.run_id }}
-          path: test-results/
-          retention-days: 7
-          if-no-files-found: ignore
+          node-version: lts/*
+          check-latest: true
+          cache: npm
+      - name: Build and package Linux release
+        if: steps.decision.outputs.deploy == 'true' && github.repository == 'jubishop/screenr'
+        run: |
+          npm ci
+          npm run build
+          npm run release:package
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        if: steps.release.outputs.deploy == 'true' && github.repository == 'jubishop/screenr'
+        if: steps.decision.outputs.deploy == 'true' && github.repository == 'jubishop/screenr'
         with:
           name: screenr-linux-x64-${{ github.sha }}
           path: .cache/screenr-*.tar.gz
@@ -98,9 +198,24 @@ jobs:
           compression-level: 0
           if-no-files-found: error
 
+  check:
+    # The one result pull requests show and bin/deploy-ci requires: every job
+    # above passed. It runs after a failure so that it reports the failure.
+    needs: [static, app, browser, release]
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Require every check job to pass
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: |
+          jq -r 'to_entries[] | "\(.key): \(.value.result)"' <<<"$NEEDS"
+          jq -e 'all(.[]; .result == "success")' <<<"$NEEDS" >/dev/null
+
   deploy:
-    needs: check
-    if: needs.check.outputs.deploy == 'true' && github.repository == 'jubishop/screenr'
+    needs: [check, release]
+    if: needs.release.outputs.deploy == 'true' && github.repository == 'jubishop/screenr'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     environment:

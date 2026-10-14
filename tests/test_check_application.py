@@ -1,8 +1,10 @@
-"""Verify the application checks that bin/check --full runs, with simulated tools."""
+"""Verify the application checks that bin/check --full runs, with simulated tools, and that CI runs them all."""
 
+import ast
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import sys
@@ -42,7 +44,9 @@ class CheckApplicationTests(unittest.TestCase):
         self.tool("shellcheck", "import json, os, sys\n"
                                 "open(os.environ['CHECK_EVENTS'], 'a').write(json.dumps(['shellcheck', *[os.path.basename(a) for a in sys.argv[1:]]]) + '\\n')\n")
         self.tool("npm", "import json, os, sys\n"
-                         "open(os.environ['CHECK_EVENTS'], 'a').write(json.dumps(['npm', *sys.argv[1:]]) + '\\n')\n"
+                         "shard = ['SCREENR_TEST_SHARD=' + os.environ['SCREENR_TEST_SHARD']] "
+                         "if 'SCREENR_TEST_SHARD' in os.environ else []\n"
+                         "open(os.environ['CHECK_EVENTS'], 'a').write(json.dumps(['npm', *sys.argv[1:], *shard]) + '\\n')\n"
                          "if sys.argv[-1] == os.environ.get('FAIL_APPLICATION'):\n"
                          "    print('application check failed: ' + sys.argv[-1], file=sys.stderr)\n"
                          "    sys.exit(17)\n")
@@ -86,9 +90,9 @@ class CheckApplicationTests(unittest.TestCase):
         self.assertEqual(self.recorded()[-2:], [["npm", "run", SCRIPTS[-1]], ["check-ios"]])
         self.assertIn("Running iOS checks: ios/ differs from origin/main", result.stdout)
 
-    def check(self, **extra):
-        return subprocess.run([str(self.repo / "bin/check-application")], cwd=self.repo, env=self.env | extra,
-                              text=True, capture_output=True, timeout=60)
+    def check(self, *args, **extra):
+        return subprocess.run([str(self.repo / "bin/check-application"), *args], cwd=self.repo,
+                              env=self.env | extra, text=True, capture_output=True, timeout=60)
 
     def recorded(self):
         return [json.loads(line) for line in self.events.read_text().splitlines()] if self.events.exists() else []
@@ -135,6 +139,54 @@ class CheckApplicationTests(unittest.TestCase):
                 self.assertIn("application check failed: " + script, result.stderr)
                 self.assertEqual([event for event in self.recorded() if event[0] == "npm"],
                                  [["npm", "run", name] for name in SCRIPTS[:index + 1]])
+
+    def test_a_full_run_ignores_an_inherited_application_test_shard(self):
+        result = self.check(SCREENR_TEST_SHARD="1/2")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn(["npm", "run", "test"], self.recorded())
+
+    def test_ci_parts_split_the_full_run(self):
+        static = [["shellcheck", "--shell=sh", "deploy.sh"], ["first"], ["second"],
+                  ["npm", "run", "format:check"], ["npm", "run", "typecheck"]]
+        for args, events in (
+                (["--part", "static"], static),
+                (["--part", "app"], [["npm", "run", "test"]]),
+                (["--part", "app", "--shard", "2/3"], [["npm", "run", "test", "SCREENR_TEST_SHARD=2/3"]]),
+                (["--part", "browser"], [["npm", "run", "test:browser"]]),
+                (["--part", "browser", "--shard", "3/3"], [["npm", "run", "test:browser", "--", "--shard=3/3"]])):
+            with self.subTest(args=args):
+                self.events.unlink(missing_ok=True)
+                result = self.check(*args, SCREENR_TEST_SHARD="1/2")
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(self.recorded(), events)
+                self.assertIn(f"Application {args[1]} checks passed", result.stdout)
+
+    def test_ci_parts_never_run_ios_checks(self):
+        self.on_mac_with_main()
+        self.edit_app()
+        for part in ("static", "app", "browser"):
+            with self.subTest(part=part):
+                result = self.check("--part", part)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertNotIn(["check-ios"], self.recorded())
+
+    def test_invalid_parts_and_shards_stop_before_any_check(self):
+        for args in (["--part", "ios"], ["--shard", "1/2"], ["--part", "static", "--shard", "1/2"],
+                     ["--part", "app", "--shard", "0/2"], ["--part", "app", "--shard", "3/2"],
+                     ["--part", "browser", "--shard", "1"], ["--part", "browser", "--shard", "a/b"]):
+            with self.subTest(args=args):
+                result = self.check(*args)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("usage: check-application", result.stderr)
+                self.assertEqual(self.recorded(), [])
+
+    def test_failures_in_a_part_propagate(self):
+        result = self.check("--part", "static", FAIL_APPLICATION="typecheck")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertNotIn("Application static checks passed", result.stdout)
+        result = self.check("--part", "browser", "--shard", "1/2", FAIL_APPLICATION="--shard=1/2")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("application check failed: --shard=1/2", result.stderr)
 
     def test_skips_ios_checks_without_xcode(self):
         (self.repo / "ios").mkdir()
@@ -187,6 +239,38 @@ class CheckApplicationTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertEqual(self.recorded()[-1], ["check-ios"])
         self.assertNotIn("Application checks passed", result.stdout)
+
+
+class WorkflowTests(unittest.TestCase):
+    """CI's parallel jobs run every part of the full check, and deployment waits for all of them."""
+
+    def setUp(self):
+        jobs = (SOURCE / ".github/workflows/check.yml").read_text().split("\njobs:\n")[1]
+        self.jobs = dict(re.findall(r"^  ([a-z]+):\n((?:(?:    .*)?\n)*)", jobs, re.M))
+
+    def test_ci_runs_the_foundation_and_every_part_and_shard(self):
+        script = ast.parse((SOURCE / "bin/check-application").read_text())
+        parts = next(ast.literal_eval(node.value) for node in script.body
+                     if isinstance(node, ast.Assign) and node.targets[0].id == "PARTS")
+        self.assertIn("        run: ./bin/check\n", self.jobs["static"])
+        for part in parts:
+            with self.subTest(part=part):
+                job = self.jobs[part]
+                if part == "static":
+                    self.assertIn("        run: bin/check-application --part static\n", job)
+                    continue
+                self.assertIn(f"run: bin/check-application --part {part} "
+                              "--shard ${{ matrix.shard }}/${{ strategy.job-total }}\n", job)
+                shards = json.loads(re.search(r"^        shard: (\[.*\])$", job, re.M)[1])
+                self.assertEqual(shards, list(range(1, len(shards) + 1)))
+
+    def test_check_reports_every_check_job_and_gates_deployment(self):
+        checks = [name for name in self.jobs if name not in ("check", "deploy")]
+        self.assertEqual(sorted(checks), ["app", "browser", "release", "static"])
+        self.assertIn(f"    needs: [{', '.join(checks)}]\n", self.jobs["check"])
+        self.assertIn("    if: ${{ !cancelled() }}\n", self.jobs["check"])
+        self.assertIn("""jq -e 'all(.[]; .result == "success")'""", self.jobs["check"])
+        self.assertIn("    needs: [check, release]\n", self.jobs["deploy"])
 
 
 if __name__ == "__main__":
