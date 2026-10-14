@@ -251,6 +251,13 @@ from the real API
 CI fail when a response no longer matches its fixture, when a case has no
 file, or when a file has no case. The failure shows the changed fields.
 
+On the Swift side, ScreenrKit's `FixtureDecodingTests` decode every file as
+the model its action returns, and `RequestTests` check that ScreenrKit
+builds the recorded requests. `swift test` and the iOS CI job fail when a
+fixture no longer decodes or names an action without a Swift model. UI tests
+run the app against the same files through the
+[fixture API](../ios/README.md#fixture-api).
+
 After an intended payload change, regenerate the fixtures and commit the
 fixture diff with the server change:
 
@@ -361,6 +368,9 @@ The case tables in `tests/app/ios-fixtures.test.ts` are keyed by
    written. Session cookies are never recorded.
 4. Run `npm run fixtures:ios`, review the new files, and commit them with
    the server change.
+5. For a new action, add its ScreenrKit request and model, as the
+   [ScreenrKit API](../ios/README.md#screenrkit-api) describes, so
+   `swift test` decodes the new files.
 
 ## Resource ownership
 

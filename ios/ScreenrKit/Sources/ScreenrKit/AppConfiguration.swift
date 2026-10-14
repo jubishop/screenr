@@ -15,6 +15,12 @@ public struct AppConfiguration: Equatable, Sendable {
   public let variant: Variant
   public let serverURL: URL
   public let appGroup: String
+  // The marketing version, such as `1.0`, and the build number.
+  public let version: String
+  public let build: String
+
+  // The `Screenr-Client` header, which the server checks against its minimum build.
+  public var clientHeader: String { "ios/\(version)/\(build)" }
 
   public init(infoDictionary: [String: Any]) throws(Failure) {
     let variant = try Self.value(for: "ScreenrVariant", in: infoDictionary) {
@@ -31,6 +37,20 @@ public struct AppConfiguration: Equatable, Sendable {
     appGroup = try Self.value(for: "ScreenrAppGroup", in: infoDictionary) { text in
       text.isEmpty ? nil : text
     }
+    version = try Self.value(for: "CFBundleShortVersionString", in: infoDictionary) { text in
+      Self.matches(text, allowed: Self.digits + Self.letters + ".-_") ? text : nil
+    }
+    // The server reads a build of at most 15 digits.
+    build = try Self.value(for: "CFBundleVersion", in: infoDictionary) { text in
+      text.count <= 15 && Self.matches(text, allowed: Self.digits) ? text : nil
+    }
+  }
+
+  private static let digits = "0123456789"
+  private static let letters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+
+  private static func matches(_ text: String, allowed: String) -> Bool {
+    !text.isEmpty && text.allSatisfy { allowed.contains($0) }
   }
 
   private static func value<Value>(
