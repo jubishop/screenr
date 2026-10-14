@@ -3,6 +3,7 @@ import { revokeAppleTokens } from "./apple";
 import { AppError, db, transaction } from "./db";
 import { codeRecipientHash, codeTypes } from "./email";
 import { logFailure } from "./log";
+import { trackErasureBadges } from "./push";
 
 // Members delete their own account from Account on the web and from the
 // iPhone app (docs/data-and-access.md#account-deletion), under the account
@@ -77,6 +78,10 @@ export async function eraseAccounts(client: PoolClient, ids: string[]) {
       [ids],
     )
   ).rows.map((row) => row.email);
+  // Other members' unread notifications from these people, or about replies
+  // on their entries, leave their badges
+  // (docs/notifications.md#badge-only-updates).
+  const queueBadges = await trackErasureBadges(client, ids);
   for (const statement of [
     `DELETE FROM comment
       WHERE conversation_id IN (SELECT id FROM conversation WHERE owner_id=ANY($1))
@@ -119,4 +124,5 @@ export async function eraseAccounts(client: PoolClient, ids: string[]) {
       codeTypes.map((type) => codeRecipientHash(type, email)),
     ),
   ]);
+  await queueBadges();
 }

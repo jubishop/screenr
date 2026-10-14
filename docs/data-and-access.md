@@ -652,7 +652,8 @@ then erases the person with `eraseAccounts`:
 - **The account:** deleting the `user` row cascades to the profile with its
   settings, push settings, and demo flag, and to the photo, sessions, push
   devices, sign-in accounts, saved services, notifications, reactions, usage
-  rows, and activity emails.
+  rows, and activity emails. Other members whose unread count drops get a
+  [badge-only update](notifications.md#badge-only-updates).
 
 Rows that limit code requests hold only a hash of the address and expire
 within a day, so they stay and keep limiting requests. Afterward the address

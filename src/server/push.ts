@@ -224,6 +224,22 @@ export async function trackRelationshipBadges(
   return trackBadges(client, [a, b, ...rows.map((row) => row.recipient_id)]);
 }
 
+// `trackBadges` for erasing these accounts: everyone else's notifications from
+// them, and about replies on their entries, go with them.
+export async function trackErasureBadges(client: Queryable, ids: string[]) {
+  const { rows } = await client.query<{ recipient_id: string }>(
+    `SELECT DISTINCT n.recipient_id FROM notification n
+    LEFT JOIN comment cm ON cm.id=n.comment_id
+    LEFT JOIN conversation c ON c.id=cm.conversation_id
+    LEFT JOIN discussion_post dp ON dp.id=cm.discussion_post_id
+    WHERE n.read_at IS NULL AND n.recipient_id<>ALL($1)
+    AND (n.actor_id=ANY($1) OR c.owner_id=ANY($1) OR dp.owner_id=ANY($1))`,
+    [ids],
+  );
+  const members = rows.map((row) => row.recipient_id);
+  return trackBadges(client, members);
+}
+
 type PushJob = {
   id: string;
   attempts: number;

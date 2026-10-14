@@ -274,12 +274,18 @@ alike:
   unchanged count. Removing a discussion post or a standalone top-level
   comment keeps its replies and their notifications, so it sends nothing,
   and neither does removing a reply again.
+- `delete-account` erases the member's notifications to others and the
+  replies on their entries with their notifications
+  ([account deletion](data-and-access.md#account-deletion)). It queues an
+  update for every other member whose count that lowers. Demo circle
+  seeding erases the previous circle the same way.
 - A friend `request` sends only its alert, and a failed action rolls back
   and queues nothing.
 
 `trackRelationshipBadges(client, a, b)` finds those members for a
-friendship or block change, and `trackBadges(client, members)` serves any
-other change that hides or restores notifications. Call either inside the
+friendship or block change, `trackErasureBadges(client, ids)` for erased
+accounts, and `trackBadges(client, members)` serves any other change that
+hides or restores notifications. Call either inside the
 transaction before the change: it counts the unread notifications of the
 members who have a device, and the function it returns, called after the
 change, counts again and queues an update for each count that changed. It

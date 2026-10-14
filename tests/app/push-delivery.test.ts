@@ -22,6 +22,7 @@ import {
 const { POST } = await import("../../src/app/api/screenr/[action]/route");
 const { changeRelationship } = await import("../../src/server/relationships");
 const { addComment, removeComment } = await import("../../src/server/comments");
+const { updateTitleActivity } = await import("../../src/server/title-actions");
 const { notifications, readNotification } =
   await import("../../src/server/notifications");
 const { savePushSettings, queueBadgePush, deliverPushes, runPushPass } =
@@ -804,6 +805,40 @@ test("removing a reply updates the badge of each member who had it unread", asyn
   // The entry's owner removes cam's comment from the web.
   await remove(web, camComment);
   assert.deepEqual(await pushed(), { updates: { alice: 0 }, alerts: {} });
+});
+
+test("deleting an account updates the badge of each member whose unread notifications go with it", async () => {
+  const { alice, ben, cam, conversation } = await setup();
+  await device(alice, tokenA);
+  await device(ben, tokenB);
+  await device(cam, tokenC);
+  await friend(ben, alice);
+  await friend(cam, alice);
+  await friend(cam, ben);
+  const bensEntry = await updateTitleActivity(
+    ben,
+    "movie:1",
+    "recommended",
+    true,
+  );
+  const camOnBen = await addComment(cam, bensEntry, "Cam's take", false);
+  await addComment(alice, bensEntry, "Alice answers", false, camOnBen);
+  await addComment(ben, conversation, "Ben's take", false);
+  await deliverPushes(apns);
+  sandbox.received.length = 0;
+
+  // Unread: alice has ben's comment; cam has both acceptances and alice's
+  // reply on ben's entry. Ben deletes his account on the web.
+  const response = await act(
+    { cookie: await cookieFor(ben) },
+    "delete-account",
+    {},
+  );
+  assert.equal(response.status, 200);
+  assert.deepEqual(await pushed(), {
+    updates: { alice: 0, cam: 1 },
+    alerts: {},
+  });
 });
 
 test("each APNs host keeps one connection and reconnects after GOAWAY or a lost connection", async () => {
