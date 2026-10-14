@@ -37,6 +37,32 @@ export async function deleteAccount(userId: string, sessionId: string) {
     );
   }
   await transaction((client) => eraseAccounts(client, [userId]));
+  journalDeletion(userId);
+}
+
+// Each deletion prints one line, naming only the user ID, to the journal.
+// After a restore from a backup taken earlier, the restore runbook finds
+// these lines and erases the accounts again with redeleteAccounts
+// (docs/restore-and-patching.md#repeat-account-deletions).
+function journalDeletion(userId: string) {
+  console.log(JSON.stringify({ event: "account deleted", userId }));
+}
+
+// Erases again the accounts that a restore brought back. Apple revocation
+// already succeeded before each original deletion. Returns how many of the
+// accounts existed.
+export async function redeleteAccounts(ids: string[]) {
+  return transaction(async (client) => {
+    const { rows } = await client.query<{ id: string }>(
+      'SELECT id FROM "user" WHERE id=ANY($1)',
+      [ids],
+    );
+    await eraseAccounts(
+      client,
+      rows.map((row) => row.id),
+    );
+    return rows.length;
+  });
 }
 
 // Erases these people and every row that refers to them, in the caller's

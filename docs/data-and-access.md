@@ -658,7 +658,12 @@ Rows that limit code requests hold only a hash of the address and expire
 within a day, so they stay and keep limiting requests. Afterward the address
 can join again only with a valid invitation, like anyone new. Deleted data
 stays in [encrypted backups](deployment.md#account-deletion-and-backups)
-until they expire. Reseeding the
+until they expire. After the transaction commits, deletion prints one
+`screenr-web` journal line, `{"event":"account deleted","userId":"..."}`,
+with no other personal data. After a restore,
+`scripts/delete-accounts.ts` reads those lines to
+[erase the accounts again](restore-and-patching.md#repeat-account-deletions).
+Reseeding the
 [demo circle](running-screenr.md#demo-circle-for-apple-review) removes the
 previous demo accounts with the same erasure.
 

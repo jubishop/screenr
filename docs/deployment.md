@@ -937,8 +937,10 @@ The weekly restore check restores into a temporary database and drops it, so
 it never brings a deleted account back. A production
 [restore](restore-and-patching.md#restore-on-the-existing-host) from a
 snapshot taken before a deletion would bring that account back. Screenr keeps
-no record of deleted accounts, so such a restore cannot redo the deletion;
-the member would need to delete the account again.
+no list of deleted accounts; each deletion leaves a journal line naming the
+user ID instead, and the runbook's
+[repeat account deletions](restore-and-patching.md#repeat-account-deletions)
+step uses those lines to erase the accounts again.
 
 ### Run time limits
 
