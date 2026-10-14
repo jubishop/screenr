@@ -7,6 +7,8 @@ struct AppConfigurationTests {
     "ScreenrVariant": "dev",
     "ScreenrServerURL": "http://localhost:3000",
     "ScreenrAppGroup": "group.com.artisanalsoftware.Screenr.dev",
+    "CFBundleShortVersionString": "1.0",
+    "CFBundleVersion": "7",
   ]
 
   @Test func readsTheBuildSettingsFromTheInfoDictionary() throws {
@@ -15,6 +17,12 @@ struct AppConfigurationTests {
     #expect(configuration.variant == .dev)
     #expect(configuration.serverURL.absoluteString == "http://localhost:3000")
     #expect(configuration.appGroup == "group.com.artisanalsoftware.Screenr.dev")
+    #expect(configuration.version == "1.0")
+    #expect(configuration.build == "7")
+  }
+
+  @Test func namesTheBuildInTheClientHeader() throws {
+    #expect(try AppConfiguration(infoDictionary: dev).clientHeader == "ios/1.0/7")
   }
 
   @Test func acceptsTheReleaseServer() throws {
@@ -37,7 +45,10 @@ struct AppConfigurationTests {
     }
   }
 
-  @Test(arguments: ["ScreenrVariant", "ScreenrServerURL", "ScreenrAppGroup"])
+  @Test(arguments: [
+    "ScreenrVariant", "ScreenrServerURL", "ScreenrAppGroup", "CFBundleShortVersionString",
+    "CFBundleVersion",
+  ])
   func reportsAMissingValue(key: String) {
     var info = dev
     info[key] = nil
@@ -51,6 +62,10 @@ struct AppConfigurationTests {
     ("ScreenrVariant", "staging"),
     ("ScreenrServerURL", "localhost"),
     ("ScreenrAppGroup", ""),
+    ("CFBundleShortVersionString", ""),
+    ("CFBundleShortVersionString", "1.0 beta"),
+    ("CFBundleVersion", "1.2"),
+    ("CFBundleVersion", "1234567890123456"),
   ])
   func reportsAnInvalidValue(key: String, value: String) {
     var info = dev

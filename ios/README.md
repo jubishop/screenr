@@ -121,20 +121,86 @@ local server that `npm run dev` starts on port 3000.
 app target's build phase runs it, so an unformatted file fails the build
 before Swift compiles.
 
+## ScreenrKit API
+
+ScreenrKit's networking core serves the app and its extensions. Views and
+view models depend only on the `ScreenrAPI` protocol and `SessionStore`:
+
+```swift
+@Environment(\.screenrAPI) private var api
+@Environment(SessionStore.self) private var session
+
+let screen = try await api.send(.screen(path: "/titles/tv/201"))
+if case .title(let page) = screen.content { … }
+try await api.send(.comment(conversation: item.id, body: text, spoiler: false))
+```
+
+| Piece | Where | What it does |
+| --- | --- | --- |
+| `ScreenrAPI`, `ScreenrClient` | `API/ScreenrClient.swift` | One method, `send(_:) async throws(APIError) -> Response`. The client runs off the caller's actor. |
+| `APIRequest<Response>` | `API/MemberRequests.swift`, `API/AuthRequests.swift` | One static function per action, such as `.screen(path:)`, `.topTen(title:_:)`, `.signIn(email:code:)`, and `.signOut`. |
+| `SessionStore` | `Session/SessionStore.swift` | `@MainActor @Observable`. Its `phase` is `.signedOut`, `.signedIn`, or `.updateRequired(minimumBuild:)`. |
+| `KeychainStorage` | `Session/KeychainStorage.swift` | The token's Keychain item: `SystemKeychain(accessGroup:)`, or `InMemoryKeychain` in tests. |
+| `APIError` | `API/APIError.swift` | `kind`, the server's `message`, and the `requestID` the request sent. `isPermanent` says whether polling should stop. |
+| `APIRequestObserver` | `API/APIRequestObserver.swift` | Sees every finished request: route pattern, request ID, status, duration, and error. Logging attaches here. |
+| Models | `Models/` | `Screens.swift`, `Feed.swift`, `Titles.swift`, `People.swift` (members and notifications), and `Results.swift` (other actions and `ErrorBody`). |
+| `AppServices` | `AppServices.swift` | The client and session together, injected with `.screenrServices(_:)`. |
+
+- **Headers:** every request sends `Screenr-Client: ios/<version>/<build>`
+  and a new `Screenr-Request-Id`, plus `Authorization: Bearer <token>` while
+  signed in. It never sends cookies or an `Origin`.
+- **Session:** a sign-in request stores the token from `set-auth-token` in
+  the Keychain, and `.signOut` removes it. A 401 to a request that carried a
+  token removes that token, unless a newer one replaced it.
+- **Caching:** each GET's response is kept in memory with its ETag. Reading
+  the same path again sends `If-None-Match`, and a 304 returns the cached
+  value. Signing in or out clears the cache.
+- **Errors:** 401, 403, 404, 408, 426, 429, other 4xx, and 5xx each have a
+  kind, as do no response, a timeout, cancellation, and an unreadable body.
+  A 426 also moves `SessionStore.phase` to `.updateRequired`. A signed-in
+  person who has not finished setup gets `.forbidden` with "Complete your
+  profile first." from every action except `setup` and the photo actions.
+- **Models:** properties use the camelCase form of the server's keys, such as
+  `userId` for `user_id`. Unknown enum values decode as `.unknown`, and an
+  unknown screen kind as `.unknown(kind:)`. Timestamps are `Date` in either
+  fixture format; date-only values, such as `releaseDate`, stay `String`.
+  Make a field the server adds later optional.
+- **A new action:** add its request function and response model, then add
+  both to `FixtureDecodingTests.models` and `RequestTests.shapes`. A fixture
+  whose action has no model fails `swift test`.
+- **Fakes:** a view model test passes any `ScreenrAPI` fake. For the client's
+  own logic, `ScreenrClient` takes an `HTTPTransport`, which tests replace.
+
+### Fixture API
+
+`FixtureTransport` answers the client's requests from `ScreenrKit/Fixtures/`
+in process, so UI tests run the real client without a server. Screenr Dev
+uses it when launched with these arguments; Release builds ignore them:
+
+| Argument | Value |
+| --- | --- |
+| `-ScreenrFixtures` | The fixtures directory. |
+| `-ScreenrFixtureViewer` | The member whose fixtures answer first: `alice` (default), or `nora` for empty screens. |
+| `-ScreenrFixtureSession` | `signedIn` (default) or `signedOut`. |
+| `-ScreenrFixtureOverride` | A fixture that answers first, such as `screen/feed/empty`. Repeatable. |
+| `-ScreenrFixtureFailure` | A fixture that answers every `/api/screenr` request, such as `errors/update-required`. |
+
+In UI tests, `app.launch(with: FixtureLaunch(viewer: "nora"))` passes them,
+with the directory found from the test's source path. The fixture API keeps
+the session in memory, and signing in always succeeds. A request gets the
+fixture with the same action and query or body, then falls back to the
+screen's path or to a successful fixture for the action. A matching ETag
+gets 304.
+
 ## Fixtures
 
 Server tests write JSON fixtures into `ScreenrKit/Fixtures/`. The directory
 is outside the package's targets, so tests find it from their own source
-path. This works under `swift test` and in the Simulator, which reads the
-Mac's file system:
-
-```swift
-let fixtures = URL(filePath: #filePath)
-  .deletingLastPathComponent()  // ScreenrKitTests
-  .deletingLastPathComponent()  // Tests
-  .deletingLastPathComponent()  // ScreenrKit
-  .appending(path: "Fixtures", directoryHint: .isDirectory)
-```
+path, as `TestFixtures.directory` in `Tests/ScreenrKitTests/Support/` does.
+This works under `swift test` and in the Simulator, which reads the Mac's
+file system. `FixtureDecodingTests` decodes every fixture as the model its
+action returns, and `RequestTests` checks that the request functions build
+the recorded requests.
 
 ## Signing
 

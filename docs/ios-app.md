@@ -183,6 +183,12 @@ directly onto app destinations.
 **Consequence:** Shipped app builds depend on screen payloads, so changes
 driven by the web must stay compatible with them.
 
+**Implementation note:** [Issue #225](https://github.com/jubishop/screenr/issues/225)
+built ScreenrKit's client, session store, and models. The
+[ScreenrKit API](../ios/README.md#screenrkit-api) section describes the
+request functions, headers, ETag cache, typed errors, and the fixture API
+that UI tests launch against.
+
 ### Hand-written models checked against server fixtures — 2026-10-13
 
 **Decision:** The app's API models are hand-written Swift `Codable` types.
