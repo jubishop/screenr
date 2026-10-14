@@ -1,0 +1,12 @@
+#!/bin/sh
+# Release the iPhone app to TestFlight from this Mac: check, archive, upload,
+# tag, and distribute. scripts/ios-testflight.ts does the work; see
+# docs/development-workflow.md#testflight-releases. Run with --help for options.
+set -eu
+root=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
+cd "$root"
+if [ ! -x node_modules/.bin/tsx ]; then
+  echo "error: run npm ci first." >&2
+  exit 1
+fi
+exec node_modules/.bin/tsx scripts/ios-testflight.ts "$@"
