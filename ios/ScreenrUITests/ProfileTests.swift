@@ -139,63 +139,67 @@ final class ProfileTests: XCTestCase {
         "pending-request", "sent-request",
       ]
     )
-    for name in names {
-      let fixture = try ScreenFixtureFile("screen/profile/\(name)")
+    let fixtures = try names.map { try ScreenFixtureFile("screen/profile/\($0)") }
+    // One launch for each viewer opens each of their fixtures' links.
+    for viewer in Set(fixtures.map(\.viewer)).sorted() {
       let app = XCUIApplication()
-      app.launch(
-        with: FixtureLaunch(
-          viewer: fixture.viewer,
-          overrides: ["screen/profile/\(name)"],
-          link: fixture.link
-        )
-      )
-      let label = "screen/profile/\(name)"
-      guard let profile = fixture.body["profile"] as? [String: Any],
-        let displayName = profile["display_name"] as? String
-      else {
-        XCTAssertEqual(fixture.status, 404, label)
-        XCTAssertTrue(app.staticTexts["Person not found."].waitForExistence(timeout: 10), label)
-        app.terminate()
-        continue
+      app.launch(with: FixtureLaunch(viewer: viewer))
+      XCTAssertTrue(app.tabBars.firstMatch.waitForExistence(timeout: 10), viewer)
+      for fixture in fixtures where fixture.viewer == viewer {
+        try app.openFixture(fixture)
+        try checkProfile(app, fixture)
       }
-      XCTAssertTrue(app.navigationBars[displayName].waitForExistence(timeout: 10), label)
-      XCTAssertTrue(
-        app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Friends ('")).firstMatch.exists,
-        label
-      )
-      let topTen = fixture.body["topTen"] as? [[String: Any]] ?? []
-      if let first = topTen.first, let title = first["name"] as? String {
-        XCTAssertTrue(app.buttons["#1 \(title)"].exists, label)
-      }
-      let own = fixture.viewer == profile["username"] as? String
-      if own {
-        XCTAssertTrue(app.staticTexts["Top 10"].exists, label)
-        XCTAssertFalse(
-          app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'More actions'")).firstMatch
-            .exists,
-          label
-        )
-      } else {
-        XCTAssertTrue(app.buttons["More actions for \(displayName)"].exists, label)
-        let action =
-          if profile["accepted_at"] is String {
-            "Watch together"
-          } else if let requester = profile["requested_by"] as? String {
-            requester == "user-\(fixture.viewer)"
-              ? "Cancel friend request" : "Accept friend request"
-          } else {
-            "Send friend request"
-          }
-        XCTAssertTrue(app.buttons[action].exists, label)
-      }
-      if profile["can_read"] as? Bool == false {
-        XCTAssertTrue(
-          app.staticTexts["You’ll see their activity after you become friends."].exists,
-          label
-        )
-      }
-      XCTAssertFalse(app.staticTexts["Screenr didn't load"].exists, label)
       app.terminate()
     }
+  }
+
+  // The fixture's person, relationship action, top 10, and activity or the
+  // friends-only note, or that the person is not found.
+  @MainActor
+  private func checkProfile(_ app: XCUIApplication, _ fixture: ScreenFixtureFile) throws {
+    let label = fixture.name
+    guard let profile = fixture.body["profile"] as? [String: Any],
+      let displayName = profile["display_name"] as? String
+    else {
+      XCTAssertEqual(fixture.status, 404, label)
+      XCTAssertTrue(app.staticTexts["Person not found."].waitForExistence(timeout: 10), label)
+      return
+    }
+    XCTAssertTrue(app.navigationBars[displayName].waitForExistence(timeout: 10), label)
+    XCTAssertTrue(
+      app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Friends ('")).firstMatch.exists,
+      label
+    )
+    let topTen = fixture.body["topTen"] as? [[String: Any]] ?? []
+    if let first = topTen.first, let title = first["name"] as? String {
+      XCTAssertTrue(app.buttons["#1 \(title)"].exists, label)
+    }
+    if fixture.viewer == profile["username"] as? String {
+      XCTAssertTrue(app.staticTexts["Top 10"].exists, label)
+      XCTAssertFalse(
+        app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'More actions'")).firstMatch
+          .exists,
+        label
+      )
+    } else {
+      XCTAssertTrue(app.buttons["More actions for \(displayName)"].exists, label)
+      let action =
+        if profile["accepted_at"] is String {
+          "Watch together"
+        } else if let requester = profile["requested_by"] as? String {
+          requester == "user-\(fixture.viewer)"
+            ? "Cancel friend request" : "Accept friend request"
+        } else {
+          "Send friend request"
+        }
+      XCTAssertTrue(app.buttons[action].exists, label)
+    }
+    if profile["can_read"] as? Bool == false {
+      XCTAssertTrue(
+        app.staticTexts["You’ll see their activity after you become friends."].exists,
+        label
+      )
+    }
+    XCTAssertFalse(app.staticTexts["Screenr didn't load"].exists, label)
   }
 }

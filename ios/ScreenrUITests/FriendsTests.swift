@@ -170,12 +170,15 @@ enum FixtureNames {
 // The parts of a screen fixture a test needs to launch it and know what
 // shows: who reads it, its path and status, and its response body.
 struct ScreenFixtureFile {
+  // Such as `screen/profile/friend`.
+  let name: String
   let viewer: String
   let path: String
   let status: Int
   let body: [String: Any]
 
   init(_ name: String) throws {
+    self.name = name
     let file = FixtureLaunch.directory.appending(path: "\(name).json")
     let json = try JSONSerialization.jsonObject(with: Data(contentsOf: file)) as? [String: Any]
     let request = json?["request"] as? [String: Any]
@@ -188,4 +191,14 @@ struct ScreenFixtureFile {
 
   // The fixture's path as a Screenr Dev link.
   var link: String { "screenr-dev://" + path.dropFirst() }
+}
+
+extension XCUIApplication {
+  // Opens a screen fixture's link in the running app, as the system delivers
+  // it. The fixture API answers each path with the launch viewer's fixture
+  // for it, so one launch reaches every fixture of that viewer.
+  @MainActor
+  func openFixture(_ fixture: ScreenFixtureFile) throws {
+    XCUIDevice.shared.system.open(try XCTUnwrap(URL(string: fixture.link)))
+  }
 }

@@ -64,23 +64,17 @@ final class WatchTogetherTests: XCTestCase {
       "missing-friend": "Choose one friend from their profile.",
       "nothing-shared": "No shared titles yet.",
     ]
+    // They are all Alice's, so one launch opens each fixture's link.
+    let app = XCUIApplication()
+    app.launch(with: FixtureLaunch())
+    XCTAssertTrue(app.tabBars.firstMatch.waitForExistence(timeout: 10))
     for name in names {
       let fixture = try ScreenFixtureFile("screen/watch-together/\(name)")
-      let app = XCUIApplication()
-      app.launch(
-        with: FixtureLaunch(
-          viewer: fixture.viewer,
-          overrides: ["screen/watch-together/\(name)"],
-          link: fixture.link
-        )
-      )
+      XCTAssertEqual(fixture.viewer, "alice", fixture.name)
+      try app.openFixture(fixture)
       let text = try XCTUnwrap(expected[name])
-      XCTAssertTrue(
-        app.staticTexts[text].waitForExistence(timeout: 10),
-        "screen/watch-together/\(name)"
-      )
-      XCTAssertTrue(app.navigationBars["Watch together"].exists, "screen/watch-together/\(name)")
-      app.terminate()
+      XCTAssertTrue(app.staticTexts[text].waitForExistence(timeout: 10), fixture.name)
+      XCTAssertTrue(app.navigationBars["Watch together"].exists, fixture.name)
     }
   }
 }

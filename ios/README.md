@@ -922,8 +922,10 @@ Watch together pages. Their screens are `FriendsView`, `ProfileView`, and
   `WatchTogetherTests` drive the journeys, check each write in the request
   log, audit at the largest text size, and render every `screen/people`,
   `screen/profile`, and `screen/watch-together` fixture. `app.person(_:)`
-  finds a Friends row by username, and `ScreenFixtureFile` reads a screen
-  fixture's viewer, path, and body.
+  finds a Friends row by username, `ScreenFixtureFile` reads a screen
+  fixture's viewer, path, and body, and `app.openFixture(_:)` opens its link
+  in the running app, so one launch for each viewer renders all of that
+  viewer's fixtures.
 - **iOS 27 controls:** a confirmation dialog is a popover without Cancel;
   tap `PopoverDismissRegion` to cancel, and `app.popovers.buttons[…]` to
   confirm.
