@@ -174,6 +174,21 @@ struct RequestTests {
     #expect(shape.invitation == recorded.headers?["Screenr-Invitation"])
   }
 
+  // Clear date sends a null date, and a review with only text a null
+  // rating, as the web's do.
+  @Test func sendsNullForAClearedDateAndAMissingRating() {
+    #expect(
+      APIRequest.finishedDate(title: "movie:102", date: nil).body
+        == .json(["title": "movie:102", "date": .null])
+    )
+    #expect(
+      APIRequest.review(title: "movie:101", rating: nil, body: "Loved it.", spoiler: false).body
+        == .json([
+          "title": "movie:101", "rating": .null, "body": "Loved it.", "spoiler": false,
+        ])
+    )
+  }
+
   @Test(arguments: [
     ("/", "/"),
     ("/?item=1&reply=2", "/"),

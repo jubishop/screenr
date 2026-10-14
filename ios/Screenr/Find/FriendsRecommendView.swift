@@ -36,7 +36,7 @@ struct FriendsRecommendView: View {
       }
       ForEach(list.titles) { title in
         Section {
-          NavigationLink(value: Destination.title(id: title.id)) {
+          NavigationLink(value: title.destination) {
             TitleRow(title: title.title, viewing: title.viewing, serviceIds: page.serviceIds) {
               Text(title.recommendedByText)
                 .font(.subheadline)
@@ -78,7 +78,7 @@ private struct RecommendationActionRow: View {
       .accessibilityValue(saved ? "Saved" : "")
       .accessibilityHint(saved ? "Removes it from Want to watch." : "Saves it to Want to watch.")
     case .status, .recommended:
-      NavigationLink(value: Destination.title(id: title.id)) {
+      NavigationLink(value: title.destination) {
         SymbolText(title.action.label, systemImage: "checkmark")
       }
       .accessibilityLabel("\(title.action.label), \(title.title.name)")

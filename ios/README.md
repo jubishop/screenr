@@ -15,7 +15,7 @@ repository root.
 | --- | --- |
 | `Screenr.xcodeproj` | The Screenr app and ScreenrUITests targets, and the shared Screenr scheme. |
 | `Config/` | The `.xcconfig` build settings, the app's entitlements, and the release export options. |
-| `Screenr/` | The app target: the [app shell](#app-shell) in `Shell/`, feature screens in `Screens/` with their parts in a folder named for the feature, such as `Find/`, components several features share in `Shared/`, such as the [title list views](#title-lists), the [conversations](#conversations) that the feed, title pages, and profiles share in `Conversation/`, the app lifecycle, assets, and `Info.plist`. |
+| `Screenr/` | The app target: the [app shell](#app-shell) in `Shell/`, feature screens in `Screens/` with their parts in a folder named for the feature, such as `Find/` and the [title page](#title-pages)'s `TitlePage/`, components several features share in `Shared/`, such as the [title list views](#title-lists), the [conversations](#conversations) that the feed, title pages, and profiles share in `Conversation/`, the app lifecycle, assets, and `Info.plist`. |
 | `ScreenrUITests/` | XCUITest UI tests. |
 | `ScreenrKit/` | A local Swift package: `Sources/ScreenrKit`, `Tests/ScreenrKitTests`, and `Fixtures/`. |
 | `build/` | Build output, check logs, and result bundles. Git ignores it. |
@@ -233,7 +233,7 @@ uses it when launched with these arguments; Release builds ignore them:
 | `-ScreenrFixtureProfile` | `complete` (default), or `pending` for a viewer without a profile, such as `pat`: member actions get `errors/incomplete-profile`, as on the server, until a setup request succeeds. |
 | `-ScreenrFixtureOverride` | A fixture that answers first, such as `screen/feed/empty`. Repeatable. |
 | `-ScreenrFixtureFailure` | A fixture that answers every `/api/screenr` request, such as `errors/update-required`. |
-| `-ScreenrFixtureLog` | A file that gets a line per `/api/screenr` request, such as `GET /api/screenr/screen?path=%2F`, with ` visit` after the app's [visit](#visits) and a write's JSON body, keys sorted, after the write: `POST /api/screenr/read-notification {"id":"18"}`. An upload has its type and size instead: `POST /api/screenr/photo image/jpeg 41250 bytes`. Sent [feedback](#feedback) adds a `FEEDBACK` line. |
+| `-ScreenrFixtureLog` | A file that gets a line per `/api/screenr` request, such as `GET /api/screenr/screen?path=%2F`, with ` visit` after the app's [visit](#visits) and a write's JSON body, keys sorted, after the write: `POST /api/screenr/read-notification {"id":"18"}`. An upload has its type and size instead: `POST /api/screenr/photo image/jpeg 41250 bytes`. Sent [feedback](#feedback) adds a `FEEDBACK` line. A [trailer](#trailers)'s player adds `WEB <url>` for each page it asks for. |
 | `-ScreenrOpenURL` | A link the app opens at launch, as if the system delivered it, such as `screenr-dev://titles/tv/201`. |
 
 In UI tests, `app.launch(with: FixtureLaunch(viewer: "nora"))` passes them,
@@ -653,8 +653,10 @@ ScreenContent(model: model) { screen in
 - **Permalinks:** `FeedList` scrolls to the target entry, or to its reply
   once the reply shows, which can follow revealing a spoiler entry. The
   reply's discussion shows in full with its group open, and the target is
-  tinted. A title page's friend line can call `feed.show(entry:in:viewer:)`;
-  scrolling to that entry is still to come.
+  tinted. A screen shows one entry on request with
+  `FeedList(entryRequest: EntryRequest(entry:))`, as a title page's friend
+  line does: the list calls `feed.show(entry:in:viewer:)`, which accepts
+  waiting activity if the entry needs it, and scrolls to the entry.
 - **Sharing:** each entry's Share uses `ShareButton` with `item.link()`: the
   title page with `?item=`, or the friends feed for a post.
 - **Times:** `FeedList` keeps one minute timeline, `\.feedNow`, for every
@@ -721,9 +723,10 @@ its text at large sizes; and `ContentUnavailableView` in a list row does not
 grow with Dynamic Type. `ListHeader`, `SymbolText`, and `EmptyListMessage`
 in `Screenr/Find/` stand in for them.
 
-Title pages opened from Find do not yet report the web's `suggestion`,
-`suggestion_recommendation`, or `friends_recommend` save surfaces, since
-`Destination.title` carries no `from`.
+Suggestions and Friends recommend open title pages at `suggestion.destination`
+and `recommendation.destination`, so the title page's Want to watch reports
+the web's `suggestion`, `suggestion_recommendation`, or `friends_recommend`
+surface. Search results open `Destination.title(id:)`, which reports `title`.
 
 ### Title lists
 
@@ -736,6 +739,74 @@ Views that list titles share these pieces:
 | `Title.kindAndYear` | ScreenrKit `Titles/` | "Movie · 2024", or only the kind without a release date. |
 | `TitleViewing.matchingServices(_:)`, `access(for:)`, `lines(savedServices:)` | ScreenrKit `Titles/` | The viewer's saved services that offer a title, whether the viewer can watch it, and the lines `ViewingLinesView` shows. |
 | `ScreenrAPI.send(_:within:clock:)` | ScreenrKit `API/Deadline.swift` | Sends a request that fails as `.timedOut` after a deadline. |
+
+## Title pages
+
+A title page, `Screenr/Screens/TitleView.swift` with its parts in
+`Screenr/TitlePage/`, follows the web's
+[title page](../docs/interface-design.md#compact-entries-on-title-pages--2026-10-12):
+the header, Where to watch, the trailer, and "Around this title" with Start a
+conversation, above the [compact feed](#conversations). Its behavior is in
+ScreenrKit's `TitlePage/`:
+
+| Piece | Where | What it does |
+| --- | --- | --- |
+| `TitleHeader` | ScreenrKit | The viewer's place, read from the page: Recommend, the title's rank in their top 10, the status and last-finished date, and the review, with the header's labels, the status choices, and `topTenLimit`. |
+| `TitlePageModel` | ScreenrKit | `@Observable`: one write at a time, each followed by a read. Recommend (no surface), Add to top 10 and its removal, the status sheet's choices (Finished sends today; Want to watch sends `surface`), the finished date, the review, and the prompts: `leaving`, the confirmation before a ranked Recommend leaves the top 10, and `sheet` (`.status`, `.review`, or `.replace`). `reconcile(with:)` closes a prompt the page no longer needs. A failure shows beneath its control. |
+| `ReviewEditor` | ScreenrKit | The review form's draft, which starts from the saved review each time it opens, its save and removal, and the removal's confirmation. |
+| `FriendActivity.lineParts`, `lineGroups`, `sentence` | ScreenrKit | The friend line in the web's words, such as "Recommended by Ben Ortiz (#1) · Cam Rivera wants to watch", as pieces that wrap between words. On a phone, each group starts its own line in place of " · ". |
+| `WatchAvailability.notice`, `emptyMessage`, `checkedLabel()` | ScreenrKit | Where to watch's messages, in the web's words. |
+| `CalendarDay` | ScreenrKit | `YYYY-MM-DD` days in the reader's calendar, such as today for Finished. |
+| `TitleHeaderView`, `WatchStatusSheet`, `ReviewSheet`, `TopTenReplaceSheet`, `AvailabilitySection`, `TrailerSection` | `Screenr/TitlePage/` | The views. The status button opens a sheet of choices with Last finished, since a SwiftUI `Menu` holds no date field. |
+
+- **Surface:** `Destination.title(id:item:reply:from:)` carries the list that
+  opened a title, as the web's `?from=` does; `destination.saveSurface` is
+  `from`, or `title`. `TitleSuggestion.destination`,
+  `FriendsRecommendation.destination`, and `SharedTitle.destination` open a
+  title with the surface the web's links use: `.suggestion` or
+  `.suggestionRecommendation`, `.friendsRecommend`, and `.watchTogether`. The
+  screen read and the shared link leave it out.
+- **Top 10:** Add to top 10 on a full list opens `TopTenReplaceSheet`, which
+  lists the 10 and sends `top-ten` with `replace`. Profiles show and edit the
+  top 10 themselves; `TitleHeader.topTenLimit` is the list's size.
+- **Friend line:** each name is a button that shows that friend's entry
+  through `FeedList`'s `entryRequest`.
+- **Credits:** Where to watch links TMDB's viewing options page and credits
+  JustWatch and TMDB, with TMDB's notice that it does not endorse Screenr.
+
+### Trailers
+
+The trailer stays collapsed behind Play trailer, with Watch on YouTube
+([decision](../docs/ios-app.md#inline-trailers-in-a-swiftui-webview--2026-10-13)).
+Play trailer creates a `WebPage` that loads `TrailerLinks.embed(_:)` inline,
+and the title page keeps it in `TrailerPlayer`, so it stays open while the
+page reads again. Nothing loads before Play trailer.
+
+- **Navigation:** the page's navigation decider asks
+  `TrailerLoading.decide(_:isMainFrame:embed:)`. The embed and frames inside
+  it load, and the embed sends `TrailerLinks.referrer`, the site's origin, as
+  the web's player does, since YouTube's embedded player needs a referrer.
+  A link that would replace the player, such as YouTube's logo, opens outside
+  the app.
+- **Full screen:** `.webViewElementFullscreenBehavior(.enabled)` lets the
+  player go full screen. The app delegate keeps every screen in portrait;
+  while a player is on screen, `TrailerOrientation` lets other windows, such
+  as full-screen video, turn to landscape. Check it on a device, since the
+  Simulator's tests load no video.
+- **Tests:** against the fixture API, `AppServices.trailers` is
+  `TrailerLoading.recording`, which writes `WEB <url>` to the request log and
+  loads nothing, so `TitleTests` checks that the embed is asked for only
+  after Play trailer, without the network.
+
+`TitleTests` also covers the watch status and finished date, Recommend and
+its confirmation, the friend line, adding to a full top 10, the review, the
+largest text size, and every `screen/title` fixture. The status and
+replacement sheets are system lists, so their audit is
+`performSettingsAudit()`, and the largest text size test reaches each of
+their controls instead.
+`screen/title/full-top-ten` shows Winter Garden while Alice's top 10 is full,
+and `screen/title/finished-review` shows Paper Lanterns, which Alice finished,
+reviewed, and ranks #2.
 
 ## Fixtures
 

@@ -1,0 +1,221 @@
+{
+  "description": "A movie a friend recommends while Alice's top 10 is full, so adding it asks which title to replace.",
+  "viewer": "alice",
+  "request": {
+    "method": "GET",
+    "action": "screen",
+    "path": "/api/screenr/screen?path=%2Ftitles%2Fmovie%2F105",
+    "query": {
+      "path": "/titles/movie/105"
+    }
+  },
+  "response": {
+    "status": 200,
+    "etag": "W/\"dAGPkVVg7t_EQUIqjkIKUFlUa2WNOQwmfYwRN70TV8I\"",
+    "body": {
+      "kind": "title",
+      "title": {
+        "id": "movie:105",
+        "kind": "movie",
+        "tmdb_id": 105,
+        "name": "Winter Garden",
+        "overview": "A botanist tends a greenhouse through the polar night.",
+        "poster_path": "/winter-garden.jpg",
+        "release_date": "2019-12-06"
+      },
+      "trailer": null,
+      "availability": {
+        "country": "US",
+        "status": "ok",
+        "checked_at": "2026-10-13T12:00:00.000Z",
+        "link": "https://www.themoviedb.org/movie/105-winter-garden/watch",
+        "providers": {
+          "flatrate": [
+            {
+              "logo_path": null,
+              "provider_id": 8,
+              "provider_name": "Netflix"
+            }
+          ]
+        },
+        "sections": [
+          {
+            "key": "subs",
+            "label": "Subs",
+            "services": [
+              {
+                "id": "service:netflix",
+                "name": "Netflix",
+                "logo_path": "/rK1KljqmbvO9HQa1PBFLILWah72.png",
+                "route_note": null
+              }
+            ]
+          }
+        ]
+      },
+      "watch": {
+        "status": null,
+        "finished_on": null
+      },
+      "topTen": [
+        {
+          "id": "movie:101",
+          "name": "Night Crossing",
+          "poster_path": "/night-crossing.jpg",
+          "rank": 1
+        },
+        {
+          "id": "movie:102",
+          "name": "Paper Lanterns",
+          "poster_path": "/paper-lanterns.jpg",
+          "rank": 2
+        },
+        {
+          "id": "tv:201",
+          "name": "Harbor Lights",
+          "poster_path": "/harbor-lights.jpg",
+          "rank": 3
+        },
+        {
+          "id": "movie:301",
+          "name": "Copper Coast",
+          "poster_path": "/copper-coast.jpg",
+          "rank": 4
+        },
+        {
+          "id": "movie:302",
+          "name": "Second Spring",
+          "poster_path": "/second-spring.jpg",
+          "rank": 5
+        },
+        {
+          "id": "movie:303",
+          "name": "Low Tide",
+          "poster_path": "/low-tide.jpg",
+          "rank": 6
+        },
+        {
+          "id": "movie:304",
+          "name": "North Window",
+          "poster_path": "/north-window.jpg",
+          "rank": 7
+        },
+        {
+          "id": "movie:305",
+          "name": "Salt and Cedar",
+          "poster_path": "/salt-and-cedar.jpg",
+          "rank": 8
+        },
+        {
+          "id": "movie:306",
+          "name": "Blue Hour",
+          "poster_path": "/blue-hour.jpg",
+          "rank": 9
+        },
+        {
+          "id": "movie:307",
+          "name": "Far Fields",
+          "poster_path": "/far-fields.jpg",
+          "rank": 10
+        }
+      ],
+      "conversations": [
+        {
+          "id": "4300d142-345c-4077-8450-5146cef8a125",
+          "conversation_id": "4857e513-5308-411e-8996-d1d7bcc2a947",
+          "owner_id": "user-ben",
+          "title_id": "movie:105",
+          "item_type": "want_to_watch",
+          "active": true,
+          "created_at": "2026-10-13T12:00:00.000Z",
+          "activity_at": "2026-10-13T12:00:00.000Z",
+          "body": null,
+          "spoiler": false,
+          "status": null,
+          "finished_on": null,
+          "rating": null,
+          "edited": false,
+          "season": null,
+          "episode": null,
+          "username": "ben",
+          "display_name": "Ben Ortiz",
+          "photo": "8fc275dfeaca5cf8",
+          "title_name": "Winter Garden",
+          "poster_path": "/winter-garden.jpg",
+          "kind": "movie",
+          "release_date": "2019-12-06",
+          "recommended": false,
+          "want_to_watch": true,
+          "viewer_want_to_watch": false,
+          "viewer_recommended": false,
+          "viewer_status": null,
+          "viewer_top_ten_rank": null,
+          "visible_activity": "2026-10-13T12:00:00.000Z",
+          "comments": [],
+          "reactions": []
+        },
+        {
+          "id": "d0c7482e-da0a-433b-8cbc-3731b07eb57a",
+          "conversation_id": "c2e12e12-8b86-4bc3-8ecb-6294c0cfb2d5",
+          "owner_id": "user-cam",
+          "title_id": "movie:105",
+          "item_type": "recommended",
+          "active": true,
+          "created_at": "2026-10-13T12:00:00.000Z",
+          "activity_at": "2026-10-13T12:00:00.000Z",
+          "body": null,
+          "spoiler": false,
+          "status": null,
+          "finished_on": null,
+          "rating": null,
+          "edited": false,
+          "season": null,
+          "episode": null,
+          "username": "cam",
+          "display_name": "Cam Rivera",
+          "photo": null,
+          "title_name": "Winter Garden",
+          "poster_path": "/winter-garden.jpg",
+          "kind": "movie",
+          "release_date": "2019-12-06",
+          "recommended": true,
+          "want_to_watch": false,
+          "viewer_want_to_watch": false,
+          "viewer_recommended": false,
+          "viewer_status": null,
+          "viewer_top_ten_rank": null,
+          "visible_activity": "2026-10-13T12:00:00.000Z",
+          "comments": [],
+          "reactions": []
+        }
+      ],
+      "friends": {
+        "recommended": [
+          {
+            "item": "d0c7482e-da0a-433b-8cbc-3731b07eb57a",
+            "user_id": "user-cam",
+            "display_name": "Cam Rivera",
+            "rank": null
+          }
+        ],
+        "want_to_watch": [
+          {
+            "item": "4300d142-345c-4077-8450-5146cef8a125",
+            "user_id": "user-ben",
+            "display_name": "Ben Ortiz",
+            "rank": null
+          }
+        ]
+      },
+      "target": null,
+      "targetUnavailable": false,
+      "unreadNotifications": 6,
+      "user": {
+        "user_id": "user-alice",
+        "username": "alice",
+        "display_name": "Alice Park",
+        "photo": "486e0212c15728ee"
+      }
+    }
+  }
+}

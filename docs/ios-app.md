@@ -943,6 +943,13 @@ from YouTube before the member taps Play. The app adds no YouTube SDK.
 
 **Rejected alternative:** Opening the trailer in the YouTube app or Safari.
 
+**Implementation note:** [Issue #230](https://github.com/jubishop/screenr/issues/230)
+loads the `www.youtube.com` embed in a `WebPage` only after Play trailer,
+with the site's origin as its referrer, as the web's player sends. Links out
+of the player open outside the app, and full-screen playback may turn to
+landscape while every screen stays in portrait. See
+[trailers](../ios/README.md#trailers).
+
 ### Sharing and later native extras — 2026-10-13
 
 **Decision:**

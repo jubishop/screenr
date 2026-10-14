@@ -29,8 +29,17 @@ public struct ImageSource: Sendable {
 
   // A title's TMDB poster, such as `/abc.jpg`, or nil without one.
   public func poster(_ path: String?) -> URLRequest? {
+    tmdb(path, size: "w342")
+  }
+
+  // A streaming service's TMDB logo, or nil without one.
+  public func logo(_ path: String?) -> URLRequest? {
+    tmdb(path, size: "w92")
+  }
+
+  private func tmdb(_ path: String?, size: String) -> URLRequest? {
     guard case .network = origin, let path, !path.isEmpty,
-      let url = URL(string: "https://image.tmdb.org/t/p/w342" + path)
+      let url = URL(string: "https://image.tmdb.org/t/p/\(size)" + path)
     else { return nil }
     return URLRequest(url: url)
   }

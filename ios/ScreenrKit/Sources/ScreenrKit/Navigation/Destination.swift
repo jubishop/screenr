@@ -19,8 +19,10 @@ public enum Destination: Hashable, Sendable {
   // Watch together, `/watch-together?with=<username>`.
   case watchTogether(with: [String])
   // A title page, `/titles/<kind>/<TMDB ID>`, optionally at an entry and one
-  // of its replies. `id` is the API's title ID, such as `tv:201`.
-  case title(id: String, item: String? = nil, reply: String? = nil)
+  // of its replies. `id` is the API's title ID, such as `tv:201`. `from` is
+  // the list that opened it, such as a suggestion, which its Want to watch
+  // save reports, as the web's `?from=` does.
+  case title(id: String, item: String? = nil, reply: String? = nil, from: SaveSurface? = nil)
   // A profile, `/people/<username>`.
   case profile(username: String)
   // An old conversation link, which the screen API redirects to its entry.
@@ -78,7 +80,12 @@ extension Destination {
     case ("account"?, 1):
       self = .account
     case ("titles"?, 3):
-      self = .title(id: parts.dropFirst().joined(separator: ":"), item: item, reply: reply)
+      self = .title(
+        id: parts.dropFirst().joined(separator: ":"),
+        item: item,
+        reply: reply,
+        from: SaveSurface(titleOrigin: query.first("from"))
+      )
     case ("people"?, 2):
       self = .profile(username: parts[1])
     case ("conversations"?, 2):
@@ -105,12 +112,12 @@ extension Destination {
       return "/account"
     case .watchTogether(let usernames):
       return Self.path("/watch-together", usernames.map { ("with", $0) })
-    case .title(let id, let item, let reply):
+    case .title(let id, let item, let reply, let from):
       let kind = id.prefix { $0 != ":" }
       let tmdbID = id.dropFirst(kind.count + 1)
       return Self.path(
         "/titles/" + PathEncoding.component(kind) + "/" + PathEncoding.component(tmdbID),
-        [("item", item), ("reply", reply)]
+        [("item", item), ("reply", reply), ("from", from?.rawValue)]
       )
     case .profile(let username):
       return "/people/" + PathEncoding.component(username)
@@ -124,19 +131,34 @@ extension Destination {
   }
 
   // The path the screen API reads for this destination, or nil when it is
-  // not a member screen.
+  // not a member screen. A title's origin does not change its screen.
   public var screenPath: String? {
     switch self {
     case .join, .notFound: nil
-    default: path
+    default: withoutOrigin.path
     }
   }
 
   // A link to this destination on screenr.club, for sharing. It opens the
   // app as a universal link where the app is installed, and the web elsewhere.
+  // It leaves out a title's origin, which was the sharer's.
   public var shareURL: URL {
-    guard let url = URL(string: path, relativeTo: Self.site) else { return Self.site }
+    guard let url = URL(string: withoutOrigin.path, relativeTo: Self.site) else {
+      return Self.site
+    }
     return url.absoluteURL
+  }
+
+  // The surface a Want to watch save on this title page reports: the list
+  // that opened it, or `title`. Nil for other screens.
+  public var saveSurface: SaveSurface? {
+    guard case .title(_, _, _, let from) = self else { return nil }
+    return from ?? .title
+  }
+
+  private var withoutOrigin: Destination {
+    guard case .title(let id, let item, let reply, _) = self else { return self }
+    return .title(id: id, item: item, reply: reply)
   }
 
   // A path and its query, leaving out empty values.
@@ -218,11 +240,28 @@ extension Destination {
     case (.join, _): "Invitation"
     case (.notFound, _): "Page not found"
     case (.title, .title(let page)?): page.title.name
-    case (.title(let id, _, _), _): id.hasPrefix("tv:") ? "TV show" : "Movie"
+    case (.title(let id, _, _, _), _): id.hasPrefix("tv:") ? "TV show" : "Movie"
     case (.profile, .profile(let page)?): page.profile.person.displayName
     case (.profile(let username), _): "@" + username
     }
   }
+}
+
+// Title pages opened from lists report the list with their Want to watch
+// saves, as the web's links do with `?from=`.
+extension TitleSuggestion {
+  // A suggestion that names a recommending friend reports that it did.
+  public var destination: Destination {
+    .title(id: id, from: recommendedBy.isEmpty ? .suggestion : .suggestionRecommendation)
+  }
+}
+
+extension FriendsRecommendation {
+  public var destination: Destination { .title(id: id, from: .friendsRecommend) }
+}
+
+extension SharedTitle {
+  public var destination: Destination { .title(id: id, from: .watchTogether) }
 }
 
 // The web's URL encodings: `encodeURIComponent` for path segments, and

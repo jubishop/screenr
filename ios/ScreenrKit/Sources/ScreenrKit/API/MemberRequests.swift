@@ -121,6 +121,15 @@ public enum SaveSurface: String, Hashable, Sendable {
   case title
   // A title page opened from Watch together.
   case watchTogether = "watch_together"
+
+  // The surfaces that open title pages with `?from=`, or nil for any other
+  // value, which a title page ignores.
+  init?(titleOrigin: String?) {
+    guard let titleOrigin, let surface = SaveSurface(rawValue: titleOrigin),
+      [.friendsRecommend, .suggestionRecommendation, .suggestion, .watchTogether].contains(surface)
+    else { return nil }
+    self = surface
+  }
 }
 
 extension APIRequest where Response == SetupDetails {
@@ -166,9 +175,9 @@ extension APIRequest where Response == Acknowledgement {
     .write("relationship", ["target": .string(target), "action": .string(action.rawValue)])
   }
 
-  // `date` is `YYYY-MM-DD`.
-  public static func finishedDate(title: String, date: String) -> Self {
-    .write("finished-date", ["title": .string(title), "date": .string(date)])
+  // Changes the last-finished date, `YYYY-MM-DD`, or clears it with nil.
+  public static func finishedDate(title: String, date: String?) -> Self {
+    .write("finished-date", ["title": .string(title), "date": .nullable(date)])
   }
 
   public static func removeReview(title: String) -> Self {
@@ -340,12 +349,12 @@ extension APIRequest where Response == EntryID {
     )
   }
 
-  // `rating` is whole stars from 1 to 5.
-  public static func review(title: String, rating: Int, body: String, spoiler: Bool) -> Self {
+  // `rating` is whole stars from 1 to 5, or nil for a review with only text.
+  public static func review(title: String, rating: Int?, body: String, spoiler: Bool) -> Self {
     .write(
       "review",
       [
-        "title": .string(title), "rating": .integer(rating), "body": .string(body),
+        "title": .string(title), "rating": .nullable(rating), "body": .string(body),
         "spoiler": .bool(spoiler),
       ]
     )

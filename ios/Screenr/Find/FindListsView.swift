@@ -63,7 +63,7 @@ private struct SuggestionsView: View {
       Section {
         ListHeader("From your circle")
         ForEach(visible) { suggestion in
-          NavigationLink(value: Destination.title(id: suggestion.id)) {
+          NavigationLink(value: suggestion.destination) {
             SuggestionRow(suggestion: suggestion, serviceIds: page.serviceIds)
           }
         }

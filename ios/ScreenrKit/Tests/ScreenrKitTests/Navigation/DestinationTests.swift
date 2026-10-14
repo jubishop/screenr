@@ -21,6 +21,8 @@ struct DestinationTests {
       ("/watch-together?with=ben&with=&with=cam", .watchTogether(with: ["ben", "", "cam"])),
       ("/titles/movie/42", .title(id: "movie:42")),
       ("/titles/tv/7?item=post&reply=answer", .title(id: "tv:7", item: "post", reply: "answer")),
+      ("/titles/movie/42?from=suggestion", .title(id: "movie:42", from: .suggestion)),
+      ("/titles/movie/42?from=watch_together", .title(id: "movie:42", from: .watchTogether)),
       ("/people/Alice", .profile(username: "Alice")),
       ("/people/a%20b", .profile(username: "a b")),
       ("/conversations/legacy?reply=old", .conversation(id: "legacy", reply: "old")),
@@ -31,6 +33,10 @@ struct DestinationTests {
       ("/search?tab=suggestions", .search()),
       ("/search?tab=Friends-Recommend", .search()),
       ("/titles/movie/42?item=", .title(id: "movie:42")),
+      // Only the surfaces that open title pages count; others are ignored.
+      ("/titles/movie/42?from=title", .title(id: "movie:42")),
+      ("/titles/movie/42?from=friend_entry", .title(id: "movie:42")),
+      ("/titles/movie/42?from=nowhere", .title(id: "movie:42")),
       ("/people/alice#friends", .profile(username: "alice")),
     ]
   )
@@ -96,6 +102,7 @@ struct DestinationTests {
       .search(), .search(query: "The Office"), .search(query: "Lost", tab: .friendsRecommend),
       .people, .invites, .account, .watchTogether(with: ["ben", "cam"]),
       .title(id: "movie:42"), .title(id: "tv:7", item: "post", reply: "answer"),
+      .title(id: "movie:42", from: .friendsRecommend),
       .profile(username: "a b"), .conversation(id: "legacy", reply: "old"),
       .join(token: "AbC_123-xyz"), .notFound(path: "/unknown"),
     ]
@@ -143,6 +150,39 @@ struct DestinationTests {
   )
   func ignoresOtherLinks(link: String) throws {
     #expect(Destination(url: try #require(URL(string: link))) == nil)
+  }
+
+  // Where a title page was opened from matters only to its own Want to watch
+  // save, so the screen it reads and the link it shares leave it out.
+  @Test func keepsATitlesOriginOutOfItsScreenAndSharedLink() {
+    let title = Destination.title(id: "tv:201", item: "post", from: .suggestionRecommendation)
+    #expect(title.path == "/titles/tv/201?item=post&from=suggestion_recommendation")
+    #expect(title.screenPath == "/titles/tv/201?item=post")
+    #expect(title.shareURL.absoluteString == "https://screenr.club/titles/tv/201?item=post")
+    #expect(title.saveSurface == .suggestionRecommendation)
+    #expect(Destination.title(id: "tv:201").saveSurface == .title)
+    #expect(Destination.feed().saveSurface == nil)
+  }
+
+  // Find's and Watch together's lists open title pages with the web's
+  // `?from=`: a suggestion naming a recommending friend, another suggestion,
+  // Friends recommend, and Watch together.
+  @Test func opensTitlesFromListsWithTheirSurface() throws {
+    guard case .search(let find) = try screen("screen/search/default").content,
+      case .watchTogether(let together) = try screen("screen/watch-together/default").content
+    else { throw FeedFixtureError(description: "not Find or Watch together") }
+    let suggestions = Dictionary(uniqueKeysWithValues: find.suggestions.map { ($0.id, $0) })
+
+    #expect(
+      suggestions["movie:105"]?.destination
+        == .title(id: "movie:105", from: .suggestionRecommendation)
+    )
+    #expect(suggestions["tv:204"]?.destination == .title(id: "tv:204", from: .suggestion))
+    #expect(
+      find.recommendations.first?.destination == .title(id: "movie:101", from: .friendsRecommend)
+    )
+    #expect(together.titles.first?.destination == .title(id: "movie:104", from: .watchTogether))
+    #expect(together.titles.first?.destination.path == "/titles/movie/104?from=watch_together")
   }
 
   @Test func sharesScreenrClubLinks() {

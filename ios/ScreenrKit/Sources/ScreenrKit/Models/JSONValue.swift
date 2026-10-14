@@ -82,6 +82,11 @@ public enum JSONValue: Codable, Hashable, Sendable, ExpressibleByStringLiteral,
     return .string(value)
   }
 
+  static func nullable(_ value: Int?) -> JSONValue {
+    guard let value else { return .null }
+    return .integer(value)
+  }
+
   // A type mismatch means the value is another kind of JSON, so the caller
   // tries the next kind.
   private static func decode<Value: Decodable>(
