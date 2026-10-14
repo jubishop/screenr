@@ -32,7 +32,8 @@ public struct FixtureScenario: Hashable, Sendable {
   // `errors/update-required`.
   public var failure: String?
   // A file that gets one line per `/api/screenr` request, such as
-  // `GET /api/screenr/screen?path=%2F`, so UI tests can see when the app reads.
+  // `GET /api/screenr/screen?path=%2F`, so UI tests can see when the app reads
+  // and what it writes.
   public var requestLog: URL?
 
   public init(
@@ -54,7 +55,7 @@ public struct FixtureScenario: Hashable, Sendable {
 
 // Appends each request the fixture API answers to the scenario's log file,
 // such as `GET /api/screenr/screen?path=%2F`, with ` visit` after the app's
-// visit.
+// visit and a write's JSON body after the write.
 final class FixtureRequestLog: Sendable {
   private let file: URL
   private let lock = Mutex(())
@@ -67,10 +68,17 @@ final class FixtureRequestLog: Sendable {
     self.file = file
   }
 
-  func record(_ request: URLRequest, path: String) throws {
+  func record(_ request: URLRequest, path: String, body: JSONValue?) throws {
     var line = (request.httpMethod ?? "GET") + " " + path
     if let query = request.url?.query(percentEncoded: true) { line += "?" + query }
     if request.value(forHTTPHeaderField: "Screenr-Visit") != nil { line += " visit" }
+    // A JSON body follows on one line, with sorted keys, such as
+    // `POST /api/screenr/read-notifications {"through":"23"}`.
+    if let body {
+      let encoder = JSONEncoder()
+      encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
+      line += " " + String(decoding: try encoder.encode(body), as: UTF8.self)
+    }
     // A handle that fails before closing closes when it is released.
     try lock.withLock { _ in
       let handle = try FileHandle(forWritingTo: file)
@@ -153,7 +161,7 @@ public struct FixtureTransport: HTTPTransport {
     guard path.hasPrefix("/api/screenr/") else {
       return try reply(url: url, status: 404, body: ["error": "Not found."])
     }
-    try log?.record(request, path: path)
+    try log?.record(request, path: path, body: Incoming.json(request))
     let requestID = request.value(forHTTPHeaderField: "Screenr-Request-Id")
     if let failure = fixture(named: scenario.failure) {
       return try reply(url: url, fixture: failure, requestID: requestID)

@@ -204,7 +204,7 @@ uses it when launched with these arguments; Release builds ignore them:
 | `-ScreenrFixtureProfile` | `complete` (default), or `pending` for a viewer without a profile, such as `pat`: member actions get `errors/incomplete-profile`, as on the server, until a setup request succeeds. |
 | `-ScreenrFixtureOverride` | A fixture that answers first, such as `screen/feed/empty`. Repeatable. |
 | `-ScreenrFixtureFailure` | A fixture that answers every `/api/screenr` request, such as `errors/update-required`. |
-| `-ScreenrFixtureLog` | A file that gets a line per `/api/screenr` request, such as `GET /api/screenr/screen?path=%2F`, with ` visit` after the app's [visit](#visits). |
+| `-ScreenrFixtureLog` | A file that gets a line per `/api/screenr` request, such as `GET /api/screenr/screen?path=%2F`, with ` visit` after the app's [visit](#visits) and a write's JSON body, keys sorted, after the write: `POST /api/screenr/read-notification {"id":"18"}`. |
 | `-ScreenrOpenURL` | A link the app opens at launch, as if the system delivered it, such as `screenr-dev://titles/tv/201`. |
 
 In UI tests, `app.launch(with: FixtureLaunch(viewer: "nora"))` passes them,
@@ -212,7 +212,9 @@ with the directory found from the test's source path; `link` and
 `requestLog` pass the last two. The fixture API keeps the session in memory.
 A request gets the fixture with the same action and
 query or body, then falls back to the screen's path or to a successful
-fixture for the action. A matching ETag gets 304.
+fixture for the action. A matching ETag gets 304. Apart from setup, writes
+change nothing, so later reads answer as before; a UI test checks what a
+write sent in the request log.
 
 Requesting a code and signing in with one succeed, and every invitation
 link is available, unless an `auth/` override answers the route, such as
@@ -297,7 +299,7 @@ The Settings placeholder holds `SignOutButton` until Settings is built.
 | --- | --- | --- |
 | `Destination` | ScreenrKit `Navigation/` | One case per member route, plus `join` and `notFound`. `Destination(path:)` and `path` match the web's member routes, `Destination(url:)` reads universal links and `screenr-dev://` links, `shareURL` builds a screenr.club link, and `pageName(for:)` names the page. |
 | `Router` | ScreenrKit `Navigation/` | `@Observable`: the selected tab, each tab's stack, and the sheet. `open(_:)` takes links from outside the app, and puts an invitation link's token in `PendingInvitation`. |
-| `ShellModel` | ScreenrKit `Shell/` | `@Observable`: the account check, the viewer, the bell's unread count, the app's activity, `screenModel(for:)`, and `pushArrived()`. Views read it with `@Environment(ShellModel.self)`. |
+| `ShellModel` | ScreenrKit `Shell/` | `@Observable`: the account check, the viewer, the bell's unread count, the app's activity, `screenModel(for:)`, `pushArrived()`, and `refreshLiveReads()`. Views read it with `@Environment(ShellModel.self)`. |
 | `LiveRead`, `ScreenModel` | ScreenrKit `Shell/` | A GET request's `phase` (`loading`, `loaded`, or `failed`) and its polling. `ScreenModel` is `LiveRead<Screen>`; other live reads, such as the notifications sheet's, use `LiveRead(.notifications(), api:)`. |
 | `IncomingActivity` | ScreenrKit `Shell/` | Which activity the reader accepted; the rest waits behind a control. |
 | `DestinationView` | `Screenr/Shell/` | Maps each destination to its screen, owns its `ScreenModel`, and adds polling, the navigation title, and redirects. |
@@ -344,7 +346,8 @@ confirm the prompt. In UI tests, launch with `FixtureLaunch(link:)`, or call
 While its screen is visible and the app's scene is active, it reads when the
 screen appears and every three seconds after, sending the cached ETag. It
 stops in the background or when the screen disappears, and reads again when
-either returns, on pull-to-refresh, and when `ShellModel.pushArrived()` runs.
+either returns, on pull-to-refresh, and when `ShellModel.pushArrived()` or
+`refreshLiveReads()` runs.
 Each read gives up after ten seconds. A failed read replaces the content with
 the error; passing failures keep polling, and a permanent error stops it until
 a read succeeds. An unchanged screen keeps its `phase`, so nothing renders
@@ -395,6 +398,34 @@ marks the visit for `ShellTests`.
    tabs with `app.performShellAudit()`. `ShellTests` check the shell through
    navigation titles and `FixtureLaunch(requestLog:)`, so they hold when a
    placeholder changes; keep `DestinationView`'s navigation titles.
+
+### Notifications sheet
+
+The bell opens `NotificationsView` (`Screenr/Screens/`) in the shell's
+`NotificationsSheet`, over whatever the tab shows, as the web's
+[notification panel](../docs/notifications.md#current-implementation) opens
+over the page. Its behavior is ScreenrKit's `NotificationsModel`
+(`Notifications/`):
+
+- **List:** a page of up to 30 from `notifications`, All or Unread, with
+  Earlier and Latest notifications. Each view is its own `LiveRead`, which
+  polls while the sheet shows and sets the bell's count from the page's
+  `unread`. Opening the sheet marks nothing read.
+- **Selecting:** `read-notification`, then `shell.router.open(_:)` with the
+  returned path, which closes the sheet and opens the item on the current
+  tab, or a feed entry on Circle.
+- **Mark all as read:** `read-notifications` through the shown page's
+  `through`, which an earlier page keeps, so later arrivals stay unread.
+- **Friend requests:** Accept, and Decline after a confirmation, through
+  `respond-friend-request`. The answered row keeps its result until the view
+  changes.
+- **Counts:** after each action, `shell.refreshLiveReads()` makes the screen
+  beneath read again, so every screen's unread count, and the bell's, catch
+  up.
+
+One action runs at a time. A failed one shows an alert with the server's
+message, and the page reads again. Closing the sheet leaves the screen
+beneath and its state, such as an unsent draft, untouched.
 
 ## Invitations and setup
 

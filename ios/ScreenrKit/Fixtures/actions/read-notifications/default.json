@@ -6,7 +6,7 @@
     "action": "read-notifications",
     "path": "/api/screenr/read-notifications",
     "body": {
-      "through": "5"
+      "through": "23"
     }
   },
   "response": {
