@@ -1,5 +1,6 @@
 import { test, mock, type TestContext } from "node:test";
 import assert from "node:assert/strict";
+import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import {
   useDatabase,
@@ -645,4 +646,81 @@ test("a person who never finished setup can delete their account", async () => {
   const response = await deleteAccount(await bearer(pat));
   assert.equal(response.status, 200, await response.clone().text());
   assert.deepEqual(await references(pat), []);
+});
+
+// Replaces console.log until the test ends and returns the JSON events it
+// printed.
+function captureEvents(t: TestContext) {
+  const printed: Record<string, unknown>[] = [];
+  mock.method(console, "log", (line: unknown) => {
+    try {
+      printed.push(JSON.parse(String(line)));
+    } catch {}
+  });
+  t.after(() => mock.restoreAll());
+  return printed;
+}
+
+test("each deletion leaves one journal line that names only the user ID", async (t) => {
+  const departing = await person("departing");
+  const stale = await person("stale");
+  const events = captureEvents(t);
+  const staleSession = await bearer(stale);
+  await db.query(
+    `UPDATE session SET "createdAt"=now()-interval '11 minutes' WHERE "userId"=$1`,
+    [stale],
+  );
+  assert.equal((await deleteAccount(staleSession)).status, 403);
+  assert.equal((await deleteAccount(await bearer(departing))).status, 200);
+  assert.deepEqual(events, [{ event: "account deleted", userId: departing }]);
+});
+
+// Runs a command in the checkout, with this suite's database, writing
+// `input` to its standard input.
+function run(command: string, args: string[], input: string) {
+  return new Promise<{ stdout: string }>((resolve, reject) => {
+    const child = spawn(command, args, {
+      cwd: new URL("../..", import.meta.url),
+      env: { ...process.env, NODE_TEST_CONTEXT: undefined },
+    });
+    let stdout = "";
+    let stderr = "";
+    child.stdout.on("data", (chunk) => (stdout += chunk));
+    child.stderr.on("data", (chunk) => (stderr += chunk));
+    child.on("error", reject);
+    child.on("close", (code) =>
+      code === 0
+        ? resolve({ stdout })
+        : reject(new Error(`${command} exited ${code}: ${stderr}`)),
+    );
+    child.stdin.end(input);
+  });
+}
+
+test("after a restore, the delete-accounts command erases the accounts that journal lines name again", async () => {
+  const restored = await person("restored");
+  const kept = await person("kept");
+  await friend(restored, kept);
+  // What `journalctl -o cat` prints: deletions among other lines.
+  const journal = [
+    "Server started",
+    JSON.stringify({ event: "request failed", status: 500 }),
+    JSON.stringify({ event: "account deleted", userId: restored }),
+    JSON.stringify({ event: "account deleted", userId: "already-gone" }),
+    "",
+  ].join("\n");
+  const { stdout } = await run(
+    "npx",
+    ["tsx", "scripts/delete-accounts.ts"],
+    journal,
+  );
+  assert.equal(
+    stdout,
+    "Deleted 1 account again. 1 named account was not in the database.\n",
+  );
+  assert.deepEqual(await references(restored), []);
+  assert.equal(
+    (await db.query("SELECT 1 FROM profile WHERE user_id=$1", [kept])).rowCount,
+    1,
+  );
 });

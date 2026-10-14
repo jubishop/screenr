@@ -28,7 +28,8 @@ import { releasePaths } from "../../scripts/release-paths";
 
 // Production runs these from the unpacked release with `node --import tsx`:
 // ops/activate.sh, ops/screenr-worker.service, and the one-off commands in
-// docs/deployment.md and docs/usage-telemetry.md.
+// docs/deployment.md, docs/usage-telemetry.md, and
+// docs/restore-and-patching.md.
 const maintenanceScripts = [
   "scripts/validate-config.ts",
   "scripts/migrate.ts",
@@ -36,6 +37,7 @@ const maintenanceScripts = [
   "scripts/bootstrap.ts",
   "scripts/report-usage.ts",
   "scripts/seed-review.ts",
+  "scripts/delete-accounts.ts",
 ];
 
 // The specifiers of imports that load at runtime, in source order. Declarations

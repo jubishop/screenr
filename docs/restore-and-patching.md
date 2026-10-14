@@ -151,6 +151,13 @@ and `screenr-worker` first.
      --working-directory=/opt/screenr/current \
      -p EnvironmentFile=/etc/screenr/app.env -p Environment=NODE_ENV=production \
      /opt/screenr/node/bin/node --import tsx scripts/migrate.ts
+   ```
+
+   Before starting the services,
+   [repeat the account deletions](#repeat-account-deletions) made since the
+   snapshot. Then start both services:
+
+   ```sh
    systemctl start screenr-web screenr-worker
    curl --fail --retry 20 --retry-connrefused --retry-delay 1 http://127.0.0.1:3060/api/health
    systemctl is-active screenr-web screenr-worker
@@ -171,6 +178,50 @@ and `screenr-worker` first.
 
 6. When nothing more is needed from the damaged copy, drop it with
    `as_backup dropdb screenr_before_restore`.
+
+### Repeat account deletions
+
+A snapshot still holds every account deleted after it was taken
+([backups and deletion](deployment.md#account-deletion-and-backups)), so a
+restore brings those accounts back. Screenr keeps no list of deleted
+accounts. Instead, each [account deletion](data-and-access.md#account-deletion)
+prints one `screenr-web` journal line that names only the user ID:
+
+```json
+{"event":"account deleted","userId":"USER_ID"}
+```
+
+`scripts/delete-accounts.ts` reads journal lines on standard input and erases
+again, through the same erasure, every account an `account deleted` line
+names. Apple revocation already succeeded before each original deletion, so
+it does not run again. Accounts that are not in the database are counted and
+skipped, so running it twice or over a longer period changes nothing more.
+
+1. Set `since` to a few minutes before the restored snapshot's time, as
+   `restic snapshots` lists it, for example `since='2026-10-13 04:55'`.
+2. Check that the journal reaches back that far. The first line this prints
+   must be older than `since`; otherwise deletions between the snapshot and
+   that line can no longer be found:
+
+   ```sh
+   journalctl -u screenr-web -o short-iso --no-pager | head -n 1
+   ```
+
+3. With the services still stopped, erase the accounts again. It prints how
+   many it deleted:
+
+   ```sh
+   journalctl -u screenr-web --since "$since" -o cat --no-pager |
+     systemd-run --quiet --wait --pipe --collect --uid=screenr \
+       --working-directory=/opt/screenr/current \
+       -p EnvironmentFile=/etc/screenr/app.env -p Environment=NODE_ENV=production \
+       /opt/screenr/node/bin/node --import tsx scripts/delete-accounts.ts
+   ```
+
+On a [replacement host](#rebuild-on-a-replacement-host), the old host's
+journal is normally lost with it. If a copy of that journal survives, pipe its
+lines from `since` onward to the same command as soon as the first
+deployment there finishes.
 
 ## Rebuild on a replacement host
 

@@ -609,6 +609,26 @@ requires in-app account deletion once the
 **Implementation:** [account deletion](data-and-access.md#account-deletion)
 and [backups](deployment.md#account-deletion-and-backups).
 
+**Updated — 2026-10-13:** After
+[issue #236](https://github.com/jubishop/screenr/issues/236) shipped, the
+owner reviewed its choices
+([issue #280](https://github.com/jubishop/screenr/issues/280)):
+
+- **Standalone comments:** a standalone title comment follows the comment
+  rule. One with other members' replies becomes "Comment removed" and the
+  replies stay; one without replies is removed. Only discussion posts and
+  reviews are removed with their whole conversation. #236 had removed
+  standalone comments with their conversations.
+- **Invitations:** deletion erases the member's invitations, with the
+  signup records of people who joined through them. Approved as built.
+- **Code request limits:** the hashed, day-long records that limit sign-in
+  code requests stay after deletion. Approved as built.
+- **Backups:** document how deletion relates to restores instead of tracking
+  deleted accounts. Each deletion leaves a journal line naming only the user
+  ID, and the
+  [restore runbook](restore-and-patching.md#repeat-account-deletions) uses
+  those lines to erase the accounts again after a restore.
+
 ### Automatic inviter friendship — 2026-09-07
 
 **Decision:** When a new member completes signup through a member's invitation,
