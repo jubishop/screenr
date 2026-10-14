@@ -18,6 +18,11 @@ struct FixtureLaunch {
   var overrides: [String] = []
   // A fixture that answers every API request, such as "errors/update-required".
   var failure: String?
+  // A link the app opens at launch, as if the system had delivered it, such as
+  // "screenr-dev://titles/tv/201".
+  var link: String?
+  // A file where the fixture API writes a line for each API request.
+  var requestLog: URL?
 
   static let directory = URL(filePath: #filePath)
     .deletingLastPathComponent()  // ScreenrUITests
@@ -31,6 +36,8 @@ struct FixtureLaunch {
     ]
     for name in overrides { arguments += ["-ScreenrFixtureOverride", name] }
     if let failure { arguments += ["-ScreenrFixtureFailure", failure] }
+    if let requestLog { arguments += ["-ScreenrFixtureLog", requestLog.path()] }
+    if let link { arguments += ["-ScreenrOpenURL", link] }
     return arguments
   }
 }

@@ -75,6 +75,9 @@ final class SignInTests: XCTestCase {
   func testSignsOutToAnEmptySignInScreen() throws {
     let app = XCUIApplication()
     app.launch(with: FixtureLaunch())
+    XCTAssertTrue(app.tab("You").waitForExistence(timeout: 10))
+    app.tab("You").tap()
+    app.buttons["Settings"].tap()
     let signOut = app.buttons["Sign out"]
     XCTAssertTrue(signOut.waitForExistence(timeout: 10))
     try app.performAccessibilityAudit()
@@ -122,7 +125,7 @@ final class SignInTests: XCTestCase {
 
   @MainActor
   private func assertSignedIn(_ app: XCUIApplication) {
-    XCTAssertTrue(app.buttons["Sign out"].waitForExistence(timeout: 10))
+    XCTAssertTrue(app.navigationBars["Your circle"].waitForExistence(timeout: 10))
     XCTAssertFalse(app.textFields["Email address"].exists)
   }
 }

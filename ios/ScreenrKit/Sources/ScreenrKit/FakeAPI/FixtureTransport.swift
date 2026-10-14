@@ -1,4 +1,5 @@
 import Foundation
+import Synchronization
 
 // Which fixtures answer, for a UI test or a Dev launch without a server.
 public struct FixtureScenario: Hashable, Sendable {
@@ -20,17 +21,48 @@ public struct FixtureScenario: Hashable, Sendable {
   // A fixture that answers every `/api/screenr` request, such as
   // `errors/update-required`.
   public var failure: String?
+  // A file that gets one line per `/api/screenr` request, such as
+  // `GET /api/screenr/screen?path=%2F`, so UI tests can see when the app reads.
+  public var requestLog: URL?
 
   public init(
     viewer: String = "alice",
     session: Session = .signedIn,
     overrides: [String] = [],
-    failure: String? = nil
+    failure: String? = nil,
+    requestLog: URL? = nil
   ) {
     self.viewer = viewer
     self.session = session
     self.overrides = overrides
     self.failure = failure
+    self.requestLog = requestLog
+  }
+}
+
+// Appends each request the fixture API answers to the scenario's log file.
+final class FixtureRequestLog: Sendable {
+  private let file: URL
+  private let lock = Mutex(())
+
+  // Starts an empty log.
+  init(file: URL) throws {
+    guard FileManager.default.createFile(atPath: file.path(), contents: Data()) else {
+      throw FixtureError("Cannot create the request log \(file.path())")
+    }
+    self.file = file
+  }
+
+  func record(_ request: URLRequest, path: String) throws {
+    var line = (request.httpMethod ?? "GET") + " " + path
+    if let query = request.url?.query(percentEncoded: true) { line += "?" + query }
+    // A handle that fails before closing closes when it is released.
+    try lock.withLock { _ in
+      let handle = try FileHandle(forWritingTo: file)
+      try handle.seekToEnd()
+      try handle.write(contentsOf: Data((line + "\n").utf8))
+      try handle.close()
+    }
   }
 }
 
@@ -56,10 +88,16 @@ public struct FixtureTransport: HTTPTransport {
 
   private let fixtures: [Fixture]
   private let scenario: FixtureScenario
+  private let log: FixtureRequestLog?
 
   public init(directory: URL, scenario: FixtureScenario = FixtureScenario()) throws {
     fixtures = try Fixture.all(in: directory)
     self.scenario = scenario
+    if let file = scenario.requestLog {
+      log = try FixtureRequestLog(file: file)
+    } else {
+      log = nil
+    }
     var named = scenario.overrides
     if let failure = scenario.failure { named.append(failure) }
     let names = Set(fixtures.map(\.name))
@@ -78,6 +116,7 @@ public struct FixtureTransport: HTTPTransport {
     guard path.hasPrefix("/api/screenr/") else {
       return try reply(url: url, status: 404, body: ["error": "Not found."])
     }
+    try log?.record(request, path: path)
     let requestID = request.value(forHTTPHeaderField: "Screenr-Request-Id")
     if let failure = fixture(named: scenario.failure) {
       return try reply(url: url, fixture: failure, requestID: requestID)

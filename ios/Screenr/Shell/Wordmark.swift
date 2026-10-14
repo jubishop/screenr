@@ -1,11 +1,14 @@
 import SwiftUI
 
-// The "screenr" wordmark and its dot.
+// The "screenr" wordmark and its dot, on screens before sign-in and, smaller,
+// in the Circle tab's navigation bar.
 struct Wordmark: View {
+  var font: Font = .system(.largeTitle, weight: .heavy)
+
   var body: some View {
     HStack(alignment: .firstTextBaseline, spacing: 4) {
       Text(verbatim: "screenr")
-        .font(.system(.largeTitle, weight: .heavy))
+        .font(font)
         .foregroundStyle(.tint)
         .accessibilityAddTraits(.isHeader)
       Image(systemName: "circle.fill")
@@ -13,13 +16,5 @@ struct Wordmark: View {
         .foregroundStyle(Color.brandDot)
         .accessibilityHidden(true)
     }
-  }
-}
-
-struct WordmarkView: View {
-  var body: some View {
-    Wordmark()
-      .frame(maxWidth: .infinity, maxHeight: .infinity)
-      .background(Color(uiColor: .systemBackground))
   }
 }
