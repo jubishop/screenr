@@ -252,6 +252,12 @@ installed apps.
 - **Incoming activity:** it shows the same "New activity" and "New replies"
   controls without moving the reader.
 
+**Implementation note:** ScreenrKit's `ScreenModel` polls each visible
+screen, and `IncomingActivity` holds other people's new activity behind the
+shell's controls. Each read also has the web's ten-second deadline and the
+same rules for passing and permanent errors. The
+[app shell](../ios/README.md#polling) section describes them.
+
 **Why:** The user accepted the recommendation. It needs no new server
 infrastructure, and it keeps the incoming-activity behavior already accepted
 for the web.
@@ -404,7 +410,10 @@ permalinks match as title and feed paths with query parameters.
 `tests/app/universal-links.test.ts` checks the list against every member
 route. The file names only the Release app,
 `34TKMKM889.com.artisanalsoftware.Screenr`. Screenr Dev uses its
-`screenr-dev://` scheme instead.
+`screenr-dev://` scheme instead. In the app, ScreenrKit's `Destination`
+reads both kinds of link with the web's member route rules, and `Router`
+opens each destination in its tab; see
+[links](../ios/README.md#links).
 
 **Why:** The user accepted the recommendation. Invitation links that open the
 app follow from [full parity](#full-parity-including-signup--2026-10-13), and

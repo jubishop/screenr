@@ -101,6 +101,7 @@ public struct AppServices: Sendable {
 //   -ScreenrFixtureSession signedIn|signedOut (default signedIn)
 //   -ScreenrFixtureOverride <fixture name>    (repeatable)
 //   -ScreenrFixtureFailure <fixture name>
+//   -ScreenrFixtureLog <file for a line per API request>
 //
 // Release builds ignore them.
 public enum APISource: Hashable, Sendable {
@@ -125,6 +126,7 @@ public enum APISource: Hashable, Sendable {
       case "-ScreenrFixtureViewer": scenario.viewer = value
       case "-ScreenrFixtureOverride": scenario.overrides.append(value)
       case "-ScreenrFixtureFailure": scenario.failure = value
+      case "-ScreenrFixtureLog": scenario.requestLog = URL(filePath: value)
       case "-ScreenrFixtureSession":
         guard let session = FixtureScenario.Session(rawValue: value) else {
           throw ArgumentError(description: "\(argument) is signedIn or signedOut, not \(value)")

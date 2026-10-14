@@ -15,7 +15,7 @@ repository root.
 | --- | --- |
 | `Screenr.xcodeproj` | The Screenr app and ScreenrUITests targets, and the shared Screenr scheme. |
 | `Config/` | The `.xcconfig` build settings, the app's entitlements, and the release export options. |
-| `Screenr/` | The app target: SwiftUI views, the app lifecycle, assets, and `Info.plist`. |
+| `Screenr/` | The app target: the [app shell](#app-shell) in `Shell/`, feature screens in `Screens/`, the app lifecycle, assets, and `Info.plist`. |
 | `ScreenrUITests/` | XCUITest UI tests. |
 | `ScreenrKit/` | A local Swift package: `Sources/ScreenrKit`, `Tests/ScreenrKitTests`, and `Fixtures/`. |
 | `build/` | Build output, check logs, and result bundles. Git ignores it. |
@@ -198,10 +198,13 @@ uses it when launched with these arguments; Release builds ignore them:
 | `-ScreenrFixtureSession` | `signedIn` (default) or `signedOut`. |
 | `-ScreenrFixtureOverride` | A fixture that answers first, such as `screen/feed/empty`. Repeatable. |
 | `-ScreenrFixtureFailure` | A fixture that answers every `/api/screenr` request, such as `errors/update-required`. |
+| `-ScreenrFixtureLog` | A file that gets a line per `/api/screenr` request, such as `GET /api/screenr/screen?path=%2F`. |
+| `-ScreenrOpenURL` | A link the app opens at launch, as if the system delivered it, such as `screenr-dev://titles/tv/201`. |
 
 In UI tests, `app.launch(with: FixtureLaunch(viewer: "nora"))` passes them,
-with the directory found from the test's source path. The fixture API keeps
-the session in memory. A request gets the fixture with the same action and
+with the directory found from the test's source path; `link` and
+`requestLog` pass the last two. The fixture API keeps the session in memory.
+A request gets the fixture with the same action and
 query or body, then falls back to the screen's path or to a successful
 fixture for the action. A matching ETag gets 304.
 
@@ -253,6 +256,119 @@ network boundary without an Apple ID or Google account:
 
 Real Apple and Google sign-in need a device or Simulator with an Apple ID or
 Google account, so they are checked on TestFlight builds.
+
+## App shell
+
+The shell is the structure every feature screen plugs into. It follows the
+session, shows the tabs, maps links to destinations, keeps the visible
+screen current, and provides the shared controls.
+
+```text
+ScreenrApp            builds AppServices and ShellModel, opens -ScreenrOpenURL
+└─ AppRootView        follows SessionStore.phase, handles onOpenURL
+   ├─ RequiredUpdateView        .updateRequired (a 426)
+   ├─ SignInView                .signedOut (SignIn/)
+   └─ signed in, by ShellModel.account
+      ├─ SetupView              .needsSetup (a 403 on the feed)
+      └─ MainTabView            .ready
+         ├─ Circle, Friends, You, Find a title (the search-role tab)
+         │  └─ NavigationStack(path: $router[stack: tab])
+         │     ├─ root DestinationView, with the bell (and You's gear)
+         │     └─ pushed DestinationViews
+         └─ sheets: NotificationsSheet, SettingsSheet (the /account screen)
+```
+
+The account check reads the friends feed once after sign-in. A 403, which the
+server sends every member without a profile, shows setup; otherwise the
+feed's `user` is the viewer, whose opaque user ID the app gives error
+reporting, and whose username makes the You tab. When the session ends,
+`SessionStore.onEnd` resets the shell, so the next member starts at Circle.
+The Settings placeholder holds `SignOutButton` until Settings is built.
+
+| Piece | Where | What it does |
+| --- | --- | --- |
+| `Destination` | ScreenrKit `Navigation/` | One case per member route, plus `join` and `notFound`. `Destination(path:)` and `path` match the web's member routes, `Destination(url:)` reads universal links and `screenr-dev://` links, `shareURL` builds a screenr.club link, and `pageName(for:)` names the page. |
+| `Router` | ScreenrKit `Navigation/` | `@Observable`: the selected tab, each tab's stack, and the sheet. `open(_:)` takes links from outside the app, and puts an invitation link's token in `PendingInvitation`. |
+| `ShellModel` | ScreenrKit `Shell/` | `@Observable`: the account check, the viewer, the bell's unread count, the app's activity, `screenModel(for:)`, and `pushArrived()`. Views read it with `@Environment(ShellModel.self)`. |
+| `LiveRead`, `ScreenModel` | ScreenrKit `Shell/` | A GET request's `phase` (`loading`, `loaded`, or `failed`) and its polling. `ScreenModel` is `LiveRead<Screen>`; other live reads, such as the notifications sheet's, use `LiveRead(.notifications(), api:)`. |
+| `IncomingActivity` | ScreenrKit `Shell/` | Which activity the reader accepted; the rest waits behind a control. |
+| `DestinationView` | `Screenr/Shell/` | Maps each destination to its screen, owns its `ScreenModel`, and adds polling, the navigation title, and redirects. |
+| `ScreenContent`, `MessageView` | `Screenr/Shell/` | Render a model's phase: a spinner, the error with Try again, or the loaded screen; and a full-screen message. |
+| `.livePolling(_:)` | `Screenr/Shell/` | Connects any `LiveRead` to its view's visibility, the app's activity, pull-to-refresh, and pushes. |
+| `IncomingActivityButton` | `Screenr/Shell/` | The "New activity" and "New replies" controls; `.incomingActivity(_:count:show:)` floats one over a screen. |
+| `ShareButton` | `Screenr/Shell/` | A `ShareLink` for a destination's screenr.club link. |
+| Feature screens | `Screenr/Screens/` | One file per screen. Each starts as a `PlaceholderScreen` that shows what the screen holds and its path. |
+
+### Links
+
+`Router.open(_:)` places a destination the way the web's pages relate:
+
+| Destination | Opens |
+| --- | --- |
+| `/` | Circle's root. |
+| `/?item=&reply=` | The feed at that entry, pushed on Circle. |
+| `/search` | Find a title's root, which shows the link's search and tab from `router.findSearch`. |
+| `/people` | Friends' root. |
+| `/people/<viewer>` | You's root. |
+| `/invites`, `/watch-together` | Pushed on Friends. |
+| `/account` | Settings over You. |
+| `/titles/…`, `/people/<other>`, `/conversations/…`, unknown paths | Pushed on the current tab. A conversation shows the entry it redirects to in its place. |
+| `/join/<token>` | Keeps the token in `PendingInvitation` for sign-in and setup. A member who has a profile lands in Circle, as on the web. |
+
+Tab roots never change destination; a link adds to a stack or, for Find,
+sets `router.findSearch`. SwiftUI did not report a root as appearing when its
+identity changed as its tab was selected, so it never polled. Replacing a
+stack's top in place reused the old screen's model, so each `DestinationView`
+is identified by its destination, and a redirect renders in place.
+
+Release builds receive universal links for `https://screenr.club`, and Screenr
+Dev receives `screenr-dev://` links, whose first path segment is the URL's
+host: `screenr-dev://titles/tv/201?item=<entry>`. To open one in a running
+Simulator, run `xcrun simctl openurl <udid> 'screenr-dev://people/ben'` and
+confirm the prompt. In UI tests, launch with `FixtureLaunch(link:)`, or call
+`XCUIDevice.shared.system.open(url)` to deliver a link to the running app;
+`XCUIApplication.open(_:)` relaunches it.
+
+### Polling
+
+`LiveRead` follows the web's
+[refresh behavior](../docs/data-and-access.md#write-lock-and-refresh-behavior).
+While its screen is visible and the app's scene is active, it reads when the
+screen appears and every three seconds after, sending the cached ETag. It
+stops in the background or when the screen disappears, and reads again when
+either returns, on pull-to-refresh, and when `ShellModel.pushArrived()` runs.
+Each read gives up after ten seconds. A failed read replaces the content with
+the error; passing failures keep polling, and a permanent error stops it until
+a read succeeds. An unchanged screen keeps its `phase`, so nothing renders
+again. `ScreenModelTests` cover the timing with a `TestClock`.
+
+### Add a feature screen
+
+1. **View:** replace the placeholder body in the destination's file under
+   `Screenr/Screens/`, such as `TitleView.swift`. It receives `model` and
+   `destination`. Render through `ScreenContent(model: model) { screen in … }`
+   and match `screen.content`, such as `.title(let page)`. `DestinationView`
+   already sets the navigation title, polling, pull-to-refresh (for a `List`
+   or `ScrollView`), and redirects.
+2. **Behavior:** put it in an `@Observable` view model in ScreenrKit that takes
+   `any ScreenrAPI` (from `@Environment(\.screenrAPI)`). After a write, call
+   `await model.refresh()`. A failed read replaces the content, so keep drafts
+   in the view model or in state outside `ScreenContent`.
+3. **Navigation:** push with `NavigationLink(value: Destination.title(id:))`;
+   the tab's stack shows it. Use `shell.router.open(_:)` only for links from
+   outside the current screen, such as a notification.
+4. **Shared controls:** share with `ShareButton(destination:subject:)`. For
+   incoming activity, keep an `IncomingActivity<Key>` in the view model and
+   float `.incomingActivity(.activity, count: waiting.count) { … }` over the
+   screen.
+5. **Tests:** test the view model with `swift test`, against `ScriptedAPI` and
+   `TestClock` in `Tests/ScreenrKitTests/Support/` or against
+   `FixtureTransport`. Write UI journeys with
+   `app.launch(with: FixtureLaunch(link: "screenr-dev://titles/tv/201"))`,
+   choosing fixtures with `viewer` and `overrides`, and audit screens in the
+   tabs with `app.performShellAudit()`. `ShellTests` check the shell through
+   navigation titles and `FixtureLaunch(requestLog:)`, so they hold when a
+   placeholder changes; keep `DestinationView`'s navigation titles.
 
 ## Fixtures
 

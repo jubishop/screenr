@@ -224,6 +224,34 @@ struct FixtureTransportTests {
     }
   }
 
+  // UI tests read the log to see when the app polls.
+  @Test func logsEachAPIRequest() async throws {
+    let directory = FileManager.default.temporaryDirectory
+      .appending(path: UUID().uuidString, directoryHint: .isDirectory)
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    defer {
+      do {
+        try FileManager.default.removeItem(at: directory)
+      } catch {
+        Issue.record("Could not remove \(directory.path()): \(error)")
+      }
+    }
+    let log = directory.appending(path: "requests.log")
+    let services = try services("-ScreenrFixtureLog", log.path())
+
+    _ = try await services.api.send(.screen(path: "/"))
+    _ = try await services.api.send(.screen(path: "/titles/tv/201"))
+    _ = try await services.api.send(.sendCode(email: "alice@example.com"))
+
+    #expect(
+      try String(contentsOf: log, encoding: .utf8) == """
+        GET /api/screenr/screen?path=%2F
+        GET /api/screenr/screen?path=%2Ftitles%2Ftv%2F201
+
+        """
+    )
+  }
+
   @Test func rejectsAMissingFixtureName() {
     #expect(throws: FixtureError.self) {
       try FixtureTransport(
@@ -245,7 +273,8 @@ struct APISourceTests {
         "Screenr", "-ScreenrFixtures", "/tmp/Fixtures", "-ScreenrFixtureViewer", "nora",
         "-ScreenrFixtureSession", "signedOut", "-ScreenrFixtureOverride", "screen/feed/empty",
         "-ScreenrFixtureOverride", "screen/people/empty", "-ScreenrFixtureFailure",
-        "errors/signed-out", "-AppleLanguages", "(en)",
+        "errors/signed-out", "-ScreenrFixtureLog", "/tmp/requests.log", "-AppleLanguages", "(en)",
+        "-ScreenrOpenURL", "screenr-dev://people",
       ],
       variant: .dev
     )
@@ -258,10 +287,23 @@ struct APISourceTests {
             viewer: "nora",
             session: .signedOut,
             overrides: ["screen/feed/empty", "screen/people/empty"],
-            failure: "errors/signed-out"
+            failure: "errors/signed-out",
+            requestLog: URL(filePath: "/tmp/requests.log")
           )
         )
     )
+  }
+
+  @Test func opensALinkAtLaunchInDev() throws {
+    let arguments = ["Screenr", "-ScreenrOpenURL", "screenr-dev://titles/tv/201?item=post"]
+
+    #expect(
+      LaunchLink.url(in: arguments, variant: .dev)
+        == URL(string: "screenr-dev://titles/tv/201?item=post")
+    )
+    #expect(LaunchLink.url(in: arguments, variant: .release) == nil)
+    #expect(LaunchLink.url(in: ["Screenr", "-ScreenrOpenURL"], variant: .dev) == nil)
+    #expect(LaunchLink.url(in: ["Screenr"], variant: .dev) == nil)
   }
 
   @Test func ignoresFixturesInRelease() throws {

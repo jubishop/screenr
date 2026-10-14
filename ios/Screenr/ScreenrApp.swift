@@ -4,6 +4,7 @@ import SwiftUI
 @main
 struct ScreenrApp: App {
   private let services: AppServices
+  private let shell: ShellModel
   private let logFile: LogFile?
   private let telemetry: Telemetry
 
@@ -30,23 +31,37 @@ struct ScreenrApp: App {
       .label("variant", configuration.variant),
       .label("telemetry", telemetry.state)
     )
+    let arguments = ProcessInfo.processInfo.arguments
     do {
       services = try AppServices(
         configuration: configuration,
-        arguments: ProcessInfo.processInfo.arguments,
+        arguments: arguments,
         observer: telemetry
       )
     } catch {
       fatalError("Screenr could not start its API client: \(error)")
     }
-    // Error reports stop naming the member once the session ends.
-    services.session.onEnd { telemetry.signOut() }
+    // Error reports name the signed-in member's opaque user ID once a screen
+    // shows who they are, and stop when the session ends; the next member
+    // starts over at the friends feed.
+    let shell = ShellModel(api: services.api, router: Router(invitation: services.invitation)) {
+      viewer in telemetry.signIn(userID: viewer.userId)
+    }
+    self.shell = shell
+    services.session.onEnd {
+      telemetry.signOut()
+      shell.sessionEnded()
+    }
+    if let link = LaunchLink.url(in: arguments, variant: configuration.variant) {
+      shell.router.open(link)
+    }
   }
 
   var body: some Scene {
     WindowGroup {
-      AppRoot()
+      AppRootView()
         .screenrServices(services)
+        .environment(shell)
     }
   }
 }
