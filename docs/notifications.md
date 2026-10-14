@@ -268,10 +268,12 @@ alike:
   and none for a count that stayed the same, as when accepting an unread
   request restores one earlier comment.
 - `remove-comment` on a reply queues an update for each member who had its
-  notification unread: the entry's owner and the person it answered.
-  Removing a discussion post or a standalone top-level comment keeps its
-  replies and their notifications, so it sends nothing, and neither does
-  removing a reply again.
+  notification unread: the entry's owner and the person it answered. The
+  removal skips the bell's visibility check, so a member whose notification
+  a block or lost access had already hidden gets an update with an
+  unchanged count. Removing a discussion post or a standalone top-level
+  comment keeps its replies and their notifications, so it sends nothing,
+  and neither does removing a reply again.
 - A friend `request` sends only its alert, and a failed action rolls back
   and queues nothing.
 
