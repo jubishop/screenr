@@ -21,6 +21,9 @@ struct FeedList<Header: View>: View {
   // Scrolls back to the header each time it changes, such as when Start a
   // conversation opens its composer there.
   var headerRequests = 0
+  // Shows and scrolls to an entry the screen names, such as a friend on a
+  // title page's friend line, accepting waiting activity if it needs to.
+  var entryRequest: EntryRequest?
   @ViewBuilder var header: () -> Header
 
   @State private var scrolled: FeedScrollTarget?
@@ -86,6 +89,16 @@ struct FeedList<Header: View>: View {
       }
       .onChange(of: headerRequests) {
         withAnimation { proxy.scrollTo(Top(), anchor: .top) }
+      }
+      .onChange(of: entryRequest) { _, request in
+        guard let request else { return }
+        feed.show(entry: request.entry, in: snapshot, viewer: viewer.userId)
+        // The entry may join the list only as it renders again.
+        Task {
+          withAnimation {
+            proxy.scrollTo(FeedScrollTarget.entry(request.entry), anchor: .top)
+          }
+        }
       }
     }
     .confirmationDialog(
@@ -155,6 +168,17 @@ extension FeedList where Header == EmptyView {
 
 // The header's place in the scroll view.
 private struct Top: Hashable {}
+
+// A screen's request to show one entry. Each request scrolls, even to the
+// entry the last one showed.
+struct EntryRequest: Hashable {
+  let entry: String
+  private let request = UUID()
+
+  init(entry: String) {
+    self.entry = entry
+  }
+}
 
 // The reply a permalink names, which the list scrolls to when its row
 // appears, since a lazily loaded entry's replies are unknown until then.

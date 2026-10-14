@@ -26,6 +26,16 @@ struct ImageSourceTests {
     #expect(source.poster("") == nil)
   }
 
+  @Test func loadsServiceLogosFromTMDB() throws {
+    let source = try source(token: nil)
+    #expect(
+      source.logo("/netflix.png")?.url?.absoluteString
+        == "https://image.tmdb.org/t/p/w92/netflix.png"
+    )
+    #expect(source.logo(nil) == nil)
+    #expect(ImageSource.none.logo("/netflix.png") == nil)
+  }
+
   @Test func loadsPhotosWithTheBearerToken() throws {
     let request = try #require(
       try source(token: "token-1").photo(userId: "user/ben", version: "8fc2")

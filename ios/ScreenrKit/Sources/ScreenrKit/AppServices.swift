@@ -6,7 +6,8 @@ import SwiftUI
 // views read `@Environment(\.screenrAPI)`, `@Environment(SessionStore.self)`,
 // `@Environment(PendingInvitation.self)`, `@Environment(\.identityProviders)`,
 // `@Environment(\.visitTracker)`, `@Environment(\.imageSource)`,
-// `@Environment(\.photoLibrary)`, and `@Environment(\.feedbackService)`.
+// `@Environment(\.photoLibrary)`, `@Environment(\.feedbackService)`, and
+// `@Environment(\.trailerLoading)`.
 public struct AppServices: Sendable {
   public let api: any ScreenrAPI
   public let session: SessionStore
@@ -23,6 +24,8 @@ public struct AppServices: Sendable {
   public let images: ImageSource
   // Where the Send feedback form sends, and the log it attaches.
   public let feedback: FeedbackService
+  // Where trailers' players load from.
+  public let trailers: TrailerLoading
 
   @MainActor
   public init(
@@ -34,7 +37,8 @@ public struct AppServices: Sendable {
     imageCache: URLCache = URLCache(memoryCapacity: 16 << 20, diskCapacity: 0),
     visits: VisitTracker = VisitTracker(),
     images: ImageSource = .none,
-    feedback: FeedbackService = .none
+    feedback: FeedbackService = .none,
+    trailers: TrailerLoading = .network
   ) {
     self.api = api
     self.session = session
@@ -45,6 +49,7 @@ public struct AppServices: Sendable {
     self.visits = visits
     self.images = images
     self.feedback = feedback
+    self.trailers = trailers
     imageSession = URLSession(configuration: Self.imageConfiguration(cache: imageCache))
     session.onEnd { imageCache.removeAllCachedResponses() }
   }
@@ -70,6 +75,7 @@ public struct AppServices: Sendable {
     let photoLibrary: PhotoLibrary
     let imageCache: URLCache
     let feedbackSender: (any FeedbackSender)?
+    let trailers: TrailerLoading
     switch source {
     case .network:
       keychain = SystemKeychain(accessGroup: configuration.appGroup)
@@ -85,6 +91,7 @@ public struct AppServices: Sendable {
         directory: URL.cachesDirectory.appending(path: "Images", directoryHint: .isDirectory)
       )
       feedbackSender = feedback
+      trailers = .network
     case .fixtures(let directory, let scenario):
       let token = scenario.session == .signedIn ? FixtureTransport.token : nil
       keychain = InMemoryKeychain(token: token)
@@ -95,6 +102,8 @@ public struct AppServices: Sendable {
       authorization = .fixture
       photoLibrary = .fixture
       imageCache = URLCache(memoryCapacity: 16 << 20, diskCapacity: 0)
+      // Trailers load nothing; the request log shows what they asked for.
+      trailers = .recording(fixtures.recordWebLoad)
     }
     let session = try SessionStore(keychain: keychain)
     let visits = VisitTracker()
@@ -128,7 +137,8 @@ public struct AppServices: Sendable {
       imageCache: imageCache,
       visits: visits,
       images: images,
-      feedback: FeedbackService(sender: feedbackSender, logFile: logFile)
+      feedback: FeedbackService(sender: feedbackSender, logFile: logFile),
+      trailers: trailers
     )
   }
 
@@ -210,6 +220,7 @@ extension EnvironmentValues {
   @Entry public var imageSource = ImageSource.none
   @Entry public var photoLibrary: PhotoLibrary = .system
   @Entry public var feedbackService = FeedbackService.none
+  @Entry public var trailerLoading = TrailerLoading.network
 }
 
 extension View {
@@ -222,6 +233,7 @@ extension View {
       .environment(\.imageSource, services.images)
       .environment(\.photoLibrary, services.photoLibrary)
       .environment(\.feedbackService, services.feedback)
+      .environment(\.trailerLoading, services.trailers)
       .asyncImageURLSession(services.imageSession)
   }
 }

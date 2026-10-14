@@ -29,7 +29,7 @@ struct SettingsSheet: View {
 }
 
 // The system's Close button, which dismisses a sheet.
-private struct CloseButton: ToolbarContent {
+struct CloseButton: ToolbarContent {
   @Environment(\.dismiss) private var dismiss
 
   var body: some ToolbarContent {

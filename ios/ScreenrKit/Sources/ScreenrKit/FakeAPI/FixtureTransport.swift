@@ -88,6 +88,12 @@ final class FixtureRequestLog: Sendable {
     try record(line)
   }
 
+  // A page a trailer's player asked for, such as
+  // `WEB https://www.youtube.com/embed/nightCross1?autoplay=1&playsinline=1`.
+  func record(webLoad url: URL) throws {
+    try record("WEB " + url.absoluteString)
+  }
+
   func record(_ line: String) throws {
     // A handle that fails before closing closes when it is released.
     try lock.withLock { _ in
@@ -165,6 +171,12 @@ public struct FixtureTransport: HTTPTransport {
     for name in named where !names.contains(name) {
       throw FixtureError("There is no fixture named \(name)")
     }
+  }
+
+  // Logs a page that a trailer's player asked for, which loads nothing
+  // against the fixture API. See `TrailerLoading.recording(_:)`.
+  public func recordWebLoad(_ url: URL) throws {
+    try log?.record(webLoad: url)
   }
 
   public func send(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {

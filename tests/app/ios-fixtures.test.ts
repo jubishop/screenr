@@ -286,6 +286,24 @@ const screens: Record<MemberRoute["kind"], Record<string, Case>> = {
       "/titles/movie/104",
       "A title with no poster or trailer whose availability could not be checked.",
     ),
+    "finished-review": screen(
+      "alice",
+      "/titles/movie/102",
+      "A movie Alice finished on a date, reviewed, and ranks #2 in her top 10, with free options only.",
+    ),
+    "full-top-ten": {
+      ...screen(
+        "alice",
+        "/titles/movie/105",
+        "A movie a friend recommends while Alice's top 10 is full, so adding it asks which title to replace.",
+      ),
+      changesWorld: true,
+      request: async (world) => {
+        for (const title of topTenTitles.slice(0, 7))
+          await updateTopTen(world.users.alice, title.id, "add");
+        return { action: "screen", query: { path: "/titles/movie/105" } };
+      },
+    },
     "linked-reply": screen(
       "hana",
       (world) =>

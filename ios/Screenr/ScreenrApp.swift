@@ -3,6 +3,7 @@ import SwiftUI
 
 @main
 struct ScreenrApp: App {
+  @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
   private let services: AppServices
   private let shell: ShellModel
   private let logFile: LogFile?
