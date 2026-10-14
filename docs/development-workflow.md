@@ -111,9 +111,85 @@ files; on Linux it skips the iOS checks. The
 GitHub Actions runs `bin/check --full` on pull requests and pushes to `main` through
 [the existing workflow](../.github/workflows/check.yml). Application formatting,
 types, PostgreSQL tests, browser verification and the production build run after
-the foundation checks. See [running checks](testing.md#running-checks)
+the foundation checks. That Linux job skips the iOS checks; [iOS CI](#ios-ci)
+runs them on a Mac. See [running checks](testing.md#running-checks)
 for requirements. GitHub issues track shared work; [td](foundation/task-tracking.md)
 records local progress and handoffs.
+
+### iOS CI
+
+The **iOS checks** workflow, [`.github/workflows/ios.yml`](../.github/workflows/ios.yml),
+runs `bin/check-ios` in its `ios` job on a GitHub-hosted Mac, which is free for
+this public repository. It follows the
+[CI decision](ios-app.md#ci-checks-and-local-testflight-releases--2026-10-13).
+
+- **Trigger:** pull requests and pushes to `main` that change `ios/**`,
+  `bin/check-ios`, `bin/format-swift`, or the workflow file. The server's
+  payload fixtures live in `ios/ScreenrKit/Fixtures/`, so a server change that
+  regenerates them runs the job too. Web-only changes skip it. **Run
+  workflow** runs it on any branch, whatever changed.
+- **Runner:** `runs-on: xcode-27`, GitHub's preview image with macOS 27,
+  Xcode 27, and the iOS 27 Simulator; see the
+  [runner images](https://github.com/actions/runner-images#available-images).
+  ScreenrKit's `swift test` needs a macOS 27 host, and on 2026-10-13
+  `macos-latest` was still macOS 26 with Xcode 26. Move the job to the
+  macOS 27 label once GitHub makes that image generally available.
+- **Xcode:** a step selects the image's newest stable Xcode with
+  `xcode-select` and prints its version. It skips betas and release
+  candidates, which the image installs under suffixed names such as
+  `Xcode_27.2_beta_2.app`. The selection follows each stable release without
+  a pin, as the
+  [toolchain policy](foundation/engineering-policy.md#runtime-and-toolchain-versions)
+  asks, and never lands on a beta that the image makes its default. On
+  2026-10-13 it selected Xcode 27.0 (27A266a), the build on the user's Mac.
+- **Simulator runtime:** the image ships the iOS 27 runtime. If no iOS 27 or
+  later runtime is available, such as after a new Xcode arrives without one,
+  the job downloads it with `xcodebuild -downloadPlatform iOS`. There is no
+  cache, since the download is rare and the runtime is several gigabytes.
+- **Warnings:** the job runs the same `bin/check-ios` as a Mac does, so any
+  warning or any failed or skipped test fails it. After a failure, the run
+  keeps `ios/build/check/`, with logs and result bundles, as a 7-day
+  artifact.
+- **Superseded runs:** the workflow's own concurrency group,
+  `ios-<pull request or ref>`, cancels an older run for the same pull request
+  or branch, `main` included, since the job deploys nothing. The check
+  workflow's group and its deploy job are unaffected.
+- **Runner time:** one job with no matrix and a 30-minute timeout.
+
+### iOS release gate
+
+The TestFlight release script must find a passing iOS CI result for the
+commit it releases, a clean `main`. Most `main` commits change no iOS files,
+so they have no run of their own. A successful run on `main` therefore counts
+for a commit when its own commit is an ancestor with the same files under
+every path in the workflow's filter:
+
+```sh
+head=$(git rev-parse HEAD)
+paths=(ios bin/check-ios bin/format-swift .github/workflows/ios.yml)
+gh run list --repo jubishop/screenr --workflow ios.yml --branch main \
+  --status success --limit 100 --json headSha --jq '.[].headSha' |
+  while read -r sha; do
+    if git merge-base --is-ancestor "$sha" "$head" &&
+      git diff --quiet "$sha" "$head" -- "${paths[@]}"; then
+      echo "$sha"
+      break
+    fi
+  done
+```
+
+A push run's commit is the push's last commit, and runs on `main` come only
+from pushes and **Run workflow**, so the list holds no pull request runs. The
+REST equivalent is
+`gh api 'repos/jubishop/screenr/actions/workflows/ios.yml/runs?branch=main&status=success&per_page=100'`,
+reading `.workflow_runs[].head_sha`. Keep `paths` equal to the workflow's
+path filter.
+
+When no run qualifies, the script starts one with
+`gh workflow run ios.yml --repo jubishop/screenr --ref main`, finds it with
+`gh run list --workflow ios.yml --event workflow_dispatch --commit "$head"`,
+and waits with `gh run watch <run ID> --exit-status`. A failed, cancelled, or
+missing result blocks the release.
 
 ## TypeScript checkout isolation
 

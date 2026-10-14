@@ -71,7 +71,9 @@ bundles from the last run are in `ios/build/check/`.
 
 On a Mac, `bin/check --full` runs `bin/check-ios` when `ios/` differs from
 where the branch left `origin/main`, including uncommitted and untracked
-files. On Linux it skips the iOS checks.
+files. On Linux it skips the iOS checks. GitHub Actions runs `bin/check-ios`
+on a hosted Mac for pull requests and pushes to `main` that change iOS files;
+see [iOS CI](../docs/development-workflow.md#ios-ci).
 
 ## Run one test
 
