@@ -39,7 +39,7 @@ struct WatchTogetherList: View {
               .foregroundStyle(.muted)
           }
           ForEach(section.titles) { title in
-            NavigationLink(value: Destination.title(id: title.id)) {
+            NavigationLink(value: title.destination) {
               TitleRow(
                 title: title.title,
                 viewing: title.viewing,

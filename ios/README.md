@@ -913,9 +913,9 @@ Watch together pages. Their screens are `FriendsView`, `ProfileView`, and
   it.
 - **Watch together:** a friend's profile links to
   `/watch-together?with=<username>`. Save your streaming services opens
-  Settings over the tab, and each title opens its page. Title pages opened
-  from it do not yet report the web's `watch_together` save surface, since
-  `Destination.title` carries no `from`.
+  Settings over the tab, and each title opens its page through
+  `SharedTitle.destination`, so a Want to watch saved there reports the web's
+  `watch_together` surface.
 - **Tests:** `FriendsModelTests`, `ProfileModelTests`, and
   `WatchTogetherTests` cover the models against the fixtures and
   `RecordingAPI`. The UI tests `FriendsTests`, `ProfileTests`, and
