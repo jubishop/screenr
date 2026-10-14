@@ -33,7 +33,7 @@ ProtectClock=true
 ProtectHostname=true
 ProtectProc=invisible
 ProcSubset=pid
-# Loopback PostgreSQL and HTTPS to Resend and TMDB need only these families.
+# Loopback PostgreSQL and HTTPS to Resend, TMDB, and APNs need only these families.
 RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
 RestrictNamespaces=true
 RestrictRealtime=true

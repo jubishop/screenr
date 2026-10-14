@@ -30,6 +30,8 @@ for (const name of [
   "APPLE_KEY_ID",
   "APPLE_PRIVATE_KEY",
   "SENTRY_DSN",
+  "APNS_KEY_ID",
+  "APNS_PRIVATE_KEY",
 ])
   delete process.env[name];
 

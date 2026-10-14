@@ -612,7 +612,17 @@ text, search terms, addresses, codes, cookies, keys, and error messages stay
 out, and confirm that permanent Resend rejections are not retried.
 `tests/app/email.test.ts` also runs `scripts/worker.ts` with fetch disabled. The
 worker refuses to start without the Resend settings, deletes expired jobs on its
-first pass, and exits cleanly on SIGTERM.
+first pass, says once that push delivery is off without APNs settings, and
+exits cleanly on SIGTERM.
+`tests/app/push-delivery.test.ts` sends
+[pushes](notifications.md#push-delivery) to two fake APNs servers, one per
+environment, that speak HTTP/2 without TLS on loopback. It checks each kind's
+payload and headers, verifies the provider token's signature with the test
+key's public key and its 50-minute reuse, and covers per-kind settings,
+visibility, read state, expired sessions, and moved tokens at send time. It
+also checks that rejected tokens delete their device, that other rejections
+and retryable failures are logged without tokens, badge-only updates, and
+reconnection after GOAWAY or a lost connection.
 Operational tests check activation rollback after a stalled health request, a
 failed signed-out session request, or a web or worker service that crashes on
 startup. They also check a production-down report when the restored release
