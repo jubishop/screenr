@@ -40,6 +40,8 @@ public final class LiveRead<Value: Decodable & Hashable & Sendable> {
   @ObservationIgnored private(set) var pollTask: Task<Void, Never>?
   @ObservationIgnored private var pollGeneration = 0
   @ObservationIgnored private var readTask: Task<Void, Never>?
+  // Counts reads, so only the newest one's result applies.
+  @ObservationIgnored private var readGeneration = 0
 
   // `onLoad` sees every value a read returns, such as for the bell's count.
   public init(
@@ -81,10 +83,11 @@ public final class LiveRead<Value: Decodable & Hashable & Sendable> {
     if isActive { restart() } else { stop() }
   }
 
-  // Reads now, for pull-to-refresh, Try again, or after a write. Polling
-  // resumes if a permanent error had stopped it.
+  // Reads now, for pull-to-refresh, Try again, or after a write. A read
+  // already in flight may have started before the write, so it is replaced.
+  // Polling resumes if a permanent error had stopped it.
   public func refresh() async {
-    await read()
+    await read(replacing: true)
     guard isLive, pollTask == nil, !isPermanentlyFailed else { return }
     startPolling(readFirst: false)
   }
@@ -137,20 +140,28 @@ public final class LiveRead<Value: Decodable & Hashable & Sendable> {
     }
   }
 
-  // Joins the read in flight, or starts one.
-  private func read() async {
+  // Joins the read in flight, or starts one. Replacing cancels the read in
+  // flight, whose result then never applies.
+  private func read(replacing: Bool = false) async {
     if let readTask {
-      await readTask.value
-      return
+      guard replacing else {
+        await readTask.value
+        return
+      }
+      readTask.cancel()
     }
-    let task = Task { await load() }
+    readGeneration += 1
+    let generation = readGeneration
+    let task = Task { await load(generation: generation) }
     readTask = task
     await task.value
     if readTask == task { readTask = nil }
   }
 
-  private func load() async {
-    switch await Self.fetch(request, api: api, clock: clock) {
+  private func load(generation: Int) async {
+    let result = await Self.fetch(request, api: api, clock: clock)
+    guard generation == readGeneration else { return }
+    switch result {
     case .success(let value):
       if phase != .loaded(value) { phase = .loaded(value) }
       onLoad(value)

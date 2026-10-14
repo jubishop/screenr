@@ -296,6 +296,7 @@ struct FixtureTransportTests {
     _ = try await services.api.send(.sendCode(email: "alice@example.com"))
     _ = try await services.api.send(.respondToFriendRequest(notification: "14", .accept))
 
+    // A write's line ends with its JSON body, keys sorted.
     #expect(
       try String(contentsOf: log, encoding: .utf8) == """
         GET /api/screenr/screen?path=%2F visit

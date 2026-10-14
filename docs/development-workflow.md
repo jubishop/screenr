@@ -154,7 +154,11 @@ this public repository. It follows the
   `ios-<pull request or ref>`, cancels an older run for the same pull request
   or branch, `main` included, since the job deploys nothing. The check
   workflow's group and its deploy job are unaffected.
-- **Runner time:** one job with no matrix and a 30-minute timeout.
+- **Runner time:** one job with no matrix and a 45-minute timeout. Runs took
+  19 to 24 minutes on 2026-10-14, and the Simulator tests run about three
+  times slower than on the user's Mac. The Circle feed's UI journeys then
+  passed 30 minutes, and each screen adds journeys, so the timeout leaves
+  room for them.
 
 ### iOS release gate
 

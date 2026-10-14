@@ -28,7 +28,9 @@ jobs:
     # GitHub's preview image with macOS 27, Xcode 27, and the iOS 27
     # Simulator. Move to the macOS 27 label once that image is GA.
     runs-on: xcode-27
-    timeout-minutes: 30
+    # The UI journeys grow with each screen; see the runner time notes in
+    # docs/development-workflow.md#ios-ci.
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

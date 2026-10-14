@@ -10,13 +10,41 @@ extension XCUIApplication {
   // things the system sizes: navigation bars keep the wordmark's size, as
   // they do their titles, and the large content viewer shows it larger; and
   // the audit flags the system's search field as clipping at large text
-  // sizes.
+  // sizes. It also passes over what it cannot measure in a scrolling screen:
+  // the contrast and clipping of text beneath the glass bars or the keyboard,
+  // and Dynamic Type for scrolling content, which larger text moves past the
+  // screen's ends. Launch with `FixtureLaunch(textSize:)` to audit a screen
+  // at the largest text size instead.
   func performShellAudit() throws {
+    let screen = windows.firstMatch.frame
+    // Content scrolls beneath the status and navigation bars, the tab bar,
+    // and the keyboard.
+    var covers = [keyboards.firstMatch].filter(\.exists).map(\.frame)
+    if navigationBars.firstMatch.exists {
+      let bottom = navigationBars.firstMatch.frame.maxY
+      covers.append(CGRect(x: 0, y: screen.minY, width: screen.width, height: bottom))
+    }
+    if tabBars.firstMatch.exists {
+      let top = tabBars.firstMatch.frame.minY
+      covers.append(CGRect(x: 0, y: top, width: screen.width, height: screen.maxY - top))
+    }
+    let scrolling = scrollViews.firstMatch.exists ? scrollViews.firstMatch.frame : .null
     try performAccessibilityAudit { issue in
+      var covered = false
+      var scrolls = false
+      if let frame = issue.element?.frame {
+        covered = !screen.contains(frame) || covers.contains { $0.intersects(frame) }
+        scrolls = scrolling.contains(frame)
+      }
       switch issue.auditType {
-      case .dynamicType: issue.element?.label == "screenr"
-      case .textClipped: issue.element?.elementType == .searchField
-      default: false
+      case .dynamicType:
+        return issue.element?.label == "screenr" || scrolls
+      case .textClipped:
+        return issue.element?.elementType == .searchField || covered
+      case .contrast:
+        return covered
+      default:
+        return false
       }
     }
   }

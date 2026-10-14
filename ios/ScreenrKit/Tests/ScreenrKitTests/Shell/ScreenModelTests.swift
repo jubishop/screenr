@@ -166,6 +166,23 @@ struct ScreenModelTests {
     #expect(model.phase == .loaded(feed))
   }
 
+  // A poll that started before a write may have missed it, so a refresh after
+  // the write reads again instead of joining it.
+  @Test func refreshesWithANewReadInsteadOfJoiningOneInFlight() async throws {
+    let api = ScriptedAPI([.screen(feed), .hang, .screen(emptyFeed)])
+    let clock = TestClock()
+    let model = ScreenModel(path: "/", api: api, clock: clock)
+    model.appeared(appActive: true)
+    await clock.waitForSleep(until: .seconds(3))
+    clock.advance(by: .seconds(3))
+    await api.waitForReads(2)
+
+    await model.refresh()
+
+    #expect(api.reads.count == 3)
+    #expect(model.phase == .loaded(emptyFeed))
+  }
+
   @Test func keepsItsDataWhenTheScreenIsUnchanged() async throws {
     let api = ScriptedAPI([.screen(feed)])
     let clock = TestClock()

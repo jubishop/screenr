@@ -15,7 +15,7 @@ repository root.
 | --- | --- |
 | `Screenr.xcodeproj` | The Screenr app and ScreenrUITests targets, and the shared Screenr scheme. |
 | `Config/` | The `.xcconfig` build settings, the app's entitlements, and the release export options. |
-| `Screenr/` | The app target: the [app shell](#app-shell) in `Shell/`, feature screens in `Screens/`, components several features share in `Shared/`, the app lifecycle, assets, and `Info.plist`. |
+| `Screenr/` | The app target: the [app shell](#app-shell) in `Shell/`, feature screens in `Screens/`, components several features share in `Shared/`, the [conversations](#conversations) that the feed, title pages, and profiles share in `Conversation/`, the app lifecycle, assets, and `Info.plist`. |
 | `ScreenrUITests/` | XCUITest UI tests. |
 | `ScreenrKit/` | A local Swift package: `Sources/ScreenrKit`, `Tests/ScreenrKitTests`, and `Fixtures/`. |
 | `build/` | Build output, check logs, and result bundles. Git ignores it. |
@@ -247,7 +247,8 @@ When the session ends, by signing out or because the server ended it, the
 client clears its screen cache and `SessionStore.onEnd` handlers run.
 `AppServices` empties the image cache there, and error reporting clears its
 user there. Posters and profile photos load through `AppServices.imageSession`,
-which `.screenrServices(_:)` sets as the `AsyncImage` session.
+which `.screenrServices(_:)` sets as the `AsyncImage` session, with requests
+from `AppServices.images`, an `ImageSource`; see [Conversations](#conversations).
 
 Against the fixture API, which only Screenr Dev runs,
 `IdentityProviders.authorization` is `.fixture`, so UI tests reach the
@@ -347,11 +348,12 @@ While its screen is visible and the app's scene is active, it reads when the
 screen appears and every three seconds after, sending the cached ETag. It
 stops in the background or when the screen disappears, and reads again when
 either returns, on pull-to-refresh, and when `ShellModel.pushArrived()` or
-`refreshLiveReads()` runs.
-Each read gives up after ten seconds. A failed read replaces the content with
-the error; passing failures keep polling, and a permanent error stops it until
-a read succeeds. An unchanged screen keeps its `phase`, so nothing renders
-again. `ScreenModelTests` cover the timing with a `TestClock`.
+`refreshLiveReads()` runs. A refresh replaces a read already in flight, which
+may have started before a write. Each read gives up after ten seconds. A
+failed read replaces the content with the error; passing failures keep
+polling, and a permanent error stops it until a read succeeds. An unchanged
+screen keeps its `phase`, so nothing renders again. `ScreenModelTests` cover
+the timing with a `TestClock`.
 
 ### Visits
 
@@ -473,6 +475,86 @@ Setup and Settings share the member's own photo:
 
 UI tests cannot drive the photo picker, so `ProfilePhotoModelTests` and
 `PhotoPreparationTests` cover choosing a photo.
+
+## Conversations
+
+The friends feed, title pages, and profiles share one interactive feed, as
+the web's do ([unified title feed](../docs/title-feed.md)). Its views are in
+`Screenr/Conversation/`, its behavior in ScreenrKit's `Conversation/`, and
+the avatar, poster, colors, and wrapping layout it uses in `Screenr/Shared/`. The friends feed, `Screens/FeedView.swift`, shows how a
+screen uses them:
+
+```swift
+// The outer view reads @Environment(\.screenrAPI) and builds the models:
+//   FeedModel(api: api) { await model.refresh() }
+//   ConversationStarter(subject: .title(id: id, kind: kind), api: api) { … }
+// The inner view keeps them in State, outside ScreenContent, so drafts and
+// the reader's place outlive a failed read.
+init(model: ScreenModel, feed: FeedModel, starter: ConversationStarter) {
+  self.model = model
+  _feed = State(initialValue: feed)
+  _starter = State(initialValue: starter)
+}
+
+ScreenContent(model: model) { screen in
+  if case .title(let page) = screen.content {
+    FeedList(
+      feed: feed, snapshot: page.conversations, viewer: screen.user,
+      target: page.target, targetUnavailable: page.targetUnavailable,
+      style: .compact, headerRequests: composing
+    ) {
+      // The screen's own content, above the entries in the same scroll view.
+      if starter.visibility == .open { StartConversationComposer(starter: starter) }
+    }
+  }
+}
+```
+
+| Piece | Where | What it does |
+| --- | --- | --- |
+| `FeedList` | `Screenr/Conversation/` | The scrolling feed beneath a header: entries in visible-activity order, New activity, the permalink's scroll and highlight, "This activity is unavailable.", the empty message, and the confirmation dialog. `style: .compact` drops the poster, title, Want to watch, and Recommend for title pages. Changing `headerRequests` scrolls back to the header, such as when Start a conversation opens. |
+| `EntryView`, `ThreadView`, `CommentView` | `Screenr/Conversation/` | An entry, its discussion, and one comment, following the web's `feed.tsx` and `thread.tsx`. Each entry and comment carries the accessibility identifier `entry-<id>` or `comment-<id>`. |
+| `CommentComposer`, `DiscussionComposer`, `StartConversationComposer` | `Screenr/Conversation/` | The one composer form, bound to a reply or comment target, or to a `ConversationStarter` with Season and Episode pickers on a TV title. |
+| `ReactionControls`, `ReactionPicker`, `FeedActionStyle`, `WriteFailure` | `Screenr/Conversation/` | Reaction counts and React, which opens the seven reactions beneath its line, as on the web (a SwiftUI `Menu` label does not follow Dynamic Type); the compact actions with 44-point hit areas; and a failed write's message beneath its control. |
+| `Avatar`, `PosterImage`, `FlowLayout`, `.muted`, `.danger` | `Screenr/Shared/` | A member's photo or initial on the web's colors; a TMDB poster or the title's initial; a row that wraps; and text colors that keep 4.5:1 contrast, which the system's secondary label and red miss at small sizes. |
+| `FeedModel` | ScreenrKit `Conversation/` | `@Observable` page state: accepted activity (`layout(_:viewer:)`, `receive`, `showIncoming`, and `show(entry:in:viewer:)` for a title page's friend line), revealed spoilers, each discussion's preview and groups, composers and their drafts, reactions, removals through `confirmation`, and Want to watch and Recommend with the top 10 confirmations. Every write reads the screen again through its `refresh` closure. |
+| `FeedLayout`, `ThreadLayout` | ScreenrKit `Conversation/` | The web's rules as values: which entries and replies show, their order, the New activity count, the three-comment preview, Show earlier comments, and nested groups. |
+| `ConversationStarter` | ScreenrKit `Conversation/` | Start a conversation: `.post` on the friends feed, or `.title(id:kind:)`, which loads a TV show's seasons and each chosen season's episodes. |
+| Presentation | ScreenrKit `EntryPresentation.swift` | `item.action(style:)`, `item.title`, `discussionLabel`, `removedLabel`, `link(reply:)`, `RelativeTime`, `FinishedDate`, `ReviewStars`, `ReactionKind.options`, and `TopTenLeaving`. |
+| `ImageSource` | ScreenrKit | `@Environment(\.imageSource)`: TMDB poster requests, and profile photo requests with the bearer token. Against the fixture API it loads nothing, so UI tests show placeholders. |
+
+- **Incoming activity:** other people's new entries, moved entries, and new
+  replies wait behind the shell's New activity control in all three feeds,
+  as on the web, whose feeds use it for replies too. The reader's own
+  entries and replies show at once, with the parents their replies need.
+  Removals, withdrawn actions, and spoiler flags apply at once.
+- **Writes:** after a write, `FeedModel` calls `refresh`, which reads again
+  even while a poll is in flight, since that poll may have started before the
+  write. Composers stay open with an empty draft after posting; Cancel keeps
+  the draft.
+- **Permalinks:** `FeedList` scrolls to the target entry, or to its reply
+  once the reply shows, which can follow revealing a spoiler entry. The
+  reply's discussion shows in full with its group open, and the target is
+  tinted. A title page's friend line can call `feed.show(entry:in:viewer:)`;
+  scrolling to that entry is still to come.
+- **Sharing:** each entry's Share uses `ShareButton` with `item.link()`: the
+  title page with `?item=`, or the friends feed for a post.
+- **Times:** `FeedList` keeps one minute timeline, `\.feedNow`, for every
+  "2h" in the list. A time's text is hidden from VoiceOver, and the author's
+  link reads the full date instead, since a label longer than its text fails
+  the audit's clipping check.
+- **Tests:** `ScreenrUITests/FeedQueries.swift` adds `app.entry(_:)`,
+  `app.comment(_:)`, `app.composerField(_:)`, `app.scrollTo(_:)`, and
+  `RequestLog.wrote(_:_:)`, which waits for a write's logged JSON body and a
+  read after it. `performShellAudit()` passes over what the audit cannot
+  measure in a scrolling screen: text beneath the glass bars or the
+  keyboard, and Dynamic Type for scrolling content, which larger text moves
+  past the screen's ends. To check large text, launch with
+  `FixtureLaunch(textSize: "UICTContentSizeCategoryAccessibilityXXXL")` and
+  audit there, as `FeedTests` does. Audit a composer after typing, once the
+  keyboard has settled. ScreenrKit's `Support/FeedSupport.swift` has
+  `FeedFixtures.entry(_:changing:)` for entries with changed fields and
+  `RecordingAPI` for scripted writes.
 
 ## Fixtures
 
