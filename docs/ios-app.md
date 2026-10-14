@@ -376,7 +376,7 @@ claims these paths:
   `/account`, `/watch-together`, `/conversations/*`, and item permalinks.
 - Invitation links: `/join/*`.
 
-It excludes `/api/*`, `/login`, `/setup`, and `/credits`.
+It excludes `/api/*`, `/login`, `/setup`, `/credits`, and `/privacy`.
 
 When the app is installed, a shared link or a group-chat invitation opens in
 the app. Without the app, the link opens the web as it does today.

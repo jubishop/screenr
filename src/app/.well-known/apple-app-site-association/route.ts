@@ -2,7 +2,7 @@
 // docs/ios-app.md#universal-links-for-member-routes-and-invitations--2026-10-13
 // Apple applies the first matching component, so exclusions come first. Only
 // the Release app is listed; Screenr Dev uses its screenr-dev:// scheme.
-const excluded = ["/api/*", "/login", "/setup", "/credits"];
+const excluded = ["/api/*", "/login", "/setup", "/credits", "/privacy"];
 // Member routes, as src/member-routes.ts parses them, and invitations. Item
 // permalinks are title or feed paths with query parameters, which match too.
 const claimed = [

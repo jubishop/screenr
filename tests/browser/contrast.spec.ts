@@ -45,6 +45,22 @@ for (const colorScheme of schemes)
         path: `.cache/contrast-sign-in-${colorScheme}-${width}.png`,
         fullPage: true,
       });
+      // The signed-out privacy policy opens from the sign-in page.
+      const privacy = page.getByRole("link", {
+        name: "Privacy policy",
+        exact: true,
+      });
+      await expectTextContrast(privacy);
+      await privacy.click();
+      await expect(page).toHaveURL("/privacy");
+      await expect(
+        page.getByRole("heading", { level: 1, name: "Privacy policy" }),
+      ).toBeVisible();
+      await expectThemedPage(page, `privacy ${colorScheme}`);
+      await page.screenshot({
+        path: `.cache/contrast-privacy-${colorScheme}-${width}.png`,
+        fullPage: true,
+      });
       await page.goto("/credits");
       await expect(
         page.getByRole("heading", { name: "Catalog credits" }),
