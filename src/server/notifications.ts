@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
 import { AppError, db, isBigintId, transaction } from "./db";
+import { queueBadgePush } from "./push";
 import { entryPath } from "../member-routes";
 
 type NotificationRow = {
@@ -119,6 +120,8 @@ export async function readNotification(viewer: string, id: unknown) {
       "UPDATE notification SET read_at=coalesce(read_at,now()),email_pending=false WHERE id=$1",
       [notificationId],
     );
+    // Selecting a notification read earlier leaves the badge as it is.
+    if (row.read_at === null) await queueBadgePush(viewer, client);
     return { href: present(row).href };
   });
 }
@@ -215,18 +218,22 @@ export async function respondToFriendRequest(
         : `DELETE FROM friendship WHERE ${pair}`,
       [viewer, row.actor_id],
     );
+    // Even a request read earlier changes the count: accepting restores the
+    // requester's comments from an earlier friendship.
+    await queueBadgePush(viewer, client);
   });
 }
 
 export async function readAllNotifications(viewer: string, through: unknown) {
   const boundary = identifier(through);
   await transaction(async (client) => {
-    await client.query(
+    const { rowCount } = await client.query(
       `UPDATE notification SET read_at=now(),email_pending=false
        WHERE recipient_id=$1 AND id<=$2 AND read_at IS NULL
        AND id IN (SELECT id FROM visible_notification WHERE recipient_id=$1)`,
       [viewer, boundary],
     );
+    if (rowCount) await queueBadgePush(viewer, client);
   });
 }
 

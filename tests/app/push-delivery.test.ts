@@ -15,6 +15,7 @@ import {
   friend,
   db,
   bearerFor,
+  cookieFor,
   captureFailures,
 } from "./social-fixture";
 
@@ -38,6 +39,7 @@ const tokenA = "a1".repeat(32);
 const tokenB = "b2".repeat(32);
 const tokenC = "c3".repeat(32);
 const alert = { body: "New activity on Screenr" };
+const sound = "default";
 
 type Received = { token: string; headers: IncomingHttpHeaders; body: unknown };
 type Reply = { status: number; reason?: string };
@@ -108,6 +110,24 @@ afterEach(async () => {
   await Promise.all([sandbox.close(), production.close()]);
 });
 
+// An action from the web, with its session cookie and Origin, or from the
+// iPhone app, with its bearer token.
+type Client = { cookie: string } | { bearer: string };
+const act = (client: Client, action: string, body: unknown) =>
+  POST(
+    new Request(`http://localhost:3000/api/screenr/${action}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...("cookie" in client
+          ? { Cookie: client.cookie, Origin: "http://localhost:3000" }
+          : { Authorization: `Bearer ${client.bearer}` }),
+      },
+      body: JSON.stringify(body),
+    }),
+    { params: Promise.resolve({ action }) },
+  );
+
 // The iPhone app registers its token over the API with a new bearer session.
 async function device(
   user: string,
@@ -116,23 +136,13 @@ async function device(
   topic = dev,
 ) {
   const bearer = await bearerFor(user);
-  const response = await POST(
-    new Request("http://localhost:3000/api/screenr/push-device", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${bearer}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        action: "register",
-        token,
-        environment,
-        topic,
-        build: 42,
-      }),
-    }),
-    { params: Promise.resolve({ action: "push-device" }) },
-  );
+  const response = await act({ bearer }, "push-device", {
+    action: "register",
+    token,
+    environment,
+    topic,
+    build: 42,
+  });
   assert.equal(response.status, 200);
   return bearer;
 }
@@ -143,7 +153,7 @@ const bodies = (fake: typeof sandbox) =>
 const jobs = async () =>
   (await db.query("SELECT count(*)::int AS count FROM push_job")).rows[0].count;
 
-test("each new notification pushes its ID, the generic alert, the unread badge, its category, and its thread", async () => {
+test("each new notification pushes its ID, the generic alert, the unread badge, the default sound, its category, and its thread", async () => {
   const { alice, ben, conversation } = await setup();
   await device(alice, tokenA);
   await device(alice, tokenB, "production", release);
@@ -153,7 +163,13 @@ test("each new notification pushes its ID, the generic alert, the unread badge, 
   const request = await latest(alice);
   assert.equal(await deliverPushes(apns), 2);
   const friendRequest = {
-    aps: { alert, badge: 1, "mutable-content": 1, category: "FRIEND_REQUEST" },
+    aps: {
+      alert,
+      badge: 1,
+      sound,
+      "mutable-content": 1,
+      category: "FRIEND_REQUEST",
+    },
     notificationId: request,
   };
   // Each device's own APNs environment and bundle ID; the actor gets nothing.
@@ -196,7 +212,7 @@ test("each new notification pushes its ID, the generic alert, the unread badge, 
   assert.deepEqual(bodies(sandbox).at(-1), {
     token: tokenC,
     body: {
-      aps: { alert, badge: 1, "mutable-content": 1 },
+      aps: { alert, badge: 1, sound, "mutable-content": 1 },
       notificationId: await latest(ben),
     },
   });
@@ -211,6 +227,7 @@ test("each new notification pushes its ID, the generic alert, the unread badge, 
       aps: {
         alert,
         badge: 1,
+        sound,
         "mutable-content": 1,
         category: "COMMENT",
         "thread-id": conversation,
@@ -226,6 +243,7 @@ test("each new notification pushes its ID, the generic alert, the unread badge, 
       aps: {
         alert,
         badge: 2,
+        sound,
         "mutable-content": 1,
         category: "COMMENT",
         "thread-id": conversation,
@@ -446,8 +464,12 @@ test("pushes go only to notifications still visible and unread when sent, on the
   await addComment(outsider, conversation, "Read on the web", false);
   await readNotification(alice, await latest(alice));
   await deliverPushes(apns);
-  assert.deepEqual(sandbox.received, []);
+  // Only the read's badge update goes: cam's and outsider's acceptances.
+  assert.deepEqual(bodies(sandbox), [
+    { token: tokenA, body: { aps: { badge: 2 } } },
+  ]);
   assert.equal(await jobs(), 0);
+  sandbox.received.length = 0;
 
   await addComment(cam, conversation, "Unfriended before sending", false);
   await changeRelationship(alice, cam, "remove");
@@ -503,12 +525,106 @@ test("badge-only pushes carry only the current unread count", async () => {
     );
   }
 
+  // Reading both notifications queues one update, since the first is waiting.
   for (const { id } of (await notifications(alice)).items)
     await readNotification(alice, id);
-  await queueBadgePush(alice);
+  assert.equal(await jobs(), 2);
   await deliverPushes(apns);
   assert.deepEqual(sandbox.received.at(-1)!.body, { aps: { badge: 0 } });
   assert.equal(await jobs(), 0);
+});
+
+test("reads on any client send the member's devices a badge-only update with the new count", async () => {
+  const { alice, ben, cam, outsider, conversation } = await setup();
+  await friend(alice, ben);
+  const app = { bearer: await device(alice, tokenA) };
+  await device(alice, tokenB, "production", release);
+  const web = { cookie: await cookieFor(alice) };
+  await addComment(ben, conversation, "One", false);
+  await addComment(ben, conversation, "Two", false);
+  await changeRelationship(cam, alice, "request");
+  await changeRelationship(outsider, alice, "request");
+  await deliverPushes(apns);
+  const [outsiderRequest, camRequest, , one] = (
+    await notifications(alice)
+  ).items.map(({ id }) => id);
+
+  // Each read queues its update before it answers, and the worker then sends
+  // the new count to both devices.
+  const read = async (client: Client, action: string, body: unknown) => {
+    assert.equal((await act(client, action, body)).status, 200);
+    assert.equal(await jobs(), 2);
+    await deliverPushes(apns);
+    assert.equal(await jobs(), 0);
+    const sent = [sandbox, production].map((fake) => fake.received.at(-1)!);
+    assert.deepEqual(
+      sent.map(({ token, headers }) => [token, headers["apns-priority"]]),
+      [
+        [tokenA, "5"],
+        [tokenB, "5"],
+      ],
+    );
+    assert.deepEqual(sent[0].body, sent[1].body);
+    return sent[0].body;
+  };
+  const badge = (count: number) => ({ aps: { badge: count } });
+  // Of 5 unread: ben's acceptance, two comments, and two requests.
+  assert.deepEqual(await read(web, "read-notification", { id: one }), badge(4));
+  assert.deepEqual(
+    await read(app, "respond-friend-request", {
+      id: camRequest,
+      action: "accept",
+    }),
+    badge(3),
+  );
+  assert.deepEqual(
+    await read(web, "respond-friend-request", {
+      id: outsiderRequest,
+      action: "decline",
+    }),
+    badge(2),
+  );
+  const { through } = await notifications(alice);
+  assert.deepEqual(
+    await read(app, "read-notifications", { through }),
+    badge(0),
+  );
+
+  // Reads that leave the count alone, and failed reads, queue nothing.
+  const sent = sandbox.received.length;
+  assert.equal((await act(app, "read-notification", { id: one })).status, 200);
+  assert.equal((await act(web, "read-notifications", { through })).status, 200);
+  assert.equal(
+    (
+      await act(app, "respond-friend-request", {
+        id: camRequest,
+        action: "decline",
+      })
+    ).status,
+    404,
+  );
+  assert.equal(await jobs(), 0);
+  await deliverPushes(apns);
+  assert.equal(sandbox.received.length, sent);
+
+  // Answering a request it already read still updates the badge: accepting
+  // restores the requester's earlier comments.
+  await addComment(ben, conversation, "Before unfriending", false);
+  await changeRelationship(alice, ben, "remove");
+  await changeRelationship(ben, alice, "request");
+  await deliverPushes(apns);
+  const request = await latest(alice);
+  assert.deepEqual(
+    await read(web, "read-notification", { id: request }),
+    badge(0),
+  );
+  assert.deepEqual(
+    await read(app, "respond-friend-request", {
+      id: request,
+      action: "accept",
+    }),
+    badge(1),
+  );
 });
 
 test("each APNs host keeps one connection and reconnects after GOAWAY or a lost connection", async () => {
