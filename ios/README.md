@@ -62,7 +62,10 @@ the compiler, linker, or tools. It runs:
 1. ScreenrKit's tests on the Mac with `swift test`.
 2. A Release build for the Simulator.
 3. The Screenr scheme's tests in an iPhone Simulator: ScreenrKit's tests
-   again, on iOS, and the UI tests.
+   again, on iOS, and the UI tests. It first boots the Simulator and waits
+   with `xcrun simctl bootstatus` until the boot finishes, since a new
+   Simulator's first boot can otherwise outlast a UI test's launch timeout
+   on a slow Mac.
 
 Without `--simulator`, it creates a Simulator on the newest iOS runtime and
 deletes it afterward, so several checkouts can check at once. With
