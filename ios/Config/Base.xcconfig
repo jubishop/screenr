@@ -1,0 +1,41 @@
+// Project settings shared by every target in both variants. Dev.xcconfig and
+// Release.xcconfig include this file; target files in this folder add to it.
+#include "Version.xcconfig"
+
+// Local builds are build 1. The release script passes the next build number.
+CURRENT_PROJECT_VERSION = 1
+
+DEVELOPMENT_TEAM = 34TKMKM889
+CODE_SIGN_STYLE = Automatic
+CODE_SIGN_IDENTITY = Apple Development
+// Simulator builds sign to run locally, embedding the entitlements without a
+// provisioning profile. Device builds keep automatic signing.
+CODE_SIGN_IDENTITY[sdk=iphonesimulator*] = -
+
+SDKROOT = iphoneos
+SUPPORTED_PLATFORMS = iphoneos iphonesimulator
+SUPPORTS_MACCATALYST = NO
+IPHONEOS_DEPLOYMENT_TARGET = 27.0
+// iPhone only. On iPad the app runs in iPhone compatibility mode.
+TARGETED_DEVICE_FAMILY = 1
+
+SWIFT_VERSION = 6.0
+SWIFT_STRICT_CONCURRENCY = complete
+SWIFT_STRICT_MEMORY_SAFETY = YES
+SWIFT_APPROACHABLE_CONCURRENCY = YES
+SWIFT_UPCOMING_FEATURE_EXISTENTIAL_ANY = YES
+SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES
+SWIFT_TREAT_WARNINGS_AS_ERRORS = YES
+GCC_TREAT_WARNINGS_AS_ERRORS = YES
+SWIFT_EMIT_LOC_STRINGS = YES
+LOCALIZATION_PREFERS_STRING_CATALOGS = YES
+STRING_CATALOG_GENERATE_SYMBOLS = YES
+ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES
+ENABLE_PREVIEWS = NO
+ENABLE_USER_SCRIPT_SANDBOXING = YES
+DEAD_CODE_STRIPPING = YES
+ALWAYS_SEARCH_USER_PATHS = NO
+CLANG_ENABLE_MODULES = YES
+CLANG_ENABLE_OBJC_ARC = YES
+ENABLE_STRICT_OBJC_MSGSEND = YES
+COPY_PHASE_STRIP = NO

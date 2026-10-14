@@ -51,10 +51,14 @@ labels, and change the label set only with the user's approval.
 
 `bin/check --full` runs `bin/check-application`: shell lint for `ops/`, Python
 tests, formatting, typechecking, application and browser tests, and the
-build. CI uses this full mode. Require successful full CI before merge and
-deployment, and follow the
+build. On a Mac it also runs `bin/check-ios` when `ios/` changed. CI uses
+this full mode. Require successful full CI before merge and deployment, and
+follow the
 [validation policy](docs/development-workflow.md#local-and-ci-validation).
 Checkout isolation also covers required generated types, included deliberately.
+
+The native iPhone app lives in `ios/`. For work there, also follow
+[`ios/AGENTS.md`](ios/AGENTS.md).
 
 Use the latest Node.js LTS release, with a minimum of Node 24, for
 application commands, CI, and production. See the

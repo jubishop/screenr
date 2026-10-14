@@ -1,0 +1,152 @@
+#!/usr/bin/env python3
+"""Build and test the iPhone app, failing on any warning.
+
+Runs ScreenrKit's tests with swift test on the Mac, builds the Release variant
+for the Simulator, then runs the Screenr scheme's tests (ScreenrKit and the UI
+tests) in an iPhone Simulator. Without --simulator, the check creates its own
+Simulator and deletes it afterward, so concurrent checkouts never share one.
+Build output, logs, and result bundles stay in ios/build/, which Git ignores.
+"""
+
+import argparse
+import json
+import os
+from pathlib import Path
+import re
+import shutil
+import subprocess
+import sys
+
+ROOT = Path(__file__).resolve().parents[1]
+BUILD = ROOT / "ios/build"
+OUTPUT = BUILD / "check"
+MINIMUM_XCODE = 27
+WARNING = re.compile(r"warning:", re.IGNORECASE)
+# The App Intents extractor prints this for targets that do not link App
+# Intents. It is not a build diagnostic, and result bundles do not count it.
+NOT_A_WARNING = re.compile(
+    r"appintentsmetadataprocessor\[\d+:\d+\] warning: Metadata extraction skipped, "
+    r"no AppIntents\.framework dependency found$")
+# A macOS SDKROOT exported by a shell profile reaches clang through xcodebuild
+# and makes it warn while linking Simulator test bundles.
+ENVIRONMENT = {key: value for key, value in os.environ.items() if key != "SDKROOT"}
+XCODEBUILD = ["xcodebuild", "-hideShellScriptEnvironment", "-project", "ios/Screenr.xcodeproj",
+              "-scheme", "Screenr", "-derivedDataPath", str(BUILD / "DerivedData")]
+
+
+class CheckFailure(Exception):
+    pass
+
+
+def capture(*command):
+    return subprocess.run(command, cwd=ROOT, env=ENVIRONMENT, check=True,
+                          capture_output=True, text=True).stdout
+
+
+def run(label, command):
+    """Run a step with its output in a log, and fail on an error status or a warning line."""
+    print(f"==> {label}", flush=True)
+    log = OUTPUT / (label.lower().replace(" ", "-") + ".log")
+    warnings = []
+    with log.open("w") as stream:
+        process = subprocess.Popen(command, cwd=ROOT, env=ENVIRONMENT, text=True,
+                                   stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        for line in process.stdout:
+            stream.write(line)
+            if WARNING.search(line) and not NOT_A_WARNING.search(line.rstrip()):
+                warnings.append(line.rstrip())
+        status = process.wait()
+    if status:
+        tail = log.read_text().splitlines()[-40:]
+        raise CheckFailure("\n".join([*tail, f"{label} failed with status {status}; see {log}"]))
+    if warnings:
+        raise CheckFailure("\n".join([*warnings, f"{label} reported {len(warnings)} warning(s); see {log}"]))
+
+
+def check_results(label, bundle, tests):
+    """Require a clean build, and for test runs, at least one test with none failed or skipped."""
+    build = json.loads(capture("xcrun", "xcresulttool", "get", "build-results", "--path", str(bundle)))
+    counts = {key: build.get(key) for key in ("errorCount", "warningCount", "analyzerWarningCount")}
+    problems = [f"{key} is {value}" for key, value in counts.items() if value != 0]
+    if tests:
+        summary = json.loads(capture("xcrun", "xcresulttool", "get", "test-results", "summary",
+                                     "--path", str(bundle)))
+        if summary.get("result") != "Passed" or summary.get("failedTests") != 0:
+            problems.append(f"the result is {summary.get('result')} with "
+                            f"{summary.get('failedTests')} failed test(s)")
+        if summary.get("skippedTests") != 0:
+            problems.append(f"{summary.get('skippedTests')} test(s) were skipped")
+        if not summary.get("passedTests"):
+            problems.append("no tests passed")
+    if problems:
+        raise CheckFailure(f"{label}: " + "; ".join(problems) + f"; see {bundle}")
+
+
+def create_simulator():
+    """Create an iPhone Simulator on the newest iOS runtime and return its UDID."""
+    listing = json.loads(capture("xcrun", "simctl", "list", "--json", "runtimes"))
+    runtimes = [runtime for runtime in listing.get("runtimes", [])
+                if runtime.get("platform") == "iOS" and runtime.get("isAvailable")]
+    version = lambda runtime: tuple(int(part) for part in runtime["version"].split("."))
+    runtime = max(runtimes, key=version, default=None)
+    if runtime is None or version(runtime)[0] < MINIMUM_XCODE:
+        raise CheckFailure(f"An iOS {MINIMUM_XCODE} or later Simulator runtime is required. "
+                           "Install one with: xcodebuild -downloadPlatform iOS")
+    iphones = [kind for kind in runtime.get("supportedDeviceTypes", [])
+               if kind.get("productFamily") == "iPhone"]
+    if not iphones:
+        raise CheckFailure(f"{runtime['name']} supports no iPhone Simulator.")
+    name = f"screenr-check-{ROOT.name}-{os.getpid()}"
+    udid = capture("xcrun", "simctl", "create", name, iphones[0]["identifier"],
+                   runtime["identifier"]).strip()
+    print(f"Created {iphones[0]['name']} Simulator {name} ({udid}) on {runtime['name']}.", flush=True)
+    return udid
+
+
+def delete_simulator(udid):
+    subprocess.run(["xcrun", "simctl", "shutdown", udid], cwd=ROOT, env=ENVIRONMENT,
+                   capture_output=True)
+    subprocess.run(["xcrun", "simctl", "delete", udid], cwd=ROOT, env=ENVIRONMENT, check=True,
+                   capture_output=True)
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__,
+                                     formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--simulator", metavar="UDID",
+                        help="run the Simulator tests on this existing Simulator, which is left in place")
+    args = parser.parse_args()
+    if not shutil.which("xcodebuild"):
+        raise CheckFailure("bin/check-ios needs macOS with Xcode 27 or later.")
+    version = re.match(r"Xcode (\d+)", capture("xcodebuild", "-version"))
+    if not version or int(version[1]) < MINIMUM_XCODE:
+        raise CheckFailure(f"Xcode {MINIMUM_XCODE} or later is required. Select it with xcode-select "
+                           "or DEVELOPER_DIR.")
+    shutil.rmtree(OUTPUT, ignore_errors=True)
+    OUTPUT.mkdir(parents=True)
+    run("ScreenrKit tests", ["swift", "test", "--package-path", "ios/ScreenrKit",
+                             "--scratch-path", str(BUILD / "ScreenrKit")])
+    release = OUTPUT / "Release.xcresult"
+    run("Release build", [*XCODEBUILD, "-configuration", "Release", "-destination",
+                          "generic/platform=iOS Simulator", "-resultBundlePath", str(release), "build"])
+    check_results("Release build", release, tests=False)
+    udid = args.simulator or create_simulator()
+    try:
+        tests = OUTPUT / "Tests.xcresult"
+        run("Simulator tests", [*XCODEBUILD, "-configuration", "Debug", "-destination",
+                                f"platform=iOS Simulator,id={udid}", "-parallel-testing-enabled", "NO",
+                                "-resultBundlePath", str(tests), "test"])
+        check_results("Simulator tests", tests, tests=True)
+    finally:
+        if not args.simulator:
+            delete_simulator(udid)
+    print(f"iOS checks passed with no warnings. Logs and result bundles are in {OUTPUT}.", flush=True)
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except (CheckFailure, OSError, ValueError, KeyError, subprocess.CalledProcessError) as error:
+        detail = getattr(error, "stderr", None)
+        print("\n".join(part for part in (str(error), detail) if part), file=sys.stderr)
+        sys.exit(1)

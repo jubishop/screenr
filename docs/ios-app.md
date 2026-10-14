@@ -606,6 +606,17 @@ no third-party tool.
 - XcodeGen, with a generated project that is not committed.
 - Tuist manifests.
 
+**Implementation note:** [Issue #218](https://github.com/jubishop/screenr/issues/218)
+created the project, ScreenrKit, and `bin/check-ios`. The
+[iPhone app guide](../ios/README.md) describes the layout, variants, checks,
+and signing. The Debug configuration builds Screenr Dev, because Xcode
+builds local packages without optimization only under a configuration named
+Debug. Screenr Dev uses its own app group,
+`group.com.artisanalsoftware.Screenr.dev`, so its data stays apart from
+Screenr's in a shared Simulator. It runs only in the Simulator, so that group
+needs no registration with Apple. Each app group is also the variant's
+Keychain access group.
+
 ### ScreenrKit package and a thin app target — 2026-10-13
 
 **Decision:** A local SwiftPM package, `ios/ScreenrKit`, holds:

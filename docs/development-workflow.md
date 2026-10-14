@@ -102,6 +102,11 @@ checks, verifies the Node runtime, lints the POSIX shell scripts in `ops/`,
 runs the Python tests, and then runs formatting, typechecking, application
 and PostgreSQL tests, and browser tests against the production build.
 `tests/test_check_application.py` covers its order and failure handling.
+On a Mac with Xcode, it then runs `bin/check-ios` when `ios/` differs from
+where the branch left `origin/main`, including uncommitted and untracked
+files; on Linux it skips the iOS checks. The
+[iPhone app guide](../ios/README.md#checks) describes `bin/check-ios`, and
+`tests/test_check_ios.py` covers it with simulated Xcode tools.
 
 GitHub Actions runs `bin/check --full` on pull requests and pushes to `main` through
 [the existing workflow](../.github/workflows/check.yml). Application formatting,

@@ -1,0 +1,24 @@
+#!/bin/sh
+# Format the iPhone app's Swift files with the swift-format that ships with
+# Xcode and the rules in ios/.swift-format. With --check, report differences
+# as errors without changing files; the Screenr target's build phase runs it.
+set -eu
+
+ios=$(CDPATH='' cd -- "$(dirname -- "$0")/../ios" && pwd)
+case "${1-}" in
+  --check) mode=lint option=--strict ;;
+  '') mode=format option=--in-place ;;
+  *)
+    echo "Usage: bin/format-swift [--check]" >&2
+    exit 2
+    ;;
+esac
+[ $# -le 1 ] || {
+  echo "Usage: bin/format-swift [--check]" >&2
+  exit 2
+}
+
+# Generated build output and Xcode's package state hold no project sources.
+find "$ios" \( -name build -o -name .build -o -name .swiftpm -o -name '*.xcodeproj' \) -prune \
+  -o -name '*.swift' -type f -exec xcrun swift-format "$mode" "$option" --parallel \
+  --configuration "$ios/.swift-format" {} +

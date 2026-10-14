@@ -1,0 +1,26 @@
+// The Screenr app target in both variants. The SCREENR_ values come from
+// Dev.xcconfig or Release.xcconfig.
+PRODUCT_NAME = Screenr
+PRODUCT_BUNDLE_IDENTIFIER = $(SCREENR_BUNDLE_IDENTIFIER)
+INFOPLIST_KEY_CFBundleDisplayName = $(SCREENR_DISPLAY_NAME)
+ASSETCATALOG_COMPILER_APPICON_NAME = $(SCREENR_APP_ICON)
+ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor
+CODE_SIGN_ENTITLEMENTS = Config/Screenr.entitlements
+
+GENERATE_INFOPLIST_FILE = YES
+INFOPLIST_FILE = Screenr/Info.plist
+// Screenr/Info.plist keeps Dev-only keys in #if blocks. Traditional mode keeps
+// URLs and apostrophes in its text intact.
+INFOPLIST_PREPROCESS = YES
+INFOPLIST_OTHER_PREPROCESSOR_FLAGS = -traditional-cpp -Wno-invalid-pp-token
+INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES
+INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES
+INFOPLIST_KEY_UILaunchScreen_Generation = YES
+INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait
+// The app uses only the system's HTTPS, which is exempt from export compliance.
+INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO
+
+SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor
+LD_RUNPATH_SEARCH_PATHS = $(inherited) @executable_path/Frameworks
+// The swift-format build phase reads every Swift file under ios/.
+ENABLE_USER_SCRIPT_SANDBOXING = NO
