@@ -1,17 +1,44 @@
 #!/usr/bin/env python3
-"""Run screenr's application checks; bin/check --full calls this after the foundation checks."""
+"""Run screenr's application checks; bin/check --full calls this after the foundation checks.
 
+With --part, run one of the parts that CI runs as parallel jobs, optionally
+one --shard of the application or browser tests. Together the parts run every
+check that a full run does, except the iOS checks, which only run locally.
+"""
+
+import argparse
 import json
+import os
+import re
 from pathlib import Path
 import shutil
 import subprocess
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
+PARTS = ("static", "app", "browser")
 
 
-def run(*command):
-    subprocess.run(command, cwd=ROOT, check=True)
+def run(*command, env=None):
+    subprocess.run(command, cwd=ROOT, check=True, env=env)
+
+
+def shard(value):
+    match = re.fullmatch(r"([1-9][0-9]*)/([1-9][0-9]*)", value)
+    if not match or int(match[1]) > int(match[2]):
+        raise argparse.ArgumentTypeError("expected I/N with 1 <= I <= N")
+    return value
+
+
+def arguments():
+    parser = argparse.ArgumentParser(prog="check-application", description=__doc__.splitlines()[0])
+    parser.add_argument("--part", choices=PARTS, help="run only this part of the checks")
+    parser.add_argument("--shard", type=shard, metavar="I/N",
+                        help="run only shard I of N of the app or browser part")
+    args = parser.parse_args()
+    if args.shard and args.part not in ("app", "browser"):
+        parser.error("--shard needs --part app or --part browser")
+    return args
 
 
 def git(*args):
@@ -37,6 +64,9 @@ def ios_checks_needed():
 
 
 def main():
+    args = arguments()
+    # npm test runs one shard of the application tests only when --shard names it.
+    os.environ.pop("SCREENR_TEST_SHARD", None)
     required = json.loads((ROOT / "package.json").read_text())["engines"]["node"]
     minimum = int(required.removeprefix(">="))
     runtime_help = (f"Node.js {required} is required for application checks. "
@@ -47,14 +77,23 @@ def main():
     major = found.removeprefix("v").split(".")[0]
     if not major.isdigit() or int(major) < minimum:
         raise RuntimeError(f"{runtime_help} Found {found}.")
-    scripts = [str(path) for path in sorted((ROOT / "ops").iterdir())
-               if path.is_file() and path.read_bytes().startswith(b"#!/bin/sh")]
-    if scripts:
-        run("shellcheck", "--shell=sh", *scripts)
-    run(sys.executable, "-B", "-m", "unittest", "discover", "-s", "tests", "-p", "test_*.py", "-v")
-    # Browser validation builds and tests the current production artifact.
-    for script in ("format:check", "typecheck", "test", "test:browser"):
-        run("npm", "run", script)
+    if args.part in (None, "static"):
+        scripts = [str(path) for path in sorted((ROOT / "ops").iterdir())
+                   if path.is_file() and path.read_bytes().startswith(b"#!/bin/sh")]
+        if scripts:
+            run("shellcheck", "--shell=sh", *scripts)
+        run(sys.executable, "-B", "-m", "unittest", "discover", "-s", "tests", "-p", "test_*.py", "-v")
+        for script in ("format:check", "typecheck"):
+            run("npm", "run", script)
+    if args.part in (None, "app"):
+        run("npm", "run", "test", env=os.environ | {"SCREENR_TEST_SHARD": args.shard} if args.shard else None)
+    if args.part in (None, "browser"):
+        # Browser validation builds and tests the current production artifact.
+        run("npm", "run", "test:browser", *(["--", "--shard=" + args.shard] if args.shard else []))
+    if args.part:
+        print(f"Application {args.part} checks passed" + (f" (shard {args.shard})." if args.shard else "."),
+              flush=True)
+        return
     if ios_checks_needed():
         run(str(ROOT / "bin/check-ios"))
     print("Application checks passed.", flush=True)
