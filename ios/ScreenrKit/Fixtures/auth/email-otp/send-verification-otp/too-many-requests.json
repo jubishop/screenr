@@ -1,0 +1,19 @@
+{
+  "description": "A fourth code request from one client within a minute is refused, with Better Auth's message.",
+  "viewer": null,
+  "request": {
+    "method": "POST",
+    "action": "email-otp/send-verification-otp",
+    "path": "/api/auth/email-otp/send-verification-otp",
+    "body": {
+      "email": "alice@example.test",
+      "type": "sign-in"
+    }
+  },
+  "response": {
+    "status": 429,
+    "body": {
+      "message": "Too many requests. Please try again later."
+    }
+  }
+}

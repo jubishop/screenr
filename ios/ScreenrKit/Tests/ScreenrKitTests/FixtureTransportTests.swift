@@ -12,6 +12,7 @@ struct FixtureTransportTests {
       "ScreenrVariant": "dev",
       "ScreenrServerURL": "http://localhost:3000",
       "ScreenrAppGroup": "group.com.artisanalsoftware.Screenr.dev",
+      "ScreenrGoogleClientID": "1083-abc.apps.googleusercontent.com",
       "CFBundleShortVersionString": "1.0",
       "CFBundleVersion": "1",
     ])
@@ -126,6 +127,91 @@ struct FixtureTransportTests {
     #expect(signedOut?.kind == .signedOut)
     #expect(feed.user.username == "alice")
     #expect(services.session.phase == .signedOut)
+  }
+
+  @Test func answersSignInWithAnAuthOverride() async throws {
+    let services = try services(
+      "-ScreenrFixtureSession",
+      "signedOut",
+      "-ScreenrFixtureOverride",
+      "auth/email-otp/send-verification-otp/rate-limited"
+    )
+
+    let error = await #expect(throws: APIError.self) {
+      try await services.api.send(.sendCode(email: "alice@example.test"))
+    }
+    _ = try await services.api.send(.signIn(email: "alice@example.test", code: "123456"))
+
+    #expect(error?.kind == .rateLimited)
+    #expect(
+      error?.message == "Too many codes requested. Try again later, or continue with Google."
+    )
+    #expect(services.session.phase == .signedIn)
+  }
+
+  @Test func signsInWithTheStubAppleAndGoogleCredentials() async throws {
+    let services = try services("-ScreenrFixtureSession", "signedOut")
+    let model = SignInModel(
+      api: services.api,
+      invitation: services.invitation,
+      providers: services.identity
+    )
+    #expect(services.identity.authorization == .fixture)
+
+    await model.signInWithFixtureApple()
+    #expect(model.failure == nil)
+    #expect(services.session.phase == .signedIn)
+    _ = try await services.api.send(.signOut)
+    // The fixture API stands in for Google's page, so the system session the
+    // view passes goes unused.
+    await model.signInWithGoogle(using: FailingAuthenticator(error: URLError(.badURL)))
+
+    #expect(model.failure == nil)
+    #expect(services.session.phase == .signedIn)
+  }
+
+  @Test func rejectsOtherSocialCredentials() async throws {
+    let services = try services("-ScreenrFixtureSession", "signedOut")
+    let apple = AppleNonce()
+
+    for request in [
+      APIRequest.signInWithGoogle(idToken: "fixture-google-token.nonce-1", nonce: "nonce-2"),
+      .signInWithApple(
+        identityToken: FixtureIdentity.appleCredential(hashedNonce: apple.hashed).identityToken,
+        authorizationCode: "fixture-apple-code",
+        nonce: "another"
+      ),
+      .signInWithApple(
+        identityToken: FixtureIdentity.appleCredential(hashedNonce: apple.hashed).identityToken,
+        authorizationCode: "another",
+        nonce: apple.raw
+      ),
+    ] {
+      let error = await #expect(throws: APIError.self) { try await services.api.send(request) }
+      #expect(error?.code == "INVALID_TOKEN")
+    }
+    #expect(services.session.phase == .signedOut)
+  }
+
+  @Test func redeemsOnlyTheStubGoogleCodeWithItsVerifier() async throws {
+    let google = GoogleSignIn(
+      clientID: GoogleSignInTests.clientID,
+      transport: try FixtureTransport(directory: TestFixtures.directory)
+    )
+    let attempt = GoogleSignIn.Attempt()
+    let callback = try await FixtureWebAuthenticator()
+      .authenticate(
+        url: try google.authorizationURL(for: attempt),
+        callbackScheme: google.callbackScheme
+      )
+    let code = try google.code(from: callback, for: attempt)
+
+    let token = try await google.idToken(forCode: code, attempt: attempt)
+    await #expect(throws: GoogleSignInError.tokenRejected(status: 400, error: "invalid_grant")) {
+      try await google.idToken(forCode: code, attempt: GoogleSignIn.Attempt())
+    }
+
+    #expect(token == "fixture-google-token.\(attempt.nonce)")
   }
 
   @Test func failsEveryRequestWithTheScenariosFailure() async throws {

@@ -80,5 +80,7 @@ public struct NotificationTarget: Codable, Hashable, Sendable {
 public struct ErrorBody: Codable, Hashable, Sendable {
   public let error: String?
   public let message: String?
+  // Better Auth's error code, such as `INVALID_OTP`.
+  public let code: String?
   public let minimumBuild: Int?
 }

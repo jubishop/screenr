@@ -110,6 +110,7 @@ struct TelemetryTests {
       "ScreenrVariant": "dev",
       "ScreenrServerURL": "http://localhost:3000",
       "ScreenrAppGroup": "group.com.artisanalsoftware.Screenr.dev",
+      "ScreenrGoogleClientID": "1083-abc.apps.googleusercontent.com",
       "CFBundleShortVersionString": "1.0",
       "CFBundleVersion": "1",
     ])

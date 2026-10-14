@@ -15,6 +15,8 @@ public struct AppConfiguration: Equatable, Sendable {
   public let variant: Variant
   public let serverURL: URL
   public let appGroup: String
+  // The Google OAuth client for iOS, such as `123-abc.apps.googleusercontent.com`.
+  public let googleClientID: String
   // The marketing version, such as `1.0`, and the build number.
   public let version: String
   public let build: String
@@ -36,6 +38,12 @@ public struct AppConfiguration: Equatable, Sendable {
     }
     appGroup = try Self.value(for: "ScreenrAppGroup", in: infoDictionary) { text in
       text.isEmpty ? nil : text
+    }
+    googleClientID = try Self.value(for: "ScreenrGoogleClientID", in: infoDictionary) { text in
+      let suffix = GoogleSignIn.clientIDSuffix
+      guard text.hasSuffix(suffix) else { return nil }
+      let client = text.dropLast(suffix.count)
+      return Self.matches(String(client), allowed: Self.digits + Self.letters + "-") ? text : nil
     }
     version = try Self.value(for: "CFBundleShortVersionString", in: infoDictionary) { text in
       Self.matches(text, allowed: Self.digits + Self.letters + ".-_") ? text : nil

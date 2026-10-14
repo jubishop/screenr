@@ -1,0 +1,20 @@
+{
+  "description": "After five wrong codes, even the right code is refused until the member requests a new one.",
+  "viewer": null,
+  "request": {
+    "method": "POST",
+    "action": "sign-in/email-otp",
+    "path": "/api/auth/sign-in/email-otp",
+    "body": {
+      "email": "alice@example.test",
+      "otp": "000000"
+    }
+  },
+  "response": {
+    "status": 403,
+    "body": {
+      "message": "Too many attempts",
+      "code": "TOO_MANY_ATTEMPTS"
+    }
+  }
+}

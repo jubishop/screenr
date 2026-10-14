@@ -248,7 +248,8 @@ from the real API
 `tests/app/ios-fixtures.test.ts` sends each case through the
 `/api/screenr/[action]` handler as the app does, with the viewer's
 [bearer token](data-and-access.md#native-client-sessions) and no cookie or
-`Origin`, and compares the response with its file under
+`Origin`. Sign-in error cases go through Better Auth's handler instead, with
+its request limits on. The test compares each response with its file under
 `ios/ScreenrKit/Fixtures/`. It runs in `npm test`, so `bin/check --full` and
 CI fail when a response no longer matches its fixture, when a case has no
 file, or when a file has no case. The failure shows the changed fields.
@@ -284,6 +285,13 @@ Each file holds one case, named for the state it shows, such as `default`,
   session. Every error body is `{"error": "<message>"}`. The 426 for an
   [outdated app build](data-and-access.md#client-headers) in
   `update-required.json` also has `minimumBuild`.
+- `auth/<route>/<case>.json`: Better Auth's sign-in errors that the app shows
+  as the server words them, such as the code request limits and too many
+  wrong codes. `<route>` is the path under `/api/auth/`, which the request's
+  `action` also names. A body is `{"message": "<message>"}`, with Better
+  Auth's `code` when it sends one. The
+  [fixture API](../ios/README.md#fixture-api) answers with them only as
+  overrides.
 
 ### Fixture format
 

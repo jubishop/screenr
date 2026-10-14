@@ -8,9 +8,19 @@
   <string>$(SCREENR_SERVER_URL)</string>
   <key>ScreenrAppGroup</key>
   <string>$(SCREENR_APP_GROUP)</string>
-#if SCREENR_DEV
+  <key>ScreenrGoogleClientID</key>
+  <string>$(SCREENR_GOOGLE_CLIENT_ID)</string>
   <key>CFBundleURLTypes</key>
   <array>
+    <dict>
+      <key>CFBundleURLName</key>
+      <string>$(PRODUCT_BUNDLE_IDENTIFIER).google</string>
+      <key>CFBundleURLSchemes</key>
+      <array>
+        <string>$(SCREENR_GOOGLE_URL_SCHEME)</string>
+      </array>
+    </dict>
+#if SCREENR_DEV
     <dict>
       <key>CFBundleURLName</key>
       <string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
@@ -19,7 +29,9 @@
         <string>$(SCREENR_URL_SCHEME)</string>
       </array>
     </dict>
+#endif
   </array>
+#if SCREENR_DEV
   <key>NSAppTransportSecurity</key>
   <dict>
     <key>NSAllowsLocalNetworking</key>

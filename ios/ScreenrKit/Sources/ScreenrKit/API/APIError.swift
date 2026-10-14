@@ -34,11 +34,14 @@ public struct APIError: Error, Hashable, Sendable {
 
   public let kind: Kind
   public let message: String?
+  // Better Auth's code for the error, such as `INVALID_OTP`, when it sent one.
+  public let code: String?
   public let requestID: String
 
-  public init(kind: Kind, message: String? = nil, requestID: String) {
+  public init(kind: Kind, message: String? = nil, code: String? = nil, requestID: String) {
     self.kind = kind
     self.message = message
+    self.code = code
     self.requestID = requestID
   }
 
@@ -66,6 +69,29 @@ public struct APIError: Error, Hashable, Sendable {
       case 500..<600: .server(status: status)
       default: .invalidResponse
       }
-    self.init(kind: kind, message: body?.error ?? body?.message, requestID: requestID)
+    self.init(
+      kind: kind,
+      message: body?.error ?? body?.message,
+      code: body?.code,
+      requestID: requestID
+    )
+  }
+
+  // What to tell the member: the server's message when it sent one, or else a
+  // sentence for the kind of failure, or `fallback`.
+  public func explanation(otherwise fallback: String) -> String {
+    if let message, !message.isEmpty { return message }
+    return Self.explanation(of: kind) ?? fallback
+  }
+
+  // A sentence for failures that need no server message to explain.
+  public static func explanation(of kind: Kind) -> String? {
+    switch kind {
+    case .offline: "You’re offline. Check your connection and try again."
+    case .timedOut: "Screenr took too long to answer. Try again."
+    case .server: "Screenr is having trouble right now. Try again soon."
+    case .rateLimited: "Too many tries. Wait a moment, then try again."
+    default: nil
+    }
   }
 }

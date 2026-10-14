@@ -392,7 +392,9 @@ the server accepts ID tokens issued to either the iOS or the
 SDK or client secret in the app. The app redeems Google's authorization code
 itself with PKCE, so the server registers no redirect URI for it. The setting
 is optional: without it, tokens issued to the iOS client fail and web sign-in
-is unchanged.
+is unchanged. The app's `ios/Config/Screenr.xcconfig` holds the same client
+ID for both variants and registers its reversed form,
+`com.googleusercontent.apps.<client>`, as the redirect scheme.
 
 **Publishing status:** with the owner's approval, the project's Google Auth
 Platform app was published on 2026-10-13. It is "In production" with the

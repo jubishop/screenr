@@ -121,6 +121,13 @@ guideline.
 Activity and code emails reach that address only when Screenr's sending
 domain is registered with Apple's private email relay service.
 
+**Implementation note:** [Issue #226](https://github.com/jubishop/screenr/issues/226)
+built the sign-in screen. Google's page opens in SwiftUI's web authentication
+session, which shares Safari's Google sign-in, and the app redeems the code
+with PKCE itself. UI tests replace Apple's sheet and Google's page with stub
+credentials that the fixture API checks. The
+[iPhone app guide](../ios/README.md#sign-in) describes the pieces.
+
 ### Sign in with Apple stays on iPhone — 2026-10-13
 
 **Decision:** Only the iPhone app offers Sign in with Apple. The web app keeps
