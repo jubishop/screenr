@@ -1,0 +1,104 @@
+#!/usr/bin/env python3
+"""Refuse a push whose iOS files have not passed bin/check-ios on this Mac.
+
+Git passes one line per ref on standard input: local ref, local commit,
+remote ref, remote commit. A pushed branch changes the iOS files when they
+differ from the remote branch's commit, or, for a new branch, from where it
+left origin/main. For those files, the hook accepts a recorded pass with the
+same Xcode, or runs bin/check-ios in this checkout and refuses the push when
+it fails. Tag pushes, branch deletions, and hosts without xcodebuild, such
+as Linux and CI, skip it. See docs/development-workflow.md#ios-checks-before-a-push.
+"""
+
+from pathlib import Path
+import shutil
+import subprocess
+import sys
+
+sys.dont_write_bytecode = True
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+import _ios_check_records as records  # noqa: E402
+
+ADVICE = "Never bypass this check with git push --no-verify."
+
+
+def say(message):
+    print(f"pre-push: {message}", file=sys.stderr, flush=True)
+
+
+def absent(commit):
+    return set(commit) == {"0"}
+
+
+def exists(root, commit):
+    return subprocess.run(["git", "cat-file", "-e", f"{commit}^{{commit}}"], cwd=root,
+                          capture_output=True).returncode == 0
+
+
+def base_key(root, local, remote):
+    """The iOS files the push replaces: the remote branch's, or origin/main's at the fork point."""
+    if not absent(remote) and exists(root, remote):
+        return records.files_key(root, remote)
+    try:
+        base = records.git(root, "merge-base", local, "refs/remotes/origin/main").strip()
+    except (OSError, subprocess.CalledProcessError):
+        return "no base"
+    return records.files_key(root, base)
+
+
+def changed_files(root, lines):
+    """Map each new iOS files key to the branches that push it."""
+    pending = {}
+    for line in lines:
+        fields = line.split()
+        if len(fields) != 4:
+            continue
+        _, local, remote_ref, remote = fields
+        if absent(local) or not remote_ref.startswith("refs/heads/"):
+            continue
+        key = records.files_key(root, local)
+        if key and key != base_key(root, local, remote):
+            pending.setdefault(key, []).append(remote_ref.removeprefix("refs/heads/"))
+    return pending
+
+
+def main():
+    lines = sys.stdin.read().splitlines()
+    if not shutil.which("xcodebuild"):
+        return 0
+    root = Path(records.git(Path.cwd(), "rev-parse", "--show-toplevel").strip())
+    pending = changed_files(root, lines)
+    if not pending:
+        return 0
+    xcode = records.xcode_version()
+    for key, branches in pending.items():
+        names = ", ".join(branches)
+        found = records.passed(root, key, xcode)
+        if found:
+            say(f"the iOS files in {names} passed bin/check-ios with {xcode} at {found['passedAt']}; "
+                "not running it again.")
+            continue
+        if records.working_key(root) != key:
+            say(f"{names} changes the iOS files (ios/ except Markdown, and bin/format-swift), but this "
+                "checkout's copies differ from the pushed commit, so bin/check-ios cannot test it. "
+                "Check out the commit you are pushing with no uncommitted iOS changes, and push "
+                "again. " + ADVICE)
+            return 1
+        say(f"{names} changes the iOS files; running bin/check-ios before the push.")
+        status = subprocess.run([str(root / "bin/check-ios")], cwd=root, stdin=subprocess.DEVNULL).returncode
+        if status:
+            say(f"bin/check-ios failed with status {status}, so the push stopped. Fix the iOS checks "
+                "and push again. " + ADVICE)
+            return 1
+        if xcode and records.working_key(root) == key:
+            records.record(root, key, xcode)
+    return 0
+
+
+if __name__ == "__main__":
+    try:
+        sys.exit(main())
+    except (OSError, subprocess.CalledProcessError) as error:
+        detail = getattr(error, "stderr", None)
+        say("\n".join(str(part).strip() for part in (error, detail) if part) + "\n" + ADVICE)
+        sys.exit(1)

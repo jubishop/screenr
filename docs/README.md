@@ -93,10 +93,10 @@ both memory and design documents.
 - [Application stack](application-stack.md): selected core stack, alternatives,
   tradeoffs, and implementation conventions.
 - [Development workflow](development-workflow.md): repository setup, the
-  Node runtime and dependency update decisions, checks, iOS CI and TestFlight
-  releases, TypeScript checkout isolation, Screen component organization,
-  testing and validation decisions, CI APT sources, main-branch delivery, and
-  Project Starter updates.
+  Node runtime and dependency update decisions, checks, local iOS checks and
+  TestFlight releases, TypeScript checkout isolation, Screen component
+  organization, testing and validation decisions, CI APT sources, main-branch
+  delivery, and Project Starter updates.
 - [Running Screenr](running-screenr.md): local setup, invitations, several
   checkouts, the email worker, production builds, and provider configuration.
 - [Testing Screenr](testing.md): test commands, running one suite, the browser

@@ -103,6 +103,10 @@ issues, and two checkouts.
 - iOS CI runs as a separate job on a macOS runner, filtered by path.
 - `AGENTS.md` and `bin/check` gain iOS sections.
 
+**Updated — 2026-10-14:** There is no iOS CI. iOS checks run locally before
+each push; see
+[local iOS checks](#local-ios-checks-instead-of-ios-ci--2026-10-14).
+
 ### Email code, Sign in with Apple, and Google — 2026-10-13
 
 **Decision:** The app offers three sign-in methods: the email one-time code,
@@ -214,7 +218,9 @@ that UI tests launch against.
   route and POST action into checked-in JSON fixtures under `ios/`.
 - **Checking fixtures:** Swift tests decode every fixture.
 - **Effect on changes:** a server change that alters a payload changes its
-  fixtures in the same commit. CI fails when the app cannot decode the result.
+  fixtures in the same commit. The iOS checks fail when the app cannot
+  decode the result; since 2026-10-14 they
+  [run locally](#local-ios-checks-instead-of-ios-ci--2026-10-14), not in CI.
 
 **Why:** The user accepted the recommendation. It needs no generator or
 dependency, and payload drift appears in review as a fixture diff.
@@ -756,6 +762,11 @@ ScreenrKit.
 
 ### CI checks and local TestFlight releases — 2026-10-13
 
+**Superseded in part — 2026-10-14:** The
+[local iOS checks decision](#local-ios-checks-instead-of-ios-ci--2026-10-14)
+replaces the CI job and the release script's CI requirement. The local
+TestFlight releases stand.
+
 **Decision:**
 
 - **CI:** a path-filtered GitHub Actions job builds and tests `ios/**` on a
@@ -781,6 +792,41 @@ signing secrets out of GitHub.
 
 - A manually triggered CI release with cloud-managed signing.
 - A TestFlight build for every push to `main` that touches `ios/`.
+
+### Local iOS checks instead of iOS CI — 2026-10-14
+
+**Decision:** GitHub Actions runs no iOS checks. `bin/check-ios` runs on a
+Mac before iOS changes leave it:
+
+- **Before every push:** a Git `pre-push` hook runs `bin/check-ios` when the
+  pushed commits change the iOS files, and refuses the push when it fails.
+  Agents run `bin/check-ios` before pushing iOS changes and never bypass the
+  hook with `--no-verify`.
+- **Remote CI:** only the Linux check job, which must stay under 10 minutes.
+- **Releases:** `bin/ios-testflight` runs `bin/check-ios` on the clean
+  `main` commit before archiving instead of looking for a CI run.
+
+**Why:** iOS CI ran on GitHub's preview macOS runners, where runs queued for
+hours and took more than 30 minutes. The user said: "dont use iOS CI then. i
+dont want merges that slow. if remote CI is longer than 10minutes ever than
+it needs to be cut down. lets just do more local testing before merges with
+agent rules encoded in AGENTS.md or something. or enforce it at the local git
+level if thats a thing."
+
+**Tradeoffs:**
+
+- A push from a Mac that changes iOS files waits for `bin/check-ios`, unless
+  the same files already passed it with the same Xcode in the last week.
+- Nothing remote catches iOS changes pushed with `--no-verify`, from a
+  checkout without the hook, or from Linux, where the hook skips.
+
+**Supersedes:** the CI part of
+[CI checks and local TestFlight releases](#ci-checks-and-local-testflight-releases--2026-10-13).
+The `iOS checks` workflow was disabled the same day, and
+[issue #291](https://github.com/jubishop/screenr/issues/291) removed it.
+[iOS checks before a push](development-workflow.md#ios-checks-before-a-push)
+describes the hook, and the [iOS release gate](development-workflow.md#ios-release-gate)
+the release check.
 
 ### In-house release tooling without fastlane — 2026-10-13
 
@@ -918,9 +964,11 @@ from YouTube before the member taps Play. The app adds no YouTube SDK.
 
 ### Public repository with feedback issues that link to Sentry — 2026-10-13
 
-**Decision:** `jubishop/screenr` stays public. iOS CI runs on GitHub-hosted
-macOS runners. The app follows PodHaven's feedback flow, except that its
-GitHub issues never contain what members write:
+**Decision:** `jubishop/screenr` stays public. iOS checks run locally on a
+Mac, not in GitHub Actions; see
+[local iOS checks](#local-ios-checks-instead-of-ios-ci--2026-10-14). The app
+follows PodHaven's feedback flow, except that its GitHub issues never contain
+what members write:
 
 1. **Feedback form:** You → Settings has a Send feedback form. It sends Sentry
    user feedback with the member's text, optional screenshots, and recent log
@@ -976,6 +1024,11 @@ Data from the GitHub billing usage API on 2026-10-13.
 
 **Supersedes:** a same-day decision that made the repository private and ran
 iOS CI on a self-hosted Mac runner.
+
+**Updated — 2026-10-14:** This decision first ran iOS CI on GitHub-hosted
+macOS runners. The
+[local iOS checks decision](#local-ios-checks-instead-of-ios-ci--2026-10-14)
+replaced that CI.
 
 ### An `area: ios` label — 2026-10-13
 

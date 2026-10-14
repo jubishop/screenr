@@ -26,6 +26,9 @@ Plain `bin/check` runs only fast repository static checks; use
 `bin/check --documents-only` for Markdown edits. Follow the
 [local and CI validation policy](development-workflow.md#local-and-ci-validation)
 for focused checks during implementation and full validation before merge.
+CI runs on Linux and has no iOS job, so iOS changes need `bin/check-ios` on
+a Mac before every push, which a
+[pre-push hook](development-workflow.md#ios-checks-before-a-push) enforces.
 The local default test database is `screenr_test` on port 5439. Override it
 with `TEST_DATABASE_URL`. The test role must be able to create databases.
 All test databases are disposable and are reset by the harness; never point
@@ -258,8 +261,11 @@ file, or when a file has no case. The failure shows the changed fields.
 
 On the Swift side, ScreenrKit's `FixtureDecodingTests` decode every file as
 the model its action returns, and `RequestTests` check that ScreenrKit
-builds the recorded requests. `swift test` and the iOS CI job fail when a
-fixture no longer decodes or names an action without a Swift model. UI tests
+builds the recorded requests. `swift test` and `bin/check-ios` fail when a
+fixture no longer decodes or names an action without a Swift model. There
+is no iOS CI, so run `bin/check-ios` on a Mac before pushing regenerated
+fixtures; the [pre-push hook](development-workflow.md#ios-checks-before-a-push)
+enforces it. UI tests
 run the app against the same files through the
 [fixture API](../ios/README.md#fixture-api).
 

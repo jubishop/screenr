@@ -52,11 +52,14 @@ labels, and change the label set only with the user's approval.
 `bin/check --full` runs `bin/check-application`: shell lint for `ops/`, Python
 tests, formatting, typechecking, application and browser tests, and the
 build. On a Mac it also runs `bin/check-ios` when `ios/` changed. CI runs
-the same checks in parallel jobs, and a separate
-[iOS workflow](docs/development-workflow.md#ios-ci) runs `bin/check-ios` when
-iOS files change. Require successful full CI before merge and deployment, and
+the same checks, except the iOS checks, in parallel jobs. Require successful
+full CI before merge and deployment, and
 follow the
 [validation policy](docs/development-workflow.md#local-and-ci-validation).
+
+iOS changes: run `bin/check-ios` locally before every push; a pre-push hook
+enforces it. Never use `--no-verify`. There is no remote iOS CI. See
+[iOS checks before a push](docs/development-workflow.md#ios-checks-before-a-push).
 Checkout isolation also covers required generated types, included deliberately.
 
 Keep remote CI under 10 minutes of wall-clock time, both for pull request

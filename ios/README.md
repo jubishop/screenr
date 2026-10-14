@@ -54,6 +54,8 @@ server, and app group to the app, which reads them through ScreenrKit's
 ```sh
 bin/check-ios
 bin/check-ios --simulator <UDID>
+bin/check-ios --reuse
+bin/check-ios --test-timeout <minutes>
 ```
 
 `bin/check-ios` fails on any failed or skipped test and on any warning, from
@@ -72,11 +74,34 @@ deletes it afterward, so several checkouts can check at once. With
 `--simulator`, it uses that Simulator and leaves it in place. Logs and result
 bundles from the last run are in `ios/build/check/`.
 
-On a Mac, `bin/check --full` runs `bin/check-ios` when `ios/` differs from
-where the branch left `origin/main`, including uncommitted and untracked
-files. On Linux it skips the iOS checks. GitHub Actions runs `bin/check-ios`
-on a hosted Mac for pull requests and pushes to `main` that change iOS files;
-see [iOS CI](../docs/development-workflow.md#ios-ci).
+The check fails fast and never hangs:
+
+- **Diagnostics:** the test run passes `-collect-test-diagnostics never`.
+  Collecting a sysdiagnose after a failed UI test took about 10 minutes and
+  sometimes never finished.
+- **Timeouts:** the Simulator tests stop and fail after 40 minutes, or after
+  `--test-timeout <minutes>`, and the Simulator boot after 10 minutes. The
+  failure shows the end of the step's log.
+- **Stopping:** each step runs in its own process group. A timeout,
+  Control-C, or `SIGTERM` stops that group: `SIGTERM` first, then `SIGKILL`
+  for whatever is left after 5 seconds. The check then deletes its Simulator.
+  Stop a check by signaling `bin/check-ios` itself, never by killing
+  `xcodebuild`.
+
+The check's inputs, the iOS files, are `ios/`, except its Markdown, and
+`bin/format-swift`. A pass on a checkout whose
+iOS files match `HEAD` is recorded for those exact files and the Xcode
+version. With `--reuse`, the check skips itself when those files passed with
+the same Xcode in the last 7 days.
+
+There is no iOS CI. Run `bin/check-ios` before every push that changes
+`ios/`. The `pre-push` hook runs it for such a push unless a recorded pass
+covers the pushed files, and refuses the push when it fails; never bypass
+it with `--no-verify`. See
+[iOS checks before a push](../docs/development-workflow.md#ios-checks-before-a-push).
+On a Mac, `bin/check --full` runs `bin/check-ios --reuse` when the iOS files
+differ from where the branch left `origin/main`, including uncommitted and
+untracked files. On Linux it skips the iOS checks.
 
 ## Run one test
 

@@ -103,109 +103,82 @@ checks, verifies the Node runtime, lints the POSIX shell scripts in `ops/`,
 runs the Python tests, and then runs formatting, typechecking, application
 and PostgreSQL tests, and browser tests against the production build.
 `tests/test_check_application.py` covers its order and failure handling.
-On a Mac with Xcode, it then runs `bin/check-ios` when `ios/` differs from
-where the branch left `origin/main`, including uncommitted and untracked
-files; on Linux it skips the iOS checks. The
+On a Mac with Xcode, it then runs `bin/check-ios --reuse` when the
+[iOS files](#ios-checks-before-a-push) differ from where the branch left
+`origin/main`, including uncommitted and untracked files; on Linux it skips
+the iOS checks. The
 [iPhone app guide](../ios/README.md#checks) describes `bin/check-ios`, and
 `tests/test_check_ios.py` covers it with simulated Xcode tools.
 
 GitHub Actions runs the same checks on pull requests and pushes to `main`
 through [the check workflow](../.github/workflows/check.yml), split into
 [parallel jobs](#ci-jobs) that keep CI under 10 minutes. Those Linux jobs skip
-the iOS checks; [iOS CI](#ios-ci)
-runs them on a Mac. See [running checks](testing.md#running-checks)
+the iOS checks, and no other job runs them; a
+[pre-push hook](#ios-checks-before-a-push) runs them on a Mac. See
+[running checks](testing.md#running-checks)
 for requirements. GitHub issues track shared work; [td](foundation/task-tracking.md)
 records local progress and handoffs.
 
-### iOS CI
+### iOS checks before a push
 
-The **iOS checks** workflow, [`.github/workflows/ios.yml`](../.github/workflows/ios.yml),
-runs `bin/check-ios` in its `ios` job on a GitHub-hosted Mac, which is free for
-this public repository. It follows the
-[CI decision](ios-app.md#ci-checks-and-local-testflight-releases--2026-10-13).
+GitHub Actions runs no iOS checks
+([decision](ios-app.md#local-ios-checks-instead-of-ios-ci--2026-10-14)).
+Instead, [`bin/hooks/pre-push`](../bin/hooks/pre-push) runs `bin/check-ios`
+on the Mac before a push that changes the iOS files, and refuses the push
+when the check fails. Run `bin/check-ios` before pushing iOS changes, so the
+push finds a recorded pass. Never bypass the hook with `git push --no-verify`.
 
-- **Trigger:** pull requests and pushes to `main` that change `ios/**`,
-  `bin/check-ios`, `bin/format-swift`, or the workflow file. The server's
-  payload fixtures live in `ios/ScreenrKit/Fixtures/`, so a server change that
-  regenerates them runs the job too. Web-only changes skip it. **Run
-  workflow** runs it on any branch, whatever changed.
-- **Runner:** `runs-on: xcode-27`, GitHub's preview image with macOS 27,
-  Xcode 27, and the iOS 27 Simulator; see the
-  [runner images](https://github.com/actions/runner-images#available-images).
-  ScreenrKit's `swift test` needs a macOS 27 host, and on 2026-10-13
-  `macos-latest` was still macOS 26 with Xcode 26. Move the job to the
-  macOS 27 label once GitHub makes that image generally available.
-- **Xcode:** a step selects the image's newest stable Xcode with
-  `xcode-select` and prints its version. It skips betas and release
-  candidates, which the image installs under suffixed names such as
-  `Xcode_27.2_beta_2.app`. The selection follows each stable release without
-  a pin, as the
-  [toolchain policy](foundation/engineering-policy.md#runtime-and-toolchain-versions)
-  asks, and never lands on a beta that the image makes its default. On
-  2026-10-13 it selected Xcode 27.0 (27A266a), the build on the user's Mac.
-- **Simulator runtime:** the image ships the iOS 27 runtime. If no iOS 27 or
-  later runtime is available, such as after a new Xcode arrives without one,
-  the job downloads it with `xcodebuild -downloadPlatform iOS`. There is no
-  cache, since the download is rare and the runtime is several gigabytes.
-- **Warnings:** the job runs the same `bin/check-ios` as a Mac does, so any
-  warning or any failed or skipped test fails it. After a failure, the run
-  keeps `ios/build/check/`, with logs and result bundles, as a 7-day
-  artifact.
-- **Superseded runs:** the workflow's own concurrency group,
-  `ios-<pull request or ref>`, cancels an older run for the same pull request
-  or branch, `main` included, since the job deploys nothing. The check
-  workflow's group and its deploy job are unaffected.
-- **Runner time:** one job with no matrix and a 45-minute timeout. Runs took
-  19 to 24 minutes on 2026-10-14, and the Simulator tests run about three
-  times slower than on the user's Mac. The Circle feed's UI journeys then
-  passed 30 minutes, and each screen adds journeys, so the timeout leaves
-  room for them.
+- **iOS files:** `ios/` and `bin/format-swift`, which the app's build runs.
+  The server's payload fixtures live in `ios/ScreenrKit/Fixtures/`, so a
+  server change that regenerates them counts. Markdown under `ios/`, such as
+  `ios/README.md`, does not: no check reads it, so documentation-only changes
+  skip the check. `bin/check-ios` itself does not count either;
+  `tests/test_check_ios.py` covers it.
+- **Trigger:** a pushed branch whose iOS files differ from the remote
+  branch's commit or, for a new branch, from where it left `origin/main`.
+  Pushes that leave them alone, tag pushes, and branch deletions skip the
+  check, as does any host without `xcodebuild`, such as Linux and CI.
+- **Checkout:** `bin/check-ios` tests the checkout's files, so the pushed
+  commit must be checked out with no uncommitted changes to the iOS files.
+  Otherwise the hook refuses the push and says why.
+- **Recorded passes:** `bin/check-ios` records each pass on a checkout whose
+  iOS files match `HEAD`. The record holds those files' Git object IDs and
+  the Xcode version, in `.git/screenr-ios-checks/`, which all worktrees of
+  the clone share. The hook skips the check when the pushed iOS files passed
+  with the same Xcode in the last 7 days, and records its own passes. A
+  re-push, a rebase that leaves the iOS files alone, or a push right after
+  `bin/check-ios` or `bin/check --full` does not run the check again.
+  `bin/check-ios --reuse` skips itself the same way. Delete the directory to
+  forget every pass.
+- **Duration:** a full `bin/check-ios` took 16 minutes on the user's Mac on
+  2026-10-14, while other checkouts ran checks, and most of it was the
+  Simulator tests. A reused pass takes under a second. A failed UI test
+  reports at once, and a stuck test run stops after 40 minutes; see the
+  [iPhone app guide](../ios/README.md#checks).
+- **Hook location:** Git runs the hooks in `core.hooksPath`. `bin/setup`
+  sets it to the relative `bin/hooks`, so each checkout runs its own copy.
+  On the user's Mac it is the primary checkout's absolute `bin/hooks`, so
+  every worktree runs the primary checkout's hooks. Keep that checkout on
+  current `main`, or new and changed hooks do not apply. `pre-push` belongs
+  to this project; Project Starter manages only the four knowledge hooks.
+- **Tests:** `tests/test_pre_push.py` pushes to a local remote with a
+  simulated `bin/check-ios`, and `tests/test_check_ios.py` covers the
+  records.
 
 ### iOS release gate
 
-The TestFlight release script must find a passing iOS CI result for the
-commit it releases, a clean `main`. Most `main` commits change no iOS files,
-so they have no run of their own. A successful run on `main` therefore counts
-for a commit when its own commit is an ancestor with the same files under
-every path in the workflow's filter:
-
-```sh
-head=$(git rev-parse HEAD)
-paths=(ios bin/check-ios bin/format-swift .github/workflows/ios.yml)
-gh run list --repo jubishop/screenr --workflow ios.yml --branch main \
-  --status success --limit 100 --json headSha --jq '.[].headSha' |
-  while read -r sha; do
-    if git merge-base --is-ancestor "$sha" "$head" &&
-      git diff --quiet "$sha" "$head" -- "${paths[@]}"; then
-      echo "$sha"
-      break
-    fi
-  done
-```
-
-A push run's commit is the push's last commit, and runs on `main` come only
-from pushes and **Run workflow**, so the list holds no pull request runs. The
-REST equivalent is
-`gh api 'repos/jubishop/screenr/actions/workflows/ios.yml/runs?branch=main&status=success&per_page=100'`,
-reading `.workflow_runs[].head_sha`. Keep `paths` equal to the workflow's
-path filter; `tests/app/ios-testflight.test.ts` checks the script's copy
-against the workflow.
-
-The script applies this to runs of every status, newest first, and the
-first run with the commit's iOS files decides. A success passes, a failure
-blocks, and a queued or running check is awaited with
-`gh run watch <run ID> --exit-status`. A cancelled run decides nothing.
-When no run decides, the script starts one with
-`gh workflow run ios.yml --repo jubishop/screenr --ref main`, finds it with
-`gh run list --workflow ios.yml --event workflow_dispatch --commit "$head"`,
-and waits for it the same way. A failed, cancelled, or missing result blocks
-the release.
+`bin/ios-testflight` runs `bin/check-ios --reuse` in the terminal on the
+clean `main` commit it releases, before archiving, and stops when it fails.
+The check skips itself when the same iOS files passed with the same Xcode in
+the last 7 days, such as before the push that brought them to `main`, and
+otherwise runs in full.
 
 ### TestFlight releases
 
 `bin/ios-testflight` builds the iPhone app on the owner's Mac and brings it
 to TestFlight testers. It follows the
-[release decision](ios-app.md#ci-checks-and-local-testflight-releases--2026-10-13)
+[release decision](ios-app.md#ci-checks-and-local-testflight-releases--2026-10-13),
+the [local iOS checks decision](ios-app.md#local-ios-checks-instead-of-ios-ci--2026-10-14),
 and the [tooling decision](ios-app.md#in-house-release-tooling-without-fastlane--2026-10-13).
 The owner or an agent runs it from a clean checkout of `main`:
 
@@ -215,10 +188,12 @@ git pull --ff-only
 bin/ios-testflight
 ```
 
-It needs `npm ci`, Xcode 27, `gh` signed in to GitHub, and the
+It needs `npm ci`, Xcode 27 with an iOS 27 Simulator runtime, Git access to
+push tags to `origin`, and the
 [App Store Connect API key](running-screenr.md#app-store-connect) in
 `ASC_KEY_PATH`, `ASC_KEY_ID`, and `ASC_ISSUER_ID`. One run takes about as
-long as an archive plus Apple's processing, often 15 to 30 minutes.
+long as an archive plus Apple's processing, often 15 to 30 minutes, plus
+`bin/check-ios` when no recorded pass covers the commit.
 
 1. **Checks:** it fetches `main` and the tags. `HEAD` must be
    `origin/main`'s commit, with no changed or untracked files; a linked
@@ -276,7 +251,7 @@ minutes. The script signs a new 15-minute token for each request with
 `src/server/apple-jwt.ts`, the same signer as the APNs sender and Sign in
 with Apple, which reads the `.p8` file as PEM. Its tests,
 `tests/app/ios-testflight.test.ts` and `tests/app/app-store-connect.test.ts`,
-fake Git, GitHub, Xcode, and the App Store Connect API.
+fake Git, `bin/check-ios`, Xcode, and the App Store Connect API.
 
 ## TypeScript checkout isolation
 

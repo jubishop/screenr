@@ -12,20 +12,12 @@ import {
 } from "./app-store-connect";
 
 // bin/ios-testflight: release the iPhone app to TestFlight from the owner's
-// Mac. It requires a clean origin/main whose iOS files passed iOS CI,
-// archives and uploads the Release app with xcodebuild, tags the commit
+// Mac. It requires a clean origin/main that passes bin/check-ios, archives
+// and uploads the Release app with xcodebuild, tags the commit
 // ios-v<version>b<build>, and then brings the build to testers through the
 // App Store Connect API. See docs/development-workflow.md#testflight-releases.
 
-const repository = "jubishop/screenr";
 const bundleId = "com.artisanalsoftware.Screenr";
-// The iOS checks workflow's path filter in .github/workflows/ios.yml.
-export const iosCheckPaths = [
-  "ios",
-  "bin/check-ios",
-  "bin/format-swift",
-  ".github/workflows/ios.yml",
-];
 // Commits under these paths can change what testers see: the app and the
 // server API it calls.
 const notePaths = ["ios", "src/server", "src/app/api"];
@@ -147,124 +139,23 @@ async function capture(exec: Exec, command: string, args: readonly string[]) {
   return stdout.trim();
 }
 
-type Run = {
-  databaseId: number;
-  headSha: string;
-  status: string;
-  conclusion: string;
-  event: string;
-  url: string;
-};
-const runFields = "databaseId,headSha,status,conclusion,event,url";
-
-// The release gate from docs/development-workflow.md#ios-release-gate. Most
-// main commits change no iOS files and get no iOS run, so the newest run on
-// main for an ancestor with the same files under the workflow's paths
-// decides: success passes, failure blocks, and a running check is awaited.
-// With no such result, the gate starts a run for this commit and waits.
-export async function checkIosCI(exec: Exec, head: string, { sleep, log }: IO) {
-  const short = head.slice(0, 12);
-  const runs = JSON.parse(
-    await capture(exec, "gh", [
-      "run",
-      "list",
-      "--repo",
-      repository,
-      "--workflow",
-      "ios.yml",
-      "--branch",
-      "main",
-      "--limit",
-      "100",
-      "--json",
-      runFields,
-    ]),
-  ) as Run[];
-  const watch = async (run: Pick<Run, "databaseId" | "url">) => {
-    log(`==> Waiting for iOS checks: ${run.url}`);
-    const { status } = await exec(
-      "gh",
-      [
-        "run",
-        "watch",
-        String(run.databaseId),
-        "--repo",
-        repository,
-        "--exit-status",
-        "--interval",
-        "30",
-      ],
-      { output: "terminal" },
-    );
-    if (status) throw new Error(`iOS checks did not pass: ${run.url}`);
-  };
-  for (const run of runs) {
-    const ancestor = await exec("git", [
-      "merge-base",
-      "--is-ancestor",
-      run.headSha,
-      head,
-    ]);
-    if (ancestor.status) continue;
-    const same = await exec("git", [
-      "diff",
-      "--quiet",
-      run.headSha,
-      head,
-      "--",
-      ...iosCheckPaths,
-    ]);
-    if (same.status) continue;
-    if (run.status !== "completed") return watch(run);
-    if (run.conclusion === "success") {
-      log(`==> iOS checks passed for ${short}: ${run.url}`);
-      return;
-    }
-    if (["cancelled", "skipped", "stale"].includes(run.conclusion)) continue;
+// The release gate from docs/development-workflow.md#ios-release-gate:
+// bin/check-ios on the clean main commit, on this Mac. It skips itself when
+// the same iOS files passed with this Xcode in the last week, such as before
+// the push that brought them to main.
+export async function checkIos(
+  exec: Exec,
+  root: string,
+  log: (line: string) => void,
+) {
+  log("==> Checking the iPhone app with bin/check-ios --reuse");
+  const { status } = await exec(join(root, "bin/check-ios"), ["--reuse"], {
+    output: "terminal",
+  });
+  if (status)
     throw new Error(
-      `iOS checks failed for ${run.headSha.slice(0, 12)}, which has this commit's iOS files: ${run.url}`,
+      `bin/check-ios failed with status ${status}. Fix the iOS checks on main before releasing.`,
     );
-  }
-  log(`==> Starting iOS checks for ${short}`);
-  const earlier = new Set(
-    runs
-      .filter((run) => run.event === "workflow_dispatch")
-      .map((run) => run.databaseId),
-  );
-  await capture(exec, "gh", [
-    "workflow",
-    "run",
-    "ios.yml",
-    "--repo",
-    repository,
-    "--ref",
-    "main",
-  ]);
-  for (let attempt = 0; attempt < 24; attempt++) {
-    const dispatched = (
-      JSON.parse(
-        await capture(exec, "gh", [
-          "run",
-          "list",
-          "--repo",
-          repository,
-          "--workflow",
-          "ios.yml",
-          "--event",
-          "workflow_dispatch",
-          "--commit",
-          head,
-          "--limit",
-          "10",
-          "--json",
-          runFields,
-        ]),
-      ) as Run[]
-    ).find((run) => !earlier.has(run.databaseId));
-    if (dispatched) return watch(dispatched);
-    await sleep(5_000);
-  }
-  throw new Error(`GitHub did not start the iOS checks run for ${short}.`);
 }
 
 export type Options = { distributeOnly: boolean; submitReview: boolean };
@@ -340,7 +231,7 @@ export async function release(
       `==> Releasing Screenr ${version} (${build}) from ${head.slice(0, 12)} as ${tag.name}`,
     );
     log(`What to Test:\n${notes}`);
-    await checkIosCI(exec, head, io);
+    await checkIos(exec, root, log);
     await archiveAndUpload(tag, credentials, io);
     await git(
       "tag",
@@ -500,18 +391,18 @@ async function pushTag(exec: Exec, name: string, log: (line: string) => void) {
 
 const usage = `Usage: bin/ios-testflight [--distribute-only] [--submit-review]
 
-Archives and uploads the next TestFlight build of Screenr from a clean
-origin/main whose iOS files passed iOS CI, tags the commit
-ios-v<version>b<build>, waits for App Store Connect to process the build,
-sets What to Test from the commits since the previous tag, and adds the build
-to the "Public testers" group.
+Runs bin/check-ios --reuse on a clean origin/main, archives and uploads the
+next TestFlight build of Screenr, tags the commit ios-v<version>b<build>,
+waits for App Store Connect to process the build, sets What to Test from the
+commits since the previous tag, and adds the build to the "Public testers"
+group.
 
   --distribute-only  Skip the build; retry the newest tag's processing wait,
                      notes, and groups.
   --submit-review    Also submit the build for Beta App Review.
 
 Needs ASC_KEY_PATH, ASC_KEY_ID, and ASC_ISSUER_ID for the App Store Connect
-API key, and gh signed in to GitHub.`;
+API key, and Git access to push tags to origin.`;
 
 if (process.argv[1]?.endsWith("scripts/ios-testflight.ts")) {
   try {
