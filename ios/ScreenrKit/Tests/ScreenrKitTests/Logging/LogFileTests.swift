@@ -112,6 +112,32 @@ struct LogFileTests {
     #expect(try await file.recentTail(maximumBytes: 1_000).isEmpty)
   }
 
+  @Test func readsEachProcesssTailEndingAtItsLastCompleteLine() async throws {
+    defer { directory.remove() }
+    try FileManager.default.createDirectory(at: directory.url, withIntermediateDirectories: true)
+    let app = LogFile(directory: directory.url, name: "app", launchID: launch)
+    Log(.app, router: LogRouter(sinks: [app])).info("Launched")
+    // Another process, partway through writing a line.
+    try Data(#"{"message":"Older"}"#.utf8 + [0x0A])
+      .write(to: directory.url.appending(path: "notifications.1.ndjson"))
+    try Data(#"{"message":"Fetched"}"#.utf8 + [0x0A] + #"{"mess"#.utf8)
+      .write(to: directory.url.appending(path: "notifications.ndjson"))
+
+    let tails = try await app.recentTails(maximumBytes: 1_000)
+
+    #expect(tails.map(\.name) == ["app", "notifications"])
+    #expect(tails.map(\.filename) == ["app.ndjson", "notifications.ndjson"])
+    let records = try tails[0].data.split(separator: 0x0A)
+      .map { line in
+        try #require(try JSONSerialization.jsonObject(with: Data(line)) as? [String: Any])
+      }
+    #expect(records.map { $0["message"] as? String } == ["Launched"])
+    #expect(
+      String(decoding: tails[1].data, as: UTF8.self)
+        == #"{"message":"Older"}"# + "\n" + #"{"message":"Fetched"}"# + "\n"
+    )
+  }
+
   @Test func appendsToTheFileAnEarlierLaunchWrote() async throws {
     defer { directory.remove() }
     let later = UUID()

@@ -16,6 +16,7 @@ public final class LogFile: LogSink {
     case append(LogEntry)
     case flush(CheckedContinuation<Void, Never>)
     case tail(maximumBytes: Int, CheckedContinuation<Data, any Error>)
+    case tails(maximumBytes: Int, CheckedContinuation<[LogTail], any Error>)
   }
 
   // The app's log directory in its app group container, which the notification extension
@@ -40,6 +41,7 @@ public final class LogFile: LogSink {
     writer = Task { [currentURL, previousURL] in
       var file = Writer(
         directory: directory,
+        name: name,
         current: currentURL,
         previous: previousURL,
         launchID: launchID.uuidString,
@@ -51,6 +53,8 @@ public final class LogFile: LogSink {
         case .flush(let done): done.resume()
         case .tail(let maximumBytes, let done):
           done.resume(with: Result { try file.tail(maximumBytes) })
+        case .tails(let maximumBytes, let done):
+          done.resume(with: Result { try file.tails(maximumBytes) })
         }
       }
       file.close()
@@ -82,6 +86,31 @@ public final class LogFile: LogSink {
       }
     }
   }
+
+  // The recent tail of each process's log in this file's directory, at most maximumBytes of
+  // each, for the feedback form: this process's first, after every entry recorded before the
+  // call, then any other process's, such as the notification extension's, as its files stand.
+  public func recentTails(maximumBytes: Int) async throws -> [LogTail] {
+    try await withCheckedThrowingContinuation { done in
+      if case .terminated = commands.yield(.tails(maximumBytes: maximumBytes, done)) {
+        done.resume(throwing: CancellationError())
+      }
+    }
+  }
+}
+
+// The newest complete lines of one process's log, such as the app's.
+public struct LogTail: Hashable, Sendable {
+  // The log's name, such as `app`.
+  public let name: String
+  public let data: Data
+
+  public init(name: String, data: Data) {
+    self.name = name
+    self.data = data
+  }
+
+  public var filename: String { "\(name).ndjson" }
 }
 
 // The file state, which only the writer task touches.
@@ -89,6 +118,7 @@ private struct Writer {
   private static let log = os.Logger(subsystem: Log.subsystem, category: "log-file")
 
   let directory: URL
+  let name: String
   let current: URL
   let previous: URL
   let launchID: String
@@ -97,8 +127,16 @@ private struct Writer {
   private var size = 0
   private let encoder = JSONEncoder()
 
-  init(directory: URL, current: URL, previous: URL, launchID: String, maximumFileSize: Int) {
+  init(
+    directory: URL,
+    name: String,
+    current: URL,
+    previous: URL,
+    launchID: String,
+    maximumFileSize: Int
+  ) {
     self.directory = directory
+    self.name = name
     self.current = current
     self.previous = previous
     self.launchID = launchID
@@ -127,6 +165,45 @@ private struct Writer {
   }
 
   func tail(_ maximumBytes: Int) throws -> Data {
+    try Self.tail(previous: previous, current: current, maximumBytes: maximumBytes)
+  }
+
+  // This process's tail, then each other log's in the directory. Another process may be partway
+  // through a line, so its tail ends at its last complete line.
+  func tails(_ maximumBytes: Int) throws -> [LogTail] {
+    var tails = [LogTail(name: name, data: try tail(maximumBytes))]
+    let files: [URL]
+    do {
+      files = try FileManager.default.contentsOfDirectory(
+        at: directory,
+        includingPropertiesForKeys: nil
+      )
+    } catch CocoaError.fileReadNoSuchFile {
+      return tails
+    }
+    // Current files only, such as `notifications.ndjson`, not `notifications.1.ndjson`.
+    let others = files.map { $0.lastPathComponent }
+      .filter { $0.hasSuffix(".ndjson") }
+      .map { String($0.dropLast(".ndjson".count)) }
+      .filter { !$0.contains(".") && $0 != name }
+      .sorted()
+    for other in others {
+      var data = try Self.tail(
+        previous: directory.appending(path: "\(other).1.ndjson"),
+        current: directory.appending(path: "\(other).ndjson"),
+        maximumBytes: maximumBytes
+      )
+      if let end = data.lastIndex(of: 0x0A) {
+        data = Data(data[...end])
+      } else {
+        data = Data()
+      }
+      tails.append(LogTail(name: other, data: data))
+    }
+    return tails
+  }
+
+  private static func tail(previous: URL, current: URL, maximumBytes: Int) throws -> Data {
     var data = Data()
     for url in [previous, current] {
       do {

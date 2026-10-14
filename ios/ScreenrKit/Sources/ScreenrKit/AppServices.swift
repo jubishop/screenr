@@ -5,8 +5,8 @@ import SwiftUI
 // fakes. The app builds them once and injects them with `.screenrServices(_:)`;
 // views read `@Environment(\.screenrAPI)`, `@Environment(SessionStore.self)`,
 // `@Environment(PendingInvitation.self)`, `@Environment(\.identityProviders)`,
-// `@Environment(\.visitTracker)`, `@Environment(\.imageSource)`, and
-// `@Environment(\.photoLibrary)`.
+// `@Environment(\.visitTracker)`, `@Environment(\.imageSource)`,
+// `@Environment(\.photoLibrary)`, and `@Environment(\.feedbackService)`.
 public struct AppServices: Sendable {
   public let api: any ScreenrAPI
   public let session: SessionStore
@@ -21,6 +21,8 @@ public struct AppServices: Sendable {
   public let visits: VisitTracker
   // The poster and profile photo requests for `AsyncImage`.
   public let images: ImageSource
+  // Where the Send feedback form sends, and the log it attaches.
+  public let feedback: FeedbackService
 
   @MainActor
   public init(
@@ -31,7 +33,8 @@ public struct AppServices: Sendable {
     photoLibrary: PhotoLibrary = .system,
     imageCache: URLCache = URLCache(memoryCapacity: 16 << 20, diskCapacity: 0),
     visits: VisitTracker = VisitTracker(),
-    images: ImageSource = .none
+    images: ImageSource = .none,
+    feedback: FeedbackService = .none
   ) {
     self.api = api
     self.session = session
@@ -41,19 +44,23 @@ public struct AppServices: Sendable {
     self.imageCache = imageCache
     self.visits = visits
     self.images = images
+    self.feedback = feedback
     imageSession = URLSession(configuration: Self.imageConfiguration(cache: imageCache))
     session.onEnd { imageCache.removeAllCachedResponses() }
   }
 
   // The live client and Keychain session and invitation, or in Screenr Dev,
   // the fixture API when the launch arguments name a fixtures directory. The
-  // fixture API also stands in for Apple's and Google's authorization, and
-  // keeps the invitation in memory.
+  // fixture API also stands in for Apple's and Google's authorization, keeps
+  // the invitation in memory, and writes feedback to its request log rather
+  // than to `feedback`, the build's sender, which Screenr Dev lacks.
   @MainActor
   public init(
     configuration: AppConfiguration,
     arguments: [String],
-    observer: (any APIRequestObserver)? = nil
+    observer: (any APIRequestObserver)? = nil,
+    feedback: (any FeedbackSender)? = nil,
+    logFile: LogFile? = nil
   ) throws {
     let source = try APISource(arguments: arguments, variant: configuration.variant)
     let keychain: any KeychainStorage
@@ -62,6 +69,7 @@ public struct AppServices: Sendable {
     let authorization: IdentityProviders.Authorization
     let photoLibrary: PhotoLibrary
     let imageCache: URLCache
+    let feedbackSender: (any FeedbackSender)?
     switch source {
     case .network:
       keychain = SystemKeychain(accessGroup: configuration.appGroup)
@@ -76,11 +84,14 @@ public struct AppServices: Sendable {
         diskCapacity: 256 << 20,
         directory: URL.cachesDirectory.appending(path: "Images", directoryHint: .isDirectory)
       )
+      feedbackSender = feedback
     case .fixtures(let directory, let scenario):
       let token = scenario.session == .signedIn ? FixtureTransport.token : nil
       keychain = InMemoryKeychain(token: token)
       invitation = PendingInvitation()
-      transport = try FixtureTransport(directory: directory, scenario: scenario)
+      let fixtures = try FixtureTransport(directory: directory, scenario: scenario)
+      transport = fixtures
+      feedbackSender = fixtures.feedback
       authorization = .fixture
       photoLibrary = .fixture
       imageCache = URLCache(memoryCapacity: 16 << 20, diskCapacity: 0)
@@ -116,7 +127,8 @@ public struct AppServices: Sendable {
       photoLibrary: photoLibrary,
       imageCache: imageCache,
       visits: visits,
-      images: images
+      images: images,
+      feedback: FeedbackService(sender: feedbackSender, logFile: logFile)
     )
   }
 
@@ -197,6 +209,7 @@ extension EnvironmentValues {
   @Entry public var visitTracker: VisitTracker?
   @Entry public var imageSource = ImageSource.none
   @Entry public var photoLibrary: PhotoLibrary = .system
+  @Entry public var feedbackService = FeedbackService.none
 }
 
 extension View {
@@ -208,6 +221,7 @@ extension View {
       .environment(\.visitTracker, services.visits)
       .environment(\.imageSource, services.images)
       .environment(\.photoLibrary, services.photoLibrary)
+      .environment(\.feedbackService, services.feedback)
       .asyncImageURLSession(services.imageSession)
   }
 }

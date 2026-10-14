@@ -26,7 +26,7 @@ struct AccountView: View {
           ActivityEmailSection(settings)
           StreamingServicesSection(settings)
           SignInMethodsSection(settings)
-          // Send feedback goes here.
+          FeedbackSection(settings)
           SignOutSection(settings)
           // Delete account goes here.
         }
@@ -36,6 +36,7 @@ struct AccountView: View {
       switch editor {
       case .profile(let model): ProfileEditorSheet(model: model)
       case .streamingServices(let model): StreamingServicesSheet(model: model)
+      case .feedback(let model): FeedbackSheet(model: model)
       }
     }
   }

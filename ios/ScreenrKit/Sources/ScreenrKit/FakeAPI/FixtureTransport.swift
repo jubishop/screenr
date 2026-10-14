@@ -85,6 +85,10 @@ final class FixtureRequestLog: Sendable {
     {
       line += " \(type) \(upload.count) bytes"
     }
+    try record(line)
+  }
+
+  func record(_ line: String) throws {
     // A handle that fails before closing closes when it is released.
     try lock.withLock { _ in
       let handle = try FileHandle(forWritingTo: file)
@@ -140,6 +144,11 @@ public struct FixtureTransport: HTTPTransport {
   private let log: FixtureRequestLog?
   // Set while the viewer's profile is pending.
   private let setup: FixtureSetup?
+
+  // The feedback form's sender, which writes each report to the request log.
+  public var feedback: any FeedbackSender {
+    FixtureFeedback(log: log)
+  }
 
   public init(directory: URL, scenario: FixtureScenario = FixtureScenario()) throws {
     fixtures = try Fixture.all(in: directory)

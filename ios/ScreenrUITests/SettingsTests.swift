@@ -122,6 +122,40 @@ final class SettingsTests: XCTestCase {
     XCTAssertTrue(app.staticTexts["Apple connected."].waitForExistence(timeout: 10))
   }
 
+  // Under the fixture API, feedback goes to the request log instead of
+  // Sentry, and Attach screenshots chooses ScreenrKit's FixturePhoto, since
+  // UI tests cannot drive the photo picker.
+  @MainActor
+  func testSendsFeedback() throws {
+    let log = RequestLog.temporary()
+    let app = openSettings(log: log)
+    let open = app.buttons["Send feedback"]
+    app.scrollTo(open)
+    open.tap()
+    XCTAssertTrue(app.navigationBars["Send feedback"].waitForExistence(timeout: 10))
+    XCTAssertFalse(app.buttons["Send"].isEnabled)
+
+    let message = app.textFields["Your feedback"]
+    message.tap()
+    message.typeText("Posters load slowly")
+    app.buttons["Attach screenshots"].tap()
+    XCTAssertTrue(app.staticTexts["Screenshot 1"].waitForExistence(timeout: 20))
+    try app.performSettingsAudit()
+    app.buttons["Send"].tap()
+
+    XCTAssertTrue(app.staticTexts["Thanks for your feedback"].waitForExistence(timeout: 10))
+    wait(
+      for: [
+        log.logged(
+          #"FEEDBACK {"logs":["app"],"message":"Posters load slowly","screenshots":1}"#
+        )
+      ],
+      timeout: 10
+    )
+    app.buttons["Done"].tap()
+    XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 10))
+  }
+
   @MainActor
   func testSignsOut() throws {
     let app = openSettings(log: RequestLog.temporary())
@@ -166,7 +200,7 @@ final class SettingsTests: XCTestCase {
     XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 10))
     for control in [
       app.switches["Email me about new activity"], app.buttons["Connect Apple"],
-      app.buttons["Sign out"],
+      app.buttons["Send feedback"], app.buttons["Sign out"],
     ] {
       app.scrollTo(control)
     }
