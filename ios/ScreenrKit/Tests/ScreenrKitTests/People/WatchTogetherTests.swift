@@ -77,22 +77,27 @@ struct WatchTogetherTests {
     #expect(WatchTogetherFilter.allCases.map(\.label) == ["All", "Movies", "TV"])
   }
 
+  // Each title marks the services either person saved.
   @Test func saysWhereEachSharedTitleStreams() throws {
     let page = try page("screen/watch-together/default")
     let orchard = try #require(page.titles.first { $0.title.name == "The Quiet Orchard" })
     let meridian = try #require(page.titles.first { $0.title.name == "Glass Meridian" })
 
-    #expect(orchard.details == "Movie · 2025")
+    let lines = { (title: SharedTitle) in
+      title.viewing.lines(savedServices: title.matchingServiceIds, savedBy: .eitherPerson)
+    }
+    #expect(orchard.title.kindAndYear == "Movie · 2025")
     #expect(
-      orchard.viewingLines == [
-        .offers(prefix: "On ", services: [ServiceMention(name: "Hulu", saved: true)]), .saved,
+      lines(orchard) == [
+        .offers(.subs, [ListedService(name: "Hulu", saved: true)]),
+        .includesSavedServices(.eitherPerson),
       ]
     )
     #expect(
-      orchard.viewingLines.map(\.text) == ["On Hulu", "Included in either person’s saved services"]
+      lines(orchard).map(\.text) == ["On Hulu", "Included in either person’s saved services"]
     )
-    #expect(orchard.viewingLines.first?.spokenText == "On Hulu (saved)")
-    #expect(meridian.details == "Movie · 2022")
-    #expect(meridian.viewingLines.map(\.text) == ["Viewing options unknown."])
+    #expect(lines(orchard).first?.spokenText == "On Hulu (saved)")
+    #expect(meridian.title.kindAndYear == "Movie · 2022")
+    #expect(lines(meridian).map(\.text) == ["Viewing options unknown."])
   }
 }

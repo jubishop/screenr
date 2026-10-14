@@ -735,7 +735,8 @@ ScreenContent(model: model) { screen in
   read after it. `performShellAudit()` passes over what the audit cannot
   measure in a scrolling screen: text beneath the glass bars or the
   keyboard or past the screen's edges, and Dynamic Type for scrolling
-  content, which larger text moves past the screen's ends. To check large text, launch with
+  content, which larger text moves past the screen's ends. To check large
+  text, launch with
   `FixtureLaunch(textSize: "UICTContentSizeCategoryAccessibilityXXXL")` and
   audit there, as `FeedTests` does. Audit a composer after typing, once the
   keyboard has settled. ScreenrKit's `Support/FeedSupport.swift` has
@@ -786,8 +787,9 @@ The audit flags some standard list parts, so Find avoids them: section
 headers and footers, subtitles, and secondary text are too faint at their
 sizes, so de-emphasized text uses `.muted`; a label's symbol column clips
 its text at large sizes; and `ContentUnavailableView` in a list row does not
-grow with Dynamic Type. `ListHeader`, `SymbolText`, and `EmptyListMessage`
-in `Screenr/Find/` stand in for them.
+grow with Dynamic Type. `ListHeader` and `SymbolText` in `Screenr/Shared/`,
+which Friends and Watch together use too, and `EmptyListMessage` in
+`Screenr/Find/` stand in for them.
 
 Suggestions and Friends recommend open title pages at `suggestion.destination`
 and `recommendation.destination`, so the title page's Want to watch reports
@@ -800,10 +802,10 @@ Views that list titles share these pieces:
 
 | Piece | Where | What it does |
 | --- | --- | --- |
-| `TitleRow` | `Screenr/Shared/Titles/` | A title's `PosterImage`, name, kind and year, and where it streams, with optional lines after them. As on the web at phone widths, it leaves out the overview. Put it in a `NavigationLink`. |
-| `ViewingLinesView` | `Screenr/Shared/Titles/` | "On Netflix, Hulu" and "Free on Tubi TV", with saved services marked, or why there are no options. |
+| `TitleRow` | `Screenr/Shared/Titles/` | A title's `PosterImage`, name, kind and year, and where it streams, with optional lines after them. As on the web at phone widths, it leaves out the overview. At accessibility sizes the text moves beneath the poster. Put it in a `NavigationLink`. |
+| `ViewingLinesView` | `Screenr/Shared/Titles/` | "On Netflix, Hulu" and "Free on Tubi TV", with saved services marked, or why there are no options. `savedBy: .eitherPerson` marks either person's services, as Watch together does. |
 | `Title.kindAndYear` | ScreenrKit `Titles/` | "Movie · 2024", or only the kind without a release date. |
-| `TitleViewing.matchingServices(_:)`, `access(for:)`, `lines(savedServices:)` | ScreenrKit `Titles/` | The viewer's saved services that offer a title, whether the viewer can watch it, and the lines `ViewingLinesView` shows. |
+| `TitleViewing.matchingServices(_:)`, `access(for:)`, `lines(savedServices:savedBy:)` | ScreenrKit `Titles/` | The viewer's saved services that offer a title, whether the viewer can watch it, and the lines `ViewingLinesView` shows. |
 | `ScreenrAPI.send(_:within:clock:)` | ScreenrKit `API/Deadline.swift` | Sends a request that fails as `.timedOut` after a deadline. |
 
 ## Title pages
@@ -885,10 +887,10 @@ Watch together pages. Their screens are `FriendsView`, `ProfileView`, and
 | --- | --- | --- |
 | `FriendsSections`, `FriendsModel` | ScreenrKit `People/` | Friends in the web's order: Requests, Friends, Sent requests, People you may know with their mutual friends, and Blocked people. Accept, Decline after a confirmation, Cancel, Send friend request, and Unblock go through `relationship`, one at a time, and the page reads again after each. A failed action's message stays with its person. `searchDestination` opens an exact username's profile. |
 | `Relationship`, `ProfileModel` | ScreenrKit `People/` | `Relationship(profile, viewer:)` is `own`, `friend`, `requestSent`, `requestReceived`, or `none`, and gives the visible `action`, such as Watch together or Accept friend request, and the More actions `menu`. Unfriend and Block confirm in the web's words. |
-| `WatchTogetherFilter`, `WatchTogetherSection` | ScreenrKit `People/` | All, Movies, and TV; Ready to watch, Not on your services, and Availability unknown; the count and empty states; and each shared title's `viewingLines`, which mark the services either person saved. |
+| `WatchTogetherFilter`, `WatchTogetherSection` | ScreenrKit `People/` | All, Movies, and TV; Ready to watch, Not on your services, and Availability unknown; and the count and empty states. Each shared title is a [`TitleRow`](#title-lists) that marks the services either person saved. |
 | `TopTenSection`, `TopTenRow` | `Screenr/Shared/TopTen/` | A profile's Top 10 heading and its row of ranked posters, each a link named like "#1 Night Crossing" that opens the title. The row only displays the list. Another member's empty list shows nothing; the owner's explains how to start one. `TopTenSection(entries:owner: .viewer(edit:))` adds Edit to the heading. |
 | `PersonLabel` | `Screenr/Shared/` | A member's avatar, name, and @username for a list row; `.nameOnly` for a blocked person. |
-| `PeopleHeading`, `ProfileLinksText` | `Screenr/People/` | A section heading as a list row, and a line of text whose names link to profiles, such as "Mutual friends: Ben Ortiz (@ben), Cam Rivera (@cam)". |
+| `ProfileLinksText` | `Screenr/People/` | A line of text whose names link to profiles, such as "Mutual friends: Ben Ortiz (@ben), Cam Rivera (@cam)". |
 
 - **Privacy:** the screens show what the server sends, which already applies
   the [privacy boundary](../docs/product-brief.md#privacy-and-the-known-people-circle--2026-09-07).

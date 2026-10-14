@@ -33,14 +33,19 @@ struct WatchTogetherList: View {
       ForEach(page.sections(filter)) { section in
         Section {
           VStack(alignment: .leading, spacing: 4) {
-            PeopleHeading(section.heading)
+            ListHeader(section.heading)
             Text(section.description)
               .font(.subheadline)
               .foregroundStyle(.muted)
           }
           ForEach(section.titles) { title in
             NavigationLink(value: Destination.title(id: title.id)) {
-              SharedTitleRow(title: title)
+              TitleRow(
+                title: title.title,
+                viewing: title.viewing,
+                serviceIds: title.matchingServiceIds,
+                savedBy: .eitherPerson
+              )
             }
           }
         }
@@ -48,7 +53,7 @@ struct WatchTogetherList: View {
       if let empty = page.empty(filter) {
         Section {
           VStack(alignment: .leading, spacing: 4) {
-            PeopleHeading(empty.title)
+            ListHeader(empty.title)
             Text(empty.message)
           }
           if empty.offersFind {
@@ -94,60 +99,5 @@ private struct Participants: View {
       ProfileLinksText(people: people, separator: " & ")
         .font(.headline)
     }
-  }
-}
-
-// A shared title: its poster, name, kind and year, and where it streams,
-// with the services either person saved marked. At accessibility sizes the
-// text moves beneath the poster, which would otherwise leave it a few
-// letters per line.
-private struct SharedTitleRow: View {
-  let title: SharedTitle
-  @Environment(\.dynamicTypeSize) private var size
-
-  var body: some View {
-    let layout =
-      size.isAccessibilitySize
-      ? AnyLayout(VStackLayout(alignment: .leading, spacing: 8))
-      : AnyLayout(HStackLayout(alignment: .top, spacing: 12))
-    layout {
-      PosterImage(path: title.title.posterPath, name: title.title.name, width: 56)
-      VStack(alignment: .leading, spacing: 4) {
-        Text(title.title.name)
-          .font(.headline)
-        Text(title.details)
-          .font(.subheadline)
-          .foregroundStyle(.muted)
-        ForEach(title.viewingLines, id: \.self) { line in
-          text(line)
-            .font(.footnote)
-            .accessibilityLabel(line.spokenText)
-        }
-      }
-    }
-    .padding(.vertical, 4)
-  }
-
-  private func text(_ line: SharedViewingLine) -> Text {
-    switch line {
-    case .offers(let prefix, let services):
-      var text = Text(prefix)
-      for (index, service) in services.enumerated() {
-        let separator = index == 0 ? "" : ", "
-        text = Text("\(text)\(separator)\(name(service))")
-      }
-      return text
-    case .saved:
-      return Text(line.text).foregroundStyle(.tint)
-    case .note:
-      return Text(line.text).foregroundStyle(.muted)
-    }
-  }
-
-  private func name(_ service: ServiceMention) -> Text {
-    guard service.saved else { return Text(service.name) }
-    return Text("\(service.name) \(Image(systemName: "checkmark.circle.fill"))")
-      .bold()
-      .foregroundStyle(.tint)
   }
 }

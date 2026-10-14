@@ -21,14 +21,8 @@ struct FriendsList: View {
       }
       Section {
         UsernameSearch(friends: friends)
-        // A label's symbol column clips its title, so the symbol leads the text.
         NavigationLink(value: Destination.invites) {
-          HStack(spacing: 12) {
-            Image(systemName: "envelope")
-              .foregroundStyle(.tint)
-              .accessibilityHidden(true)
-            Text("Invite friends")
-          }
+          SymbolText("Invite friends", systemImage: "envelope")
         }
       }
       if sections.isEmpty {
@@ -38,7 +32,7 @@ struct FriendsList: View {
       }
       if !sections.requests.isEmpty {
         Section {
-          PeopleHeading("Requests")
+          ListHeader("Requests")
           ForEach(sections.requests) { person in
             PersonActionsRow(person: person, actions: [.accept, .decline], friends: friends)
           }
@@ -46,7 +40,7 @@ struct FriendsList: View {
       }
       if !sections.friends.isEmpty {
         Section {
-          PeopleHeading("Friends")
+          ListHeader("Friends")
           ForEach(sections.friends) { person in
             NavigationLink(value: Destination.profile(username: person.username)) {
               PersonLabel(person: person)
@@ -56,7 +50,7 @@ struct FriendsList: View {
       }
       if !sections.sent.isEmpty {
         Section {
-          PeopleHeading("Sent requests")
+          ListHeader("Sent requests")
           ForEach(sections.sent) { person in
             PersonActionsRow(
               person: person,
@@ -68,7 +62,7 @@ struct FriendsList: View {
         }
       }
       Section {
-        PeopleHeading("People you may know")
+        ListHeader("People you may know")
         Text("Meet people through your mutual friends.")
         ForEach(sections.suggestions) { suggestion in
           PersonActionsRow(person: suggestion.person, actions: [.request], friends: friends) {
@@ -82,7 +76,7 @@ struct FriendsList: View {
       }
       if !sections.blocked.isEmpty {
         Section {
-          PeopleHeading("Blocked people")
+          ListHeader("Blocked people")
           ForEach(sections.blocked) { person in
             PersonActionsRow(person: person, actions: [.unblock], friends: friends, link: .unlinked)
           }

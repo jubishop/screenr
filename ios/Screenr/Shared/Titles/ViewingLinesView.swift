@@ -2,15 +2,17 @@ import ScreenrKit
 import SwiftUI
 
 // Where a title streams in the US, under a title in a list: "On Netflix,
-// Hulu" and "Free on Tubi TV", with the viewer's saved services marked, or
-// why there is nothing to show.
+// Hulu" and "Free on Tubi TV", with the saved services marked, or why there
+// is nothing to show.
 struct ViewingLinesView: View {
   let viewing: TitleViewing
   let serviceIds: [String]
+  // Whose saved services `serviceIds` are.
+  var savedBy = SavedServicesOwner.viewer
 
   var body: some View {
     VStack(alignment: .leading, spacing: 2) {
-      ForEach(viewing.lines(savedServices: serviceIds), id: \.self) { line in
+      ForEach(viewing.lines(savedServices: serviceIds, savedBy: savedBy), id: \.self) { line in
         text(line)
           .accessibilityLabel(line.spokenText)
       }
