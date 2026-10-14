@@ -73,8 +73,9 @@ export function AccountDeletion({ email }: { email: string }) {
       <p>
         Deleting your account erases your profile, photo, friendships,
         invitations, recommendations, watch statuses, reviews, top 10,
-        reactions, and notifications right away. Your posts and reviews are
-        removed with their conversations. A comment that has replies becomes
+        reactions, and notifications right away. Your posts, reviews, and
+        comments about titles are removed with their conversations. A comment of
+        yours in someone else&rsquo;s conversation that has replies becomes
         &ldquo;Comment removed&rdquo; so the replies remain. This can&rsquo;t be
         undone.
       </p>

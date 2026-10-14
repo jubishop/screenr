@@ -614,11 +614,16 @@ and [backups](deployment.md#account-deletion-and-backups).
 owner reviewed its choices
 ([issue #280](https://github.com/jubishop/screenr/issues/280)):
 
-- **Standalone comments:** a standalone title comment follows the comment
-  rule. One with other members' replies becomes "Comment removed" and the
-  replies stay; one without replies is removed. Only discussion posts and
-  reviews are removed with their whole conversation. #236 had removed
-  standalone comments with their conversations.
+- **Standalone comments:** a standalone title comment is removed with its
+  whole conversation, like a post, as #236 built. The owner first chose to
+  keep its replies under "Comment removed". Its replies' audience is the
+  author's friends, and deletion erases those friendships, so the replies
+  would have no audience, or would need one with no owner. Learning this, the
+  owner chose removal.
+- **Entries:** Recommend, Want to watch, and watch status entries are also
+  erased together with their replies, as built. Only the member's comments
+  on other members' entries keep a "Comment removed" placeholder when they
+  have replies.
 - **Invitations:** deletion erases the member's invitations, with the
   signup records of people who joined through them. Approved as built.
 - **Code request limits:** the hashed, day-long records that limit sign-in
