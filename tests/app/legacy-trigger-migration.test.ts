@@ -15,11 +15,13 @@ const legacyFunctions = `SELECT proname FROM pg_proc
   AND proname IN ('screenr_sync_actions','screenr_attach_legacy_comment',
     'screenr_withdraw_progress','screenr_leave_top_ten')`;
 
-// Migrations 017, 023, and 026 dropped every compatibility trigger.
+// Migrations 017, 023, and 026 dropped every compatibility trigger. Migration
+// 029 queues a push for each new notification.
 test("migrated databases keep only the notification triggers", async () => {
   assert.deepEqual((await db.query(triggers)).rows, [
     { table: "comment", name: "comment_notify" },
     { table: "friendship", name: "friendship_notify" },
+    { table: "notification", name: "notification_push" },
   ]);
   assert.deepEqual((await db.query(legacyFunctions)).rows, []);
 });

@@ -19,7 +19,7 @@ The old hostname now only [redirects](#old-hostname-redirect) to the new one.
 | Active release | `/opt/screenr/current` symlink |
 | Node runtime | `/opt/screenr/node/bin/node`, through a link to the host's shared `/opt/node/current` |
 | Web process | `screenr-web.service`, loopback port 3060, 384 MB memory limit |
-| Email worker | `screenr-worker.service`, 128 MB memory limit |
+| Email and push worker | `screenr-worker.service`, 128 MB memory limit |
 | PostgreSQL 18 | `screenr-db.service`, loopback port 5439, 256 MB memory limit |
 | Database files | `/var/lib/screenr/postgres`, owned by `screenr-db` |
 | Private app settings | `/etc/screenr/app.env`, root-owned mode 0600 |
@@ -170,6 +170,34 @@ Both private keys use the
 production secrets, update their
 [off-server copies](#encrypted-backups-and-restore-check) whenever they
 change.
+
+`screenr-worker` reads `APPLE_TEAM_ID`, `APNS_KEY_ID`, and `APNS_PRIVATE_KEY`
+once, when it starts, and sends
+[push notifications](notifications.md#push-delivery) only when all three are
+set. Restart it after changing them. The same key reaches both the sandbox
+and production APNs. Without any of them it prints `push delivery off` once
+and keeps sending email; an incomplete set or an unreadable key logs that
+event as a [failure](#failure-logs). The worker connects to
+`api.push.apple.com` and `api.sandbox.push.apple.com` on port 443, over the
+outbound HTTPS that the [service sandbox](#service-sandbox) already allows.
+To confirm delivery is on after a deployment, check that the worker printed
+no `push delivery` event since it started:
+
+```sh
+journalctl -u screenr-worker --since '10 minutes ago' --no-pager | grep '"event":"push delivery'
+```
+
+Pending pushes wait in `push_job`. A growing count, or rows with
+`last_error`, means APNs is refusing or unreachable:
+
+```sh
+runuser -u screenr-db -- psql -h /run/screenr-db -p 5439 -d screenr -c "SELECT count(*),max(attempts),min(available_at),max(last_error) FROM push_job"
+```
+
+A key revoked in the Apple Developer account makes APNs reject every push
+with status 403 `InvalidProviderToken`, which drops each push. Create a new
+key, set `APNS_KEY_ID` and `APNS_PRIVATE_KEY`, update every copy, and restart
+the worker.
 
 Add only the Screenr blocks from `ops/Caddyfile` to the existing Caddyfile;
 each deployment checks that they still match. The template uses a per-host
@@ -700,13 +728,18 @@ journalctl -u screenr-worker --since '1 day ago' --no-pager | grep '"event":"ema
 | `page failed` | web | `route`, the member route kind, such as `search` or `profile` |
 | `worker failed` | worker | Error fields only |
 | `email delivery failed` | worker | `job` ID, `kind` (`code` or `activity`), `attempt`, and `final` |
+| `push delivery failed` | worker | `job` ID, `kind` (`alert` or `badge`), `environment` (`sandbox` or `production`), `attempt`, `final`, and `status` and `reason` for an APNs reply |
+| `push delivery off` | worker | `missing` setting names, or `reason` `invalid key` with error fields; see [push settings](#provisioning) |
 | `google photo copy failed` | web, worker | `user` ID, `trigger` (`account`, `choice`, or `backfill`), `reason`, and `status` for an HTTP reply |
 | `google photo backfill failed` | worker | Error fields only |
 | `sentry report failed` | web, worker | `status` for a Sentry reply, `reason` `invalid DSN`, or error fields; see [failure reports](#failure-reports-in-sentry) |
 
 For a Resend reply, `email delivery failed` adds the HTTP `status` and the
 `provider` error name, such as `daily_quota_exceeded` or `invalid_api_key`.
-Its other failures, and the other events, add error fields:
+For an APNs reply, `push delivery failed` adds the HTTP `status` and APNs'
+`reason`, such as `ServiceUnavailable` or `InvalidProviderToken`; a `final`
+failure drops that push. Other failures of both events, and the other
+events, add error fields:
 
 - `error`: the class, such as `DatabaseError`, `TypeError`, or
   `DOMException`, and `name` when it differs, such as `TimeoutError`.
@@ -745,9 +778,11 @@ systemctl restart screenr-worker
 ```
 
 Logs never include error messages, PostgreSQL details, page paths, request
-bodies, email addresses, email content, cookies, or keys. Messages and details
-can quote the values that failed. `email_job.last_error` keeps a short
-message until cleanup deletes the expired job.
+bodies, email addresses, email content, device tokens, cookies, or keys.
+Messages and details can quote the values that failed. `email_job.last_error`
+keeps a short message until cleanup deletes the expired job, and
+`push_job.last_error` keeps the APNs status and reason or the error code
+until the push is sent or expires.
 
 ### Failure reports in Sentry
 
@@ -822,10 +857,10 @@ VPS in three places:
 
 - **Working copy:** `~/.config/screenr/` on the owner's Mac, in two files.
   `production.env` mirrors `/etc/screenr/app.env`, including
-  `BETTER_AUTH_SECRET`, the Resend and TMDB keys, and the Google client
-  secret. `backup.env` mirrors `/etc/screenr/backup.env`, including the
-  restic repository, `RESTIC_PASSWORD`, and the R2 keys. Both files are
-  mode 0600.
+  `BETTER_AUTH_SECRET`, the Resend and TMDB keys, the Google client secret,
+  and the Apple keys, including the APNs key in `APNS_PRIVATE_KEY`.
+  `backup.env` mirrors `/etc/screenr/backup.env`, including the restic
+  repository, `RESTIC_PASSWORD`, and the R2 keys. Both files are mode 0600.
 - **Home repository:** the owner's private home repository already tracks
   `~/.config/screenr/`, so its remote also holds both files.
 - **1Password:** documents "Screenr production.env" and "Screenr

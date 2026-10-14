@@ -5,11 +5,12 @@ status: current
 # Notifications
 
 Screenr notifies members about friend requests, acceptances, and comments
-through a bell panel and optional activity email. This page holds the accepted
-notification decisions and describes their implementation. The
-[email worker](running-screenr.md#email-worker) and
+through a bell panel, optional activity email, and iPhone push notifications.
+This page holds the accepted notification decisions and describes their
+implementation. The [email worker](running-screenr.md#email-worker) and
 [provider configuration](running-screenr.md#provider-configuration) describe
-email delivery setup.
+email delivery setup, and [push delivery](#push-delivery) describes the
+pushes.
 
 ## Notification triggers — 2026-09-04
 
@@ -149,5 +150,99 @@ is on by default, and the settings are separate from activity email. The
 account screen payload includes them, and the `push-settings` action saves
 them; see
 [push devices and settings](data-and-access.md#push-devices-and-settings).
-Signing out deletes that session's devices. The worker does not send pushes
-yet ([issue #240](https://github.com/jubishop/screenr/issues/240)).
+Signing out deletes that session's devices. The worker sends each new
+notification to the member's devices as it is created.
+
+### Push delivery
+
+The worker sends pushes directly to APNs
+([APNs delivery](ios-app.md#in-house-apns-delivery-from-the-worker--2026-10-13),
+[issue #240](https://github.com/jubishop/screenr/issues/240)).
+`src/server/apns.ts` holds the APNs client, and `src/server/push.ts` holds
+the jobs and their delivery.
+
+- **Jobs:** migration `029-push-jobs.sql` adds `push_job`. A trigger on
+  `notification` queues one job per device of the recipient when the bell
+  receives a notification, in the same transaction. Deleting the device or
+  the notification deletes its jobs.
+- **When it sends:** a separate loop in `screenr-worker` claims due jobs about
+  once a second and sends up to 50 at a time. It sends an alert only while the
+  notification is visible to the device's current member under the bell's
+  rules and still unread, while the device's session is live, and while that
+  member allows the notification's kind. Otherwise it deletes the job without
+  sending. A phone that another member has since signed in to therefore never
+  receives the first member's notification.
+- **Environments:** each device goes to its own APNs host:
+  `api.sandbox.push.apple.com` for `sandbox` devices and `api.push.apple.com`
+  for `production` devices. The worker keeps one HTTP/2 connection per host
+  and replaces it after GOAWAY, a connection failure, a request that gets no
+  answer in 10 seconds, or 15 idle minutes.
+- **Signing:** each request carries an ES256 provider token that
+  `src/server/apple-jwt.ts` signs with the APNs key from `APNS_PRIVATE_KEY`.
+  It names `APNS_KEY_ID` and is issued by `APPLE_TEAM_ID`. The worker reuses
+  a token for 50 minutes, inside APNs' limits of one new token per 20 minutes
+  and none older than an hour.
+- **Stale tokens:** APNs status 410, or 400 with `BadDeviceToken` or
+  `DeviceTokenNotForTopic`, deletes the device and its jobs. The app
+  registers again on its next launch.
+- **Retries:** status 429 or 5xx, a 403 `ExpiredProviderToken`, a connection
+  failure, or a timeout retries the job after 2, 4, 8, and up to 60 seconds.
+  Any other rejection drops the push. Jobs that are not sent within 24 hours
+  expire, and the worker deletes them. Each failure is logged as
+  [`push delivery failed`](deployment.md#failure-logs).
+- **Without settings:** with none of `APPLE_TEAM_ID`, `APNS_KEY_ID`, and
+  `APNS_PRIVATE_KEY`, as in development and CI, the worker prints
+  `push delivery off` once and sends nothing; its push loop only deletes
+  expired jobs. Incomplete settings or an unreadable key log the same event
+  as a failure.
+
+Each alert has this payload. The notification ID is a string, as in the API,
+and the app's Notification Service Extension uses it to
+[fetch the notification](data-and-access.md#single-notification-read) and
+build the visible alert
+([push content](ios-app.md#the-extension-fetches-push-content--2026-10-13)):
+
+```json
+{
+  "aps": {
+    "alert": { "body": "New activity on Screenr" },
+    "badge": 3,
+    "mutable-content": 1,
+    "category": "COMMENT",
+    "thread-id": "0b6f7a52-6c1e-4f0e-9a51-3d2f4c8e1a77"
+  },
+  "notificationId": "42"
+}
+```
+
+- **Badge:** the member's unread count when the push is sent, the same count
+  as the bell's.
+- **Category:** the app registers the categories and their
+  [actions](ios-app.md#notification-actions--2026-10-13):
+
+  | Kind | `category` | Actions |
+  | --- | --- | --- |
+  | `friend_request` | `FRIEND_REQUEST` | Accept and Decline |
+  | `comment`, `reply` | `COMMENT` | Reply, with a text field |
+  | `friend_accepted` | none | none |
+
+- **Thread:** comments and replies use their entry's ID as the `thread-id`,
+  the `thread` of the single-notification read, so the phone groups them by
+  conversation. Friendship notifications have no `thread-id`.
+- **Headers:** `apns-push-type: alert`, `apns-priority: 10`, the device's
+  bundle ID as `apns-topic`, and an `apns-expiration` 24 hours after the job
+  was queued. The notification ID is also the `apns-collapse-id`, so a
+  retried alert replaces the first rather than showing twice, and it becomes
+  the delivered notification's request identifier on the phone.
+
+`queueBadgePush(userId, client?)` queues a badge-only update to each of the
+member's devices, for read changes on other clients
+([unread badge](ios-app.md#unread-badge-kept-in-sync--2026-10-13),
+[issue #241](https://github.com/jubishop/screenr/issues/241)). Call it with
+the transaction client that changes read state, so the worker counts after
+the change commits. Its payload is only `{"aps": {"badge": 2}}`, sent with
+`apns-push-type: alert`, which Apple specifies for badge updates, and
+`apns-priority: 5`, which lets the phone defer it to save power. It has no
+collapse ID, sends regardless of the per-kind settings, and is skipped for a
+device that already has an update waiting for its first attempt. The count
+is read when the update is sent.

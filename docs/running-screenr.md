@@ -186,6 +186,12 @@ email and use the shared Resend free allowance. Switching Next to the
 `resend` transport also queues codes for the worker, so `npm run dev:code`
 no longer finds them.
 
+The worker also sends [iPhone push notifications](notifications.md#push-delivery)
+to APNs when `APPLE_TEAM_ID`, `APNS_KEY_ID`, and `APNS_PRIVATE_KEY` are set.
+Leave them empty locally: the worker then prints `push delivery off` and
+sends no pushes. `tests/app/push-delivery.test.ts` covers delivery against
+fake APNs servers on loopback.
+
 ### Production build
 
 There is no `npm start` script. `next start` does not support the

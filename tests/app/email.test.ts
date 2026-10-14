@@ -298,14 +298,16 @@ test("the worker deletes expired jobs on its first pass and exits cleanly on SIG
       exited,
       setTimeout(5_000).then(() => assert.fail("The worker did not stop.")),
     ]);
-    // The backfill, with no Google members, reports its counts and nothing
-    // else is printed.
+    // Push delivery, without APNs settings, says once that it is off. The
+    // backfill, with no Google members, reports its counts. Nothing else is
+    // printed.
     assert.deepEqual(
       { code, signal, output },
       {
         code: 0,
         signal: null,
         output:
+          '{"event":"push delivery off","reason":"no APNs settings"}\n' +
           '{"event":"google photo backfill finished","copied":0,"kept":0,"no picture":0,"failed":0}\n',
       },
     );
