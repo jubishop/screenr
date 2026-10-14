@@ -14,7 +14,7 @@ repository root.
 | Path | Contents |
 | --- | --- |
 | `Screenr.xcodeproj` | The Screenr app and ScreenrUITests targets, and the shared Screenr scheme. |
-| `Config/` | The `.xcconfig` build settings and the app's entitlements. |
+| `Config/` | The `.xcconfig` build settings, the app's entitlements, and the release export options. |
 | `Screenr/` | The app target: SwiftUI views, the app lifecycle, assets, and `Info.plist`. |
 | `ScreenrUITests/` | XCUITest UI tests. |
 | `ScreenrKit/` | A local Swift package: `Sources/ScreenrKit`, `Tests/ScreenrKitTests`, and `Fixtures/`. |
@@ -117,6 +117,13 @@ xcrun simctl launch "$udid" com.artisanalsoftware.Screenr.dev
 `xcrun simctl launch --console-pty` shows the app's output instead. Run
 `xcrun simctl delete "$udid"` when you are done. The Dev app talks to the
 local server that `npm run dev` starts on port 3000.
+
+## Releases
+
+`bin/ios-testflight` archives the Release app from a clean `main`, uploads it
+to App Store Connect, tags the commit `ios-v<version>b<build>`, and adds the
+build to the TestFlight groups with What to Test notes. See
+[TestFlight releases](../docs/development-workflow.md#testflight-releases).
 
 ## Formatting
 

@@ -183,13 +183,95 @@ from pushes and **Run workflow**, so the list holds no pull request runs. The
 REST equivalent is
 `gh api 'repos/jubishop/screenr/actions/workflows/ios.yml/runs?branch=main&status=success&per_page=100'`,
 reading `.workflow_runs[].head_sha`. Keep `paths` equal to the workflow's
-path filter.
+path filter; `tests/app/ios-testflight.test.ts` checks the script's copy
+against the workflow.
 
-When no run qualifies, the script starts one with
+The script applies this to runs of every status, newest first, and the
+first run with the commit's iOS files decides. A success passes, a failure
+blocks, and a queued or running check is awaited with
+`gh run watch <run ID> --exit-status`. A cancelled run decides nothing.
+When no run decides, the script starts one with
 `gh workflow run ios.yml --repo jubishop/screenr --ref main`, finds it with
 `gh run list --workflow ios.yml --event workflow_dispatch --commit "$head"`,
-and waits with `gh run watch <run ID> --exit-status`. A failed, cancelled, or
-missing result blocks the release.
+and waits for it the same way. A failed, cancelled, or missing result blocks
+the release.
+
+### TestFlight releases
+
+`bin/ios-testflight` builds the iPhone app on the owner's Mac and brings it
+to TestFlight testers. It follows the
+[release decision](ios-app.md#ci-checks-and-local-testflight-releases--2026-10-13)
+and the [tooling decision](ios-app.md#in-house-release-tooling-without-fastlane--2026-10-13).
+The owner or an agent runs it from a clean checkout of `main`:
+
+```sh
+git switch main
+git pull --ff-only
+bin/ios-testflight
+```
+
+It needs `npm ci`, Xcode 27, `gh` signed in to GitHub, and the
+[App Store Connect API key](running-screenr.md#app-store-connect) in
+`ASC_KEY_PATH`, `ASC_KEY_ID`, and `ASC_ISSUER_ID`. One run takes about as
+long as an archive plus Apple's processing, often 15 to 30 minutes.
+
+1. **Checks:** it fetches `main` and the tags. `HEAD` must be
+   `origin/main`'s commit, with no changed or untracked files; a linked
+   worktree can check that commit out detached. The commit must not already
+   have a release tag, and it must pass the [release gate](#ios-release-gate).
+2. **Version:** the marketing version is `MARKETING_VERSION` in
+   `ios/Config/Version.xcconfig`. The build number is the highest
+   `ios-v<version>b<build>` tag's build plus one, starting at 1, and reaches
+   Xcode as `CURRENT_PROJECT_VERSION`. Raise the marketing version in a
+   normal commit; build numbers keep counting across versions.
+3. **Archive:** `xcodebuild archive` builds the Release configuration without
+   the Xcode interface. `-allowProvisioningUpdates` with the API key signs it
+   automatically for team `34TKMKM889`. Its last build phase uploads the
+   [symbols to Sentry](../ios/README.md#symbols).
+4. **Upload:** `xcodebuild -exportArchive` with
+   `ios/Config/ExportOptions.plist` (`app-store-connect` method, `upload`
+   destination) sends the build to App Store Connect, with its symbols.
+5. **Tag:** it tags the commit `ios-v<version>b<build>`, with the What to
+   Test notes as the tag message, and pushes the tag to `origin`.
+6. **Distribute:** `scripts/app-store-connect.ts` calls the App Store
+   Connect API. It waits up to an hour for processing, sets What to Test for
+   the app's primary locale, and adds the build to the external group
+   "Public testers", creating the group without a public link if it is
+   missing. The internal group "Screenr team" has access to every build, so
+   its testers get each build once it is processed. If that setting is off,
+   the script adds the build to it too.
+
+**What to Test** lists the subjects of the commits since the previous tag
+that touch `ios/`, `src/server/`, or `src/app/api/`, newest first. It keeps
+features, fixes, performance work, and subjects without a type, such as
+reverts, and drops the emoji, type, scope, and pull request number. It never
+reads commit bodies. The list stops before App Store Connect's 4,000-character
+limit with a count of the rest. The first build says "The first TestFlight
+build of Screenr for iPhone.", and a release with no such commits says
+"Behind-the-scenes changes only; nothing new to test."
+
+**Beta App Review and the public link:** external testers get a build only
+after Beta App Review approves it, and a release does not submit it.
+`--submit-review` submits the build after the distribution steps, once the
+review information in App Store Connect is complete. The script never enables
+the group's public link; the owner turns it on in App Store Connect's
+TestFlight tab. [#250](https://github.com/jubishop/screenr/issues/250) does
+both for the first external build.
+
+**Recovery:** a failure before the upload leaves nothing behind, so rerun the
+command. After the upload, the build number is used and the tag exists.
+`bin/ios-testflight --distribute-only` repeats the processing wait, notes,
+and groups for the newest tag without building, and accepts
+`--submit-review`. Each run keeps the archive and the `archive.log` and
+`upload.log` files in `ios/build/release/<tag>/`, which Git ignores.
+
+**Signing requests:** App Store Connect accepts ES256 JWTs with the key ID,
+the issuer ID, and the `appstoreconnect-v1` audience, expiring within 20
+minutes. The script signs a new 15-minute token for each request with
+`src/server/apple-jwt.ts`, the same signer as the APNs sender and Sign in
+with Apple, which reads the `.p8` file as PEM. Its tests,
+`tests/app/ios-testflight.test.ts` and `tests/app/app-store-connect.test.ts`,
+fake Git, GitHub, Xcode, and the App Store Connect API.
 
 ## TypeScript checkout isolation
 

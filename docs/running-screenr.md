@@ -360,15 +360,17 @@ in base64.
 | Record | Purpose | Storage |
 | --- | --- | --- |
 | App "Screenr", Apple ID `6822501070`, SKU `screenr-ios` | The app record for TestFlight and, later, the App Store | App Store Connect |
-| TestFlight internal group "Screenr team" | Internal testing; the owner is a member | App Store Connect |
+| TestFlight internal group "Screenr team" | Internal testing; the owner is a member, and it has access to every build | App Store Connect |
+| TestFlight external group "Public testers" | External testing through a public link ([#250](https://github.com/jubishop/screenr/issues/250)) | App Store Connect |
 | API key "Agents", key ID `A9CMX47R79`, Admin role | Signing, upload, and TestFlight distribution in the release script ([#246](https://github.com/jubishop/screenr/issues/246)) | The owner's Mac |
 
 Releases reuse the team's existing "Agents" key, which PodHaven also uses.
 Its `.p8` file stays on the owner's Mac at the path in `ASC_KEY_PATH`, and
-the owner's shell exports `ASC_KEY_ID` and `ASC_ISSUER_ID`. The external
-testers group with a public link can be created only after the first build
-is uploaded; [#250](https://github.com/jubishop/screenr/issues/250) creates
-it.
+the owner's shell exports `ASC_KEY_ID` and `ASC_ISSUER_ID`.
+[TestFlight releases](development-workflow.md#testflight-releases) add each
+build to "Public testers" and create the group, without a public link, if it
+is missing. [#250](https://github.com/jubishop/screenr/issues/250) enables
+the link after the first build passes Beta App Review.
 
 ### Google
 
