@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
 import { AppError, db, isBigintId, transaction } from "./db";
-import { queueBadgePush } from "./push";
+import { queueBadgePush, trackRelationshipBadges } from "./push";
 import { entryPath } from "../member-routes";
 
 type NotificationRow = {
@@ -206,6 +206,13 @@ export async function respondToFriendRequest(
     ).rows[0];
     if (!row)
       throw new AppError("This friend request is no longer pending.", 404);
+    // Answering hides the request, and accepting can restore comments and
+    // replies (docs/notifications.md#badge-only-updates).
+    const queueBadges = await trackRelationshipBadges(
+      client,
+      viewer,
+      row.actor_id,
+    );
     await client.query(
       "UPDATE notification SET read_at=coalesce(read_at,now()),email_pending=false WHERE id=$1",
       [notificationId],
@@ -218,9 +225,7 @@ export async function respondToFriendRequest(
         : `DELETE FROM friendship WHERE ${pair}`,
       [viewer, row.actor_id],
     );
-    // Even a request read earlier changes the count: accepting restores the
-    // requester's comments from an earlier friendship.
-    await queueBadgePush(viewer, client);
+    await queueBadges();
   });
 }
 

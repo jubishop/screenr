@@ -164,7 +164,7 @@ export async function savePushSettings(
 }
 
 // Queues a badge-only push with the member's current unread count to each of
-// their devices. Call it in the transaction that changes read state, so the
+// their devices. Call it in the transaction that changes the count, so the
 // worker counts after it commits. A device that already has an update waiting
 // for its first attempt needs no second one.
 export async function queueBadgePush(userId: string, client: Queryable = db) {
@@ -177,6 +177,69 @@ export async function queueBadgePush(userId: string, client: Queryable = db) {
   );
 }
 
+// Tracks the unread counts of the `members` a change can affect, for a change
+// that can hide or restore notifications. Call it in the change's transaction
+// before the change, and call the function it returns after the change: that
+// queues a badge-only push to each member whose count changed. Members without
+// a device are skipped. Only notifications that existed before the change
+// count, since one the change creates queues its own push with the new count.
+export async function trackBadges(client: Queryable, members: string[]) {
+  const { through } = (
+    await client.query<{ through: string | null }>(
+      "SELECT max(id)::text AS through FROM notification",
+    )
+  ).rows[0];
+  const unread = async (users: string[]) =>
+    new Map(
+      (
+        await client.query<{ user_id: string; unread: number }>(
+          `SELECT d.user_id,(SELECT count(*)::int FROM visible_notification v
+            WHERE v.recipient_id=d.user_id AND v.read_at IS NULL AND v.id<=$2) AS unread
+          FROM (SELECT DISTINCT user_id FROM push_device WHERE user_id=ANY($1)) d`,
+          [users, through],
+        )
+      ).rows.map(({ user_id, unread }) => [user_id, unread]),
+    );
+  const before = await unread(members);
+  return async () => {
+    if (!before.size) return;
+    for (const [member, count] of await unread([...before.keys()]))
+      if (count !== before.get(member)) await queueBadgePush(member, client);
+  };
+}
+
+// `trackBadges` for a change to the friendship or block between `a` and `b`.
+// It can change what either one sees from the other, and the replies either
+// one sent to someone else on the other's entries.
+export async function trackRelationshipBadges(
+  client: Queryable,
+  a: string,
+  b: string,
+) {
+  const { rows } = await client.query<{ recipient_id: string }>(
+    `SELECT DISTINCT recipient_id FROM notification
+    WHERE actor_id IN ($1,$2) AND kind='reply' AND read_at IS NULL`,
+    [a, b],
+  );
+  return trackBadges(client, [a, b, ...rows.map((row) => row.recipient_id)]);
+}
+
+// `trackBadges` for erasing these accounts: everyone else's notifications from
+// them, and about replies on their entries, go with them.
+export async function trackErasureBadges(client: Queryable, ids: string[]) {
+  const { rows } = await client.query<{ recipient_id: string }>(
+    `SELECT DISTINCT n.recipient_id FROM notification n
+    LEFT JOIN comment cm ON cm.id=n.comment_id
+    LEFT JOIN conversation c ON c.id=cm.conversation_id
+    LEFT JOIN discussion_post dp ON dp.id=cm.discussion_post_id
+    WHERE n.read_at IS NULL AND n.recipient_id<>ALL($1)
+    AND (n.actor_id=ANY($1) OR c.owner_id=ANY($1) OR dp.owner_id=ANY($1))`,
+    [ids],
+  );
+  const members = rows.map((row) => row.recipient_id);
+  return trackBadges(client, members);
+}
+
 type PushJob = {
   id: string;
   attempts: number;
@@ -184,6 +247,7 @@ type PushJob = {
   token: string;
   environment: PushEnvironment;
   topic: PushTopic;
+  // The alert's notification, or null for a badge-only update.
   notification: string | null;
   kind: PushKind | null;
   thread: string | null;
@@ -268,8 +332,9 @@ async function deliver(apns: Apns, job: PushJob) {
 // Sends up to `limit` due pushes at once and returns how many it claimed.
 // Claiming leases each job for a minute, so a worker that stops mid-send
 // retries it later; the collapse ID keeps a repeated alert from showing
-// twice. An alert goes only while its notification is visible to and unread
-// by the device's current member, and that member allows its kind.
+// twice. A notification's push goes only while it is visible to and unread
+// by the device's current member. It is an alert when that member allows its
+// kind, and otherwise only updates the badge.
 export async function deliverPushes(apns: Apns, limit = 50) {
   const jobs = (
     await db.query<PushJob>(
@@ -281,10 +346,11 @@ export async function deliverPushes(apns: Apns, limit = 50) {
         RETURNING id,token,notification_id,attempts,expires_at
       )
       SELECT c.id::text,c.attempts,extract(epoch FROM c.expires_at)::bigint AS expires,
-        d.token,d.environment,d.topic,c.notification_id::text AS notification,
+        d.token,d.environment,d.topic,
+        CASE WHEN ${kindAllowed} THEN c.notification_id::text END AS notification,
         n.kind,n.item_id::text AS thread,
         CASE WHEN s.id IS NOT NULL AND (c.notification_id IS NULL
-          OR (n.id IS NOT NULL AND n.read_at IS NULL AND ${kindAllowed}))
+          OR (n.id IS NOT NULL AND n.read_at IS NULL))
         THEN (SELECT count(*)::int FROM visible_notification v
           WHERE v.recipient_id=d.user_id AND v.read_at IS NULL) END AS badge
       FROM claimed c JOIN push_device d ON d.token=c.token

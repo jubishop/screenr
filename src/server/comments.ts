@@ -1,6 +1,8 @@
 import { randomUUID } from "node:crypto";
+import type { PoolClient } from "pg";
 import { AppError, isBigintId, isUuid, text, transaction } from "./db";
 import { belongsTo, entryColumn, feedEntries, itemQuery } from "./feed";
+import { queueBadgePush } from "./push";
 
 export async function addComment(
   viewer: string,
@@ -63,6 +65,8 @@ export async function removeComment(viewer: string, id: string) {
   const reply = isBigintId(id);
   if (!reply && !isUuid(id)) throw new AppError("Comment not found.", 404);
   await transaction(async (client) => {
+    // A removed entry keeps its replies and their notifications.
+    const unread = reply ? await unreadRecipients(client, id) : [];
     const result = reply
       ? await client.query(
           `UPDATE comment cm SET removed_at=coalesce(removed_at,now()),body='[removed]'
@@ -83,7 +87,24 @@ export async function removeComment(viewer: string, id: string) {
           [id, viewer],
         );
     if (!result.rowCount) throw new AppError("Comment not found.", 404);
+    for (const { recipient_id } of unread)
+      await queueBadgePush(recipient_id, client);
   });
+}
+
+// Removing a reply hides its notifications, lowering the count of each member
+// who has one unread. One already hidden by a block or lost access sends an
+// update with the same count: telling it apart takes the visibility view,
+// whose joins PostgreSQL can plan as whole-table reads here
+// (tests/app/id-lookups.test.ts).
+async function unreadRecipients(client: PoolClient, id: string) {
+  return (
+    await client.query<{ recipient_id: string }>(
+      `SELECT n.recipient_id FROM notification n JOIN comment cm ON cm.id=n.comment_id
+      WHERE n.comment_id=$1::bigint AND n.read_at IS NULL AND cm.removed_at IS NULL`,
+      [id],
+    )
+  ).rows;
 }
 
 // A discussion post without a title, for the author and their friends.
