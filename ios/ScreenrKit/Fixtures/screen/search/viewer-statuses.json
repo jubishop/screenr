@@ -1,0 +1,792 @@
+{
+  "description": "Cam's Find a title: his own Want to watch and Caught up on friends' recommendations, free options, unknown availability, a title without a poster, and no saved services.",
+  "viewer": "cam",
+  "request": {
+    "method": "GET",
+    "action": "screen",
+    "path": "/api/screenr/screen?path=%2Fsearch",
+    "query": {
+      "path": "/search"
+    }
+  },
+  "response": {
+    "status": 200,
+    "etag": "W/\"BQtMtZrzu37xhQIRfNq-EFq-8TcwDu_YvVCWMA8Xb2g\"",
+    "body": {
+      "kind": "search",
+      "suggestions": [
+        {
+          "id": "movie:301",
+          "kind": "movie",
+          "name": "Copper Coast",
+          "tmdb_id": 301,
+          "overview": "",
+          "wanted_by": [],
+          "poster_path": "/copper-coast.jpg",
+          "watching_by": [],
+          "release_date": "2010-06-01",
+          "recommended_by": [
+            {
+              "rank": 1,
+              "username": "erin",
+              "display_name": "Erin Walsh"
+            }
+          ],
+          "second_degree_wanted": 0,
+          "second_degree_watching": 0,
+          "second_degree_recommended": 0,
+          "viewing": {
+            "status": "ok",
+            "checked_at": "2026-10-13T12:00:00.000Z",
+            "sections": []
+          }
+        },
+        {
+          "id": "movie:302",
+          "kind": "movie",
+          "name": "Second Spring",
+          "tmdb_id": 302,
+          "overview": "",
+          "wanted_by": [],
+          "poster_path": "/second-spring.jpg",
+          "watching_by": [],
+          "release_date": "2011-06-01",
+          "recommended_by": [
+            {
+              "rank": 2,
+              "username": "erin",
+              "display_name": "Erin Walsh"
+            }
+          ],
+          "second_degree_wanted": 0,
+          "second_degree_watching": 0,
+          "second_degree_recommended": 0,
+          "viewing": {
+            "status": "ok",
+            "checked_at": "2026-10-13T12:00:00.000Z",
+            "sections": []
+          }
+        },
+        {
+          "id": "movie:102",
+          "kind": "movie",
+          "name": "Paper Lanterns",
+          "tmdb_id": 102,
+          "overview": "A festival of lights brings a scattered family home.",
+          "wanted_by": [],
+          "poster_path": "/paper-lanterns.jpg",
+          "watching_by": [],
+          "release_date": "2023-11-17",
+          "recommended_by": [
+            {
+              "rank": 2,
+              "username": "alice",
+              "display_name": "Alice Park"
+            }
+          ],
+          "second_degree_wanted": 0,
+          "second_degree_watching": 0,
+          "second_degree_recommended": 0,
+          "viewing": {
+            "status": "ok",
+            "checked_at": "2026-10-13T12:00:00.000Z",
+            "sections": [
+              {
+                "key": "free",
+                "label": "Free",
+                "services": [
+                  {
+                    "id": "service:pluto-tv",
+                    "name": "Pluto TV",
+                    "logo_path": "/fN4czqaMQNLeF6sSSIjGbAWzvwK.png",
+                    "route_note": null
+                  },
+                  {
+                    "id": "service:tubi-tv",
+                    "name": "Tubi TV",
+                    "logo_path": "/9dEuvA8wg5TSeFBZlPxSVxFdimJ.png",
+                    "route_note": null
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "id": "movie:303",
+          "kind": "movie",
+          "name": "Low Tide",
+          "tmdb_id": 303,
+          "overview": "",
+          "wanted_by": [],
+          "poster_path": "/low-tide.jpg",
+          "watching_by": [],
+          "release_date": "2012-06-01",
+          "recommended_by": [
+            {
+              "rank": 3,
+              "username": "erin",
+              "display_name": "Erin Walsh"
+            }
+          ],
+          "second_degree_wanted": 0,
+          "second_degree_watching": 0,
+          "second_degree_recommended": 0,
+          "viewing": {
+            "status": "ok",
+            "checked_at": "2026-10-13T12:00:00.000Z",
+            "sections": []
+          }
+        },
+        {
+          "id": "movie:304",
+          "kind": "movie",
+          "name": "North Window",
+          "tmdb_id": 304,
+          "overview": "",
+          "wanted_by": [],
+          "poster_path": "/north-window.jpg",
+          "watching_by": [],
+          "release_date": "2013-06-01",
+          "recommended_by": [
+            {
+              "rank": 4,
+              "username": "erin",
+              "display_name": "Erin Walsh"
+            }
+          ],
+          "second_degree_wanted": 0,
+          "second_degree_watching": 0,
+          "second_degree_recommended": 0,
+          "viewing": {
+            "status": "ok",
+            "checked_at": "2026-10-13T12:00:00.000Z",
+            "sections": []
+          }
+        },
+        {
+          "id": "movie:305",
+          "kind": "movie",
+          "name": "Salt and Cedar",
+          "tmdb_id": 305,
+          "overview": "",
+          "wanted_by": [],
+          "poster_path": "/salt-and-cedar.jpg",
+          "watching_by": [],
+          "release_date": "2014-06-01",
+          "recommended_by": [
+            {
+              "rank": 5,
+              "username": "erin",
+              "display_name": "Erin Walsh"
+            }
+          ],
+          "second_degree_wanted": 0,
+          "second_degree_watching": 0,
+          "second_degree_recommended": 0,
+          "viewing": {
+            "status": "ok",
+            "checked_at": "2026-10-13T12:00:00.000Z",
+            "sections": []
+          }
+        },
+        {
+          "id": "movie:306",
+          "kind": "movie",
+          "name": "Blue Hour",
+          "tmdb_id": 306,
+          "overview": "",
+          "wanted_by": [],
+          "poster_path": "/blue-hour.jpg",
+          "watching_by": [],
+          "release_date": "2015-06-01",
+          "recommended_by": [
+            {
+              "rank": 6,
+              "username": "erin",
+              "display_name": "Erin Walsh"
+            }
+          ],
+          "second_degree_wanted": 0,
+          "second_degree_watching": 0,
+          "second_degree_recommended": 0,
+          "viewing": {
+            "status": "ok",
+            "checked_at": "2026-10-13T12:00:00.000Z",
+            "sections": []
+          }
+        },
+        {
+          "id": "movie:307",
+          "kind": "movie",
+          "name": "Far Fields",
+          "tmdb_id": 307,
+          "overview": "",
+          "wanted_by": [],
+          "poster_path": "/far-fields.jpg",
+          "watching_by": [],
+          "release_date": "2016-06-01",
+          "recommended_by": [
+            {
+              "rank": 7,
+              "username": "erin",
+              "display_name": "Erin Walsh"
+            }
+          ],
+          "second_degree_wanted": 0,
+          "second_degree_watching": 0,
+          "second_degree_recommended": 0,
+          "viewing": {
+            "status": "ok",
+            "checked_at": "2026-10-13T12:00:00.000Z",
+            "sections": []
+          }
+        },
+        {
+          "id": "movie:308",
+          "kind": "movie",
+          "name": "Small Hours",
+          "tmdb_id": 308,
+          "overview": "",
+          "wanted_by": [],
+          "poster_path": "/small-hours.jpg",
+          "watching_by": [],
+          "release_date": "2017-06-01",
+          "recommended_by": [
+            {
+              "rank": 8,
+              "username": "erin",
+              "display_name": "Erin Walsh"
+            }
+          ],
+          "second_degree_wanted": 0,
+          "second_degree_watching": 0,
+          "second_degree_recommended": 0,
+          "viewing": {
+            "status": "ok",
+            "checked_at": "2026-10-13T12:00:00.000Z",
+            "sections": []
+          }
+        },
+        {
+          "id": "movie:309",
+          "kind": "movie",
+          "name": "Kite Season",
+          "tmdb_id": 309,
+          "overview": "",
+          "wanted_by": [],
+          "poster_path": "/kite-season.jpg",
+          "watching_by": [],
+          "release_date": "2018-06-01",
+          "recommended_by": [
+            {
+              "rank": 9,
+              "username": "erin",
+              "display_name": "Erin Walsh"
+            }
+          ],
+          "second_degree_wanted": 0,
+          "second_degree_watching": 0,
+          "second_degree_recommended": 0,
+          "viewing": {
+            "status": "ok",
+            "checked_at": "2026-10-13T12:00:00.000Z",
+            "sections": []
+          }
+        },
+        {
+          "id": "movie:310",
+          "kind": "movie",
+          "name": "Last Ferry",
+          "tmdb_id": 310,
+          "overview": "",
+          "wanted_by": [],
+          "poster_path": "/last-ferry.jpg",
+          "watching_by": [],
+          "release_date": "2019-06-01",
+          "recommended_by": [
+            {
+              "rank": 10,
+              "username": "erin",
+              "display_name": "Erin Walsh"
+            }
+          ],
+          "second_degree_wanted": 0,
+          "second_degree_watching": 0,
+          "second_degree_recommended": 0,
+          "viewing": {
+            "status": "ok",
+            "checked_at": "2026-10-13T12:00:00.000Z",
+            "sections": []
+          }
+        },
+        {
+          "id": "movie:104",
+          "kind": "movie",
+          "name": "Glass Meridian",
+          "tmdb_id": 104,
+          "overview": "",
+          "wanted_by": [
+            {
+              "username": "alice",
+              "display_name": "Alice Park"
+            },
+            {
+              "username": "ben",
+              "display_name": "Ben Ortiz"
+            }
+          ],
+          "poster_path": null,
+          "watching_by": [],
+          "release_date": "2022-08-19",
+          "recommended_by": [],
+          "second_degree_wanted": 0,
+          "second_degree_watching": 0,
+          "second_degree_recommended": 0,
+          "viewing": {
+            "status": "unavailable",
+            "checked_at": null,
+            "sections": []
+          }
+        },
+        {
+          "id": "movie:103",
+          "kind": "movie",
+          "name": "The Quiet Orchard",
+          "tmdb_id": 103,
+          "overview": "An orchard keeper hears the trees whispering.",
+          "wanted_by": [
+            {
+              "username": "alice",
+              "display_name": "Alice Park"
+            },
+            {
+              "username": "ben",
+              "display_name": "Ben Ortiz"
+            }
+          ],
+          "poster_path": "/quiet-orchard.jpg",
+          "watching_by": [],
+          "release_date": "2025-05-02",
+          "recommended_by": [],
+          "second_degree_wanted": 0,
+          "second_degree_watching": 0,
+          "second_degree_recommended": 0,
+          "viewing": {
+            "status": "ok",
+            "checked_at": "2026-10-13T12:00:00.000Z",
+            "sections": [
+              {
+                "key": "subs",
+                "label": "Subs",
+                "services": [
+                  {
+                    "id": "service:hulu",
+                    "name": "Hulu",
+                    "logo_path": "/44uAnmSqvA4yBOdbPWN8YgQHjWm.png",
+                    "route_note": null
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "id": "tv:202",
+          "kind": "tv",
+          "name": "The Long Winter",
+          "tmdb_id": 202,
+          "overview": "A mountain village waits out a winter that will not end.",
+          "wanted_by": [],
+          "poster_path": "/long-winter.jpg",
+          "watching_by": [
+            {
+              "username": "alice",
+              "display_name": "Alice Park"
+            }
+          ],
+          "release_date": "2020-01-10",
+          "recommended_by": [],
+          "second_degree_wanted": 0,
+          "second_degree_watching": 0,
+          "second_degree_recommended": 0,
+          "viewing": {
+            "status": "ok",
+            "checked_at": "2026-10-13T12:00:00.000Z",
+            "sections": []
+          }
+        }
+      ],
+      "recommendations": [
+        {
+          "id": "movie:101",
+          "kind": "movie",
+          "name": "Night Crossing",
+          "tmdb_id": 101,
+          "overview": "Two strangers share the last ferry across a frozen strait.",
+          "poster_path": "/night-crossing.jpg",
+          "release_date": "2024-03-08",
+          "viewer_status": "want_to_watch",
+          "recommended_by": [
+            {
+              "rank": 1,
+              "username": "alice",
+              "display_name": "Alice Park"
+            },
+            {
+              "rank": 1,
+              "username": "ben",
+              "display_name": "Ben Ortiz"
+            }
+          ],
+          "viewer_recommended": false,
+          "viewing": {
+            "status": "ok",
+            "checked_at": "2026-10-13T12:00:00.000Z",
+            "sections": [
+              {
+                "key": "subs",
+                "label": "Subs",
+                "services": [
+                  {
+                    "id": "service:netflix",
+                    "name": "Netflix",
+                    "logo_path": "/rK1KljqmbvO9HQa1PBFLILWah72.png",
+                    "route_note": null
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "id": "tv:201",
+          "kind": "tv",
+          "name": "Harbor Lights",
+          "tmdb_id": 201,
+          "overview": "A lighthouse town keeps its secrets through the fog.",
+          "poster_path": "/harbor-lights.jpg",
+          "release_date": "2021-09-30",
+          "viewer_status": "caught_up",
+          "recommended_by": [
+            {
+              "rank": 2,
+              "username": "ben",
+              "display_name": "Ben Ortiz"
+            },
+            {
+              "rank": 3,
+              "username": "alice",
+              "display_name": "Alice Park"
+            }
+          ],
+          "viewer_recommended": false,
+          "viewing": {
+            "status": "ok",
+            "checked_at": "2026-10-13T12:00:00.000Z",
+            "sections": [
+              {
+                "key": "subs",
+                "label": "Subs",
+                "services": [
+                  {
+                    "id": "service:acorn-tv",
+                    "name": "Acorn TV",
+                    "logo_path": "/3aWmgZsNAqdOt8ClxIFT4pnmHrM.png",
+                    "route_note": "via Amazon"
+                  },
+                  {
+                    "id": "service:hbo-max",
+                    "name": "HBO Max",
+                    "logo_path": "/skypuy7SXuugIQeYg0IglmzoKaS.png",
+                    "route_note": null
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "id": "movie:301",
+          "kind": "movie",
+          "name": "Copper Coast",
+          "tmdb_id": 301,
+          "overview": "",
+          "poster_path": "/copper-coast.jpg",
+          "release_date": "2010-06-01",
+          "viewer_status": null,
+          "recommended_by": [
+            {
+              "rank": 1,
+              "username": "erin",
+              "display_name": "Erin Walsh"
+            }
+          ],
+          "viewer_recommended": false,
+          "viewing": {
+            "status": "ok",
+            "checked_at": "2026-10-13T12:00:00.000Z",
+            "sections": []
+          }
+        },
+        {
+          "id": "movie:302",
+          "kind": "movie",
+          "name": "Second Spring",
+          "tmdb_id": 302,
+          "overview": "",
+          "poster_path": "/second-spring.jpg",
+          "release_date": "2011-06-01",
+          "viewer_status": null,
+          "recommended_by": [
+            {
+              "rank": 2,
+              "username": "erin",
+              "display_name": "Erin Walsh"
+            }
+          ],
+          "viewer_recommended": false,
+          "viewing": {
+            "status": "ok",
+            "checked_at": "2026-10-13T12:00:00.000Z",
+            "sections": []
+          }
+        },
+        {
+          "id": "movie:102",
+          "kind": "movie",
+          "name": "Paper Lanterns",
+          "tmdb_id": 102,
+          "overview": "A festival of lights brings a scattered family home.",
+          "poster_path": "/paper-lanterns.jpg",
+          "release_date": "2023-11-17",
+          "viewer_status": null,
+          "recommended_by": [
+            {
+              "rank": 2,
+              "username": "alice",
+              "display_name": "Alice Park"
+            }
+          ],
+          "viewer_recommended": false,
+          "viewing": {
+            "status": "ok",
+            "checked_at": "2026-10-13T12:00:00.000Z",
+            "sections": [
+              {
+                "key": "free",
+                "label": "Free",
+                "services": [
+                  {
+                    "id": "service:pluto-tv",
+                    "name": "Pluto TV",
+                    "logo_path": "/fN4czqaMQNLeF6sSSIjGbAWzvwK.png",
+                    "route_note": null
+                  },
+                  {
+                    "id": "service:tubi-tv",
+                    "name": "Tubi TV",
+                    "logo_path": "/9dEuvA8wg5TSeFBZlPxSVxFdimJ.png",
+                    "route_note": null
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "id": "movie:303",
+          "kind": "movie",
+          "name": "Low Tide",
+          "tmdb_id": 303,
+          "overview": "",
+          "poster_path": "/low-tide.jpg",
+          "release_date": "2012-06-01",
+          "viewer_status": null,
+          "recommended_by": [
+            {
+              "rank": 3,
+              "username": "erin",
+              "display_name": "Erin Walsh"
+            }
+          ],
+          "viewer_recommended": false,
+          "viewing": {
+            "status": "ok",
+            "checked_at": "2026-10-13T12:00:00.000Z",
+            "sections": []
+          }
+        },
+        {
+          "id": "movie:304",
+          "kind": "movie",
+          "name": "North Window",
+          "tmdb_id": 304,
+          "overview": "",
+          "poster_path": "/north-window.jpg",
+          "release_date": "2013-06-01",
+          "viewer_status": null,
+          "recommended_by": [
+            {
+              "rank": 4,
+              "username": "erin",
+              "display_name": "Erin Walsh"
+            }
+          ],
+          "viewer_recommended": false,
+          "viewing": {
+            "status": "ok",
+            "checked_at": "2026-10-13T12:00:00.000Z",
+            "sections": []
+          }
+        },
+        {
+          "id": "movie:305",
+          "kind": "movie",
+          "name": "Salt and Cedar",
+          "tmdb_id": 305,
+          "overview": "",
+          "poster_path": "/salt-and-cedar.jpg",
+          "release_date": "2014-06-01",
+          "viewer_status": null,
+          "recommended_by": [
+            {
+              "rank": 5,
+              "username": "erin",
+              "display_name": "Erin Walsh"
+            }
+          ],
+          "viewer_recommended": false,
+          "viewing": {
+            "status": "ok",
+            "checked_at": "2026-10-13T12:00:00.000Z",
+            "sections": []
+          }
+        },
+        {
+          "id": "movie:306",
+          "kind": "movie",
+          "name": "Blue Hour",
+          "tmdb_id": 306,
+          "overview": "",
+          "poster_path": "/blue-hour.jpg",
+          "release_date": "2015-06-01",
+          "viewer_status": null,
+          "recommended_by": [
+            {
+              "rank": 6,
+              "username": "erin",
+              "display_name": "Erin Walsh"
+            }
+          ],
+          "viewer_recommended": false,
+          "viewing": {
+            "status": "ok",
+            "checked_at": "2026-10-13T12:00:00.000Z",
+            "sections": []
+          }
+        },
+        {
+          "id": "movie:307",
+          "kind": "movie",
+          "name": "Far Fields",
+          "tmdb_id": 307,
+          "overview": "",
+          "poster_path": "/far-fields.jpg",
+          "release_date": "2016-06-01",
+          "viewer_status": null,
+          "recommended_by": [
+            {
+              "rank": 7,
+              "username": "erin",
+              "display_name": "Erin Walsh"
+            }
+          ],
+          "viewer_recommended": false,
+          "viewing": {
+            "status": "ok",
+            "checked_at": "2026-10-13T12:00:00.000Z",
+            "sections": []
+          }
+        },
+        {
+          "id": "movie:308",
+          "kind": "movie",
+          "name": "Small Hours",
+          "tmdb_id": 308,
+          "overview": "",
+          "poster_path": "/small-hours.jpg",
+          "release_date": "2017-06-01",
+          "viewer_status": null,
+          "recommended_by": [
+            {
+              "rank": 8,
+              "username": "erin",
+              "display_name": "Erin Walsh"
+            }
+          ],
+          "viewer_recommended": false,
+          "viewing": {
+            "status": "ok",
+            "checked_at": "2026-10-13T12:00:00.000Z",
+            "sections": []
+          }
+        },
+        {
+          "id": "movie:309",
+          "kind": "movie",
+          "name": "Kite Season",
+          "tmdb_id": 309,
+          "overview": "",
+          "poster_path": "/kite-season.jpg",
+          "release_date": "2018-06-01",
+          "viewer_status": null,
+          "recommended_by": [
+            {
+              "rank": 9,
+              "username": "erin",
+              "display_name": "Erin Walsh"
+            }
+          ],
+          "viewer_recommended": false,
+          "viewing": {
+            "status": "ok",
+            "checked_at": "2026-10-13T12:00:00.000Z",
+            "sections": []
+          }
+        },
+        {
+          "id": "movie:310",
+          "kind": "movie",
+          "name": "Last Ferry",
+          "tmdb_id": 310,
+          "overview": "",
+          "poster_path": "/last-ferry.jpg",
+          "release_date": "2019-06-01",
+          "viewer_status": null,
+          "recommended_by": [
+            {
+              "rank": 10,
+              "username": "erin",
+              "display_name": "Erin Walsh"
+            }
+          ],
+          "viewer_recommended": false,
+          "viewing": {
+            "status": "ok",
+            "checked_at": "2026-10-13T12:00:00.000Z",
+            "sections": []
+          }
+        }
+      ],
+      "serviceIds": [],
+      "unreadNotifications": 3,
+      "user": {
+        "user_id": "user-cam",
+        "username": "cam",
+        "display_name": "Cam Rivera",
+        "photo": null
+      }
+    }
+  }
+}

@@ -29,11 +29,19 @@ extension XCUIApplication {
       covers.append(CGRect(x: 0, y: top, width: screen.width, height: screen.maxY - top))
     }
     let scrolling = scrollViews.firstMatch.exists ? scrollViews.firstMatch.frame : .null
+    let isCovered = { (frame: CGRect) in
+      !screen.contains(frame) || covers.contains { $0.intersects(frame) }
+    }
+    // An issue without an element is in a part of a list row that VoiceOver
+    // reads with the rest of the row, so the audit cannot place it. It counts
+    // as covered while any row reaches beneath a cover. One snapshot finds the
+    // rows, since querying elements while the audit runs can outlast it.
+    let rowsCovered = Self.cells(in: try snapshot()).contains { isCovered($0.frame) }
     try performAccessibilityAudit { issue in
-      var covered = false
+      var covered = rowsCovered
       var scrolls = false
       if let frame = issue.element?.frame {
-        covered = !screen.contains(frame) || covers.contains { $0.intersects(frame) }
+        covered = isCovered(frame)
         scrolls = scrolling.contains(frame)
       }
       switch issue.auditType {
@@ -47,6 +55,11 @@ extension XCUIApplication {
         return false
       }
     }
+  }
+
+  private static func cells(in snapshot: any XCUIElementSnapshot) -> [any XCUIElementSnapshot] {
+    let inner = snapshot.children.flatMap { cells(in: $0) }
+    return snapshot.elementType == .cell ? [snapshot] + inner : inner
   }
 }
 

@@ -15,7 +15,7 @@ repository root.
 | --- | --- |
 | `Screenr.xcodeproj` | The Screenr app and ScreenrUITests targets, and the shared Screenr scheme. |
 | `Config/` | The `.xcconfig` build settings, the app's entitlements, and the release export options. |
-| `Screenr/` | The app target: the [app shell](#app-shell) in `Shell/`, feature screens in `Screens/`, components several features share in `Shared/`, the [conversations](#conversations) that the feed, title pages, and profiles share in `Conversation/`, the app lifecycle, assets, and `Info.plist`. |
+| `Screenr/` | The app target: the [app shell](#app-shell) in `Shell/`, feature screens in `Screens/` with their parts in a folder named for the feature, such as `Find/`, components several features share in `Shared/`, such as the [title list views](#title-lists), the [conversations](#conversations) that the feed, title pages, and profiles share in `Conversation/`, the app lifecycle, assets, and `Info.plist`. |
 | `ScreenrUITests/` | XCUITest UI tests. |
 | `ScreenrKit/` | A local Swift package: `Sources/ScreenrKit`, `Tests/ScreenrKitTests`, and `Fixtures/`. |
 | `build/` | Build output, check logs, and result bundles. Git ignores it. |
@@ -401,9 +401,14 @@ marks the visit for `ShellTests`.
    `FixtureTransport`. Write UI journeys with
    `app.launch(with: FixtureLaunch(link: "screenr-dev://titles/tv/201"))`,
    choosing fixtures with `viewer` and `overrides`, and audit screens in the
-   tabs with `app.performShellAudit()`. `ShellTests` check the shell through
-   navigation titles and `FixtureLaunch(requestLog:)`, so they hold when a
-   placeholder changes; keep `DestinationView`'s navigation titles.
+   tabs with `app.performShellAudit()`. It passes over what the audit cannot
+   measure in a scrolling screen, as [Conversations](#conversations)
+   describes. While a list row reaches beneath a bar or the keyboard, it also
+   passes over contrast and clipping issues without an element, which are in
+   parts of a row that VoiceOver reads with the rest of the row. `ShellTests`
+   check the shell through navigation titles and `FixtureLaunch(requestLog:)`,
+   so they hold when a placeholder changes; keep `DestinationView`'s
+   navigation titles.
 
 ### Notifications sheet
 
@@ -607,6 +612,69 @@ ScreenContent(model: model) { screen in
   keyboard has settled. ScreenrKit's `Support/FeedSupport.swift` has
   `FeedFixtures.entry(_:changing:)` for entries with changed fields and
   `RecordingAPI` for scripted writes.
+
+## Find a title
+
+Find a title, `Screenr/Screens/FindView.swift` with its parts in
+`Screenr/Find/`, is the search-role tab
+([decision](../docs/ios-app.md#bell-in-every-tab-and-find-as-the-search-tab--2026-10-13)).
+Selecting the tab at its root activates the search field, which hides the
+bar's bell until the search closes. Below the field are My services, then
+search results, or Suggestions and Friends recommend, as on the
+[web](../docs/interface-design.md#friends-recommend-as-a-find-a-title-tab--2026-10-12).
+
+ScreenrKit's `FindModel` holds what the member changes, so it outlives a
+failed screen read and the search keeps working:
+
+- **Search:** typing runs the `search` action once it pauses for
+  `FindTiming.typingPause` (350 ms), and the keyboard's Search key runs it at
+  once. A newer search or clearing the field cancels the one in flight, and a
+  late response never replaces newer results. A search gives up after ten
+  seconds, as on the web. The Search key with one character asks for two;
+  typing one character shows the lists again without a request.
+- **Lists:** `FindList.suggestions` or `.friendsRecommend`. A `/search` link
+  sets the search and list once, through `apply(_:)` and `router.findSearch`.
+- **Filters:** My services keeps titles on the viewer's saved subscription
+  services or free, across results and both lists, and counts the titles
+  with unknown viewing options it leaves out. Friends recommend adds Movies/TV
+  and Show finished; finished titles start hidden. Edit services opens
+  Settings over the tab.
+- **Want to watch:** Friends recommend's one-tap save sends `activity` with
+  the `friends_recommend` surface, then reads the screen again. Another
+  status, or the viewer's own Recommend, opens the title instead.
+- **Wording:** `FindWording`, `TitleSuggestion.reasons`,
+  `FriendsRecommendation.recommendedByText`, and `.action` word everything
+  as the web does.
+
+`FindSearchTests`, `FindWantToWatchTests`, and `FindListsTests` cover the
+model with `FindAPI`, a fake that answers searches by their text, and
+`TestClock`. `FindTests` drives the tab: searching, opening a result,
+Friends recommend, and every `screen/search` and `actions/search` fixture.
+`screen/search/viewer-statuses` shows Cam's own statuses, free options,
+unknown availability, and no saved services.
+
+The audit flags some standard list parts, so Find avoids them: section
+headers and footers, subtitles, and secondary text are too faint at their
+sizes, so de-emphasized text uses `.muted`; a label's symbol column clips
+its text at large sizes; and `ContentUnavailableView` in a list row does not
+grow with Dynamic Type. `ListHeader`, `SymbolText`, and `EmptyListMessage`
+in `Screenr/Find/` stand in for them.
+
+Title pages opened from Find do not yet report the web's `suggestion`,
+`suggestion_recommendation`, or `friends_recommend` save surfaces, since
+`Destination.title` carries no `from`.
+
+### Title lists
+
+Views that list titles share these pieces:
+
+| Piece | Where | What it does |
+| --- | --- | --- |
+| `TitleRow` | `Screenr/Shared/Titles/` | A title's `PosterImage`, name, kind and year, and where it streams, with optional lines after them. As on the web at phone widths, it leaves out the overview. Put it in a `NavigationLink`. |
+| `ViewingLinesView` | `Screenr/Shared/Titles/` | "On Netflix, Hulu" and "Free on Tubi TV", with saved services marked, or why there are no options. |
+| `Title.kindAndYear` | ScreenrKit `Titles/` | "Movie · 2024", or only the kind without a release date. |
+| `TitleViewing.matchingServices(_:)`, `access(for:)`, `lines(savedServices:)` | ScreenrKit `Titles/` | The viewer's saved services that offer a title, whether the viewer can watch it, and the lines `ViewingLinesView` shows. |
+| `ScreenrAPI.send(_:within:clock:)` | ScreenrKit `API/Deadline.swift` | Sends a request that fails as `.timedOut` after a deadline. |
 
 ## Fixtures
 
