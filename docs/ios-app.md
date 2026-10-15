@@ -977,6 +977,15 @@ name on its page; other links and Safari pages elsewhere search for the
 shared text. See [shared links](title-catalog.md#shared-links) and the
 [share extension](../ios/README.md#share-extension).
 
+**Implementation note:** [Issue #253](https://github.com/jubishop/screenr/issues/253)
+adds Add to Want to watch, What do my friends recommend?, and Open Friends
+recommend as App Shortcuts. Add to Want to watch saves only a title the
+member neither recommends nor has a status for, and reports the `shortcut`
+save surface. The actions' screen reads are never app visits. Spotlight
+indexes, on the device, the titles that loaded screens show the member
+interacted with, and removes them all when the session ends. See
+[Siri, Shortcuts, and Spotlight](../ios/README.md#siri-shortcuts-and-spotlight).
+
 ### Public repository with feedback issues that link to Sentry — 2026-10-13
 
 **Decision:** `jubishop/screenr` stays public. iOS checks run locally on a

@@ -45,6 +45,10 @@ struct RequestTests {
       .activity(title: "movie:105", .wantToWatch, value: true, surface: .friendRecommendation)
     ),
     Shape(
+      "actions/activity/shortcut",
+      .activity(title: "movie:105", .wantToWatch, value: true, surface: .shortcut)
+    ),
+    Shape(
       "actions/comment/reply",
       .comment(
         conversation: "0601645c-005d-450f-8b22-ae05a508119d",

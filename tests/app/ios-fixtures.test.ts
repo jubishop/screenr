@@ -448,6 +448,12 @@ const actions: Record<Exclude<ActionName, "screen">, Record<string, Case>> = {
       { q: "night" },
       "Search results for a movie and a TV show, with viewing options.",
     ),
+    winter: read(
+      "search",
+      "alice",
+      { q: "winter" },
+      "Search results for a movie Alice has not saved and a show she is watching.",
+    ),
     "short-query": read(
       "search",
       "alice",
@@ -700,6 +706,17 @@ const actions: Record<Exclude<ActionName, "screen">, Record<string, Case>> = {
         surface: "friend_recommendation",
       },
       "Saving a friend's recommendation to Want to watch.",
+    ),
+    shortcut: write(
+      "activity",
+      "alice",
+      {
+        title: "movie:105",
+        field: "want_to_watch",
+        value: true,
+        surface: "shortcut",
+      },
+      "Saving a title to Want to watch from Siri or the Shortcuts app.",
     ),
   },
   "watch-status": {

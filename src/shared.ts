@@ -103,7 +103,8 @@ export const reactionOptions = [
 ] as const;
 export type ReactionKind = (typeof reactionOptions)[number]["kind"];
 // Where a member saved a title to Want to watch, for usage telemetry.
-// db/015-usage-telemetry.sql enforces the same list.
+// db/015-usage-telemetry.sql and db/032-shortcut-save-surface.sql enforce the
+// same list.
 export const saveSurfaces = [
   "friend_recommendation", // the action on a friend's active Recommend entry
   "friend_entry", // the action on any other friend's feed entry
@@ -112,6 +113,7 @@ export const saveSurfaces = [
   "suggestion", // a title page opened from another suggestion tile
   "title", // a title page reached any other way
   "watch_together", // a title page opened from Watch together
+  "shortcut", // Siri or the Shortcuts app, through the iPhone app
 ] as const;
 export type SaveSurface = (typeof saveSurfaces)[number];
 // Each person has at most one current status per title. Want to watch is a

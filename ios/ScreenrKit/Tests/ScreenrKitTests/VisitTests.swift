@@ -85,6 +85,22 @@ struct VisitTests {
     #expect(visitFlags(test) == ["1", "1", "1", nil])
   }
 
+  // Siri and the Shortcuts app read screens without opening the app, so
+  // their reads leave the visit for the app's next screen.
+  @Test func leavesTheVisitForTheNextReadThatAsksForIt() async throws {
+    let test = try TestClient(
+      token: "signed-token",
+      visits: VisitTracker(),
+      replies: [try screenReply(), try screenReply(), try screenReply()]
+    )
+
+    _ = try await test.client.send(.screen(path: "/search", visit: .never))
+    _ = try await test.client.send(.screen(path: "/"))
+    _ = try await test.client.send(.screen(path: "/titles/tv/201", visit: .never))
+
+    #expect(visitFlags(test) == [nil, "1", nil])
+  }
+
   @Test func flagsNothingWithoutATracker() async throws {
     let test = try TestClient(token: "signed-token", replies: [try screenReply()])
 

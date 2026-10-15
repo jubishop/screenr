@@ -285,6 +285,8 @@ test("Want to watch saves record the surface and whether a direct friend recomme
     (await save(dana, "movie:3", true, "suggestion_recommendation")).status,
     200,
   );
+  // The iPhone app's Add to Want to watch shortcut reports its own surface.
+  assert.equal((await save(outsider, "movie:2", true, "shortcut")).status, 200);
   assert.equal((await save(ben, "movie:2", true, "not-a-surface")).status, 400);
   assert.equal(
     (
@@ -309,6 +311,7 @@ test("Want to watch saves record the surface and whether a direct friend recomme
     row(alice, "movie:2", null, false),
     row(dana, "movie:2", "friend_entry", false),
     row(dana, "movie:3", "suggestion_recommendation", false),
+    row(outsider, "movie:2", "shortcut", false),
   ]);
   const feed = await db.query(
     "SELECT 1 FROM feed_item WHERE owner_id=$1 AND title_id='movie:2' AND active",

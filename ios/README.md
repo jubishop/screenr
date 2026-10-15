@@ -890,6 +890,81 @@ the member can Recommend it or mark it Want to watch:
   extension's log stays in the app group, and `SettingsTests` expects
   feedback to attach only the app's.
 
+## Siri, Shortcuts, and Spotlight
+
+Siri and the Shortcuts app can save a title to Want to watch and read or open
+Friends recommend, and Spotlight on the iPhone finds the titles the member
+has interacted with
+([decision](../docs/ios-app.md#sharing-and-later-native-extras--2026-10-13)).
+The behavior is in ScreenrKit's `Shortcuts/` and `Spotlight/`; the App
+Intents are in `Screenr/Shortcuts/`.
+
+| Piece | Where | What it does |
+| --- | --- | --- |
+| `ShortcutActions` | ScreenrKit `Shortcuts/` | What the intents do: `search(_:)`, `titles(_:)` for a saved shortcut's title IDs, `addToWantToWatch(_:)`, `wantToWatchSuggestions()`, `friendsRecommend()`, and `openFriendsRecommend()`. Each fails with a `Failure` whose message Siri can say. |
+| `TitleSummary` | ScreenrKit `Titles/` | A title's ID, name, kind, year, and poster, with `isTitleID(_:)` to check an ID that Spotlight or a shortcut kept. |
+| `TitleSpotlight`, `InteractedTitles`, `SpotlightIndex` | ScreenrKit `Spotlight/` | Which titles each screen shows the member interacted with, the writes that keep the index in step, and the `CSSearchableIndex` items. |
+| `TitleEntity`, `TitleQuery` | `Screenr/Shortcuts/` | A title in Siri and the Shortcuts app, found by name with search and suggested from Friends recommend. |
+| `AddToWantToWatchIntent`, `FriendsRecommendIntent`, `OpenFriendsRecommendIntent`, `ScreenrShortcuts` | `Screenr/Shortcuts/` | The intents and their App Shortcuts, which need no setup: "Add to Want to watch in Screenr", "What do my friends recommend in Screenr", and "Open Friends recommend in Screenr". |
+
+- **Process:** the intents run in the app's process. `ScreenrApp` registers
+  its `ShortcutActions`, built on the app's client, session, router, and
+  Spotlight, with `AppDependencyManager`, and the intents and the query read
+  it with `@Dependency`. Without a session, each action says "Sign in to
+  Screenr to use this shortcut."
+- **Add to Want to watch:** asks "Which movie or show?", suggests the titles
+  in Friends recommend that the member neither recommends nor has a status
+  for, and finds others by name through `search`. It reads the title's page
+  first and saves only when the member has no status and no Recommend for
+  it; otherwise it says what they have and leaves the title page to change
+  it. A save sends the `shortcut`
+  [save surface](../docs/usage-telemetry.md#save-attribution) and joins
+  Spotlight.
+- **Friends recommend:** "What do my friends recommend?" names the first
+  three titles that are not finished, as the tab first shows them, such as
+  "Your friends recommend Night Crossing, Harbor Lights, and Winter Garden.",
+  and returns them to the shortcut. Open Friends recommend opens the app at
+  Find a title's Friends recommend.
+- **Visits:** the actions read screens with `.screen(path:visit: .never)`, so
+  they never carry the app's [visit](#visits), which stays due for the
+  app's next screen.
+- **Spotlight index:** `ShellModel`'s `onScreen` hands `TitleSpotlight` every
+  screen that loads. A feed or profile entry names the viewer's Recommend,
+  status, and top 10 rank for its title, and the viewer's own review counts
+  too; Friends recommend names their status and Recommend. A title page
+  without any of these removes its title. Each title is indexed once per
+  launch until it changes, so polls write nothing, and the writes run in
+  order. An item's identifier is the title ID, with its name, "Movie · 2024",
+  and the poster when the image cache already holds it, so indexing
+  downloads nothing. Nothing leaves the device.
+- **Opening a result:** selecting a result continues
+  `CSSearchableItemActionType`, and `AppRootView` opens the title with
+  `router.open(_:)`, as a link would.
+- **Clearing:** when the session ends, by signing out, the server ending it,
+  or deleting the account, `SessionStore.onEnd` removes every item. A launch
+  without a session removes them too, since the session may have ended in
+  another process.
+
+`ShortcutActionsTests` runs the actions against the fixture API and checks
+the request log; `actions/search/winter` finds Winter Garden, which Alice has
+not saved, and `actions/activity/shortcut` saves it. `TitleSpotlightTests`
+checks the index's writes against a recording index. UI tests do not drive
+the Shortcuts app or Spotlight, whose interfaces belong to the system. To
+check them in a Simulator, launch Screenr Dev with the fixture launch
+arguments and leave it running, since the intents run in that process; the
+system otherwise launches the app without them, against the server. Then:
+
+- **Shortcuts:** open Shortcuts, then Library, Apps, and Screenr Dev, and tap
+  an App Shortcut. Add to Want to watch suggests Winter Garden and says
+  "Added Winter Garden to Want to watch."; the request log shows the save.
+- **Spotlight:** swipe down on the Home Screen and search for a title in
+  Alice's feed, such as Paper Lanterns. Selecting the Screenr Dev result
+  opens its page. After signing out, the search finds no Screenr Dev result.
+
+Use a Simulator you will not pass to `bin/check-ios --simulator`: typing in
+Spotlight and Safari leaves keyboard predictions, whose cells fail the
+accessibility audit in tests that type. Siri's spoken phrases need a device.
+
 ## Fixtures
 
 Server tests write JSON fixtures into `ScreenrKit/Fixtures/`. The directory
