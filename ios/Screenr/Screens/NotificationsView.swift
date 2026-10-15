@@ -192,7 +192,7 @@ private struct NotificationRow: View {
           announce()
         }
       }
-      .buttonStyle(.borderedProminent)
+      .buttonStyle(.accent)
       Button("Decline") { model.askToDecline(row.item) }
         .buttonStyle(.bordered)
         .confirmationDialog(

@@ -110,7 +110,7 @@ private struct SignInForm: View {
             busy: model.activity == .apple
           )
         }
-        .buttonStyle(.borderedProminent)
+        .buttonStyle(.accent)
         .controlSize(.large)
       }
       Button {
@@ -154,7 +154,7 @@ private struct SignInForm: View {
         } label: {
           ProgressLabel("Send sign-in code", busy: model.activity == .sendingCode)
         }
-        .buttonStyle(.borderedProminent)
+        .buttonStyle(.accent)
         .controlSize(.large)
         .disabled(!model.canSendCode)
       case .code(let email):
@@ -174,7 +174,7 @@ private struct SignInForm: View {
         } label: {
           ProgressLabel("Sign in", busy: model.activity == .checkingCode)
         }
-        .buttonStyle(.borderedProminent)
+        .buttonStyle(.accent)
         .controlSize(.large)
         .disabled(!model.canCheckCode)
         Button("Use another email or request a new code") {

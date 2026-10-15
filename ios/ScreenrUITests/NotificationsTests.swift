@@ -144,6 +144,22 @@ final class NotificationsTests: XCTestCase {
     try app.performShellAudit()
   }
 
+  // In dark mode the accent is a light lime, so Accept's label is dark. The
+  // audit judges contrast in the Simulator's appearance, so the test also
+  // measures the label against its fill.
+  @MainActor
+  func testKeepsTheSheetReadableInDarkMode() throws {
+    let app = XCUIApplication()
+    app.launch(with: FixtureLaunch(appearance: .dark))
+    XCTAssertTrue(app.navigationBars["Your circle"].waitForExistence(timeout: 10))
+
+    app.buttons["bell"].tap()
+    let accept = app.buttons["Accept"]
+    XCTAssertTrue(accept.waitForExistence(timeout: 10))
+    XCTAssertGreaterThanOrEqual(try accept.labelContrast(), 4.5)
+    try app.performShellAudit()
+  }
+
   @MainActor
   func testDeclinesAFriendRequestOnceConfirmed() throws {
     let log = RequestLog.temporary()

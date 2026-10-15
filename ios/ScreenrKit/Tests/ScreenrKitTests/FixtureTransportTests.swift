@@ -412,6 +412,27 @@ struct APISourceTests {
     #expect(LaunchLink.url(in: ["Screenr"], variant: .dev) == nil)
   }
 
+  @Test func choosesTheAppearanceAtLaunchInDev() {
+    #expect(LaunchAppearance.colorScheme(in: ["Screenr"], variant: .dev) == nil)
+    #expect(
+      LaunchAppearance.colorScheme(in: ["Screenr", "-ScreenrAppearance", "dark"], variant: .dev)
+        == .dark
+    )
+    #expect(
+      LaunchAppearance.colorScheme(in: ["Screenr", "-ScreenrAppearance", "light"], variant: .dev)
+        == .light
+    )
+    #expect(
+      LaunchAppearance.colorScheme(
+        in: ["Screenr", "-ScreenrAppearance", "dark"],
+        variant: .release
+      ) == nil
+    )
+    #expect(
+      LaunchAppearance.colorScheme(in: ["Screenr", "-ScreenrAppearance"], variant: .dev) == nil
+    )
+  }
+
   @Test func ignoresFixturesInRelease() throws {
     let arguments = ["Screenr", "-ScreenrFixtures", "/tmp/Fixtures"]
     #expect(try APISource(arguments: arguments, variant: .release) == .network)

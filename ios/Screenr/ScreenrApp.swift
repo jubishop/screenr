@@ -8,6 +8,7 @@ struct ScreenrApp: App {
   private let shell: ShellModel
   private let logFile: LogFile?
   private let telemetry: Telemetry
+  private let colorScheme: ColorScheme?
 
   init() {
     let configuration: AppConfiguration
@@ -58,6 +59,7 @@ struct ScreenrApp: App {
     if let link = LaunchLink.url(in: arguments, variant: configuration.variant) {
       shell.router.open(link)
     }
+    colorScheme = LaunchAppearance.colorScheme(in: arguments, variant: configuration.variant)
   }
 
   var body: some Scene {
@@ -65,6 +67,7 @@ struct ScreenrApp: App {
       AppRootView()
         .screenrServices(services)
         .environment(shell)
+        .preferredColorScheme(colorScheme)
     }
   }
 }
