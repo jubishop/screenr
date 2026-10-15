@@ -11,6 +11,11 @@ struct FixtureLaunch {
     case signedOut
   }
 
+  enum Appearance: String {
+    case light
+    case dark
+  }
+
   enum Profile: String {
     case complete
     // The viewer has no profile until a setup request succeeds.
@@ -32,6 +37,9 @@ struct FixtureLaunch {
   var requestLog: URL?
   // A content size category, such as "UICTContentSizeCategoryAccessibilityXXXL".
   var textSize: String?
+  // The color scheme in place of the Simulator's, which changes for its apps
+  // only after it restarts.
+  var appearance: Appearance?
 
   static let directory = URL(filePath: #filePath)
     .deletingLastPathComponent()  // ScreenrUITests
@@ -48,6 +56,7 @@ struct FixtureLaunch {
     if let requestLog { arguments += ["-ScreenrFixtureLog", requestLog.path()] }
     if let link { arguments += ["-ScreenrOpenURL", link] }
     if let textSize { arguments += ["-UIPreferredContentSizeCategoryName", textSize] }
+    if let appearance { arguments += ["-ScreenrAppearance", appearance.rawValue] }
     return arguments
   }
 }

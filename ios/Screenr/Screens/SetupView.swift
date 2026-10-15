@@ -116,7 +116,7 @@ private struct SetupForm: View {
       Button(action: submit) {
         ProgressLabel("Join Screenr", busy: model.activity == .joining)
       }
-      .buttonStyle(.borderedProminent)
+      .buttonStyle(.accent)
       .controlSize(.large)
       .disabled(!model.canJoin)
     }
