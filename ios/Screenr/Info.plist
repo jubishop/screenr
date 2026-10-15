@@ -10,6 +10,8 @@
   <string>$(SCREENR_APP_GROUP)</string>
   <key>ScreenrGoogleClientID</key>
   <string>$(SCREENR_GOOGLE_CLIENT_ID)</string>
+  <key>ScreenrAPSEnvironment</key>
+  <string>$(SCREENR_APS_ENVIRONMENT)</string>
   <key>CFBundleURLTypes</key>
   <array>
     <dict>

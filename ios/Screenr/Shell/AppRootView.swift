@@ -44,11 +44,22 @@ struct AppRootView: View {
   }
 }
 
-// A signed-in member: setup until they have a profile, then the tabs.
+// A signed-in member: setup until they have a profile, then the tabs. A new
+// member who just joined is asked to allow notifications as Circle opens.
 private struct SignedInView: View {
   @Environment(ShellModel.self) private var shell
+  @Environment(PushNotifications.self) private var push
 
   var body: some View {
+    account
+      .onChange(of: shell.account) { previous, account in
+        if previous == .needsSetup, account == .ready {
+          Task { await push.askForPermission() }
+        }
+      }
+  }
+
+  @ViewBuilder private var account: some View {
     switch shell.account {
     case .checking:
       ProgressView("Loading")

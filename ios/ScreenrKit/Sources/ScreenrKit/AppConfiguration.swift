@@ -48,9 +48,41 @@ public struct AppConfiguration: Equatable, Sendable {
     version = try Self.value(for: "CFBundleShortVersionString", in: infoDictionary) { text in
       Self.matches(text, allowed: Self.digits + Self.letters + ".-_") ? text : nil
     }
-    // The server reads a build of at most 15 digits.
-    build = try Self.value(for: "CFBundleVersion", in: infoDictionary) { text in
-      text.count <= 15 && Self.matches(text, allowed: Self.digits) ? text : nil
+    build = try String(Self.buildNumber(in: infoDictionary))
+  }
+
+  // Where APNs reaches the app: the environment of its `aps-environment`
+  // entitlement, its bundle ID as the topic, and its build. Only the app reads
+  // it; its extensions have no `aps-environment` entitlement. The Info.plist
+  // repeats the entitlement's value from the same build setting, so a token
+  // always names the environment that issued it: `development` for Screenr
+  // Dev, which runs in the Simulator, and `production` for TestFlight and App
+  // Store builds.
+  public static func pushTarget(infoDictionary: [String: Any]) throws(Failure) -> PushTarget {
+    let topic = try value(for: "CFBundleIdentifier", in: infoDictionary) { text in
+      matches(text, allowed: digits + letters + ".-") ? text : nil
+    }
+    let environment = try value(for: "ScreenrAPSEnvironment", in: infoDictionary) {
+      text -> PushEnvironment? in
+      switch text {
+      case "development": .sandbox
+      case "production": .production
+      default: nil
+      }
+    }
+    return try PushTarget(
+      environment: environment,
+      topic: topic,
+      build: buildNumber(in: infoDictionary)
+    )
+  }
+
+  // The server reads a positive build of at most 15 digits.
+  private static func buildNumber(in infoDictionary: [String: Any]) throws(Failure) -> Int {
+    try value(for: "CFBundleVersion", in: infoDictionary) { text in
+      guard text.count <= 15, matches(text, allowed: digits), let number = Int(text), number > 0
+      else { return nil }
+      return number
     }
   }
 

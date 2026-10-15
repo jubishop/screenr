@@ -32,6 +32,9 @@ public struct AppServices: Sendable {
   public let feedback: FeedbackService
   // Where trailers' players load from.
   public let trailers: TrailerLoading
+  // iOS's notification permission, APNs registration, and badge, or nil in
+  // the share extension, which handles no notifications.
+  public let push: (any PushSystem)?
 
   @MainActor
   public init(
@@ -44,7 +47,8 @@ public struct AppServices: Sendable {
     visits: VisitTracker = VisitTracker(),
     images: ImageSource = .none,
     feedback: FeedbackService = .none,
-    trailers: TrailerLoading = .network
+    trailers: TrailerLoading = .network,
+    push: (any PushSystem)? = nil
   ) {
     self.api = api
     self.session = session
@@ -56,6 +60,7 @@ public struct AppServices: Sendable {
     self.images = images
     self.feedback = feedback
     self.trailers = trailers
+    self.push = push
     imageSession = URLSession(configuration: Self.imageConfiguration(cache: imageCache))
     session.onEnd { imageCache.removeAllCachedResponses() }
     // A deleted account leaves nothing in the Keychain. The client removed
@@ -67,10 +72,12 @@ public struct AppServices: Sendable {
 
   // The live client and Keychain session and invitation, or in Screenr Dev,
   // the fixture API when the launch arguments name a fixtures directory. The
-  // fixture API also stands in for Apple's and Google's authorization, keeps
-  // the invitation in memory, and writes feedback to its request log rather
-  // than to `feedback`, the build's sender, which Screenr Dev lacks. Only the
-  // app's client marks visits; the share extension's sends none.
+  // fixture API also stands in for Apple's and Google's authorization and
+  // iOS's push permission, keeps the invitation in memory, and writes
+  // feedback to its request log rather than to `feedback`, the build's
+  // sender, which Screenr Dev lacks. Only the app's client marks visits; the
+  // share extension's sends none. `push` is iOS's own push system, which the
+  // app target provides; the share extension has none.
   @MainActor
   public init(
     configuration: AppConfiguration,
@@ -78,7 +85,8 @@ public struct AppServices: Sendable {
     observer: (any APIRequestObserver)? = nil,
     feedback: (any FeedbackSender)? = nil,
     logFile: LogFile? = nil,
-    host: Host = .app
+    host: Host = .app,
+    push system: (any PushSystem)? = nil
   ) throws {
     let source = try APISource(arguments: arguments, variant: configuration.variant)
     let keychain: any KeychainStorage
@@ -89,8 +97,10 @@ public struct AppServices: Sendable {
     let imageCache: URLCache
     let feedbackSender: (any FeedbackSender)?
     let trailers: TrailerLoading
+    let push: (any PushSystem)?
     switch source {
     case .network:
+      push = system
       keychain = SystemKeychain(accessGroup: configuration.appGroup)
       invitation = PendingInvitation(
         storage: SystemKeychain.invitation(accessGroup: configuration.appGroup)
@@ -117,6 +127,11 @@ public struct AppServices: Sendable {
       imageCache = URLCache(memoryCapacity: 16 << 20, diskCapacity: 0)
       // Trailers load nothing; the request log shows what they asked for.
       trailers = .recording(fixtures.recordWebLoad)
+      if system != nil, let permission = scenario.push.permission {
+        push = FixturePushSystem(permission: permission)
+      } else {
+        push = system
+      }
     }
     let session = try SessionStore(keychain: keychain)
     let visits = VisitTracker()
@@ -151,7 +166,8 @@ public struct AppServices: Sendable {
       visits: visits,
       images: images,
       feedback: FeedbackService(sender: feedbackSender, logFile: logFile),
-      trailers: trailers
+      trailers: trailers,
+      push: push
     )
   }
 
@@ -177,6 +193,7 @@ public struct AppServices: Sendable {
 //   -ScreenrFixtureOverride <fixture name>    (repeatable)
 //   -ScreenrFixtureFailure <fixture name>
 //   -ScreenrFixtureLog <file for a line per API request>
+//   -ScreenrFixturePush undecided|allowed|denied|system (default undecided)
 //
 // Release builds ignore them.
 public enum APISource: Hashable, Sendable {
@@ -202,6 +219,13 @@ public enum APISource: Hashable, Sendable {
       case "-ScreenrFixtureOverride": scenario.overrides.append(value)
       case "-ScreenrFixtureFailure": scenario.failure = value
       case "-ScreenrFixtureLog": scenario.requestLog = URL(filePath: value)
+      case "-ScreenrFixturePush":
+        guard let push = FixtureScenario.Push(rawValue: value) else {
+          throw ArgumentError(
+            description: "\(argument) is undecided, allowed, denied, or system, not \(value)"
+          )
+        }
+        scenario.push = push
       case "-ScreenrFixtureSession":
         guard let session = FixtureScenario.Session(rawValue: value) else {
           throw ArgumentError(description: "\(argument) is signedIn or signedOut, not \(value)")

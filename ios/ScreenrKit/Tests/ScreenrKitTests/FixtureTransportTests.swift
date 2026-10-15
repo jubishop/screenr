@@ -18,7 +18,8 @@ struct FixtureTransportTests {
     ])
     return try AppServices(
       configuration: configuration,
-      arguments: ["Screenr", "-ScreenrFixtures", TestFixtures.directory.path()] + arguments
+      arguments: ["Screenr", "-ScreenrFixtures", TestFixtures.directory.path()] + arguments,
+      push: RecordingPushSystem(.undecided)
     )
   }
 
@@ -380,6 +381,7 @@ struct APISourceTests {
         "-ScreenrFixtureOverride", "screen/people/empty", "-ScreenrFixtureFailure",
         "errors/signed-out", "-ScreenrFixtureLog", "/tmp/requests.log", "-AppleLanguages", "(en)",
         "-ScreenrOpenURL", "screenr-dev://people", "-ScreenrFixtureProfile", "pending",
+        "-ScreenrFixturePush", "denied",
       ],
       variant: .dev
     )
@@ -394,10 +396,30 @@ struct APISourceTests {
             profile: .pending,
             overrides: ["screen/feed/empty", "screen/people/empty"],
             failure: "errors/signed-out",
-            requestLog: URL(filePath: "/tmp/requests.log")
+            requestLog: URL(filePath: "/tmp/requests.log"),
+            push: .denied
           )
         )
     )
+  }
+
+  // UI tests never see iOS's permission prompt: the fixture push system
+  // reports the scenario's permission, and a member who has not decided
+  // allows notifications when asked. It gets no device token. The `system`
+  // choice keeps iOS's own, for checking pushes from `xcrun simctl push`.
+  @Test @MainActor func reportsTheScenariosPushPermission() async throws {
+    #expect(FixtureScenario().push == .undecided)
+
+    let undecided = FixturePushSystem(permission: .undecided)
+    #expect(await undecided.permission() == .undecided)
+    #expect(try await undecided.requestPermission() == .allowed)
+    #expect(await undecided.permission() == .allowed)
+
+    let denied = FixturePushSystem(permission: .denied)
+    #expect(try await denied.requestPermission() == .denied)
+
+    #expect(FixtureScenario.Push.allowed.permission == .allowed)
+    #expect(FixtureScenario.Push.system.permission == nil)
   }
 
   @Test func opensALinkAtLaunchInDev() throws {
@@ -442,6 +464,7 @@ struct APISourceTests {
     ["Screenr", "-ScreenrFixtures"],
     ["Screenr", "-ScreenrFixtures", "/tmp", "-ScreenrFixtureSession", "maybe"],
     ["Screenr", "-ScreenrFixtures", "/tmp", "-ScreenrFixtureColor", "red"],
+    ["Screenr", "-ScreenrFixtures", "/tmp", "-ScreenrFixturePush", "maybe"],
   ])
   func rejectsMalformedArguments(_ arguments: [String]) {
     #expect(throws: APISource.ArgumentError.self) {

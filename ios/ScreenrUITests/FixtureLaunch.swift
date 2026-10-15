@@ -40,6 +40,9 @@ struct FixtureLaunch {
   // The color scheme in place of the Simulator's, which changes for its apps
   // only after it restarts.
   var appearance: Appearance?
+  // A notification the app opens at launch, as if the member had tapped its
+  // push, such as "18".
+  var pushTap: String?
 
   static let directory = URL(filePath: #filePath)
     .deletingLastPathComponent()  // ScreenrUITests
@@ -57,6 +60,7 @@ struct FixtureLaunch {
     if let link { arguments += ["-ScreenrOpenURL", link] }
     if let textSize { arguments += ["-UIPreferredContentSizeCategoryName", textSize] }
     if let appearance { arguments += ["-ScreenrAppearance", appearance.rawValue] }
+    if let pushTap { arguments += ["-ScreenrPushTap", pushTap] }
     return arguments
   }
 }

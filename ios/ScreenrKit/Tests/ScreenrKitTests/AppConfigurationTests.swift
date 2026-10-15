@@ -8,8 +8,10 @@ struct AppConfigurationTests {
     "ScreenrServerURL": "http://localhost:3000",
     "ScreenrAppGroup": "group.com.artisanalsoftware.Screenr.dev",
     "ScreenrGoogleClientID": "1083-abc.apps.googleusercontent.com",
+    "CFBundleIdentifier": "com.artisanalsoftware.Screenr.dev",
     "CFBundleShortVersionString": "1.0",
     "CFBundleVersion": "7",
+    "ScreenrAPSEnvironment": "development",
   ]
 
   @Test func readsTheBuildSettingsFromTheInfoDictionary() throws {
@@ -25,6 +27,57 @@ struct AppConfigurationTests {
 
   @Test func namesTheBuildInTheClientHeader() throws {
     #expect(try AppConfiguration(infoDictionary: dev).clientHeader == "ios/1.0/7")
+  }
+
+  // A device token belongs to the APNs environment of the build's aps-environment
+  // entitlement, which the same build setting writes to the Info.plist.
+  @Test func namesTheDeviceTokensEnvironmentTopicAndBuild() throws {
+    #expect(
+      try AppConfiguration.pushTarget(infoDictionary: dev)
+        == PushTarget(environment: .sandbox, topic: "com.artisanalsoftware.Screenr.dev", build: 7)
+    )
+    var release = dev
+    release["ScreenrAPSEnvironment"] = "production"
+    release["CFBundleIdentifier"] = "com.artisanalsoftware.Screenr"
+    #expect(
+      try AppConfiguration.pushTarget(infoDictionary: release)
+        == PushTarget(environment: .production, topic: "com.artisanalsoftware.Screenr", build: 7)
+    )
+  }
+
+  // Extensions, such as the share extension, receive no pushes and carry no
+  // APNs environment.
+  @Test func readsAnExtensionsSettingsWithoutThePushTarget() throws {
+    var info = dev
+    info["CFBundleIdentifier"] = nil
+    info["ScreenrAPSEnvironment"] = nil
+
+    #expect(try AppConfiguration(infoDictionary: info).build == "7")
+  }
+
+  @Test(arguments: ["CFBundleIdentifier", "CFBundleVersion", "ScreenrAPSEnvironment"])
+  func reportsAMissingPushValue(key: String) {
+    var info = dev
+    info[key] = nil
+
+    #expect(throws: AppConfiguration.Failure.missingValue(key: key)) {
+      try AppConfiguration.pushTarget(infoDictionary: info)
+    }
+  }
+
+  @Test(arguments: [
+    ("CFBundleIdentifier", ""),
+    ("CFBundleIdentifier", "com.artisanalsoftware.Screenr dev"),
+    ("CFBundleVersion", "0"),
+    ("ScreenrAPSEnvironment", "sandbox"),
+  ])
+  func reportsAnInvalidPushValue(key: String, value: String) {
+    var info = dev
+    info[key] = value
+
+    #expect(throws: AppConfiguration.Failure.invalidValue(key: key)) {
+      try AppConfiguration.pushTarget(infoDictionary: info)
+    }
   }
 
   @Test func acceptsTheReleaseServer() throws {
@@ -72,6 +125,7 @@ struct AppConfigurationTests {
     ("CFBundleShortVersionString", "1.0 beta"),
     ("CFBundleVersion", "1.2"),
     ("CFBundleVersion", "1234567890123456"),
+    ("CFBundleVersion", "0"),
   ])
   func reportsAnInvalidValue(key: String, value: String) {
     var info = dev

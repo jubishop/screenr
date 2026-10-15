@@ -38,6 +38,7 @@ public final class ShellModel {
   @ObservationIgnored private let clock: any Clock<Duration>
   @ObservationIgnored private let onViewer: @MainActor (Person) -> Void
   @ObservationIgnored private let onScreen: @MainActor (Screen) -> Void
+  @ObservationIgnored private var unreadHandlers: [@MainActor (Int) -> Void] = []
 
   // `onViewer` learns who is signed in each time a new member's first screen
   // loads, such as to name the opaque user ID in error reports. `onScreen`
@@ -78,9 +79,16 @@ public final class ShellModel {
   public func sessionEnded() {
     account = .checking
     viewer = nil
-    unreadNotifications = 0
+    setUnreadNotifications(0)
     notices = [:]
     router.reset()
+  }
+
+  // Runs `handler` with every unread count a read reports, changed or not,
+  // and with 0 when the session ends, such as to keep the app icon's badge on
+  // the count the app sees.
+  public func onUnreadCount(_ handler: @escaping @MainActor (Int) -> Void) {
+    unreadHandlers.append(handler)
   }
 
   // A model for a member screen that reports what it loads to the shell, or
@@ -107,6 +115,7 @@ public final class ShellModel {
   // Such as after marking notifications read, or from a push's badge.
   public func setUnreadNotifications(_ count: Int) {
     if unreadNotifications != count { unreadNotifications = count }
+    for handler in unreadHandlers { handler(count) }
   }
 
   // A push notification arrived while the app is open: the visible screen
