@@ -6,9 +6,29 @@ import Observation
 // Google. A sign-in that succeeds stores the session, which moves
 // `SessionStore.phase` to signed in, so the app leaves this screen. Every
 // request carries the pending invitation, which a new member needs.
+//
+// The same model confirms it's the signed-in member again, such as before
+// deleting the account: with an email code to the account's own address or a
+// sign-in method connected to the account, without the invitation, and only
+// for the same member, as `confirming(userId:)` describes.
 @MainActor
 @Observable
 public final class SignInModel {
+  // The ways to sign in, in the order the screen offers them.
+  public enum Method: Hashable, Sendable {
+    case apple
+    case google
+    case emailCode
+
+    var provider: String {
+      switch self {
+      case .emailCode: "email"
+      case .apple: "Apple"
+      case .google: "Google"
+      }
+    }
+  }
+
   public enum Step: Hashable, Sendable {
     case email
     // A code was requested for this address.
@@ -33,24 +53,66 @@ public final class SignInModel {
   // What went wrong with the last attempt, in words for the member.
   public private(set) var failure: String?
 
+  private enum Purpose {
+    // Signing in, or joining with the pending invitation.
+    case signIn(PendingInvitation)
+    // Confirming it's the signed-in member.
+    case confirm(MemberConfirmation)
+  }
+
   @ObservationIgnored private let api: any ScreenrAPI
-  @ObservationIgnored private let invitation: PendingInvitation
+  @ObservationIgnored private let purpose: Purpose
   @ObservationIgnored private let providers: IdentityProviders
   @ObservationIgnored private var appleNonce: AppleNonce?
+  @ObservationIgnored private var confirmed: @MainActor () -> Void = {}
 
   public init(api: any ScreenrAPI, invitation: PendingInvitation, providers: IdentityProviders) {
     self.api = api
-    self.invitation = invitation
+    purpose = .signIn(invitation)
     self.providers = providers
   }
 
+  // Confirms it's `member` again. A sign-in that succeeds keeps the new
+  // session and runs the `onConfirm(_:)` handler.
+  public init(
+    api: any ScreenrAPI,
+    confirming member: MemberConfirmation,
+    providers: IdentityProviders
+  ) {
+    self.api = api
+    purpose = .confirm(member)
+    self.providers = providers
+    email = member.email ?? ""
+  }
+
+  // Runs `handler` once a sign-in confirms the member.
+  public func onConfirm(_ handler: @escaping @MainActor () -> Void) {
+    confirmed = handler
+  }
+
   public var authorization: IdentityProviders.Authorization { providers.authorization }
+  // The methods to offer: every one to sign in, and to confirm the member,
+  // those their account has.
+  public var methods: [Method] {
+    switch purpose {
+    case .signIn: [.apple, .google, .emailCode]
+    case .confirm(let member): member.methods
+    }
+  }
+  // The account's address while confirming the member, which gets the code
+  // and cannot change; nil while signing in, when the person types one.
+  public var fixedEmail: String? {
+    guard case .confirm(let member) = purpose else { return nil }
+    return member.email
+  }
   // Whether the person opened an invitation link that may still be used.
-  public var isInvited: Bool { invitation.token != nil }
+  public var isInvited: Bool { invitationToken != nil }
   // The web's words for an invitation link the server no longer accepts.
   public var invitationNotice: String? {
-    invitation.status == .unavailable
-      ? "That invitation is no longer available. Existing members can still sign in." : nil
+    guard case .signIn(let invitation) = purpose, invitation.status == .unavailable else {
+      return nil
+    }
+    return "That invitation is no longer available. Existing members can still sign in."
   }
   public var canSendCode: Bool { activity == .idle && Self.isAddress(trimmedEmail) }
   public var canCheckCode: Bool { activity == .idle && code.count == Self.codeLength }
@@ -66,12 +128,12 @@ public final class SignInModel {
     begin(.sendingCode)
     defer { activity = .idle }
     do {
-      _ = try await api.send(.sendCode(email: address, invitation: invitation.token))
+      _ = try await api.send(.sendCode(email: address, invitation: invitationToken))
       email = address
       code = ""
       step = .code(email: address)
     } catch {
-      failure = Self.message(for: error, method: .emailCode)
+      failure = message(for: error, method: .emailCode)
     }
   }
 
@@ -81,10 +143,14 @@ public final class SignInModel {
     begin(.checkingCode)
     defer { activity = .idle }
     do {
-      _ = try await api.send(.signIn(email: address, code: code, invitation: invitation.token))
+      _ = try await api.send(
+        session(.signIn(email: address, code: code, invitation: invitationToken))
+      )
     } catch {
-      failure = Self.message(for: error, method: .emailCode)
+      failure = message(for: error, method: .emailCode)
+      return
     }
+    succeeded()
   }
 
   // Back to the address, to change it or request a new code.
@@ -147,17 +213,21 @@ public final class SignInModel {
     defer { activity = .idle }
     do {
       _ = try await api.send(
-        .signInWithApple(
-          identityToken: credential.identityToken,
-          authorizationCode: credential.authorizationCode,
-          nonce: nonce.raw,
-          name: credential.name,
-          invitation: invitation.token
+        session(
+          .signInWithApple(
+            identityToken: credential.identityToken,
+            authorizationCode: credential.authorizationCode,
+            nonce: nonce.raw,
+            name: credential.name,
+            invitation: invitationToken
+          )
         )
       )
     } catch {
-      failure = Self.message(for: error, method: .apple)
+      failure = message(for: error, method: .apple)
+      return
     }
+    succeeded()
   }
 
   // Signs in with the fixture API's stub Apple credential, in place of the
@@ -193,15 +263,37 @@ public final class SignInModel {
     }
     do {
       _ = try await api.send(
-        .signInWithGoogle(
-          idToken: credential.idToken,
-          nonce: credential.nonce,
-          invitation: invitation.token
+        session(
+          .signInWithGoogle(
+            idToken: credential.idToken,
+            nonce: credential.nonce,
+            invitation: invitationToken
+          )
         )
       )
     } catch {
-      failure = Self.message(for: error, method: .google)
+      failure = message(for: error, method: .google)
+      return
     }
+    succeeded()
+  }
+
+  // The invitation each request sends while signing in. Confirming the
+  // member never joins, so it sends none.
+  private var invitationToken: String? {
+    guard case .signIn(let invitation) = purpose else { return nil }
+    return invitation.token
+  }
+
+  // A sign-in request for this model's purpose.
+  private func session(_ request: APIRequest<Acknowledgement>) -> APIRequest<Acknowledgement> {
+    guard case .confirm(let member) = purpose else { return request }
+    return request.confirming(userId: member.userId)
+  }
+
+  private func succeeded() {
+    guard case .confirm = purpose else { return }
+    confirmed()
   }
 
   private func begin(_ activity: Activity) {
@@ -209,7 +301,9 @@ public final class SignInModel {
     failure = nil
   }
 
-  private var trimmedEmail: String { email.trimmingCharacters(in: .whitespacesAndNewlines) }
+  private var trimmedEmail: String {
+    fixedEmail ?? email.trimmingCharacters(in: .whitespacesAndNewlines)
+  }
 
   private static func isAddress(_ text: String) -> Bool {
     let parts = text.split(separator: "@", omittingEmptySubsequences: false)
@@ -219,18 +313,14 @@ public final class SignInModel {
 
   private static let appleUnfinished = "Sign in with Apple did not finish. Try again."
 
-  enum Method {
-    case emailCode
-    case apple
-    case google
-
-    var provider: String {
-      switch self {
-      case .emailCode: "email"
-      case .apple: "Apple"
-      case .google: "Google"
-      }
-    }
+  // While confirming the member, an Apple or Google account that belongs to
+  // no Screenr account, or is not connected to one, is not this one.
+  private func message(for error: APIError, method: Method) -> String? {
+    guard case .confirm = purpose, method != .emailCode,
+      error.kind == .forbidden || error.code == "OAUTH_LINK_ERROR"
+    else { return Self.message(for: error, method: method) }
+    return
+      "That \(method.provider) account isn’t connected to this Screenr account. Use an email code instead."
   }
 
   // The server's own words for limits, attempts, and invitations. Better

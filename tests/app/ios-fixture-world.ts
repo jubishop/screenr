@@ -1,3 +1,4 @@
+import { generateKeyPairSync } from "node:crypto";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { db, pending, bearerFor, friend } from "./social-fixture";
@@ -8,12 +9,18 @@ import { Placeholders, labelToken, labelUuid } from "./ios-fixtures";
 // titles.
 
 // Google sign-in and Sign in with Apple are configured, as in production, so
-// the account screen offers them. No request reaches Google or Apple.
+// the account screen offers them. No request reaches Google or Apple. Apple's
+// key is a real P-256 key, so a case can sign a request to Apple that a
+// stand-in answers.
 process.env.GOOGLE_CLIENT_ID = "fixture-google-client";
 process.env.GOOGLE_CLIENT_SECRET = "fixture-google-secret";
 process.env.APPLE_TEAM_ID = "fixture-team";
 process.env.APPLE_KEY_ID = "fixture-key";
-process.env.APPLE_PRIVATE_KEY = "fixture-private-key";
+process.env.APPLE_PRIVATE_KEY = generateKeyPairSync("ec", {
+  namedCurve: "P-256",
+})
+  .privateKey.export({ format: "der", type: "pkcs8" })
+  .toString("base64");
 
 const { createInvitation, completeSignup } =
   await import("../../src/server/invitations");

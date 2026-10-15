@@ -217,11 +217,14 @@ export default function Privacy() {
 
         <h2>Deleting your account</h2>
         <p>
-          Delete your account from Account on the website. Screenr first emails
-          you a sign-in code to confirm it&rsquo;s you, then asks you to confirm
-          the deletion. Deletion from You &rarr; Settings in the iPhone app is
-          coming soon; until then, use the website or email{" "}
-          <a href="mailto:screenr@jubishop.com">screenr@jubishop.com</a>.
+          Delete your account from Account on the website or from You &rarr;
+          Settings in the iPhone app. Screenr first confirms it&rsquo;s you: the
+          website emails you a sign-in code, and the app asks you to sign in
+          again with an email code or a sign-in method connected to your
+          account. Then it asks you to confirm the deletion. The app also
+          removes its sign-in token from your iPhone. You can also email{" "}
+          <a href="mailto:screenr@jubishop.com">screenr@jubishop.com</a> to
+          delete your account.
         </p>
         <p>
           Deleting an account is permanent. It erases your sessions and push

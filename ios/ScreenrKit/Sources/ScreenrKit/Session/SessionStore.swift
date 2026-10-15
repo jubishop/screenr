@@ -15,7 +15,18 @@ public final class SessionStore {
     case updateRequired(minimumBuild: Int?)
   }
 
+  // How a session ended.
+  public enum Ending: Hashable, Sendable {
+    // The member signed out, or the server ended the session.
+    case signedOut
+    // The member deleted their account.
+    case accountDeleted
+  }
+
   public private(set) var phase: Phase
+  // How the last session ended, until the next sign-in, so the sign-in
+  // screen can say the account was deleted. Nil after a launch.
+  public private(set) var ending: Ending?
   @ObservationIgnored private let keychain: any KeychainStorage
   @ObservationIgnored private(set) var token: String?
   @ObservationIgnored private var endHandlers: [@MainActor () -> Void] = []
@@ -30,13 +41,15 @@ public final class SessionStore {
   func signIn(token: String) throws(KeychainError) {
     try keychain.write(token)
     self.token = token
+    ending = nil
     if case .updateRequired = phase { return }
     phase = .signedIn
   }
 
-  // Runs `handler` each time the session ends, whether the member signed out
-  // or the server ended the session, so the app forgets what the member saw,
-  // such as cached images and the error-reporting user.
+  // Runs `handler` each time the session ends, whether the member signed out,
+  // the server ended the session, or the member deleted their account, so
+  // the app forgets what the member saw, such as cached images and the
+  // error-reporting user. `ending` already says how it ended.
   public func onEnd(_ handler: @escaping @MainActor () -> Void) {
     endHandlers.append(handler)
   }
@@ -45,9 +58,12 @@ public final class SessionStore {
   // a newer sign-in must not remove the newer token, and the app may have
   // stored one while another process, such as the notification extension,
   // still held the old one. So this checks the Keychain before removing it.
-  func end(token ended: String) throws(KeychainError) {
+  func end(token ended: String, ending: Ending = .signedOut) throws(KeychainError) {
     let current = token == ended
-    if current { token = nil }
+    if current {
+      token = nil
+      self.ending = ending
+    }
     if token == nil, case .signedIn = phase { phase = .signedOut }
     if current {
       for handler in endHandlers { handler() }

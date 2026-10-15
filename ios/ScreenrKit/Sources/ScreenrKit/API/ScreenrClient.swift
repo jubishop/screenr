@@ -180,7 +180,7 @@ public final class ScreenrClient: ScreenrAPI {
       if let cacheKey = context.cacheKey, let etag = response.value(forHTTPHeaderField: "ETag") {
         cache.withLock { $0[cacheKey] = CachedRead(etag: etag, value: value) }
       }
-      try await apply(request.sessionChange, response: response, context: context)
+      try await apply(request.sessionChange, response: response, data: data, context: context)
       return value
     case 304:
       guard let value = context.cached?.value as? Response else {
@@ -217,30 +217,105 @@ public final class ScreenrClient: ScreenrAPI {
   private func apply(
     _ change: SessionChange,
     response: HTTPURLResponse,
+    data: Data,
     context: Context
   ) async throws(APIError) {
     switch change {
     case .none:
       break
     case .signIn:
-      guard let token = response.value(forHTTPHeaderField: "set-auth-token"), !token.isEmpty
-      else { throw APIError(kind: .invalidResponse, requestID: context.requestID) }
+      try await store(Self.sessionToken(response, requestID: context.requestID), context: context)
+    case .confirmSignIn(let userId):
+      let token = try Self.sessionToken(response, requestID: context.requestID)
+      let user: String
       do {
-        try await session.signIn(token: token)
+        user = try ScreenrJSON.decoder().decode(SignedInUser.self, from: data).user.id
       } catch {
-        throw APIError(kind: .keychain, requestID: context.requestID)
+        await discard(token)
+        throw APIError(kind: .invalidResponse, requestID: context.requestID)
       }
-      cache.withLock { $0.removeAll() }
+      guard user == userId else {
+        await discard(token)
+        throw APIError(kind: .otherAccount, requestID: context.requestID)
+      }
+      try await store(token, context: context)
     case .signOut:
       if let token = context.token { try await endSession(token, requestID: context.requestID) }
+    case .accountDeleted:
+      if let token = context.token {
+        try await endSession(token, ending: .accountDeleted, requestID: context.requestID)
+      }
+    }
+  }
+
+  // Better Auth's sign-in response names the person it signed in.
+  private struct SignedInUser: Decodable {
+    struct User: Decodable {
+      let id: String
+    }
+
+    let user: User
+  }
+
+  private static func sessionToken(
+    _ response: HTTPURLResponse,
+    requestID: String
+  ) throws(APIError) -> String {
+    guard let token = response.value(forHTTPHeaderField: "set-auth-token"), !token.isEmpty
+    else { throw APIError(kind: .invalidResponse, requestID: requestID) }
+    return token
+  }
+
+  // Keeps a new session's token in place of any earlier one, and forgets the
+  // screens the earlier one read.
+  private func store(_ token: String, context: Context) async throws(APIError) {
+    do {
+      try await session.signIn(token: token)
+    } catch {
+      throw APIError(kind: .keychain, requestID: context.requestID)
+    }
+    cache.withLock { $0.removeAll() }
+  }
+
+  // Signs out a new session that this device will not keep, such as another
+  // account's, so it does not stay open on the server until it expires.
+  private func discard(_ token: String) async {
+    let requestID = UUID().uuidString
+    do {
+      let request = try makeRequest(
+        .signOut,
+        requestID: requestID,
+        token: token,
+        etag: nil,
+        visit: nil
+      )
+      let (_, response) = try await transport.send(request)
+      guard (200..<300).contains(response.statusCode) else {
+        Log.session.warning(
+          "Could not end a session the app did not keep",
+          .int("status", response.statusCode),
+          .identifier("request_id", requestID)
+        )
+        return
+      }
+    } catch {
+      Log.session.warning(
+        "Could not end a session the app did not keep",
+        .error(error),
+        .identifier("request_id", requestID)
+      )
     }
   }
 
   // Removes the ended session's token and the screens it read.
-  private func endSession(_ token: String, requestID: String) async throws(APIError) {
+  private func endSession(
+    _ token: String,
+    ending: SessionStore.Ending = .signedOut,
+    requestID: String
+  ) async throws(APIError) {
     cache.withLock { $0.removeAll() }
     do {
-      try await session.end(token: token)
+      try await session.end(token: token, ending: ending)
     } catch {
       throw APIError(kind: .keychain, requestID: requestID)
     }

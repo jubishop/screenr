@@ -30,6 +30,9 @@ public struct APIError: Error, Hashable, Sendable {
     case invalidRequest
     // The session token could not be saved to or removed from the Keychain.
     case keychain
+    // A sign-in meant to confirm the signed-in member reached a different
+    // account. The client kept the member's session and ended the other one.
+    case otherAccount
   }
 
   public let kind: Kind
@@ -50,7 +53,8 @@ public struct APIError: Error, Hashable, Sendable {
   // can pass, so polling continues through them.
   public var isPermanent: Bool {
     switch kind {
-    case .signedOut, .forbidden, .notFound, .updateRequired, .rejected, .invalidRequest, .keychain:
+    case .signedOut, .forbidden, .notFound, .updateRequired, .rejected, .invalidRequest, .keychain,
+      .otherAccount:
       true
     case .timedOut, .rateLimited, .server, .offline, .cancelled, .invalidResponse: false
     }
@@ -91,6 +95,8 @@ public struct APIError: Error, Hashable, Sendable {
     case .timedOut: "Screenr took too long to answer. Try again."
     case .server: "Screenr is having trouble right now. Try again soon."
     case .rateLimited: "Too many tries. Wait a moment, then try again."
+    case .otherAccount:
+      "That sign-in is for a different Screenr account. Use one of this account’s sign-in methods."
     default: nil
     }
   }

@@ -487,6 +487,9 @@ activity email, streaming services, and sign-in methods, plus Invite friends
 and Sign out. It also links Sign in with Apple, which only the app offers.
 Photos are cropped and compressed as on the web. See
 [Settings](../ios/README.md#settings).
+[Issue #237](https://github.com/jubishop/screenr/issues/237) added Delete
+account, last in Settings, under the
+[account deletion decision](product-brief.md#account-deletion--2026-10-13).
 
 ### Bell in every tab and Find as the search tab — 2026-10-13
 
