@@ -28,10 +28,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+      - uses: actions/setup-node@v7
         with:
           node-version: lts/*
           check-latest: true
@@ -74,10 +74,10 @@ jobs:
     env:
       TEST_DATABASE_URL: postgresql://screenr:screenr-ci-only@127.0.0.1:5432/screenr_test
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+      - uses: actions/setup-node@v7
         with:
           node-version: lts/*
           check-latest: true
@@ -125,10 +125,10 @@ jobs:
     env:
       TEST_DATABASE_URL: postgresql://screenr:screenr-ci-only@127.0.0.1:5432/screenr_test
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+      - uses: actions/setup-node@v7
         with:
           node-version: lts/*
           check-latest: true
@@ -141,7 +141,7 @@ jobs:
       - run: npx playwright install --with-deps chromium
       - name: Build and run browser tests
         run: bin/check-application --part browser --shard ${{ matrix.shard }}/${{ strategy.job-total }}
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+      - uses: actions/upload-artifact@v7
         if: failure()
         with:
           name: browser-failure-${{ github.run_id }}-${{ matrix.shard }}
@@ -173,7 +173,7 @@ jobs:
     env:
       TEST_DATABASE_URL: postgresql://screenr:screenr-ci-only@127.0.0.1:5432/screenr_test
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
           fetch-depth: 0 # A skip must cover every commit since that deployment.
@@ -185,7 +185,7 @@ jobs:
           REF: ${{ github.ref }}
           REVISION: ${{ github.sha }}
         run: bin/deployment-decision "$EVENT_NAME" "$REF" "$REVISION" >> "$GITHUB_OUTPUT"
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+      - uses: actions/setup-node@v7
         if: steps.decision.outputs.deploy == 'true' && github.repository == 'jubishop/screenr'
         with:
           node-version: lts/*
@@ -197,7 +197,7 @@ jobs:
           npm ci
           npm run build
           npm run release:package
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+      - uses: actions/upload-artifact@v7
         if: steps.decision.outputs.deploy == 'true' && github.repository == 'jubishop/screenr'
         with:
           name: screenr-linux-x64-${{ github.sha }}
@@ -236,12 +236,12 @@ jobs:
       actions: write # Download and remove this run's temporary release artifact.
       id-token: write # Join the tailnet through Tailscale workload identity federation.
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
       # The server answers SSH only on its tailnet address. See docs/deployment.md#production-environment-setup.
       - name: Join the tailnet
-        uses: tailscale/github-action@d1b6cd204f8dceda5b3eaad7f1f767be390056cd # v4.2.0
+        uses: tailscale/github-action@d1b6cd204f8dceda5b3eaad7f1f767be390056cd # Pinned: third-party action in a job holding deploy credentials (v4.2.0)
         with:
           oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
           audience: ${{ secrets.TS_AUDIENCE }}
