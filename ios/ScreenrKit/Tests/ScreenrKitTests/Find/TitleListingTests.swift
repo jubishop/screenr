@@ -35,11 +35,18 @@ struct TitleListingTests {
     let saved = night.lines(savedServices: ["service:netflix"])
     #expect(
       saved == [
-        .offers(.subs, [ListedService(name: "Netflix", saved: true)]), .includesSavedServices,
+        .offers(.subs, [ListedService(name: "Netflix", saved: true)]),
+        .includesSavedServices(.viewer),
       ]
     )
     #expect(saved.map(\.text) == ["On Netflix", "Included in your saved services"])
     #expect(saved.first?.spokenText == "On Netflix (saved)")
+    // Watch together marks the services either person saved.
+    #expect(
+      night.lines(savedServices: ["service:netflix"], savedBy: .eitherPerson).map(\.text) == [
+        "On Netflix", "Included in either person’s saved services",
+      ]
+    )
     #expect(
       viewing["movie:102"]?.lines(savedServices: []).map(\.text) == ["Free on Pluto TV, Tubi TV"]
     )

@@ -115,6 +115,15 @@ public final class Router {
     }
   }
 
+  // Closes destinations that no longer load, such as a blocked person's
+  // profile, with whatever each tab opened above them.
+  public func close(where isClosed: (Destination) -> Bool) {
+    for (tab, stack) in paths {
+      guard let index = stack.firstIndex(where: isClosed) else { continue }
+      paths[tab] = Array(stack[..<index])
+    }
+  }
+
   // Forgets where the last member was, after they sign out.
   public func reset() {
     selectedTab = .circle
