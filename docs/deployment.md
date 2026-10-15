@@ -677,13 +677,23 @@ add required deployment reviewers or require a PR for direct main delivery.
 The `check` job, which passes only when every check job passed, gates
 production deployment.
 
+The shared VPS answers SSH only on its tailnet address, so the deploy job
+first joins the tailnet as an ephemeral `tag:ci` node with
+`tailscale/github-action` and pings the server. It authenticates through a
+Tailscale federated identity limited to the subject
+`repo:jubishop/screenr:environment:production`, which needs the job's
+`id-token: write` permission; no Tailscale secret is stored in GitHub. The
+tailnet policy and setup live in vps-infra `docs/tailscale.md`.
+
 Add these environment secrets:
 
 | Secret | Value |
 | --- | --- |
-| `SCREENR_DEPLOY_HOST` | `root@YOUR_SSH_HOST`, reachable from GitHub-hosted runners |
+| `SCREENR_DEPLOY_HOST` | `root@` and the VPS's tailnet address |
 | `SCREENR_DEPLOY_KEY` | A dedicated Ed25519 private key for this repository's deployments |
 | `SCREENR_DEPLOY_KNOWN_HOSTS` | The verified SSH host-key entry for that exact host |
+| `TS_OAUTH_CLIENT_ID` | The federated identity's client ID |
+| `TS_AUDIENCE` | The federated identity's audience |
 
 Install the [deploy kit](#deploy-kit) with `bin/install-deploy-kit`, then
 install the matching public key in the VPS root account's `authorized_keys`
