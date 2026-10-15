@@ -92,6 +92,29 @@ final class FriendsTests: XCTestCase {
     wait(for: [log.read("/people/erin")], timeout: 10)
   }
 
+  // In dark mode the accent is a light lime, so the labels of the filled
+  // buttons, Accept and Send friend request in Friends and Watch together on
+  // a profile, are dark. The audit judges contrast in the Simulator's
+  // appearance, so the test measures each label against its fill.
+  @MainActor
+  func testKeepsFilledButtonsReadableInDarkMode() throws {
+    let app = XCUIApplication()
+    app.launch(with: FixtureLaunch(link: "screenr-dev://people", appearance: .dark))
+    let accept = app.person("fay").buttons["Accept"]
+    XCTAssertTrue(accept.waitForExistence(timeout: 10))
+    XCTAssertGreaterThanOrEqual(try accept.labelContrast(), 4.5)
+
+    app.buttons(starting: "Ben Ortiz").tap()
+    let watchTogether = app.buttons["Watch together"]
+    XCTAssertTrue(watchTogether.waitForExistence(timeout: 10))
+    XCTAssertGreaterThanOrEqual(try watchTogether.labelContrast(), 4.5)
+
+    app.navigationBars["Ben Ortiz"].buttons.element(boundBy: 0).tap()
+    let erin = app.person("erin")
+    app.scrollTo(erin)
+    XCTAssertGreaterThanOrEqual(try erin.buttons["Send friend request"].labelContrast(), 4.5)
+  }
+
   // At the largest accessibility text size, nothing clips or loses contrast.
   @MainActor
   func testReadsAtTheLargestTextSize() throws {

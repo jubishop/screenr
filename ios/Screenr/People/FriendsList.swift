@@ -192,7 +192,7 @@ private struct PersonActionsRow<Note: View>: View {
       } label: {
         label
       }
-      .buttonStyle(.borderedProminent)
+      .buttonStyle(.accent)
       .disabled(friends.isSending)
     case .decline:
       // Read while rendering, so asking presents the confirmation.

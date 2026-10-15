@@ -42,7 +42,7 @@ struct ProfileHeader: View {
       NavigationLink(value: Destination.watchTogether(with: [profile.person.username])) {
         Text(action.label)
       }
-      .buttonStyle(.borderedProminent)
+      .buttonStyle(.accent)
     case .cancelRequest:
       Button {
         Task { await actions.run(action, for: profile.person) }
@@ -57,7 +57,7 @@ struct ProfileHeader: View {
       } label: {
         label
       }
-      .buttonStyle(.borderedProminent)
+      .buttonStyle(.accent)
       .disabled(actions.activity != .idle)
     }
   }
