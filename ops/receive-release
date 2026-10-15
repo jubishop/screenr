@@ -1,0 +1,279 @@
+#!/usr/bin/python3 -I
+"""Forced command for Screenr's production deploy key.
+
+bin/install-deploy-kit installs this file at /usr/local/sbin/screenr-receive-release.
+Root's authorized_keys entry for the GitHub Actions deploy key forces it:
+
+    restrict,command="/usr/local/sbin/screenr-receive-release" ssh-ed25519 KEY screenr-github-actions-production
+
+The key can then run only these commands, read from SSH_ORIGINAL_COMMAND:
+
+    status                       Print the active revision and the installed kit's digest as JSON.
+    upload REVISION SHA256       Check the release archive on stdin and keep it for deployment.
+    deploy REVISION SHA256 KIT   Deploy the kept archive with the installed kit.
+    discard                      Remove the kept archive.
+    finalize REVISION            Run the installed kit's release cleanup after public checks.
+
+Root runs only the deploy kit that bin/install-deploy-kit installed from Git in
+/usr/local/lib/screenr-deploy. Nothing that arrives over the connection is run
+or installed as root; the release runs as the Screenr service users.
+
+ops/deploy-release.sh also runs this file, with arguments the forced command
+never passes, to extract the kept archive:
+
+    screenr-receive-release extract ARCHIVE /opt/screenr/releases/REVISION REVISION
+
+It checks the archive again and extracts it with the same parser, so no
+difference between tar implementations can let an entry past the checks.
+"""
+import contextlib
+import fcntl
+import hashlib
+import json
+import os
+from pathlib import Path, PurePosixPath
+import re
+import subprocess
+import sys
+import tarfile
+import zlib
+
+SCREENR = Path('/opt/screenr')
+KIT = Path('/usr/local/lib/screenr-deploy')
+UPLOAD = Path('/var/lib/screenr-deploy/release.tar.gz')
+PYTHON = Path('/usr/bin/python3')
+# Releases are about 110 MB compressed and 420 MB unpacked, in about 15,000 entries.
+ARCHIVE_LIMIT = 512 * 1024 * 1024
+CONTENT_LIMIT = 2 * 1024 * 1024 * 1024
+MEMBER_LIMIT = 100_000
+# Far longer than any release path; keeps every path well under PATH_MAX.
+NAME_LIMIT = 1024
+# The kit's scripts get this environment, never the connection's.
+ENVIRONMENT = {'PATH': '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin', 'LANG': 'C.UTF-8'}
+COMMANDS = {
+    'status': re.compile(r'status'),
+    'upload': re.compile(r'upload ([0-9a-f]{40}) ([0-9a-f]{64})'),
+    'deploy': re.compile(r'deploy ([0-9a-f]{40}) ([0-9a-f]{64}) ([0-9a-f]{64})'),
+    'discard': re.compile(r'discard'),
+    'finalize': re.compile(r'finalize ([0-9a-f]{40})'),
+}
+# Deployment and cleanup write these markers; a release cannot supply them.
+RESERVED = {'.deployment-pending', '.deployment-success'}
+# Activation creates .next/cache and changes its owner as root.
+NOT_LINKS = {'.', '.next', '.next/cache'}
+LOCK_HELD = ('Another deployment, release cleanup, or restore holds /opt/screenr/deploy.lock. '
+             'Wait for it to finish, then rerun the deploy job.')
+
+
+def kit_digest():
+    """Digest the installed kit the way bin/_deploy_kit.py digests it from Git."""
+    files = {'receive-release': Path(__file__).read_bytes()}
+    if KIT.exists():
+        for path in KIT.iterdir():
+            if path.is_symlink() or not path.is_file():
+                raise ValueError(f'Unexpected entry {path.name} in the deploy kit. '
+                                 'Reinstall it with bin/install-deploy-kit.')
+            files[path.name] = path.read_bytes()
+    listing = ''.join(f'{hashlib.sha256(data).hexdigest()}  {name}\n' for name, data in sorted(files.items()))
+    return hashlib.sha256(listing.encode()).hexdigest()
+
+
+def active_revision():
+    """Return the active revision, or None on a provisioned host that never activated one."""
+    current, releases = SCREENR / 'current', SCREENR / 'releases'
+    try:
+        active = (current / 'REVISION').read_text().strip()
+    except OSError:
+        # Only a host with no active release and an empty releases directory
+        # is new. Any other state fails closed.
+        if not current.exists() and not current.is_symlink() and releases.is_dir() and not any(releases.iterdir()):
+            return None
+        raise ValueError('Could not read the active production revision.') from None
+    if not re.fullmatch(r'[0-9a-f]{40}', active):
+        raise ValueError('Could not read the active production revision.')
+    return active
+
+
+@contextlib.contextmanager
+def deploy_lock():
+    with (SCREENR / 'deploy.lock').open('a') as lock:
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            raise ValueError(LOCK_HELD) from None
+        yield
+
+
+def release_path(raw):
+    """Return a member's path inside the release, rejecting absolute, parent, and overlong paths."""
+    path = PurePosixPath(raw)
+    if raw.startswith('/') or '..' in path.parts or len(raw.encode()) > NAME_LIMIT:
+        raise ValueError(f'Release archive entry {raw!r} points outside the release.')
+    return str(path)
+
+
+def check_links(names, links):
+    """Require every link to resolve inside the release without passing through another link."""
+    for name in names:
+        for parent in PurePosixPath(name).parents:
+            if str(parent) in links:
+                raise ValueError(f'Release archive entry {name} is inside the link {parent}.')
+    for name, target in links.items():
+        if name in NOT_LINKS:
+            raise ValueError(f'Release archive entry {name} cannot be a link.')
+        if not target or target.startswith('/') or len(target.encode()) > NAME_LIMIT:
+            raise ValueError(f'Release archive link {name} has an empty, absolute, or overlong target.')
+        parts = list(PurePosixPath(name).parent.parts)
+        steps = [step for step in target.split('/') if step not in ('', '.')]
+        for index, step in enumerate(steps):
+            if step == '..':
+                if not parts:
+                    raise ValueError(f'Release archive link {name} points outside the release.')
+                parts.pop()
+                continue
+            parts.append(step)
+            if index < len(steps) - 1 and '/'.join(parts) in links:
+                raise ValueError(f'Release archive link {name} resolves through another link.')
+
+
+def check_archive(path, revision):
+    """Accept only directories, regular files, and contained links, with REVISION and server.js."""
+    names, links, manifest, server, total = set(), {}, None, False, 0
+    try:
+        with tarfile.open(path, 'r:gz') as archive:
+            for member in archive:
+                if len(names) >= MEMBER_LIMIT:
+                    raise ValueError(f'Release archive has more than {MEMBER_LIMIT} entries.')
+                name = release_path(member.name)
+                if name in names:
+                    raise ValueError(f'Release archive repeats {name}.')
+                names.add(name)
+                if name in RESERVED:
+                    raise ValueError(f'Release archive contains the deployment marker {name}.')
+                if member.issym():
+                    links[name] = member.linkname
+                    continue
+                if member.isreg():
+                    total += member.size
+                    if total > CONTENT_LIMIT:
+                        raise ValueError(f'Release archive unpacks to more than {CONTENT_LIMIT} bytes.')
+                    manifest = member if name == 'REVISION' and member.size <= 64 else manifest
+                    server = server or name == 'server.js'
+                elif not member.isdir():
+                    raise ValueError(f'Release archive entry {name} is not a file, directory, or link.')
+                if member.mode & 0o7002:
+                    raise ValueError(f'Release archive entry {name} is setuid, setgid, sticky, or world-writable.')
+            check_links(names, links)
+            if manifest is None or not server:
+                raise ValueError('Release archive needs a REVISION file and a server.js file.')
+            content = archive.extractfile(manifest)
+            if content is None or content.read().strip() != revision.encode():
+                raise ValueError(f'Release archive REVISION does not match {revision}.')
+    except (tarfile.TarError, EOFError, zlib.error, OSError) as error:
+        raise ValueError(f'Release archive is unreadable: {error}') from None
+
+
+def upload(revision, checksum, stdin):
+    """Keep a checked archive at UPLOAD; only a fully checked archive ever appears there."""
+    UPLOAD.parent.mkdir(mode=0o700, exist_ok=True)
+    UPLOAD.parent.chmod(0o700)
+    partial = UPLOAD.with_name(UPLOAD.name + '.partial')
+    with deploy_lock():
+        UPLOAD.unlink(missing_ok=True)
+        partial.unlink(missing_ok=True)
+        try:
+            digest, size = hashlib.sha256(), 0
+            flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW
+            with os.fdopen(os.open(partial, flags, 0o600), 'wb') as output:
+                while chunk := stdin.read(1024 * 1024):
+                    size += len(chunk)
+                    if size > ARCHIVE_LIMIT:
+                        raise ValueError(f'Release archive exceeds {ARCHIVE_LIMIT} bytes.')
+                    digest.update(chunk)
+                    output.write(chunk)
+            if digest.hexdigest() != checksum:
+                raise ValueError('Release archive checksum does not match the upload command.')
+            check_archive(partial, revision)
+            partial.rename(UPLOAD)
+        finally:
+            partial.unlink(missing_ok=True)
+    print(f'Received and checked release {revision}.', flush=True)
+    return 0
+
+
+def extract(archive, destination, revision):
+    """Check the archive again, then extract it into the revision's new, empty release directory."""
+    destination = Path(destination)
+    if (destination != SCREENR / 'releases' / revision or destination.is_symlink()
+            or not destination.is_dir() or any(destination.iterdir())):
+        raise ValueError(f'Unexpected extraction destination {destination}.')
+    check_archive(Path(archive), revision)
+    try:
+        with tarfile.open(archive, 'r:gz') as release:
+            release.extractall(destination, filter='data')
+    except (tarfile.TarError, EOFError, zlib.error) as error:
+        raise ValueError(f'Release archive could not be extracted: {error}') from None
+    return 0
+
+
+def deploy(revision, checksum, kit):
+    installed = kit_digest()
+    if installed != kit:
+        raise ValueError(f'The installed deploy kit ({installed[:12]}) does not match ops/ at {revision} '
+                         f'({kit[:12]}). From a trusted checkout, run bin/install-deploy-kit with this '
+                         'revision, then rerun the deploy job.')
+    if UPLOAD.is_symlink() or not UPLOAD.is_file():
+        raise ValueError('No uploaded release archive. Rerun the deploy job.')
+    print(f'Deploying {revision} with deploy kit {kit[:12]}.', flush=True)
+    return subprocess.run(['/bin/sh', str(KIT / 'deploy-release.sh'), revision, checksum, str(UPLOAD)],
+                          env=ENVIRONMENT, stdin=subprocess.DEVNULL).returncode
+
+
+def discard():
+    with deploy_lock():
+        UPLOAD.unlink(missing_ok=True)
+        UPLOAD.with_name(UPLOAD.name + '.partial').unlink(missing_ok=True)
+    return 0
+
+
+def finalize(revision):
+    return subprocess.run([str(PYTHON), '-I', str(KIT / 'prune-releases.py'), str(SCREENR / 'releases' / revision)],
+                          env=ENVIRONMENT, stdin=subprocess.DEVNULL).returncode
+
+
+def receive(command, stdin):
+    """Run one protocol command and return its exit status."""
+    name = command.partition(' ')[0]
+    match = COMMANDS[name].fullmatch(command) if name in COMMANDS else None
+    if not match:
+        raise ValueError('Refused: the deploy key accepts only status, upload REVISION SHA256, '
+                         'deploy REVISION SHA256 KIT, discard, and finalize REVISION.')
+    if name == 'status':
+        print(json.dumps({'active': active_revision(), 'kit': kit_digest()}), flush=True)
+        return 0
+    if name == 'upload':
+        return upload(*match.groups(), stdin)
+    if name == 'deploy':
+        return deploy(*match.groups())
+    if name == 'discard':
+        return discard()
+    return finalize(*match.groups())
+
+
+def main():
+    try:
+        if os.geteuid() != 0:
+            raise ValueError("Run as root through the deploy key's forced command.")
+        if len(sys.argv) > 1:
+            # Only ops/deploy-release.sh passes arguments; the forced command has none.
+            if len(sys.argv) != 5 or sys.argv[1] != 'extract' or not re.fullmatch(r'[0-9a-f]{40}', sys.argv[4]):
+                raise ValueError('Usage: screenr-receive-release extract ARCHIVE DIRECTORY REVISION')
+            return extract(*sys.argv[2:])
+        return receive(os.environ.get('SSH_ORIGINAL_COMMAND', ''), sys.stdin.buffer)
+    except (OSError, ValueError) as error:
+        print(f'screenr-receive-release: {error}', file=sys.stderr, flush=True)
+        return 1
+
+
+if __name__ == '__main__':
+    sys.exit(main())

@@ -1,20 +1,21 @@
 #!/bin/sh
-# Executed remotely by the CI deployment job with a verified release archive.
-# The job sends this script, the activation and host configuration scripts,
-# and the unit and shared configuration files from the checked Git revision.
-# Root never runs scripts or installs units from the archive.
+# Run as root by ops/receive-release, the deploy key's forced command, with the
+# release archive it received and checked. This script, the activation and host
+# configuration scripts, and the unit and shared configuration files come from
+# the deploy kit that bin/install-deploy-kit installed from Git. Root never
+# runs scripts or installs units from the archive or the SSH connection.
 set -eu
 revision=${1:?Missing revision}
 checksum=${2:?Missing archive checksum}
 archive=${3:?Missing uploaded archive}
-activate=${4:?Missing checked activation script}
-host_config=${5:?Missing checked host configuration script}
-host_files=${6:?Missing checked host configuration files}
+kit=/usr/local/lib/screenr-deploy
 case "$revision" in *[!0-9a-f]*|'') exit 1 ;; esac
 [ "${#revision}" -eq 40 ]
 case "$checksum" in *[!0-9a-f]*|'') exit 1 ;; esac
 [ "${#checksum}" -eq 64 ]
-case "$archive" in /tmp/screenr-release.*) ;; *) exit 1 ;; esac
+[ "$archive" = /var/lib/screenr-deploy/release.tar.gz ]
+test -f "$kit/activate.sh"
+test -f "$kit/host-config.py"
 release=/opt/screenr/releases/$revision
 cd /opt/screenr
 exec 9>deploy.lock
@@ -58,18 +59,20 @@ Restore the /opt/screenr/current link before deploying." >&2
 fi
 # After the backup runs under the active release's units: stop on shared Caddy
 # or PostgreSQL drift, or install changed Screenr units for activation.
-python3 -c "$host_config" "$host_files" /etc/systemd/system \
+python3 "$kit/host-config.py" "$kit" /etc/systemd/system \
     /etc/caddy/Caddyfile /var/lib/screenr/postgres/postgresql.conf
 if [ "$already_active" = false ]; then
     # A failed rollback kept this revision's candidate; a retry replaces it.
     if test -e "$release/.deployment-pending"; then rm -rf "$release"; fi
     mkdir "$release"
     created=true
-    tar -xzf "$archive" -C "$release" --no-same-owner
+    # The receiver checks the archive again and extracts it with the same
+    # parser that checked it on upload.
+    python3 -I /usr/local/sbin/screenr-receive-release extract "$archive" "$release" "$revision"
     touch "$release/.deployment-pending"
     test "$(cat "$release/REVISION")" = "$revision"
     status=0
-    sh -c "$activate" activate "$release" || status=$?
+    sh "$kit/activate.sh" "$release" || status=$?
     # Status 69: no healthy release is running. The candidate already
     # migrated the database, so keep it for recovery.
     if [ "$status" -eq 69 ]; then created=false; fi

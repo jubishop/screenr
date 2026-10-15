@@ -105,8 +105,9 @@ git archive --format=tar REVISION ops/screenr-web.service ops/screenr-worker.ser
 ```
 
 Then check `http://127.0.0.1:3060/api/health` on the host and the public
-health endpoint. Each deployment installs its revision's units, so fix the
-units in `main` before the next deployment.
+health endpoint. Each deployment installs the units of its revision's
+[deploy kit](#deploy-kit), so fix the units in `main` and install that
+revision's kit before the next deployment.
 
 ## Provisioning
 
@@ -291,13 +292,14 @@ host.
 **Rejected alternatives:** Failing on any drift, and applying every
 configuration automatically.
 
-`ops/host-config.py` performs the step. `bin/deploy-ci` reads it with
-`git show`, and the units, `ops/Caddyfile`, and `ops/postgresql.conf` with
-`git archive`, from the checked revision. The release archive and the
-checkout's working files never supply what root installs or compares.
-`ops/deploy-release.sh` runs the step after the pre-activation backup, so the
-backup still runs under the active release's units. A repeat deployment of the
-active revision runs it too.
+`ops/host-config.py` performs the step. It runs from the installed
+[deploy kit](#deploy-kit) and reads the units, `ops/Caddyfile`, and
+`ops/postgresql.conf` from the kit, which must match the deployed revision.
+The release archive, the SSH connection, and the checkout's working files
+never supply what root installs or compares. `ops/deploy-release.sh` runs the
+step after the pre-activation backup, so the backup still runs under the
+active release's units. A repeat deployment of the active revision runs it
+too.
 
 The step first compares the shared files, and changes nothing when either
 differs:
@@ -466,13 +468,14 @@ host has [no active release](#first-release-on-a-new-host), applies
 checks Screenr services, the public health endpoint, the login
 page, and the sign-in route: a signed-out `/api/auth/get-session` must return
 `null`. It also checks that Caddy, Health, KidsBank, and Trading retain their
-running service state. [`bin/deploy-ci`](../bin/deploy-ci) is the internal Actions helper;
-[`ops/deploy-release.sh`](../ops/deploy-release.sh) runs the remote steps.
+running service state. [`bin/deploy-ci`](../bin/deploy-ci) is the internal Actions helper.
+On the host, [`ops/receive-release`](../ops/receive-release), the deploy
+key's forced command, checks the archive, and
+[`ops/deploy-release.sh`](../ops/deploy-release.sh) from the
+[deploy kit](#deploy-kit) runs the remote steps.
 
-**Decision — 2026-10-12:** Send `ops/activate.sh` and `ops/prune-releases.py`
-from the checked Git revision with `git show`, the same way as
-`ops/deploy-release.sh`, so no script that root runs comes from the release
-archive. [Issue #110](https://github.com/jubishop/screenr/issues/110) tracks
+**Decision — 2026-10-12:** No script that root runs comes from the release
+archive. [Issue #110](https://github.com/jubishop/screenr/issues/110) tracked
 the work.
 
 **Why:** The release job packages `ops/` after `npm ci` runs third-party code. A
@@ -482,20 +485,31 @@ shared host, even though build jobs hold no production secrets.
 **Rejected alternative:** Comparing the archive's `ops/` hashes with Git
 before uploading.
 
-The helper reads these scripts from Git before contacting the host. It
-passes the activation script to `deploy-release.sh` as an argument and runs
-cleanup with `python3 -c`, so the archive's copies and the checkout's working
-files are never used. The archive still includes `ops/` because the backup and
-restore-check services run their scripts from the active release as
-`screenr-db`, not root. The same rule covers the script and files for
+**Decision — 2026-10-14:** The deploy key can run only a forced-command
+receiver, and root runs and installs only a deploy kit that an operator
+installs from Git. This supersedes sending the root scripts and unit files
+from Git over the deploy key with each deployment.
+[Issue #304](https://github.com/jubishop/screenr/issues/304) tracks the work.
+
+**Why:** The user asked to confine the key after finding that it could run any
+command as root on the shared host, which also holds other applications'
+credentials. Sending scripts for root to run meant the key, and anyone who
+obtained it, had full root access.
+
+**Tradeoff:** A change to a kit file needs a manual
+[kit installation](#deploy-kit) before its deployment can pass.
+
+The archive still includes `ops/` because the backup and restore-check
+services run their scripts from the active release as `screenr-db`, not root.
+The same rule covers the script and files for
 [host configuration drift](#host-configuration-drift), and applies to anything
 else deployment runs or installs as root.
 
 A new push does not cancel a running main workflow or interrupt activation.
 The workflow's concurrency group runs one main workflow at a time and keeps
 the latest pending run when pushes arrive quickly. Before uploading and again
-before activation, the helper reads the active revision from
-`/opt/screenr/current/REVISION` over the deployment SSH connection. It then
+before activation, the helper reads the active revision with the receiver's
+`status` command, which reads `/opt/screenr/current/REVISION`. It then
 uses GitHub's compare API to require that `main` contains the checked revision
 and that the revision contains the active one. A run superseded by newer pushes
 therefore still deploys its validated release; the next run deploys the newer
@@ -535,8 +549,9 @@ activation with the
 [restore runbook](restore-and-patching.md#restore-on-the-existing-host).
 Cleanup after the next successful deployment removes the kept candidate.
 
-After the public health, login, and sign-in checks pass, deployment runs the checked
-`ops/prune-releases.py` with the verified release path. Cleanup takes the same
+After the public health, login, and sign-in checks pass, the receiver's
+`finalize` command runs the kit's `ops/prune-releases.py` with the verified
+release path. Cleanup takes the same
 host lock as activation and confirms that this release is still active. It
 keeps the active release and the two most recent successful releases, then
 removes other recognized, inactive release directories. Each complete bundle
@@ -562,11 +577,12 @@ release tree.
 A provisioned replacement host has no active release, so it has neither
 `/opt/screenr/current/REVISION` nor the backup script that the backup service
 runs from the active release
-([issue #184](https://github.com/jubishop/screenr/issues/184)). When the
-production read fails, the helper checks over SSH that `/opt/screenr/current`
-does not exist, not even as a broken link, and that `/opt/screenr/releases`
-exists and is empty. Only then does it skip the production comparison; `main`
-must still contain the revision. Under the deploy lock, `deploy-release.sh`
+([issue #184](https://github.com/jubishop/screenr/issues/184)). When
+`/opt/screenr/current/REVISION` cannot be read, the receiver's `status`
+reports no active release only if `/opt/screenr/current` does not exist, not
+even as a broken link, and `/opt/screenr/releases` exists and is empty.
+Otherwise it fails. Only with no active release does the helper skip the
+production comparison; `main` must still contain the revision. Under the deploy lock, `deploy-release.sh`
 checks the host the same way and skips the backup before activation. The
 database on such a host is empty or was just restored from a backup. Every
 deployment that replaces an active release still compares revisions and backs
@@ -578,6 +594,63 @@ at the release that was active before deploying, so the comparison and the
 backup run again. The
 [rebuild runbook](restore-and-patching.md#rebuild-on-a-replacement-host)
 leaves both paths untouched until the first deployment.
+
+### Deploy kit
+
+The deploy key's `authorized_keys` entry forces
+[`ops/receive-release`](../ops/receive-release), installed at
+`/usr/local/sbin/screenr-receive-release`. It reads the requested command from
+`SSH_ORIGINAL_COMMAND`, accepts only these, and refuses anything else,
+including shells, `scp`, and SFTP:
+
+| Command | Effect |
+| --- | --- |
+| `status` | Prints the active revision, or `null` on a [new host](#first-release-on-a-new-host), and the installed kit's digest as JSON |
+| `upload REVISION SHA256` | Reads the release archive from stdin, up to 512 MiB, and keeps it in `/var/lib/screenr-deploy` only if it passes every check |
+| `deploy REVISION SHA256 KIT` | Runs the kit's `deploy-release.sh` for the kept archive when `KIT` matches the installed kit |
+| `discard` | Removes the kept archive |
+| `finalize REVISION` | Runs the kit's `prune-releases.py` for that release |
+
+The upload check accepts only directories, regular files, and relative links
+that resolve inside the release without passing through another link. It
+rejects setuid, setgid, sticky, and world-writable modes, deployment markers,
+and links at `.next` or `.next/cache`. It requires a `server.js` file and a
+`REVISION` file that names the revision. Uploads and discards take the deploy
+lock, so an archive cannot change while a deployment extracts it.
+`deploy-release.sh` extracts the kept archive by running the receiver with
+arguments, which the forced command never passes. The receiver repeats the
+checks and extracts with the same parser and Python's `data` extraction
+filter, so no difference between tar implementations can let an entry past
+the checks.
+
+The deploy kit is what root runs and installs during deployment: the
+receiver, `ops/deploy-release.sh`, `ops/activate.sh`, `ops/host-config.py`,
+`ops/prune-releases.py`, every `ops/screenr-*.service` and `.timer`, and the
+`ops/Caddyfile` and `ops/postgresql.conf` copies that deployment compares.
+[`bin/_deploy_kit.py`](../bin/_deploy_kit.py) lists it. The receiver goes to
+`/usr/local/sbin`, and the rest to `/usr/local/lib/screenr-deploy`, all
+root-owned. Nothing that arrives over the deploy key is run or installed as
+root. The key can still deploy any release, whose code runs as `screenr` and
+whose backup scripts run as `screenr-db`.
+
+`bin/deploy-ci` computes the kit's digest from Git at the deployed revision.
+Before downloading the release, it requires the host's `status` to report
+the same digest; the receiver checks it again before `deploy`. When a commit
+changes a kit file, the deploy job fails with a message naming
+`bin/install-deploy-kit` until the kit is installed. From a trusted checkout,
+with the owner's SSH access rather than the deploy key, run:
+
+```sh
+bin/install-deploy-kit root@YOUR_SSH_HOST REVISION
+```
+
+The script sends the kit files from `git archive` at that revision, never the
+working tree. Under the deploy lock, the host replaces the kit, removes kit
+files that the revision no longer has, and reports its digest, which must
+match. Then re-run the failed deploy job. Installing a kit changes no running
+service: the deployment installs the kit's changed units under the lock,
+before activation. A later deployment of an older revision fails until its kit
+is installed again.
 
 ### Production environment setup
 
@@ -595,14 +668,22 @@ Add these environment secrets:
 | `SCREENR_DEPLOY_KEY` | A dedicated Ed25519 private key for this repository's deployments |
 | `SCREENR_DEPLOY_KNOWN_HOSTS` | The verified SSH host-key entry for that exact host |
 
-Install the matching public key in the VPS root account's `authorized_keys`.
-Use the `restrict` key option to disable forwarding, PTY allocation, and user
-startup files. The deployment needs root access for backups, release ownership,
-and service activation. This grants trusted `main` workflows deployment access
-to the shared VPS. Use a new deployment key; do not upload an existing personal
-SSH key. Obtain the host key through the existing trusted SSH connection and
-verify it before saving the known-hosts entry. The workflow requires strict
-host-key checking and deletes its temporary SSH files when the job finishes.
+Install the [deploy kit](#deploy-kit) with `bin/install-deploy-kit`, then
+install the matching public key in the VPS root account's `authorized_keys`
+with the forced command:
+
+```text
+restrict,command="/usr/local/sbin/screenr-receive-release" ssh-ed25519 PUBLIC_KEY screenr-github-actions-production
+```
+
+`restrict` disables forwarding, PTY allocation, and user startup files, and
+`command=` limits the key to the receiver's commands. The receiver runs as
+root for backups, release ownership, and service activation. This grants
+trusted `main` workflows deployment access to the shared VPS, but not a root
+shell. Use a new deployment key; do not upload an existing personal SSH key.
+Obtain the host key through the existing trusted SSH connection and verify it
+before saving the known-hosts entry. The workflow requires strict host-key
+checking and deletes its temporary SSH files when the job finishes.
 
 Application and backup credentials stay in `/etc/screenr/` on the host.
 For GitHub's environment and concurrency behavior, see
@@ -634,12 +715,11 @@ sign-in route. This check also verifies that Next's generated dependency aliases
 are present.
 Inspect the archive manifest before transferring it. Extract into a new revision directory as root and
 keep application source and runtime packages read-only to the service users.
-Copy `ops/activate.sh` from a checkout of the same revision, not from the
-archive, to `/root/screenr-activate.sh`. Then run on the VPS:
+Install the [deploy kit](#deploy-kit) of the same revision, so the activation
+script comes from Git, not from the archive. Then run on the VPS:
 
 ```sh
-sh /root/screenr-activate.sh /opt/screenr/releases/REVISION
-rm /root/screenr-activate.sh
+sh /usr/local/lib/screenr-deploy/activate.sh /opt/screenr/releases/REVISION
 systemctl enable screenr-web screenr-worker
 ```
 

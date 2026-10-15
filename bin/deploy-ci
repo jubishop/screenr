@@ -1,55 +1,41 @@
 #!/usr/bin/env python3
-"""Deploy the checked main revision from the GitHub Actions production job."""
+"""Deploy the checked main revision from the GitHub Actions production job.
+
+The deploy key can run only ops/receive-release on the host, so every remote
+step is one of its commands. Root runs the deploy kit that
+bin/install-deploy-kit installed from Git; this helper sends only the release
+archive and the kit digest that the checked revision expects.
+"""
 import hashlib
-import io
 import json
 import os
 import posixpath
-import shlex
 from pathlib import Path, PurePosixPath
 import re
 import subprocess
 import sys
 import tarfile
 
+from _deploy_kit import checked_kit, kit_digest
+
 REPO = 'jubishop/screenr'
 ROOT = Path(__file__).resolve().parents[1]
 # The remote scripts exit with this status when no healthy release is running.
 PRODUCTION_DOWN = 69
-# Screenr's systemd units; deployment installs the checked copies as root.
-UNIT = re.compile(r'screenr-[A-Za-z0-9@_.-]+\.(service|timer)')
-# Succeeds only on a provisioned host that has never activated a release.
-# ops/deploy-release.sh repeats the check under the deploy lock.
-NEW_HOST_CHECK = ('test ! -e /opt/screenr/current && test ! -L /opt/screenr/current && '
-                  'test -d /opt/screenr/releases && test -z "$(ls -A /opt/screenr/releases)"')
 
 
-def run(*args, capture=False, text=True):
-    if args[0] in ('ssh', 'scp'):
+def run(*args, capture=False, text=True, stdin=None):
+    if args[0] == 'ssh':
         args = (args[0], '-i', os.environ['SCREENR_DEPLOY_KEY_FILE'],
                 '-o', 'UserKnownHostsFile=' + os.environ['SCREENR_DEPLOY_KNOWN_HOSTS_FILE'],
                 '-o', 'StrictHostKeyChecking=yes', '-o', 'IdentitiesOnly=yes',
                 '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=10',
                 '-o', 'ServerAliveInterval=15', '-o', 'ServerAliveCountMax=3', *args[1:])
-    return subprocess.run(args, check=True, text=text,
-                          cwd=ROOT, stdout=subprocess.PIPE if capture else None,
-                          stdin=subprocess.DEVNULL).stdout
-
-
-def checked_host_files(revision):
-    """Return Screenr's units and the shared Caddy and PostgreSQL configuration from Git."""
-    files = {}
-    with tarfile.open(fileobj=io.BytesIO(run('git', 'archive', '--format=tar', revision, 'ops/',
-                                             capture=True, text=False))) as tree:
-        for member in tree.getmembers():
-            path = PurePosixPath(member.name)
-            if member.isfile() and path.parent == PurePosixPath('ops') and (
-                    UNIT.fullmatch(path.name) or path.name in ('Caddyfile', 'postgresql.conf')):
-                files[path.name] = tree.extractfile(member).read().decode()
-    for name in ('Caddyfile', 'postgresql.conf'):
-        if name not in files:
-            raise ValueError(f'Missing checked configuration: ops/{name}')
-    return files
+    if stdin is None:
+        return subprocess.run(args, check=True, text=text, cwd=ROOT, stdin=subprocess.DEVNULL,
+                              stdout=subprocess.PIPE if capture else None).stdout
+    with stdin.open('rb') as data:
+        return subprocess.run(args, check=True, cwd=ROOT, stdin=data).stdout
 
 
 def contains(older, newer):
@@ -62,28 +48,29 @@ def contains(older, newer):
         raise ValueError(f'Could not compare {older} with {newer}.') from error
 
 
-def active_revision(host):
-    """Return the active production revision, or None on a host that never activated one."""
+def host_status(host):
+    """Return the active production revision, or None on a new host, and the installed kit digest."""
     try:
-        active = run('ssh', host, 'cat /opt/screenr/current/REVISION', capture=True).strip()
-    except subprocess.SubprocessError:
-        # Only a provisioned host with no active release and an empty releases
-        # directory takes a first deployment. Any other state fails closed.
-        try:
-            run('ssh', host, NEW_HOST_CHECK)
-        except subprocess.SubprocessError as error:
-            raise ValueError('Could not read the active production revision.') from error
-        return None
-    if not re.fullmatch(r'[0-9a-f]{40}', active):
+        status = json.loads(run('ssh', host, 'status', capture=True))
+        active, kit = status['active'], status['kit']
+    except (subprocess.SubprocessError, ValueError, KeyError, TypeError) as error:
+        raise ValueError('Could not read the active production revision.') from error
+    if active is not None and not (isinstance(active, str) and re.fullmatch(r'[0-9a-f]{40}', active)):
         raise ValueError('Could not read the active production revision.')
-    return active
+    if not (isinstance(kit, str) and re.fullmatch(r'[0-9a-f]{64}', kit)):
+        raise ValueError('Could not read the deploy kit installed on the host.')
+    return active, kit
 
 
-def check_release(revision, host):
-    """Require main to contain the release and the release to contain production."""
+def check_release(revision, host, kit):
+    """Require the installed kit to match, main to contain the release, and the release to contain production."""
     if not contains(revision, 'main'):
         raise ValueError(f'Release {revision} is not in main. Deploy a revision that main contains.')
-    active = active_revision(host)
+    active, installed = host_status(host)
+    if installed != kit:
+        raise ValueError(f'The deploy kit on the host ({installed[:12]}) does not match ops/ at {revision} '
+                         f'({kit[:12]}). From a trusted checkout, run bin/install-deploy-kit {revision}, '
+                         'then re-run the failed deploy job.')
     if active is None:
         print(f'Main contains {revision}; production has no active release, '
               'so this is the first deployment.', flush=True)
@@ -118,14 +105,12 @@ def main():
         raise ValueError('The release checks must pass before deployment.')
     if run('git', 'rev-parse', 'HEAD', capture=True).strip() != revision:
         raise ValueError('Checkout does not match the checked revision.')
-    # Root runs these scripts and installs or compares these files. The build
-    # job packages ops/ after third-party install scripts run, so never send
-    # the archive's copies.
-    deploy, activate, prune, host_config = (
-        run('git', 'show', f'{revision}:ops/{name}', capture=True)
-        for name in ('deploy-release.sh', 'activate.sh', 'prune-releases.py', 'host-config.py'))
-    host_files = json.dumps(checked_host_files(revision))
-    check_release(revision, host)
+    # Root runs and installs only the deploy kit on the host. Its digest comes
+    # from Git: the build job packages ops/ after third-party install scripts
+    # run, so the archive's copies never count.
+    kit = kit_digest(checked_kit(run('git', 'archive', '--format=tar', revision, 'ops/',
+                                     capture=True, text=False)))
+    check_release(revision, host, kit)
     artifact_name = f'screenr-linux-x64-{revision}'
     print(f'Deploying {revision} from run {run_id}', flush=True)
     directory = ROOT / '.cache' / 'deploy' / run_id
@@ -154,19 +139,17 @@ def main():
         if artifact['name'] == artifact_name:
             run('gh', 'api', '--method', 'DELETE', f"repos/{REPO}/actions/artifacts/{artifact['id']}")
     checksum = hashlib.sha256(archive.read_bytes()).hexdigest()
-    remote = run('ssh', host, 'mktemp /tmp/screenr-release.XXXXXXXX', capture=True).strip()
-    if not re.fullmatch(r'/tmp/screenr-release\.[A-Za-z0-9]+', remote):
-        raise ValueError('Unexpected remote temporary path.')
     try:
-        run('scp', str(archive), f'{host}:{remote}')
-        check_release(revision, host)
+        # The receiver checks the archive again and keeps it only if it passes.
         try:
-            # The remote shell receives this command as one argument, which
-            # Linux limits to 128 KiB.
-            run('ssh', host, shlex.join(('sh', '-c', deploy, 'deploy-release', revision, checksum, remote,
-                                         activate, host_config, host_files)))
+            run('ssh', host, f'upload {revision} {checksum}', stdin=archive)
         except subprocess.CalledProcessError as error:
-            # The remote output above explains the failure. Omit the script text.
+            raise ValueError(f'The host refused the upload with status {error.returncode}; '
+                             'see its output above.') from error
+        check_release(revision, host, kit)
+        try:
+            run('ssh', host, f'deploy {revision} {checksum} {kit}')
+        except subprocess.CalledProcessError as error:
             if error.returncode == PRODUCTION_DOWN:
                 raise ValueError('Activation failed and no healthy release is running, so production is down. '
                                  'Follow the recovery steps in docs/deployment.md.') from error
@@ -174,9 +157,9 @@ def main():
                              'see its output above.') from error
     finally:
         try:
-            run('ssh', host, f'rm -f {remote}')
+            run('ssh', host, 'discard')
         except subprocess.SubprocessError:
-            print(f'Could not remove temporary upload: {remote}', file=sys.stderr)
+            print('Could not remove the uploaded archive from the host.', file=sys.stderr)
     for path in ('api/health', 'login', 'api/auth/get-session'):
         body = run('curl', '--fail', '--silent', '--show-error', '--max-time', '20',
                    f'https://screenr.club/{path}', capture=True)
@@ -188,7 +171,7 @@ def main():
         # session request proves the sign-in route itself answers.
         if path == 'api/auth/get-session' and body.strip() != 'null':
             raise ValueError('Public sign-in check failed.')
-    run('ssh', host, shlex.join(('python3', '-c', prune, f'/opt/screenr/releases/{revision}')))
+    run('ssh', host, f'finalize {revision}')
     print(f'DEPLOY SUCCEEDED: {revision}\nhttps://screenr.club')
     print('Verify changed user flows and the other shared-host applications before closing the release.')
 

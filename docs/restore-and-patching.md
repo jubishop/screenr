@@ -284,7 +284,9 @@ other applications that it checks to be running.
      certificate keys were only on the lost host. Keep the certificate paths
      in `ops/Caddyfile`: deployment
      [stops](deployment.md#host-configuration-drift) while the blocks differ.
-   - Install a deploy key and update the host secrets of the `production`
+   - Install the [deploy kit](deployment.md#deploy-kit) of the revision to
+     deploy with `bin/install-deploy-kit`. Then install the deploy key with
+     its forced command and update the host secrets of the `production`
      environment, as in
      [production environment setup](deployment.md#production-environment-setup).
      Generate a new key pair if the old public key is lost.

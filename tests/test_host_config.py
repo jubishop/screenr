@@ -1,18 +1,20 @@
 """Run the deployment's host configuration step against disposable host files.
 
-Deployment sends the checked source with `python3 -c`, so the tests run it the
-same way, with a fake systemctl at the operating-system boundary.
+Deployment runs the installed deploy kit's copy with the kit directory, which
+holds the checked units and shared configuration beside the kit's scripts. The
+tests build such a directory and fake systemctl at the operating-system boundary.
 """
-import json
 import os
 from pathlib import Path
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
+KIT_SCRIPTS = ('receive-release', 'deploy-release.sh', 'activate.sh', 'host-config.py', 'prune-releases.py')
 UNITS = sorted(path.name for path in (ROOT / 'ops').iterdir()
                if path.name.startswith('screenr-') and path.suffix in ('.service', '.timer'))
 # Other applications' sites in the shared Caddyfile, indented with tabs.
@@ -50,8 +52,15 @@ class HostConfigTests(unittest.TestCase):
                             'PATH': str(commands) + os.pathsep + os.environ['PATH']}
 
     def execute(self, **environment):
-        source = (ROOT / 'ops/host-config.py').read_text()
-        return subprocess.run([sys.executable, '-c', source, json.dumps(self.checked), str(self.units),
+        kit = self.base / 'kit'
+        shutil.rmtree(kit, ignore_errors=True)
+        kit.mkdir()
+        # The kit's scripts sit beside the units and are never installed.
+        for name in KIT_SCRIPTS:
+            (kit / name).write_text('#!/bin/sh\n')
+        for name, content in self.checked.items():
+            (kit / name).write_text(content)
+        return subprocess.run([sys.executable, str(ROOT / 'ops/host-config.py'), str(kit), str(self.units),
                                str(self.caddyfile), str(self.postgresql)],
                               env={**self.environment, **environment}, text=True,
                               capture_output=True, timeout=10)
@@ -201,18 +210,28 @@ class HostConfigTests(unittest.TestCase):
         self.assertIn('Host configuration failed', result.stderr)
         self.assertNotIn('Traceback', result.stderr)
 
-    def test_unexpected_unit_names_are_refused(self):
-        for name in ('../screenr-escape.service', 'screenr-web.socket', 'other.service'):
-            with self.subTest(name=name):
+    def test_only_screenr_units_are_installed_from_the_kit(self):
+        for name in ('screenr-web.socket', 'other.service', 'screenr-web.service.orig'):
+            self.checked[name] = '[Unit]\n'
+        result = self.execute()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(sorted(path.name for path in self.units.iterdir()), UNITS)
+        self.assertEqual(self.systemctl(), [])
+
+    def test_incomplete_kit_changes_nothing(self):
+        for missing in ('Caddyfile', 'postgresql.conf', 'units'):
+            with self.subTest(missing=missing):
                 checked = dict(self.checked)
-                self.checked[name] = '[Unit]\n'
+                for name in (UNITS if missing == 'units' else [missing]):
+                    del self.checked[name]
+                self.checked['screenr-new.timer' if missing != 'units' else 'unused'] = '[Timer]\n'
                 result = self.execute()
                 self.checked = checked
                 self.assertEqual(result.returncode, 1)
-                self.assertIn('Unexpected', result.stderr)
-                self.assertFalse((self.base / 'screenr-escape.service').exists())
+                self.assertIn('deploy kit', result.stderr)
+                self.assertNotIn('Traceback', result.stderr)
+                self.assertEqual(sorted(path.name for path in self.units.iterdir()), UNITS)
                 self.assertEqual(self.systemctl(), [])
-
 
 if __name__ == '__main__':
     unittest.main()

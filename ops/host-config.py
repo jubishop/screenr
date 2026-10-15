@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
 """Install changed Screenr systemd units and stop on shared configuration drift.
 
-Deployment runs this as root under the deploy lock, before activation, with
-the checked Git copies of the files in ops/. It installs changed Screenr units
-and reloads systemd. It never changes the shared Caddyfile or the PostgreSQL
-settings: a difference fails the deployment before any unit is installed.
-Output names files, sites, and settings, never host values, because the
-deployment log is public.
+Deployment runs this as root under the deploy lock, before activation, from
+the deploy kit that bin/install-deploy-kit installed from Git. The kit
+directory holds the checked copies of the units, ops/Caddyfile, and
+ops/postgresql.conf. This installs changed Screenr units from it and reloads
+systemd. It never changes the shared Caddyfile or the PostgreSQL settings: a
+difference fails the deployment before any unit is installed. Output names
+files, sites, and settings, never host values, because the deployment log is
+public.
 """
-import json
 import os
 from pathlib import Path
 import re
@@ -118,16 +119,17 @@ def install_units(units, directory):
 
 def main():
     if len(sys.argv) != 5:
-        raise ValueError('Usage: host-config.py CHECKED_FILES_JSON UNIT_DIRECTORY CADDYFILE POSTGRESQL_CONF')
-    files = json.loads(sys.argv[1])
-    if not isinstance(files, dict) or not all(isinstance(content, str) for content in files.values()):
-        raise ValueError('Unexpected checked files: expected file names and contents.')
-    unexpected = sorted(name for name in files if name not in SHARED and not UNIT.fullmatch(name))
-    if unexpected or not all(name in files for name in SHARED):
-        raise ValueError(f"Unexpected checked files: {', '.join(unexpected) or 'missing shared configuration'}.")
+        raise ValueError('Usage: host-config.py DEPLOY_KIT UNIT_DIRECTORY CADDYFILE POSTGRESQL_CONF')
+    kit = Path(sys.argv[1])
+    # The kit's scripts sit beside these files; only units and shared files are read.
+    files = {path.name: path.read_text() for path in kit.iterdir()
+             if path.is_file() and (path.name in SHARED or UNIT.fullmatch(path.name))}
+    missing = [name for name in SHARED if name not in files]
+    if missing:
+        raise ValueError(f"The deploy kit lacks {', '.join(missing)}. Reinstall it with bin/install-deploy-kit.")
     units = {name: content for name, content in files.items() if UNIT.fullmatch(name)}
     if not units:
-        raise ValueError('Unexpected checked files: the release defines no Screenr units.')
+        raise ValueError('The deploy kit has no Screenr units. Reinstall it with bin/install-deploy-kit.')
     problems = drift(files, Path(sys.argv[3]), Path(sys.argv[4]))
     if problems:
         for problem in problems:

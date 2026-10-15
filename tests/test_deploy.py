@@ -5,9 +5,9 @@ import json
 import os
 from pathlib import Path
 import re
-import shlex
 import shutil
 import subprocess
+import sys
 import tarfile
 import tempfile
 import unittest
@@ -15,23 +15,27 @@ import unittest
 from test_failure_alert import unit_file
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / 'bin'))
+from _deploy_kit import SCRIPTS, SHARED, checked_kit, kit_digest  # noqa: E402
+
 REVISION = 'a' * 40
-# Scripts that run as root on the host. Only their checked Git copies may run.
-ROOT_SCRIPTS = ('ops/deploy-release.sh', 'ops/activate.sh', 'ops/prune-releases.py', 'ops/host-config.py')
+# The installed deploy kit and the receiver's kept upload on the host.
+KIT = '/usr/local/lib/screenr-deploy'
+UPLOAD = '/var/lib/screenr-deploy/release.tar.gz'
 # The remote deployment's host configuration step and the host files it reads.
 HOST_CONFIG = 'host-config /etc/systemd/system /etc/caddy/Caddyfile /var/lib/screenr/postgres/postgresql.conf'
-# Host configuration that deployment installs or compares as root.
-HOST_FILES = ('ops/screenr-web.service', 'ops/screenr-backup.timer', 'ops/Caddyfile', 'ops/postgresql.conf')
-# Checked configuration that deployment requires; 'ops/' fails the whole archive.
-REQUIRED_CHECKED = ('ops/Caddyfile', 'ops/postgresql.conf', 'ops/')
+# The only commands that ops/receive-release accepts from the deploy key.
+PROTOCOL = re.compile(r'status|discard|upload [0-9a-f]{40} [0-9a-f]{64}|deploy [0-9a-f]{40} [0-9a-f]{64} [0-9a-f]{64}'
+                      r'|finalize [0-9a-f]{40}')
 
 FAKE_COMMAND = r'''#!/usr/bin/env python3
-import json, os, subprocess, sys, shutil, tarfile
+import json, os, sys, shutil, tarfile
 from pathlib import Path
 name, args = Path(sys.argv[0]).name, sys.argv[1:]
 base = Path(os.environ['FIXTURE'])
 with (base / 'calls').open('a') as log:
     log.write(json.dumps([name, *args]) + '\n')
+calls = [json.loads(line) for line in (base / 'calls').read_text().splitlines()]
 if name == 'git':
     if args[0] == 'rev-parse': print(os.environ.get('CHECKOUT_SHA', 'a'*40))
     elif args[0] == 'archive':
@@ -41,17 +45,11 @@ if name == 'git':
             for path in sorted((base / 'checked/ops').iterdir()):
                 if 'ops/' + path.name != os.environ.get('MISSING_CHECKED'):
                     tree.add(path, arcname='ops/' + path.name)
-    elif args[0] == 'show':
-        revision, _, path = args[1].partition(':')
-        if revision != 'a'*40 or path not in ('ops/deploy-release.sh', 'ops/activate.sh',
-                                              'ops/prune-releases.py', 'ops/host-config.py'):
-            sys.exit(99)
-        if path == os.environ.get('MISSING_CHECKED'): sys.exit(128)
-        print((base / 'checked' / path).read_text(), end='')
+    else: sys.exit(99)
 elif name == 'gh':
     if args[:2] == ['run', 'download']:
         if os.environ.get('WORKTREE_DRIFT'):
-            for path in ('ops/deploy-release.sh', 'ops/activate.sh', 'ops/prune-releases.py',
+            for path in ('ops/receive-release', 'ops/deploy-release.sh', 'ops/activate.sh', 'ops/prune-releases.py',
                          'ops/host-config.py', 'ops/screenr-web.service', 'ops/Caddyfile'):
                 (base / path).write_text('echo unchecked-deployment\n')
         shutil.copyfile(base / 'release.tar.gz', Path(args[-1]) / ('screenr-' + 'a'*40 + '.tar.gz'))
@@ -68,7 +66,7 @@ elif name == 'gh':
     elif '/compare/' in args[-1]:
         # Linear history 0 -> a -> b; any other revision is on another line.
         if os.environ.get('COMPARE_FAIL'): sys.exit(1)
-        count = sum('...main' in line for line in (base / 'calls').read_text().splitlines())
+        count = sum('...main' in call[-1] for call in calls)
         main = os.environ['LATE_MAIN'] if os.environ.get('LATE_MAIN') and count > 1 else os.environ.get('MAIN_SHA', 'a'*40)
         older, newer = (main if ref == 'main' else ref for ref in args[-1].split('/compare/')[1].split('?')[0].split('...'))
         history = ['0'*40, 'a'*40, 'b'*40]
@@ -79,26 +77,24 @@ elif name == 'gh':
         print(json.dumps(dict(status=status)))
     else: sys.exit(99)
 elif name == 'ssh':
-    # The fixture's host directory stands in for /opt/screenr on the host.
-    host = base / 'host'
-    if args[-1].startswith('mktemp'): print('/tmp/screenr-release.ABC123')
-    elif args[-1] == 'cat /opt/screenr/current/REVISION':
-        if os.environ.get('ACTIVE_EXIT') or not (host / 'current/REVISION').is_file(): sys.exit(1)
-        count = sum('current/REVISION' in line for line in (base / 'calls').read_text().splitlines())
-        print(os.environ['LATE_ACTIVE'] if os.environ.get('LATE_ACTIVE') and count > 1 else os.environ.get('ACTIVE_SHA', '0'*40))
-    elif args[-1].startswith('sh -c'):
+    # Stands in for ops/receive-release behind the forced command.
+    command = args[-1]
+    if command == 'status':
+        if os.environ.get('STATUS_EXIT'): sys.exit(1)
+        count = sum(call[0] == 'ssh' and call[-1] == 'status' for call in calls)
+        if os.environ.get('LATE_ACTIVE') and count > 1: active = os.environ['LATE_ACTIVE']
+        elif os.environ.get('NEW_HOST'): active = None
+        else: active = os.environ.get('ACTIVE_SHA', '0'*40)
+        print(json.dumps(dict(active=active, kit=os.environ['HOST_KIT'])))
+    elif command.startswith('upload '):
+        (base / 'uploaded').write_bytes(sys.stdin.buffer.read())
+        sys.exit(int(os.environ.get('UPLOAD_EXIT', '0')))
+    elif command.startswith('deploy '):
         sys.exit(int(os.environ.get('SSH_EXIT', '0')))
-    elif args[-1].startswith('python3 '):
+    elif command.startswith('finalize '):
         sys.exit(int(os.environ.get('PRUNE_EXIT', '0')))
-    elif '/opt/screenr' in args[-1]:
-        # Run any other host inspection for real against the fixture host.
-        sys.exit(subprocess.run(['sh', '-c', args[-1].replace('/opt/screenr', str(host))]).returncode)
-elif name == 'scp':
-    if os.environ.get('ACTIVATED_DURING_UPLOAD'):
-        # Another activation finishes while this archive uploads.
-        (base / 'host/releases' / ('b'*40)).mkdir(parents=True)
-        (base / 'host/releases' / ('b'*40) / 'REVISION').write_text('b'*40 + '\n')
-        (base / 'host/current').symlink_to('releases/' + 'b'*40)
+    elif command != 'discard':
+        sys.exit(1)
 elif name == 'curl':
     if args[-1].endswith('health'): print(os.environ.get('HEALTH', '{"ok":true}'))
     elif args[-1].endswith('get-session'): print(os.environ.get('SESSION', 'null'))
@@ -114,7 +110,8 @@ class DeploymentFixture(unittest.TestCase):
         (self.base / 'bin').mkdir()
         (self.base / 'ops').mkdir()
         (self.base / 'checked/ops').mkdir(parents=True)
-        shutil.copy2(ROOT / 'bin/deploy-ci', self.base / 'bin/deploy-ci')
+        for name in ('deploy-ci', '_deploy_kit.py'):
+            shutil.copy2(ROOT / 'bin' / name, self.base / 'bin' / name)
         # The checked revision's ops/ directory, and a working copy beside it.
         for path in (ROOT / 'ops').iterdir():
             if path.is_file():
@@ -125,35 +122,35 @@ class DeploymentFixture(unittest.TestCase):
         fake = self.commands / 'command'
         fake.write_text(FAKE_COMMAND)
         fake.chmod(0o755)
-        for name in ('git', 'gh', 'ssh', 'scp', 'curl'):
+        for name in ('git', 'gh', 'ssh', 'curl'):
             (self.commands / name).symlink_to(fake)
         self.environment = {**os.environ, 'FIXTURE': str(self.base),
                             'SCREENR_DEPLOY_HOST': 'root@example.test',
                             'GITHUB_REPOSITORY': 'jubishop/screenr', 'GITHUB_RUN_ID': '123',
                             'GITHUB_SHA': REVISION, 'GITHUB_REF': 'refs/heads/main',
-                            'GITHUB_EVENT_NAME': 'push',
+                            'GITHUB_EVENT_NAME': 'push', 'HOST_KIT': self.checked_digest(),
                             'PATH': str(self.commands) + os.pathsep + os.environ['PATH']}
         for name in ('deploy-key', 'known-hosts'):
             (self.base / name).write_text('fixture')
         self.environment['SCREENR_DEPLOY_KEY_FILE'] = str(self.base / 'deploy-key')
         self.environment['SCREENR_DEPLOY_KNOWN_HOSTS_FILE'] = str(self.base / 'known-hosts')
-        self.make_host()
         self.make_archive()
 
-    def make_host(self):
-        # A host that already runs a release.
-        shutil.rmtree(self.base / 'host', ignore_errors=True)
-        active = self.base / 'host/releases' / ('0' * 40)
-        active.mkdir(parents=True)
-        (active / 'REVISION').write_text('0' * 40 + '\n')
-        (self.base / 'host/current').symlink_to('releases/' + '0' * 40)
+    def checked_digest(self):
+        """The kit digest of the checked revision's ops/ files."""
+        buffer = io.BytesIO()
+        with tarfile.open(fileobj=buffer, mode='w') as tree:
+            for path in sorted((self.base / 'checked/ops').iterdir()):
+                tree.add(path, arcname='ops/' + path.name)
+        return kit_digest(checked_kit(buffer.getvalue()))
 
     def make_archive(self, revision=REVISION, extra=None, root_scripts=True):
         files = [('REVISION', revision), ('server.js', '// server')]
         if root_scripts:
             # The build job packages ops/ after third-party install scripts
             # run, so treat every archive copy of a root script as tampered.
-            files += [('ops/deploy-release.sh', '#!/bin/sh\necho tampered-deployment\n'),
+            files += [('ops/receive-release', 'print("tampered-receiver")\n'),
+                      ('ops/deploy-release.sh', '#!/bin/sh\necho tampered-deployment\n'),
                       ('ops/activate.sh', '#!/bin/sh\necho tampered-activation\n'),
                       ('ops/prune-releases.py', 'print("tampered-cleanup")\n'),
                       ('ops/host-config.py', 'print("tampered-host-config")\n'),
@@ -181,11 +178,20 @@ class DeploymentFixture(unittest.TestCase):
 class CIDeploymentTests(DeploymentFixture):
     command = 'deploy-ci'
 
+    def remote_commands(self):
+        return [call[-1] for call in self.calls() if call[0] == 'ssh']
+
+    def sent(self, verb):
+        return [command for command in self.remote_commands() if command.split(' ')[0] == verb]
+
+    def uploaded(self):
+        return bool(self.sent('upload'))
+
     def test_checked_manual_main_run_can_deploy(self):
         result = self.execute(GITHUB_EVENT_NAME='workflow_dispatch', RUN_EVENT='workflow_dispatch')
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn('DEPLOY SUCCEEDED', result.stdout)
-        self.assertTrue(any(call[0] == 'scp' for call in self.calls()))
+        self.assertTrue(self.uploaded())
 
     def test_checked_push_downloads_and_deploys_without_dispatching_again(self):
         result = self.execute(RUN_EVENT='push')
@@ -195,14 +201,19 @@ class CIDeploymentTests(DeploymentFixture):
         for command in (['gh', 'run', 'download'], ['gh', 'api', '--method', 'DELETE']):
             self.assertTrue(any(call[:len(command)] == command for call in calls), command)
         self.assertFalse(any(call[:3] == ['gh', 'workflow', 'run'] for call in calls))
-        self.assertTrue(any(call[0] == 'scp' for call in calls))
-        self.assertTrue(any(call[0] == 'ssh' and call[-1].startswith('sh -c') for call in calls))
+        checksum = hashlib.sha256((self.base / 'release.tar.gz').read_bytes()).hexdigest()
+        self.assertEqual(self.remote_commands(),
+                         ['status', f'upload {REVISION} {checksum}', 'status',
+                          f'deploy {REVISION} {checksum} {self.checked_digest()}', 'discard',
+                          f'finalize {REVISION}'])
+        self.assertEqual((self.base / 'uploaded').read_bytes(), (self.base / 'release.tar.gz').read_bytes())
         self.assertEqual([call[-1] for call in calls if call[0] == 'curl'],
                          ['https://screenr.club/api/health', 'https://screenr.club/login',
                           'https://screenr.club/api/auth/get-session'])
         self.assertIn('https://screenr.club', result.stdout)
+        self.assertFalse(any(call[0] == 'scp' for call in calls))
         for call in calls:
-            if call[0] in ('ssh', 'scp'):
+            if call[0] == 'ssh':
                 self.assertIn('StrictHostKeyChecking=yes', call)
                 self.assertIn('IdentitiesOnly=yes', call)
                 self.assertIn(str(self.base / 'deploy-key'), call)
@@ -221,72 +232,56 @@ class CIDeploymentTests(DeploymentFixture):
                 self.assertNotEqual(result.returncode, 0, result.stdout)
                 self.assertFalse(any(call[0] in ('ssh', 'scp') for call in self.calls()))
 
-    def remote_commands(self):
-        return [shlex.split(call[-1]) for call in self.calls() if call[0] == 'ssh']
-
-    def host_files(self, command):
-        """Return the checked host configuration files sent with a remote deployment."""
-        return json.loads(command[-1])
-
-    def assert_only_checked_root_scripts(self):
-        checked = {path: (self.base / 'checked' / path).read_text() for path in ROOT_SCRIPTS}
-        checksum = hashlib.sha256((self.base / 'release.tar.gz').read_bytes()).hexdigest()
+    def assert_protocol_only(self):
+        """Every remote command is one the receiver accepts, and the kit digest comes from Git."""
         commands = self.remote_commands()
-        self.assertFalse([command for command in commands
-                          if any('tampered' in part or 'unchecked' in part for part in command)])
-        deployments = [command for command in commands if command[0] == 'sh']
-        self.assertEqual([command[:-1] for command in deployments],
-                         [['sh', '-c', checked['ops/deploy-release.sh'], 'deploy-release', REVISION,
-                           checksum, '/tmp/screenr-release.ABC123', checked['ops/activate.sh'],
-                           checked['ops/host-config.py']]])
-        # Every Screenr unit and the shared configuration, from Git only.
-        checked_ops = self.base / 'checked/ops'
-        self.assertEqual(self.host_files(deployments[0]),
-                         {path.name: path.read_text() for path in checked_ops.iterdir()
-                          if re.fullmatch(r'screenr-.+\.(service|timer)|Caddyfile|postgresql\.conf', path.name)})
-        for path in HOST_FILES:
-            self.assertIn(Path(path).name, self.host_files(deployments[0]))
-        self.assertEqual([command for command in commands if command[0] == 'python3'],
-                         [['python3', '-c', checked['ops/prune-releases.py'],
-                           '/opt/screenr/releases/' + REVISION]])
+        self.assertTrue(commands)
+        for command in commands:
+            self.assertRegex(command, '^(' + PROTOCOL.pattern + ')$')
+        self.assertEqual([command.split(' ')[3] for command in self.sent('deploy')], [self.checked_digest()])
+        self.assertEqual((self.base / 'uploaded').read_bytes(), (self.base / 'release.tar.gz').read_bytes())
 
-    def test_checkout_changes_cannot_change_remote_scripts(self):
+    def test_checkout_changes_cannot_change_the_kit_digest(self):
         result = self.execute(WORKTREE_DRIFT='yes')
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assert_only_checked_root_scripts()
+        self.assert_protocol_only()
 
-    def test_tampered_archive_root_scripts_never_run(self):
+    def test_tampered_archive_root_scripts_do_not_change_the_kit_digest(self):
         result = self.execute()
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assert_only_checked_root_scripts()
+        self.assert_protocol_only()
 
-    def test_archive_without_root_scripts_still_deploys_checked_copies(self):
+    def test_archive_without_root_scripts_still_deploys(self):
         self.make_archive(root_scripts=False)
         result = self.execute()
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assert_only_checked_root_scripts()
+        self.assert_protocol_only()
 
-    def test_every_checked_unit_is_sent_but_no_other_ops_file(self):
-        (self.base / 'checked/ops/screenr-retention.timer').write_text('[Timer]\nOnCalendar=daily\n')
+    def test_kit_digest_covers_kit_files_only(self):
+        before = self.checked_digest()
+        (self.base / 'checked/ops/backup.sh').write_text('# not in the kit\n')
+        self.assertEqual(self.checked_digest(), before)
+        for name in ('screenr-retention.timer', 'activate.sh', 'receive-release', 'Caddyfile'):
+            with self.subTest(name=name):
+                (self.base / 'checked/ops' / name).write_text('# changed\n')
+                self.assertNotEqual(self.checked_digest(), before)
+                before = self.checked_digest()
+
+    def test_host_kit_mismatch_never_uploads(self):
+        (self.base / 'checked/ops/activate.sh').write_text('# changed in this revision\n')
         result = self.execute()
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assert_only_checked_root_scripts()
-        sent = self.host_files(next(command for command in self.remote_commands() if command[0] == 'sh'))
-        self.assertEqual(sent['screenr-retention.timer'], '[Timer]\nOnCalendar=daily\n')
-        for name in ('backup.sh', 'activate.sh', 'backup.env.example'):
-            self.assertNotIn(name, sent)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('bin/install-deploy-kit', result.stderr)
+        self.assertIn(REVISION, result.stderr)
+        self.assertFalse(self.uploaded())
 
     def test_unreadable_checked_files_never_contact_host(self):
-        for path in ROOT_SCRIPTS + REQUIRED_CHECKED:
+        for path in [f'ops/{name}' for name in SCRIPTS + SHARED] + ['ops/']:
             with self.subTest(path=path):
                 (self.base / 'calls').unlink(missing_ok=True)
                 result = self.execute(MISSING_CHECKED=path)
                 self.assertNotEqual(result.returncode, 0)
                 self.assertFalse(any(call[0] in ('ssh', 'scp') for call in self.calls()))
-
-    def uploaded(self):
-        return any(call[0] == 'scp' or (call[0] == 'ssh' and call[-1].startswith(('mktemp', 'sh -c')))
-                   for call in self.calls())
 
     def test_superseded_release_newer_than_production_deploys(self):
         # A newer push moved main while this run's checks ran.
@@ -296,9 +291,9 @@ class CIDeploymentTests(DeploymentFixture):
         self.assertIn('production has ' + '0' * 40, result.stdout)
         calls = self.calls()
         checks = [i for i, call in enumerate(calls) if call[-1].startswith('repos/jubishop/screenr/compare/')
-                  or call[-1] == 'cat /opt/screenr/current/REVISION']
-        upload = next(i for i, call in enumerate(calls) if call[0] == 'scp')
-        activation = next(i for i, call in enumerate(calls) if call[0] == 'ssh' and call[-1].startswith('sh -c'))
+                  or (call[0] == 'ssh' and call[-1] == 'status')]
+        upload = next(i for i, call in enumerate(calls) if call[0] == 'ssh' and call[-1].startswith('upload '))
+        activation = next(i for i, call in enumerate(calls) if call[0] == 'ssh' and call[-1].startswith('deploy '))
         self.assertEqual(len(checks), 6)
         self.assertLess(max(checks[:3]), upload)
         self.assertTrue(upload < min(checks[3:]) and max(checks[3:]) < activation)
@@ -329,7 +324,8 @@ class CIDeploymentTests(DeploymentFixture):
                 self.assertFalse(self.uploaded())
 
     def test_unverifiable_release_never_uploads(self):
-        for environment in ({'COMPARE_FAIL': 'yes'}, {'ACTIVE_EXIT': '1'}, {'ACTIVE_SHA': 'unknown'}):
+        for environment in ({'COMPARE_FAIL': 'yes'}, {'STATUS_EXIT': '1'}, {'ACTIVE_SHA': 'unknown'},
+                            {'HOST_KIT': 'unknown'}):
             with self.subTest(environment=environment):
                 (self.base / 'calls').unlink(missing_ok=True)
                 result = self.execute(**environment)
@@ -337,48 +333,23 @@ class CIDeploymentTests(DeploymentFixture):
                 self.assertIn('Could not', result.stderr)
                 self.assertFalse(self.uploaded())
 
-    def make_new_host(self):
-        # A provisioned replacement host that never activated a release.
-        shutil.rmtree(self.base / 'host/releases' / ('0' * 40))
-        (self.base / 'host/current').unlink()
-
     def test_first_deploy_to_new_host_activates_without_production_comparison(self):
-        self.make_new_host()
-        result = self.execute()
+        result = self.execute(NEW_HOST='yes')
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn('DEPLOY SUCCEEDED', result.stdout)
         self.assertIn('production has no active release', result.stdout)
         # Main must still contain the release; only the production comparison is skipped.
         compares = [call[-1] for call in self.calls() if '/compare/' in call[-1]]
         self.assertEqual(compares, [f'repos/jubishop/screenr/compare/{REVISION}...main?per_page=1'] * 2)
-        self.assert_only_checked_root_scripts()
-
-    def test_missing_active_revision_on_used_host_never_uploads(self):
-        # Only a host with no active release and no releases skips the comparison.
-        host = self.base / 'host'
-        for name, damage in (
-                ('dangling active link', lambda: shutil.rmtree(host / 'releases' / ('0' * 40))),
-                ('active link removed', lambda: (host / 'current').unlink()),
-                ('active manifest removed', lambda: (host / 'releases' / ('0' * 40) / 'REVISION').unlink()),
-                ('other release directory', lambda: (self.make_new_host(), (host / 'releases/bootstrap').mkdir())),
-                ('releases directory missing', lambda: (self.make_new_host(), (host / 'releases').rmdir()))):
-            with self.subTest(name=name):
-                self.make_host()
-                (self.base / 'calls').unlink(missing_ok=True)
-                damage()
-                result = self.execute()
-                self.assertNotEqual(result.returncode, 0)
-                self.assertIn('Could not read the active production revision', result.stderr)
-                self.assertFalse(self.uploaded())
+        self.assert_protocol_only()
 
     def test_release_activated_during_first_upload_still_cannot_move_backwards(self):
-        self.make_new_host()
-        result = self.execute(ACTIVATED_DURING_UPLOAD='yes', LATE_ACTIVE='b' * 40)
+        result = self.execute(NEW_HOST='yes', LATE_ACTIVE='b' * 40)
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('does not contain production revision ' + 'b' * 40, result.stderr)
-        calls = self.calls()
-        self.assertTrue(any(call[0] == 'scp' for call in calls))
-        self.assertFalse(any(call[0] == 'ssh' and call[-1].startswith('sh -c') for call in calls))
+        self.assertTrue(self.uploaded())
+        self.assertEqual(self.sent('deploy'), [])
+        self.assertEqual(self.sent('discard'), ['discard'])
 
     def test_push_during_upload_still_activates(self):
         result = self.execute(LATE_MAIN='b' * 40)
@@ -391,17 +362,16 @@ class CIDeploymentTests(DeploymentFixture):
                 (self.base / 'calls').unlink(missing_ok=True)
                 result = self.execute(**environment)
                 self.assertNotEqual(result.returncode, 0)
-                calls = self.calls()
-                self.assertTrue(any(call[0] == 'scp' for call in calls))
-                self.assertFalse(any(call[0] == 'ssh' and call[-1].startswith('sh -c') for call in calls))
-                self.assertTrue(any(call[0] == 'ssh' and call[-1].startswith('rm -f') for call in calls))
+                self.assertTrue(self.uploaded())
+                self.assertEqual(self.sent('deploy'), [])
+                self.assertEqual(self.sent('discard'), ['discard'])
 
     def test_mismatched_archive_never_contacts_host(self):
         self.make_archive(revision='b' * 40)
         result = self.execute()
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('Archive revision', result.stderr)
-        self.assertFalse(any(call[0] == 'scp' or (call[0] == 'ssh' and call[-1].startswith(('mktemp', 'sh -c'))) for call in self.calls()))
+        self.assertFalse(self.uploaded())
 
     def test_escaping_archive_never_contacts_host(self):
         extra = tarfile.TarInfo('../escape')
@@ -409,13 +379,21 @@ class CIDeploymentTests(DeploymentFixture):
         result = self.execute()
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('Unsafe archive', result.stderr)
-        self.assertFalse(any(call[0] == 'scp' or (call[0] == 'ssh' and call[-1].startswith(('mktemp', 'sh -c'))) for call in self.calls()))
+        self.assertFalse(self.uploaded())
+
+    def test_refused_upload_never_deploys(self):
+        result = self.execute(UPLOAD_EXIT='1')
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('upload', result.stderr)
+        self.assertEqual(self.sent('deploy'), [])
+        self.assertEqual(self.sent('discard'), ['discard'])
+        self.assertNotIn('DEPLOY SUCCEEDED', result.stdout)
 
     def test_failed_activation_cleans_upload_without_success(self):
         result = self.execute(SSH_EXIT='1')
         self.assertNotEqual(result.returncode, 0)
         self.assertNotIn('DEPLOY SUCCEEDED', result.stdout)
-        self.assertTrue(any(call[0] == 'ssh' and call[-1].startswith('rm -f') for call in self.calls()))
+        self.assertEqual(self.sent('discard'), ['discard'])
 
     def test_failed_rollback_reports_production_down(self):
         # The remote scripts exit 69 only when no healthy release is running.
@@ -427,12 +405,9 @@ class CIDeploymentTests(DeploymentFixture):
                 self.assertIn(message, result.stderr)
                 if status != '69':
                     self.assertNotIn('production is down', result.stderr)
-                # Report the outcome, not the remote script text.
-                self.assertNotIn('Executed remotely', result.stderr)
                 self.assertNotIn('DEPLOY SUCCEEDED', result.stdout)
-                calls = self.calls()
-                self.assertTrue(any(call[0] == 'ssh' and call[-1].startswith('rm -f') for call in calls))
-                self.assertFalse(any(call[0] == 'ssh' and call[-1].startswith('python3 ') for call in calls))
+                self.assertEqual(self.sent('discard'), ['discard'])
+                self.assertEqual(self.sent('finalize'), [])
 
     def test_failed_public_health_is_not_success(self):
         result = self.execute(HEALTH='{"ok":false}')
@@ -457,7 +432,7 @@ class CIDeploymentTests(DeploymentFixture):
                 result = self.execute(**environment)
                 calls = self.calls()
                 cleanup = [i for i, call in enumerate(calls)
-                           if call[0] == 'ssh' and call[-1].startswith('python3 ')]
+                           if call[0] == 'ssh' and call[-1].startswith('finalize ')]
                 if environment:
                     self.assertNotEqual(result.returncode, 0)
                     self.assertEqual(cleanup, [])
@@ -510,7 +485,7 @@ class RemoteDeploymentTests(unittest.TestCase):
         }
         readlink() { command cat "$FIXTURE/current"; }
         mkdir() { printf 'created\n' >> "$FIXTURE/events"; }
-        tar() { [ "${FAIL_EXTRACT:-}" != yes ]; }
+        tar() { printf 'ran tar\n' >> "$FIXTURE/events"; return 1; }
         touch() { :; }
         rm() { printf 'removed\n' >> "$FIXTURE/events"; }
         cat() { printf '%s\n' "$REVISION"; }
@@ -518,7 +493,8 @@ class RemoteDeploymentTests(unittest.TestCase):
         # releases directory lists only the names in OTHER_RELEASES.
         ls() { [ -z "${OTHER_RELEASES:-}" ] || printf '%s\n' "$OTHER_RELEASES"; }
         test() {
-            if [ "$1" = -f ]; then return 0; fi
+            # Every file exists except a deploy kit file named in MISSING_KIT_FILE.
+            if [ "$1" = -f ]; then [ "$2" != "${MISSING_KIT_FILE:-}" ]; return; fi
             case "$*" in '-e /opt/screenr/current'|'-L /opt/screenr/current')
                 [ -n "$(command cat "$FIXTURE/current")" ]; return ;;
             esac
@@ -572,33 +548,37 @@ class RemoteDeploymentTests(unittest.TestCase):
         # The host configuration step has its own tests. Record it in order
         # with systemctl; HOST_DRIFT stands for a reported difference.
         python3() {
-            if [ "$1" != -c ] || [ "$2" != "$HOST_CONFIG_SCRIPT" ] || [ "$3" != "$HOST_FILES" ]; then
+            # The receiver extracts with the parser that checked the archive.
+            if [ "$*" = "-I /usr/local/sbin/screenr-receive-release extract $ARCHIVE /opt/screenr/releases/$REVISION $REVISION" ]; then
+                printf 'extracted\n' >> "$FIXTURE/events"
+                [ "${FAIL_EXTRACT:-}" != yes ]
+                return
+            fi
+            if [ "$1" != "$KIT/host-config.py" ] || [ "$2" != "$KIT" ]; then
                 printf 'ran unchecked host configuration\n' >> "$FIXTURE/events"
                 return 1
             fi
-            shift 3
+            shift 2
             printf 'host-config %s\n' "$*" >> "$FIXTURE/systemctl"
             [ "${HOST_DRIFT:-}" != yes ]
         }
         sh() {
-            # Release files are untrusted. Record and refuse any script file;
-            # run only the checked script text passed by the CI helper.
+            # Release files are untrusted. Record and refuse any script but
+            # the installed deploy kit's activation script.
             # Deployment tests the activation status, so dash ignores set -e in
             # a plain subshell. Like the host's new sh process, a background
             # subshell stops at the first failing command.
             (
-                if [ "$1" != -c ]; then
+                if [ "$1" != "$KIT/activate.sh" ]; then
                     printf 'ran %s\n' "$1" >> "$FIXTURE/events"
                     exit 1
                 fi
-                script=$2
-                shift 3
-                eval "$script"
+                shift
+                eval "$ACTIVATION_SCRIPT"
             ) &
             wait "$!"
         }
-        set -- "$REVISION" "$CHECKSUM" /tmp/screenr-release.fixture "$ACTIVATION_SCRIPT" \
-            "$HOST_CONFIG_SCRIPT" "$HOST_FILES"
+        set -- "$REVISION" "$CHECKSUM" "$ARCHIVE"
         . "$DEPLOY"
         '''
         with tempfile.TemporaryDirectory() as directory:
@@ -613,8 +593,7 @@ class RemoteDeploymentTests(unittest.TestCase):
                                     env={**os.environ, 'FIXTURE': directory, 'REVISION': REVISION,
                                          'CHECKSUM': 'b' * 64,
                                          'ACTIVATION_SCRIPT': (ROOT / 'ops/activate.sh').read_text(),
-                                         'HOST_CONFIG_SCRIPT': (ROOT / 'ops/host-config.py').read_text(),
-                                         'HOST_FILES': json.dumps({'Caddyfile': "site {\n    # it's checked\n}\n"}),
+                                         'KIT': KIT, 'ARCHIVE': UPLOAD,
                                          'DEPLOY': str(ROOT / 'ops/deploy-release.sh'), **environment}, timeout=5)
             log = {name: (base / name).read_text().splitlines() if (base / name).exists() else []
                    for name in ('systemctl', 'sleeps', 'steps')}
@@ -664,8 +643,10 @@ class RemoteDeploymentTests(unittest.TestCase):
         self.assertEqual(current, '/opt/screenr/releases/previous')
         self.assertFalse([call for call in self.systemctl_calls if call.startswith('restart')])
 
-    def test_missing_host_configuration_changes_nothing(self):
-        for environment in ({'HOST_CONFIG_SCRIPT': ''}, {'HOST_FILES': ''}):
+    def test_missing_kit_file_or_unexpected_archive_changes_nothing(self):
+        for environment in ({'MISSING_KIT_FILE': KIT + '/activate.sh'},
+                            {'MISSING_KIT_FILE': KIT + '/host-config.py'},
+                            {'ARCHIVE': '/tmp/screenr-release.fixture'}):
             with self.subTest(environment=environment):
                 result, events, current = self.execute_remote(**environment)
                 self.assertNotEqual(result.returncode, 0)
@@ -683,7 +664,7 @@ class RemoteDeploymentTests(unittest.TestCase):
                 self.assertEqual(events, '')
                 self.assertEqual(current, '')
 
-    def test_activation_runs_checked_script_not_release_copy(self):
+    def test_activation_runs_kit_script_not_release_copy(self):
         result, events, current = self.execute_remote(
             ACTIVATION_SCRIPT='echo checked-activation\nln -s "$1" /opt/screenr/current.new\n'
                               'mv -Tf /opt/screenr/current.new /opt/screenr/current\n')
@@ -691,12 +672,6 @@ class RemoteDeploymentTests(unittest.TestCase):
         self.assertIn('checked-activation', result.stdout)
         self.assertNotIn('ran ', events)
         self.assertEqual(current, '/opt/screenr/releases/' + REVISION)
-
-    def test_missing_activation_script_does_not_extract_or_activate(self):
-        result, events, current = self.execute_remote(ACTIVATION_SCRIPT='')
-        self.assertNotEqual(result.returncode, 0)
-        self.assertEqual(events, '')
-        self.assertEqual(current, '/opt/screenr/releases/previous')
 
     def test_backup_failure_does_not_extract_or_activate(self):
         result, events, current = self.execute_remote(FAIL_BACKUP='yes')
@@ -707,7 +682,7 @@ class RemoteDeploymentTests(unittest.TestCase):
     def test_extraction_failure_removes_only_new_release(self):
         result, events, current = self.execute_remote(FAIL_EXTRACT='yes')
         self.assertNotEqual(result.returncode, 0)
-        self.assertEqual(events, 'created\nremoved\n')
+        self.assertEqual(events, 'created\nextracted\nremoved\n')
         self.assertEqual(current, '/opt/screenr/releases/previous')
 
     def test_failed_configuration_check_or_migration_keeps_active_release(self):
@@ -722,7 +697,7 @@ class RemoteDeploymentTests(unittest.TestCase):
                 self.assertEqual(current, '/opt/screenr/releases/previous')
                 self.assertFalse([call for call in self.systemctl_calls if call.startswith('restart')])
                 self.assertNotIn('Activated', result.stdout)
-                self.assertEqual(events, 'created\nremoved\n')
+                self.assertEqual(events, 'created\nextracted\nremoved\n')
 
     def assert_verified_rollback(self, result, events, current):
         self.assertEqual(result.returncode, 1)
@@ -788,7 +763,7 @@ class RemoteDeploymentTests(unittest.TestCase):
         result, events, current = self.execute_remote(KEPT_CANDIDATE='yes')
         self.assertEqual(result.returncode, 0, result.stderr)
         # Activation then creates the release's cache directory.
-        self.assertEqual(events, 'removed\ncreated\ncreated\n')
+        self.assertEqual(events, 'removed\ncreated\nextracted\ncreated\n')
         self.assertEqual(current, '/opt/screenr/releases/' + REVISION)
 
     def test_links_left_by_an_interrupted_activation_are_replaced(self):

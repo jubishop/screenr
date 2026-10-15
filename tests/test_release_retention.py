@@ -1,7 +1,7 @@
 """Run the release cleanup CLI against real, disposable release directories.
 
-Deployment sends the checked source with `python3 -c`, so the tests run it the
-same way rather than from a file path.
+Deployment runs the installed deploy kit's copy; the tests run the checked
+source with `python3 -c`, which behaves the same.
 """
 import fcntl
 import os
