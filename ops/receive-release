@@ -18,13 +18,17 @@ Root runs only the deploy kit that bin/install-deploy-kit installed from Git in
 /usr/local/lib/screenr-deploy. Nothing that arrives over the connection is run
 or installed as root; the release runs as the Screenr service users.
 
-ops/deploy-release.sh also runs this file, with arguments the forced command
-never passes, to extract the kept archive:
+Arguments, which the forced command never passes, select two local modes:
 
     screenr-receive-release extract ARCHIVE /opt/screenr/releases/REVISION REVISION
+    screenr-receive-release kit DIRECTORY
 
-It checks the archive again and extracts it with the same parser, so no
-difference between tar implementations can let an entry past the checks.
+ops/deploy-release.sh extracts the kept archive with the first. It checks the
+archive again and extracts it with the same parser, so no difference between
+tar implementations can let an entry past the checks. The second prints the
+digest of a kit directory and this file: deploy-release.sh rechecks the kit
+under the deploy lock with it, and bin/install-deploy-kit confirms an
+installation.
 """
 import contextlib
 import fcntl
@@ -33,6 +37,8 @@ import json
 import os
 from pathlib import Path, PurePosixPath
 import re
+import resource
+import signal
 import subprocess
 import sys
 import tarfile
@@ -48,6 +54,16 @@ CONTENT_LIMIT = 2 * 1024 * 1024 * 1024
 MEMBER_LIMIT = 100_000
 # Far longer than any release path; keeps every path well under PATH_MAX.
 NAME_LIMIT = 1024
+# tarfile reads a long-name or pax header's whole body into memory, so refuse
+# a large one before it does. Release headers hold only long paths.
+HEADER_LIMIT = 64 * 1024
+EXTENDED_HEADERS = {tarfile.GNUTYPE_LONGNAME, tarfile.GNUTYPE_LONGLINK, tarfile.XHDTYPE, tarfile.XGLTYPE,
+                    tarfile.SOLARIS_XHDTYPE}
+# Upload and extraction cap their address space, so a crafted archive cannot
+# exhaust the shared host's memory. Checking a release needs under 100 MB.
+MEMORY_LIMIT = 512 * 1024 * 1024
+# A stalled client must not keep an upload open forever.
+TRANSFER_SECONDS = 15 * 60
 # The kit's scripts get this environment, never the connection's.
 ENVIRONMENT = {'PATH': '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin', 'LANG': 'C.UTF-8'}
 COMMANDS = {
@@ -63,16 +79,34 @@ RESERVED = {'.deployment-pending', '.deployment-success'}
 NOT_LINKS = {'.', '.next', '.next/cache'}
 LOCK_HELD = ('Another deployment, release cleanup, or restore holds /opt/screenr/deploy.lock. '
              'Wait for it to finish, then rerun the deploy job.')
+UPLOAD_HELD = 'Another upload is in progress. Wait for it to finish, then rerun the deploy job.'
+INSTALL = 'From a trusted checkout, run bin/install-deploy-kit root@HOST REVISION'
 
 
-def kit_digest():
-    """Digest the installed kit the way bin/_deploy_kit.py digests it from Git."""
+class BoundedHeaders(tarfile.TarInfo):
+    """Refuse oversized extended headers and sparse files before tarfile reads their bodies."""
+
+    def _proc_member(self, archive):
+        if self.type in EXTENDED_HEADERS and self.size > HEADER_LIMIT:
+            raise ValueError(f'Release archive has a {self.size}-byte extended header; '
+                             f'the limit is {HEADER_LIMIT} bytes.')
+        if self.type == tarfile.GNUTYPE_SPARSE:
+            raise ValueError('Release archive contains a sparse file.')
+        return super()._proc_member(archive)
+
+
+def limit_memory():
+    resource.setrlimit(resource.RLIMIT_AS, (MEMORY_LIMIT, MEMORY_LIMIT))
+
+
+def kit_digest(kit=None):
+    """Digest a kit directory and this file the way bin/_deploy_kit.py digests the kit from Git."""
+    kit = KIT if kit is None else kit
     files = {'receive-release': Path(__file__).read_bytes()}
-    if KIT.exists():
-        for path in KIT.iterdir():
+    if kit.exists():
+        for path in kit.iterdir():
             if path.is_symlink() or not path.is_file():
-                raise ValueError(f'Unexpected entry {path.name} in the deploy kit. '
-                                 'Reinstall it with bin/install-deploy-kit.')
+                raise ValueError(f'Unexpected entry {path.name} in the deploy kit. {INSTALL} to reinstall it.')
             files[path.name] = path.read_bytes()
     listing = ''.join(f'{hashlib.sha256(data).hexdigest()}  {name}\n' for name, data in sorted(files.items()))
     return hashlib.sha256(listing.encode()).hexdigest()
@@ -95,13 +129,31 @@ def active_revision():
 
 
 @contextlib.contextmanager
-def deploy_lock():
-    with (SCREENR / 'deploy.lock').open('a') as lock:
+def exclusive(path, message):
+    with path.open('a') as lock:
         try:
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError:
-            raise ValueError(LOCK_HELD) from None
+            raise ValueError(message) from None
         yield
+
+
+def deploy_lock():
+    return exclusive(SCREENR / 'deploy.lock', LOCK_HELD)
+
+
+@contextlib.contextmanager
+def deadline(seconds):
+    def expire(signum, frame):
+        raise TimeoutError(f'Release upload did not finish within {seconds} seconds.')
+
+    previous = signal.signal(signal.SIGALRM, expire)
+    signal.alarm(seconds)
+    try:
+        yield
+    finally:
+        signal.alarm(0)
+        signal.signal(signal.SIGALRM, previous)
 
 
 def release_path(raw):
@@ -140,7 +192,7 @@ def check_archive(path, revision):
     """Accept only directories, regular files, and contained links, with REVISION and server.js."""
     names, links, manifest, server, total = set(), {}, None, False, 0
     try:
-        with tarfile.open(path, 'r:gz') as archive:
+        with tarfile.open(path, 'r:gz', tarinfo=BoundedHeaders) as archive:
             for member in archive:
                 if len(names) >= MEMBER_LIMIT:
                     raise ValueError(f'Release archive has more than {MEMBER_LIMIT} entries.')
@@ -150,6 +202,8 @@ def check_archive(path, revision):
                 names.add(name)
                 if name in RESERVED:
                     raise ValueError(f'Release archive contains the deployment marker {name}.')
+                if member.issparse():
+                    raise ValueError(f'Release archive entry {name} is a sparse file.')
                 if member.issym():
                     links[name] = member.linkname
                     continue
@@ -169,19 +223,27 @@ def check_archive(path, revision):
             content = archive.extractfile(manifest)
             if content is None or content.read().strip() != revision.encode():
                 raise ValueError(f'Release archive REVISION does not match {revision}.')
+    except MemoryError:
+        raise ValueError(f'Release archive needs more than the receiver\'s {MEMORY_LIMIT}-byte memory limit.') from None
     except (tarfile.TarError, EOFError, zlib.error, OSError) as error:
         raise ValueError(f'Release archive is unreadable: {error}') from None
 
 
 def upload(revision, checksum, stdin):
     """Keep a checked archive at UPLOAD; only a fully checked archive ever appears there."""
+    limit_memory()
     UPLOAD.parent.mkdir(mode=0o700, exist_ok=True)
     UPLOAD.parent.chmod(0o700)
     partial = UPLOAD.with_name(UPLOAD.name + '.partial')
-    with deploy_lock():
-        UPLOAD.unlink(missing_ok=True)
-        partial.unlink(missing_ok=True)
+    # One transfer at a time, under its own lock and deadline. The transfer
+    # never holds the deploy lock, so a slow client cannot block deployments,
+    # cleanup, or restores.
+    with exclusive(SCREENR / 'upload.lock', UPLOAD_HELD), deadline(TRANSFER_SECONDS):
+        with deploy_lock():
+            UPLOAD.unlink(missing_ok=True)
         try:
+            # A killed upload can leave a partial file; this upload owns the name now.
+            partial.unlink(missing_ok=True)
             digest, size = hashlib.sha256(), 0
             flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW
             with os.fdopen(os.open(partial, flags, 0o600), 'wb') as output:
@@ -193,8 +255,11 @@ def upload(revision, checksum, stdin):
                     output.write(chunk)
             if digest.hexdigest() != checksum:
                 raise ValueError('Release archive checksum does not match the upload command.')
-            check_archive(partial, revision)
-            partial.rename(UPLOAD)
+            # Check and keep it under the deploy lock, so the kept archive
+            # never changes while a deployment extracts it.
+            with deploy_lock():
+                check_archive(partial, revision)
+                partial.rename(UPLOAD)
         finally:
             partial.unlink(missing_ok=True)
     print(f'Received and checked release {revision}.', flush=True)
@@ -207,10 +272,13 @@ def extract(archive, destination, revision):
     if (destination != SCREENR / 'releases' / revision or destination.is_symlink()
             or not destination.is_dir() or any(destination.iterdir())):
         raise ValueError(f'Unexpected extraction destination {destination}.')
+    limit_memory()
     check_archive(Path(archive), revision)
     try:
-        with tarfile.open(archive, 'r:gz') as release:
+        with tarfile.open(archive, 'r:gz', tarinfo=BoundedHeaders) as release:
             release.extractall(destination, filter='data')
+    except MemoryError:
+        raise ValueError(f'Release archive needs more than the receiver\'s {MEMORY_LIMIT}-byte memory limit.') from None
     except (tarfile.TarError, EOFError, zlib.error) as error:
         raise ValueError(f'Release archive could not be extracted: {error}') from None
     return 0
@@ -220,12 +288,12 @@ def deploy(revision, checksum, kit):
     installed = kit_digest()
     if installed != kit:
         raise ValueError(f'The installed deploy kit ({installed[:12]}) does not match ops/ at {revision} '
-                         f'({kit[:12]}). From a trusted checkout, run bin/install-deploy-kit with this '
-                         'revision, then rerun the deploy job.')
+                         f'({kit[:12]}). {INSTALL} with this revision, then rerun the deploy job.')
     if UPLOAD.is_symlink() or not UPLOAD.is_file():
         raise ValueError('No uploaded release archive. Rerun the deploy job.')
     print(f'Deploying {revision} with deploy kit {kit[:12]}.', flush=True)
-    return subprocess.run(['/bin/sh', str(KIT / 'deploy-release.sh'), revision, checksum, str(UPLOAD)],
+    # The script rechecks the kit under the deploy lock.
+    return subprocess.run(['/bin/sh', str(KIT / 'deploy-release.sh'), revision, checksum, str(UPLOAD), kit],
                           env=ENVIRONMENT, stdin=subprocess.DEVNULL).returncode
 
 
@@ -262,12 +330,16 @@ def receive(command, stdin):
 
 def main():
     try:
+        # Local modes take arguments; the forced command never passes any.
+        if len(sys.argv) == 3 and sys.argv[1] == 'kit':
+            print(kit_digest(Path(sys.argv[2])), flush=True)
+            return 0
         if os.geteuid() != 0:
             raise ValueError("Run as root through the deploy key's forced command.")
         if len(sys.argv) > 1:
-            # Only ops/deploy-release.sh passes arguments; the forced command has none.
             if len(sys.argv) != 5 or sys.argv[1] != 'extract' or not re.fullmatch(r'[0-9a-f]{40}', sys.argv[4]):
-                raise ValueError('Usage: screenr-receive-release extract ARCHIVE DIRECTORY REVISION')
+                raise ValueError('Usage: screenr-receive-release extract ARCHIVE DIRECTORY REVISION '
+                                 'or screenr-receive-release kit DIRECTORY')
             return extract(*sys.argv[2:])
         return receive(os.environ.get('SSH_ORIGINAL_COMMAND', ''), sys.stdin.buffer)
     except (OSError, ValueError) as error:

@@ -29,7 +29,7 @@ retry() {
 fetch_dump() {
     restic dump --retry-lock 3m --host bishop --tag screenr latest /var/lib/screenr-backup/screenr.dump >"$dump"
 }
-python3 /opt/screenr/current/ops/check-backup-age.py
+python3 /usr/local/lib/screenr-deploy/check-backup-age.py
 # Wait for a backup's repository lock instead of failing.
 retry restic check --retry-lock 3m --read-data
 retry fetch_dump

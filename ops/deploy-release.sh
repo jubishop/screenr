@@ -8,11 +8,14 @@ set -eu
 revision=${1:?Missing revision}
 checksum=${2:?Missing archive checksum}
 archive=${3:?Missing uploaded archive}
+expected_kit=${4:?Missing deploy kit digest}
 kit=/usr/local/lib/screenr-deploy
 case "$revision" in *[!0-9a-f]*|'') exit 1 ;; esac
 [ "${#revision}" -eq 40 ]
 case "$checksum" in *[!0-9a-f]*|'') exit 1 ;; esac
 [ "${#checksum}" -eq 64 ]
+case "$expected_kit" in *[!0-9a-f]*|'') exit 1 ;; esac
+[ "${#expected_kit}" -eq 64 ]
 [ "$archive" = /var/lib/screenr-deploy/release.tar.gz ]
 test -f "$kit/activate.sh"
 test -f "$kit/host-config.py"
@@ -21,6 +24,12 @@ cd /opt/screenr
 exec 9>deploy.lock
 if ! flock -n 9; then
     echo 'Another deployment, release cleanup, or restore holds /opt/screenr/deploy.lock. Wait for it to finish, then rerun the deploy job.' >&2
+    exit 1
+fi
+# Kit installation takes this lock too, so the kit the receiver checked
+# cannot change from here on.
+if [ "$(python3 -I /usr/local/sbin/screenr-receive-release kit "$kit")" != "$expected_kit" ]; then
+    echo 'The deploy kit changed after the receiver checked it. From a trusted checkout, run bin/install-deploy-kit root@HOST REVISION for this revision, then rerun the deploy job.' >&2
     exit 1
 fi
 printf '%s  %s\n' "$checksum" "$archive" | sha256sum --check
@@ -49,8 +58,8 @@ elif test -e /opt/screenr/current || test -L /opt/screenr/current; then
     # Back up before replacing a release. A missing backup script fails.
     systemctl start screenr-backup.service
 elif test -z "$(ls -A /opt/screenr/releases)"; then
-    # A new host's backup script arrives with its first release. Its
-    # database is empty or was just restored from a backup.
+    # A new host's database is empty or was just restored from a backup,
+    # so there is nothing new to back up.
     echo 'No active release: skipping the backup for this first deployment.'
 else
     echo "No active release, but /opt/screenr/releases is not empty. \

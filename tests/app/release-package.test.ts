@@ -154,6 +154,15 @@ test("the release package includes every local module the maintenance scripts lo
   assert.deepEqual(outside, [], "Add these paths to scripts/release-paths.ts");
 });
 
+test("the release leaves out ops/, which runs only from the root-installed deploy kit", () => {
+  // The deploy key can upload any release, so nothing that runs as root, as
+  // screenr-db, or with the backup secrets may come from it.
+  assert.deepEqual(
+    releasePaths.filter((path) => path === "ops" || path.startsWith("ops/")),
+    [],
+  );
+});
+
 test("the maintenance script list includes every script the ops files run", async () => {
   const run = new Set<string>();
   for (const item of await readdir("ops", { withFileTypes: true }))

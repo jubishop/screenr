@@ -267,7 +267,7 @@ class FailureAlertUnitTests(unittest.TestCase):
         self.assertNotIn('Install', alert)
         self.assertEqual(service['Type'], ['oneshot'])
         self.assertEqual(service['ExecStart'],
-                         ['/usr/bin/python3 /opt/screenr/current/ops/failure-alert.py %i'])
+                         ['/usr/bin/python3 /usr/local/lib/screenr-deploy/failure-alert.py %i'])
         self.assertTrue(ALERT.is_file())
         self.assertEqual(service['EnvironmentFile'], ['/etc/screenr/backup.env'])
         # Dynamic users cannot reach systemd's D-Bus API on the host.
@@ -277,7 +277,7 @@ class FailureAlertUnitTests(unittest.TestCase):
     def test_daily_stale_backup_check_reuses_the_age_check(self):
         service = unit_file('screenr-backup-age.service')['Service']
         self.assertEqual(service['ExecStart'],
-                         ['/usr/bin/python3 /opt/screenr/current/ops/check-backup-age.py'])
+                         ['/usr/bin/python3 /usr/local/lib/screenr-deploy/check-backup-age.py'])
         self.assertTrue((ROOT / 'ops/check-backup-age.py').is_file())
         self.assertEqual(service['User'], ['screenr-db'])
         self.assertEqual(service['EnvironmentFile'], ['/etc/screenr/backup.env'])

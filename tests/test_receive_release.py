@@ -6,6 +6,7 @@ directory, and replace the installed deploy kit's scripts with recorders.
 """
 import contextlib
 import fcntl
+import gzip
 import hashlib
 from importlib.machinery import SourceFileLoader
 from importlib.util import module_from_spec, spec_from_loader
@@ -13,9 +14,11 @@ import io
 import json
 import os
 from pathlib import Path
+import subprocess
 import sys
 import tarfile
 import tempfile
+import time
 import unittest
 from unittest import mock
 
@@ -76,6 +79,31 @@ def release_members(revision=REVISION):
             file_member('./ops/backup.sh', b'#!/bin/sh\n')]
 
 
+def header(name, size, typeflag):
+    """A raw ustar header block, for headers that tarfile will not write."""
+    block = bytearray(512)
+    block[0:len(name)] = name
+    block[100:108] = b'0000644\0'
+    block[108:116] = block[116:124] = b'0000000\0'
+    block[124:136] = b'%011o\0' % size
+    block[136:148] = b'00000000000\0'
+    block[148:156] = b' ' * 8
+    block[156:157] = typeflag
+    block[257:265] = b'ustar  \0'
+    block[148:156] = b'%06o\0 ' % sum(block)
+    return bytes(block)
+
+
+def header_bomb(path, size, typeflag=b'L'):
+    """Write a small gzip archive whose first header claims SIZE bytes of name or attributes."""
+    with gzip.open(path, 'wb', compresslevel=1) as output:
+        output.write(header(b'././@LongLink', size, typeflag))
+        chunk = b'a' * (1 << 20)
+        for start in range(0, size, len(chunk)):
+            output.write(chunk[:min(len(chunk), size - start)])
+        output.write(b'\0' * ((512 - size % 512) % 512 + 1024))
+
+
 def archive_bytes(members):
     buffer = io.BytesIO()
     with tarfile.open(fileobj=buffer, mode='w:gz') as archive:
@@ -117,6 +145,10 @@ class ReceiverTests(unittest.TestCase):
             self.addCleanup(patcher.stop)
         patcher = mock.patch.object(self.receiver.os, 'geteuid', return_value=0)
         self.geteuid = patcher.start()
+        self.addCleanup(patcher.stop)
+        # The receiver caps its own memory; never cap the test runner's.
+        patcher = mock.patch.object(self.receiver.resource, 'setrlimit')
+        self.setrlimit = patcher.start()
         self.addCleanup(patcher.stop)
 
     def kit_files(self):
@@ -322,6 +354,133 @@ class UploadTests(ReceiverTests):
             fcntl.flock(lock, fcntl.LOCK_EX)
             self.assert_rejected(self.upload_archive(), 'holds /opt/screenr/deploy.lock')
 
+    def test_transfer_runs_without_the_deploy_lock(self):
+        # A slow or stalled client must not block deployments, cleanup, or restores.
+        data = archive_bytes(release_members())
+        free = []
+
+        class Stream(io.BytesIO):
+            def read(stream, size=-1):
+                with (self.screenr / 'deploy.lock').open('a') as lock:
+                    try:
+                        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                        free.append(True)
+                    except BlockingIOError:
+                        free.append(False)
+                return super().read(size)
+
+        stdout, stderr = io.StringIO(), io.StringIO()
+        checksum = hashlib.sha256(data).hexdigest()
+        with (mock.patch.dict(os.environ, {'SSH_ORIGINAL_COMMAND': f'upload {REVISION} {checksum}'}),
+              mock.patch.object(sys, 'argv', ['screenr-receive-release']),
+              mock.patch.object(sys, 'stdin', mock.Mock(buffer=Stream(data))),
+              contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr)):
+            self.assertEqual(self.receiver.main(), 0, stderr.getvalue())
+        self.assertTrue(free)
+        self.assertTrue(all(free))
+        self.assertEqual(self.upload.read_bytes(), data)
+
+    def test_one_transfer_at_a_time(self):
+        nested = []
+
+        class Stream(io.BytesIO):
+            def read(stream, size=-1):
+                if not nested:
+                    nested.append(self.upload_archive()[:3])
+                return super().read(size)
+
+        data = archive_bytes(release_members())
+        checksum = hashlib.sha256(data).hexdigest()
+        stderr = io.StringIO()
+        with (mock.patch.dict(os.environ, {'SSH_ORIGINAL_COMMAND': f'upload {REVISION} {checksum}'}),
+              mock.patch.object(sys, 'argv', ['screenr-receive-release']),
+              mock.patch.object(sys, 'stdin', mock.Mock(buffer=Stream(data))),
+              contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(stderr)):
+            self.assertEqual(self.receiver.main(), 0, stderr.getvalue())
+        status, stdout, error = nested[0]
+        self.assertEqual(status, 1)
+        self.assertIn('Another upload', error)
+        self.assertEqual(self.upload.read_bytes(), data)
+
+    def test_stalled_transfer_ends_at_the_deadline(self):
+        class Stalled(io.BytesIO):
+            def read(stream, size=-1):
+                time.sleep(5)
+                return b''
+
+        with mock.patch.object(self.receiver, 'TRANSFER_SECONDS', 1):
+            start = time.monotonic()
+            stdout, stderr = io.StringIO(), io.StringIO()
+            with (mock.patch.dict(os.environ, {'SSH_ORIGINAL_COMMAND': f'upload {REVISION} {"c" * 64}'}),
+                  mock.patch.object(sys, 'argv', ['screenr-receive-release']),
+                  mock.patch.object(sys, 'stdin', mock.Mock(buffer=Stalled())),
+                  contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr)):
+                result = (self.receiver.main(), stdout.getvalue(), stderr.getvalue())
+            self.assertLess(time.monotonic() - start, 4)
+        self.assert_rejected(result, '1 seconds')
+
+    def test_partial_upload_left_by_a_killed_receiver_is_replaced(self):
+        self.upload.parent.mkdir(mode=0o700)
+        (self.upload.parent / 'release.tar.gz.partial').write_bytes(b'interrupted')
+        status, stdout, stderr, data, checksum = self.upload_archive()
+        self.assertEqual(status, 0, stderr)
+        self.assertEqual(sorted(path.name for path in self.upload.parent.iterdir()), ['release.tar.gz'])
+
+    def test_upload_caps_its_memory(self):
+        self.upload_archive()
+        self.setrlimit.assert_called_with(self.receiver.resource.RLIMIT_AS,
+                                          (self.receiver.MEMORY_LIMIT, self.receiver.MEMORY_LIMIT))
+        self.assertLessEqual(self.receiver.MEMORY_LIMIT, 768 * 1024 * 1024)
+
+    def test_oversized_extended_headers_are_refused_before_they_are_read(self):
+        for typeflag in (b'L', b'K', b'x', b'g'):
+            with self.subTest(typeflag=typeflag):
+                bomb = self.base / 'bomb.tar.gz'
+                header_bomb(bomb, 16 * 1024 * 1024, typeflag)
+                data = bomb.read_bytes()
+                self.assertLess(len(data), 256 * 1024)
+                result = self.receive(f'upload {REVISION} {hashlib.sha256(data).hexdigest()}', data)
+                self.assert_rejected(result, 'extended header')
+
+    def test_sparse_files_are_refused(self):
+        sparse = file_member('./sparse.bin', b'x')
+        sparse[0].type = tarfile.GNUTYPE_SPARSE
+        self.assert_rejected(self.upload_archive(release_members() + [sparse]), 'Release archive')
+
+    @unittest.skipUnless(sys.platform == 'linux', 'Only Linux enforces RLIMIT_AS.')
+    def test_memory_cap_stops_any_other_oversized_read(self):
+        # With the header check disabled, the address-space cap still turns a
+        # small archive's 256 MiB header into a clean refusal.
+        bomb = self.base / 'bomb.tar.gz'
+        header_bomb(bomb, 256 * 1024 * 1024)
+        driver = '''
+import os, resource, sys
+from importlib.machinery import SourceFileLoader
+from importlib.util import module_from_spec, spec_from_loader
+from pathlib import Path
+loader = SourceFileLoader('receiver', sys.argv[1])
+receiver = module_from_spec(spec_from_loader('receiver', loader))
+loader.exec_module(receiver)
+receiver.HEADER_LIMIT = 1 << 40
+receiver.MEMORY_LIMIT = 128 * 1024 * 1024
+receiver.SCREENR, receiver.UPLOAD = Path(sys.argv[2]), Path(sys.argv[3])
+receiver.os.geteuid = lambda: 0
+os.environ['SSH_ORIGINAL_COMMAND'] = sys.argv[4]
+sys.argv = ['screenr-receive-release']
+status = receiver.main()
+print(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss * 1024)
+sys.exit(status)
+'''
+        checksum = hashlib.sha256(bomb.read_bytes()).hexdigest()
+        with bomb.open('rb') as stdin:
+            result = subprocess.run([sys.executable, '-I', '-c', driver, str(ROOT / 'ops/receive-release'),
+                                     str(self.screenr), str(self.upload), f'upload {REVISION} {checksum}'],
+                                    stdin=stdin, capture_output=True, text=True, timeout=60)
+        self.assertEqual(result.returncode, 1, result.stderr)
+        self.assertIn('memory', result.stderr)
+        self.assertLess(int(result.stdout.split()[-1]), 128 * 1024 * 1024)
+        self.assertFalse(self.upload.exists())
+
 
 class DeployTests(ReceiverTests):
     def deploy(self, kit=None):
@@ -334,6 +493,7 @@ class DeployTests(ReceiverTests):
         status, stdout, stderr, checksum = self.deploy()
         self.assertEqual(status, 0, stderr)
         self.assertEqual(self.recorded(), ['deploy-release', REVISION, checksum, str(self.upload),
+                                           kit_digest(self.kit_files()),
                                            'PATH=' + self.receiver.ENVIRONMENT['PATH']])
 
     def test_deploy_status_is_returned(self):
@@ -355,6 +515,16 @@ class DeployTests(ReceiverTests):
         self.assertEqual(status, 1)
         self.assertIn('No uploaded release', stderr)
         self.assertEqual(self.recorded(), [])
+
+    def test_kit_mode_digests_a_kit_directory_without_root(self):
+        # ops/deploy-release.sh rechecks the kit under the deploy lock, and
+        # bin/install-deploy-kit confirms an installation, with this mode.
+        self.geteuid.return_value = 1000
+        stdout, stderr = io.StringIO(), io.StringIO()
+        with (mock.patch.object(sys, 'argv', ['screenr-receive-release', 'kit', str(self.kit)]),
+              contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr)):
+            self.assertEqual(self.receiver.main(), 0, stderr.getvalue())
+        self.assertEqual(stdout.getvalue(), kit_digest(self.kit_files()) + '\n')
 
     def test_unexpected_kit_entry_fails_closed(self):
         (self.kit / 'nested').mkdir()
@@ -383,6 +553,8 @@ class ExtractTests(ReceiverTests):
     def test_extracts_a_checked_release(self):
         status, stderr = self.extract(archive_bytes(release_members()))
         self.assertEqual(status, 0, stderr)
+        self.setrlimit.assert_called_with(self.receiver.resource.RLIMIT_AS,
+                                          (self.receiver.MEMORY_LIMIT, self.receiver.MEMORY_LIMIT))
         self.assertEqual((self.release / 'REVISION').read_text(), REVISION + '\n')
         self.assertEqual(os.readlink(self.release / 'node_modules/.bin/tsx'), '../tsx/cli.mjs')
         self.assertEqual((self.release / 'node_modules/tsx/cli.mjs').stat().st_mode & 0o7777, 0o755)

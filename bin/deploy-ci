@@ -69,7 +69,7 @@ def check_release(revision, host, kit):
     active, installed = host_status(host)
     if installed != kit:
         raise ValueError(f'The deploy kit on the host ({installed[:12]}) does not match ops/ at {revision} '
-                         f'({kit[:12]}). From a trusted checkout, run bin/install-deploy-kit {revision}, '
+                         f'({kit[:12]}). From a trusted checkout, run bin/install-deploy-kit root@HOST {revision}, '
                          'then re-run the failed deploy job.')
     if active is None:
         print(f'Main contains {revision}; production has no active release, '
@@ -105,9 +105,8 @@ def main():
         raise ValueError('The release checks must pass before deployment.')
     if run('git', 'rev-parse', 'HEAD', capture=True).strip() != revision:
         raise ValueError('Checkout does not match the checked revision.')
-    # Root runs and installs only the deploy kit on the host. Its digest comes
-    # from Git: the build job packages ops/ after third-party install scripts
-    # run, so the archive's copies never count.
+    # Root and the backup services run only the deploy kit on the host. Its
+    # digest comes from Git, never from the checkout's working files.
     kit = kit_digest(checked_kit(run('git', 'archive', '--format=tar', revision, 'ops/',
                                      capture=True, text=False)))
     check_release(revision, host, kit)

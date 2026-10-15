@@ -272,7 +272,7 @@ class BackupSizeUnitTests(unittest.TestCase):
         service = unit['Service']
         self.assertEqual(service['Type'], ['oneshot'])
         self.assertEqual(service['ExecStart'],
-                         ['/usr/bin/python3 /opt/screenr/current/ops/check-backup-size.py'])
+                         ['/usr/bin/python3 /usr/local/lib/screenr-deploy/check-backup-size.py'])
         self.assertEqual(service['User'], ['screenr-db'])
         self.assertEqual(service['EnvironmentFile'], ['/etc/screenr/backup.env'])
         self.assertEqual(service['StateDirectory'], ['screenr-backup'])
@@ -287,7 +287,7 @@ class BackupSizeUnitTests(unittest.TestCase):
                       (ROOT / 'ops/deploy-release.sh').read_text())
         backup = unit_file('screenr-backup.service')
         self.assertEqual(backup['Service']['ExecStart'],
-                         ['/bin/sh /opt/screenr/current/ops/backup.sh'])
+                         ['/bin/sh /usr/local/lib/screenr-deploy/backup.sh'])
         for name in ['ops/screenr-backup.service', 'ops/backup.sh', 'ops/deploy-release.sh']:
             with self.subTest(file=name):
                 self.assertNotIn('backup-size', (ROOT / name).read_text())

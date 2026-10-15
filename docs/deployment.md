@@ -433,7 +433,7 @@ Verify the alert path without sending email:
   systemd-run --unit=screenr-alert-probe --wait /bin/false
   systemd-run --quiet --wait --pipe --collect -p User=screenr-db \
       -p EnvironmentFile=/etc/screenr/backup.env /usr/bin/python3 \
-      /opt/screenr/current/ops/failure-alert.py --dry-run screenr-alert-probe.service
+      /usr/local/lib/screenr-deploy/failure-alert.py --dry-run screenr-alert-probe.service
   systemctl reset-failed screenr-alert-probe.service
   ```
 
@@ -499,9 +499,8 @@ obtained it, had full root access.
 **Tradeoff:** A change to a kit file needs a manual
 [kit installation](#deploy-kit) before its deployment can pass.
 
-The archive still includes `ops/` because the backup and restore-check
-services run their scripts from the active release as `screenr-db`, not root.
-The same rule covers the script and files for
+The same rule covers the scripts that Screenr's units run as `screenr-db`
+or with the backup secrets, and the script and files for
 [host configuration drift](#host-configuration-drift), and applies to anything
 else deployment runs or installs as root.
 
@@ -574,19 +573,18 @@ release tree.
 
 ### First release on a new host
 
-A provisioned replacement host has no active release, so it has neither
-`/opt/screenr/current/REVISION` nor the backup script that the backup service
-runs from the active release
+A provisioned replacement host has no active release, so it has no
+`/opt/screenr/current/REVISION`, and its database is empty or was just
+restored from a backup
 ([issue #184](https://github.com/jubishop/screenr/issues/184)). When
 `/opt/screenr/current/REVISION` cannot be read, the receiver's `status`
 reports no active release only if `/opt/screenr/current` does not exist, not
 even as a broken link, and `/opt/screenr/releases` exists and is empty.
 Otherwise it fails. Only with no active release does the helper skip the
 production comparison; `main` must still contain the revision. Under the deploy lock, `deploy-release.sh`
-checks the host the same way and skips the backup before activation. The
-database on such a host is empty or was just restored from a backup. Every
-deployment that replaces an active release still compares revisions and backs
-up first.
+checks the host the same way and skips the backup before activation, since
+there is nothing new to back up. Every deployment that replaces an active
+release still compares revisions and backs up first.
 
 Any other host without a readable active revision fails closed. A host whose
 `current` link is missing while releases remain is not new. Point the link back
@@ -606,7 +604,7 @@ including shells, `scp`, and SFTP:
 | Command | Effect |
 | --- | --- |
 | `status` | Prints the active revision, or `null` on a [new host](#first-release-on-a-new-host), and the installed kit's digest as JSON |
-| `upload REVISION SHA256` | Reads the release archive from stdin, up to 512 MiB, and keeps it in `/var/lib/screenr-deploy` only if it passes every check |
+| `upload REVISION SHA256` | Reads the release archive from stdin, up to 512 MiB in 15 minutes, and keeps it in `/var/lib/screenr-deploy` only if it passes every check |
 | `deploy REVISION SHA256 KIT` | Runs the kit's `deploy-release.sh` for the kept archive when `KIT` matches the installed kit |
 | `discard` | Removes the kept archive |
 | `finalize REVISION` | Runs the kit's `prune-releases.py` for that release |
@@ -615,8 +613,16 @@ The upload check accepts only directories, regular files, and relative links
 that resolve inside the release without passing through another link. It
 rejects setuid, setgid, sticky, and world-writable modes, deployment markers,
 and links at `.next` or `.next/cache`. It requires a `server.js` file and a
-`REVISION` file that names the revision. Uploads and discards take the deploy
-lock, so an archive cannot change while a deployment extracts it.
+`REVISION` file that names the revision, and it refuses sparse files and
+long-name or pax headers over 64 KiB before reading them. Upload and
+extraction limit their own address space to 512 MiB, so a crafted archive
+fails with a refusal instead of exhausting the shared host's memory.
+
+One upload runs at a time, under `/opt/screenr/upload.lock`. The transfer
+itself never holds the deploy lock, so a slow or stalled client cannot block
+deployments, cleanup, or restores, and it ends after 15 minutes. The check of
+the received archive and the move into place take the deploy lock, as does
+`discard`, so a kept archive never changes while a deployment extracts it.
 `deploy-release.sh` extracts the kept archive by running the receiver with
 arguments, which the forced command never passes. The receiver repeats the
 checks and extracts with the same parser and Python's `data` extraction
@@ -626,16 +632,26 @@ the checks.
 The deploy kit is what root runs and installs during deployment: the
 receiver, `ops/deploy-release.sh`, `ops/activate.sh`, `ops/host-config.py`,
 `ops/prune-releases.py`, every `ops/screenr-*.service` and `.timer`, and the
-`ops/Caddyfile` and `ops/postgresql.conf` copies that deployment compares.
-[`bin/_deploy_kit.py`](../bin/_deploy_kit.py) lists it. The receiver goes to
-`/usr/local/sbin`, and the rest to `/usr/local/lib/screenr-deploy`, all
-root-owned. Nothing that arrives over the deploy key is run or installed as
-root. The key can still deploy any release, whose code runs as `screenr` and
-whose backup scripts run as `screenr-db`.
+`ops/Caddyfile` and `ops/postgresql.conf` copies that deployment compares. It
+also holds the scripts that the units run as `screenr-db` or with
+`/etc/screenr/backup.env`: `ops/backup.sh`, `ops/restore-check.sh`,
+`ops/failure-alert.py`, `ops/check-backup-age.py`, `ops/check-backup-size.py`,
+and `ops/check-postgresql-updates.py`. Those units run them from
+`/usr/local/lib/screenr-deploy`, and the release archive leaves out `ops/`.
+[`bin/_deploy_kit.py`](../bin/_deploy_kit.py) lists the kit. The receiver
+goes to `/usr/local/sbin`, and the rest to `/usr/local/lib/screenr-deploy`,
+all root-owned. Nothing that arrives over the deploy key is run or installed
+as root or as `screenr-db`, or runs with the backup secrets. The key can still
+deploy any release, whose code runs as `screenr` with the application
+settings, but it cannot read the backup credentials, prune snapshots, or
+silence failure alerts. R2 credentials without delete permission would
+further limit what a compromised `screenr-db` could do to the backups.
 
 `bin/deploy-ci` computes the kit's digest from Git at the deployed revision.
 Before downloading the release, it requires the host's `status` to report
-the same digest; the receiver checks it again before `deploy`. When a commit
+the same digest. The receiver checks it again before `deploy`, and
+`deploy-release.sh` checks it once more after taking the deploy lock, which
+kit installation also takes. When a commit
 changes a kit file, the deploy job fails with a message naming
 `bin/install-deploy-kit` until the kit is installed. From a trusted checkout,
 with the owner's SSH access rather than the deploy key, run:
@@ -647,10 +663,11 @@ bin/install-deploy-kit root@YOUR_SSH_HOST REVISION
 The script sends the kit files from `git archive` at that revision, never the
 working tree. Under the deploy lock, the host replaces the kit, removes kit
 files that the revision no longer has, and reports its digest, which must
-match. Then re-run the failed deploy job. Installing a kit changes no running
-service: the deployment installs the kit's changed units under the lock,
-before activation. A later deployment of an older revision fails until its kit
-is installed again.
+match. Then re-run the failed deploy job. Installing a kit changes the
+scripts that the backup and alert units run at their next start, and no
+running service: the deployment installs the kit's changed units under the
+lock, before activation. A later deployment of an older revision fails until
+its kit is installed again.
 
 ### Production environment setup
 
@@ -1095,7 +1112,7 @@ would fail until then although the backups themselves succeeded.
 06:30, 12:30, and 18:30 UTC, each up to 10 minutes late. The 12:30 UTC run,
 05:30 PDT / 04:30 PST, measures after the daily backup. A run that starts
 during a backup, including one a deployment started, waits for the backup to
-finish. The service runs the release's `ops/check-backup-size.py` as
+finish. The service runs the [deploy kit](#deploy-kit)'s `ops/check-backup-size.py` as
 `screenr-db`, with `backup.env`. Six hours keeps automatic retries well within
 the retry window below, and limits a persistent failure to four alerts a day.
 

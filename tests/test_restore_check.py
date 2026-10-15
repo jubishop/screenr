@@ -183,7 +183,7 @@ class RestoreCheckTests(unittest.TestCase):
         stamp = datetime.datetime.fromtimestamp(newest, datetime.timezone.utc)
         wrapper = '''
 python3() {
-    [ "$1" = /opt/screenr/current/ops/check-backup-age.py ] || return 97
+    [ "$1" = /usr/local/lib/screenr-deploy/check-backup-age.py ] || return 97
     PATH="$FIXTURE/bin:$PATH" "$PYTHON" "$AGE_CHECK"
 }
 # FAIL names the step that exits non-zero, as for a damaged repository, an

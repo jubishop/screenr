@@ -48,10 +48,6 @@ if name == 'git':
     else: sys.exit(99)
 elif name == 'gh':
     if args[:2] == ['run', 'download']:
-        if os.environ.get('WORKTREE_DRIFT'):
-            for path in ('ops/receive-release', 'ops/deploy-release.sh', 'ops/activate.sh', 'ops/prune-releases.py',
-                         'ops/host-config.py', 'ops/screenr-web.service', 'ops/Caddyfile'):
-                (base / path).write_text('echo unchecked-deployment\n')
         shutil.copyfile(base / 'release.tar.gz', Path(args[-1]) / ('screenr-' + 'a'*40 + '.tar.gz'))
     elif args[-1].endswith('/artifacts'):
         print(json.dumps(dict(artifacts=[dict(name='screenr-linux-x64-'+'a'*40, id=456)])))
@@ -242,7 +238,11 @@ class CIDeploymentTests(DeploymentFixture):
         self.assertEqual((self.base / 'uploaded').read_bytes(), (self.base / 'release.tar.gz').read_bytes())
 
     def test_checkout_changes_cannot_change_the_kit_digest(self):
-        result = self.execute(WORKTREE_DRIFT='yes')
+        # The working files differ from the checked revision before the helper
+        # starts. A digest from them would not match the host's kit.
+        for name in ('receive-release', 'deploy-release.sh', 'backup.sh', 'screenr-web.service', 'Caddyfile'):
+            (self.base / 'ops' / name).write_text('echo unchecked-deployment\n')
+        result = self.execute()
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assert_protocol_only()
 
@@ -259,9 +259,10 @@ class CIDeploymentTests(DeploymentFixture):
 
     def test_kit_digest_covers_kit_files_only(self):
         before = self.checked_digest()
-        (self.base / 'checked/ops/backup.sh').write_text('# not in the kit\n')
+        (self.base / 'checked/ops/provision.sh').write_text('# not in the kit\n')
         self.assertEqual(self.checked_digest(), before)
-        for name in ('screenr-retention.timer', 'activate.sh', 'receive-release', 'Caddyfile'):
+        for name in ('screenr-retention.timer', 'activate.sh', 'receive-release', 'Caddyfile', 'backup.sh',
+                     'failure-alert.py'):
             with self.subTest(name=name):
                 (self.base / 'checked/ops' / name).write_text('# changed\n')
                 self.assertNotEqual(self.checked_digest(), before)
@@ -271,8 +272,7 @@ class CIDeploymentTests(DeploymentFixture):
         (self.base / 'checked/ops/activate.sh').write_text('# changed in this revision\n')
         result = self.execute()
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn('bin/install-deploy-kit', result.stderr)
-        self.assertIn(REVISION, result.stderr)
+        self.assertIn(f'bin/install-deploy-kit root@HOST {REVISION}', result.stderr)
         self.assertFalse(self.uploaded())
 
     def test_unreadable_checked_files_never_contact_host(self):
@@ -548,6 +548,13 @@ class RemoteDeploymentTests(unittest.TestCase):
         # The host configuration step has its own tests. Record it in order
         # with systemctl; HOST_DRIFT stands for a reported difference.
         python3() {
+            # The receiver digests the installed kit; KIT_CHANGED stands for an
+            # installation that finished after the receiver checked the kit.
+            if [ "$*" = "-I /usr/local/sbin/screenr-receive-release kit $KIT" ]; then
+                printf 'kit digest\n' >> "$FIXTURE/systemctl"
+                if [ "${KIT_CHANGED:-}" = yes ]; then printf '%064d\n' 0; else printf '%s\n' "$KIT_DIGEST"; fi
+                return
+            fi
             # The receiver extracts with the parser that checked the archive.
             if [ "$*" = "-I /usr/local/sbin/screenr-receive-release extract $ARCHIVE /opt/screenr/releases/$REVISION $REVISION" ]; then
                 printf 'extracted\n' >> "$FIXTURE/events"
@@ -578,7 +585,7 @@ class RemoteDeploymentTests(unittest.TestCase):
             ) &
             wait "$!"
         }
-        set -- "$REVISION" "$CHECKSUM" "$ARCHIVE"
+        set -- "$REVISION" "$CHECKSUM" "$ARCHIVE" "$KIT_DIGEST"
         . "$DEPLOY"
         '''
         with tempfile.TemporaryDirectory() as directory:
@@ -593,7 +600,7 @@ class RemoteDeploymentTests(unittest.TestCase):
                                     env={**os.environ, 'FIXTURE': directory, 'REVISION': REVISION,
                                          'CHECKSUM': 'b' * 64,
                                          'ACTIVATION_SCRIPT': (ROOT / 'ops/activate.sh').read_text(),
-                                         'KIT': KIT, 'ARCHIVE': UPLOAD,
+                                         'KIT': KIT, 'ARCHIVE': UPLOAD, 'KIT_DIGEST': 'c' * 64,
                                          'DEPLOY': str(ROOT / 'ops/deploy-release.sh'), **environment}, timeout=5)
             log = {name: (base / name).read_text().splitlines() if (base / name).exists() else []
                    for name in ('systemctl', 'sleeps', 'steps')}
@@ -613,7 +620,7 @@ class RemoteDeploymentTests(unittest.TestCase):
         self.assertIn('start screenr-backup.service', self.systemctl_calls)
 
     def test_first_deploy_to_new_host_activates_without_backup(self):
-        # A new host has no active release, so it has no backup script yet.
+        # A new host's database is empty or was just restored from a backup.
         result, events, current = self.execute_remote(NO_PREVIOUS='yes')
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn('No active release', result.stdout)
@@ -795,6 +802,17 @@ class RemoteDeploymentTests(unittest.TestCase):
         self.assertEqual(current, '/opt/screenr/releases/' + REVISION)
         # Host units still converge on the active release's copies.
         self.assertEqual(self.systemctl_calls.count(HOST_CONFIG), 1)
+
+    def test_kit_is_rechecked_under_the_lock_before_anything_changes(self):
+        result, events, current = self.execute_remote()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.systemctl_calls[0], 'kit digest')
+        result, events, current = self.execute_remote(KIT_CHANGED='yes')
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('bin/install-deploy-kit root@HOST', result.stderr)
+        self.assertEqual(self.systemctl_calls, ['kit digest'])
+        self.assertEqual(events, '')
+        self.assertEqual(current, '/opt/screenr/releases/previous')
 
     def test_lock_failure_explains_and_does_not_extract_or_activate(self):
         result, events, current = self.execute_remote(FAIL_LOCK='yes')

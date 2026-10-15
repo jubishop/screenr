@@ -10,7 +10,6 @@ export const releasePaths: readonly string[] = [
   "src/shared.ts",
   "src/member-routes.ts",
   "db",
-  "ops",
   "package.json",
   "package-lock.json",
 ];

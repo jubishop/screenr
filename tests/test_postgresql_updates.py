@@ -240,7 +240,7 @@ class PostgresqlUpdateUnitTests(unittest.TestCase):
         service = unit['Service']
         self.assertEqual(service['Type'], ['oneshot'])
         self.assertEqual(service['ExecStart'],
-                         ['/usr/bin/python3 /opt/screenr/current/ops/check-postgresql-updates.py'])
+                         ['/usr/bin/python3 /usr/local/lib/screenr-deploy/check-postgresql-updates.py'])
         self.assertTrue(CHECK.is_file())
         # It needs neither the database files nor systemd's D-Bus API.
         self.assertEqual(service['DynamicUser'], ['yes'])

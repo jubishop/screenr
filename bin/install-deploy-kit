@@ -12,7 +12,6 @@ bin/deploy-ci requires before it deploys that revision. See
 docs/deployment.md#deploy-kit.
 """
 import io
-import json
 from pathlib import Path
 import re
 import shlex
@@ -23,23 +22,26 @@ import tarfile
 from _deploy_kit import RECEIVER, checked_kit, kit_digest
 
 ROOT = Path(__file__).resolve().parents[1]
-# Runs as root on the host with the kit as a tar stream on stdin.
+# The kit directory, the receiver, the upload directory, and the deploy lock.
+HOST_PATHS = ('/usr/local/lib/screenr-deploy', '/usr/local/sbin/screenr-receive-release',
+              '/var/lib/screenr-deploy', '/opt/screenr/deploy.lock')
+# Runs as root on the host with HOST_PATHS as arguments and the kit as a tar
+# stream on stdin. Its last line is the installed kit's digest.
 INSTALL = r'''
 set -eu
 umask 022
-kit=/usr/local/lib/screenr-deploy
-receiver=/usr/local/sbin/screenr-receive-release
-exec 9>>/opt/screenr/deploy.lock
+kit=$1 receiver=$2 uploads=$3 lock=$4
+exec 9>>"$lock"
 if ! flock -n 9; then
-    echo 'Another deployment, release cleanup, or restore holds /opt/screenr/deploy.lock. Wait for it to finish, then rerun.' >&2
+    echo "Another deployment, release cleanup, or restore holds $lock. Wait for it to finish, then rerun." >&2
     exit 1
 fi
 staging=$(mktemp -d)
 trap 'rm -rf "$staging"' EXIT
 tar -x -C "$staging" --no-same-owner --no-same-permissions
 test -f "$staging/receive-release"
-install -d -o root -g root -m 0755 "$kit"
-install -d -o root -g root -m 0700 /var/lib/screenr-deploy
+install -d -m 0755 "$kit"
+install -d -m 0700 "$uploads"
 for path in "$kit"/* "$kit"/.[!.]*; do
     name=${path##*/}
     if { [ -e "$path" ] || [ -L "$path" ]; } && { [ ! -e "$staging/$name" ] || [ "$name" = receive-release ]; }; then
@@ -50,14 +52,26 @@ done
 for path in "$staging"/*; do
     name=${path##*/}
     if [ "$name" != receive-release ]; then
-        install -o root -g root -m 0644 "$path" "$kit/.$name.new"
+        install -m 0644 "$path" "$kit/.$name.new"
         mv -f "$kit/.$name.new" "$kit/$name"
     fi
 done
-install -o root -g root -m 0755 "$staging/receive-release" "$receiver.new"
+install -m 0755 "$staging/receive-release" "$receiver.new"
 mv -f "$receiver.new" "$receiver"
-SSH_ORIGINAL_COMMAND=status "$receiver"
+python3 -I "$receiver" kit "$kit"
 '''
+
+
+def kit_archive(files):
+    """Return the kit as an uncompressed tar stream of flat file names."""
+    stream = io.BytesIO()
+    with tarfile.open(fileobj=stream, mode='w') as kit:
+        for name, data in sorted(files.items()):
+            member = tarfile.TarInfo(name)
+            member.size = len(data)
+            member.mode = 0o755 if name == RECEIVER else 0o644
+            kit.addfile(member, io.BytesIO(data))
+    return stream.getvalue()
 
 
 def git(*args, text=True):
@@ -77,25 +91,18 @@ def main():
         raise ValueError(f'Unknown revision: {reference}') from error
     files = checked_kit(git('archive', '--format=tar', revision, 'ops/', text=False))
     expected = kit_digest(files)
-    stream = io.BytesIO()
-    with tarfile.open(fileobj=stream, mode='w') as kit:
-        for name, data in sorted(files.items()):
-            member = tarfile.TarInfo(name)
-            member.size = len(data)
-            member.mode = 0o755 if name == RECEIVER else 0o644
-            kit.addfile(member, io.BytesIO(data))
     print(f'Installing deploy kit {expected[:12]} from {revision} on {host}.', flush=True)
-    result = subprocess.run(['ssh', '-o', 'BatchMode=yes', host, shlex.join(('sh', '-c', INSTALL))],
-                            input=stream.getvalue(), stdout=subprocess.PIPE)
+    command = shlex.join(('sh', '-c', INSTALL, 'install-deploy-kit', *HOST_PATHS))
+    result = subprocess.run(['ssh', '-o', 'BatchMode=yes', host, command],
+                            input=kit_archive(files), stdout=subprocess.PIPE)
     output = result.stdout.decode(errors='replace').splitlines()
     for line in output[:-1]:
         print(line, flush=True)
     if result.returncode != 0:
         raise ValueError(f'Installation exited with status {result.returncode}; see its output above.')
-    try:
-        reported = json.loads(output[-1])['kit']
-    except (IndexError, ValueError, KeyError, TypeError) as error:
-        raise ValueError('The host did not report its deploy kit.') from error
+    reported = output[-1] if output else ''
+    if not re.fullmatch(r'[0-9a-f]{64}', reported):
+        raise ValueError('The host did not report its deploy kit.')
     if reported != expected:
         raise ValueError(f'The host reports deploy kit {reported}, which does not match {expected} '
                          f'from {revision}.')

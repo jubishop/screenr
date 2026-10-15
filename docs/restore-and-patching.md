@@ -293,8 +293,8 @@ other applications that it checks to be running.
    - Leave `/opt/screenr/current` absent and `/opt/screenr/releases` empty.
      The deploy job then treats the host as
      [new](deployment.md#first-release-on-a-new-host): it skips the
-     production revision comparison and the backup before activation, which
-     needs a backup script from an active release.
+     production revision comparison and the backup before activation, since
+     the database was just restored.
 
 5. Use **Run workflow** on `main` to deploy. After it passes, enable the
    services and timers, and run the restore check:
@@ -408,7 +408,7 @@ or saving state:
 ```sh
 systemd-run --quiet --wait --pipe --collect -p DynamicUser=yes \
   -p StateDirectory=screenr-postgresql-updates \
-  /usr/bin/python3 /opt/screenr/current/ops/check-postgresql-updates.py --dry-run
+  /usr/bin/python3 /usr/local/lib/screenr-deploy/check-postgresql-updates.py --dry-run
 ```
 
 ### Reboots

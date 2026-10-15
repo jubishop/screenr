@@ -13,7 +13,13 @@ import tarfile
 # The receiver is installed at /usr/local/sbin/screenr-receive-release; the
 # other files go to /usr/local/lib/screenr-deploy.
 RECEIVER = 'receive-release'
-SCRIPTS = (RECEIVER, 'deploy-release.sh', 'activate.sh', 'host-config.py', 'prune-releases.py')
+# Root runs these during deployment.
+DEPLOY_SCRIPTS = (RECEIVER, 'deploy-release.sh', 'activate.sh', 'host-config.py', 'prune-releases.py')
+# Screenr's units run these as screenr-db or with the backup secrets, so they
+# never come from the release that the deploy key uploads.
+SERVICE_SCRIPTS = ('backup.sh', 'restore-check.sh', 'failure-alert.py', 'check-backup-age.py',
+                   'check-backup-size.py', 'check-postgresql-updates.py')
+SCRIPTS = DEPLOY_SCRIPTS + SERVICE_SCRIPTS
 # Deployment compares these with the shared host configuration but never installs them.
 SHARED = ('Caddyfile', 'postgresql.conf')
 UNIT = re.compile(r'screenr-[A-Za-z0-9@_.-]+\.(service|timer)')
