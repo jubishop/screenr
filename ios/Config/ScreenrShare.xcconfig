@@ -1,0 +1,23 @@
+// The share extension in both variants, which the app embeds. The SCREENR_
+// values come from Dev.xcconfig or Release.xcconfig. The share sheet shows the
+// extension under the app's name.
+PRODUCT_NAME = ScreenrShare
+PRODUCT_BUNDLE_IDENTIFIER = $(SCREENR_BUNDLE_IDENTIFIER).Share
+INFOPLIST_KEY_CFBundleDisplayName = $(SCREENR_DISPLAY_NAME)
+CODE_SIGN_ENTITLEMENTS = Config/ScreenrShare.entitlements
+// The app's asset catalog, which the extension shares for the accent color.
+ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor
+
+GENERATE_INFOPLIST_FILE = YES
+INFOPLIST_FILE = ScreenrShare/Info.plist
+// ScreenrShare/Info.plist keeps Dev-only keys in #if blocks, as the app's does.
+INFOPLIST_PREPROCESS = YES
+INFOPLIST_OTHER_PREPROCESSOR_FLAGS = -traditional-cpp -Wno-invalid-pp-token
+
+// An extension installs only inside the app, and may use only the APIs that
+// Apple allows in extensions.
+SKIP_INSTALL = YES
+APPLICATION_EXTENSION_API_ONLY = YES
+
+SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor
+LD_RUNPATH_SEARCH_PATHS = $(inherited) @executable_path/Frameworks @executable_path/../../Frameworks

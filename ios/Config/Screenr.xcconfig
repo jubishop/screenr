@@ -20,13 +20,6 @@ INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait
 // The app uses only the system's HTTPS, which is exempt from export compliance.
 INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO
 
-// The Google OAuth client "Screenr iOS", which both variants sign in with. An
-// iOS client has no secret, and its ID is public. Google redirects an iOS
-// client only to its reversed ID, which Screenr/Info.plist registers.
-SCREENR_GOOGLE_CLIENT = 1083033132977-i7pofqgq76lrnahd4l5q6bht51uhtc3o
-SCREENR_GOOGLE_CLIENT_ID = $(SCREENR_GOOGLE_CLIENT).apps.googleusercontent.com
-SCREENR_GOOGLE_URL_SCHEME = com.googleusercontent.apps.$(SCREENR_GOOGLE_CLIENT)
-
 SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor
 LD_RUNPATH_SEARCH_PATHS = $(inherited) @executable_path/Frameworks
 // The swift-format build phase reads every Swift file under ios/.

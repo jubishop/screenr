@@ -9,6 +9,12 @@ import SwiftUI
 // `@Environment(\.photoLibrary)`, `@Environment(\.feedbackService)`, and
 // `@Environment(\.trailerLoading)`.
 public struct AppServices: Sendable {
+  // The process the services run in: the app, or its share extension.
+  public enum Host: Hashable, Sendable {
+    case app
+    case shareExtension
+  }
+
   public let api: any ScreenrAPI
   public let session: SessionStore
   public let invitation: PendingInvitation
@@ -58,14 +64,16 @@ public struct AppServices: Sendable {
   // the fixture API when the launch arguments name a fixtures directory. The
   // fixture API also stands in for Apple's and Google's authorization, keeps
   // the invitation in memory, and writes feedback to its request log rather
-  // than to `feedback`, the build's sender, which Screenr Dev lacks.
+  // than to `feedback`, the build's sender, which Screenr Dev lacks. Only the
+  // app's client marks visits; the share extension's sends none.
   @MainActor
   public init(
     configuration: AppConfiguration,
     arguments: [String],
     observer: (any APIRequestObserver)? = nil,
     feedback: (any FeedbackSender)? = nil,
-    logFile: LogFile? = nil
+    logFile: LogFile? = nil,
+    host: Host = .app
   ) throws {
     let source = try APISource(arguments: arguments, variant: configuration.variant)
     let keychain: any KeychainStorage
@@ -125,7 +133,7 @@ public struct AppServices: Sendable {
         session: session,
         transport: transport,
         observer: observer,
-        visits: visits
+        visits: host == .app ? visits : nil
       ),
       session: session,
       invitation: invitation,

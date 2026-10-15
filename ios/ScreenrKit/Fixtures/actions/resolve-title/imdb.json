@@ -1,0 +1,28 @@
+{
+  "description": "An IMDb link resolves to its title through TMDB.",
+  "viewer": "alice",
+  "request": {
+    "method": "GET",
+    "action": "resolve-title",
+    "path": "/api/screenr/resolve-title?url=https%3A%2F%2Fwww.imdb.com%2Ftitle%2Ftt0000101%2F%3Fref_%3Dext_shr_lnk",
+    "query": {
+      "url": "https://www.imdb.com/title/tt0000101/?ref_=ext_shr_lnk"
+    }
+  },
+  "response": {
+    "status": 200,
+    "etag": "W/\"jvIY1l4Z4dD8BbFnjrOKYLlE2H8qmFr8SUAXGBCHyi4\"",
+    "body": {
+      "title": {
+        "id": "movie:101",
+        "kind": "movie",
+        "tmdb_id": 101,
+        "name": "Night Crossing",
+        "overview": "Two strangers share the last ferry across a frozen strait.",
+        "poster_path": "/night-crossing.jpg",
+        "release_date": "2024-03-08"
+      },
+      "query": ""
+    }
+  }
+}

@@ -42,6 +42,10 @@ type CatalogTitle = {
   > | null;
   seasons?: { name: string; episodes: string[] }[];
   stored?: false;
+  // The IMDb ID that TMDB's find returns the title for.
+  imdb?: string;
+  // The Netflix ID of the title page that names it.
+  netflix?: string;
 };
 const providerNames: Record<number, string> = {
   2: "Apple TV Store",
@@ -81,6 +85,8 @@ const catalog: CatalogTitle[] = [
     poster: "/night-crossing.jpg",
     trailer: "nightCross1",
     providers: { flatrate: [8], rent: [2] },
+    imdb: "tt0000101",
+    netflix: "80000001",
   },
   {
     id: "movie:102",
@@ -164,6 +170,22 @@ function catalogReply(url: URL): [number, unknown] {
         results: catalog
           .filter((title) => title.name.toLowerCase().includes(query))
           .map((title) => details(title, true)),
+      },
+    ];
+  }
+  const find = /^\/find\/(tt\d+)$/.exec(url.pathname);
+  if (find) {
+    const found = catalog.find((item) => item.imdb === find[1]);
+    const results = (kind: string) =>
+      found?.id.startsWith(`${kind}:`) ? [details(found, true)] : [];
+    return [
+      200,
+      {
+        movie_results: results("movie"),
+        tv_results: results("tv"),
+        tv_episode_results: [],
+        tv_season_results: [],
+        person_results: [],
       },
     ];
   }
@@ -254,8 +276,19 @@ function details(title: CatalogTitle, search = false) {
   };
 }
 
+// The catalog, and Netflix's title pages, whose heading names the title.
 const catalogServer = createServer((request, response) => {
-  const [status, body] = catalogReply(new URL(request.url!, "http://catalog"));
+  const url = new URL(request.url!, "http://catalog");
+  const netflix = /^\/title\/(\d+)$/.exec(url.pathname);
+  if (netflix) {
+    const title = catalog.find((item) => item.netflix === netflix[1]);
+    response.writeHead(title ? 200 : 404, { "Content-Type": "text/html" });
+    response.end(
+      title ? `<title>Netflix</title><h1>${title.name}</h1>` : "Not found",
+    );
+    return;
+  }
+  const [status, body] = catalogReply(url);
   response.writeHead(status, { "Content-Type": "application/json" });
   response.end(JSON.stringify(body));
 });
@@ -562,12 +595,14 @@ export async function buildWorld() {
 }
 export type World = Awaited<ReturnType<typeof buildWorld>>;
 
-// Serves the catalog on a loopback port until the returned function closes it.
+// Serves the catalog and Netflix's pages on a loopback port until the
+// returned function closes it.
 export async function startCatalog() {
   await new Promise<void>((resolve) =>
     catalogServer.listen(0, "127.0.0.1", resolve),
   );
   process.env.SCREENR_TEST_TMDB_URL = `http://127.0.0.1:${(catalogServer.address() as AddressInfo).port}`;
+  process.env.SCREENR_TEST_PAGES_URL = process.env.SCREENR_TEST_TMDB_URL;
   process.env.TMDB_READ_TOKEN = "fixture-catalog-token";
   return () => catalogServer.close();
 }

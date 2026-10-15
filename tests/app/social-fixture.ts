@@ -20,6 +20,7 @@ process.env.BETTER_AUTH_URL = "http://localhost:3000";
 for (const name of [
   "TMDB_READ_TOKEN",
   "SCREENR_TEST_TMDB_URL",
+  "SCREENR_TEST_PAGES_URL",
   "EMAIL_TRANSPORT",
   "RESEND_API_KEY",
   "EMAIL_FROM",

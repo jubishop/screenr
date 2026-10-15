@@ -11,6 +11,7 @@ struct FixtureDecodingTests {
     uniqueKeysWithValues: [
       model(.screen(path: "/")),
       model(.search("")),
+      model(.resolveTitle(url: "", text: "")),
       model(.seasons(title: "")),
       model(.episodes(title: "", season: 1)),
       model(.notifications()),

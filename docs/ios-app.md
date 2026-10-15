@@ -969,6 +969,14 @@ landscape while every screen stays in portrait. See
 
 **Rejected for now:** Home Screen widgets.
 
+**Implementation note:** [Issue #252](https://github.com/jubishop/screenr/issues/252)
+adds the `ScreenrShare` share extension. TMDB, IMDb, and JustWatch links open
+their title in the share sheet with Recommend and Want to watch. Netflix's
+pages name no other catalog's ID, so a Netflix link opens a search for the
+name on its page; other links and Safari pages elsewhere search for the
+shared text. See [shared links](title-catalog.md#shared-links) and the
+[share extension](../ios/README.md#share-extension).
+
 ### Public repository with feedback issues that link to Sentry — 2026-10-13
 
 **Decision:** `jubishop/screenr` stays public. iOS checks run locally on a

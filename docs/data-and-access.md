@@ -98,6 +98,20 @@ or is hidden by access rules. The single answer reveals nothing about which
 applies, and the extension shows its generic alert. An ID that is not a
 positive 64-bit integer answers `400`.
 
+### Shared title links
+
+The iPhone share extension asks `GET /api/screenr/resolve-title?url=…&text=…`
+which title a shared link or text names
+([issue #252](https://github.com/jubishop/screenr/issues/252)). It is a
+member read like `search`: the extension sends the app's bearer token from
+the shared Keychain group, so a member without a session gets 401 and one
+without a profile 403. It records no usage. The answer is
+`{ "title": <title> | null, "query": "…" }`; see
+[shared links](title-catalog.md#shared-links) for how each site's links
+resolve. The extension then reads the title's `screen` and saves Recommend
+and Want to watch with the usual `activity` and `watch-status` actions, with
+the `title` save surface.
+
 ### Client headers
 
 `src/server/api-route.ts` reads two request headers on every

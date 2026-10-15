@@ -1,0 +1,21 @@
+{
+  "description": "A Netflix link maps to no TMDB title, so the name on its page becomes a search.",
+  "viewer": "alice",
+  "request": {
+    "method": "GET",
+    "action": "resolve-title",
+    "path": "/api/screenr/resolve-title?url=https%3A%2F%2Fwww.netflix.com%2Ftitle%2F80000001&text=Netflix",
+    "query": {
+      "url": "https://www.netflix.com/title/80000001",
+      "text": "Netflix"
+    }
+  },
+  "response": {
+    "status": 200,
+    "etag": "W/\"4nrpiN7Qtsnbu0w99A6-BxIip-kE8VZQ7A0SagoPprU\"",
+    "body": {
+      "title": null,
+      "query": "Night Crossing"
+    }
+  }
+}

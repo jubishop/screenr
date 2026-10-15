@@ -33,6 +33,7 @@ import { setReaction } from "./reactions";
 import { changeRelationship } from "./relationships";
 import { removeReview, saveReview } from "./reviews";
 import { loadScreen, screenResponse } from "./screens";
+import { resolveSharedTitle } from "./shared-links";
 import { saveServices } from "./streaming-services";
 import {
   setFinishedDate,
@@ -214,6 +215,15 @@ const actions = {
     usage: true,
     input: (query) => query.get("q") ?? "",
     run: (text) => findTitles(text),
+  }),
+  // The iPhone share extension's link and text: the title it names, or the
+  // text to search for one.
+  "resolve-title": read({
+    input: (query) => ({
+      url: query.get("url") ?? "",
+      text: query.get("text") ?? "",
+    }),
+    run: ({ url, text }) => resolveSharedTitle(url, text),
   }),
   // The TV discussion composer's Season and Episode pickers.
   seasons: read({

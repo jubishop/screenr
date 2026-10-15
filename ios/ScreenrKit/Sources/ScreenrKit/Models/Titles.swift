@@ -128,6 +128,14 @@ public struct TitleViewing: Codable, Hashable, Sendable {
   public let sections: [WatchSection]
 }
 
+// What a link or text shared to the share extension names: its title, or,
+// when it names none, the text the extension's search starts from, which may
+// be empty.
+public struct TitleResolution: Decodable, Hashable, Sendable {
+  public let title: Title?
+  public let query: String
+}
+
 // A title with where it streams: a search result.
 public struct ViewingTitle: Decodable, Hashable, Sendable, Identifiable {
   public let title: Title

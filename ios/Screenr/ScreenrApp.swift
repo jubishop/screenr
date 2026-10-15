@@ -34,6 +34,8 @@ struct ScreenrApp: App {
       .label("telemetry", telemetry.state)
     )
     let arguments = ProcessInfo.processInfo.arguments
+    // Screenr Dev's share extension answers from the same fixtures.
+    FixtureHandoff(configuration: configuration)?.keep(arguments)
     do {
       services = try AppServices(
         configuration: configuration,
