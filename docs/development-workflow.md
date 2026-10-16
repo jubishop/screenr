@@ -569,11 +569,15 @@ in each service of `.github/workflows/check.yml` with production's major version
 
 ## Main branch delivery
 
-**Decision — 2026-09-28:** Direct pushes to `main` are allowed. A PR and its
-review are optional. This replaces the mandatory PR-before-deployment rule
-from 2026-09-06. Test locally and require successful full CI before deployment.
+**Decision — 2026-10-15:** Production code reaches `main` through a pull
+request, under Project Starter's
+[kinds of change](foundation/engineering-policy.md#kinds-of-change). Text and
+checked development code may still be pushed directly. This replaces the
+2026-09-28 decision that made PRs optional for all changes, which itself
+replaced the mandatory PR-before-deployment rule from 2026-09-06. Test locally
+and require successful full CI before deployment.
 
-Push the checked change to `main`. GitHub Actions runs full validation, then
+Merge the pull request, or push text or checked development code, to `main`. GitHub Actions runs full validation, then
 packages and deploys the selected main revision using the
 [deployment procedure](deployment.md). A run deploys its validated revision
 while `main` contains it and it is at least as new as production, even after

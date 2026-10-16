@@ -1285,8 +1285,8 @@ limits require a decision. The public hostname is selected below; use the
 Resend relay selected above.
 
 The [release workflow](development-workflow.md#main-branch-delivery)
-permits direct main delivery after validation and allows nonfunctional changes
-to skip deployment. It replaces the earlier mandatory PR review and merge step.
+requires a pull request for production code, deploys each validated push to
+`main`, and allows nonfunctional changes to skip deployment.
 
 ### Public hostname — 2026-09-06
 

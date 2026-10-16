@@ -454,7 +454,7 @@ entries.
 ## Build and activate a release
 
 Follow the [main branch workflow](development-workflow.md#main-branch-delivery).
-Direct pushes to `main` run full checks and, by default, package a Linux x64
+Pushes to `main` run full checks and, by default, package a Linux x64
 release in the `release` job alongside them. A separate `deploy` job starts
 only after every [check job](development-workflow.md#ci-jobs) passes. Nonfunctional
 changes can skip packaging and deployment with the documented commit trailers;
@@ -673,7 +673,8 @@ its kit is installed again.
 
 Create a GitHub Actions environment named `production` in `jubishop/screenr`.
 Allow only the **branch** `main` through its deployment branch policy. Do not
-add required deployment reviewers or require a PR for direct main delivery.
+add required deployment reviewers or a branch rule that requires pull requests:
+text and checked development code still go directly to `main`.
 The `check` job, which passes only when every check job passed, gates
 production deployment.
 

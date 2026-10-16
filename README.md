@@ -129,9 +129,10 @@ the [email worker](docs/running-screenr.md#email-worker), and the
 [production build](docs/running-screenr.md#production-build), which replaces
 `npm start`.
 
-Direct pushes to `main` run full checks and normally build and deploy through
-GitHub Actions. Nonfunctional changes may skip deployment with a recorded
-reason; a PR is optional. See the
+Pushes to `main`, including merged pull requests, run full checks and normally
+build and deploy through GitHub Actions. Nonfunctional changes may skip
+deployment with a recorded reason. Production code arrives through a pull
+request. See the
 [deployment guide](docs/deployment.md#build-and-activate-a-release) for the
 one-time production environment setup and release checks.
 

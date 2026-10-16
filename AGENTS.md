@@ -84,7 +84,9 @@ application commands, CI, and production. See the
 ## Deployment
 
 Test changes locally and require successful full CI before production deployment.
-Direct pushes to `main` are allowed; a PR is optional. Nonfunctional changes may
+Production code reaches `main` through a pull request; text and checked
+development code may be pushed directly, under the
+[kinds of change](docs/foundation/engineering-policy.md#kinds-of-change). Nonfunctional changes may
 skip deployment after checking the complete change since the last successful
 release. Keep CI enabled and record the skip reason in the commit trailers.
 Follow the [release workflow](docs/development-workflow.md#main-branch-delivery).
