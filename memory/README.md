@@ -91,6 +91,5 @@ to ordinary memory pages. Create these records only when a review needs them.
   the source of repository conventions, the product decision process, and the
   preference to reduce third-party dependencies.
 - [Parallel agent gotchas](parallel-agent-gotchas.md): cap concurrent iOS
-  checks, push rebased branches to the SourceHut mirror with an explicit lease,
-  keep hooks current in the primary checkout, avoid broad process kills, and
-  register new extension App IDs through the Xcode account.
+  checks, keep hooks current in the primary checkout, avoid broad process
+  kills, and register new extension App IDs through the Xcode account.

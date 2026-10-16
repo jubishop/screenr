@@ -1,6 +1,6 @@
 ---
 name: parallel-agent-gotchas
-description: Validated pitfalls when several coding agents work on Screenr at once on the owner's Mac, especially concurrent iOS checks, mirror pushes, hooks, and shared processes.
+description: Validated pitfalls when several coding agents work on Screenr at once on the owner's Mac, especially concurrent iOS checks, hooks, and shared processes.
 type: reference
 ---
 
@@ -37,13 +37,6 @@ done
 attempts while the machine is loaded is usually load: rerun before assuming
 the change broke it. `performSettledAudit` (#295) already retries once after a
 two-second settle.
-
-## Pushing rebased branches
-
-`origin` pushes to GitHub and the SourceHut mirror together. After a rebase,
-SourceHut rejects a plain `--force-with-lease`. Push the branch to the
-`sourcehut` remote separately with an explicit lease
-(`--force-with-lease=<branch>:<old sha>`).
 
 ## Hooks come from the primary checkout
 
