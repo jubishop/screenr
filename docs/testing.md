@@ -22,8 +22,9 @@ bin/check --full
 TypeScript, PostgreSQL tests, and the browser suite against a fresh production
 build. The browser command performs that build once; the full check does not
 build a second artifact afterward.
-Plain `bin/check` runs only fast repository static checks; use
-`bin/check --documents-only` for Markdown edits. Follow the
+Plain `bin/check` runs only fast repository static checks, and
+`bin/check --documents-only` only the Markdown checks; Markdown edits need no
+checks. Follow the
 [local and CI validation policy](development-workflow.md#local-and-ci-validation)
 for focused checks during implementation and full validation before merge.
 CI runs on Linux and has no iOS job, so iOS changes need `bin/check-ios` on
