@@ -277,6 +277,24 @@ test("a release archives and uploads the next build, then tags and pushes the co
   }
 });
 
+test("a release stops before distribution when GitHub refuses the tag", async () => {
+  const fixture = await releaseFixture([
+    [/^git push origin refs\/tags\/ios-v1\.0b4$/, { status: 1 }],
+  ]);
+  try {
+    await assert.rejects(
+      release({ distributeOnly: false, submitReview: false }, fixture.io),
+      {
+        message:
+          /^ios-v1\.0b4 is uploaded but could not be pushed\. Run git push origin refs\/tags\/ios-v1\.0b4, then bin\/ios-testflight --distribute-only\.$/,
+      },
+    );
+    assert.deepEqual(fixture.requests, []);
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
 test("a release refuses a dirty, stale, released, or failing checkout and tags nothing after a failed upload", async () => {
   const cases: [string, [RegExp, Answer][], RegExp][] = [
     [

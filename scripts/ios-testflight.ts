@@ -241,7 +241,7 @@ export async function release(
       `Screenr ${version} (${build})\n\n${notes}`,
       head,
     );
-    await pushTag(exec, tag.name, log);
+    await pushTag(exec, tag.name);
   }
 
   try {
@@ -367,26 +367,14 @@ async function archiveAndUpload(
   await rm(join(directory, "DerivedData"), { recursive: true, force: true });
 }
 
-// origin pushes to GitHub and the SourceHut mirror. GitHub's copy is the one
-// that counts; a mirror failure only needs a later push.
-async function pushTag(exec: Exec, name: string, log: (line: string) => void) {
+async function pushTag(exec: Exec, name: string) {
   const pushed = await exec("git", ["push", "origin", `refs/tags/${name}`], {
     output: "terminal",
   });
-  if (!pushed.status) return;
-  const remote = await capture(exec, "git", [
-    "ls-remote",
-    "--tags",
-    "origin",
-    `refs/tags/${name}`,
-  ]);
-  if (!remote)
+  if (pushed.status)
     throw new Error(
       `${name} is uploaded but could not be pushed. Run git push origin refs/tags/${name}, then bin/ios-testflight --distribute-only.`,
     );
-  log(
-    `warning: GitHub has ${name}, but a mirror refused it. Run git push sourcehut refs/tags/${name} later.`,
-  );
 }
 
 const usage = `Usage: bin/ios-testflight [--distribute-only] [--submit-review]
