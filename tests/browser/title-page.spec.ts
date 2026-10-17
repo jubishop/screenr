@@ -35,6 +35,14 @@ test("title pages show compact entries, a friend line that moves to each entry, 
   await updateTitleActivity(viewer, "movie:996090", "recommended", true);
   for (const id of [maya, sam, ana, lee, stranger])
     await updateTitleActivity(id, "movie:996090", "recommended", true);
+  // Saves can land in the same millisecond, where the friend line falls back
+  // to item IDs, so space the recommendations a minute apart, oldest first.
+  for (const [i, owner] of [maya, sam, ana, lee].entries())
+    await db.query(
+      `UPDATE feed_item SET activity_at=now()-make_interval(mins=>$2)
+      WHERE owner_id=$1 AND title_id='movie:996090' AND item_type='recommended'`,
+      [owner, 4 - i],
+    );
   const theoEntry = await updateTitleActivity(
     theo,
     "movie:996090",

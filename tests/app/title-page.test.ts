@@ -36,6 +36,16 @@ async function friendLine(viewer: string) {
     data,
   };
 }
+// Saves can land in the same millisecond, where the friend line falls back to
+// item IDs, so give each owner's recommendation its own minute, oldest first.
+async function spaceRecommendations(...owners: string[]) {
+  for (const [i, owner] of owners.entries())
+    await db.query(
+      `UPDATE feed_item SET activity_at=now()-make_interval(mins=>$2)
+      WHERE owner_id=$1 AND title_id='movie:1' AND item_type='recommended'`,
+      [owner, owners.length - i],
+    );
+}
 async function groups(viewer: string) {
   const line = await friendLine(viewer);
   return [line.recommended, line.want_to_watch];
@@ -59,6 +69,7 @@ test("the title friend line groups current friends' actions, most recent first, 
   await updateTitleActivity(sam, "movie:1", "recommended", true);
   await updateTitleActivity(theo, "movie:1", "want_to_watch", true);
   await updateTitleActivity(ana, "movie:1", "recommended", true);
+  await spaceRecommendations(maya, sam, ana);
   // Other titles and standalone comments are not title actions.
   await updateTitleActivity(lee, "movie:2", "recommended", true);
   await createTitleComment(lee, "movie:1", "Only a comment", false);
@@ -122,6 +133,7 @@ test("the title friend line follows the title feed's friendship and blocking rul
     secondDegree,
   ])
     await updateTitleActivity(id, "movie:1", "recommended", true);
+  await spaceRecommendations(current, blocked, unfriended);
   await changeRelationship(viewer, blocked, "block");
   await changeRelationship(blocker, viewer, "block");
   await changeRelationship(viewer, unfriended, "remove");
@@ -161,6 +173,7 @@ test("the title friend line shows top 10 ranks, best first, then the rest newest
   await updateTitleActivity(theo, "movie:1", "recommended", true);
   await updateTopTen(ana, "movie:1", "add"); // #1
   await updateTitleActivity(kai, "movie:1", "want_to_watch", true);
+  await spaceRecommendations(maya, theo, ana);
   // The viewer's own top 10 does not add them to the line.
   await updateTopTen(viewer, "movie:1", "add");
   const ranks = (group: FriendAction[]) => group.map((f) => f.rank);
