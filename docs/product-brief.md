@@ -79,8 +79,8 @@ applies to every feature.
 - In Watch together, prioritize shared titles carried by a streaming service
   saved by either participant. Retain the other shared titles in a separate
   section below, following the [streaming service decision](watch-together.md#streaming-services-from-either-participant--2026-09-10).
-- Each member's profile links to a Want to watch page listing only their
-  Want to watch titles that the viewer can watch now, following the
+- Each member's profile links to a Want to watch page listing their Want
+  to watch titles that the viewer can watch now, following the
   [Want to watch page decision](#want-to-watch-page--2026-10-16).
 - Users can make their own recommendations.
 - Recommend and Want to watch are mutually exclusive for each person and
@@ -751,9 +751,10 @@ page listing the profile owner's current Want to watch titles. The page
 lists only titles the viewer can watch now: a subscription offer from one
 of the viewer's saved streaming services, or any free or ad-supported US
 option, as the [My services filter](#saved-streaming-services-and-discovery--2026-09-10)
-counts them. Rental and purchase offers never count. Order titles by when
-they became Want to watch, newest first, with an All, Movies, and TV
-filter.
+counts them. Rental and purchase offers never count. Titles whose
+availability cannot be checked appear in a separate Availability unknown
+section below the list, as in Watch together. Order titles by when they
+became Want to watch, newest first, with an All, Movies, and TV filter.
 
 The link appears on the viewer's own profile and on accepted friends'
 profiles. A friend's page uses the viewer's services, not the owner's.
