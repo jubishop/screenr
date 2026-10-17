@@ -799,6 +799,10 @@ separate In theaters section on the viewer's own profile, chosen earlier
 the same day before the Want to watch page was decided; this decision
 supersedes it. A Find a title tab. A home feed strip.
 
+[Unknown release data](watch-together.md#unknown-release-data-in-in-theaters--2026-10-16)
+and the [mode in the URL](watch-together.md#the-selected-mode-stays-in-the-url--2026-10-16)
+follow the Watch together decisions.
+
 Implementation is tracked in [issue #311](https://github.com/jubishop/screenr/issues/311)
 and, for the iPhone app, [issue #312](https://github.com/jubishop/screenr/issues/312).
 

@@ -139,6 +139,30 @@ currently mark Want to watch, the same rule as At home.
 be both a shared choice and in theaters now. The rejected alternative
 listed movies that only one participant wants below the shared ones.
 
+### Unknown release data in In theaters — 2026-10-16
+
+**Decision:** When a movie's release data cannot be loaded, In theaters
+lists it in a separate Availability unknown section below the list instead
+of leaving it out. This applies to Watch together and to
+[Want to watch pages](product-brief.md#in-theaters-on-want-to-watch-pages--2026-10-16),
+matching the Availability unknown section At home already uses.
+
+**Why:** The user accepted this.
+
+**Rejected alternative:** Leaving such movies out of In theaters.
+
+### The selected mode stays in the URL — 2026-10-16
+
+**Decision:** The page URL records the selected mode, such as
+`mode=theaters`, so reloading the page keeps At home or In theaters. A URL
+without the mode opens At home. This applies to Watch together and to Want
+to watch pages.
+
+**Why:** The user accepted keeping the choice in the page address.
+
+**Rejected alternative:** Starting in At home on every reload, as the
+title-type filter resets to All.
+
 ## Implementation
 
 The profile link opens `/watch-together?with=<friend-username>`. The signed-in
