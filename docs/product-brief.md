@@ -79,6 +79,9 @@ applies to every feature.
 - In Watch together, prioritize shared titles carried by a streaming service
   saved by either participant. Retain the other shared titles in a separate
   section below, following the [streaming service decision](watch-together.md#streaming-services-from-either-participant--2026-09-10).
+- Each member's profile links to a Want to watch page listing only their
+  Want to watch titles that the viewer can watch now, following the
+  [Want to watch page decision](#want-to-watch-page--2026-10-16).
 - Users can make their own recommendations.
 - Recommend and Want to watch are mutually exclusive for each person and
   title. Selecting either removes the other. Restoring an action reuses its
@@ -740,6 +743,33 @@ release, including a way to reflect a rewatch through the current status.
 The [Watch together decisions](watch-together.md) define the profile entry
 point, shared-title inclusion, newest-shared-first order, title-type filter,
 and use of existing title pages for choice changes.
+
+### Want to watch page — 2026-10-16
+
+**Decision:** Add a Want to watch link to profiles. It opens a dedicated
+page listing the profile owner's current Want to watch titles. The page
+lists only titles the viewer can watch now: a subscription offer from one
+of the viewer's saved streaming services, or any free or ad-supported US
+option, as the [My services filter](#saved-streaming-services-and-discovery--2026-09-10)
+counts them. Rental and purchase offers never count. Order titles by when
+they became Want to watch, newest first, with an All, Movies, and TV
+filter.
+
+The link appears on the viewer's own profile and on accepted friends'
+profiles. A friend's page uses the viewer's services, not the owner's.
+The existing friendship and blocking rules apply.
+
+**Why:** The user wants a clean view of the titles they want to watch, to
+decide what to watch next. They chose the profile over Find a title, and
+friends' profiles as well as their own, without giving further reasons.
+They accepted counting free options, as the My services filter and Watch
+together do, a separate page so the profile stays short, and newest-first
+order with a title-type filter, as in Watch together.
+
+**Rejected alternatives:** A third tab on Find a title. A fifth navigation
+item. A collapsed or open section on the profile itself. Saved
+subscriptions only, without free options. Oldest-first and alphabetical
+order.
 
 ### Ratings and written reviews — 2026-09-04
 
