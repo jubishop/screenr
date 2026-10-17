@@ -15,9 +15,9 @@ today and links the features that are not built yet. Related guides cover
 ## Local setup
 
 Use the latest Node.js LTS release, npm, Python 3.9+, ShellCheck, Caddy,
-OpenSSL, and a Docker-compatible engine. Caddy and OpenSSL are used by the local proxy test;
-do not start a system Caddy service. On macOS, install the test tools with
-`brew install caddy openssl`; the existing Colima installation can provide Docker.
+OpenSSL, and PostgreSQL 18. Caddy and OpenSSL are used by the local proxy test;
+do not start a system Caddy service. On macOS, install them with
+`brew install caddy openssl postgresql@18`.
 CI tests with production's Caddy release instead; see
 [CI Caddy](development-workflow.md#ci-caddy).
 To run several checkouts at once, give each its own database and development
@@ -32,10 +32,25 @@ execution. `bin/check --full` also checks Node before running behavior tests.
 Fast and document-only checks do not need Node. See the
 [runtime decision](development-workflow.md#node-runtime) for upgrade policy.
 
+PostgreSQL runs natively as a Homebrew login service on port 5439, not in
+Docker; see the [local PostgreSQL decision](development-workflow.md#local-postgresql).
+Set its port and its time zone to UTC, start it, and create the local role and
+database once. Tests compare dates in UTC, as CI's server does, and the role
+is a superuser, as in CI, so tests can create and reset their databases:
+
+```sh
+sed -i '' -e 's/^#port = 5432/port = 5439/' -e "s/^timezone = .*/timezone = 'UTC'/" \
+  "$(brew --prefix)/var/postgresql@18/postgresql.conf"
+brew services start postgresql@18
+psql -h 127.0.0.1 -p 5439 -d postgres -c "CREATE ROLE screenr LOGIN SUPERUSER PASSWORD 'screenr-local-only'"
+createdb -h 127.0.0.1 -p 5439 -U screenr screenr
+```
+
+Then set up the checkout:
+
 ```sh
 bin/setup
 npm ci
-docker compose up -d --wait
 cp .env.example .env
 chmod 600 .env
 openssl rand -base64 32
@@ -120,15 +135,11 @@ database, test database, and development port. The browser harness already
 derives its own ports and database from the checkout path; see
 [the browser harness](testing.md#browser-harness).
 
-The simplest setup shares one PostgreSQL server. Start it from one checkout
-only: Compose names its project after the checkout directory, so
-`docker compose up` in another worktree tries to start a second container on
-the same host port and fails. `npm run db:migrate` does not create databases,
-so create one for each additional checkout from the checkout that started
-PostgreSQL:
+Checkouts share the local PostgreSQL server. `npm run db:migrate` does not
+create databases, so create one for each additional checkout:
 
 ```sh
-docker compose exec postgres createdb -U screenr screenr_feature
+createdb -h 127.0.0.1 -p 5439 -U screenr screenr_feature
 ```
 
 In the additional checkout, set `DATABASE_URL` in `.env` to
@@ -139,18 +150,6 @@ must end in `_test`:
 
 ```sh
 export TEST_DATABASE_URL=postgresql://screenr:screenr-local-only@127.0.0.1:5439/screenr_feature_test
-```
-
-To give a checkout its own server instead, set `SCREENR_DB_PORT` to a free
-port in that checkout's `.env`. Docker Compose reads it from that file, and a
-shell variable of the same name takes precedence. Use the same port in
-`DATABASE_URL` and `TEST_DATABASE_URL`. `docker compose up -d --wait` then
-starts a separate container, with its own data volume, on that port. Without
-the setting, Compose uses 5439, which `.env.example` also uses.
-
-```sh
-SCREENR_DB_PORT=5440
-DATABASE_URL=postgresql://screenr:screenr-local-only@127.0.0.1:5440/screenr
 ```
 
 The development server uses port 3000 unless you pass another one. Match it

@@ -25,7 +25,7 @@
     "test:browser": "SCREENR_BROWSER_MODE=production playwright test",
     "test:browser:dev": "SCREENR_BROWSER_MODE=development playwright test",
     "test:browser:isolation": "tsx scripts/check-browser-isolation.ts",
-    "format:check": "prettier --check src scripts tests/app tests/browser package.json tsconfig.json next.config.ts playwright.config.ts compose.yml",
+    "format:check": "prettier --check src scripts tests/app tests/browser package.json tsconfig.json next.config.ts playwright.config.ts",
     "dev:code": "tsx scripts/dev-code.ts",
     "worker": "tsx --env-file=.env scripts/worker.ts",
     "report:usage": "tsx scripts/report-usage.ts",

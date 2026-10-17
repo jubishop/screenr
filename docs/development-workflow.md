@@ -554,17 +554,31 @@ Before [#122](https://github.com/jubishop/screenr/issues/122), CI installed
 Ubuntu's Caddy 2.6.2 package. Its post-install script started an unused system
 service and made the install take 30 to 70 seconds.
 
+### Local PostgreSQL
+
+**Decision — 2026-10-16:** Local development runs PostgreSQL 18 natively from
+Homebrew's `postgresql@18` as a login service on port 5439, as
+[local setup](running-screenr.md#local-setup) describes. This replaces the
+Docker Compose database. A session that ran `docker compose up` left Colima's
+virtual machine holding about 4 GB for days after the session ended: nothing
+stopped the machine, and macOS could not reclaim the Linux file cache inside
+it. A native server stays small when idle and, like production, runs
+PostgreSQL 18 outside a container. Checkouts now share the one server with
+their own databases; a checkout can no longer start a separate server with a
+port setting. CI keeps its `postgres:18` service container, which GitHub
+Actions removes after each job.
+
 ### CI PostgreSQL
 
-CI and the local Compose database use the `postgres:18` image tag, not a
-digest pin. Production runs PostgreSQL 18 from the PostgreSQL APT repository
+CI uses the `postgres:18` image tag, not a digest pin. Production runs PostgreSQL 18 from the PostgreSQL APT repository
 and [installs each minor release](restore-and-patching.md#postgresql), and
 the tag follows the same minor releases without anyone bumping it, as the
 [toolchain policy](foundation/engineering-policy.md#runtime-and-toolchain-versions)
 prefers. Unlike [CI Caddy](#ci-caddy), the checks depend only on the major
 version, so a pinned digest and its update pull requests would add work
-without catching a production difference. Change the tag in `compose.yml` and
-in each service of `.github/workflows/check.yml` with production's major version
+without catching a production difference. Change the tag in each service of
+`.github/workflows/check.yml`, and the Homebrew formula in
+[local setup](running-screenr.md#local-setup), with production's major version
 ([#124](https://github.com/jubishop/screenr/issues/124)).
 
 ## Main branch delivery

@@ -31,7 +31,6 @@ async function fixture(t: TestContext) {
     "tsconfig.json",
     "next.config.ts",
     "playwright.config.ts",
-    "compose.yml",
     "scripts/test-database.ts",
     "scripts/browser-config.ts",
   ])
