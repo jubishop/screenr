@@ -74,7 +74,8 @@ both memory and design documents.
   (#18), and comment deletion (#29), with the shared implementation and
   migrations.
 - [Watch together](watch-together.md): accepted shared-choice behavior and
-  implementation for issue #26.
+  implementation for issue #26, and At home and In theaters modes for issue
+  #311.
 - [Interface design](interface-design.md): accepted layout and presentation
   decisions from the 2026-10-12 design review.
 - [Title availability](title-availability.md): accepted US viewing options,

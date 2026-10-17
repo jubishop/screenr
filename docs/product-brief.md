@@ -82,6 +82,11 @@ applies to every feature.
 - Each member's profile links to a Want to watch page listing their Want
   to watch titles that the viewer can watch now, following the
   [Want to watch page decision](#want-to-watch-page--2026-10-16).
+- Want to watch pages and Watch together switch between At home and In
+  theaters. In theaters lists Want to watch movies in US theaters now,
+  following the [Want to watch](#in-theaters-on-want-to-watch-pages--2026-10-16)
+  and [Watch together](watch-together.md#at-home-and-in-theaters-modes--2026-10-16)
+  decisions.
 - Users can make their own recommendations.
 - Recommend and Want to watch are mutually exclusive for each person and
   title. Selecting either removes the other. Restoring an action reuses its
@@ -771,6 +776,31 @@ order with a title-type filter, as in Watch together.
 item. A collapsed or open section on the profile itself. Saved
 subscriptions only, without free options. Oldest-first and alphabetical
 order.
+
+### In theaters on Want to watch pages — 2026-10-16
+
+**Decision:** Every Want to watch page, on the viewer's own profile and on
+accepted friends' profiles, switches between At home and In theaters, with
+At home selected by default. At home is the page described above. In
+theaters lists the profile owner's current Want to watch movies that are in
+US theaters now, following the
+[In theaters decision](title-availability.md#in-theaters-from-a-recent-us-theatrical-date--2026-10-16).
+The viewer's streaming services do not affect it. It shows no showtimes,
+theater locations, or ticket links, as in
+[Watch together](watch-together.md#at-home-and-in-theaters-modes--2026-10-16).
+
+**Why:** The user wants to see the movies they want to watch that are in
+theaters now. They chose the switch on every Want to watch page, matching
+Watch together. Friends can already see each other's Want to watch
+choices, so the In theaters view reveals nothing new.
+
+**Rejected alternatives:** The switch on the viewer's own page only. A
+separate In theaters section on the viewer's own profile, chosen earlier
+the same day before the Want to watch page was decided; this decision
+supersedes it. A Find a title tab. A home feed strip.
+
+Implementation is tracked in [issue #311](https://github.com/jubishop/screenr/issues/311)
+and, for the iPhone app, [issue #312](https://github.com/jubishop/screenr/issues/312).
 
 ### Ratings and written reviews — 2026-09-04
 

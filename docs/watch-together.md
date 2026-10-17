@@ -106,6 +106,39 @@ order.
 services sees shared titles under "Not on your services" with no hint about
 the cause.
 
+### At home and In theaters modes — 2026-10-16
+
+**Decision:** Keep the single Watch together link on a friend's profile.
+The page switches between At home and In theaters, with At home selected
+by default. At home is the comparison described above, unchanged.
+In theaters lists shared movies that are in US theaters now, following the
+[In theaters decision](title-availability.md#in-theaters-from-a-recent-us-theatrical-date--2026-10-16).
+It shows no showtimes, theater locations, or ticket links, and uses no
+member location.
+
+**Why:** The user wants one Watch together option for watching at home and
+another for going out to a theater. They chose in-theaters status alone
+because showtimes need a separate, usually paid, provider and a member
+location setting.
+
+**Rejected alternatives:** Two separate links on the friend's profile.
+Adding showtimes and nearby theaters. Filing the data source as research
+first.
+
+Implementation is tracked in [issue #311](https://github.com/jubishop/screenr/issues/311)
+and, for the iPhone app, [issue #312](https://github.com/jubishop/screenr/issues/312).
+
+### In theaters uses shared choices — 2026-10-16
+
+**Decision:** In theaters includes only movies that both participants
+currently mark Want to watch, the same rule as At home.
+
+**Why:** The user chose to keep the shared-choice rule.
+
+**Tradeoff:** The list will often be short or empty, because a movie must
+be both a shared choice and in theaters now. The rejected alternative
+listed movies that only one participant wants below the shared ones.
+
 ## Implementation
 
 The profile link opens `/watch-together?with=<friend-username>`. The signed-in
