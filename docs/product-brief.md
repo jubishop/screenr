@@ -48,6 +48,9 @@ applies to every feature.
 - Show US viewing options on movie and TV title pages under Subs and Free.
   Group duplicate service variants within each section, following the
   [title availability decisions](title-availability.md).
+- On title pages and title cards, show whether a movie is in US theaters and
+  upcoming US theatrical, digital, and TV premiere dates, following the
+  [release status decisions](title-availability.md#release-status-on-title-pages-and-cards--2026-10-16).
 - Let members save their streaming services. On Find a title, mark matches
   in search results and suggestions, and offer an optional My services filter.
   Include free options automatically. Keep all titles available when the

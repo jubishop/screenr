@@ -78,7 +78,8 @@ both memory and design documents.
 - [Interface design](interface-design.md): accepted layout and presentation
   decisions from the 2026-10-12 design review.
 - [Title availability](title-availability.md): accepted US viewing options,
-  data acquisition, cache behavior, and title-page scope for issue #7.
+  data acquisition, cache behavior, and title-page scope for issue #7, and
+  theatrical and upcoming release status for issue #310.
 - [Find a title suggestions](title-suggestions.md): accepted discovery
   decisions, anonymous second-degree counts, and 3:1 social weighting for
   issue #39, and watch-status signals for issue #192.

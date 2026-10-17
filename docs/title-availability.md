@@ -8,6 +8,9 @@ Accepted decisions for [issue #7](https://github.com/jubishop/screenr/issues/7)
 and the [viewing-scope change](https://github.com/jubishop/screenr/issues/62).
 Screenr obtains US at-home viewing options and shows them on movie and TV
 title pages. The accepted decisions and implementation are described below.
+[Release status](#release-status-on-title-pages-and-cards--2026-10-16)
+covers theaters and upcoming dates for
+[issue #310](https://github.com/jubishop/screenr/issues/310).
 
 ## At-home scope and source — 2026-09-07
 
@@ -28,7 +31,9 @@ catalog provider.
 **Tradeoff:** Prices and direct playback links are outside the first
 version. The supplied TMDB watch page provides further viewing information.
 Theatrical availability is deferred. This replaces the issue's original
-request to investigate theatrical availability alongside streaming.
+request to investigate theatrical availability alongside streaming. The
+[2026-10-16 release status decision](#release-status-on-title-pages-and-cards--2026-10-16)
+ends that deferral.
 
 Use these [movie](https://developer.themoviedb.org/reference/movie-watch-providers)
 and [TV](https://developer.themoviedb.org/reference/tv-series-watch-providers)
@@ -195,6 +200,69 @@ changes in that issue. Issue #93 adds the
 [saved-service discovery](product-brief.md#saved-streaming-services-and-discovery--2026-09-10)
 and [Watch together](watch-together.md#streaming-services-from-either-participant--2026-09-10)
 uses.
+
+## Release status on title pages and cards — 2026-10-16
+
+**Decision:** Show whether a movie is in US theaters, and when a movie or
+show that is not out yet will be released. Show it on title pages beside
+the viewing options, and on title cards in Find a title, Want to watch,
+Friends recommend, Watch together, and other title lists. The web app and
+the iPhone app both show it. Use US release dates only, following the
+[US availability decision](#us-availability--2026-09-07); never fall back to
+another country's dates. This ends the theatrical deferral in the
+[at-home scope decision](#at-home-scope-and-source--2026-09-07).
+
+**Why:** The user asked for theatrical status and upcoming release dates, and
+chose title cards as well as title pages. No further reason was stated.
+
+**Tradeoff:** Title lists need release data for each title, which list
+results do not carry today. The rejected alternative was title pages only,
+with cards in a later issue.
+
+Implementation is tracked in [issue #310](https://github.com/jubishop/screenr/issues/310).
+
+## In theaters from a recent US theatrical date — 2026-10-16
+
+**Decision:** Infer "In theaters" from TMDB release dates, because TMDB
+supplies no showtimes. A movie is in theaters when its most recent US
+theatrical release, limited or wide, falls within a fixed recent window.
+Start with 45 days, tune the window during implementation, and record the
+final value here.
+
+**Why:** The user accepted this recommendation.
+
+**Tradeoff:** The label is an estimate. It cannot confirm that a nearby
+theater is showing the movie, and a long run can outlast the window.
+Rejected alternatives: ending the window early once a Subs or Free option
+is listed, and using TMDB's US now-playing list, which is also derived from
+release dates and requires fetching a list with many pages.
+
+## Upcoming movie dates include digital releases — 2026-10-16
+
+**Decision:** Show upcoming US theatrical and digital release dates for
+movies, such as "In theaters Nov 21" and "Digital Dec 9". Label a digital
+release as Digital. A movie with only a digital release, such as a streaming
+original, shows its digital date.
+
+**Why:** The user accepted this recommendation.
+
+**Tradeoff:** US digital releases usually start as rentals or purchases,
+which Screenr's viewing options exclude. A digital date must not be presented
+as a Subs or Free option. Rejected alternatives: theatrical dates only, and
+digital dates only for movies with no theatrical release.
+
+## TV series and season premieres — 2026-10-16
+
+**Decision:** A show that has not premiered shows its premiere date and
+network, such as "Premieres Nov 4 on Netflix". A released show with an
+announced next-season premiere shows that date, such as "Season 3 premieres
+Jan 8". Do not show weekly episode air dates.
+
+**Why:** The user accepted this recommendation.
+
+**Tradeoff:** A show that is currently airing shows no next-episode date.
+Rejected alternatives: series premieres only, and also showing the next
+episode's air date.
 
 ## Display transformation
 
