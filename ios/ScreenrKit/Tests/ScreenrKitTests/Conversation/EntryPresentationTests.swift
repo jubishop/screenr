@@ -125,6 +125,20 @@ struct EntryPresentationTests {
     #expect(FinishedDate.label("not a date", now: now, calendar: Self.pacific) == nil)
   }
 
+  // The server's days are Gregorian, so this year is the Gregorian year even
+  // when the phone uses another calendar.
+  @Test(arguments: [Calendar.Identifier.buddhist, .japanese, .hebrew, .islamic, .republicOfChina])
+  func comparesFinishedDatesWithTheGregorianYear(_ identifier: Calendar.Identifier) throws {
+    var calendar = Calendar(identifier: identifier)
+    calendar.timeZone = Self.pacific.timeZone
+    let now = try Self.date("2026-10-13T12:00:00.000Z")
+    #expect(FinishedDate.label("2026-09-20", now: now, calendar: calendar) == "Sep 20")
+    #expect(FinishedDate.label("2025-01-02", now: now, calendar: calendar) == "Jan 2, 2025")
+    // 4 AM UTC on Jan 1 is still Dec 31 in Pacific time.
+    let newYear = try Self.date("2027-01-01T04:00:00.000Z")
+    #expect(FinishedDate.label("2026-12-31", now: newYear, calendar: calendar) == "Dec 31")
+  }
+
   @Test func namesReactionsAndStars() {
     #expect(ReactionKind.options.map(\.emoji) == ["👍", "❤️", "🥰", "😆", "😮", "😢", "😡"])
     #expect(
