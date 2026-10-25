@@ -1,10 +1,15 @@
 "use client";
 import { Link } from "./pending-navigation";
 import { useState } from "react";
-import type { Person, Title } from "../shared";
+import type { Person } from "../shared";
 import type { ScreenData } from "../server/screens";
 import { TitleCard } from "./title-card";
-import { ViewingAttribution } from "./title-services";
+import {
+  ofKind,
+  TitleKindButtons,
+  type TitleKindFilter,
+} from "./title-kind-filter";
+import { ServicesPrompt, ViewingAttribution } from "./title-services";
 import { Avatar } from "./avatar";
 
 export function WatchTogether({
@@ -16,10 +21,8 @@ export function WatchTogether({
   titles: Extract<ScreenData, { kind: "watch-together" }>["titles"];
   viewerHasServices: boolean;
 }) {
-  const [filter, setFilter] = useState<"all" | Title["kind"]>("all");
-  const visible = titles.filter(
-    (title) => filter === "all" || title.kind === filter,
-  );
+  const [filter, setFilter] = useState<TitleKindFilter>("all");
+  const visible = ofKind(titles, filter);
   return (
     <>
       <div className="page-heading">
@@ -42,35 +45,11 @@ export function WatchTogether({
           first, then your other shared picks.
         </p>
       </div>
-      <div className="inline-actions" role="group" aria-label="Title type">
-        {(
-          [
-            ["all", "All"],
-            ["movie", "Movies"],
-            ["tv", "TV"],
-          ] as const
-        ).map(([value, label]) => (
-          <button
-            type="button"
-            key={value}
-            className={filter === value ? "primary" : "secondary"}
-            aria-pressed={filter === value}
-            onClick={() => setFilter(value)}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
+      <TitleKindButtons value={filter} onChange={setFilter} />
       <p className="small muted watch-together-count" role="status">
         {visible.length} shared {visible.length === 1 ? "title" : "titles"}
       </p>
-      {!viewerHasServices && (
-        <p className="services-prompt">
-          <Link href="/account#streaming-services" prefetch={false}>
-            Save your streaming services to see what you can watch right now.
-          </Link>
-        </p>
-      )}
+      {!viewerHasServices && <ServicesPrompt />}
       <section aria-label="Shared titles">
         {(
           [

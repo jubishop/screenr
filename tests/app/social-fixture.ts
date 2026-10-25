@@ -151,6 +151,7 @@ export const denied = {
     message: "Notification is no longer available.",
   },
   watchTogether: { status: 404, message: "Watch together not found." },
+  wantToWatch: { status: 404, message: "Want to watch not found." },
   invitation: { status: 404, message: "Invitation not found." },
   unavailableInvitation: {
     status: 403,

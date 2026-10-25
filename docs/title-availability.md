@@ -315,8 +315,11 @@ with service notes and indicators for saved services. **My services** includes
 saved subscription services and any reported free option. **Watch together**
 puts shared choices available through either person's services or a free option
 first, followed by known unmatched choices and unknown availability separately.
-Both views use US availability, broad service names, and the existing cache.
-They preserve their original title order within each displayed group.
+[Want to watch pages](want-to-watch.md) list a profile owner's Want to watch
+titles on the viewer's services or free, then unknown availability, and leave
+out the rest. These views use US availability, broad service names, and the
+existing cache. They preserve their original title order within each displayed
+group.
 
 `src/server/catalog.ts` fetches and validates the US watch-provider response.
 `db/007-title-availability.sql` adds a separate cache keyed by title and
@@ -350,7 +353,7 @@ US region, last-checked time, attribution, and watch-page link. It distinguishes
 empty, failed, and older cached data, including older empty results.
 
 `src/server/title-viewing.ts` adds this same availability to catalog results,
-circle suggestions, and shared Want to watch titles. Each list reads its cache
+circle suggestions, shared Want to watch titles, and Want to watch pages. Each list reads its cache
 rows in one query, then requests only missing or expired entries from TMDB. It
 allows four concurrent provider requests and stops starting them after three
 seconds. Catalog search also stops starting provider requests seven seconds

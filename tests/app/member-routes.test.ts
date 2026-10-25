@@ -49,6 +49,14 @@ test("member routes name each screen and its parameters", () => {
     ["/people/Alice", { kind: "profile", username: "Alice" }],
     ["/people/a%20b", { kind: "profile", username: "a b" }],
     [
+      "/people/Alice/want-to-watch",
+      { kind: "want-to-watch", username: "Alice" },
+    ],
+    [
+      "/people/a%20b/want-to-watch?item=x",
+      { kind: "want-to-watch", username: "a b" },
+    ],
+    [
       "/conversations/legacy?reply=old",
       { kind: "conversation", id: "legacy", reply: "old" },
     ],
@@ -73,6 +81,8 @@ test("member routes reject unknown paths and extra segments", () => {
     "/titles/movie",
     "/titles/movie/42/extra",
     "/people/alice/friends",
+    "/people/alice/want-to-watch/extra",
+    "/people/alice/Want-to-watch",
     "/conversations",
     "/%E0%A4%A",
   ])
@@ -98,6 +108,8 @@ test("member paths keep only each screen's parameters and round-trip", () => {
     ["/account?error=access_denied", "/account"],
     ["/people/alice?item=post", "/people/alice"],
     ["/people/a%20b", "/people/a%20b"],
+    ["/people/alice/want-to-watch?q=x", "/people/alice/want-to-watch"],
+    ["/people/a%20b/want-to-watch", "/people/a%20b/want-to-watch"],
     [
       "/titles/movie/42?reply=answer&item=post",
       "/titles/movie/42?item=post&reply=answer",
@@ -133,6 +145,7 @@ test("return paths keep same-origin member pages in canonical form", () => {
     ["/people/%2F%2Fevil.example", "/people/%2F%2Fevil.example"],
     ["/conversations/legacy?reply=old", "/conversations/legacy?reply=old"],
     ["/watch-together?with=ben", "/watch-together?with=ben"],
+    ["/people/ben/want-to-watch", "/people/ben/want-to-watch"],
     ["/account?error=access_denied", "/account"],
   ])
     assert.equal(returnPath(next), path, next);
@@ -230,5 +243,24 @@ test("member page titles name each screen, title, or person", () => {
   assert.equal(
     title("/people/alice", { kind: "title", title: { name: "Lost" } }),
     "@alice · Screenr",
+  );
+  // A Want to watch page names its owner once their profile loads.
+  assert.equal(
+    title("/people/ben/want-to-watch", {
+      kind: "want-to-watch",
+      owner: { display_name: "Ben Rivera" },
+    }),
+    "Want to watch · Ben Rivera · Screenr",
+  );
+  assert.equal(
+    title("/people/ben/want-to-watch"),
+    "Want to watch · @ben · Screenr",
+  );
+  assert.equal(
+    title("/people/ben/want-to-watch", {
+      kind: "profile",
+      profile: { display_name: "Ben Rivera" },
+    }),
+    "Want to watch · @ben · Screenr",
   );
 });

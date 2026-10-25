@@ -15,6 +15,7 @@ public struct Screen: Decodable, Hashable, Sendable {
     case invites(InvitesScreen)
     case account(AccountScreen)
     case watchTogether(WatchTogetherScreen)
+    case wantToWatch(WantToWatchScreen)
     case title(TitleScreen)
     case profile(ProfileScreen)
     // A conversation link resolves to the member path of its entry.
@@ -42,6 +43,7 @@ public struct Screen: Decodable, Hashable, Sendable {
     case "invites": content = .invites(try InvitesScreen(from: decoder))
     case "account": content = .account(try AccountScreen(from: decoder))
     case "watch-together": content = .watchTogether(try WatchTogetherScreen(from: decoder))
+    case "want-to-watch": content = .wantToWatch(try WantToWatchScreen(from: decoder))
     case "title": content = .title(try TitleScreen(from: decoder))
     case "profile": content = .profile(try ProfileScreen(from: decoder))
     case "redirect": content = .redirect(path: try container.decode(String.self, forKey: .url))
@@ -100,6 +102,20 @@ public struct AccountScreen: Codable, Hashable, Sendable {
 public struct WatchTogetherScreen: Decodable, Hashable, Sendable {
   public let participants: [Person]
   public let viewerHasServices: Bool
+  public let titles: [SharedTitle]
+}
+
+// A profile's Want to watch page, at `/people/<username>/want-to-watch`: the
+// owner's current Want to watch titles the viewer can watch now, newest first,
+// and those whose availability is unknown. The viewer's own saved services
+// decide, and the owner's are never sent.
+public struct WantToWatchScreen: Decodable, Hashable, Sendable {
+  public let owner: Person
+  public let viewerHasServices: Bool
+  // Whether the owner has any current Want to watch titles, including ones
+  // the viewer cannot watch now, so an empty page can say which is the case.
+  public let hasWantToWatch: Bool
+  // Each title's access is available or unknown, never unmatched.
   public let titles: [SharedTitle]
 }
 

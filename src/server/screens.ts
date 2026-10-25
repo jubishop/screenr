@@ -11,6 +11,7 @@ import { getTitle, getTitleTrailer, getTitleAvailability } from "./catalog";
 import { listInvitations } from "./invitations";
 import { AppError, db } from "./db";
 import { watchTogether } from "./watch-together";
+import { wantToWatch } from "./want-to-watch";
 import { titleSuggestions } from "./title-suggestions";
 import { friendsRecommend } from "./friends-recommend";
 import { savedServices, streamingServices } from "./streaming-services";
@@ -201,6 +202,11 @@ async function loadContent(userId: string, route: MemberRoute) {
       conversations: entries,
     };
   }
+  if (route.kind === "want-to-watch")
+    return {
+      kind: "want-to-watch" as const,
+      ...(await wantToWatch(userId, route.username)),
+    };
   if (route.kind === "conversation")
     return {
       kind: "redirect" as const,

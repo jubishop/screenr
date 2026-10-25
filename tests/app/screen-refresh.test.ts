@@ -78,6 +78,7 @@ test("unchanged screens of every kind answer 304 without a body, matching the ve
     "/people",
     "/people/ben",
     "/people/alice",
+    "/people/ben/want-to-watch",
     "/titles/movie/1",
     "/watch-together?with=ben",
     "/invites",

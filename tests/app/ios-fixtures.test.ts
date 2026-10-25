@@ -271,6 +271,34 @@ const screens: Record<MemberRoute["kind"], Record<string, Case>> = {
       400,
     ),
   },
+  "want-to-watch": {
+    own: screen(
+      "alice",
+      "/people/alice/want-to-watch",
+      "Alice's own Want to watch page: a title with unknown availability, newest, and one on her services.",
+    ),
+    friend: screen(
+      "alice",
+      "/people/ben/want-to-watch",
+      "Ben's Want to watch page as Alice sees it: her saved services decide, so a title on Netflix, which only she has saved, is ready to watch.",
+    ),
+    "nothing-to-watch": screen(
+      "cam",
+      "/people/cam/want-to-watch",
+      "Cam's own page: his only Want to watch title is on a service he has not saved, and he has saved none.",
+    ),
+    empty: screen(
+      "nora",
+      "/people/nora/want-to-watch",
+      "A member with no Want to watch titles.",
+    ),
+    "not-friends": screen(
+      "alice",
+      "/people/erin/want-to-watch",
+      "A member who is not Alice's friend: no page.",
+      404,
+    ),
+  },
   title: {
     movie: screen(
       "alice",

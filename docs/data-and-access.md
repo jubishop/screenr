@@ -602,8 +602,9 @@ has a ten-second deadline; failure clears server content until a successful
 refresh. A permanent error, any 4xx response except 408 and 429, stops polling
 until a read succeeds. Until then, only Try again, returning to the page, a
 write, or navigation reads again. Timeouts, network failures, rate limits, and
-5xx responses keep polling. A missing title, person, page, conversation, or
-Watch together responds 404 from both the page and the screen API. The page
+5xx responses keep polling. A missing title, person, page, conversation,
+Watch together, or [Want to watch page](want-to-watch.md) responds 404 from
+both the page and the screen API. The page
 keeps the member's navigation, and its first read shows the reason, such as
 "Person not found."
 ([issue #139](https://github.com/jubishop/screenr/issues/139)). Writes and

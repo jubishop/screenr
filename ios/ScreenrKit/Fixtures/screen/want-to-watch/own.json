@@ -1,0 +1,83 @@
+{
+  "description": "Alice's own Want to watch page: a title with unknown availability, newest, and one on her services.",
+  "viewer": "alice",
+  "request": {
+    "method": "GET",
+    "action": "screen",
+    "path": "/api/screenr/screen?path=%2Fpeople%2Falice%2Fwant-to-watch",
+    "query": {
+      "path": "/people/alice/want-to-watch"
+    }
+  },
+  "response": {
+    "status": 200,
+    "etag": "W/\"OuNQymBgwboMfAqmQC0U6dUaUuSr8-jvdNr5u0xH7Rk\"",
+    "body": {
+      "kind": "want-to-watch",
+      "owner": {
+        "photo": "486e0212c15728ee",
+        "user_id": "user-alice",
+        "username": "alice",
+        "display_name": "Alice Park"
+      },
+      "viewerHasServices": true,
+      "hasWantToWatch": true,
+      "titles": [
+        {
+          "id": "movie:104",
+          "kind": "movie",
+          "name": "Glass Meridian",
+          "tmdb_id": 104,
+          "overview": "",
+          "poster_path": null,
+          "release_date": "2022-08-19",
+          "viewing": {
+            "status": "unavailable",
+            "checked_at": null,
+            "sections": []
+          },
+          "access": "unknown",
+          "matchingServiceIds": []
+        },
+        {
+          "id": "movie:103",
+          "kind": "movie",
+          "name": "The Quiet Orchard",
+          "tmdb_id": 103,
+          "overview": "An orchard keeper hears the trees whispering.",
+          "poster_path": "/quiet-orchard.jpg",
+          "release_date": "2025-05-02",
+          "viewing": {
+            "status": "ok",
+            "checked_at": "2026-10-13T12:00:00.000Z",
+            "sections": [
+              {
+                "key": "subs",
+                "label": "Subs",
+                "services": [
+                  {
+                    "id": "service:hulu",
+                    "name": "Hulu",
+                    "logo_path": "/44uAnmSqvA4yBOdbPWN8YgQHjWm.png",
+                    "route_note": null
+                  }
+                ]
+              }
+            ]
+          },
+          "access": "available",
+          "matchingServiceIds": [
+            "service:hulu"
+          ]
+        }
+      ],
+      "unreadNotifications": 6,
+      "user": {
+        "user_id": "user-alice",
+        "username": "alice",
+        "display_name": "Alice Park",
+        "photo": "486e0212c15728ee"
+      }
+    }
+  }
+}
