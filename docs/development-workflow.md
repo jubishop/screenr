@@ -130,9 +130,13 @@ push finds a recorded pass. Never bypass the hook with `git push --no-verify`.
 
 - **iOS files:** `ios/` and `bin/format-swift`, which the app's build runs.
   The server's payload fixtures live in `ios/ScreenrKit/Fixtures/`, so a
-  server change that regenerates them counts. Markdown under `ios/`, such as
-  `ios/README.md`, does not: no check reads it, so documentation-only changes
-  skip the check. `bin/check-ios` itself does not count either;
+  server change that regenerates them counts. The one exemption is Markdown
+  directly in `ios/`, such as `ios/README.md` and `ios/AGENTS.md`: no build
+  or check reads it, so changes only to it skip the check. Markdown in any
+  folder under `ios/` counts, because SwiftPM targets and Xcode's
+  synchronized folders, such as `ios/ScreenrKit/Sources/ScreenrKit/` and
+  `ios/Screenr/`, build every file in them, and SwiftPM warns about Markdown
+  it does not handle. `bin/check-ios` itself does not count either;
   `tests/test_check_ios.py` covers it.
 - **Trigger:** a pushed branch whose iOS files differ from the remote
   branch's commit or, for a new branch, from where it left `origin/main`.
@@ -141,6 +145,13 @@ push finds a recorded pass. Never bypass the hook with `git push --no-verify`.
 - **Checkout:** `bin/check-ios` tests the checkout's files, so the pushed
   commit must be checked out with no uncommitted changes to the iOS files.
   Otherwise the hook refuses the push and says why.
+- **Git environment:** Git exports the repository variables that
+  `git rev-parse --local-env-vars` lists to hooks and to `git rebase --exec`;
+  in a linked worktree they include `GIT_DIR`. The hook runs `bin/check-ios`
+  without them, and the check runs its tools and its records without them
+  too. Every Git command inside the check, such as SwiftPM's package
+  checkouts, then finds its repository from its directory, as when the check
+  runs from a shell.
 - **Recorded passes:** `bin/check-ios` records each pass on a checkout whose
   iOS files match `HEAD`. The record holds those files' Git object IDs and
   the Xcode version, in `.git/screenr-ios-checks/`, which all worktrees of
@@ -161,9 +172,9 @@ push finds a recorded pass. Never bypass the hook with `git push --no-verify`.
   every worktree runs the primary checkout's hooks. Keep that checkout on
   current `main`, or new and changed hooks do not apply. `pre-push` belongs
   to this project; Project Starter manages only the four knowledge hooks.
-- **Tests:** `tests/test_pre_push.py` pushes to a local remote with a
-  simulated `bin/check-ios`, and `tests/test_check_ios.py` covers the
-  records.
+- **Tests:** `tests/test_pre_push.py` pushes to a local remote, from the
+  checkout and from a linked worktree, with a simulated `bin/check-ios`, and
+  `tests/test_check_ios.py` covers the records and the check's environment.
 
 ### iOS release gate
 

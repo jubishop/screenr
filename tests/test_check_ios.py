@@ -28,13 +28,18 @@ RUNTIMES = {"runtimes": [
     {"platform": "watchOS", "isAvailable": True, "version": "30.0", "name": "watchOS 30.0",
      "identifier": "runtime-watch", "supportedDeviceTypes": []},
 ]}
-# Each simulated tool records its arguments and whether it saw SDKROOT, then
-# prints and exits as the test configures it.
+# Variables the tools must not inherit: a macOS SDKROOT, and those that tie Git to
+# one repository, such as the GIT_DIR that Git exports to hooks in a linked worktree.
+UNWANTED = {"SDKROOT", *subprocess.run(["git", "rev-parse", "--local-env-vars"], check=True,
+                                       capture_output=True, text=True).stdout.split()}
+# Each simulated tool records its arguments and which of SDKROOT and the GIT_
+# variables it saw, then prints and exits as the test configures it.
 RECORD = """import json, os, sys
 from pathlib import Path
 def record(*event):
+    seen = sorted(name for name in os.environ if name == 'SDKROOT' or name.startswith('GIT_'))
     with open(os.environ['CHECK_EVENTS'], 'a') as stream:
-        stream.write(json.dumps([*event, 'SDKROOT' in os.environ]) + '\\n')
+        stream.write(json.dumps([*event, seen]) + '\\n')
 def finish(step):
     print(os.environ.get('FAKE_OUTPUT_' + step, ''))
     sys.exit(int(os.environ.get('FAKE_STATUS_' + step, '0')))
@@ -120,7 +125,8 @@ class CheckIOSTests(unittest.TestCase):
 
     def recorded(self):
         events = [json.loads(line) for line in self.events.read_text().splitlines()] if self.events.exists() else []
-        self.assertFalse(any(event[-1] for event in events), "tools must not inherit SDKROOT")
+        leaked = [event for event in events if UNWANTED.intersection(event[-1])]
+        self.assertEqual(leaked, [], "tools must not inherit SDKROOT or Git's repository variables")
         return [event[:-1] for event in events]
 
     def steps(self):
@@ -288,7 +294,7 @@ class CheckIOSTests(unittest.TestCase):
         [record] = (self.repo / ".git/screenr-ios-checks").glob("*.json")
         self.assertEqual(json.loads(record.read_text())["xcode"], "Xcode 27.0 Build version 27A266a")
         self.events.unlink()
-        # Markdown under ios/ is not an iOS file, committed or not.
+        # Markdown directly in ios/ is not an iOS file, committed or not.
         (self.repo / "ios/Notes.md").write_text("Draft notes.\n")
         result = self.check("--reuse")
         self.assertEqual(result.returncode, 0, result.stderr)
@@ -302,11 +308,29 @@ class CheckIOSTests(unittest.TestCase):
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertEqual(self.steps()[0], "swift")
 
+    def test_runs_outside_the_git_repository_that_launched_it(self):
+        # Git exports GIT_DIR and its other repository variables to hooks and to
+        # git rebase --exec. The check's records and its tools' own Git commands,
+        # such as SwiftPM's package checkouts, find their repositories by directory.
+        self.committed_checkout()
+        other = self.repo.parent / "other"
+        subprocess.run(["git", "init", "--quiet", str(other)], env=self.env, check=True, capture_output=True)
+        result = self.check(GIT_DIR=str(other / ".git"), GIT_WORK_TREE=str(other),
+                            GIT_INDEX_FILE=str(other / ".git/index"), GIT_PREFIX="ios/")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.steps()[0], "swift")
+        self.assertIn("Recorded this pass for these iOS files", result.stdout)
+        self.assertEqual(len(list((self.repo / ".git/screenr-ios-checks").glob("*.json"))), 1)
+        self.assertFalse((other / ".git/screenr-ios-checks").exists())
+
     def test_a_pass_with_uncommitted_ios_files_is_not_recorded_or_reused(self):
         self.committed_checkout()
         self.assertEqual(self.check().returncode, 0)
-        for name in ("ios/App.swift", "ios/Draft.swift", "bin/format-swift"):
+        # Markdown in a folder under ios/ can be in a SwiftPM target, which warns about it.
+        for name in ("ios/App.swift", "ios/Draft.swift", "ios/ScreenrKit/Sources/ScreenrKit/Notes.md",
+                     "bin/format-swift"):
             with self.subTest(name=name):
+                (self.repo / name).parent.mkdir(parents=True, exist_ok=True)
                 original = (self.repo / name).read_text() if (self.repo / name).exists() else None
                 (self.repo / name).write_text("// draft\n")
                 self.events.unlink(missing_ok=True)

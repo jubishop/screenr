@@ -5,9 +5,12 @@ bin/check-ios --reuse, the pre-push hook, and the TestFlight release skip a
 run when the same files already passed with the same Xcode within
 LIFETIME. The records live in the clone's Git directory, so every worktree
 of the clone shares them; see docs/development-workflow.md#ios-checks-before-a-push.
+It also gives the check and the hook an environment without Git's repository
+variables, which Git exports to hooks.
 """
 
 from datetime import datetime, timedelta, timezone
+import functools
 import hashlib
 import json
 import os
@@ -16,20 +19,46 @@ import subprocess
 import tempfile
 
 # The files bin/check-ios tests: the app and the formatter that its build runs.
-# Markdown under ios/ documents the app, and no check reads it. The check script
-# itself has its own tests in tests/test_check_ios.py.
+# Markdown directly in ios/, such as ios/README.md, documents the app, and no
+# build or check reads it. Markdown in a folder under ios/ counts: SwiftPM
+# targets and Xcode's synchronized folders build every file in them, and
+# SwiftPM warns about Markdown it does not handle. The check script itself has
+# its own tests in tests/test_check_ios.py.
 PATHS = ("ios", "bin/format-swift")
-PATHSPEC = (*PATHS, ":(exclude,glob)ios/**/*.md")
+PATHSPEC = (*PATHS, ":(exclude,glob)ios/*.md")
 LIFETIME = timedelta(days=7)
 STORE = "screenr-ios-checks"
 
 
+@functools.cache
+def repository_variables():
+    """Name the variables that tie Git to one repository, such as GIT_DIR, or none without Git."""
+    try:
+        listing = subprocess.run(["git", "rev-parse", "--local-env-vars"], check=True, capture_output=True,
+                                 text=True).stdout
+    except (OSError, subprocess.CalledProcessError):
+        return frozenset()
+    return frozenset(listing.split())
+
+
+def outside_git():
+    """This process's environment without Git's repository variables.
+
+    Git exports some, such as GIT_DIR in a linked worktree, to hooks and to
+    git rebase --exec. Without them, a Git command finds its repository from
+    its directory, as when run from a shell, so SwiftPM's package checkouts
+    use their own repositories rather than this one.
+    """
+    return {key: value for key, value in os.environ.items() if key not in repository_variables()}
+
+
 def git(root, *args):
-    return subprocess.run(["git", *args], cwd=root, check=True, capture_output=True, text=True).stdout
+    return subprocess.run(["git", *args], cwd=root, env=outside_git(), check=True, capture_output=True,
+                          text=True).stdout
 
 
 def checked(path):
-    return not (path.startswith("ios/") and path.endswith(".md"))
+    return not (path.startswith("ios/") and path.endswith(".md") and path.count("/") == 1)
 
 
 def files_key(root, commit):

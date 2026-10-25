@@ -79,13 +79,16 @@ def main():
                 "not running it again.")
             continue
         if records.working_key(root) != key:
-            say(f"{names} changes the iOS files (ios/ except Markdown, and bin/format-swift), but this "
-                "checkout's copies differ from the pushed commit, so bin/check-ios cannot test it. "
-                "Check out the commit you are pushing with no uncommitted iOS changes, and push "
-                "again. " + ADVICE)
+            say(f"{names} changes the iOS files (ios/ except Markdown directly in it, and "
+                "bin/format-swift), but this checkout's copies differ from the pushed commit, so "
+                "bin/check-ios cannot test it. Check out the commit you are pushing with no "
+                "uncommitted iOS changes, and push again. " + ADVICE)
             return 1
         say(f"{names} changes the iOS files; running bin/check-ios before the push.")
-        status = subprocess.run([str(root / "bin/check-ios")], cwd=root, stdin=subprocess.DEVNULL).returncode
+        # As from a shell, the check gets none of the repository variables, such
+        # as GIT_DIR, that Git exports to this hook.
+        status = subprocess.run([str(root / "bin/check-ios")], cwd=root, env=records.outside_git(),
+                                stdin=subprocess.DEVNULL).returncode
         if status:
             say(f"bin/check-ios failed with status {status}, so the push stopped. Fix the iOS checks "
                 "and push again. " + ADVICE)

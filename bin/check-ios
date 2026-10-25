@@ -49,8 +49,10 @@ NOT_A_WARNING = re.compile(
     r"appintentsmetadataprocessor\[\d+:\d+\] warning: Metadata extraction skipped, "
     r"no AppIntents\.framework dependency found$")
 # A macOS SDKROOT exported by a shell profile reaches clang through xcodebuild
-# and makes it warn while linking Simulator test bundles.
-ENVIRONMENT = {key: value for key, value in os.environ.items() if key != "SDKROOT"}
+# and makes it warn while linking Simulator test bundles. Git's repository
+# variables, such as the GIT_DIR that Git exports to hooks in a linked
+# worktree, would send SwiftPM's package checkouts to this repository.
+ENVIRONMENT = {key: value for key, value in records.outside_git().items() if key != "SDKROOT"}
 XCODEBUILD = ["xcodebuild", "-hideShellScriptEnvironment", "-project", "ios/Screenr.xcodeproj",
               "-scheme", "Screenr", "-derivedDataPath", str(BUILD / "DerivedData")]
 

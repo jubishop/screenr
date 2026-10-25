@@ -11,8 +11,18 @@ import tempfile
 import unittest
 
 SOURCE = Path(__file__).resolve().parents[1]
-# The simulated check records where it ran and fails when FAIL_CHECK is set.
-CHECK_IOS = """import json, os, sys
+# The simulated check records where it ran and fails when FAIL_CHECK is set. Like
+# SwiftPM's package checkouts, it also runs Git in a new repository of its own, and
+# fails when it inherits a variable that ties Git to the pushing checkout instead.
+CHECK_IOS = """import json, os, subprocess, sys, tempfile
+def git(*args):
+    return subprocess.run(['git', *args], check=True, capture_output=True, text=True).stdout.strip()
+inherited = sorted(set(git('rev-parse', '--local-env-vars').split()) & set(os.environ))
+package = os.path.join(tempfile.mkdtemp(dir=os.path.dirname(os.environ['CHECK_EVENTS'])), 'package')
+git('init', '--quiet', package)
+used = git('-C', package, 'rev-parse', '--absolute-git-dir')
+if inherited or used != os.path.join(package, '.git'):
+    sys.exit(f'check-ios inherited {inherited}, so its nested Git command used {used}')
 with open(os.environ['CHECK_EVENTS'], 'a') as stream:
     stream.write(json.dumps(['check-ios', os.getcwd(), *sys.argv[1:]]) + '\\n')
 sys.exit(int(os.environ.get('FAIL_CHECK', '0')))
@@ -78,9 +88,9 @@ class PrePushTests(unittest.TestCase):
         self.git("-c", "core.hooksPath=/dev/null", "commit", "--quiet", "--message", message)
         return self.git("rev-parse", "HEAD")
 
-    def push(self, *args, **extra):
-        return subprocess.run(["git", "push", "origin", *args], cwd=self.repo, env=self.env | extra,
-                              capture_output=True, text=True, timeout=60)
+    def push(self, *args, cwd=None, **extra):
+        return subprocess.run(["git", "push", "origin", *args], cwd=cwd or self.repo,
+                              env=self.env | extra, capture_output=True, text=True, timeout=60)
 
     def remote_has(self, ref):
         return bool(self.git("ls-remote", str(self.remote), ref))
@@ -97,6 +107,20 @@ class PrePushTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(self.checks(), [["check-ios", str(self.repo)]])
         self.assertIn("feature changes the iOS files; running bin/check-ios", result.stderr)
+        self.assertTrue(self.remote_has("refs/heads/feature"))
+        self.assertEqual(len(self.records()), 1)
+
+    def test_a_push_from_a_linked_worktree_runs_the_check_as_a_shell_would(self):
+        # Git exports GIT_DIR to hooks in a linked worktree. Passed on, it sends the check's
+        # own Git commands, such as SwiftPM's package checkouts, to this clone instead.
+        worktree = self.repo.parent / "worktree"
+        self.git("worktree", "add", "--quiet", "-b", "feature", str(worktree))
+        (worktree / "ios/App.swift").write_text("struct App { let edited = true }\n")
+        self.git("-c", "core.hooksPath=/dev/null", "commit", "--quiet", "--all", "--message", "Edit the app",
+                 cwd=worktree)
+        result = self.push("HEAD:refs/heads/feature", cwd=worktree)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.checks(), [["check-ios", str(worktree)]])
         self.assertTrue(self.remote_has("refs/heads/feature"))
         self.assertEqual(len(self.records()), 1)
 
@@ -134,10 +158,9 @@ class PrePushTests(unittest.TestCase):
                 self.assertEqual(result.stderr.count("pre-push:"), 0)
         self.assertEqual(self.checks(), [])
 
-    def test_markdown_under_ios_is_not_an_ios_file(self):
-        (self.repo / "ios/Docs").mkdir()
+    def test_markdown_directly_in_ios_is_not_an_ios_file(self):
         self.commit("Document the app", ("ios/README.md", "# The iPhone app\n"),
-                    ("ios/Docs/Guide.md", "Guide.\n"))
+                    ("ios/AGENTS.md", "# Rules\n"))
         result = self.push("HEAD:refs/heads/docs", FAIL_CHECK="1")
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(self.checks(), [])
@@ -148,6 +171,20 @@ class PrePushTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(len(self.checks()), 1)
         self.assertEqual(len(self.records()), 1)
+
+    def test_markdown_in_a_folder_under_ios_is_an_ios_file(self):
+        # SwiftPM targets and Xcode's synchronized folders build every file in them, and
+        # SwiftPM warns about Markdown it does not handle.
+        for name in ("ios/ScreenrKit/Sources/ScreenrKit/Notes.md", "ios/Screenr/Notes.md"):
+            with self.subTest(name=name):
+                (self.repo / name).parent.mkdir(parents=True, exist_ok=True)
+                self.commit("Add notes", (name, "Notes.\n"))
+                result = self.push("HEAD:refs/heads/notes", FAIL_CHECK="1")
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("notes changes the iOS files; running bin/check-ios", result.stderr)
+                self.assertFalse(self.remote_has("refs/heads/notes"))
+                self.git("reset", "--quiet", "--hard", "HEAD~1")
+        self.assertEqual(len(self.checks()), 2)
 
     def test_an_existing_branch_compares_with_its_remote_commit(self):
         self.commit("Edit the app", ("ios/App.swift", "struct App { let edited = true }\n"))
