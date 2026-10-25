@@ -10,6 +10,11 @@ import unittest
 
 
 ROOT = Path(__file__).resolve().parents[1]
+# Git exports GIT_DIR and its other repository variables to commands such as
+# git rebase --exec. The fixture repository's commands must not follow them
+# and commit to the checkout that runs these tests.
+REPOSITORY_VARIABLES = set(subprocess.run(["git", "rev-parse", "--local-env-vars"], check=True,
+                                          capture_output=True, text=True).stdout.split())
 SKIP = "\n\nScreenr-Deploy: skip\nScreenr-Deploy-Reason: Documentation only."
 
 # Stands in for the GitHub CLI: logs each call and replies with the fixture's
@@ -36,8 +41,10 @@ class DeploymentDecisionTests(unittest.TestCase):
         commands.mkdir()
         (commands / "gh").write_text(FAKE_GH)
         (commands / "gh").chmod(0o755)
-        self.environment = {**os.environ, "FIXTURE": str(self.fixture),
-                            "PATH": str(commands) + os.pathsep + os.environ["PATH"]}
+        self.environment = {key: value for key, value in os.environ.items()
+                            if key not in REPOSITORY_VARIABLES}
+        self.environment.update(FIXTURE=str(self.fixture),
+                                PATH=str(commands) + os.pathsep + os.environ["PATH"])
         self.directory = self.fixture / "repository"
         self.directory.mkdir()
         self.git("init", "-q")
@@ -46,7 +53,8 @@ class DeploymentDecisionTests(unittest.TestCase):
 
     def git(self, *args, cwd=None):
         return subprocess.run(
-            ["git", *args], cwd=cwd or self.directory, check=True, capture_output=True, text=True
+            ["git", *args], cwd=cwd or self.directory, env=self.environment, check=True,
+            capture_output=True, text=True
         ).stdout.strip()
 
     def commit(self, message):

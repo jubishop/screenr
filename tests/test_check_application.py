@@ -227,16 +227,22 @@ class CheckApplicationTests(unittest.TestCase):
         self.assertNotIn("check-ios", [event[0] for event in self.recorded()])
         self.assertIn("Skipping iOS checks: the iOS files match origin/main", result.stdout)
 
-    def test_skips_ios_checks_on_a_mac_for_markdown_only_ios_changes(self):
+    def test_skips_ios_checks_on_a_mac_for_changes_to_markdown_directly_in_ios(self):
         self.on_mac_with_main()
         (self.repo / "ios/README.md").write_text("# The iPhone app\n")
         self.git("add", "--all")
         self.git("commit", "--quiet", "--message", "Document the app")
-        (self.repo / "ios/Screenr/Notes.md").write_text("Draft notes.\n")
+        (self.repo / "ios/AGENTS.md").write_text("# Rules\n")
         result = self.check()
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertNotIn("check-ios", [event[0] for event in self.recorded()])
         self.assertIn("Skipping iOS checks: the iOS files match origin/main", result.stdout)
+
+    def test_runs_ios_checks_on_a_mac_for_markdown_in_a_folder_under_ios(self):
+        # Xcode builds every file in the app's synchronized folder, Markdown included.
+        self.on_mac_with_main()
+        (self.repo / "ios/Screenr/Notes.md").write_text("Draft notes.\n")
+        self.assert_ios_checks_run_last()
 
     def test_runs_ios_checks_on_a_mac_for_a_check_script_change(self):
         self.on_mac_with_main()

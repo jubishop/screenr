@@ -94,8 +94,8 @@ The check fails fast and never hangs:
   Stop a check by signaling `bin/check-ios` itself, never by killing
   `xcodebuild`.
 
-The check's inputs, the iOS files, are `ios/`, except its Markdown, and
-`bin/format-swift`. A pass on a checkout whose
+The check's inputs, the iOS files, are `ios/`, except Markdown directly in
+it, and `bin/format-swift`. A pass on a checkout whose
 iOS files match `HEAD` is recorded for those exact files and the Xcode
 version. With `--reuse`, the check skips itself when those files passed with
 the same Xcode in the last 7 days.

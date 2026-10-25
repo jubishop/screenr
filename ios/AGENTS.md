@@ -77,7 +77,8 @@ layout, commands, and toolchain notes, and the
   creates its own; for direct `xcodebuild` runs, create and delete one as the
   [guide](README.md#run-the-dev-app) shows.
 - **Before pushing:** run `bin/check-ios` locally before every push that
-  changes `ios/`, including regenerated fixtures; Markdown-only changes are
-  exempt. A pre-push hook enforces it; never bypass it with `--no-verify`.
+  changes `ios/`, including regenerated fixtures and Markdown in its
+  folders; only Markdown directly in `ios/`, such as this file, is exempt.
+  A pre-push hook enforces it; never bypass it with `--no-verify`.
   There is no remote iOS CI. See
   [iOS checks before a push](../docs/development-workflow.md#ios-checks-before-a-push).
