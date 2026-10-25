@@ -6,11 +6,10 @@ release=${1:?Usage: ops/activate.sh /opt/screenr/releases/REVISION}
 case "$release" in /opt/screenr/releases/*) ;; *) echo 'Unexpected release path' >&2; exit 1 ;; esac
 test -f "$release/REVISION"
 test -f "$release/server.js"
-node=/opt/screenr/node/bin/node
+kit=/usr/local/lib/screenr-deploy
+# Release code runs as screenr in the worker's sandbox.
 run() {
-    systemd-run --quiet --wait --pipe --collect --uid=screenr \
-        --working-directory="$release" -p EnvironmentFile=/etc/screenr/app.env \
-        -p Environment=NODE_ENV=production "$node" --import tsx "$@"
+    sh "$kit/run-release-script.sh" "$release" "$@"
 }
 run scripts/validate-config.ts
 run scripts/migrate.ts

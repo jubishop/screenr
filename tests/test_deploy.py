@@ -504,14 +504,21 @@ class RemoteDeploymentTests(unittest.TestCase):
             fi
             command test "$@"
         }
-        # Activation runs its configuration check and migrations through
-        # systemd-run. Record each script; the one in FAIL_STEP exits 1.
+        # Activation runs its configuration check and migrations in the
+        # candidate through the kit's sandboxed runner. Record each script; the
+        # one in FAIL_STEP exits 1.
         run_step() {
+            if [ "$1" != "/opt/screenr/releases/$REVISION" ]; then
+                printf 'ran a release script outside the candidate\n' >> "$FIXTURE/events"
+                return 1
+            fi
             for fixture_step do :; done
             printf '%s\n' "$fixture_step" >> "$FIXTURE/steps"
             [ "$fixture_step" != "${FAIL_STEP:-}" ]
         }
-        alias systemd-run=run_step
+        # Release code never runs through systemd-run outside the runner.
+        unsandboxed_run() { printf 'ran systemd-run outside the runner\n' >> "$FIXTURE/events"; return 1; }
+        alias systemd-run=unsandboxed_run
         chown() { :; }
         # GNU ln and mv for the links beside /opt/screenr/current. The link
         # files in the fixture hold their targets.
@@ -571,17 +578,17 @@ class RemoteDeploymentTests(unittest.TestCase):
         }
         sh() {
             # Release files are untrusted. Record and refuse any script but
-            # the installed deploy kit's activation script.
+            # the installed deploy kit's activation script and release-script
+            # runner.
             # Deployment tests the activation status, so dash ignores set -e in
             # a plain subshell. Like the host's new sh process, a background
             # subshell stops at the first failing command.
             (
-                if [ "$1" != "$KIT/activate.sh" ]; then
-                    printf 'ran %s\n' "$1" >> "$FIXTURE/events"
-                    exit 1
-                fi
-                shift
-                eval "$ACTIVATION_SCRIPT"
+                case "$1" in
+                "$KIT/activate.sh") shift; eval "$ACTIVATION_SCRIPT" ;;
+                "$KIT/run-release-script.sh") shift; run_step "$@" ;;
+                *) printf 'ran %s\n' "$1" >> "$FIXTURE/events"; exit 1 ;;
+                esac
             ) &
             wait "$!"
         }
@@ -616,6 +623,7 @@ class RemoteDeploymentTests(unittest.TestCase):
         self.assertNotIn('Rolled back', result.stdout + result.stderr)
         self.assertEqual(current, '/opt/screenr/releases/' + REVISION)
         self.assertNotIn('removed', events)
+        self.assertEqual(self.steps, ['scripts/validate-config.ts', 'scripts/migrate.ts'])
         # Replacing an active release backs it up first.
         self.assertIn('start screenr-backup.service', self.systemctl_calls)
 

@@ -58,7 +58,8 @@ with no capabilities and have:
   other call fails with `EPERM` instead of killing the service;
 - no access to other applications' directories under `/opt` or to Caddy's
   configuration and logs. Add a new application's directories to
-  `InaccessiblePaths` in both units; the `-` prefix ignores a missing path;
+  `InaccessiblePaths` in every [copy of the sandbox](#release-scripts-and-jobs);
+  the `-` prefix ignores a missing path;
 - no access to kernel tunables, modules, or logs. They cannot set the clock
   or hostname, create namespaces, use realtime scheduling, create SUID or
   SGID files, or change their execution domain.
@@ -86,7 +87,37 @@ Test a sandbox change the same way before deploying it. Pass each `[Service]`
 setting except `ExecStart` and the restart settings to `systemd-run` with
 `-p`, and set `Environment=PORT=` to a free loopback port for the web. Leave
 out `[Unit]`, so a failure starts no alert, and stop the transient units
-afterwards.
+afterwards. Test the jobs below the same way, with their own `ExecStart`.
+
+### Release scripts and jobs
+
+Release code also runs outside the two units, and the same sandbox covers it
+([issue #306](https://github.com/jubishop/screenr/issues/306)):
+
+- `ops/run-release-script.sh`, from the [deploy kit](#deploy-kit), runs Node
+  with a release's maintenance script as `screenr`, with
+  `/etc/screenr/app.env`, in a transient unit with the worker's sandbox.
+  Activation runs the configuration check and migrations through it. Run
+  every other release script on the host through it too, as the runbooks do:
+
+  ```sh
+  sh /usr/local/lib/screenr-deploy/run-release-script.sh /opt/screenr/current scripts/bootstrap.ts
+  ```
+
+- The backup, restore check, stale-backup check, backup storage check,
+  PostgreSQL update check, and failure alert units run kit scripts and system
+  programs as `screenr-db` or a dynamic user, never release code. They have
+  the worker's sandbox too, which leaves them restic and its cache, the
+  database socket, systemd's D-Bus API, and HTTPS to R2 and Resend. Only
+  `screenr-db.service`, the PostgreSQL server itself, keeps its own settings.
+
+systemd units cannot include shared settings, so each of these units and the
+runner carries a copy of the sandbox. `tests/test_app_sandbox.py` requires
+every copy to match `screenr-worker.service`, so a sandbox change, such as a
+new application's directory in `InaccessiblePaths`, goes into every copy. A
+changed job unit applies at the job's next start. After deploying one, start
+the jobs by hand and read their journals, as under
+[failure alerts](#failure-alerts).
 
 ### Restore the previous units
 
@@ -108,6 +139,12 @@ Then check `http://127.0.0.1:3060/api/health` on the host and the public
 health endpoint. Each deployment installs the units of its revision's
 [deploy kit](#deploy-kit), so fix the units in `main` and install that
 revision's kit before the next deployment.
+
+A [job unit](#release-scripts-and-jobs) that fails after a change is restored
+the same way: install its previous file and run `systemctl daemon-reload`,
+without restarting the services. A failing `screenr-backup.service` also
+fails every deployment, which backs up under the installed units before it
+installs new ones.
 
 ## Provisioning
 
@@ -630,8 +667,9 @@ filter, so no difference between tar implementations can let an entry past
 the checks.
 
 The deploy kit is what root runs and installs during deployment: the
-receiver, `ops/deploy-release.sh`, `ops/activate.sh`, `ops/host-config.py`,
-`ops/prune-releases.py`, every `ops/screenr-*.service` and `.timer`, and the
+receiver, `ops/deploy-release.sh`, `ops/activate.sh`,
+`ops/run-release-script.sh`, `ops/host-config.py`, `ops/prune-releases.py`,
+every `ops/screenr-*.service` and `.timer`, and the
 `ops/Caddyfile` and `ops/postgresql.conf` copies that deployment compares. It
 also holds the scripts that the units run as `screenr-db` or with
 `/etc/screenr/backup.env`: `ops/backup.sh`, `ops/restore-check.sh`,
@@ -643,7 +681,7 @@ goes to `/usr/local/sbin`, and the rest to `/usr/local/lib/screenr-deploy`,
 all root-owned. Nothing that arrives over the deploy key is run or installed
 as root or as `screenr-db`, or runs with the backup secrets. The key can still
 deploy any release, whose code runs as `screenr` with the application
-settings, but it cannot read the backup credentials, prune snapshots, or
+settings in the [service sandbox](#service-sandbox), but it cannot read the backup credentials, prune snapshots, or
 silence failure alerts. R2 credentials without delete permission would
 further limit what a compromised `screenr-db` could do to the backups.
 
@@ -790,10 +828,7 @@ Create the first private invitation using a one-off process with the same
 private environment, rather than opening a public bootstrap endpoint:
 
 ```sh
-systemd-run --quiet --wait --pipe --collect --uid=screenr \
-  --working-directory=/opt/screenr/current \
-  -p EnvironmentFile=/etc/screenr/app.env -p Environment=NODE_ENV=production \
-  /opt/screenr/node/bin/node --import tsx scripts/bootstrap.ts
+sh /usr/local/lib/screenr-deploy/run-release-script.sh /opt/screenr/current scripts/bootstrap.ts
 ```
 
 Do not paste the resulting invitation into a public issue or PR. The
@@ -802,10 +837,7 @@ does the command that seeds or resets the
 [demo circle for Apple review](running-screenr.md#demo-circle-for-apple-review):
 
 ```sh
-systemd-run --quiet --wait --pipe --collect --uid=screenr \
-  --working-directory=/opt/screenr/current \
-  -p EnvironmentFile=/etc/screenr/app.env -p Environment=NODE_ENV=production \
-  /opt/screenr/node/bin/node --import tsx scripts/seed-review.ts
+sh /usr/local/lib/screenr-deploy/run-release-script.sh /opt/screenr/current scripts/seed-review.ts
 ```
 
 Its fixed code, `REVIEW_SIGN_IN_CODE`, lives in `/etc/screenr/app.env` with
@@ -949,10 +981,7 @@ fields for a network failure.
 To confirm reporting, send a test failure from the active release:
 
 ```sh
-systemd-run --quiet --wait --pipe --collect --uid=screenr \
-  --working-directory=/opt/screenr/current \
-  -p EnvironmentFile=/etc/screenr/app.env -p Environment=NODE_ENV=production \
-  /opt/screenr/node/bin/node --import tsx --input-type=module \
+sh /usr/local/lib/screenr-deploy/run-release-script.sh /opt/screenr/current --input-type=module \
   -e 'const { logFailure } = await import("./src/server/log.ts"); logFailure("sentry check", { requestId: "sentry-check" }, new Error("check"));'
 ```
 

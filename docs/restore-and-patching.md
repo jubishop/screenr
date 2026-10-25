@@ -147,10 +147,7 @@ and `screenr-worker` first.
    as_backup psql --no-psqlrc --set=ON_ERROR_STOP=1 --dbname=postgres \
      --command='ALTER DATABASE screenr RENAME TO screenr_before_restore' \
      --command='ALTER DATABASE screenr_restore RENAME TO screenr'
-   systemd-run --quiet --wait --pipe --collect --uid=screenr \
-     --working-directory=/opt/screenr/current \
-     -p EnvironmentFile=/etc/screenr/app.env -p Environment=NODE_ENV=production \
-     /opt/screenr/node/bin/node --import tsx scripts/migrate.ts
+   sh /usr/local/lib/screenr-deploy/run-release-script.sh /opt/screenr/current scripts/migrate.ts
    ```
 
    Before starting the services,
@@ -212,10 +209,7 @@ skipped, so running it twice or over a longer period changes nothing more.
 
    ```sh
    journalctl -u screenr-web --since "$since" -o cat --no-pager |
-     systemd-run --quiet --wait --pipe --collect --uid=screenr \
-       --working-directory=/opt/screenr/current \
-       -p EnvironmentFile=/etc/screenr/app.env -p Environment=NODE_ENV=production \
-       /opt/screenr/node/bin/node --import tsx scripts/delete-accounts.ts
+     sh /usr/local/lib/screenr-deploy/run-release-script.sh /opt/screenr/current scripts/delete-accounts.ts
    ```
 
 On a [replacement host](#rebuild-on-a-replacement-host), the old host's

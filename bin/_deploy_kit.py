@@ -13,8 +13,10 @@ import tarfile
 # The receiver is installed at /usr/local/sbin/screenr-receive-release; the
 # other files go to /usr/local/lib/screenr-deploy.
 RECEIVER = 'receive-release'
-# Root runs these during deployment.
-DEPLOY_SCRIPTS = (RECEIVER, 'deploy-release.sh', 'activate.sh', 'host-config.py', 'prune-releases.py')
+# Root runs these during deployment. Activation and the runbooks run release
+# scripts as screenr through run-release-script.sh.
+DEPLOY_SCRIPTS = (RECEIVER, 'deploy-release.sh', 'activate.sh', 'run-release-script.sh', 'host-config.py',
+                  'prune-releases.py')
 # Screenr's units run these as screenr-db or with the backup secrets, so they
 # never come from the release that the deploy key uploads.
 SERVICE_SCRIPTS = ('backup.sh', 'restore-check.sh', 'failure-alert.py', 'check-backup-age.py',
