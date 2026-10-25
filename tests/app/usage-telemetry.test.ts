@@ -326,6 +326,10 @@ async function members(...names: string[]) {
   return ids;
 }
 
+// The fixed-date reports below use weeks that ended in 2025, so whatever
+// today is, none of them is in progress and nothing the app records today
+// falls inside them. Keep new fixed dates in the past for the same reason.
+
 test("weekly returns use Monday-to-Sunday Pacific weeks and count the week before the range", async () => {
   const [alice, ben, cam, dana, erin] = await members(
     "alice",
@@ -335,22 +339,22 @@ test("weekly returns use Monday-to-Sunday Pacific weeks and count the week befor
     "erin",
   );
   for (const [user, day, web, ios] of [
-    [dana, "2026-10-18", false, true],
-    [dana, "2026-10-19", true, false],
-    [alice, "2026-10-25", false, true],
-    [alice, "2026-10-26", true, true],
-    [cam, "2026-10-26", true, false],
-    [cam, "2026-10-28", false, true],
-    [ben, "2026-11-01", true, false],
-    [ben, "2026-11-02", false, true],
-    [cam, "2026-11-08", false, true],
-    [erin, "2026-11-09", true, true],
+    [dana, "2025-10-19", false, true],
+    [dana, "2025-10-20", true, false],
+    [alice, "2025-10-26", false, true],
+    [alice, "2025-10-27", true, true],
+    [cam, "2025-10-27", true, false],
+    [cam, "2025-10-29", false, true],
+    [ben, "2025-11-02", true, false],
+    [ben, "2025-11-03", false, true],
+    [cam, "2025-11-09", false, true],
+    [erin, "2025-11-10", true, true],
   ] as const)
     await db.query(
       "INSERT INTO member_active_day(user_id,day,web,ios) VALUES($1,$2,$3,$4)",
       [user, day, web, ios],
     );
-  const weeks = await usageReport({ weeks: 3, through: "2026-11-08" });
+  const weeks = await usageReport({ weeks: 3, through: "2025-11-09" });
   assert.deepEqual(
     weeks.map((w) => [
       w.week,
@@ -359,9 +363,9 @@ test("weekly returns use Monday-to-Sunday Pacific weeks and count the week befor
       w.activePreviousWeek,
     ]),
     [
-      ["2026-10-19", false, 2, 1],
-      ["2026-10-26", false, 3, 1],
-      ["2026-11-02", false, 2, 2],
+      ["2025-10-20", false, 2, 1],
+      ["2025-10-27", false, 3, 1],
+      ["2025-11-03", false, 2, 2],
     ],
   );
   // A member who used the website and the app in the same week, on one day
@@ -369,9 +373,9 @@ test("weekly returns use Monday-to-Sunday Pacific weeks and count the week befor
   assert.deepEqual(
     weeks.map((w) => [w.week, w.webOnly, w.appOnly, w.webAndApp]),
     [
-      ["2026-10-19", 1, 1, 0],
-      ["2026-10-26", 1, 0, 2],
-      ["2026-11-02", 0, 2, 0],
+      ["2025-10-20", 1, 1, 0],
+      ["2025-10-27", 1, 0, 2],
+      ["2025-11-03", 0, 2, 0],
     ],
   );
   // Any day selects its whole week; the current week is marked in progress.
@@ -384,8 +388,8 @@ test("weekly returns use Monday-to-Sunday Pacific weeks and count the week befor
   ).rows[0].monday;
   assert.equal(current.week, monday);
   assert.deepEqual(
-    (await usageReport({ weeks: 1, through: "2026-10-28" })).map((w) => w.week),
-    ["2026-10-26"],
+    (await usageReport({ weeks: 1, through: "2025-10-29" })).map((w) => w.week),
+    ["2025-10-27"],
   );
   await assert.rejects(usageReport({ weeks: 0 }), {
     message: "Choose 1 to 104 weeks.",
@@ -407,29 +411,29 @@ test("saves report observed and inferred lines and their follow-through once per
   // The last column marks a save the member later followed with Watching,
   // Caught up, or Finished, whenever that happened.
   for (const [user, title, day, surface, recommending, followed] of [
-    [ben, "movie:1", "2026-10-26", "friend_recommendation", true, true],
-    [ben, "movie:1", "2026-10-27", "friend_recommendation", true, false],
-    [cam, "movie:1", "2026-11-01", "title", true, true],
-    [dana, "movie:2", "2026-10-30", "suggestion_recommendation", false, false],
-    [erin, "movie:2", "2026-10-31", "friend_entry", false, true],
-    [frank, "movie:1", "2026-10-28", null, true, false],
-    [ben, "movie:2", "2026-11-02", "friends_recommend", true, true],
-    [cam, "movie:2", "2026-11-03", "watch_together", false, false],
-    [dana, "movie:1", "2026-11-08", "suggestion", false, true],
-    [erin, "movie:1", "2026-11-09", "friend_recommendation", true, true],
+    [ben, "movie:1", "2025-10-27", "friend_recommendation", true, true],
+    [ben, "movie:1", "2025-10-28", "friend_recommendation", true, false],
+    [cam, "movie:1", "2025-11-02", "title", true, true],
+    [dana, "movie:2", "2025-10-31", "suggestion_recommendation", false, false],
+    [erin, "movie:2", "2025-11-01", "friend_entry", false, true],
+    [frank, "movie:1", "2025-10-29", null, true, false],
+    [ben, "movie:2", "2025-11-03", "friends_recommend", true, true],
+    [cam, "movie:2", "2025-11-04", "watch_together", false, false],
+    [dana, "movie:1", "2025-11-09", "suggestion", false, true],
+    [erin, "movie:1", "2025-11-10", "friend_recommendation", true, true],
   ] as const)
     await db.query(
       `INSERT INTO want_to_watch_save(user_id,title_id,saved_on,surface,friend_recommending,followed_through)
       VALUES($1,$2,$3,$4,$5,$6)`,
       [user, title, day, surface, recommending, followed],
     );
-  const weeks = await usageReport({ weeks: 3, through: "2026-11-08" });
+  const weeks = await usageReport({ weeks: 3, through: "2025-11-09" });
   assert.deepEqual(
     weeks.map((w) => [w.week, w.saves, w.observedSaves, w.inferredSaves]),
     [
-      ["2026-10-19", 0, 0, 0],
-      ["2026-10-26", 5, 2, 3],
-      ["2026-11-02", 3, 1, 1],
+      ["2025-10-20", 0, 0, 0],
+      ["2025-10-27", 5, 2, 3],
+      ["2025-11-03", 3, 1, 1],
     ],
   );
   // A Sunday save stays in its week, and a member and title saved twice in
@@ -442,9 +446,9 @@ test("saves report observed and inferred lines and their follow-through once per
       w.followedInferred,
     ]),
     [
-      ["2026-10-19", 0, 0, 0],
-      ["2026-10-26", 3, 1, 2],
-      ["2026-11-02", 2, 1, 1],
+      ["2025-10-20", 0, 0, 0],
+      ["2025-10-27", 3, 1, 2],
+      ["2025-11-03", 2, 1, 1],
     ],
   );
 });
@@ -573,11 +577,11 @@ test("conversation measures count two-person, back-and-forth, and repeat activit
     false,
   );
   await db.query(
-    "UPDATE feed_item SET created_at='2026-10-20T12:00:00Z' WHERE id IN ($1,$2)",
+    "UPDATE feed_item SET created_at='2025-10-21T12:00:00Z' WHERE id IN ($1,$2)",
     [recommendation, wanted],
   );
   await db.query(
-    "UPDATE title_comment SET created_at='2026-10-20T12:00:00Z' WHERE id=$1",
+    "UPDATE title_comment SET created_at='2025-10-21T12:00:00Z' WHERE id=$1",
     [standaloneId],
   );
   const comment = async (entry: string, author: string, at: string) =>
@@ -591,19 +595,19 @@ test("conversation measures count two-person, back-and-forth, and repeat activit
         [entry, author, at],
       )
     ).rows[0].id as string;
-  // Daylight saving time ends on Sunday, November 1, 2026, so the week of
-  // October 26 ends at 08:00 UTC rather than 07:00 UTC.
-  await comment(recommendation, ben, "2026-11-02T07:59:59Z");
-  await comment(recommendation, alice, "2026-11-02T08:00:00Z");
-  await comment(standaloneId, cam, "2026-10-27T12:00:00Z");
-  const removed = await comment(standaloneId, ben, "2026-11-03T12:00:00Z");
+  // Daylight saving time ends on Sunday, November 2, 2025, so the week of
+  // October 27 ends at 08:00 UTC rather than 07:00 UTC.
+  await comment(recommendation, ben, "2025-11-03T07:59:59Z");
+  await comment(recommendation, alice, "2025-11-03T08:00:00Z");
+  await comment(standaloneId, cam, "2025-10-28T12:00:00Z");
+  const removed = await comment(standaloneId, ben, "2025-11-04T12:00:00Z");
   await removeComment(ben, removed);
-  await comment(wanted, ben, "2026-10-26T06:59:59Z");
-  await comment(wanted, ben, "2026-10-26T07:00:00Z");
-  await comment(wanted, dana, "2026-10-28T12:00:00Z");
-  await comment(wanted, ben, "2026-10-29T12:00:00Z");
+  await comment(wanted, ben, "2025-10-27T06:59:59Z");
+  await comment(wanted, ben, "2025-10-27T07:00:00Z");
+  await comment(wanted, dana, "2025-10-29T12:00:00Z");
+  await comment(wanted, ben, "2025-10-30T12:00:00Z");
 
-  const weeks = await usageReport({ weeks: 3, through: "2026-11-08" });
+  const weeks = await usageReport({ weeks: 3, through: "2025-11-09" });
   assert.deepEqual(
     weeks.map((w) => [
       w.week,
@@ -612,9 +616,9 @@ test("conversation measures count two-person, back-and-forth, and repeat activit
       w.repeatCommenters,
     ]),
     [
-      ["2026-10-19", 1, 0, 0],
-      ["2026-10-26", 2, 1, 1],
-      ["2026-11-02", 2, 1, 1],
+      ["2025-10-20", 1, 0, 0],
+      ["2025-10-27", 2, 1, 1],
+      ["2025-11-03", 2, 1, 1],
     ],
   );
 });
@@ -630,18 +634,18 @@ test("npm run report:usage prints weekly totals without identifying members", as
     true,
   );
   await db.query(
-    "UPDATE feed_item SET created_at='2026-10-20T12:00:00Z' WHERE id=$1",
+    "UPDATE feed_item SET created_at='2025-10-21T12:00:00Z' WHERE id=$1",
     [recommendation],
   );
   // A day recorded without a client, as before the client split, is a
   // website day.
   await db.query("INSERT INTO member_active_day(user_id,day) VALUES($1,$2)", [
     alice,
-    "2026-10-28",
+    "2025-10-29",
   ]);
   for (const [user, day, web] of [
-    [ben, "2026-10-28", false],
-    [ben, "2026-11-03", true],
+    [ben, "2025-10-29", false],
+    [ben, "2025-11-04", true],
   ] as const)
     await db.query(
       "INSERT INTO member_active_day(user_id,day,web,ios) VALUES($1,$2,$3,true)",
@@ -649,13 +653,13 @@ test("npm run report:usage prints weekly totals without identifying members", as
     );
   await db.query(
     `INSERT INTO want_to_watch_save(user_id,title_id,saved_on,surface,friend_recommending,followed_through)
-    VALUES($1,'movie:1','2026-10-28','friend_recommendation',true,true),
-      ($1,'movie:1','2026-11-03','title',true,false)`,
+    VALUES($1,'movie:1','2025-10-29','friend_recommendation',true,true),
+      ($1,'movie:1','2025-11-04','title',true,false)`,
     [ben],
   );
   await db.query(
     `INSERT INTO comment(feed_item_id,conversation_id,author_id,body,created_at)
-    SELECT id,conversation_id,$2,'Report fixture','2026-10-29T12:00:00Z' FROM feed_item WHERE id=$1`,
+    SELECT id,conversation_id,$2,'Report fixture','2025-10-30T12:00:00Z' FROM feed_item WHERE id=$1`,
     [recommendation, ben],
   );
   const { stdout } = await execute(
@@ -668,7 +672,7 @@ test("npm run report:usage prints weekly totals without identifying members", as
       "--weeks",
       "2",
       "--through",
-      "2026-11-08",
+      "2025-11-09",
     ],
     {
       cwd: root,
@@ -677,38 +681,38 @@ test("npm run report:usage prints weekly totals without identifying members", as
   );
   assert.equal(
     stdout,
-    `Screenr usage for the 2 weeks starting 2026-10-26
+    `Screenr usage for the 2 weeks starting 2025-10-27
 Weeks run Monday through Sunday, Pacific time. Totals only.
 
 Members who return each week
 Week of     Active members  Also active the week before
-2026-10-26               2                            0
-2026-11-02               1                            1
+2025-10-27               2                            0
+2025-11-03               1                            1
 
 Where active members used Screenr
 Week of     Website only  iPhone app only  Both
-2026-10-26             1                1     0
-2026-11-02             0                0     1
+2025-10-27             1                1     0
+2025-11-03             0                0     1
 Both: the website and the iPhone app in the same week.
 
 Want to watch saves from friends' recommendations
 Week of     Saves  Observed  Inferred
-2026-10-26      1         1         1
-2026-11-02      1         0         1
+2025-10-27      1         1         1
+2025-11-03      1         0         1
 Observed: saved where a friend's recommendation was shown.
 Inferred: saved while a direct friend was recommending the title.
 
 Those saves later marked Watching, Caught up, or Finished
 Week of     Saves  Observed  Inferred
-2026-10-26      1         1         1
-2026-11-02      0         0         0
+2025-10-27      1         1         1
+2025-11-03      0         0         0
 Each save counts in its own week once the same member marks that title.
 Stopped watching alone does not count.
 
 Conversations with at least two people
 Week of     Conversations  Back-and-forth  Repeat commenters
-2026-10-26              1               0                  0
-2026-11-02              0               0                  0
+2025-10-27              1               0                  0
+2025-11-03              0               0                  0
 `,
   );
   for (const value of [
