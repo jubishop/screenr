@@ -36,7 +36,7 @@ public final class TitleSpotlight {
   public init(index: any TitleIndex, session: SessionStore) {
     self.index = index
     self.session = session
-    session.onEnd { [weak self] in self?.clear() }
+    session.onEnd { [weak self] _ in self?.clear() }
     if session.phase == .signedOut { clear() }
   }
 

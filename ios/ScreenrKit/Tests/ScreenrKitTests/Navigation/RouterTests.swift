@@ -109,11 +109,28 @@ struct RouterTests {
     let router = Router(invitation: invitation)
 
     router.open(.join(token: "AbC_123-xyz"))
-    router.reset()
+    router.sessionEnded(.signedOut)
 
     #expect(invitation.token == "AbC_123-xyz")
     #expect(router.selectedTab == .circle)
     #expect(router.paths.values.allSatisfy { $0.isEmpty })
+  }
+
+  // A member who already has a profile lands in Circle from an invitation
+  // link, as on the web, unless a later link takes them elsewhere.
+  @Test func opensCircleForAnInvitationUntilALaterLink() {
+    let router = Router()
+    router.selectedTab = .friends
+    router.open(.title(id: "tv:201"))
+    router.sheet = .notifications
+
+    router.open(.join(token: "AbC_123-xyz"))
+    #expect(router.selectedTab == .circle)
+    #expect(router.paths[.circle] == [])
+    #expect(router.sheet == nil)
+
+    router.open(.title(id: "tv:202"))
+    #expect(router.paths[.circle] == [.title(id: "tv:202")])
   }
 
   @Test func opensScreenrLinksAndIgnoresOthers() throws {
@@ -143,13 +160,88 @@ struct RouterTests {
     router.open(.search(query: "Lost"))
     router.sheet = .notifications
 
-    router.reset()
+    router.sessionEnded(.signedOut)
 
     #expect(router.selectedTab == .circle)
     #expect(router.paths.values.allSatisfy { $0.isEmpty })
     #expect(router.findSearch == .search())
     #expect(router.root(of: .you) == nil)
     #expect(router.sheet == nil)
+  }
+
+  // A member whose session expired may have just followed a link into the
+  // 401, so it opens again for the next sign-in. The rest of their place is
+  // still forgotten.
+  @Test func keepsALinkWhoseScreenHasNotLoadedWhenTheSessionExpires() {
+    let router = Router()
+    router.viewerUsername = "alice"
+    router.open(.search(query: "Lost"))
+    router.selectedTab = .friends
+    router.open(.title(id: "tv:201"))
+    // The screen that showed before the link does not show it.
+    router.screenLoaded(.people)
+
+    router.sessionEnded(.expired)
+
+    #expect(router.selectedTab == .circle)
+    #expect(router.paths == [.circle: [.title(id: "tv:201")]])
+    #expect(router.findSearch == .search())
+    #expect(router.root(of: .you) == nil)
+  }
+
+  @Test func forgetsALinkOnceItsScreenLoads() {
+    let router = Router()
+    router.open(.title(id: "tv:201"))
+
+    router.screenLoaded(.title(id: "tv:201"))
+    router.sessionEnded(.expired)
+
+    #expect(router.paths.values.allSatisfy { $0.isEmpty })
+  }
+
+  // Signing out or deleting the account leaves nothing for the next member.
+  @Test(arguments: [SessionStore.Ending.signedOut, .accountDeleted])
+  func forgetsALinkWhenTheMemberLeaves(_ ending: SessionStore.Ending) {
+    let router = Router()
+    router.open(.title(id: "tv:201"))
+
+    router.sessionEnded(ending)
+
+    #expect(router.paths.values.allSatisfy { $0.isEmpty })
+  }
+
+  // A link waits for the screen that shows it, such as Find's root for a
+  // search, and a link that names no screen waits for any screen.
+  @Test(arguments: [
+    (Destination.search(query: "Lost", tab: .friendsRecommend), Destination.search()),
+    (.profile(username: "Alice"), .profile(username: "alice")),
+    (.account, .account),
+    (.feed(item: "post"), .feed(item: "post")),
+    (.notFound(path: "/nothing/here"), .people),
+  ])
+  func waitsForTheScreenThatShowsALink(_ link: Destination, shownBy screen: Destination) {
+    let kept = Router()
+    let shown = Router()
+    for router in [kept, shown] {
+      router.viewerUsername = "alice"
+      router.open(link)
+    }
+
+    shown.screenLoaded(screen)
+    kept.sessionEnded(.expired)
+    shown.sessionEnded(.expired)
+
+    // The kept link opens as it would for a member who has not signed in.
+    let signedOut = Router()
+    signedOut.open(link)
+    #expect(kept.selectedTab == signedOut.selectedTab)
+    #expect(kept.paths == signedOut.paths)
+    #expect(kept.sheet == signedOut.sheet)
+    #expect(kept.findSearch == signedOut.findSearch)
+    #expect(shown.selectedTab == .circle)
+    #expect(shown.paths.values.allSatisfy { $0.isEmpty })
+    #expect(shown.sheet == nil)
+    #expect(shown.findSearch == .search())
   }
 
   // A destination that no longer loads closes on every tab, with whatever

@@ -74,14 +74,15 @@ public final class ShellModel {
   }
 
   // The session ended, by signing out or on the server: the member leaves
-  // nothing behind for the next one. The app calls this from
+  // nothing behind for the next one, except a link the router keeps when the
+  // server ended the session before the link showed. The app calls this from
   // `SessionStore.onEnd(_:)`.
-  public func sessionEnded() {
+  public func sessionEnded(_ ending: SessionStore.Ending) {
     account = .checking
     viewer = nil
     setUnreadNotifications(0)
     notices = [:]
-    router.reset()
+    router.sessionEnded(ending)
   }
 
   // Runs `handler` with every unread count a read reports, changed or not,
@@ -91,12 +92,13 @@ public final class ShellModel {
     unreadHandlers.append(handler)
   }
 
-  // A model for a member screen that reports what it loads to the shell, or
-  // nil for a destination without a screen.
+  // A model for a member screen that reports what it loads to the shell and
+  // the router, or nil for a destination without a screen.
   public func screenModel(for destination: Destination) -> ScreenModel? {
     guard let path = destination.screenPath else { return nil }
     return ScreenModel(path: path, api: api, clock: clock) { [weak self] screen in
       self?.screenLoaded(screen)
+      self?.router.screenLoaded(destination)
     }
   }
 

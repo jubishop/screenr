@@ -165,6 +165,29 @@ final class ShellTests: XCTestCase {
     wait(for: [log.read("/titles/tv/201?item=\(entry)")], timeout: 10)
   }
 
+  // A member whose saved session has expired follows a link. The account
+  // check's 401 shows sign-in, and the link opens once they sign in again.
+  @MainActor
+  func testOpensALinkAfterSigningInAgainWhenTheSessionExpired() throws {
+    let log = RequestLog.temporary()
+    let app = XCUIApplication()
+    app.launch(
+      with: FixtureLaunch(
+        session: .expired,
+        link: "screenr-dev://titles/tv/201",
+        requestLog: log.file
+      )
+    )
+
+    let signIn = app.buttons["Sign in with Apple"]
+    XCTAssertTrue(signIn.waitForExistence(timeout: 10))
+    signIn.tap()
+
+    XCTAssertTrue(app.navigationBars["Harbor Lights"].waitForExistence(timeout: 10))
+    XCTAssertTrue(app.tab("Circle").isSelected)
+    wait(for: [log.read("/titles/tv/201")], timeout: 10)
+  }
+
   @MainActor
   func testKeepsAnInvitationForSignIn() throws {
     let app = XCUIApplication()

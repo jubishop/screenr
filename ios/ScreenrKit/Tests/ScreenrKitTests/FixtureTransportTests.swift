@@ -130,6 +130,23 @@ struct FixtureTransportTests {
     #expect(services.session.phase == .signedOut)
   }
 
+  // The app starts with a saved session the server no longer accepts.
+  @Test func rejectsAnExpiredSessionUntilTheNextSignIn() async throws {
+    let services = try services("-ScreenrFixtureSession", "expired")
+    #expect(services.session.phase == .signedIn)
+
+    let expired = await #expect(throws: APIError.self) {
+      try await services.api.send(.screen(path: "/"))
+    }
+    #expect(services.session.phase == .signedOut)
+    #expect(services.session.ending == .expired)
+    _ = try await services.api.send(.signIn(email: "alice@example.com", code: "123456"))
+    let feed = try await services.api.send(.screen(path: "/"))
+
+    #expect(expired?.kind == .signedOut)
+    #expect(feed.user.username == "alice")
+  }
+
   @Test func reportsInvitationsAvailableUnlessOverridden() async throws {
     let services = try services("-ScreenrFixtureSession", "signedOut")
     let unavailable = try self.services(

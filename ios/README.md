@@ -196,7 +196,8 @@ try await api.send(.comment(conversation: item.id, body: text, spoiler: false))
 - **Session:** a sign-in request stores the token from `set-auth-token` in
   the Keychain, and `.signOut` removes it, as does a successful
   `.deleteAccount`. `SessionStore.ending` then says how the session ended,
-  `.signedOut` or `.accountDeleted`, until the next sign-in. A sign-in made
+  `.signedOut`, `.expired` when a 401 ended it, or `.accountDeleted`, until
+  the next sign-in, and `onEnd(_:)` handlers receive it. A sign-in made
   `.confirming(userId:)` keeps its new token only when the response names
   that user; see [account deletion](#account-deletion). A 401 to a request
   that carried a token removes that token, unless a newer one replaced it. Linking a sign-in method is the
@@ -238,7 +239,7 @@ uses it when launched with these arguments; Release builds ignore them:
 | --- | --- |
 | `-ScreenrFixtures` | The fixtures directory. |
 | `-ScreenrFixtureViewer` | The member whose fixtures answer first: `alice` (default), or `nora` for empty screens. |
-| `-ScreenrFixtureSession` | `signedIn` (default) or `signedOut`. |
+| `-ScreenrFixtureSession` | `signedIn` (default), `signedOut`, or `expired`: a saved session that gets `errors/signed-out` until the next sign-in. |
 | `-ScreenrFixtureProfile` | `complete` (default), or `pending` for a viewer without a profile, such as `pat`: member actions get `errors/incomplete-profile`, as on the server, until a setup request succeeds. |
 | `-ScreenrFixtureOverride` | A fixture that answers first, such as `screen/feed/empty`. Repeatable. |
 | `-ScreenrFixtureFailure` | A fixture that answers every `/api/screenr` request, such as `errors/update-required`. |
@@ -339,12 +340,15 @@ server sends every member without a profile, shows setup; otherwise the
 feed's `user` is the viewer, whose opaque user ID the app gives error
 reporting, and whose username makes the You tab. When the session ends,
 `SessionStore.onEnd` resets the shell, so the next member starts at Circle.
-[Settings](#settings) ends with `SignOutButton`.
+When the server ended it, such as after it expired, the last link `open(_:)`
+showed opens again for the next sign-in if its screen had not loaded yet,
+since the member may have followed it into the 401. Signing out and deleting
+the account forget it. [Settings](#settings) ends with `SignOutButton`.
 
 | Piece | Where | What it does |
 | --- | --- | --- |
 | `Destination` | ScreenrKit `Navigation/` | One case per member route, plus `join` and `notFound`. `Destination(path:)` and `path` match the web's member routes, `Destination(url:)` reads universal links and `screenr-dev://` links, `shareURL` builds a screenr.club link, and `pageName(for:)` names the page. |
-| `Router` | ScreenrKit `Navigation/` | `@Observable`: the selected tab, each tab's stack, and the sheet. `open(_:)` takes links from outside the app, and puts an invitation link's token in `PendingInvitation`. |
+| `Router` | ScreenrKit `Navigation/` | `@Observable`: the selected tab, each tab's stack, and the sheet. `open(_:)` takes links from outside the app, and puts an invitation link's token in `PendingInvitation`. The last link waits until `screenLoaded(_:)` reports the screen that shows it, so `sessionEnded(_:)` can keep it across an expired session. |
 | `ShellModel` | ScreenrKit `Shell/` | `@Observable`: the account check, the viewer, the bell's unread count, the app's activity, `screenModel(for:)`, `pushArrived()`, `refreshLiveReads()`, and `onUnreadCount(_:)`, which reports each unread count, such as for the app icon's badge. Views read it with `@Environment(ShellModel.self)`. |
 | `LiveRead`, `ScreenModel` | ScreenrKit `Shell/` | A GET request's `phase` (`loading`, `loaded`, or `failed`) and its polling. `ScreenModel` is `LiveRead<Screen>`; other live reads, such as the notifications sheet's, use `LiveRead(.notifications(), api:)`. |
 | `IncomingActivity` | ScreenrKit `Shell/` | Which activity the reader accepted; the rest waits behind a control. |
@@ -369,7 +373,7 @@ reporting, and whose username makes the You tab. When the session ends,
 | `/invites`, `/watch-together` | Pushed on Friends. |
 | `/account` | Settings over You. |
 | `/titles/…`, `/people/<other>`, `/conversations/…`, unknown paths | Pushed on the current tab. A conversation shows the entry it redirects to in its place. |
-| `/join/<token>` | Keeps the token in `PendingInvitation` for sign-in and setup, and checks it with the server. A member who has a profile lands in Circle, as on the web, and the app forgets the token. |
+| `/join/<token>` | Keeps the token in `PendingInvitation` for sign-in and setup, checks it with the server, and opens Circle's root. A member who has a profile lands there, as on the web, unless a later link took its place, and the app forgets the token. |
 
 Tab roots never change destination; a link adds to a stack or, for Find,
 sets `router.findSearch`. SwiftUI did not report a root as appearing when its

@@ -6,6 +6,10 @@ public struct FixtureScenario: Hashable, Sendable {
   public enum Session: String, Hashable, Sendable {
     case signedIn
     case signedOut
+    // The app starts with a session the server no longer accepts, as after
+    // it expired. Requests with its token get `errors/signed-out` until the
+    // member signs in again.
+    case expired
   }
 
   // Whether the viewer has set up a profile.
@@ -123,7 +127,8 @@ final class FixtureSetup: Sendable {
 // An in-process Screenr server that answers from the checked-in fixtures, so
 // the app runs its real client against recorded responses.
 //
-// - `/api/screenr` requests without a bearer token get `errors/signed-out`.
+// - `/api/screenr` requests without a bearer token, or with
+//   `FixtureTransport.expiredToken`, get `errors/signed-out`.
 // - A viewer whose profile is pending gets `errors/incomplete-profile` from
 //   member actions until a setup request succeeds.
 // - Otherwise the fixture with the same action and the same query or body
@@ -143,6 +148,8 @@ final class FixtureSetup: Sendable {
 // - Google's token endpoint redeems `FixtureWebAuthenticator`'s stub codes.
 public struct FixtureTransport: HTTPTransport {
   public static let token = "fixture-session"
+  // The token of a session the fixture API no longer accepts.
+  public static let expiredToken = "fixture-expired-session"
 
   // The actions a member without a profile can use, as on the server.
   private static let beforeProfile: Set = [
@@ -199,7 +206,7 @@ public struct FixtureTransport: HTTPTransport {
       return try reply(url: url, fixture: failure, requestID: requestID)
     }
     let bearer = request.value(forHTTPHeaderField: "Authorization")
-    guard let bearer, bearer.hasPrefix("Bearer ") else {
+    guard let bearer, bearer.hasPrefix("Bearer "), bearer != "Bearer " + Self.expiredToken else {
       guard let signedOut = fixture(named: "errors/signed-out") else {
         return try reply(url: url, status: 401, body: ["error": "Sign in to continue."])
       }
