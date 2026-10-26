@@ -1,0 +1,23 @@
+// The Notification Service Extension in both variants, which the app embeds.
+// The SCREENR_ values come from Dev.xcconfig or Release.xcconfig.
+PRODUCT_NAME = ScreenrNotificationService
+PRODUCT_BUNDLE_IDENTIFIER = $(SCREENR_BUNDLE_IDENTIFIER).NotificationService
+INFOPLIST_KEY_CFBundleDisplayName = $(SCREENR_DISPLAY_NAME)
+CODE_SIGN_ENTITLEMENTS = Config/ScreenrNotificationService.entitlements
+
+GENERATE_INFOPLIST_FILE = YES
+INFOPLIST_FILE = ScreenrNotificationService/Info.plist
+// ScreenrNotificationService/Info.plist keeps Dev-only keys in #if blocks, as
+// the app's does.
+INFOPLIST_PREPROCESS = YES
+INFOPLIST_OTHER_PREPROCESSOR_FLAGS = -traditional-cpp -Wno-invalid-pp-token
+
+// An extension installs only inside the app, and may use only the APIs that
+// Apple allows in extensions.
+SKIP_INSTALL = YES
+APPLICATION_EXTENSION_API_ONLY = YES
+
+// iOS calls the extension on threads of its own, and it shows no interface,
+// so its code is nonisolated by default, as ScreenrKit's is.
+SWIFT_DEFAULT_ACTOR_ISOLATION = nonisolated
+LD_RUNPATH_SEARCH_PATHS = $(inherited) @executable_path/Frameworks @executable_path/../../Frameworks

@@ -73,6 +73,21 @@ extension's new App ID (`com.artisanalsoftware.Screenr.Share`); `xcodebuild
 archive` with the key failed with "Authentication failed". One archive
 signed through the Mac's Xcode account (`-allowProvisioningUpdates` without
 the key flags) registered it, and afterwards the key's archive and export
-signed it. Expect the same for any new target, such as the Notification
-Service Extension in
-[#244](https://github.com/jubishop/screenr/issues/244).
+signed it. The same worked on 2026-10-25 for the Notification Service
+Extension's `com.artisanalsoftware.Screenr.NotificationService`
+([#244](https://github.com/jubishop/screenr/issues/244)); expect it for any
+new target. Write the archive inside the worktree and never export it. Its
+Release archive's last build phase still uploads the dSYMs to Sentry, which
+is harmless.
+
+## Seeing the notification extension in a Simulator
+
+`xcrun simctl push` skips Notification Service Extensions, so its alert
+stays generic. A real APNs sandbox push to the Simulator's device token runs
+the extension; see
+[push content](../ios/README.md#push-content). To allow notifications in a
+fresh Simulator, a throwaway UI test that opens the bell with
+`-ScreenrFixturePush system` and taps Allow from an
+`addUIInterruptionMonitor` worked on 2026-10-25, where querying the
+springboard for the Allow button found none. `simctl privacy` has no
+notifications service.

@@ -10,8 +10,9 @@ layout, commands, and toolchain notes, and the
 
 - **No Xcode:** work from the command line and the Simulator. Write no
   `#Preview` blocks or preview content.
-- **Synchronized folders:** `Screenr/`, `ScreenrShare/`, and
-  `ScreenrUITests/` are synchronized folder groups. Add, move, or delete files on disk; never edit
+- **Synchronized folders:** `Screenr/`, `ScreenrShare/`,
+  `ScreenrNotificationService/`, and `ScreenrUITests/` are synchronized
+  folder groups. Add, move, or delete files on disk; never edit
   `project.pbxproj` to register a file. Change it only for a new target,
   capability, or setting that cannot live in an `.xcconfig` file.
 - **Settings:** build settings live in `Config/*.xcconfig`. Put a standard
@@ -20,8 +21,9 @@ layout, commands, and toolchain notes, and the
   `Release.xcconfig`.
 - **Code placement:** `ScreenrKit` holds the API models and client, session
   and Keychain storage, logging, push content, and `@Observable` view models.
-  The app target holds SwiftUI views and the app lifecycle, and the
-  `ScreenrShare` extension target its own views.
+  The app target holds SwiftUI views and the app lifecycle, the
+  `ScreenrShare` extension target its own views, and the
+  `ScreenrNotificationService` extension target only its entry point.
 - **Dependencies:** `sentry-cocoa` is the only third-party package. Use the
   platform or small in-house code for everything else.
 - **Fixtures:** `ScreenrKit/Fixtures/` holds JSON that server tests write.
@@ -30,8 +32,9 @@ layout, commands, and toolchain notes, and the
 ## Swift
 
 - **Language:** Swift 6 mode, with complete strict concurrency and strict
-  memory safety. Default actor isolation is MainActor in the app target and
-  nonisolated in ScreenrKit and the UI tests.
+  memory safety. Default actor isolation is MainActor in the app and share
+  extension targets, and nonisolated in ScreenrKit, the notification
+  extension, and the UI tests.
 - **Warnings:** warnings are errors. Every build and test run ends with zero
   warnings; `bin/check-ios` enforces it.
 - **Formatting:** run `bin/format-swift` on changed files. The app's build

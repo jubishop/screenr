@@ -10,6 +10,8 @@
     5C0000000000000000000017 /* ScreenrKit in Frameworks */ = {isa = PBXBuildFile; productRef = 5C0000000000000000000016 /* ScreenrKit */; };
     5C0000000000000000252007 /* ScreenrKit in Frameworks */ = {isa = PBXBuildFile; productRef = 5C0000000000000000252008 /* ScreenrKit */; };
     5C0000000000000000252010 /* ScreenrShare.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 5C0000000000000000252001 /* ScreenrShare.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+    5C0000000000000000244007 /* ScreenrKit in Frameworks */ = {isa = PBXBuildFile; productRef = 5C0000000000000000244008 /* ScreenrKit */; };
+    5C0000000000000000244010 /* ScreenrNotificationService.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 5C0000000000000000244001 /* ScreenrNotificationService.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -27,6 +29,13 @@
       remoteGlobalIDString = 5C0000000000000000252009;
       remoteInfo = ScreenrShare;
     };
+    5C0000000000000000244012 /* PBXContainerItemProxy */ = {
+      isa = PBXContainerItemProxy;
+      containerPortal = 5C0000000000000000000001 /* Project object */;
+      proxyType = 1;
+      remoteGlobalIDString = 5C0000000000000000244009;
+      remoteInfo = ScreenrNotificationService;
+    };
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -37,6 +46,7 @@
       dstSubfolderSpec = 13;
       files = (
         5C0000000000000000252010 /* ScreenrShare.appex in Embed Foundation Extensions */,
+        5C0000000000000000244010 /* ScreenrNotificationService.appex in Embed Foundation Extensions */,
       );
       name = "Embed Foundation Extensions";
       runOnlyForDeploymentPostprocessing = 0;
@@ -57,6 +67,9 @@
     5C0000000000000000252001 /* ScreenrShare.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = ScreenrShare.appex; sourceTree = BUILT_PRODUCTS_DIR; };
     5C000000000000000025200D /* ScreenrShare.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = ScreenrShare.xcconfig; sourceTree = "<group>"; };
     5C000000000000000025200E /* ScreenrShare.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = ScreenrShare.entitlements; sourceTree = "<group>"; };
+    5C0000000000000000244001 /* ScreenrNotificationService.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = ScreenrNotificationService.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+    5C000000000000000024400D /* ScreenrNotificationService.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = ScreenrNotificationService.xcconfig; sourceTree = "<group>"; };
+    5C000000000000000024400E /* ScreenrNotificationService.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = ScreenrNotificationService.entitlements; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -81,6 +94,13 @@
       );
       target = 5C0000000000000000252009 /* ScreenrShare */;
     };
+    5C0000000000000000244003 /* Exceptions for "ScreenrNotificationService" folder in "ScreenrNotificationService" target */ = {
+      isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+      membershipExceptions = (
+        Info.plist,
+      );
+      target = 5C0000000000000000244009 /* ScreenrNotificationService */;
+    };
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -104,6 +124,14 @@
         5C0000000000000000252003 /* Exceptions for "ScreenrShare" folder in "ScreenrShare" target */,
       );
       path = ScreenrShare;
+      sourceTree = "<group>";
+    };
+    5C0000000000000000244002 /* ScreenrNotificationService */ = {
+      isa = PBXFileSystemSynchronizedRootGroup;
+      exceptions = (
+        5C0000000000000000244003 /* Exceptions for "ScreenrNotificationService" folder in "ScreenrNotificationService" target */,
+      );
+      path = ScreenrNotificationService;
       sourceTree = "<group>";
     };
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -132,6 +160,14 @@
       );
       runOnlyForDeploymentPostprocessing = 0;
     };
+    5C0000000000000000244005 /* Frameworks */ = {
+      isa = PBXFrameworksBuildPhase;
+      buildActionMask = 2147483647;
+      files = (
+        5C0000000000000000244007 /* ScreenrKit in Frameworks */,
+      );
+      runOnlyForDeploymentPostprocessing = 0;
+    };
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -142,6 +178,7 @@
         5C0000000000000000000028 /* ScreenrKit */,
         5C0000000000000000000005 /* Screenr */,
         5C0000000000000000252002 /* ScreenrShare */,
+        5C0000000000000000244002 /* ScreenrNotificationService */,
         5C0000000000000000000006 /* ScreenrUITests */,
         5C0000000000000000000003 /* Products */,
       );
@@ -152,6 +189,7 @@
       children = (
         5C0000000000000000000008 /* Screenr.app */,
         5C0000000000000000252001 /* ScreenrShare.appex */,
+        5C0000000000000000244001 /* ScreenrNotificationService.appex */,
         5C0000000000000000000009 /* ScreenrUITests.xctest */,
       );
       name = Products;
@@ -169,6 +207,8 @@
         5C0000000000000000000027 /* Screenr.entitlements */,
         5C000000000000000025200D /* ScreenrShare.xcconfig */,
         5C000000000000000025200E /* ScreenrShare.entitlements */,
+        5C000000000000000024400D /* ScreenrNotificationService.xcconfig */,
+        5C000000000000000024400E /* ScreenrNotificationService.entitlements */,
       );
       path = Config;
       sourceTree = "<group>";
@@ -191,6 +231,7 @@
       );
       dependencies = (
         5C0000000000000000252011 /* PBXTargetDependency */,
+        5C0000000000000000244011 /* PBXTargetDependency */,
       );
       fileSystemSynchronizedGroups = (
         5C0000000000000000000005 /* Screenr */,
@@ -249,6 +290,29 @@
       productReference = 5C0000000000000000252001 /* ScreenrShare.appex */;
       productType = "com.apple.product-type.app-extension";
     };
+    5C0000000000000000244009 /* ScreenrNotificationService */ = {
+      isa = PBXNativeTarget;
+      buildConfigurationList = 5C000000000000000024400A /* Build configuration list for PBXNativeTarget "ScreenrNotificationService" */;
+      buildPhases = (
+        5C0000000000000000244004 /* Sources */,
+        5C0000000000000000244005 /* Frameworks */,
+        5C0000000000000000244006 /* Resources */,
+      );
+      buildRules = (
+      );
+      dependencies = (
+      );
+      fileSystemSynchronizedGroups = (
+        5C0000000000000000244002 /* ScreenrNotificationService */,
+      );
+      name = ScreenrNotificationService;
+      packageProductDependencies = (
+        5C0000000000000000244008 /* ScreenrKit */,
+      );
+      productName = ScreenrNotificationService;
+      productReference = 5C0000000000000000244001 /* ScreenrNotificationService.appex */;
+      productType = "com.apple.product-type.app-extension";
+    };
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -267,6 +331,9 @@
             TestTargetID = 5C000000000000000000000A;
           };
           5C0000000000000000252009 = {
+            CreatedOnToolsVersion = 27.0;
+          };
+          5C0000000000000000244009 = {
             CreatedOnToolsVersion = 27.0;
           };
         };
@@ -290,6 +357,7 @@
       targets = (
         5C000000000000000000000A /* Screenr */,
         5C0000000000000000252009 /* ScreenrShare */,
+        5C0000000000000000244009 /* ScreenrNotificationService */,
         5C000000000000000000000B /* ScreenrUITests */,
       );
     };
@@ -311,6 +379,13 @@
       runOnlyForDeploymentPostprocessing = 0;
     };
     5C0000000000000000252006 /* Resources */ = {
+      isa = PBXResourcesBuildPhase;
+      buildActionMask = 2147483647;
+      files = (
+      );
+      runOnlyForDeploymentPostprocessing = 0;
+    };
+    5C0000000000000000244006 /* Resources */ = {
       isa = PBXResourcesBuildPhase;
       buildActionMask = 2147483647;
       files = (
@@ -385,6 +460,13 @@
       );
       runOnlyForDeploymentPostprocessing = 0;
     };
+    5C0000000000000000244004 /* Sources */ = {
+      isa = PBXSourcesBuildPhase;
+      buildActionMask = 2147483647;
+      files = (
+      );
+      runOnlyForDeploymentPostprocessing = 0;
+    };
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -397,6 +479,11 @@
       isa = PBXTargetDependency;
       target = 5C0000000000000000252009 /* ScreenrShare */;
       targetProxy = 5C0000000000000000252012 /* PBXContainerItemProxy */;
+    };
+    5C0000000000000000244011 /* PBXTargetDependency */ = {
+      isa = PBXTargetDependency;
+      target = 5C0000000000000000244009 /* ScreenrNotificationService */;
+      targetProxy = 5C0000000000000000244012 /* PBXContainerItemProxy */;
     };
 /* End PBXTargetDependency section */
 
@@ -457,6 +544,20 @@
       };
       name = Release;
     };
+    5C000000000000000024400B /* Debug */ = {
+      isa = XCBuildConfiguration;
+      baseConfigurationReference = 5C000000000000000024400D /* ScreenrNotificationService.xcconfig */;
+      buildSettings = {
+      };
+      name = Debug;
+    };
+    5C000000000000000024400C /* Release */ = {
+      isa = XCBuildConfiguration;
+      baseConfigurationReference = 5C000000000000000024400D /* ScreenrNotificationService.xcconfig */;
+      buildSettings = {
+      };
+      name = Release;
+    };
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -496,6 +597,15 @@
       defaultConfigurationIsVisible = 0;
       defaultConfigurationName = Release;
     };
+    5C000000000000000024400A /* Build configuration list for PBXNativeTarget "ScreenrNotificationService" */ = {
+      isa = XCConfigurationList;
+      buildConfigurations = (
+        5C000000000000000024400B /* Debug */,
+        5C000000000000000024400C /* Release */,
+      );
+      defaultConfigurationIsVisible = 0;
+      defaultConfigurationName = Release;
+    };
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
@@ -511,6 +621,10 @@
       productName = ScreenrKit;
     };
     5C0000000000000000252008 /* ScreenrKit */ = {
+      isa = XCSwiftPackageProductDependency;
+      productName = ScreenrKit;
+    };
+    5C0000000000000000244008 /* ScreenrKit */ = {
       isa = XCSwiftPackageProductDependency;
       productName = ScreenrKit;
     };

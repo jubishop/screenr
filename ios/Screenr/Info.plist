@@ -12,6 +12,10 @@
   <string>$(SCREENR_GOOGLE_CLIENT_ID)</string>
   <key>ScreenrAPSEnvironment</key>
   <string>$(SCREENR_APS_ENVIRONMENT)</string>
+  <key>NSUserActivityTypes</key>
+  <array>
+    <string>INSendMessageIntent</string>
+  </array>
   <key>CFBundleURLTypes</key>
   <array>
     <dict>
