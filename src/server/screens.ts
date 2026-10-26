@@ -7,7 +7,11 @@ import {
   friendActivity,
   linkTarget,
 } from "./feed";
-import { getTitle, getTitleTrailer, getTitleAvailability } from "./catalog";
+import {
+  getTitleAvailability,
+  getTitleTrailer,
+  getTitleWithRelease,
+} from "./catalog";
 import { listInvitations } from "./invitations";
 import { AppError, db } from "./db";
 import { watchTogether } from "./watch-together";
@@ -89,19 +93,20 @@ async function loadContent(userId: string, route: MemberRoute) {
   }
   if (route.kind === "search") {
     // Both Find a title tabs load together, so switching tabs needs no new
-    // read, and one availability read covers titles on either list.
+    // read, and one availability and release read covers titles on either
+    // list.
     const [suggestions, recommendations, serviceIds] = await Promise.all([
       titleSuggestions(userId),
       friendsRecommend(userId),
       savedServices(userId),
     ]);
-    const viewing = new Map(
+    const listed = new Map(
       (await withViewingOptions([...suggestions, ...recommendations])).map(
-        (title) => [title.id, title.viewing],
+        ({ id, viewing, release }) => [id, { viewing, release }],
       ),
     );
     const withViewing = <T extends Title>(titles: T[]) =>
-      titles.map((title) => ({ ...title, viewing: viewing.get(title.id)! }));
+      titles.map((title) => ({ ...title, ...listed.get(title.id)! }));
     return {
       kind: "search" as const,
       suggestions: withViewing(suggestions),
@@ -161,22 +166,31 @@ async function loadContent(userId: string, route: MemberRoute) {
   if (route.kind === "title") {
     const { id } = route;
     // Catalog requests run together to fit the client's refresh deadline.
-    const stored = getTitle(id);
-    const [title, threads, trailer, availability, watch, own, ranks] =
-      await Promise.all([
-        stored,
-        conversations(userId, { title: id }),
-        getTitleTrailer(id, stored),
-        getTitleAvailability(id, Infinity, stored),
-        watchStatus(userId, id),
-        topTen(userId),
-        topTenRanks(id),
-      ]);
+    const stored = getTitleWithRelease(id);
+    const [
+      { title, release },
+      threads,
+      trailer,
+      availability,
+      watch,
+      own,
+      ranks,
+    ] = await Promise.all([
+      stored,
+      conversations(userId, { title: id }),
+      getTitleTrailer(id, stored),
+      getTitleAvailability(id, Infinity, stored),
+      watchStatus(userId, id),
+      topTen(userId),
+      topTenRanks(id),
+    ]);
     return {
       kind: "title" as const,
       title,
       trailer,
       availability,
+      // The US release status shown beside Where to watch.
+      release,
       watch,
       // The viewer's own top 10, for its control and full-list prompt.
       topTen: own,

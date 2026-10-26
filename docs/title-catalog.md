@@ -26,6 +26,9 @@ from the requested ID count as an invalid title, and their contents are stored
 under neither ID. Search returns the same catalog
 errors. It sends no request for fewer than two non-space characters, rejects
 queries over 120 characters, and drops results that are not movies or TV.
+Movie details include their US release dates, which share this cache;
+title lists also refresh missing or expired details for them. See
+[release status](title-availability.md#release-status-implementation).
 Title details, trailer, and availability load in parallel, and the optional
 caches are written once the title is stored. Actions and comments use the
 stored title without contacting TMDB, so members can still remove actions on

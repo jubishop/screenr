@@ -363,6 +363,28 @@
   color: var(--ink);
   font-weight: 600;
 }
+/* A title's US release status, such as "In theaters · Digital Dec 9", on
+   title cards, suggestion tiles, and above Where to watch's sections. */
+.release-status {
+  display: inline-block;
+  max-width: 100%;
+  margin: 0 0 8px;
+  padding: 2px 10px;
+  border-radius: 8px;
+  background: var(--tint);
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.search-result .release-status {
+  margin-bottom: 8px;
+}
+.title-availability .release-status {
+  margin-bottom: 14px;
+  font-size: 14px;
+}
 .title-services {
   margin-top: 8px;
   overflow-wrap: anywhere;

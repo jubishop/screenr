@@ -237,6 +237,13 @@ Rejected alternatives: ending the window early once a Subs or Free option
 is listed, and using TMDB's US now-playing list, which is also derived from
 release dates and requires fetching a list with many pages.
 
+**Final window:** 45 days, unchanged after checking live TMDB data on
+2026-10-25. TMDB's US now-playing list then began 39 days back, and the
+sampled wide releases reached US digital about 45 days after opening: Street
+Fighter and Resident Evil both took 46 days. The
+[implementation](#release-status-implementation) counts the release day and
+the 44 days after it.
+
 ## Upcoming movie dates include digital releases — 2026-10-16
 
 **Decision:** Show upcoming US theatrical and digital release dates for
@@ -374,6 +381,94 @@ for discovery and Watch together. Free options qualify without a saved
 selection. Paid rental and purchase offers do not qualify. Older results keep
 an age warning, and failed lookups stay distinct from known unmatched titles.
 
+## Release status implementation
+
+This implements the
+[release status decisions](#release-status-on-title-pages-and-cards--2026-10-16)
+for the server and web app. The iPhone app receives the same fields; showing
+them there is the remaining part of
+[issue #310](https://github.com/jubishop/screenr/issues/310).
+
+**Source.** Movie details ask TMDB for
+[release dates](https://developer.themoviedb.org/reference/movie-release-dates)
+in the same request, with `append_to_response=release_dates`. Only the `US`
+result counts: types 2 (limited theatrical) and 3 (theatrical) are
+theatrical dates, and type 4 is digital. Premieres, physical and TV
+releases, and every other country are ignored, so a movie without a US
+result has no label. A show's dates come from its series details: the
+premiere is `first_air_date`, or season 1's air date; each later season's
+`air_date` is its premiere; and `next_episode_to_air` stands in only when it
+is the first episode of a season TMDB has not dated. TMDB gives a show one
+set of dates, from its original network, so a show counts only on a US or
+worldwide network: the first network whose TMDB `origin_country` is `US` or
+empty, as for streaming services such as Netflix. A show only on another
+country's network, such as BBC One, gets no label. These shapes were
+confirmed against live TMDB responses on 2026-10-25.
+
+**Storage.** [`db/033-title-release.sql`](../db/033-title-release.sql)
+adds `title.release`, which keeps only those dates as calendar dates
+(`YYYY-MM-DD`, cut from TMDB's midnight-UTC timestamps, never converted to
+a time zone). It follows the title details'
+[cache](title-catalog.md#title-details): 24-hour freshness and a five-minute
+retry after a failure, with the last dates kept. A details response without
+usable movie release dates still stores the details, but keeps the last
+dates, leaves `fetched_at` unchanged, and retries after five minutes. The
+migration marks every stored title due, so each picks up its dates the next
+time a title page or list shows it.
+
+**Status.** `src/server/title-release.ts` derives the status each time the
+server sends a screen, so a stored row never shows an old status. Today is
+the date in `America/Los_Angeles`, the latest mainland US time zone, so no
+label calls a title out before its release day there. A movie is in theaters
+when its latest US theatrical date on or before today, limited, wide, or a
+re-release, is at most 44 days ago. A movie that is not in theaters shows its
+next theatrical date, such as "In theaters Nov 21". It shows its first US
+digital date while that is ahead, such as "Digital Dec 9"; later digital
+dates, which are often a streaming service's arrival, never show, since Where
+to watch covers streaming. A show shows "Premieres Nov 4 on Netflix" until
+it premieres, then its earliest season premiere still ahead, such as
+"Season 3 premieres Jan 8". Next episodes are never shown. Dates name the
+month and day, with the year when it is not the current year, as feed times
+do.
+
+**Payload.** Title screens send `release` beside `availability`. Every title
+list item that carries `viewing`, from the Find a title screen's
+`suggestions` and `recommendations`, the `search` action, Watch together's
+`titles`, and Want to watch pages' `titles`, also carries `release`. Its shape is `TitleRelease` in
+`src/shared.ts`:
+
+```json
+{
+  "status": "ok",
+  "in_theaters": true,
+  "upcoming": [
+    { "kind": "digital", "date": "2026-12-09", "label": "Digital Dec 9" }
+  ]
+}
+```
+
+`status` is `unavailable` when the release data could not be loaded, which
+shows no label. `upcoming` kinds are `theatrical`, `digital`, `premiere`, and
+`season_premiere`, in date order. Clients show "In theaters" when
+`in_theaters` is set, then each `label`, and never derive either from the
+dates. Later features, such as In theaters lists, read `in_theaters` and
+`status` from `withViewingOptions` or `getTitleReleases` instead of
+computing theatrical status again.
+
+**Lists.** `getTitleReleases` in `src/server/catalog.ts` reads a list's
+stored titles in one query and refreshes only missing or expired details, at
+most four at a time. `withViewingOptions` runs it beside the availability
+lookup with the same deadlines: no request starts after three seconds, or
+seven seconds after a search began. A title left unrefreshed keeps its stored
+dates, or an unavailable status, and stays listed. Search summaries are
+stored without dates, so a search refreshes each new result's details.
+
+**Web.** `src/components/title-release.tsx` shows the status, such as
+"In theaters · Digital Dec 9", on title cards, Find a title's suggestion
+tiles, and at the top of Where to watch, outside its Subs and Free groups.
+The text comes from the screen data, never the reader's clock, so server
+and hydration markup match.
+
 ## Provider registry and maintenance
 
 [`src/server/watch-provider-registry.json`](../src/server/watch-provider-registry.json)
@@ -453,3 +548,15 @@ recovery, bounded cold-list requests, and single-query cache reads for the
 suggestion and Watch together screens through the public API.
 `tests/browser/streaming-services.spec.ts` covers saving, cancelling, clearing,
 failed saves, filters, background preference changes, and responsive grouping.
+
+`tests/app/title-release.test.ts` covers release status through title pages,
+Find a title, the Find a title screen, Want to watch, and Watch together, with a fake TMDB
+service, the real database, and a fixed US date: both edges of the
+theatrical window, limited releases and re-releases, upcoming theatrical and
+digital dates, digital-only movies, past dates, missing US data and other
+countries' dates, series and season premieres, shows with no announcement
+or only weekly episodes, cache reuse and expiry, failed and unusable
+responses, one stored-title read per list, and bounded requests within the
+search deadline. `tests/browser/title-release.spec.ts` checks the title page
+and the cards in Find a title, Friends recommend, Want to watch, and Watch
+together at desktop, mobile, and 320px widths.

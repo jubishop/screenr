@@ -11,7 +11,7 @@
   },
   "response": {
     "status": 200,
-    "etag": "W/\"aKYWmYox7mc4yVcBnXzt_bwCUWMGTEZXQNbWFHfC8fs\"",
+    "etag": "W/\"Qeh6_nSq_B4_a2tFLoiwzxfsv9n4JwiTa-M-LFimo48\"",
     "body": [
       {
         "id": "movie:101",
@@ -38,6 +38,11 @@
               ]
             }
           ]
+        },
+        "release": {
+          "status": "ok",
+          "in_theaters": false,
+          "upcoming": []
         }
       },
       {
@@ -65,6 +70,11 @@
               ]
             }
           ]
+        },
+        "release": {
+          "status": "ok",
+          "in_theaters": false,
+          "upcoming": []
         }
       }
     ]

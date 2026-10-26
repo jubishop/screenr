@@ -45,7 +45,7 @@ test("Friends recommend lists friends' recommendations, filters by type, and sav
     ('movie:987654','movie',987654,'The Lantern Room','A fictional coastal story.','2026-06-12'),
     ('tv:998001','tv',998001,'The Harbor Signal','A fictional mystery.','2025-09-01'),
     ('movie:987671','movie',987671,'The Quiet Pier','A fictional harbor town.','2024-03-08')
-    ON CONFLICT(id) DO NOTHING`);
+    ON CONFLICT DO NOTHING`);
   const maya = await person("recommendmaya", "Maya Chen");
   const theo = await person("recommendtheo", "Theo Park");
   const sam = await person("recommendsam", "Sam Okafor");
@@ -178,7 +178,7 @@ test("the Find a title tab stays in the URL through search, history, and reloads
   const viewer = await signIn(page, "recommendtabs");
   await db.query(`INSERT INTO title(id,kind,tmdb_id,name,overview) VALUES
     ('movie:987654','movie',987654,'The Lantern Room','A fictional coastal story.')
-    ON CONFLICT(id) DO NOTHING`);
+    ON CONFLICT DO NOTHING`);
   const maya = await person("recommendtabsmaya", "Maya Chen");
   await friend(viewer, maya);
   await recommend(maya, "movie:987654", "2026-01-01");
@@ -240,7 +240,7 @@ test("Friends recommend hides titles the viewer finished until Show finished is 
   await db.query(`INSERT INTO title(id,kind,tmdb_id,name,overview) VALUES
     ('movie:987654','movie',987654,'The Lantern Room','A fictional coastal story.'),
     ('tv:998001','tv',998001,'The Harbor Signal','A fictional mystery.')
-    ON CONFLICT(id) DO NOTHING`);
+    ON CONFLICT DO NOTHING`);
   const maya = await person("recommendfinishedmaya", "Maya Chen");
   await friend(viewer, maya);
   await recommend(maya, "movie:987654", "2026-01-02");

@@ -11,7 +11,7 @@
   },
   "response": {
     "status": 200,
-    "etag": "W/\"VtA9XsRZICT8mvsMbWgP_qEqjoucUQ-2UhGtqyhk2Wk\"",
+    "etag": "W/\"zMhkh5HPJ-VpytzVD9u4wXHvp4B0boR6eQzc_aT3Q4c\"",
     "body": [
       {
         "id": "movie:105",
@@ -38,6 +38,11 @@
               ]
             }
           ]
+        },
+        "release": {
+          "status": "ok",
+          "in_theaters": false,
+          "upcoming": []
         }
       },
       {
@@ -52,6 +57,11 @@
           "status": "ok",
           "checked_at": "2026-10-13T12:00:00.000Z",
           "sections": []
+        },
+        "release": {
+          "status": "ok",
+          "in_theaters": false,
+          "upcoming": []
         }
       }
     ]

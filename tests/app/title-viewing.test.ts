@@ -58,7 +58,9 @@ const catalog = createServer((request, response) => {
     details++;
     response.end(
       JSON.stringify({
-        id: Number(request.url?.split("/")[2]),
+        id: Number(
+          new URL(request.url!, "http://catalog").pathname.split("/")[2],
+        ),
         title: "Detailed title",
         name: "Detailed title",
         overview: "Full overview",
@@ -94,6 +96,7 @@ after(async () => {
 });
 
 test("search enriches movie and TV summaries and caches availability without replacing full details", async () => {
+  // The movie's full details are current; the show has only its summary.
   await db.query(
     "INSERT INTO title(id,kind,tmdb_id,name,overview) VALUES('movie:93901','movie',93901,'Full title','Full overview')",
   );
@@ -105,8 +108,9 @@ test("search enriches movie and TV summaries and caches availability without rep
   assert.ok(result.every((t) => t.viewing.status === "ok"));
   assert.equal(result[0].viewing.sections[0].services[0].name, "AMC+");
   assert.equal(result[0].viewing.sections[1].services[0].name, "Tubi TV");
+  // Only the summary-only show fetches its details, for its release status.
+  assert.equal(details, 1);
   assert.equal((await getTitle("movie:93901")).name, "Full title");
-  assert.equal(details, 0);
   assert.equal((await getTitle("tv:93901")).name, "Detailed title");
   assert.equal(details, 1);
   await findTitles("streaming");

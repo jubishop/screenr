@@ -19,7 +19,7 @@ async function setup(viewer: string, prefix: string) {
   await db.query(`INSERT INTO title(id,kind,tmdb_id,name,overview) VALUES
     ('movie:987654','movie',987654,'The Lantern Room','A fictional coastal story.'),
     ('tv:998001','tv',998001,'The Harbor Signal','A fictional mystery.')
-    ON CONFLICT(id) DO NOTHING`);
+    ON CONFLICT DO NOTHING`);
   await updateTitleActivity(direct, "movie:987654", "recommended", true);
   // Second-degree signals need at least three friends of friends per action.
   const hidden: string[] = [];
@@ -171,7 +171,7 @@ test("suggestion tiles explain Watching by friends and anonymous friends of frie
   await db.query(`INSERT INTO title(id,kind,tmdb_id,name,overview) VALUES
     ('movie:987654','movie',987654,'The Lantern Room','A fictional coastal story.'),
     ('tv:998001','tv',998001,'The Harbor Signal','A fictional mystery.')
-    ON CONFLICT(id) DO NOTHING`);
+    ON CONFLICT DO NOTHING`);
   await updateWatchStatus(direct, "movie:987654", "watching");
   // Caught up counts as watching, and the count needs three people.
   const hidden: string[] = [];

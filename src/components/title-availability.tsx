@@ -1,12 +1,17 @@
 import Image from "next/image";
-import type { WatchAvailability } from "../shared";
+import type { TitleRelease, WatchAvailability } from "../shared";
 import { dateLabel, useInteractive } from "./client";
+import { ReleaseStatus } from "./title-release";
 
+// Where to watch: the title's US release status, then its Subs and Free
+// options. A digital release date stays in the status, never in a section.
 export function TitleAvailability({
   availability,
+  release,
   kind,
 }: {
   availability: WatchAvailability;
+  release?: TitleRelease;
   kind: "movie" | "tv";
 }) {
   const interactive = useInteractive();
@@ -20,6 +25,7 @@ export function TitleAvailability({
         <h2 id="availability-heading">Where to watch</h2>
         <span className="muted">United States</span>
       </div>
+      <ReleaseStatus release={release} />
       {availability.status === "unavailable" ? (
         <p className="muted">
           Viewing options could not be loaded. Please check again later.

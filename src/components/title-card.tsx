@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import type { SaveSurface, Title, ViewingTitle } from "../shared";
 import { Poster } from "./poster";
 import { TitleServices } from "./title-services";
+import { ReleaseStatus } from "./title-release";
 import { Icon } from "./icons";
 
 // The kind and release year, such as "TV show · 2022", or only the kind when
@@ -43,6 +44,7 @@ export function TitleCard({
       <div>
         <Heading>{title.name}</Heading>
         <p className="muted">{titleDetails(title)}</p>
+        <ReleaseStatus release={title.release} />
         {title.overview && <p className="small overview">{title.overview}</p>}
         <TitleServices
           viewing={title.viewing}

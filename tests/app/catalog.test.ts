@@ -61,7 +61,8 @@ const catalog = createServer((request, response) => {
     return;
   }
   requests.push({ path, authorization: request.headers.authorization });
-  if (/^\/(movie|tv)\/\d+$/.test(path)) return send(details);
+  // Movie details ask for their release dates in the same request.
+  if (/^\/(movie|tv)\/\d+(\?|$)/.test(path)) return send(details);
   if (path.startsWith("/search/multi?")) return send(search);
   if (slow) return; // Exercise the real network timeout.
   reply(status, videos);
@@ -227,8 +228,13 @@ for (const failure of ["http", "timeout", "configuration"]) {
   });
 }
 
+const detailPath = (id: string) => {
+  const [kind, tmdbId] = id.split(":");
+  return `/${kind}/${tmdbId}${kind === "movie" ? "?append_to_response=release_dates" : ""}`;
+};
 const detailRequests = (kind = "movie") =>
-  requests.filter((request) => request.path === `/${kind}/42`).length;
+  requests.filter((request) => request.path === detailPath(`${kind}:42`))
+    .length;
 
 for (const failure of [
   "http",
@@ -306,7 +312,7 @@ const invalidResults = {
 const lookups = () =>
   requests
     .map((request) => request.path)
-    .filter((path) => /^\/(movie|tv)\/\d+$|^\/search\//.test(path));
+    .filter((path) => /^\/(movie|tv)\/\d+(\?|$)|^\/search\//.test(path));
 const storedTitle = async (id: string) =>
   (
     await db.query(
@@ -341,7 +347,7 @@ for (const [failure, reply] of Object.entries(failures)) {
     await assert.rejects(getTitle("movie:43"), unavailable);
     await assert.rejects(searchTitles("night"), unavailable);
     assert.deepEqual(lookups(), [
-      "/movie/43",
+      detailPath("movie:43"),
       "/search/multi?query=night&include_adult=false",
     ]);
     assert.equal(await storedTitle("movie:43"), undefined);
@@ -646,6 +652,6 @@ test("actions and comments on a stored title skip the catalog after TMDB drops i
   assert.equal(missing.status, 404);
   assert.deepEqual(
     requests.map((request) => request.path),
-    ["/movie/43"],
+    [detailPath("movie:43")],
   );
 });

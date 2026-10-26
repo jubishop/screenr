@@ -233,6 +233,7 @@ export function TitleView({
           </div>
           <TitleAvailability
             availability={data.availability}
+            release={data.release}
             kind={data.title.kind}
           />
           {data.trailer && (
