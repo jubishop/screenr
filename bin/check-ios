@@ -3,8 +3,8 @@
 
 Runs ScreenrKit's tests with swift test on the Mac, builds the Release variant
 for the Simulator, then boots an iPhone Simulator, waits for it to finish
-booting, and runs the Screenr scheme's tests (ScreenrKit and the UI tests) in
-it. Without --simulator, the check creates its own Simulator and deletes it
+booting, turns its VoiceOver volume to zero, and runs the Screenr scheme's
+tests (ScreenrKit and the UI tests) in it. Without --simulator, the check creates its own Simulator and deletes it
 afterward, so concurrent checkouts never share one.
 Build output, logs, and result bundles stay in ios/build/, which Git ignores.
 
@@ -55,6 +55,11 @@ NOT_A_WARNING = re.compile(
 ENVIRONMENT = {key: value for key, value in records.outside_git().items() if key != "SDKROOT"}
 XCODEBUILD = ["xcodebuild", "-hideShellScriptEnvironment", "-project", "ios/Screenr.xcodeproj",
               "-scheme", "Screenr", "-derivedDataPath", str(BUILD / "DerivedData")]
+# A UI test that turns on VoiceOver would otherwise speak through the Mac's
+# speakers. VoiceOver still reports what it would say.
+SILENT_VOICEOVER = [("VoiceOverTouchVolume", "-float", "0"),
+                    ("VoiceOverAdjustSoundVolumeIndependently", "-bool", "true"),
+                    ("VoiceOverSoundVolume", "-float", "0")]
 
 
 class CheckFailure(Exception):
@@ -164,6 +169,12 @@ def create_simulator():
     return udid
 
 
+def silence_voiceover(udid):
+    for key, kind, value in SILENT_VOICEOVER:
+        capture("xcrun", "simctl", "spawn", udid, "defaults", "write", "com.apple.Accessibility",
+                key, kind, value)
+
+
 def delete_simulator(udid):
     subprocess.run(["xcrun", "simctl", "shutdown", udid], cwd=ROOT, env=ENVIRONMENT,
                    capture_output=True)
@@ -213,6 +224,7 @@ def main():
         # A new Simulator keeps setting itself up after xcodebuild boots it, and
         # on a slow Mac that can outlast a UI test's app launch timeout.
         run("Simulator boot", ["xcrun", "simctl", "bootstatus", udid, "-b"], BOOT_TIMEOUT_MINUTES)
+        silence_voiceover(udid)
         tests = OUTPUT / "Tests.xcresult"
         # Collecting diagnostics after a failed UI test took about 10 minutes
         # and sometimes never finished.

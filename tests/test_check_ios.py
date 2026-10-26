@@ -150,19 +150,26 @@ class CheckIOSTests(unittest.TestCase):
         self.assertEqual(events[2][4:], ["iphone-18-pro", "runtime-27-0"])
         # A new Simulator finishes its first boot before tests launch the app.
         self.assertEqual(events[3], ["xcrun", "simctl", "bootstatus", "NEW-UDID", "-b"])
-        self.assertEqual(events[4], ["xcodebuild", *project, "-configuration", "Debug", "-destination",
+        # VoiceOver in a UI test stays silent rather than speaking through the Mac.
+        write = ["xcrun", "simctl", "spawn", "NEW-UDID", "defaults", "write", "com.apple.Accessibility"]
+        self.assertEqual(events[4:7], [[*write, "VoiceOverTouchVolume", "-float", "0"],
+                                       [*write, "VoiceOverAdjustSoundVolumeIndependently", "-bool", "true"],
+                                       [*write, "VoiceOverSoundVolume", "-float", "0"]])
+        self.assertEqual(events[7], ["xcodebuild", *project, "-configuration", "Debug", "-destination",
                                      "platform=iOS Simulator,id=NEW-UDID", "-parallel-testing-enabled", "NO",
                                      # A failure reports at once instead of gathering a sysdiagnose.
                                      "-collect-test-diagnostics", "never",
                                      "-resultBundlePath", build + "/check/Tests.xcresult", "test"])
-        self.assertEqual(events[5:], [["xcrun", "simctl", "shutdown", "NEW-UDID"],
+        self.assertEqual(events[8:], [["xcrun", "simctl", "shutdown", "NEW-UDID"],
                                       ["xcrun", "simctl", "delete", "NEW-UDID"]])
 
     def test_uses_a_given_simulator_and_leaves_it_in_place(self):
         result = self.check("--simulator", "MY-UDID")
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(self.steps(), ["swift", "xcodebuild", "simctl bootstatus", "xcodebuild"])
+        self.assertEqual(self.steps(), ["swift", "xcodebuild", "simctl bootstatus", *["simctl spawn"] * 3,
+                                        "xcodebuild"])
         self.assertEqual(self.recorded()[2], ["xcrun", "simctl", "bootstatus", "MY-UDID", "-b"])
+        self.assertEqual(self.recorded()[3][:4], ["xcrun", "simctl", "spawn", "MY-UDID"])
         self.assertIn("platform=iOS Simulator,id=MY-UDID", self.recorded()[-1])
 
     def test_a_failed_boot_still_deletes_its_simulator(self):
