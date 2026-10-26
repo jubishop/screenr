@@ -14,13 +14,16 @@ async function post(page: Page, action: string, data: unknown) {
 
 // The streaming fixture titles: Night Crossing on Netflix, Night Harbor on
 // AMC+, Night Orchard free on Tubi, Night Market on HBO Max, and Night Signal,
-// whose availability cannot be loaded.
+// whose availability cannot be loaded. This test's own Night Archive has
+// older Netflix availability.
+const archive = "movie:939313";
 const newestFirst = [
   "movie:939103",
   "tv:939102",
   "tv:939105",
   "movie:939101",
   "movie:939104",
+  archive,
 ];
 
 test("Want to watch opens from own and friends' profiles, lists what the viewer can watch, and follows friendship", async ({
@@ -62,6 +65,25 @@ test("Want to watch opens from own and friends' profiles, lists what the viewer 
       .getByRole("link", { name: "Find a title", exact: true }),
   ).toBeVisible();
 
+  await db.query(
+    "INSERT INTO title(id,kind,tmdb_id,name,fetched_at) VALUES($1,'movie',939313,'Night Archive',now())",
+    [archive],
+  );
+  await db.query(
+    `INSERT INTO title_availability(title_id,country,availability,fetched_at,refresh_after)
+    VALUES($1,'US',$2,now()-interval '2 days',now()+interval '1 day')`,
+    [
+      archive,
+      {
+        link: null,
+        providers: {
+          flatrate: [
+            { provider_id: 8, provider_name: "Netflix", logo_path: null },
+          ],
+        },
+      },
+    ],
+  );
   await prepareFriendship(page, owner);
   await post(page, "streaming-services", { serviceIds: ["service:netflix"] });
   await post(owner, "streaming-services", {
@@ -106,15 +128,26 @@ test("Want to watch opens from own and friends' profiles, lists what the viewer 
   await expect(ready.getByRole("heading", { level: 3 })).toHaveText([
     "Night Orchard",
     "Night Crossing",
+    "Night Archive",
   ]);
   await expect(unknown.getByRole("heading", { level: 3 })).toHaveText([
     "Night Signal",
   ]);
-  await expect(count).toHaveText("2 titles to watch now");
+  await expect(count).toHaveText("3 titles to watch now");
+  const card = (name: string) =>
+    ready.getByRole("link").filter({ hasText: name });
   await expect(
-    ready.getByText("Free on Tubi TV", { exact: true }),
+    card("Night Orchard").getByText("Free on Tubi TV", { exact: true }),
   ).toBeVisible();
-  await expect(ready.getByText("On Netflix ✓", { exact: true })).toBeVisible();
+  await expect(
+    card("Night Crossing").getByText("On Netflix ✓", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    card("Night Archive").getByText("Older availability. Check title details."),
+  ).toBeVisible();
+  await expect(
+    card("Night Crossing").getByText(/Older availability/),
+  ).toHaveCount(0);
   await expect(page.getByText("Night Harbor")).toHaveCount(0);
   await expect(page.getByText("Night Market")).toHaveCount(0);
   await expect(page.getByText(/AMC\+/)).toHaveCount(0);
@@ -135,6 +168,7 @@ test("Want to watch opens from own and friends' profiles, lists what the viewer 
   await expect(ready.getByRole("heading", { level: 3 })).toHaveText([
     "Night Orchard",
     "Night Crossing",
+    "Night Archive",
   ]);
   await expect(unknown).toHaveCount(0);
   await page.keyboard.press("Tab");
@@ -163,13 +197,10 @@ test("Want to watch opens from own and friends' profiles, lists what the viewer 
   }
 
   // Selecting a title opens its page.
-  await ready
-    .getByRole("link")
-    .filter({ hasText: "Night Crossing" })
-    .press("Enter");
+  await card("Night Crossing").press("Enter");
   await expect(page).toHaveURL("/titles/movie/939101");
   await page.goBack();
-  await expect(ready.getByRole("heading", { level: 3 })).toHaveCount(2);
+  await expect(ready.getByRole("heading", { level: 3 })).toHaveCount(3);
 
   // Refreshes drop a title moved off Want to watch, and follow the viewer's
   // services: without any, only free titles count, and the page says why.
@@ -180,6 +211,7 @@ test("Want to watch opens from own and friends' profiles, lists what the viewer 
   });
   await expect(ready.getByRole("heading", { level: 3 })).toHaveText([
     "Night Crossing",
+    "Night Archive",
   ]);
   await post(page, "streaming-services", { serviceIds: [] });
   await expect(

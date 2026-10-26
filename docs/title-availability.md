@@ -353,14 +353,15 @@ US region, last-checked time, attribution, and watch-page link. It distinguishes
 empty, failed, and older cached data, including older empty results.
 
 `src/server/title-viewing.ts` adds this same availability to catalog results,
-circle suggestions, shared Want to watch titles, and Want to watch pages. Each list reads its cache
-rows in one query, then requests only missing or expired entries from TMDB. It
-allows four concurrent provider requests and stops starting them after three
-seconds. Catalog search also stops starting provider requests seven seconds
-after the search began, leaving room within the browser's ten-second deadline.
-In-flight requests retain the two-second timeout. Remaining titles use cached
-data or an explicit unknown state; they are not dropped. Search summaries create
-only missing title identities for the cache and never overwrite richer details.
+circle suggestions, shared Want to watch titles, and Want to watch pages. Each
+list reads its cache rows in one query, then requests only missing or expired
+entries from TMDB. It allows four concurrent provider requests and stops
+starting them after three seconds. Catalog search also stops starting provider
+requests seven seconds after the search began, leaving room within the
+browser's ten-second deadline. In-flight requests retain the two-second
+timeout. Remaining titles use cached data or an explicit unknown state; they
+are not dropped. Search summaries create only missing title identities for the
+cache and never overwrite richer details.
 
 `db/009-streaming-services.sql` stores each member's selected stable service
 identities. `src/server/streaming-services.ts` validates selections against the
