@@ -517,8 +517,9 @@ served packages at 50 to 125 KB/s for hours. `npx playwright install
 --with-deps chromium` took up to 221 seconds instead of about 20, and one app
 job hit its 8-minute timeout
 ([#320](https://github.com/jubishop/screenr/issues/320)). Even with a normal
-mirror the step took 13 to 38 seconds. Without APT, it took 4 to 7 seconds,
-and the pull request's run passed `check` after 3 minutes 5 seconds.
+mirror the step took 13 to 38 seconds. Without APT, it took 3 to 7 seconds in
+two pull request runs, and both passed `check` about 3 minutes after they
+started.
 
 - **Playwright:** the `app` and `browser` jobs run
   `npx playwright install --only-shell chromium`, which downloads only the
