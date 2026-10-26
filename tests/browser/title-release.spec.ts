@@ -12,7 +12,9 @@ const { titleRelease } = await import("../../src/server/title-release");
 const widths = [1366, 390, 320];
 
 // Stores a title with current details and US release data, so pages read it
-// without the catalog. A null release leaves the status unavailable.
+// without the catalog. A null release leaves the status unavailable. Specs
+// share one database when they run in one process, so this replaces any row
+// another spec stored under the same ID rather than keeping it.
 async function storeTitle(
   id: string,
   name: string,
@@ -21,7 +23,10 @@ async function storeTitle(
   const [kind, tmdbId] = id.split(":");
   await db.query(
     `INSERT INTO title(id,kind,tmdb_id,name,overview,release_date,release)
-    VALUES($1,$2,$3,$4,$5,$6,$7) ON CONFLICT DO NOTHING`,
+    VALUES($1,$2,$3,$4,$5,$6,$7)
+    ON CONFLICT(id) DO UPDATE SET name=excluded.name,overview=excluded.overview,
+      release_date=excluded.release_date,release=excluded.release,
+      fetched_at=now(),retry_after=NULL`,
     [
       id,
       kind,
@@ -53,22 +58,22 @@ test("title pages show the release status above Where to watch's options at each
   signIn,
 }) => {
   await signIn(page, "releasepage");
-  const showing = await storeTitle("movie:996300", "Now Showing", {
+  const showing = await storeTitle("movie:996500", "Now Showing", {
     theatrical: [fromToday(-5)],
     digital: [fromToday(20)],
   });
-  const premiere = await storeTitle("tv:996301", "Coming Tide", {
+  const premiere = await storeTitle("tv:996501", "Coming Tide", {
     premiere: fromToday(9),
     network: "An exceptionally long streaming network name for narrow screens",
     seasons: [],
   });
-  await storeTitle("movie:996302", "Unknown Release", null);
+  await storeTitle("movie:996502", "Unknown Release", null);
   expect(showing).toMatch(/^In theaters · Digital [A-Z][a-z]{2} \d{1,2}/);
   expect(premiere).toMatch(/^Premieres [A-Z][a-z]{2} \d{1,2}.* on An /);
 
   for (const width of widths) {
     await page.setViewportSize({ width, height: 900 });
-    await page.goto("/titles/movie/996300");
+    await page.goto("/titles/movie/996500");
     const whereToWatch = page.getByRole("region", { name: "Where to watch" });
     const status = whereToWatch.locator(".release-status");
     await expect(status).toHaveText(showing);
@@ -83,7 +88,7 @@ test("title pages show the release status above Where to watch's options at each
     await noOverflow(page);
     await page.screenshot({ path: `.cache/release-title-${width}.png` });
 
-    await page.goto("/titles/tv/996301");
+    await page.goto("/titles/tv/996501");
     await expect(
       page
         .getByRole("region", { name: "Where to watch" })
@@ -93,7 +98,7 @@ test("title pages show the release status above Where to watch's options at each
   }
 
   // A title whose release data could not be loaded shows no label.
-  await page.goto("/titles/movie/996302");
+  await page.goto("/titles/movie/996502");
   await expect(
     page.getByRole("heading", { name: "Unknown Release" }),
   ).toBeVisible();
@@ -107,24 +112,24 @@ test("title cards show release status in Find a title, Friends recommend, Want t
   const viewer = await signIn(page, "releasecards");
   const other = await person("releasecardsfriend", "Rae Friend");
   await friend(viewer, other);
-  const recommended = await storeTitle("movie:996310", "Friend Favorite", {
+  const recommended = await storeTitle("movie:996510", "Friend Favorite", {
     theatrical: [fromToday(-3)],
     digital: [],
   });
-  const shared = await storeTitle("movie:996311", "Shared Opening", {
+  const shared = await storeTitle("movie:996511", "Shared Opening", {
     theatrical: [fromToday(15)],
     digital: [fromToday(60)],
   });
-  await storeTitle("movie:996312", "Shared Unknown", null);
-  await updateTitleActivity(other, "movie:996310", "recommended", true);
+  await storeTitle("movie:996512", "Shared Unknown", null);
+  await updateTitleActivity(other, "movie:996510", "recommended", true);
   for (const id of [viewer, other]) {
-    await updateTitleActivity(id, "movie:996311", "want_to_watch", true);
-    await updateTitleActivity(id, "movie:996312", "want_to_watch", true);
+    await updateTitleActivity(id, "movie:996511", "want_to_watch", true);
+    await updateTitleActivity(id, "movie:996512", "want_to_watch", true);
   }
   // A free option puts the shared movie on the viewer's Want to watch page.
   await db.query(
     `INSERT INTO title_availability(title_id,country,availability,fetched_at,refresh_after)
-    VALUES('movie:996311','US',$1,now(),now()+interval '1 day')`,
+    VALUES('movie:996511','US',$1,now(),now()+interval '1 day')`,
     [
       {
         link: null,
