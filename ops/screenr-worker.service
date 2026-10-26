@@ -20,6 +20,7 @@ RestartSec=5
 MemoryMax=128M
 CPUQuota=15%
 # The web and worker units share this sandbox; only the web writes files.
+# The job units and ops/run-release-script.sh copy the worker's.
 NoNewPrivileges=true
 PrivateTmp=true
 PrivateDevices=true

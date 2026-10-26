@@ -238,14 +238,11 @@ rollback ran the previous release.
 present. It prints 12 weeks ending with the current week. Pass
 `--weeks N` (1–104) or `--through YYYY-MM-DD`, any date in the last week to
 show. On the server, run it as the service user with the production
-environment:
+environment, through the
+[release-script runner](deployment.md#release-scripts-and-jobs):
 
 ```sh
-systemd-run --quiet --wait --pipe --collect --uid=screenr \
-  --working-directory=/opt/screenr/current \
-  -p EnvironmentFile=/etc/screenr/app.env -p Environment=NODE_ENV=production \
-  -p Environment=PATH=/opt/screenr/node/bin:/usr/bin:/bin \
-  /opt/screenr/node/bin/npm run --silent report:usage -- --weeks 12
+sh /usr/local/lib/screenr-deploy/run-release-script.sh /opt/screenr/current scripts/report-usage.ts --weeks 12
 ```
 
 The report only reads data. Every figure leaves out the

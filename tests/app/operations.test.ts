@@ -18,7 +18,8 @@ test("activation reaches rollback when its health request stalls", async () => {
       "-c",
       `
       test() { if [ "$1" = "-f" ]; then return 0; fi; command test "$@"; }
-      alias systemd-run=':'
+      # Activation runs its release scripts through the kit's sandboxed runner.
+      sh() { [ "$1" = /usr/local/lib/screenr-deploy/run-release-script.sh ]; }
       mkdir() { :; }
       chown() { :; }
       readlink() { printf '/opt/screenr/releases/previous\\n'; }
