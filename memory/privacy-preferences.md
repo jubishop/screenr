@@ -1,14 +1,17 @@
 ---
 name: privacy-preferences
-description: User correction to preserve Screenr privacy and close personal circles when designing discovery or social features.
+description: "User correction to preserve Screenr privacy and close personal circles when designing discovery or social features."
 type: feedback
 ---
 
 # Privacy and close personal circles
 
 Treat privacy and the user's circle of known people as product constraints.
-Do not broaden access or reveal second-degree people to improve discovery.
-The authoritative product rule is the
+Do not broaden access or reveal second-degree people to improve discovery
+outside the explicit connection routes in the product brief. Since
+2026-09-08, People suggestions may name friends of friends and their mutual
+friends; that route grants no activity access and does not change title
+suggestion explanations. The authoritative product rule is the
 [privacy and known-people boundary](../docs/product-brief.md#privacy-and-the-known-people-circle--2026-09-07).
 
 **Why — 2026-09-07:** The user rejected showing who supplied a
