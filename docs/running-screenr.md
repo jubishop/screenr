@@ -32,16 +32,18 @@ execution. `bin/check --full` also checks Node before running behavior tests.
 Fast and document-only checks do not need Node. See the
 [runtime decision](development-workflow.md#node-runtime) for upgrade policy.
 
-PostgreSQL runs natively as a Homebrew login service on port 5439, not in
-Docker; see the [local PostgreSQL decision](development-workflow.md#local-postgresql).
-Set its port and its time zone to UTC, start it, and create the local role and
-database once. Tests compare dates in UTC, as CI's server does, and the role
-is a superuser, as in CI, so tests can create and reset their databases:
+PostgreSQL runs natively from Homebrew's `postgresql@18` as a login service on
+port 5439, not in Docker; see the
+[local PostgreSQL decision](development-workflow.md#local-postgresql).
+Set its port and its time zone to UTC, start it as a login service, and create
+the local role and database once. Tests compare dates in UTC, as CI's server
+does, and the role is a superuser, as in CI, so tests can create and reset
+their databases:
 
 ```sh
 sed -i '' -e 's/^#port = 5432/port = 5439/' -e "s/^timezone = .*/timezone = 'UTC'/" \
   "$(brew --prefix)/var/postgresql@18/postgresql.conf"
-brew services start postgresql@18
+# Start postgresql@18 as a login service, then:
 psql -h 127.0.0.1 -p 5439 -d postgres -c "CREATE ROLE screenr LOGIN SUPERUSER PASSWORD 'screenr-local-only'"
 createdb -h 127.0.0.1 -p 5439 -U screenr screenr
 ```

@@ -126,7 +126,7 @@ keeps. Sign-in accepts only these paths as
 
 After [local app setup](docs/running-screenr.md#local-setup), run `npm run dev`
 and open <http://localhost:3000>. Changes reload automatically. If the database
-is stopped, start it with `brew services start postgresql@18`. The setup guide also
+is stopped, start its login service. The setup guide also
 covers [several checkouts at once](docs/running-screenr.md#several-checkouts-at-once),
 the [email worker](docs/running-screenr.md#email-worker), and the
 [production build](docs/running-screenr.md#production-build), which replaces
