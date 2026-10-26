@@ -36,7 +36,7 @@ public struct InteractedTitles: Hashable, Sendable {
       where recommendation.viewerRecommended || recommendation.viewerStatus != nil {
         add(TitleSummary(recommendation.title))
       }
-    case .people, .invites, .account, .watchTogether, .redirect, .unknown:
+    case .people, .invites, .account, .watchTogether, .wantToWatch, .redirect, .unknown:
       break
     }
   }

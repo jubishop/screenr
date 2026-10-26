@@ -15,6 +15,7 @@ export type MemberRoute =
   | { kind: "watch-together"; with: string[] }
   | ({ kind: "title"; id: string } & ItemTarget)
   | { kind: "profile"; username: string }
+  | { kind: "want-to-watch"; username: string }
   | { kind: "conversation"; id: string; reply?: string }
   | { kind: "not-found"; path: string };
 
@@ -54,6 +55,8 @@ export function parseMemberRoute(path: string): MemberRoute {
     return { kind: "title", id: rest.join(":"), ...target() };
   if (section === "people" && rest.length === 1)
     return { kind: "profile", username: rest[0] };
+  if (section === "people" && rest.length === 2 && rest[1] === "want-to-watch")
+    return { kind: "want-to-watch", username: rest[0] };
   if (section === "conversations" && rest.length === 1)
     return { kind: "conversation", id: rest[0], reply: param("reply") };
   return { kind: "not-found", path: url.pathname };
@@ -74,6 +77,8 @@ export function memberPath(route: MemberRoute): string {
       return withQuery("/watch-together", { with: route.with });
     case "profile":
       return `/people/${segments(route.username)}`;
+    case "want-to-watch":
+      return `/people/${segments(route.username)}/want-to-watch`;
     case "conversation":
       return withQuery(`/conversations/${segments(route.id)}`, {
         reply: route.reply,
@@ -159,11 +164,13 @@ function withReturn(page: string, next?: string) {
     : page;
 }
 
-// Screen data that can name its page: a loaded title or profile.
+// Screen data that can name its page: a loaded title, profile, or Want to
+// watch page's owner.
 type NamedScreen = {
   kind: string;
   title?: { name: string };
   profile?: { display_name: string };
+  owner?: { display_name: string };
 };
 const pageNames = {
   feed: "Your circle",
@@ -178,7 +185,8 @@ const pageNames = {
 
 /**
  * Returns a member page's document title, such as "Find a title · Screenr".
- * Title and profile pages use the loaded name, or the route until it loads.
+ * Title, profile, and Want to watch pages use the loaded name, or the route
+ * until it loads.
  */
 export function memberTitle(route: MemberRoute, data?: NamedScreen | null) {
   let name: string;
@@ -190,6 +198,11 @@ export function memberTitle(route: MemberRoute, data?: NamedScreen | null) {
     name =
       (data?.kind === "profile" && data.profile?.display_name) ||
       `@${route.username}`;
+  else if (route.kind === "want-to-watch")
+    name = `Want to watch · ${
+      (data?.kind === "want-to-watch" && data.owner?.display_name) ||
+      `@${route.username}`
+    }`;
   else name = pageNames[route.kind];
   return `${name} · Screenr`;
 }

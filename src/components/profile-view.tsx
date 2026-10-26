@@ -3,6 +3,7 @@ import { Link } from "./pending-navigation";
 import { useEffect, useId, useRef, useState, type RefObject } from "react";
 import type { ScreenData } from "../server/screens";
 import type { Person } from "../shared";
+import { memberPath } from "../member-routes";
 import { useInteractive } from "./client";
 import { DisplayNameEditor } from "./display-name-editor";
 import { Avatar } from "./avatar";
@@ -74,6 +75,21 @@ export function ProfileView({
             busy={busy}
             change={topTen}
           />
+          {/* The viewer's own profile and friends' profiles open their Want
+              to watch page. */}
+          {data.profile.can_read && (
+            <Link
+              className="profile-link"
+              href={memberPath({
+                kind: "want-to-watch",
+                username: data.profile.username,
+              })}
+              prefetch={false}
+            >
+              Want to watch
+              <Icon name="chevron" />
+            </Link>
+          )}
           <details className="profile-friends">
             <summary>Friends ({data.profile.friends.length})</summary>
             <section aria-label="Friends">

@@ -777,6 +777,9 @@ item. A collapsed or open section on the profile itself. Saved
 subscriptions only, without free options. Oldest-first and alphabetical
 order.
 
+[Want to watch pages](want-to-watch.md) describes the implementation from
+[issue #313](https://github.com/jubishop/screenr/issues/313).
+
 ### In theaters on Want to watch pages — 2026-10-16
 
 **Decision:** Every Want to watch page, on the viewer's own profile and on

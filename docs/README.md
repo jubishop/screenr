@@ -76,6 +76,9 @@ both memory and design documents.
 - [Watch together](watch-together.md): accepted shared-choice behavior and
   implementation for issue #26, and At home and In theaters modes for issue
   #311.
+- [Want to watch pages](want-to-watch.md): the profile page of a member's
+  Want to watch titles the viewer can watch now, from issue #313, and its
+  screen payload.
 - [Interface design](interface-design.md): accepted layout and presentation
   decisions from the 2026-10-12 design review.
 - [Title availability](title-availability.md): accepted US viewing options,

@@ -19,6 +19,7 @@ import { Avatar } from "./avatar";
 import { Icon, type IconName } from "./icons";
 import { FeedView } from "./feed";
 import { WatchTogether } from "./watch-together";
+import { WantToWatch } from "./want-to-watch";
 import { TitleSearch } from "./title-search";
 import { AccountView } from "./account-view";
 import { sendPhoto, type PhotoChange } from "./photo-editor";
@@ -445,6 +446,9 @@ export function Screen({
             titles={data.titles}
             viewerHasServices={data.viewerHasServices}
           />
+        )}
+        {data?.kind === "want-to-watch" && (
+          <WantToWatch data={data} user={user} />
         )}
         {route.kind === "profile" && (
           <ProfileView

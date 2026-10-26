@@ -147,6 +147,19 @@ a.person:hover strong {
 .people-list > h2 {
   margin-bottom: 4px;
 }
+/* The Want to watch page link sits above Friends, in the same type. */
+.profile-link {
+  display: flex;
+  width: fit-content;
+  align-items: center;
+  gap: 4px;
+  padding: 12px 0;
+  color: var(--ink);
+  font-weight: 600;
+}
+.profile-link .icon {
+  color: var(--muted);
+}
 .profile-friends {
   margin-bottom: 28px;
   overflow-wrap: anywhere;

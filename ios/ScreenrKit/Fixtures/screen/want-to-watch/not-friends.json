@@ -1,0 +1,18 @@
+{
+  "description": "A member who is not Alice's friend: no page.",
+  "viewer": "alice",
+  "request": {
+    "method": "GET",
+    "action": "screen",
+    "path": "/api/screenr/screen?path=%2Fpeople%2Ferin%2Fwant-to-watch",
+    "query": {
+      "path": "/people/erin/want-to-watch"
+    }
+  },
+  "response": {
+    "status": 404,
+    "body": {
+      "error": "Want to watch not found."
+    }
+  }
+}

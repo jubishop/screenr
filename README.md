@@ -62,6 +62,9 @@ test flow, and [Testing Screenr](docs/testing.md) for the automated suites.
 - **Watch together:** A friend's profile links to a page that compares both
   people's Want to watch choices, listing titles on either person's services
   first.
+- **Want to watch pages:** A member's own profile and friends' profiles link
+  to a page of that member's Want to watch titles that the viewer can watch
+  now, on the viewer's services or free, newest first.
 - **Notifications and account:** An in-app panel covers friend requests,
   acceptances, comments, and replies, with optional activity email. Account
   settings edit the display name, username, and profile photo, connect

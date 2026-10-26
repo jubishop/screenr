@@ -234,6 +234,32 @@ struct FixtureDecodingTests {
     #expect(together.titles.last?.matchingServiceIds == ["service:hulu"])
   }
 
+  @Test func readsWantToWatch() throws {
+    guard
+      case .wantToWatch(let page) = try Self.screen("screen/want-to-watch/friend").content
+    else {
+      Issue.record("Expected Want to watch")
+      return
+    }
+    #expect(page.owner.username == "ben")
+    #expect(page.viewerHasServices)
+    #expect(page.hasWantToWatch)
+    #expect(page.titles.map(\.id) == ["movie:104", "movie:103", "movie:105"])
+    #expect(page.titles.map(\.access) == [.unknown, .available, .available])
+    #expect(page.titles.last?.matchingServiceIds == ["service:netflix"])
+
+    guard
+      case .wantToWatch(let nothing) = try Self.screen("screen/want-to-watch/nothing-to-watch")
+        .content
+    else {
+      Issue.record("Expected Want to watch")
+      return
+    }
+    #expect(nothing.titles.isEmpty)
+    #expect(nothing.hasWantToWatch)
+    #expect(!nothing.viewerHasServices)
+  }
+
   @Test func readsARedirect() throws {
     let screen = try Self.screen("screen/conversation/redirect")
     #expect(

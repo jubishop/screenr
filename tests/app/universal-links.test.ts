@@ -73,6 +73,7 @@ test("every member screen, item permalink, and invitation opens in the app", asy
     "watch-together": memberPath({ kind: "watch-together", with: ["ana"] }),
     title: memberPath({ kind: "title", id: "tv:95396" }),
     profile: memberPath({ kind: "profile", username: "ana" }),
+    "want-to-watch": memberPath({ kind: "want-to-watch", username: "ana" }),
     conversation: memberPath({ kind: "conversation", id: "c1", reply: "r1" }),
   };
   for (const path of [

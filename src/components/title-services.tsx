@@ -1,3 +1,4 @@
+import { Link } from "./pending-navigation";
 import type { TitleViewing } from "../shared";
 import { matchingServices } from "../viewing";
 
@@ -61,6 +62,18 @@ export function ViewingAttribution() {
         JustWatch
       </a>
       . Open a title for details.
+    </p>
+  );
+}
+
+// Shown above a list that matches the viewer's saved services when they have
+// none: Watch together and Want to watch pages.
+export function ServicesPrompt() {
+  return (
+    <p className="services-prompt">
+      <Link href="/account#streaming-services" prefetch={false}>
+        Save your streaming services to see what you can watch right now.
+      </Link>
     </p>
   );
 }
