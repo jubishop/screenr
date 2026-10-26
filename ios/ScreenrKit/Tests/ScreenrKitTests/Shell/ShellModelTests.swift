@@ -10,9 +10,10 @@ struct ShellModelTests {
   // The real client against the fixture API.
   private func shell(
     _ scenario: FixtureScenario = FixtureScenario(),
+    token: String = FixtureTransport.token,
     clock: TestClock = TestClock()
   ) throws -> (ShellModel, SessionStore) {
-    let session = try SessionStore(keychain: InMemoryKeychain(token: FixtureTransport.token))
+    let session = try SessionStore(keychain: InMemoryKeychain(token: token))
     let client = ScreenrClient(
       serverURL: try #require(URL(string: "http://localhost:3000")),
       clientHeader: "ios/1.0/7",
@@ -114,7 +115,7 @@ struct ShellModelTests {
 
     await shell.checkAccount()
     await shell.checkAccount()
-    shell.sessionEnded()
+    shell.sessionEnded(.signedOut)
     await shell.checkAccount()
 
     #expect(viewers.withLock { $0 } == ["user-alice", "user-nora"])
@@ -167,13 +168,50 @@ struct ShellModelTests {
     #expect(shell.liveRefreshes == before + 1)
   }
 
+  // A member whose saved session expired follows a link. The account check's
+  // 401 ends the session, and the link opens once they sign in again.
+  @Test func opensALinkAfterSigningInAgainWhenTheSessionExpired() async throws {
+    let (shell, session) = try shell(
+      FixtureScenario(session: .expired),
+      token: FixtureTransport.expiredToken
+    )
+    session.onEnd { shell.sessionEnded($0) }
+    shell.router.open(.title(id: "tv:201"))
+
+    await shell.checkAccount()
+    #expect(session.phase == .signedOut)
+    _ = try await shell.api.send(.signIn(email: "alice@example.test", code: "123456"))
+    await shell.checkAccount()
+
+    #expect(shell.account == .ready)
+    #expect(shell.router.selectedTab == .circle)
+    #expect(shell.router.paths[.circle] == [.title(id: "tv:201")])
+  }
+
+  // A link whose screen loaded reached the member, so the next sign-in
+  // starts at Circle.
+  @Test func forgetsALinkWhoseScreenLoadedWhenTheSessionExpires() async throws {
+    let clock = TestClock()
+    let (shell, _) = try shell(clock: clock)
+    await shell.checkAccount()
+    shell.router.open(.title(id: "tv:201"))
+    let model = try #require(shell.screenModel(for: .title(id: "tv:201")))
+
+    model.appeared(appActive: true)
+    await clock.waitForSleep(until: .seconds(3))
+    model.disappeared()
+    shell.sessionEnded(.expired)
+
+    #expect(shell.router.paths.values.allSatisfy { $0.isEmpty })
+  }
+
   @Test func startsOverWhenTheMemberSignsOut() async throws {
     let (shell, _) = try shell()
     await shell.checkAccount()
     shell.router.open(.title(id: "tv:201"))
     shell.leaveNotice("You blocked Ben Ortiz.", on: .people)
 
-    shell.sessionEnded()
+    shell.sessionEnded(.signedOut)
 
     #expect(shell.notices.isEmpty)
     #expect(shell.account == .checking)

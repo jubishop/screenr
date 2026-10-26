@@ -67,7 +67,8 @@ struct ScreenrApp: App {
     )
     // Error reports name the signed-in member's opaque user ID once a screen
     // shows who they are, and stop when the session ends; the next member
-    // starts over at the friends feed.
+    // starts over at the friends feed, or at a link the member followed into
+    // an expired session.
     let shell = ShellModel(
       api: services.api,
       router: Router(invitation: services.invitation),
@@ -87,9 +88,9 @@ struct ScreenrApp: App {
     )
     self.push = push
     AppDelegate.push = push
-    services.session.onEnd {
+    services.session.onEnd { ending in
       telemetry.signOut()
-      shell.sessionEnded()
+      shell.sessionEnded(ending)
       push.sessionEnded()
     }
     // Siri and the Shortcuts app run the intents in this process, which

@@ -9,6 +9,9 @@ struct FixtureLaunch {
   enum Session: String {
     case signedIn
     case signedOut
+    // A saved session the fixture API no longer accepts, as after it
+    // expired, until the member signs in again.
+    case expired
   }
 
   enum Appearance: String {

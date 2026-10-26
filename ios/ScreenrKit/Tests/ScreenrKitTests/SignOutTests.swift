@@ -62,6 +62,8 @@ struct SignOutTests {
 
     #expect(model.state == .idle)
     #expect(test.session.phase == .signedOut)
+    // The member chose to leave, though the server had already ended it.
+    #expect(test.session.ending == .signedOut)
   }
 
   @Test func runsTheEndHandlersOnlyWhenTheSessionEnds() async throws {
@@ -74,16 +76,16 @@ struct SignOutTests {
         try .json(401, ["error": "Sign in to continue."]),
       ]
     )
-    var ended = 0
-    test.session.onEnd { ended += 1 }
+    var endings: [SessionStore.Ending] = []
+    test.session.onEnd { endings.append($0) }
 
     await #expect(throws: APIError.self) { try await test.client.send(.signOut) }
-    #expect(ended == 0)
+    #expect(endings.isEmpty)
     _ = try await test.client.send(.signOut)
-    #expect(ended == 1)
+    #expect(endings == [.signedOut])
     _ = try await test.client.send(.signIn(email: "alice@example.test", code: "123456"))
     await #expect(throws: APIError.self) { try await test.client.send(.screen(path: "/")) }
-    #expect(ended == 2)
+    #expect(endings == [.signedOut, .expired])
   }
 
   @Test func emptiesTheImageCacheWhenTheSessionEnds() async throws {

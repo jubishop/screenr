@@ -30,11 +30,11 @@ struct MainTabView: View {
       case .settings: SettingsSheet()
       }
     }
-    // A member with a profile who follows an invitation link lands in Circle,
-    // as on the web, and the app forgets the link.
-    .onChange(of: router.invitation.token, initial: true) { _, token in
+    // A member with a profile has no use for an invitation link, so the app
+    // forgets it. The router already opened Circle for the link, as on the
+    // web, unless a later link took its place.
+    .onChange(of: router.invitation.token, initial: true) {
       router.invitation.finish()
-      if token != nil { router.open(.feed()) }
     }
     // The tabs show a member with a profile, whose device registers for
     // pushes on each launch and each return to the foreground.

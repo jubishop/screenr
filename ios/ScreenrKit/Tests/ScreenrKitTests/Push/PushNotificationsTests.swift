@@ -106,7 +106,7 @@ struct PushNotificationsTests {
     await push.memberReady()
     await push.received(token: token)
 
-    shell.sessionEnded()
+    shell.sessionEnded(.signedOut)
     push.sessionEnded()
     await push.received(token: token)
     #expect(api.requests == [register(hex)])
@@ -242,7 +242,7 @@ struct PushNotificationsTests {
     #expect(system.badges == [3, 3, 1])
 
     // The next member starts without one.
-    shell.sessionEnded()
+    shell.sessionEnded(.signedOut)
     await push.badgeUpdate?.value
     #expect(system.badges == [3, 3, 1, 0])
   }

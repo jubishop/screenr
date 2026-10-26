@@ -203,8 +203,13 @@ public final class ScreenrClient: ScreenrAPI {
       switch error.kind {
       case .signedOut:
         // Only a request that carried a token learns its session is gone; a
-        // rejected sign-in attempt carries none.
-        if let token = context.token { try await endSession(token, requestID: context.requestID) }
+        // rejected sign-in attempt carries none. The server ended it, unless
+        // the member was signing out anyway.
+        if let token = context.token {
+          let ending: SessionStore.Ending =
+            request.sessionChange == .signOut ? .signedOut : .expired
+          try await endSession(token, ending: ending, requestID: context.requestID)
+        }
       case .updateRequired(let minimumBuild):
         await session.requireUpdate(minimumBuild: minimumBuild)
       default:
@@ -240,7 +245,9 @@ public final class ScreenrClient: ScreenrAPI {
       }
       try await store(token, context: context)
     case .signOut:
-      if let token = context.token { try await endSession(token, requestID: context.requestID) }
+      if let token = context.token {
+        try await endSession(token, ending: .signedOut, requestID: context.requestID)
+      }
     case .accountDeleted:
       if let token = context.token {
         try await endSession(token, ending: .accountDeleted, requestID: context.requestID)
@@ -310,7 +317,7 @@ public final class ScreenrClient: ScreenrAPI {
   // Removes the ended session's token and the screens it read.
   private func endSession(
     _ token: String,
-    ending: SessionStore.Ending = .signedOut,
+    ending: SessionStore.Ending,
     requestID: String
   ) async throws(APIError) {
     cache.withLock { $0.removeAll() }

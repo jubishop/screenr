@@ -120,7 +120,7 @@ struct SessionTests {
       ]
     )
     var ended = 0
-    test.session.onEnd { ended += 1 }
+    test.session.onEnd { _ in ended += 1 }
 
     _ = try await test.client.send(
       .signIn(email: "alice@example.test", code: "123456", invitation: "invite-1")
@@ -150,7 +150,7 @@ struct SessionTests {
       ]
     )
     var ended = 0
-    test.session.onEnd { ended += 1 }
+    test.session.onEnd { _ in ended += 1 }
 
     let error = await #expect(throws: APIError.self) {
       try await test.client.send(
@@ -244,6 +244,7 @@ struct SessionTests {
     #expect(error?.kind == .signedOut)
     #expect(try test.keychain.read() == nil)
     #expect(test.session.phase == .signedOut)
+    #expect(test.session.ending == .expired)
     // The screen cache belonged to the ended session.
     #expect(test.header("Authorization", request: 2) == nil)
     #expect(test.header("If-None-Match", request: 2) == nil)

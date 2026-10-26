@@ -17,8 +17,11 @@ public final class SessionStore {
 
   // How a session ended.
   public enum Ending: Hashable, Sendable {
-    // The member signed out, or the server ended the session.
+    // The member signed out.
     case signedOut
+    // The server no longer accepts the session, such as after it expired,
+    // so the member did not choose to leave.
+    case expired
     // The member deleted their account.
     case accountDeleted
   }
@@ -29,7 +32,7 @@ public final class SessionStore {
   public private(set) var ending: Ending?
   @ObservationIgnored private let keychain: any KeychainStorage
   @ObservationIgnored private(set) var token: String?
-  @ObservationIgnored private var endHandlers: [@MainActor () -> Void] = []
+  @ObservationIgnored private var endHandlers: [@MainActor (Ending) -> Void] = []
 
   public init(keychain: any KeychainStorage) throws(KeychainError) {
     self.keychain = keychain
@@ -46,11 +49,11 @@ public final class SessionStore {
     phase = .signedIn
   }
 
-  // Runs `handler` each time the session ends, whether the member signed out,
-  // the server ended the session, or the member deleted their account, so
-  // the app forgets what the member saw, such as cached images and the
-  // error-reporting user. `ending` already says how it ended.
-  public func onEnd(_ handler: @escaping @MainActor () -> Void) {
+  // Runs `handler` with how the session ended each time it ends, whether the
+  // member signed out, the server ended the session, or the member deleted
+  // their account, so the app forgets what the member saw, such as cached
+  // images and the error-reporting user.
+  public func onEnd(_ handler: @escaping @MainActor (Ending) -> Void) {
     endHandlers.append(handler)
   }
 
@@ -66,7 +69,7 @@ public final class SessionStore {
     }
     if token == nil, case .signedIn = phase { phase = .signedOut }
     if current {
-      for handler in endHandlers { handler() }
+      for handler in endHandlers { handler(ending) }
     }
     guard try keychain.read() == ended else { return }
     try keychain.delete()

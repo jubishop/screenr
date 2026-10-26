@@ -62,11 +62,11 @@ public struct AppServices: Sendable {
     self.trailers = trailers
     self.push = push
     imageSession = URLSession(configuration: Self.imageConfiguration(cache: imageCache))
-    session.onEnd { imageCache.removeAllCachedResponses() }
+    session.onEnd { _ in imageCache.removeAllCachedResponses() }
     // A deleted account leaves nothing in the Keychain. The client removed
     // the session token, and an invitation link kept for joining goes too.
-    session.onEnd { [weak session] in
-      if session?.ending == .accountDeleted { invitation.finish() }
+    session.onEnd { ending in
+      if ending == .accountDeleted { invitation.finish() }
     }
   }
 
@@ -116,7 +116,12 @@ public struct AppServices: Sendable {
       feedbackSender = feedback
       trailers = .network
     case .fixtures(let directory, let scenario):
-      let token = scenario.session == .signedIn ? FixtureTransport.token : nil
+      let token: String? =
+        switch scenario.session {
+        case .signedIn: FixtureTransport.token
+        case .signedOut: nil
+        case .expired: FixtureTransport.expiredToken
+        }
       keychain = InMemoryKeychain(token: token)
       invitation = PendingInvitation()
       let fixtures = try FixtureTransport(directory: directory, scenario: scenario)
@@ -188,7 +193,7 @@ public struct AppServices: Sendable {
 //
 //   -ScreenrFixtures <path to ios/ScreenrKit/Fixtures>
 //   -ScreenrFixtureViewer <username>          (default alice)
-//   -ScreenrFixtureSession signedIn|signedOut (default signedIn)
+//   -ScreenrFixtureSession signedIn|signedOut|expired (default signedIn)
 //   -ScreenrFixtureProfile complete|pending   (default complete)
 //   -ScreenrFixtureOverride <fixture name>    (repeatable)
 //   -ScreenrFixtureFailure <fixture name>
@@ -228,7 +233,9 @@ public enum APISource: Hashable, Sendable {
         scenario.push = push
       case "-ScreenrFixtureSession":
         guard let session = FixtureScenario.Session(rawValue: value) else {
-          throw ArgumentError(description: "\(argument) is signedIn or signedOut, not \(value)")
+          throw ArgumentError(
+            description: "\(argument) is signedIn, signedOut, or expired, not \(value)"
+          )
         }
         scenario.session = session
       case "-ScreenrFixtureProfile":
