@@ -469,7 +469,7 @@ together they run everything `bin/check --full` runs on Linux:
 | Job | Work |
 | --- | --- |
 | `static` | `bin/check`, then `bin/check-application --part static`: shell lint for `ops/`, Python tests, formatting, and typechecking. |
-| `app (I/N)` | `bin/check-application --part app --shard I/N`: one shard of the application and PostgreSQL test files, with the [pinned Caddy](#ci-caddy) and Playwright's Chromium for the browser harness tests. |
+| `app (I/N)` | `bin/check-application --part app --shard I/N`: one shard of the application and PostgreSQL test files, with the [pinned Caddy](#ci-caddy) and Playwright's headless Chromium for the browser harness tests. |
 | `browser (I/N)` | `bin/check-application --part browser --shard I/N`: one Playwright shard against a production build. |
 | `release` | Runs [`bin/deployment-decision`](#main-branch-delivery). When it deploys, the job builds, runs the [packaging check](deployment.md#build-and-activate-a-release), and uploads the release. |
 | `check` | Passes only when every job above passed. Pull requests show it, and `bin/deploy-ci` requires it. |
@@ -488,8 +488,10 @@ Each browser shard builds its own production artifact, as the
 [browser harness](testing.md#browser-harness) requires, and the `release` job
 builds the one it ships. A build takes about 12 seconds on a runner, less than
 sharing one artifact between jobs would cost. Only `setup-node`'s npm cache is
-kept: Playwright's browser download takes about 9 seconds, so a browser cache
-would save little and add a dependency. Every check job has an 8-minute
+kept: Playwright's headless shell and FFmpeg download in about 4 seconds, so a
+browser cache would save little and add a dependency. The jobs take nothing
+from the Ubuntu mirror, as [CI dependency sources](#ci-dependency-sources)
+explains. Every check job has an 8-minute
 timeout, so a stuck job fails before the run passes 10 minutes.
 
 Measured on 2026-10-14, the single job took about 11 minutes: a minute of
@@ -508,17 +510,47 @@ Linux jobs at once for the account, and each run uses up to 7.
 
 ### CI dependency sources
 
-The Ubuntu 24.04 `static`, `app`, and `browser` jobs install
-[.github/ci-apt.conf](../.github/ci-apt.conf) before ShellCheck or Playwright
-runs APT. It selects only the runner's
+The check jobs use the libraries and tools that the runner image already
+ships, so a normal run downloads nothing from the runner's Ubuntu mirror. The
+`ubuntu-latest` image ran Ubuntu 26.04 on 2026-10-25. That day the mirror
+served packages at 50 to 125 KB/s for hours. `npx playwright install
+--with-deps chromium` took up to 221 seconds instead of about 20, and one app
+job hit its 8-minute timeout
+([#320](https://github.com/jubishop/screenr/issues/320)).
+
+- **Playwright:** the `app` and `browser` jobs run
+  `npx playwright install --only-shell chromium`, which downloads only the
+  headless shell that every test launches, and FFmpeg, from Playwright's CDN.
+  They skip `--with-deps`. The runner image includes Google Chrome, which
+  needs the same shared libraries as Playwright's Chromium, and APT found all
+  21 of them already installed. The 25 MB that `--with-deps` still fetched
+  were Xvfb, which only a headed browser needs, a few library updates, and
+  fallback fonts for Chinese, Japanese, Thai, Cyrillic, and other scripts
+  (`fonts-wqy-zenhei`, `fonts-ipafont-gothic`, `fonts-tlwg-loma-otf`,
+  `fonts-unifont`, `fonts-freefont-ttf`, and two X font sets). No test
+  compares screenshots or renders those scripts, and the layout checks also
+  pass with macOS fonts. The image already has the color emoji font that
+  test names use.
+- **ShellCheck:** the `static` job installs ShellCheck from APT only when the
+  runner image lacks it, then prints its version.
+
+The jobs use the image's library versions, which GitHub refreshes every week
+or two, and their browsers load only local test servers. If an image drops a
+library that Chromium needs, Playwright stops the first browser launch with
+"Host system is missing dependencies" and names the packages. Install those
+packages in the app and browser jobs under the source policy below, not all
+of `--with-deps`. Caching the packages would not have avoided the slow
+mirror: APT still downloads its index from the mirror, and APT's timeouts end
+only a stalled connection, not a slow one.
+
+The `static` job installs [.github/ci-apt.conf](../.github/ci-apt.conf)
+before any APT use. It selects only the runner's
 `/etc/apt/sources.list.d/ubuntu.sources`. That file retains Ubuntu's mirrors,
-suites, components (including `universe` for ShellCheck), and signing key. Other
-runner sources, such as Google Chrome, do not participate. A job fails if
-the Ubuntu source file is missing or empty. The `static` job refreshes the
-package index under this policy with `apt-get update` before it installs
-ShellCheck, and Playwright's `--with-deps` install refreshes it the same way in
-each app and browser job. The runner image already includes ShellCheck, so that
-install normally changes nothing.
+suites, components (including `universe` for ShellCheck), and signing key.
+Other runner sources, such as Google Chrome, do not participate. A job fails
+if the Ubuntu source file is missing or empty. When ShellCheck is missing, the
+job refreshes the package index under this policy with `apt-get update`
+before it installs ShellCheck.
 
 The configuration applies only to the disposable check runners. It does not
 change developer machines, the deploy job, or production. APT signature and
@@ -526,11 +558,12 @@ checksum verification remain enabled. Every required-source update error,
 including a transient failure with a cached index, stops installation.
 
 `tests/test_ci_apt.py` runs real APT against temporary
-signed HTTP repositories during full Ubuntu validation. They cover unrelated
+signed HTTP repositories during full Ubuntu validation. In hosted CI they use
+the policy that the `static` job installed. They cover unrelated
 broken sources, previously cached vendor packages, required-source outages,
 invalid signatures, index and package checksum mismatches, and missing packages.
 They use isolated APT state and skip on machines without APT. To run them on an
-Ubuntu 24.04 system with Python, GnuPG, and dpkg installed:
+Ubuntu system with Python, GnuPG, and dpkg installed:
 
 ```sh
 python3 -B tests/test_ci_apt.py -v

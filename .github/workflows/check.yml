@@ -38,13 +38,19 @@ jobs:
           cache: npm
       - run: npm ci
       - name: Isolate CI APT sources
+        # tests/test_ci_apt.py exercises the policy installed here.
         run: |
           test -s /etc/apt/sources.list.d/ubuntu.sources
           sudo install -m 0644 .github/ci-apt.conf /etc/apt/apt.conf.d/99-screenr-ci
       - name: Install ShellCheck
+        # The runner image ships ShellCheck, so APT runs only on an image without it.
+        # See docs/development-workflow.md#ci-dependency-sources.
         run: |
-          sudo apt-get update
-          sudo apt-get install --yes shellcheck
+          if ! command -v shellcheck >/dev/null; then
+            sudo apt-get update
+            sudo apt-get install --yes shellcheck
+          fi
+          shellcheck --version
       - name: Check foundation
         run: ./bin/check
       - name: Check shell scripts, Python, formatting, and types
@@ -83,12 +89,10 @@ jobs:
           check-latest: true
           cache: npm
       - run: npm ci
-      - name: Isolate CI APT sources
-        run: |
-          test -s /etc/apt/sources.list.d/ubuntu.sources
-          sudo install -m 0644 .github/ci-apt.conf /etc/apt/apt.conf.d/99-screenr-ci
-      # The browser harness tests run Playwright.
-      - run: npx playwright install --with-deps chromium
+      # The browser harness tests run Playwright's headless Chromium. The runner
+      # image already has its libraries, so the install skips --with-deps and APT.
+      # See docs/development-workflow.md#ci-dependency-sources.
+      - run: npx playwright install --only-shell chromium
       - name: Install Caddy
         # Production's Caddy release, from the image .github/caddy/Dockerfile pins.
         run: |
@@ -134,11 +138,8 @@ jobs:
           check-latest: true
           cache: npm
       - run: npm ci
-      - name: Isolate CI APT sources
-        run: |
-          test -s /etc/apt/sources.list.d/ubuntu.sources
-          sudo install -m 0644 .github/ci-apt.conf /etc/apt/apt.conf.d/99-screenr-ci
-      - run: npx playwright install --with-deps chromium
+      # Headless Chromium without --with-deps, as in the app job.
+      - run: npx playwright install --only-shell chromium
       - name: Build and run browser tests
         run: bin/check-application --part browser --shard ${{ matrix.shard }}/${{ strategy.job-total }}
       - uses: actions/upload-artifact@v7

@@ -297,6 +297,25 @@ class WorkflowTests(unittest.TestCase):
         self.assertIn("""jq -e 'all(.[]; .result == "success")'""", self.jobs["check"])
         self.assertIn("    needs: [check, release]\n", self.jobs["deploy"])
 
+    def test_check_jobs_use_the_ubuntu_mirror_only_for_missing_tools(self):
+        # A slow mirror held Playwright's --with-deps past a job's timeout (#320).
+        # The runner image already has Chromium's libraries and ShellCheck.
+        for name in ("app", "browser"):
+            with self.subTest(job=name):
+                job = re.sub(r"^ *#.*\n", "", self.jobs[name], flags=re.M)
+                self.assertIn("      - run: npx playwright install --only-shell chromium\n", job)
+                for apt in ("--with-deps", "install-deps", "apt-get", "ci-apt.conf"):
+                    self.assertNotIn(apt, job)
+        static = self.jobs["static"]
+        guard = static.index("if ! command -v shellcheck >/dev/null; then\n")
+        end = static.index("fi\n", guard)
+        uses = [use.start() for use in re.finditer("apt-get", static)]
+        self.assertTrue(uses)
+        self.assertTrue(all(guard < use < end for use in uses), static)
+        # tests/test_ci_apt.py exercises the policy that the static job installs.
+        self.assertIn("sudo install -m 0644 .github/ci-apt.conf /etc/apt/apt.conf.d/99-screenr-ci\n",
+                      static[:guard])
+
 
 if __name__ == "__main__":
     unittest.main()
