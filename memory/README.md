@@ -98,3 +98,6 @@ to ordinary memory pages. Create these records only when a review needs them.
 - [Parallel agent gotchas](parallel-agent-gotchas.md): cap concurrent iOS
   checks, keep hooks current in the primary checkout, avoid broad process
   kills, and register new extension App IDs through the Xcode account.
+- [Parallel agent playbook](parallel-agent-playbook.md): how an orchestrator
+  briefs, runs, reviews, and merges parallel issue agents, including iOS batch
+  verification and coordinating with other sessions.

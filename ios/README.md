@@ -1158,7 +1158,9 @@ Watch together pages. Their screens are `FriendsView`, `ProfileView`, and
   `labelContrast()` in dark mode.
 - **iOS 27 controls:** a confirmation dialog is a popover without Cancel;
   tap `PopoverDismissRegion` to cancel, and `app.popovers.buttons[…]` to
-  confirm.
+  confirm. Avoid `ViewThatFits`, which the Dynamic Type audit fails, and use
+  symbol buttons rather than text buttons in toolbars, which the audit also
+  fails.
 
 ### Top 10 editor
 
