@@ -687,8 +687,8 @@ A weekly local job checks every active [memory](../memory/README.md) note
 against the code and GitHub evidence, archives or updates stale notes, and
 commits validated changes to `main`. [`bin/memory-audit`](../bin/memory-audit)
 is a project-owned copy of PodHaven's audit, adapted to Screenr
-([#309](https://github.com/jubishop/screenr/issues/309)). The two copies could
-later become one opt-in Project Starter feature.
+([#309](https://github.com/jubishop/screenr/issues/309)). It moves to a shared
+Project Starter feature under the [audit decisions](#audit-decisions--2026-10-25).
 
 ### Audit schedule
 
@@ -794,16 +794,22 @@ To stop the schedule, run
 `launchctl bootout gui/$(id -u)/com.jubishop.screenr.memory-audit` and remove
 the plist so it does not load at the next login.
 
-### Open audit choices
+### Audit decisions — 2026-10-25
 
-Two choices from #309 are defaults that the owner has not confirmed:
+The owner settled the two choices #309 left open
+([#323](https://github.com/jubishop/screenr/issues/323)):
 
-- **Active-note index:** keep Project Starter's hand-maintained index, with
-  the runner removing archived notes' entries. The alternative is PodHaven's
-  generated list, which overrides Project Starter's managed `bin/_checks.py`.
-- **Shared implementation:** keep this project-owned copy, which overrides no
-  managed file. The alternative is one opt-in Project Starter feature that
-  PodHaven and Screenr share.
+- **Active-note index:** keep Project Starter's hand-maintained index. When
+  the audit retires a note, the runner deletes that note's line. Rejected:
+  PodHaven's generated list, whose verification overrides Project Starter's
+  managed `bin/_checks.py`. PodHaven drops it too
+  ([jubishop/podhaven#759](https://github.com/jubishop/podhaven/issues/759)).
+- **Shared implementation:** the audit becomes one opt-in Project Starter
+  feature that Screenr and PodHaven share
+  ([jubishop/project-starter#6](https://github.com/jubishop/project-starter/issues/6)),
+  so fixes no longer need porting by hand. Until a Starter release ships it,
+  this project-owned copy runs; [#333](https://github.com/jubishop/screenr/issues/333)
+  replaces it. Rejected: separate copies in each repository.
 
 ## Project Starter
 
