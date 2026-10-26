@@ -5,6 +5,7 @@ import json
 import os
 from pathlib import Path
 import runpy
+import signal
 import subprocess
 import sys
 import tempfile
@@ -15,6 +16,15 @@ from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 AGE_CHECK = ROOT / 'ops/check-backup-age.py'
+
+
+def default_interrupt():
+    """Give a child the default SIGINT handling. A shell that starts this suite in the
+    background ignores SIGINT, children inherit that, and a script cannot trap a
+    signal it starts with ignored."""
+    signal.signal(signal.SIGINT, signal.SIG_DFL)
+
+
 HOUR = 3600
 NOW = 1_790_000_000
 
@@ -132,7 +142,7 @@ rm() { echo "rm $*"; }
         environment = {**os.environ, 'SCRIPT': str(ROOT / 'ops/backup.sh'), 'DUMP': dump,
                        'FAIL': fail, 'TIMES': str(times)}
         return subprocess.run(['sh', '-c', wrapper], text=True, capture_output=True,
-                              env=environment, timeout=10)
+                              env=environment, timeout=10, preexec_fn=default_interrupt)
 
     def test_backup_uploads_prunes_and_removes_the_dump(self):
         result = self.execute()
@@ -162,9 +172,9 @@ rm() { echo "rm $*"; }
     def test_stopped_backup_fails_and_removes_the_dump_once(self):
         # The signal can arrive while a command that still succeeds runs. The
         # script must stop there instead of uploading or pruning.
-        for signal in ('HUP', 'INT', 'TERM'):
-            with self.subTest(signal=signal):
-                result = self.execute(f'kill -{signal} $$')
+        for name in ('HUP', 'INT', 'TERM'):
+            with self.subTest(signal=name):
+                result = self.execute(f'kill -{name} $$')
                 self.assertNotEqual(result.returncode, 0)
                 self.assertEqual(result.stdout.splitlines(), ['pg_dump', f'rm -f {self.DUMP}'])
 
@@ -215,7 +225,7 @@ psql() {
                        'SNAPSHOTS': json.dumps([{'time': stamp.isoformat().replace('+00:00', 'Z'),
                                                  'short_id': 'fixture'}])}
         return subprocess.run(['sh', '-c', wrapper], text=True, capture_output=True,
-                              env=environment, timeout=10)
+                              env=environment, timeout=10, preexec_fn=default_interrupt)
 
     def storage_steps(self, result):
         return [line for line in result.stderr.splitlines() if line.startswith(('restic ', 'sleep '))]

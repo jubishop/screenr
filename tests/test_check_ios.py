@@ -93,6 +93,10 @@ finish('SWIFT')
 """
 
 
+def default_interrupt():
+    """Give a child the default SIGINT handling, which an ignored SIGINT in this suite's parent would replace."""
+    signal.signal(signal.SIGINT, signal.SIG_DFL)
+
 class CheckIOSTests(unittest.TestCase):
     def setUp(self):
         temporary = tempfile.TemporaryDirectory(prefix="screenr ios checks ")
@@ -252,9 +256,12 @@ class CheckIOSTests(unittest.TestCase):
             with self.subTest(signal=stop.name):
                 self.events.unlink(missing_ok=True)
                 pids = self.events.parent / f"{stop.name}.pids"
+                # A shell that starts this suite in the background ignores SIGINT,
+                # and children inherit that, so restore its default first.
                 process = subprocess.Popen([str(self.repo / "bin/check-ios")], cwd=self.repo,
                                            env=self.env | {"FAKE_HANG_TEST": str(pids)}, text=True,
-                                           stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                                           stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                           preexec_fn=default_interrupt)
                 deadline = time.monotonic() + 30
                 while not (pids.exists() and pids.read_text()):
                     self.assertLess(time.monotonic(), deadline, "the test run never started")
