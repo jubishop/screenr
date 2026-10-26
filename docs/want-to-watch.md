@@ -68,7 +68,10 @@ Titles have the same shape as Watch together's, so ScreenrKit decodes them as
 
 `src/components/want-to-watch.tsx` renders the page with the shared
 `src/components/title-card.tsx`, whose service notes read "On Netflix" or
-"Free on Tubi TV" and mark the viewer's matching services. Selecting a title
+"Free on Tubi TV" and mark the viewer's matching services. Each card also
+shows the title's
+[release status](title-availability.md#release-status-implementation), such
+as "In theaters", from the `release` field. Selecting a title
 opens its title page; the page has no inline title actions. The All, Movies,
 and TV filter in `src/components/title-kind-filter.tsx`, shared with Watch
 together, keeps the server's order and resets to All on reload. **Ready to

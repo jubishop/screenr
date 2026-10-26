@@ -14,6 +14,7 @@ import { TitleServices, ViewingAttribution } from "./title-services";
 import { api, useInteractive } from "./client";
 import { Poster } from "./poster";
 import { TitleCard } from "./title-card";
+import { ReleaseStatus } from "./title-release";
 import {
   FriendsRecommend,
   ofKind,
@@ -397,6 +398,7 @@ export function TitleSearch({
                     sizes="(max-width: 560px) 45vw, 220px"
                   />
                   <h3>{title.name}</h3>
+                  <ReleaseStatus release={title.release} />
                   <TitleServices
                     viewing={title.viewing}
                     serviceIds={serviceIds ?? []}

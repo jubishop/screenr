@@ -11,7 +11,7 @@
   },
   "response": {
     "status": 200,
-    "etag": "W/\"ejkHgv5LEzw-JxhozhuS0f6imy2HYohLyfqZOXgXwD0\"",
+    "etag": "W/\"CxVdYHHUlGnQRA3CsF1geSL9Q6_2lVoG6L_uqWrIZ_Y\"",
     "body": {
       "kind": "want-to-watch",
       "owner": {
@@ -35,6 +35,11 @@
             "status": "unavailable",
             "checked_at": null,
             "sections": []
+          },
+          "release": {
+            "status": "unavailable",
+            "in_theaters": false,
+            "upcoming": []
           },
           "access": "unknown",
           "matchingServiceIds": []
@@ -62,6 +67,17 @@
                     "route_note": null
                   }
                 ]
+              }
+            ]
+          },
+          "release": {
+            "status": "ok",
+            "in_theaters": true,
+            "upcoming": [
+              {
+                "kind": "digital",
+                "date": "2026-11-20",
+                "label": "Digital Nov 20"
               }
             ]
           },
@@ -95,6 +111,11 @@
                 ]
               }
             ]
+          },
+          "release": {
+            "status": "ok",
+            "in_theaters": false,
+            "upcoming": []
           },
           "access": "available",
           "matchingServiceIds": [

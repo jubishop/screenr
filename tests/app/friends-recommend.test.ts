@@ -105,6 +105,7 @@ test("Friends recommend sorts by recommending friends, then the most recent reco
       viewer_status: null,
       viewer_recommended: false,
       viewing: show.viewing,
+      release: show.release,
     },
   );
 

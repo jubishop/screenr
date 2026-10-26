@@ -11,7 +11,7 @@
   },
   "response": {
     "status": 200,
-    "etag": "W/\"OQs-i4EBbP8j2dfTrEdsFEbYzxiJe92uuF2LIaj4I48\"",
+    "etag": "W/\"__miCJ-SW1PP9Ds3d3F5Ot-P9YxmJ-EQ1NATeUs2R3g\"",
     "body": {
       "kind": "search",
       "suggestions": [
@@ -57,6 +57,11 @@
                 ]
               }
             ]
+          },
+          "release": {
+            "status": "ok",
+            "in_theaters": false,
+            "upcoming": []
           }
         },
         {
@@ -93,6 +98,17 @@
                     "route_note": null
                   }
                 ]
+              }
+            ]
+          },
+          "release": {
+            "status": "ok",
+            "in_theaters": false,
+            "upcoming": [
+              {
+                "kind": "season_premiere",
+                "date": "2026-11-04",
+                "label": "Season 2 premieres Nov 4"
               }
             ]
           }
@@ -133,6 +149,11 @@
                 ]
               }
             ]
+          },
+          "release": {
+            "status": "ok",
+            "in_theaters": false,
+            "upcoming": []
           }
         },
         {
@@ -175,6 +196,11 @@
                 ]
               }
             ]
+          },
+          "release": {
+            "status": "ok",
+            "in_theaters": false,
+            "upcoming": []
           }
         },
         {
@@ -211,6 +237,11 @@
                 ]
               }
             ]
+          },
+          "release": {
+            "status": "ok",
+            "in_theaters": false,
+            "upcoming": []
           }
         }
       ],

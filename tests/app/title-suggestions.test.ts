@@ -319,6 +319,7 @@ test("top 10 Recommends count 1.5× at #10 up to 1.95× at #1 in groups that mee
       "overview",
       "poster_path",
       "recommended_by",
+      "release",
       "release_date",
       "second_degree_recommended",
       "second_degree_wanted",

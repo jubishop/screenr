@@ -5,6 +5,7 @@ import { once } from "node:events";
 import { cp } from "node:fs/promises";
 import { createServer, type Server as HTTPServer } from "node:http";
 import { createBrowserProxy } from "./browser-proxy";
+import { releaseTitles } from "../tests/browser/release-titles";
 import { createServer as reservePort, type Server } from "node:net";
 import { spawn, type ChildProcess } from "node:child_process";
 
@@ -137,6 +138,8 @@ try {
   let availabilityFailure = false;
   catalog = createServer((request, response) => {
     response.setHeader("Content-Type", "application/json");
+    // Movie details carry `?append_to_response=release_dates`.
+    const path = new URL(request.url ?? "/", browserConfig.catalogURL).pathname;
     // TMDB has no title with this ID.
     if (request.url?.startsWith("/movie/987690")) {
       response.writeHead(404).end(JSON.stringify({ status_code: 34 }));
@@ -161,6 +164,14 @@ try {
         const { providers: _providers, ...title } = streamingTitle;
         response.end(JSON.stringify(title));
       }
+      return;
+    }
+    // Titles with release dates, relative to today's US date.
+    const releaseTitle = releaseTitles().find(
+      (title) => path === `/${title.media_type}/${title.id}`,
+    );
+    if (releaseTitle) {
+      response.end(JSON.stringify(releaseTitle));
       return;
     }
     if (request.url === "/availability-failure") {
@@ -284,30 +295,32 @@ try {
     const searchResults =
       searchQuery === "streaming choices"
         ? streamingTitles.map(({ providers: _providers, ...title }) => title)
-        : searchQuery === "no matching suggestions"
-          ? []
-          : [
-              {
-                ...fixture,
-                ...(searchQuery === "first suggestion fixture"
-                  ? { id: 998011, title: "The First Signal" }
-                  : {}),
-                ...(searchQuery === "second suggestion fixture"
-                  ? { id: 998012, title: "The Second Signal" }
-                  : {}),
-              },
-            ];
+        : searchQuery === "release dates"
+          ? releaseTitles()
+          : searchQuery === "no matching suggestions"
+            ? []
+            : [
+                {
+                  ...fixture,
+                  ...(searchQuery === "first suggestion fixture"
+                    ? { id: 998011, title: "The First Signal" }
+                    : {}),
+                  ...(searchQuery === "second suggestion fixture"
+                    ? { id: 998012, title: "The Second Signal" }
+                    : {}),
+                },
+              ];
     response.end(
       JSON.stringify(
         request.url?.startsWith("/search/")
           ? { results: searchResults }
           : {
               ...fixture,
-              id: Number(request.url?.split("/")[2]) || fixture.id,
-              ...(request.url === "/tv/998001"
+              id: Number(path.split("/")[2]) || fixture.id,
+              ...(path === "/tv/998001"
                 ? { name: "The Harbor Signal", first_air_date: "2025-09-01" }
                 : {}),
-              ...(request.url === "/tv/998020"
+              ...(path === "/tv/998020"
                 ? {
                     name: "The Night Ferry",
                     first_air_date: "2024-03-01",
@@ -318,7 +331,7 @@ try {
                     ],
                   }
                 : {}),
-              ...(request.url === "/movie/987658"
+              ...(path === "/movie/987658"
                 ? {
                     title: "The Painted Sky",
                     name: "The Painted Sky",

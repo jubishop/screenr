@@ -64,8 +64,27 @@ export type TitleViewing = Pick<
   WatchAvailability,
   "status" | "checked_at" | "sections"
 >;
+// A title's US release status (docs/title-availability.md#release-status-implementation),
+// which the server derives from stored TMDB dates each time it sends a
+// screen. `unavailable` means the release data could not be loaded, which
+// shows no label. Clients show "In theaters" when `in_theaters` is set, then
+// each upcoming label, and never compute either themselves.
+export type ReleaseDate = {
+  kind: "theatrical" | "digital" | "premiere" | "season_premiere";
+  // A US calendar date, YYYY-MM-DD, never an instant.
+  date: string;
+  // Such as "In theaters Nov 21", "Digital Dec 9", "Premieres Nov 4 on
+  // Netflix", or "Season 3 premieres Jan 8, 2027".
+  label: string;
+};
+export type TitleRelease = {
+  status: "ok" | "unavailable";
+  in_theaters: boolean;
+  upcoming: ReleaseDate[];
+};
 export type ViewingTitle<T extends Title = Title> = T & {
   viewing: TitleViewing;
+  release: TitleRelease;
 };
 export type ViewingAccess = "available" | "unmatched" | "unknown";
 export type TitleSuggestion = Title & {

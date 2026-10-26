@@ -372,7 +372,8 @@ change produces no diff:
 
 Comment and notification IDs are sequence values. The suite resets the
 sequences, so they stay stable. Dates without a time, such as finished and
-release dates, are fixed in the world.
+release dates, are fixed in the world, and release status is derived on
+2026-10-13.
 
 ### Adding a fixture
 

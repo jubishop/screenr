@@ -34,6 +34,11 @@ const { setReaction } = await import("../../src/server/reactions");
 const { uploadPhoto } = await import("../../src/server/photos");
 const { saveServices } = await import("../../src/server/streaming-services");
 const { readNotification } = await import("../../src/server/notifications");
+const { releaseCalendar } = await import("../../src/server/title-release");
+import type { StoredRelease } from "../../src/server/title-release";
+
+// Release status is derived on the fixtures' own date, so it never drifts.
+releaseCalendar.today = () => "2026-10-13";
 
 // TMDB stand-in. A null `providers` makes the provider request fail, so the
 // title's availability is unknown. Unstored titles appear only in search.
@@ -48,6 +53,10 @@ type CatalogTitle = {
     Record<"flatrate" | "free" | "ads" | "rent", number[]>
   > | null;
   seasons?: { name: string; episodes: string[] }[];
+  // Stored US release data. By default a movie's only date is its past
+  // theatrical release and a show premiered on its release date; null leaves
+  // the release status unavailable.
+  release?: StoredRelease | null;
   stored?: false;
   // The IMDb ID that TMDB's find returns the title for.
   imdb?: string;
@@ -110,6 +119,11 @@ const catalog: CatalogTitle[] = [
     overview: "An orchard keeper hears the trees whispering.",
     poster: "/quiet-orchard.jpg",
     providers: { flatrate: [15] },
+    // Back in theaters, with its first digital release ahead.
+    release: {
+      theatrical: ["2025-05-02", "2026-09-26"],
+      digital: ["2026-11-20"],
+    },
   },
   {
     id: "movie:104",
@@ -118,6 +132,7 @@ const catalog: CatalogTitle[] = [
     overview: "",
     poster: null,
     providers: null,
+    release: null,
   },
   {
     id: "movie:105",
@@ -164,6 +179,14 @@ const catalog: CatalogTitle[] = [
     overview: "Radio operators on a remote island hear a distress call.",
     poster: "/signal-fire.jpg",
     providers: { flatrate: [15] },
+    release: {
+      premiere: "2025-02-14",
+      network: "Hulu",
+      seasons: [
+        { number: 1, date: "2025-02-14" },
+        { number: 2, date: "2026-11-04" },
+      ],
+    },
   },
   ...topTenTitles,
 ];
@@ -342,8 +365,8 @@ export async function buildWorld() {
   for (const title of catalog.filter((item) => item.stored !== false)) {
     const [kind, id] = title.id.split(":");
     await db.query(
-      `INSERT INTO title(id,kind,tmdb_id,name,overview,poster_path,release_date)
-      VALUES($1,$2,$3,$4,$5,$6,$7)`,
+      `INSERT INTO title(id,kind,tmdb_id,name,overview,poster_path,release_date,release)
+      VALUES($1,$2,$3,$4,$5,$6,$7,$8)`,
       [
         title.id,
         kind,
@@ -352,6 +375,18 @@ export async function buildWorld() {
         title.overview,
         title.poster,
         title.released,
+        title.release === null
+          ? null
+          : JSON.stringify(
+              title.release ??
+                (kind === "movie"
+                  ? { theatrical: [title.released], digital: [] }
+                  : {
+                      premiere: title.released,
+                      network: "Netflix",
+                      seasons: [],
+                    }),
+            ),
       ],
     );
   }

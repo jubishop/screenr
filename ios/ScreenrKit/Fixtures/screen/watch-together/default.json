@@ -11,7 +11,7 @@
   },
   "response": {
     "status": 200,
-    "etag": "W/\"WyH-DowEX_zrXEzIQQ2RwIKBibjSwSqJUGRuDTLAcK0\"",
+    "etag": "W/\"0Qos19ZoSQq3ccJ6jAwQ4mlfFcwN0c84sHsaUD1YSXU\"",
     "body": {
       "kind": "watch-together",
       "participants": [
@@ -43,6 +43,11 @@
             "checked_at": null,
             "sections": []
           },
+          "release": {
+            "status": "unavailable",
+            "in_theaters": false,
+            "upcoming": []
+          },
           "access": "unknown",
           "matchingServiceIds": []
         },
@@ -69,6 +74,17 @@
                     "route_note": null
                   }
                 ]
+              }
+            ]
+          },
+          "release": {
+            "status": "ok",
+            "in_theaters": true,
+            "upcoming": [
+              {
+                "kind": "digital",
+                "date": "2026-11-20",
+                "label": "Digital Nov 20"
               }
             ]
           },
