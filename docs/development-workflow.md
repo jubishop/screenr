@@ -16,8 +16,7 @@ bin/check --full
 ```
 
 Setup needs Git and Python 3.9 or later, and checks also need ShellCheck.
-QMD and direnv are optional; setup reports skipped features. Install td and
-run `td init` as described in [task tracking](foundation/task-tracking.md).
+QMD and direnv are optional; setup reports skipped features.
 Complete [app setup](running-screenr.md#local-setup) before running
 `bin/check --full`. Review `.envrc` before running `direnv allow`, and add
 project-specific environment settings to it deliberately; search does not
@@ -116,8 +115,7 @@ through [the check workflow](../.github/workflows/check.yml), split into
 the iOS checks, and no other job runs them; a
 [pre-push hook](#ios-checks-before-a-push) runs them on a Mac. See
 [running checks](testing.md#running-checks)
-for requirements. GitHub issues track shared work; [td](foundation/task-tracking.md)
-records local progress and handoffs.
+for requirements. GitHub issues track work.
 
 ### iOS checks before a push
 

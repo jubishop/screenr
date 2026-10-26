@@ -22,8 +22,7 @@ Do not use memory for:
   [docs](../docs/README.md).
 - Code patterns or paths that current source explains directly.
 - Recent changes or Git history: use `git log` and `git blame`.
-- Local tasks, implementation checklists, or session progress: use
-  [td](../docs/foundation/task-tracking.md). Keep shared work in GitHub issues.
+- Tasks, implementation checklists, or session progress: use GitHub issues.
 - Secrets or private personal records: this repository is public.
 
 ## Page format

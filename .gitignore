@@ -11,8 +11,6 @@ next-env.d.ts
 /ios/ScreenrKit/.swiftpm/
 xcuserdata/
 
-# Local td task state
-
 # project-starter:begin
 .DS_Store
 .cache/
@@ -24,5 +22,4 @@ xcuserdata/
 __pycache__/
 *.py[cod]
 worktrees/
-.todos/
 # project-starter:end

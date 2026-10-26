@@ -2,8 +2,7 @@
 
 Product decisions, architecture, initiatives, and research. Use
 [memory](../memory/README.md) for durable guidance and non-code context.
-Use [td](foundation/task-tracking.md) for local progress and handoffs, and GitHub issues
-for shared scope and acceptance criteria.
+Use GitHub issues for tracked work, scope, and acceptance criteria.
 
 Every document except this index starts with:
 
@@ -65,8 +64,7 @@ both memory and design documents.
 ## Product and development
 
 - [Project Starter foundation](foundation/README.md): shared engineering
-  policy, knowledge search with its Git hooks and worktree preparation, and
-  task tracking.
+  policy and knowledge search with its Git hooks and worktree preparation.
 - [Product brief](product-brief.md): confirmed requirements, accepted product
   decisions, and open design choices.
 - [Unified title feed](title-feed.md): accepted shared feed decisions from
