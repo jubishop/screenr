@@ -46,6 +46,8 @@ struct FixtureLaunch {
   // A notification the app opens at launch, as if the member had tapped its
   // push, such as "18".
   var pushTap: String?
+  // Fixtures that answer the app's reads once the test sends them.
+  var update: FixtureUpdate?
 
   static let directory = URL(filePath: #filePath)
     .deletingLastPathComponent()  // ScreenrUITests
@@ -64,7 +66,35 @@ struct FixtureLaunch {
     if let textSize { arguments += ["-UIPreferredContentSizeCategoryName", textSize] }
     if let appearance { arguments += ["-ScreenrAppearance", appearance.rawValue] }
     if let pushTap { arguments += ["-ScreenrPushTap", pushTap] }
+    if let update {
+      for name in update.fixtures { arguments += ["-ScreenrFixtureUpdate", name] }
+      arguments += ["-ScreenrFixtureUpdateSignal", update.signal.path()]
+    }
     return arguments
+  }
+}
+
+// Fixtures that answer before any other once the test sends them, such as
+// "screen/feed/incoming", so the app's next read, such as a poll, brings new
+// activity at a moment the test chooses.
+struct FixtureUpdate {
+  let fixtures: [String]
+  // The file whose creation tells the fixture API to send the update.
+  let signal: URL
+
+  init(_ fixtures: String...) {
+    self.fixtures = fixtures
+    signal = FileManager.default.temporaryDirectory
+      .appending(path: "update-\(UUID().uuidString)")
+  }
+
+  func send(file: StaticString = #filePath, line: UInt = #line) {
+    XCTAssertTrue(
+      FileManager.default.createFile(atPath: signal.path(), contents: Data()),
+      "Could not create \(signal.path())",
+      file: file,
+      line: line
+    )
   }
 }
 

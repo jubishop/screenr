@@ -199,6 +199,8 @@ public struct AppServices: Sendable {
 //   -ScreenrFixtureOverride <fixture name>    (repeatable)
 //   -ScreenrFixtureFailure <fixture name>
 //   -ScreenrFixtureLog <file for a line per API request>
+//   -ScreenrFixtureUpdate <fixture name>      (repeatable)
+//   -ScreenrFixtureUpdateSignal <file whose creation brings the updates>
 //   -ScreenrFixturePush undecided|allowed|denied|system (default undecided)
 //
 // Release builds ignore them.
@@ -225,6 +227,8 @@ public enum APISource: Hashable, Sendable {
       case "-ScreenrFixtureOverride": scenario.overrides.append(value)
       case "-ScreenrFixtureFailure": scenario.failure = value
       case "-ScreenrFixtureLog": scenario.requestLog = URL(filePath: value)
+      case "-ScreenrFixtureUpdate": scenario.updates.append(value)
+      case "-ScreenrFixtureUpdateSignal": scenario.updateSignal = URL(filePath: value)
       case "-ScreenrFixturePush":
         guard let push = FixtureScenario.Push(rawValue: value) else {
           throw ArgumentError(

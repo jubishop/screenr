@@ -30,6 +30,7 @@ const { readVersion } = await import("../../src/server/screens");
 const { parseMemberRoute } = await import("../../src/member-routes");
 const { migrate } = await import("../../scripts/migrate");
 const { updateTopTen } = await import("../../src/server/title-actions");
+const { createDiscussionPost } = await import("../../src/server/comments");
 const { createAuth } = await import("../../src/server/auth");
 const { completeSignup } = await import("../../src/server/invitations");
 const { uploadPhoto } = await import("../../src/server/photos");
@@ -182,6 +183,24 @@ const screens: Record<MemberRoute["kind"], Record<string, Case>> = {
       "Alice's feed: Recommends with top 10 ranks, Want to watch, progress, an edited spoiler review, TV comments with season and episode labels, spoiler and removed replies, a blocked author's reply shown as unavailable, reactions, a post, and a deleted post that keeps its reply.",
     ),
     empty: screen("nora", "/", "A member with no friends or activity."),
+    // Every fixture time is the same instant, so Ben's new post, whose ID is
+    // the first numbered placeholder, sorts above the other entries.
+    incoming: {
+      ...screen(
+        "alice",
+        "/",
+        "Alice's feed after Ben posts a discussion, as a poll brings it while she reads.",
+      ),
+      changesWorld: true,
+      request: async (world) => {
+        await createDiscussionPost(
+          world.users.ben,
+          "Who wants to rewatch the Harbor Lights finale on Sunday?",
+          false,
+        );
+        return { action: "screen", query: { path: "/" } };
+      },
+    },
     joined: afterPatJoins(
       screen(
         "pat",

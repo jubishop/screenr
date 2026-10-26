@@ -31,6 +31,7 @@ struct IncomingActivityButton: View {
     .accessibilityLabel(kind.title)
     .accessibilityValue(Text("\(count)"))
     .accessibilityHint("Shows it without moving what you are reading.")
+    .accessibilityIdentifier("incoming-activity")
   }
 }
 
@@ -38,19 +39,22 @@ extension View {
   // Floats the control over the top of a scrolling screen while `count` is
   // above zero, so it never moves the content beneath it. `show` applies the
   // waiting activity; keep the reader's place when it changes the content,
-  // such as with `scrollPosition(id:)`.
+  // as `FeedList` does with `scrollPosition(_:anchor:)`.
   func incomingActivity(
     _ kind: IncomingActivityKind,
     count: Int,
     show: @escaping () -> Void
   ) -> some View {
     overlay(alignment: .top) {
-      if count > 0 {
-        IncomingActivityButton(kind: kind, count: count, action: show)
-          .padding(.top, 8)
-          .transition(.move(edge: .top).combined(with: .opacity))
+      ZStack {
+        if count > 0 {
+          IncomingActivityButton(kind: kind, count: count, action: show)
+            .padding(.top, 8)
+            .transition(.move(edge: .top).combined(with: .opacity))
+        }
       }
+      // Only the control moves; the activity it shows appears in place.
+      .animation(.default, value: count > 0)
     }
-    .animation(.default, value: count > 0)
   }
 }

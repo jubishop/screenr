@@ -102,11 +102,13 @@ extension XCUIApplication {
   }
 
   // The parts of the screen that content scrolls beneath, the status and
-  // navigation bars and the keyboard, whose glass hides text from the audit's
-  // contrast check. A sheet's navigation bar sits below the status bar, so a
-  // navigation bar covers the screen from its top down to the bar's bottom.
-  // A bar behind a sheet covers nothing the audit reaches, and can reach
-  // below the sheet's own bar, so only bars in front count.
+  // navigation bars, the keyboard, and the floating New activity control,
+  // whose glass hides text from the audit's contrast check. The control's own
+  // label sits on that glass too; check it with `labelContrast()`. A sheet's
+  // navigation bar sits below the status bar, so a navigation bar covers the
+  // screen from its top down to the bar's bottom. A bar behind a sheet covers
+  // nothing the audit reaches, and can reach below the sheet's own bar, so
+  // only bars in front count.
   func glassCovers() -> [CGRect] {
     let screen = windows.firstMatch.frame
     var covers = [keyboards.firstMatch].filter(\.exists).map(\.frame)
@@ -114,6 +116,8 @@ extension XCUIApplication {
       let bottom = bar.frame.maxY
       covers.append(CGRect(x: 0, y: screen.minY, width: screen.width, height: bottom - screen.minY))
     }
+    let floating = buttons.matching(identifier: "incoming-activity").allElementsBoundByIndex
+    covers += floating.filter(\.exists).map(\.frame)
     return covers
   }
 }

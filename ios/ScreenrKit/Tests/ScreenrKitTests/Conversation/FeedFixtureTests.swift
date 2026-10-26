@@ -27,10 +27,32 @@ struct FeedFixtureTests {
   @Test func findsTheFeedFixtures() {
     #expect(
       Self.fixtures == [
-        "screen/feed/default", "screen/feed/empty", "screen/feed/joined",
-        "screen/feed/linked-reply", "screen/feed/unavailable-link",
+        "screen/feed/default", "screen/feed/empty", "screen/feed/incoming",
+        "screen/feed/joined", "screen/feed/linked-reply", "screen/feed/unavailable-link",
       ]
     )
+  }
+
+  // The poll a UI test sends after Alice's feed: Ben's new post waits behind
+  // New activity, and nothing else changes.
+  @Test func holdsTheIncomingPostBehindNewActivity() throws {
+    guard case .feed(let first) = try screen("screen/feed/default").content,
+      case .feed(let later) = try screen("screen/feed/incoming").content
+    else {
+      Issue.record("Expected feeds")
+      return
+    }
+    let viewer = "user-alice"
+    let feed = FeedModel(api: RecordingAPI()) {}
+    feed.receive(first.conversations, viewer: viewer)
+    feed.receive(later.conversations, viewer: viewer)
+    let waiting = feed.layout(later.conversations, viewer: viewer)
+
+    #expect(waiting.incoming == 1)
+    #expect(waiting.entries == feed.layout(first.conversations, viewer: viewer).entries)
+    feed.showIncoming(later.conversations, viewer: viewer)
+    let shown = feed.layout(later.conversations, viewer: viewer).entries.map(\.id)
+    #expect(shown == ["00000000-0000-4000-8000-000000000001"] + waiting.entries.map(\.id))
   }
 
   @Test(arguments: fixtures)

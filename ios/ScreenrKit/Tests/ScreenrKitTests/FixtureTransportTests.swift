@@ -84,6 +84,52 @@ struct FixtureTransportTests {
     #expect(error?.message == "That username is already taken.")
   }
 
+  // A UI test brings new activity at a moment it chooses: once the signal
+  // file exists, the update answers before the scenario's other fixtures.
+  @Test func answersWithUpdatesOnceTheirSignalExists() async throws {
+    let directory = FileManager.default.temporaryDirectory
+      .appending(path: UUID().uuidString, directoryHint: .isDirectory)
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    defer {
+      do {
+        try FileManager.default.removeItem(at: directory)
+      } catch {
+        Issue.record("Could not remove \(directory.path()): \(error)")
+      }
+    }
+    let signal = directory.appending(path: "update")
+    let services = try services(
+      "-ScreenrFixtureOverride",
+      "screen/feed/empty",
+      "-ScreenrFixtureUpdate",
+      "screen/feed/incoming",
+      "-ScreenrFixtureUpdateSignal",
+      signal.path()
+    )
+
+    let before = try await services.api.send(.screen(path: "/"))
+    #expect(FileManager.default.createFile(atPath: signal.path(), contents: Data()))
+    let after = try await services.api.send(.screen(path: "/"))
+    let people = try await services.api.send(.screen(path: "/people"))
+
+    #expect(before.feed?.conversations.isEmpty == true)
+    #expect(after.feed?.conversations.count == 23)
+    #expect(
+      after.feed?.conversations.first?.body
+        == "Who wants to rewatch the Harbor Lights finale on Sunday?"
+    )
+    #expect(people.user.username == "alice")
+  }
+
+  @Test func needsASignalForUpdates() {
+    #expect(throws: FixtureError.self) {
+      try FixtureTransport(
+        directory: TestFixtures.directory,
+        scenario: FixtureScenario(updates: ["screen/feed/incoming"])
+      )
+    }
+  }
+
   @Test func fallsBackToTheScreensPathAndToSuccessfulWrites() async throws {
     let services = try services()
 
@@ -398,7 +444,8 @@ struct APISourceTests {
         "-ScreenrFixtureOverride", "screen/people/empty", "-ScreenrFixtureFailure",
         "errors/signed-out", "-ScreenrFixtureLog", "/tmp/requests.log", "-AppleLanguages", "(en)",
         "-ScreenrOpenURL", "screenr-dev://people", "-ScreenrFixtureProfile", "pending",
-        "-ScreenrFixturePush", "denied",
+        "-ScreenrFixturePush", "denied", "-ScreenrFixtureUpdate", "screen/feed/incoming",
+        "-ScreenrFixtureUpdateSignal", "/tmp/update",
       ],
       variant: .dev
     )
@@ -414,7 +461,9 @@ struct APISourceTests {
             overrides: ["screen/feed/empty", "screen/people/empty"],
             failure: "errors/signed-out",
             requestLog: URL(filePath: "/tmp/requests.log"),
-            push: .denied
+            push: .denied,
+            updates: ["screen/feed/incoming"],
+            updateSignal: URL(filePath: "/tmp/update")
           )
         )
     )
