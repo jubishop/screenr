@@ -224,8 +224,9 @@ public enum RelativeTime {
   }
 }
 
-// A last-finished date is a calendar day, `YYYY-MM-DD`, shown without time
-// zone conversion, such as "Oct 12", with the year outside the current one.
+// A last-finished date is a Gregorian calendar day, `YYYY-MM-DD`, shown without
+// time zone conversion, such as "Oct 12", with the year outside the reader's
+// current Gregorian year, whatever calendar their phone uses.
 public enum FinishedDate {
   private static let months = "Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec"
     .split(separator: " ")
@@ -238,6 +239,7 @@ public enum FinishedDate {
       let day = Int(parts[2]), months.indices.contains(month - 1)
     else { return nil }
     let label = "\(months[month - 1]) \(day)"
-    return year == calendar.component(.year, from: now) ? label : "\(label), \(year)"
+    let thisYear = CalendarDay.gregorian(calendar).component(.year, from: now)
+    return year == thisYear ? label : "\(label), \(year)"
   }
 }

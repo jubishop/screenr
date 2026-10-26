@@ -935,7 +935,7 @@ ScreenrKit's `TitlePage/`:
 | `ReviewEditor` | ScreenrKit | The review form's draft, which starts from the saved review each time it opens, its save and removal, and the removal's confirmation. |
 | `FriendActivity.lineParts`, `lineGroups`, `sentence` | ScreenrKit | The friend line in the web's words, such as "Recommended by Ben Ortiz (#1) · Cam Rivera wants to watch", as pieces that wrap between words. On a phone, each group starts its own line in place of " · ". |
 | `WatchAvailability.notice`, `emptyMessage`, `checkedLabel()` | ScreenrKit | Where to watch's messages, in the web's words. |
-| `CalendarDay` | ScreenrKit | `YYYY-MM-DD` days in the reader's calendar, such as today for Finished. |
+| `CalendarDay` | ScreenrKit | `YYYY-MM-DD` days, such as today for Finished: Gregorian days in the reader's time zone, whatever calendar the phone uses. |
 | `TitleHeaderView`, `WatchStatusSheet`, `ReviewSheet`, `TopTenReplaceSheet`, `AvailabilitySection`, `TrailerSection` | `Screenr/TitlePage/` | The views. The status button opens a sheet of choices with Last finished, since a SwiftUI `Menu` holds no date field. |
 
 - **Surface:** `Destination.title(id:item:reply:from:)` carries the list that

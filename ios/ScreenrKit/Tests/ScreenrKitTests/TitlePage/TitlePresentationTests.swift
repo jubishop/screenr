@@ -105,7 +105,7 @@ struct TitlePresentationTests {
     )
   }
 
-  @Test func writesCalendarDaysInTheReadersCalendar() throws {
+  @Test func writesCalendarDaysInTheReadersTimeZone() throws {
     var calendar = Calendar(identifier: .gregorian)
     calendar.timeZone = try #require(TimeZone(identifier: "America/Los_Angeles"))
     // 3 AM UTC on Oct 14 is still Oct 13 in Pacific time.
@@ -116,6 +116,28 @@ struct TitlePresentationTests {
     #expect(CalendarDay.string(from: day, calendar: calendar) == "1900-01-01")
     #expect(CalendarDay.date(from: "2026-02-30", calendar: calendar) == nil)
     #expect(CalendarDay.date(from: "yesterday", calendar: calendar) == nil)
+  }
+
+  // The server stores Gregorian days, so a phone set to another calendar still
+  // sends and reads them, and the date picker's range still runs forward.
+  @Test(arguments: [
+    Calendar.Identifier.buddhist, .japanese, .hebrew, .islamic, .islamicUmmAlQura, .persian,
+    .republicOfChina, .chinese,
+  ])
+  func writesGregorianDaysWhateverTheReadersCalendar(_ identifier: Calendar.Identifier) throws {
+    var calendar = Calendar(identifier: identifier)
+    calendar.timeZone = try #require(TimeZone(identifier: "America/Los_Angeles"))
+    calendar.locale = Locale(identifier: "ar_SA")
+    let instant = try #require(ServerTimestamp.date(from: "2026-10-14T03:00:00Z"))
+
+    #expect(CalendarDay.today(now: instant, calendar: calendar) == "2026-10-13")
+    let day = try #require(CalendarDay.date(from: "2026-09-21", calendar: calendar))
+    #expect(day == ServerTimestamp.date(from: "2026-09-21T07:00:00Z"))
+    #expect(CalendarDay.string(from: day, calendar: calendar) == "2026-09-21")
+    let earliest = try #require(CalendarDay.date(from: CalendarDay.earliest, calendar: calendar))
+    #expect(earliest == ServerTimestamp.date(from: "1900-01-01T08:00:00Z"))
+    #expect(earliest < instant)
+    #expect(CalendarDay.date(from: "2026-02-30", calendar: calendar) == nil)
   }
 
   // MARK: - Trailers

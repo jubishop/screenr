@@ -100,8 +100,10 @@ public struct ReviewDraft: Hashable, Sendable {
   }
 }
 
-// Calendar days as the server stores them, `YYYY-MM-DD`, in the reader's own
-// calendar and time zone.
+// Calendar days as the server stores them, `YYYY-MM-DD`: Gregorian days in
+// the reader's time zone. `calendar` is the reader's, which supplies only the
+// time zone, since a phone set to the Buddhist, Japanese, Hebrew, or another
+// calendar still sends and reads Gregorian days.
 public enum CalendarDay {
   // The earliest last-finished date the server accepts.
   public static let earliest = "1900-01-01"
@@ -111,7 +113,7 @@ public enum CalendarDay {
   }
 
   public static func string(from date: Date, calendar: Calendar = .current) -> String {
-    let parts = calendar.dateComponents([.year, .month, .day], from: date)
+    let parts = gregorian(calendar).dateComponents([.year, .month, .day], from: date)
     let year = String(parts.year ?? 0)
     let month = String(parts.month ?? 0)
     let day = String(parts.day ?? 0)
@@ -126,11 +128,19 @@ public enum CalendarDay {
   // The start of the day, or nil for a value that names no day.
   public static func date(from value: String, calendar: Calendar = .current) -> Date? {
     let parts = value.split(separator: "-")
+    let gregorian = Self.gregorian(calendar)
     guard parts.count == 3, let year = Int(parts[0]), let month = Int(parts[1]),
       let day = Int(parts[2]),
-      let date = calendar.date(from: DateComponents(year: year, month: month, day: day)),
+      let date = gregorian.date(from: DateComponents(year: year, month: month, day: day)),
       string(from: date, calendar: calendar) == value
     else { return nil }
     return date
+  }
+
+  // The Gregorian calendar in the reader's time zone.
+  static func gregorian(_ calendar: Calendar) -> Calendar {
+    var gregorian = Calendar(identifier: .gregorian)
+    gregorian.timeZone = calendar.timeZone
+    return gregorian
   }
 }
