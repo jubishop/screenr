@@ -245,6 +245,17 @@ build the visible alert
   | `comment`, `reply` | `COMMENT` | Reply, with a text field |
   | `friend_accepted` | none | none |
 
+  The actions run in the background without opening the app, after the
+  member unlocks the phone. Accept and Decline send
+  `respond-friend-request`, which marks the request read as the bell's
+  buttons do. Reply reads the
+  [single notification](data-and-access.md#single-notification-read), posts
+  `comment` with its `thread` as the `conversation` and its `comment` as
+  `replyTo`, never marked as a spoiler, and then sends `read-notification`.
+  The server queues the usual [badge-only update](#badge-only-updates) for
+  each count these change. See
+  [iPhone push notifications](../ios/README.md#push-notifications).
+
 - **Thread:** comments and replies use their entry's ID as the `thread-id`,
   the `thread` of the single-notification read, so the phone groups them by
   conversation. Friendship notifications have no `thread-id`.

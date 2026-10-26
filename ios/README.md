@@ -536,11 +536,13 @@ before launch finishes, and puts it in the environment.
   `AppServices.push` is nil.
 - **Categories:** at launch, `AppDelegate` registers
   `PushCategory.notificationCategories`: `FRIEND_REQUEST` and `COMMENT`, the
-  categories the worker names, with no actions yet. Notification actions add
-  their `UNNotificationAction`s in `PushCategory.notificationCategory` and
-  handle their identifiers in `AppDelegate`'s
-  `userNotificationCenter(_:didReceive:)`, which routes only the default
-  action, a tap, today.
+  categories the worker names, with the
+  [actions](../docs/ios-app.md#notification-actions--2026-10-13) that
+  `PushCategory.actions` lists. `FRIEND_REQUEST` offers Accept and Decline,
+  and `COMMENT` a Reply text field whose button is Post. Each
+  `PushAction.Identifier` builds its `UNNotificationAction`: none opens the
+  app, each needs the passcode or Face ID on a locked phone because it
+  changes what friends see, and Decline is destructive.
 - **Taps:** `PushTap(userInfo:)` reads the payload's `notificationId`, and
   `open(_:)` reads that notification with `GET /api/screenr/notification`.
   It opens the notification's `href` with `shell.router.open(_:)`, as the
@@ -549,6 +551,21 @@ before launch finishes, and puts it in the environment.
   a failed read opens the bell instead; while signed out or with a required
   update, a tap does nothing. A tap that launches the app works the same
   way: the router keeps the destination until the tabs show.
+- **Actions:** `AppDelegate`'s `userNotificationCenter(_:didReceive:)`
+  reads any other identifier as a `PushAction`, with a Reply's
+  `UNTextInputNotificationResponse.userText`, and awaits
+  `perform(_:notificationID:)`, because iOS suspends a background app,
+  including one it launched for the action, once the method returns. Accept
+  and Decline send `respond-friend-request`, which also marks the
+  notification read. Reply reads the notification with
+  `GET /api/screenr/notification`, posts `comment` with its `thread` as the
+  `conversation` and its `comment` as `replyTo`, never as a spoiler, then
+  sends `read-notification`. After a successful action the live screens
+  read again; nothing opens. A blank reply, a hidden notification, a
+  request no longer pending (404), or a signed-out session stops the action
+  with an info log line; any other failure logs a `Log.push` warning, which
+  reaches Sentry, and a reply that fails leaves the notification unread in
+  the bell. The worker's badge-only updates then correct the app icon.
 - **While open:** a push that arrives while the app is open shows its
   banner, sound, and badge as usual, and calls `shell.pushArrived()`, so the
   visible screen reads again.
@@ -628,6 +645,8 @@ prompt: `-ScreenrFixturePush` sets the permission the app finds, a member who
 has not decided allows notifications when asked, and no device token
 arrives, so nothing registers. `PushTests` follow a tap with
 `FixtureLaunch(pushTap: "18")`, which passes `-ScreenrPushTap`.
+`PushNotificationsTests` also cover each action's requests and the
+categories' actions; XCUITest cannot reach a notification's actions.
 
 `PushContentTests`, `PushContentLoaderTests`, and `NotificationServicesTests`
 cover [push content](#push-content) from the single-notification fixtures:
@@ -664,8 +683,15 @@ xcrun simctl push "$udid" com.artisanalsoftware.Screenr.dev payload.apns
 
 The alert stays generic, since `simctl push` skips the
 [notification extension](#push-content). Tapping the notification opens
-Harbor Lights at Ben's reply. The fixture request log, from
-`-ScreenrFixtureLog`, shows the registration and the tap's requests.
+Harbor Lights at Ben's reply. Pressing and holding it opens its Reply field
+instead, since Reply is its only action; Post sends `notification`,
+`comment`, and `read-notification`. For Accept and Decline, send the same
+payload with `"category": "FRIEND_REQUEST"`, `"notificationId": "14"`, and
+no `thread-id`. Leave Screenr Dev in the background rather than quitting
+it: an app that iOS launches for an action gets no launch arguments, so it
+would use the local server instead of the fixtures. The fixture request
+log, from `-ScreenrFixtureLog`, shows the registration and the requests of
+each tap and action.
 
 ## Invitations and setup
 

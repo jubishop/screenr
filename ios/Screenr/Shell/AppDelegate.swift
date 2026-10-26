@@ -4,8 +4,8 @@ import UserNotifications
 
 // The app's UIKit delegate, for what SwiftUI's app lifecycle leaves to it:
 // the interface orientations, APNs's device token, and the notification
-// center's pushes while the app is open and taps on notifications. It hands
-// each push event to `PushNotifications`.
+// center's pushes while the app is open and taps and actions on
+// notifications. It hands each push event to `PushNotifications`.
 final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate {
   // `ScreenrApp` sets this before launch finishes, ahead of any token or tap.
   static var push: PushNotifications?
@@ -60,14 +60,24 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
 
   // Tapping a notification, its default action, opens its item. It returns
   // at once, so the system is not kept waiting on the network.
+  //
+  // Accept, Decline, and Reply run in the background, possibly in an app
+  // that iOS launched for them. They return only after their requests
+  // finish, since iOS suspends the app once this returns.
   func userNotificationCenter(
     _ center: UNUserNotificationCenter,
     didReceive response: UNNotificationResponse
   ) async {
-    guard response.actionIdentifier == UNNotificationDefaultActionIdentifier,
-      let push = Self.push
-    else { return }
+    guard let push = Self.push else { return }
     let tap = PushTap(userInfo: response.notification.request.content.userInfo)
-    Task { await push.open(tap) }
+    if response.actionIdentifier == UNNotificationDefaultActionIdentifier {
+      Task { await push.open(tap) }
+      return
+    }
+    let text = (response as? UNTextInputNotificationResponse)?.userText
+    guard let action = PushAction(identifier: response.actionIdentifier, text: text) else {
+      return
+    }
+    await push.perform(action, notificationID: tap.notificationID)
   }
 }

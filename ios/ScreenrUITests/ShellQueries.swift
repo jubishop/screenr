@@ -67,6 +67,8 @@ extension XCUIApplication {
   // After such a failure, the screen settles and the audit runs once more
   // with a new handler, and only a second failure fails the test, so a real
   // problem, which fails both times, still does. `types` limits the audit.
+  // Every audit passes over the keyboard's prediction bar, which is the
+  // system's: while it has no predictions, its empty cell has no description.
   func performSettledAudit(
     for types: XCUIAccessibilityAuditType = .all,
     expecting: () throws -> (XCUIAccessibilityAuditIssue) -> Bool
@@ -75,7 +77,7 @@ extension XCUIApplication {
     do {
       let isExpected = try expecting()
       try performAccessibilityAudit(for: types) { issue in
-        if !isExpected(issue) { failed = true }
+        if !Self.isKeyboardPrediction(issue), !isExpected(issue) { failed = true }
         return true
       }
     } catch {
@@ -86,8 +88,16 @@ extension XCUIApplication {
       let settled = XCTestExpectation(description: "The screen settles")
       settled.isInverted = true
       _ = XCTWaiter.wait(for: [settled], timeout: 2)
-      try performAccessibilityAudit(for: types, try expecting())
+      let isExpected = try expecting()
+      try performAccessibilityAudit(for: types) { issue in
+        Self.isKeyboardPrediction(issue) || isExpected(issue)
+      }
     }
+  }
+
+  private static func isKeyboardPrediction(_ issue: XCUIAccessibilityAuditIssue) -> Bool {
+    issue.auditType == .sufficientElementDescription
+      && issue.detailedDescription.contains("TUIPredictionViewCell")
   }
 
   // The list rows and controls in a screen's content, apart from the bars and
