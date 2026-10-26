@@ -42,12 +42,14 @@ export async function findTitles(query: string) {
     // The availability cache references a stored title. Search summaries create
     // only missing identities and never replace details or mark them fresh,
     // so a summary-only title fetches its details for its release status.
+    // Any unique conflict means the title is stored: a concurrent insert of
+    // the same new title can collide on (kind, tmdb_id) before the ID.
     await db.query(
       `INSERT INTO title(id,kind,tmdb_id,name,overview,poster_path,release_date,fetched_at)
       SELECT id,kind,tmdb_id,name,overview,poster_path,release_date,'epoch'::timestamptz
       FROM jsonb_to_recordset($1::jsonb) AS t(id text,kind text,tmdb_id bigint,name text,
         overview text,poster_path text,release_date text)
-      ON CONFLICT(id) DO NOTHING`,
+      ON CONFLICT DO NOTHING`,
       [JSON.stringify(titles)],
     );
   }

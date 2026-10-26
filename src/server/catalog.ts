@@ -156,8 +156,9 @@ async function refreshTitle(id: string, stored?: TitleRow): Promise<TitleRow> {
     );
     return stored;
   }
-  const saved = await db.query<{ release: StoredRelease | null }>(
-    `INSERT INTO title(id,kind,tmdb_id,name,overview,poster_path,release_date,release,fetched_at,retry_after)
+  const save = () =>
+    db.query<{ release: StoredRelease | null }>(
+      `INSERT INTO title(id,kind,tmdb_id,name,overview,poster_path,release_date,release,fetched_at,retry_after)
     VALUES($1,$2,$3,$4,$5,$6,$7,$8::jsonb,
       CASE WHEN $8::jsonb IS NULL THEN 'epoch'::timestamptz ELSE now() END,
       CASE WHEN $8::jsonb IS NULL THEN now()+interval '5 minutes' END)
@@ -166,17 +167,27 @@ async function refreshTitle(id: string, stored?: TitleRow): Promise<TitleRow> {
     fetched_at=CASE WHEN excluded.release IS NULL THEN title.fetched_at ELSE now() END,
     retry_after=excluded.retry_after
     RETURNING release`,
-    [
-      title.id,
-      title.kind,
-      title.tmdb_id,
-      title.name,
-      title.overview,
-      title.poster_path,
-      title.release_date,
-      release && JSON.stringify(release),
-    ],
-  );
+      [
+        title.id,
+        title.kind,
+        title.tmdb_id,
+        title.name,
+        title.overview,
+        title.poster_path,
+        title.release_date,
+        release && JSON.stringify(release),
+      ],
+    );
+  let saved;
+  try {
+    saved = await save();
+  } catch (error) {
+    // A concurrent first fetch of the same title can win its (kind, tmdb_id)
+    // index before the ID conflict is seen. The title is then stored, so the
+    // retry updates it.
+    if ((error as { code?: string }).code !== "23505") throw error;
+    saved = await save();
+  }
   return { ...title, release: saved.rows[0].release };
 }
 

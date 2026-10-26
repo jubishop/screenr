@@ -48,7 +48,7 @@ test("page loads and navigation count as active days, background refreshes do no
   await db.query(`INSERT INTO title(id,kind,tmdb_id,name,overview) VALUES
     ('movie:987654','movie',987654,'The Lantern Room','A fictional coastal story.'),
     ('tv:998001','tv',998001,'The Harbor Signal','A fictional mystery.')
-    ON CONFLICT(id) DO NOTHING`);
+    ON CONFLICT DO NOTHING`);
   const recommender = await person("usagefriend");
   await friend(viewer, recommender);
   await updateTitleActivity(recommender, "movie:987654", "recommended", true);
