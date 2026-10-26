@@ -42,5 +42,21 @@
     "exclude": [
       "memory/pr_reviews/**"
     ]
+  },
+  "memoryAudit": {
+    "schedule": {
+      "weekday": "Saturday",
+      "hour": 8,
+      "minute": 0
+    },
+    "issueLabels": [
+      "bug",
+      "area: tooling"
+    ],
+    "commitTrailers": {
+      "Screenr-Deploy": "skip",
+      "Screenr-Deploy-Reason": "The weekly memory audit changes only memory notes, which do not run in production."
+    },
+    "indexHeading": "Active memory index"
   }
 }

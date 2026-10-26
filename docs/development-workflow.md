@@ -683,114 +683,29 @@ deployment history.
 
 A weekly local job checks every active [memory](../memory/README.md) note
 against the code and GitHub evidence, archives or updates stale notes, and
-commits validated changes to `main`. [`bin/memory-audit`](../bin/memory-audit)
-is a project-owned copy of PodHaven's audit, adapted to Screenr
-([#309](https://github.com/jubishop/screenr/issues/309)). It moves to a shared
-Project Starter feature under the [audit decisions](#audit-decisions--2026-10-25).
+commits validated changes to `main`
+([#309](https://github.com/jubishop/screenr/issues/309)). It is Project
+Starter's shared [memory audit](foundation/memory-audit.md) feature, whose
+page covers installing, running, inspecting, and stopping it, and its model,
+validation, and failure handling. Screenr's `memoryAudit` settings in
+`.config/knowledge.json` add:
 
-### Audit schedule
+- **Schedule:** Saturday at 08:00 in the Mac's local time zone, two hours
+  after PodHaven's audit. Audits on the same Mac also take turns through the
+  feature's shared lock.
+- **Deployment:** each audit commit carries `Screenr-Deploy: skip` trailers,
+  so a memory-only commit never forces a
+  [deployment](#main-branch-delivery). CI ignores Markdown-only pushes, so the
+  commit starts no checks itself.
+- **Failure issue:** a new `Memory audit failing` issue gets the `bug` and
+  `area: tooling` labels.
+- **Index:** archiving a note removes its entry from the README's
+  "Active memory index" list.
 
-Run `bin/memory-audit install` in the primary checkout on macOS to register
-the weekly launchd job. It runs on Saturday at 08:00 in the Mac's local time
-zone (Pacific on the maintainer's machine), two hours after PodHaven's audit.
-A sleeping Mac runs a missed calendar job after wake; the user must be logged
-in. The LaunchAgent is
-`~/Library/LaunchAgents/com.jubishop.screenr.memory-audit.plist`. It starts
-uv's default `~/.local/bin/python3` through `/bin/sh`, so it follows Python
-updates; the installer refuses until `uv python install --default` has
-created that interpreter. Tools under an fnm Node version are scheduled
-through fnm's default alias, so Node updates need no reinstall. Reinstall
-after moving the checkout or changing other tool locations. The installer
-requires `claude`, `qmd`, `gh`, `git`, `rg`, and `jq`, checks that QMD starts
-with the scheduled `PATH`, and does not run an audit.
-
-### Audit model and evidence
-
-The job runs `claude -p` with `claude-haiku-5-5`, high effort, and the saved
-Claude subscription login. It refuses API-key and third-party provider logins
-and excludes API keys from its environment; subscription limits apply.
-Restricted mode ignores user and project Claude settings and instruction
-files, so personal permissions, MCP servers, and hooks do not join the audit.
-Claude gets only Bash, Read, Glob, and Grep, and no session is saved. Writes,
-network commands, and reads outside the clone need approval, which the job
-denies automatically. Beyond Claude Code's built-in read-only commands, only
-`jq` and `qmd search` are allowed.
-
-Each run fetches `origin/main` and audits that exact revision in a disposable
-clone under `.cache/memory-audit/runs/`, so uncommitted work is neither
-audited nor touched. Before the model starts, the runner writes
-`artifacts/memory-audit-context.json` in the clone: GitHub issues and PRs from
-two bounded lists of up to 1,000 entries each, and the commits since the last
-successful audit, or the last seven days on the first run. It also builds a
-keyword-only QMD index of the clone's shared collections from
-`.config/knowledge.json`, never personal home memory. The model makes no
-network requests or QMD model downloads. Unchanged repository, GitHub, and
-audit inputs skip the model call, except right after a failed or interrupted
-run; `--force` always audits. A lock prevents overlapping runs, and model
-attempts share a 90-minute limit.
-
-### Audit validation
-
-The model returns one finding per active note and the complete proposed
-content of each note it changes. The runner accepts the proposal only when:
-
-- Every active note has exactly one finding with evidence, and the report has
-  its required sections and reviewed count.
-- Changes only update existing active notes or move them into
-  `memory/archive/`, without overwriting an archive.
-- The session log shows the model read every active note with the Read tool
-  and made at least one source or evidence lookup per note. On 2026-10-10 a
-  PodHaven run kept all 16 of its notes in 32 seconds without reading any.
-- Project Starter's metadata, index-coverage, and local-link checks pass on
-  the proposed tree.
-
-The model cannot edit `memory/README.md`, archives, PR review ledgers, docs,
-or code. The README keeps Project Starter's hand-maintained index: when the
-model archives a note, the runner removes that note's entry from the
-"Active memory index" list before validation. Updates leave the README
-untouched. An archive that would break a link from an existing archive, a
-doc, or README text outside the index fails validation, so that note stays
-active. After a rejected proposal, the runner restores the original notes and
-README and gives Claude one repair attempt with the exact error. A second
-rejection fails the run. Both attempts' logs are kept.
-
-### Audit publishing and failures
-
-When the checks pass and notes changed, the runner commits the change in the
-clone with the checkout's Git identity and pushes it to `main` on GitHub. Git
-hooks stay off in the clone; none gates a memory-only commit. CI ignores
-Markdown-only pushes, so the commit starts no checks or deployment itself.
-Its `Screenr-Deploy: skip` trailers keep it from forcing a
-[deployment](#main-branch-delivery) when a later push would otherwise skip
-one. If `main` moved during the audit, the commit is rebased onto it, unless
-the move changed `memory/`; then the run fails and the next run audits the
-new notes. The local checkout is never touched; pull to see the change.
-
-A failed run shows a macOS notification and opens a public GitHub issue titled
-`Memory audit failing`, or comments on the open one, with the error and the
-run's folder name. The next successful run closes it. A run that changes
-nothing stays silent.
-
-Run and inspect an audit:
-
-```sh
-bin/memory-audit run
-bin/memory-audit run --force
-cat .cache/memory-audit/latest.json
-launchctl print gui/$(id -u)/com.jubishop.screenr.memory-audit
-```
-
-`latest.json` records the latest success, failure, or skip, its run folder,
-and any `publishedCommit`. A failure never updates `last-success.json`. Each
-run folder keeps `run-meta.json` and the context; model attempts add
-`events.jsonl`, `claude.log`, and the structured result, and successful runs
-add `memory-audit-report.md` and `memory-audit.patch`. The clone is deleted
-when the run ends. Run folders stay local and ignored by Git. Each run deletes
-run folders older than 60 days, except those the state files name.
-
-To stop the schedule, run
-`launchctl bootout gui/$(id -u)/com.jubishop.screenr.memory-audit` and remove
-the plist so it does not load at the next login.
+Run `bin/memory-audit install` in the primary checkout to register or update
+the LaunchAgent, and
+`launchctl print gui/$(id -u)/com.jubishop.screenr.memory-audit` to inspect
+it.
 
 ### Audit decisions — 2026-10-25
 
@@ -805,12 +720,13 @@ The owner settled the two choices #309 left open
 - **Shared implementation:** the audit becomes one opt-in Project Starter
   feature that Screenr and PodHaven share
   ([jubishop/project-starter#6](https://github.com/jubishop/project-starter/issues/6)),
-  so fixes no longer need porting by hand. Until a Starter release ships it,
-  this project-owned copy runs; [#333](https://github.com/jubishop/screenr/issues/333)
-  replaces it. Rejected: separate copies in each repository.
+  so fixes no longer need porting by hand. Project Starter 3.2.0 ships it,
+  and [#333](https://github.com/jubishop/screenr/issues/333) replaced this
+  project's copy with it. Rejected: separate copies in each repository.
 
 ## Project Starter
 
-`.project-starter.json` records the installed Project Starter release and the
-hashes of its managed files. Update them with Project Starter's `bin/sync`,
-and record any intentional local change as an override with its reason.
+`.project-starter.json` records the installed Project Starter release, the
+hashes of its managed files, and the enabled `memory-audit` feature. Update
+them with Project Starter's `bin/sync`, and record any intentional local
+change as an override with its reason.

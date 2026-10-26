@@ -1,11 +1,13 @@
 # Weekly memory audit
 
-Review every active Screenr memory note against this repository snapshot and
-the captured GitHub evidence. Run to completion without questions. This is a
+Review every active memory note against this repository snapshot and the
+captured GitHub evidence. Run to completion without questions. This is a
 read-only audit: return proposed changes as structured JSON. The local runner
 validates your response and commits accepted changes directly to `main`, so
 propose only what the evidence supports. Do not edit files, create tasks,
 commit, push, open issues or PRs, contact anyone, or use other agents.
+
+{{projectContext}}
 
 ## Evidence and search
 
@@ -86,10 +88,10 @@ unchanged kept notes. Every archive verdict must have one archival change. Do
 not overwrite an existing archive or delete a note without archiving it.
 
 Only existing active ordinary notes can be changed. Do not propose edits to
-`memory/README.md`, existing archives, PR review ledgers in
-`memory/pr_reviews/`, code, docs, configuration, or other files. When you
-archive a note, the runner removes that note's entry from the README's
-"Active memory index" list after it validates your proposed scope; it changes
+`memory/README.md`, existing archives, ledgers and other files in folders
+under `memory/`, code, docs, configuration, or other files. When you archive a
+note, the runner removes that note's entry from the README's
+"{{indexHeading}}" list after it validates your proposed scope; it changes
 nothing else in the README.
 
 On touched notes, enforce the documented frontmatter:
