@@ -340,7 +340,9 @@ new rank and shows the new order while the row is busy saving; a failed save
 returns the row to the saved order with the error beneath it. Escape, a drop
 outside the row, or a drop back in place changes nothing, and no drag opens
 the title. Touch input, touch-first devices, and other members' profiles keep
-plain links, and Edit mode stays for keyboard and touch.
+plain links, and Edit mode stays for keyboard and touch. The iPhone app
+edits the list in a sheet with drag handles and swipe to remove instead
+([decision](ios-app.md#top-10-editing-in-a-list-sheet--2026-10-13)).
 
 The title header adds Add to top 10 beside Recommend. Once listed it
 reads "✓ #3 in your top 10", and choosing it removes the title from the list.

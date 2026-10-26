@@ -541,6 +541,14 @@ row. They did not give a reason.
 - Dragging posters within the profile row.
 - Offering both in-row dragging and the list.
 
+**Implementation note:** [Issue #233](https://github.com/jubishop/screenr/issues/233)
+built the sheet; [Top 10 editor](../ios/README.md#top-10-editor) in the
+iPhone guide describes it. SwiftUI's list shows drag handles only in its edit
+mode, where rows do not swipe, so the sheet uses UIKit's list, whose rows
+show their handles and swipe at once. VoiceOver drags a handle with the
+list's own gesture, and each row also offers Move up and Move down, like the
+web's edit mode.
+
 ### Sentry is the only package — 2026-10-13
 
 **Decision:** `sentry-cocoa` is the app's only third-party Swift package.

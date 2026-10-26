@@ -797,6 +797,13 @@ const actions: Record<Exclude<ActionName, "screen">, Record<string, Case>> = {
       { title: "tv:201", change: "move", rank: 1 },
       "Moving a title to a new rank.",
     ),
+    "move-unlisted": write(
+      "top-ten",
+      "alice",
+      { title: "movie:103", change: "move", rank: 1 },
+      "Moving a title that is not in the top 10, such as one removed on another device, is refused.",
+      400,
+    ),
     remove: write(
       "top-ten",
       "alice",

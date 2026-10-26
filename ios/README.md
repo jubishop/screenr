@@ -996,6 +996,8 @@ Watch together pages. Their screens are `FriendsView`, `ProfileView`, and
 | `Relationship`, `ProfileModel` | ScreenrKit `People/` | `Relationship(profile, viewer:)` is `own`, `friend`, `requestSent`, `requestReceived`, or `none`, and gives the visible `action`, such as Watch together or Accept friend request, and the More actions `menu`. Unfriend and Block confirm in the web's words. |
 | `WatchTogetherFilter`, `WatchTogetherSection` | ScreenrKit `People/` | All, Movies, and TV; Ready to watch, Not on your services, and Availability unknown; and the count and empty states. Each shared title is a [`TitleRow`](#title-lists) that marks the services either person saved. |
 | `TopTenSection`, `TopTenRow` | `Screenr/Shared/TopTen/` | A profile's Top 10 heading and its row of ranked posters, each a link named like "#1 Night Crossing" that opens the title. The row only displays the list. Another member's empty list shows nothing; the owner's explains how to start one. `TopTenSection(entries:owner: .viewer(edit:))` adds Edit to the heading. |
+| `TopTenEditorModel` | ScreenrKit `People/` | `@Observable`: the [top 10 editor](#top-10-editor)'s entries, one change at a time: `drop(_:dragged:)` and `move(_:toRank:)` send `top-ten` `move`, and `remove(_:)` sends `remove`. A change shows at once and a failed one returns the list to its order before the change, with `failure`. `reconcile(with:)` takes the profile's reads. |
+| `ProfileWithTopTenEditor`, `TopTenEditorList` | `Screenr/Shared/TopTen/` | The profile destination with the editor sheet that Edit opens, and the sheet's list. |
 | `PersonLabel` | `Screenr/Shared/` | A member's avatar, name, and @username for a list row; `.nameOnly` for a blocked person. |
 | `ProfileLinksText` | `Screenr/People/` | A line of text whose names link to profiles, such as "Mutual friends: Ben Ortiz (@ben), Cam Rivera (@cam)". |
 
@@ -1015,9 +1017,9 @@ Watch together pages. Their screens are `FriendsView`, `ProfileView`, and
 - **The member's own profile:** the You tab's root is `ProfileView` with
   `Relationship.own`: no relationship action or More actions, and the top
   10's empty state. Its `editTopTen` closure adds Edit to the Top 10 heading
-  while the list has titles; the top 10 editor sheet hooks in there, for
-  example by giving `DestinationView`'s profile case a closure that presents
-  it.
+  while the list has titles. `DestinationView` shows every profile through
+  `ProfileWithTopTenEditor`, whose closure opens the
+  [top 10 editor](#top-10-editor).
 - **Watch together:** a friend's profile links to
   `/watch-together?with=<username>`. Save your streaming services opens
   Settings over the tab, and each title opens its page through
@@ -1038,6 +1040,46 @@ Watch together pages. Their screens are `FriendsView`, `ProfileView`, and
 - **iOS 27 controls:** a confirmation dialog is a popover without Cancel;
   tap `PopoverDismissRegion` to cancel, and `app.popovers.buttons[…]` to
   confirm.
+
+### Top 10 editor
+
+Edit on the member's own profile opens a sheet with their top 10 as a
+system list, following the
+[decision](../docs/ios-app.md#top-10-editing-in-a-list-sheet--2026-10-13) and
+the web's [top 10 rules](../docs/profile-top-ten.md#reorder-in-an-edit-mode--2026-10-12).
+`TopTenEditorModel` holds the behavior:
+
+- **Reordering:** each row shows its reorder handle. A drop sends one
+  `top-ten` `move` with the dragged entry's new rank. When two neighbors swap,
+  either one's move gives the same order, so the model sends the dragged one.
+- **Removing:** swiping a row left offers Remove, which sends `remove` and
+  keeps the title's Recommend. The rows below move up.
+- **Saving:** one change saves at a time, and the list shows it at once. A
+  failed save returns the rows to their order before the change and shows
+  the reason above them, which VoiceOver announces. A successful one reads
+  the profile again.
+- **Reads:** the profile beneath keeps polling. A read whose list differs
+  from the last one replaces the editor's, after any save in flight, so a
+  change on the web shows; an unchanged read, like the fixture API's after a
+  write, keeps the saved change.
+- **VoiceOver:** each row reads like "#1 Night Crossing" and offers Remove,
+  Move up, and Move down; its handle reads "Reorder #1 Night Crossing,
+  button, draggable" and drags with the list's own double-tap-and-hold
+  gesture.
+
+`TopTenEditorList` is a UIKit collection view list, with SwiftUI rows through
+`UIHostingConfiguration`, since SwiftUI's `List` shows reorder handles only
+in edit mode, where its rows do not swipe. A failed read beneath the sheet
+leaves it open.
+
+`TopTenEditorModelTests` cover the model against `RecordingAPI`, a gated fake
+for saves in flight, and the fixture API's refusal. `TopTenEditorTests` drag
+Harbor Lights to #1, roll back the move that the
+`actions/top-ten/move-unlisted` override refuses, remove Paper Lanterns by
+swiping, check the writes in the request log, and reach every handle at the
+largest text size. They also turn on VoiceOver with
+`XCUIDevice.shared.voiceOverService` and check what it reads for each row and
+handle.
 
 ## Share extension
 
