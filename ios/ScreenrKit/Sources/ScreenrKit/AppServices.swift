@@ -9,10 +9,11 @@ import SwiftUI
 // `@Environment(\.photoLibrary)`, `@Environment(\.feedbackService)`, and
 // `@Environment(\.trailerLoading)`.
 public struct AppServices: Sendable {
-  // The process the services run in: the app, or its share extension.
+  // The process the services run in: the app, or one of its extensions.
   public enum Host: Hashable, Sendable {
     case app
     case shareExtension
+    case notificationExtension
   }
 
   public let api: any ScreenrAPI
@@ -33,7 +34,7 @@ public struct AppServices: Sendable {
   // Where trailers' players load from.
   public let trailers: TrailerLoading
   // iOS's notification permission, APNs registration, and badge, or nil in
-  // the share extension, which handles no notifications.
+  // the extensions, which leave them to the app.
   public let push: (any PushSystem)?
 
   @MainActor
@@ -76,8 +77,8 @@ public struct AppServices: Sendable {
   // iOS's push permission, keeps the invitation in memory, and writes
   // feedback to its request log rather than to `feedback`, the build's
   // sender, which Screenr Dev lacks. Only the app's client marks visits; the
-  // share extension's sends none. `push` is iOS's own push system, which the
-  // app target provides; the share extension has none.
+  // extensions' send none. `push` is iOS's own push system, which the app
+  // target provides; the extensions have none.
   @MainActor
   public init(
     configuration: AppConfiguration,

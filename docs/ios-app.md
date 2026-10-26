@@ -339,6 +339,16 @@ the push was sent, and the sender's avatar uses native iOS presentation.
 can call. The app and the extension share a Keychain access group and an
 app group.
 
+**Implementation note:** [Issue #244](https://github.com/jubishop/screenr/issues/244)
+adds the `ScreenrNotificationService` extension. iOS shows a direct
+message's sender in place of the alert's title and subtitle, so the body
+leads with the action: "Ben Ortiz" above "Replied to your comment about
+Harbor Lights: Did you see the end?", or "… Contains spoilers." for a
+spoiler. A failed read, a hidden notification, or iOS's time running out
+before the read finishes keeps the generic alert; a photo that does not
+load in time leaves only the avatar out. See
+[push content](../ios/README.md#push-content).
+
 ### In-house APNs delivery from the worker — 2026-10-13
 
 **Decision:** The existing `screenr-worker` sends pushes directly to APNs:

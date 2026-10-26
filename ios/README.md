@@ -13,17 +13,18 @@ repository root.
 
 | Path | Contents |
 | --- | --- |
-| `Screenr.xcodeproj` | The Screenr app, ScreenrShare extension, and ScreenrUITests targets, and the shared Screenr scheme. |
-| `Config/` | The `.xcconfig` build settings, the app's and extension's entitlements, and the release export options. |
+| `Screenr.xcodeproj` | The Screenr app, the ScreenrShare and ScreenrNotificationService extensions, the ScreenrUITests targets, and the shared Screenr scheme. |
+| `Config/` | The `.xcconfig` build settings, the app's and extensions' entitlements, and the release export options. |
 | `Screenr/` | The app target: the [app shell](#app-shell) in `Shell/`, feature screens in `Screens/` with their parts in a folder named for the feature, such as `Find/` and the [title page](#title-pages)'s `TitlePage/`, components several features share in `Shared/`, such as the [title list views](#title-lists), the [conversations](#conversations) that the feed, title pages, and profiles share in `Conversation/`, the iOS side of [push notifications](#push-notifications) in `Push/`, the app lifecycle, assets, and `Info.plist`. |
 | `ScreenrShare/` | The [share extension](#share-extension), which the app embeds: its view controller, views, and `Info.plist`. |
+| `ScreenrNotificationService/` | The Notification Service Extension that builds [push content](#push-content), which the app embeds: its entry point and `Info.plist`. |
 | `ScreenrUITests/` | XCUITest UI tests. |
 | `ScreenrKit/` | A local Swift package: `Sources/ScreenrKit`, `Tests/ScreenrKitTests`, and `Fixtures/`. |
 | `build/` | Build output, check logs, and result bundles. Git ignores it. |
 
-`Screenr/`, `ScreenrShare/`, and `ScreenrUITests/` are synchronized folders:
+`Screenr/`, `ScreenrShare/`, `ScreenrNotificationService/`, and `ScreenrUITests/` are synchronized folders:
 a file added on disk joins its target with no `project.pbxproj` change. The
-Screenr scheme builds the app with its extension and tests both ScreenrKit
+Screenr scheme builds the app with its extensions and tests both ScreenrKit
 and the UI tests. Xcode also lists
 an automatic ScreenrKit scheme for the package.
 
@@ -37,6 +38,7 @@ a configuration named Debug, so the names stay Debug and Release.
 | --- | --- | --- |
 | Bundle ID | `com.artisanalsoftware.Screenr.dev` | `com.artisanalsoftware.Screenr` |
 | Share extension | `com.artisanalsoftware.Screenr.dev.Share` | `com.artisanalsoftware.Screenr.Share` |
+| Notification extension | `com.artisanalsoftware.Screenr.dev.NotificationService` | `com.artisanalsoftware.Screenr.NotificationService` |
 | Server | `http://localhost:3000` | `https://screenr.club` |
 | App group and Keychain group | `group.com.artisanalsoftware.Screenr.dev` | `group.com.artisanalsoftware.Screenr` |
 | APNs | `development` | `production` |
@@ -45,14 +47,15 @@ a configuration named Debug, so the names stay Debug and Release.
 
 `Config/Base.xcconfig` holds the shared settings, `Dev.xcconfig` and
 `Release.xcconfig` the variant values, and `Screenr.xcconfig`,
-`ScreenrShare.xcconfig`, and `ScreenrUITests.xcconfig` the target settings.
+`ScreenrShare.xcconfig`, `ScreenrNotificationService.xcconfig`, and
+`ScreenrUITests.xcconfig` the target settings.
 `Config/Version.xcconfig` holds the marketing version; local builds are build
 1, and release builds take the next number from the release tags, which the
-extension shares. `Screenr/Info.plist` passes the variant, server, and app
+extensions share. `Screenr/Info.plist` passes the variant, server, and app
 group to the app, which reads them through ScreenrKit's `AppConfiguration`,
-as `ScreenrShare/Info.plist` does for the extension. The app's also passes
+as each extension's `Info.plist` does for it. The app's also passes
 its APNs environment, which `AppConfiguration.pushTarget(infoDictionary:)`
-reads. Xcode preprocesses both files, so Dev-only keys sit in an
+reads. Xcode preprocesses these files, so Dev-only keys sit in an
 `#if SCREENR_DEV` block.
 
 ## Checks
@@ -525,7 +528,7 @@ before launch finishes, and puts it in the environment.
   environment that issued it: `development` (`sandbox`) for Screenr Dev,
   which runs in the Simulator, and `production` for the Release builds that
   TestFlight and the App Store install. The topic is the bundle ID. Only the
-  app reads them: the share extension handles no notifications, so its
+  app reads them: the extensions register no device, so their
   `AppServices.push` is nil.
 - **Categories:** at launch, `AppDelegate` registers
   `PushCategory.notificationCategories`: `FRIEND_REQUEST` and `COMMENT`, the
@@ -552,6 +555,66 @@ before launch finishes, and puts it in the environment.
   worker's [badge-only updates](../docs/notifications.md#badge-only-updates)
   keep it current while the app is closed.
 
+### Push content
+
+`ScreenrNotificationService`, which the app embeds, turns each alert's
+generic "New activity on Screenr" into a Communication Notification from the
+notification's actor before iOS shows it
+([decision](../docs/ios-app.md#the-extension-fetches-push-content--2026-10-13),
+[what each kind shows](../docs/notifications.md#push-delivery)):
+
+1. **Reading:** `PushTap(userInfo:)` reads the payload's `notificationId`,
+   and `PushContentLoader` reads that notification with
+   `GET /api/screenr/notification`. Each push builds its own
+   `AppServices(…, host: .notificationExtension)`, so it reads the session
+   the app last stored in the shared Keychain group, even when iOS shows
+   several pushes in one process.
+2. **Wording:** `PushContent` holds the sender and the body. iOS shows a
+   direct message's sender in place of the alert's title and subtitle, so
+   the body leads with the action, such as "Replied to your comment about
+   Harbor Lights: Did you see the end?". A spoiler's body ends "Contains
+   spoilers." even if an excerpt arrives with it.
+3. **Avatar:** `PushAvatars.network(images:session:)` loads the actor's
+   `/api/photos/<actorId>/<actorPhoto>` with the bearer token, as
+   `ImageSource` requests every photo. Without a photo, iOS shows the app
+   icon.
+4. **Showing:** `PushContent.notificationContent(updating:avatar:)` puts the
+   sender's name and the body on the payload's content, donates an incoming
+   `INSendMessageIntent` from the actor, and returns the content that
+   `updating(from:)` makes of it. The category, thread, and notification ID
+   stay, so taps, actions, and grouping work as before. If iOS refuses the
+   intent, the alert still shows the text.
+5. **Falling back:** the loader delivers once. A payload without an ID, a
+   hidden notification, a failed read, or services that cannot start, such
+   as with the Keychain locked after a restart, keep the generic alert. When
+   iOS calls `serviceExtensionTimeWillExpire`, about 30 seconds in, the
+   loader delivers the best alert so far: the generic one while the read is
+   out, or the rich one without its avatar while the photo loads.
+
+| Piece | Where | What it does |
+| --- | --- | --- |
+| `NotificationService` | `ScreenrNotificationService/` | The principal class. iOS calls it from threads of its own, so the target's code is nonisolated by default. It hands iOS's content handler to a `PushContentLoader`, logs to `notifications.ndjson` in the app group's log directory with `Telemetry.localOnly()`, and starts no Sentry. Screenr Dev's extension answers from the app's fixtures through `FixtureHandoff`. |
+| `PushContent`, `PushContentLoader`, `PushAvatars` | ScreenrKit `Push/` | The wording, the read and its fallbacks, and the photo. |
+| `CommunicationNotification.swift` | ScreenrKit `Push/` | The message intent and the content iOS shows. It builds only for iOS, which alone has the intent. |
+
+- **Capability:** the app's entitlements hold
+  `com.apple.developer.usernotifications.communication`, and its
+  `Info.plist` lists `INSendMessageIntent` in `NSUserActivityTypes`. The
+  extension's `Info.plist` lists it in `IntentsSupported`, and its
+  entitlements hold only the app group.
+- **Signing:** the bundle ID is the app's with `.NotificationService`. See
+  [Apple Developer](../docs/running-screenr.md#apple-developer).
+- **Simulator:** `xcrun simctl push` skips service extensions, so its alert
+  stays generic. A real APNs sandbox push reaches the Simulator, and the
+  extension runs: launch Screenr Dev with `-ScreenrFixtures`,
+  `-ScreenrFixturePush system`, and `-ScreenrFixtureLog`, allow
+  notifications, and send the worker's payload to the device token from the
+  log's `push-device` line, signed with the APNs key, as `src/server/apns.ts`
+  does. The fixture API loads no photos, so the avatar is the app icon. Use
+  a Simulator you will not pass to `bin/check-ios --simulator`: the
+  extension's log stays in the app group, and `SettingsTests` expects
+  feedback to attach only the app's.
+
 ### Push tests
 
 `PushNotificationsTests` and `PushSettingsModelTests` cover the behavior with
@@ -561,6 +624,15 @@ prompt: `-ScreenrFixturePush` sets the permission the app finds, a member who
 has not decided allows notifications when asked, and no device token
 arrives, so nothing registers. `PushTests` follow a tap with
 `FixtureLaunch(pushTap: "18")`, which passes `-ScreenrPushTap`.
+
+`PushContentTests`, `PushContentLoaderTests`, and `NotificationServicesTests`
+cover [push content](#push-content) from the single-notification fixtures:
+each kind's wording, spoilers, the avatar, and the generic alert after a
+hidden notification, a failed read, and time running out. A
+`PhotoRequests` fake holds a photo until its task is cancelled, and
+`ScriptedAPI`'s `.hang` holds the read. `CommunicationNotificationTests`
+check the message intent and run only in the Simulator. No UI test drives
+the extension, since UI tests cannot send a push.
 
 To see a real push in your Simulator against the fixture API, launch with
 `-ScreenrFixturePush system`, which keeps iOS's permission and APNs
@@ -586,9 +658,10 @@ EOF
 xcrun simctl push "$udid" com.artisanalsoftware.Screenr.dev payload.apns
 ```
 
-Tapping the notification opens Harbor Lights at Ben's reply. The fixture
-request log, from `-ScreenrFixtureLog`, shows the registration and the tap's
-requests.
+The alert stays generic, since `simctl push` skips the
+[notification extension](#push-content). Tapping the notification opens
+Harbor Lights at Ben's reply. The fixture request log, from
+`-ScreenrFixtureLog`, shows the registration and the tap's requests.
 
 ## Invitations and setup
 
@@ -1267,7 +1340,8 @@ order, so logging never waits on the disk. When the file would pass 256 KB it
 becomes `app.1.ndjson`, so the log keeps at most two files.
 `LogFile.recentTail(maximumBytes:)` returns the newest complete lines.
 Another process writes a file of its own name in the same directory, such
-as the [share extension](#share-extension)'s `share.ndjson`, and
+as the [share extension](#share-extension)'s `share.ndjson` and the
+[notification extension](#push-content)'s `notifications.ndjson`, and
 `recentTails(maximumBytes:)` returns each file's newest lines for the
 [feedback form](#feedback).
 
@@ -1354,6 +1428,11 @@ there.
   the App IDs, app group, and capabilities listed in
   [Apple Developer](../docs/running-screenr.md#apple-developer). Screenr Dev
   runs only in the Simulator, so its `.dev` app group is not registered.
+- **New extensions:** the App Store Connect key cannot register a new
+  extension's App ID. One archive signed through the Mac's Xcode account,
+  `xcodebuild archive … -allowProvisioningUpdates` without the key flags,
+  registers it, and the release script's key signs it from then on. Neither
+  archive needs uploading.
 - **Keychain:** the app group is also the Keychain access group. Pass it as
   `kSecAttrAccessGroup`; there is no `keychain-access-groups` entitlement. In
   the Simulator, the Dev app can store and read items in its group, and

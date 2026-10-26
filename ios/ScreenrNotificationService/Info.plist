@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>ScreenrVariant</key>
+  <string>$(SCREENR_VARIANT)</string>
+  <key>ScreenrServerURL</key>
+  <string>$(SCREENR_SERVER_URL)</string>
+  <key>ScreenrAppGroup</key>
+  <string>$(SCREENR_APP_GROUP)</string>
+  <key>ScreenrGoogleClientID</key>
+  <string>$(SCREENR_GOOGLE_CLIENT_ID)</string>
+  <key>NSExtension</key>
+  <dict>
+    <key>NSExtensionPointIdentifier</key>
+    <string>com.apple.usernotifications.service</string>
+    <key>NSExtensionPrincipalClass</key>
+    <string>$(PRODUCT_MODULE_NAME).NotificationService</string>
+    <key>NSExtensionAttributes</key>
+    <dict>
+      <key>IntentsSupported</key>
+      <array>
+        <string>INSendMessageIntent</string>
+      </array>
+    </dict>
+  </dict>
+#if SCREENR_DEV
+  <key>NSAppTransportSecurity</key>
+  <dict>
+    <key>NSAllowsLocalNetworking</key>
+    <true/>
+  </dict>
+#endif
+</dict>
+</plist>

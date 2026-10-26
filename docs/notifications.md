@@ -254,6 +254,28 @@ build the visible alert
   retried alert replaces the first rather than showing twice, and it becomes
   the delivered notification's request identifier on the phone.
 
+On the phone, the app's Notification Service Extension
+([issue #244](https://github.com/jubishop/screenr/issues/244)) reads the
+notification with the app's session before iOS shows the alert, and shows it
+as a Communication Notification from the actor: their photo as the avatar,
+their name, and a body that leads with the action and ends with the excerpt.
+
+| Kind | Body |
+| --- | --- |
+| `comment` | "Commented on your post about Harbor Lights: Wait until season 2." |
+| `reply` | "Replied to your comment about Harbor Lights: Did you see the end?" |
+| Spoiler comment or reply | "Replied to your comment about Harbor Lights. Contains spoilers." |
+| `friend_request` | "Sent you a friend request." |
+| `friend_accepted` | "Became your friend." |
+
+A post without a title drops "about …". The alert keeps the payload's
+generic "New activity on Screenr" when the payload has no notification ID,
+the read answers `{ "visible": false }` or fails, or iOS's time for the
+extension, about 30 seconds, runs out before the read finishes. A photo
+that does not load in time leaves only the avatar out. The category, thread,
+and notification ID stay, so taps and grouping work either way. See
+[push content](../ios/README.md#push-content).
+
 #### Badge-only updates
 
 Every change to a member's unread count reaches their devices
