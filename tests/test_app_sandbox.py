@@ -263,7 +263,8 @@ class ReleaseScriptSandboxTests(unittest.TestCase):
         # the sandbox. screenr-db runs only system programs and kit scripts.
         unsandboxed = re.compile(r'(--uid=|User=|-u )screenr(?![\w-])')
         sources = [*ROOT.glob('docs/**/*.md'), *ROOT.glob('memory/**/*.md'), *ROOT.glob('*.md'),
-                   *(path for path in (ROOT / 'ops').iterdir() if path.name not in APPS + (RUNNER.name,))]
+                   *(path for path in (ROOT / 'ops').iterdir()
+                     if path.is_file() and path.name not in APPS + (RUNNER.name,))]
         for path in sources:
             with self.subTest(path=str(path.relative_to(ROOT))):
                 self.assertIsNone(unsandboxed.search(path.read_text()))
