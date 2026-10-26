@@ -62,8 +62,11 @@ primary checkout to `main` before relying on it.
 
 Agents that left CI waiting to background monitors and ended their turn often
 stopped before merging. Wait in the foreground with
-`gh pr checks <pr> --watch`. Remote CI is only the Linux `check` job, about
-four minutes; there is no iOS CI
+`gh pr checks <pr> --watch`. Remote CI is the Linux split workflow in
+`.github/workflows/check.yml`: `static`, `app`, `browser`, and `release`, with
+the `check` job as the one result that pull requests require. A normal run
+takes about three minutes ([CI jobs](../docs/development-workflow.md#ci-jobs)).
+There is no iOS CI
 ([decision](../docs/ios-app.md#local-ios-checks-instead-of-ios-ci--2026-10-14)).
 
 ## Registering new extension App IDs
