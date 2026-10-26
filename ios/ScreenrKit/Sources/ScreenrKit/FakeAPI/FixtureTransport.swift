@@ -41,6 +41,11 @@ public struct FixtureScenario: Hashable, Sendable {
   public var requestLog: URL?
   // The notification permission the app finds; see `FixturePushSystem`.
   public var push: Push
+  // Fixtures that answer before any other, overrides included, once the file
+  // at `updateSignal` exists, such as `screen/feed/incoming`. A UI test
+  // creates the file when it wants the app's next read to bring new activity.
+  public var updates: [String]
+  public var updateSignal: URL?
 
   public init(
     viewer: String = "alice",
@@ -49,7 +54,9 @@ public struct FixtureScenario: Hashable, Sendable {
     overrides: [String] = [],
     failure: String? = nil,
     requestLog: URL? = nil,
-    push: Push = .undecided
+    push: Push = .undecided,
+    updates: [String] = [],
+    updateSignal: URL? = nil
   ) {
     self.viewer = viewer
     self.session = session
@@ -58,6 +65,8 @@ public struct FixtureScenario: Hashable, Sendable {
     self.failure = failure
     self.requestLog = requestLog
     self.push = push
+    self.updates = updates
+    self.updateSignal = updateSignal
   }
 }
 
@@ -129,6 +138,7 @@ final class FixtureSetup: Sendable {
 //
 // - `/api/screenr` requests without a bearer token, or with
 //   `FixtureTransport.expiredToken`, get `errors/signed-out`.
+// - Once the scenario's update signal exists, its updates answer first.
 // - A viewer whose profile is pending gets `errors/incomplete-profile` from
 //   member actions until a setup request succeeds.
 // - Otherwise the fixture with the same action and the same query or body
@@ -176,7 +186,10 @@ public struct FixtureTransport: HTTPTransport {
       log = nil
     }
     setup = scenario.profile == .pending ? FixtureSetup() : nil
-    var named = scenario.overrides
+    if !scenario.updates.isEmpty, scenario.updateSignal == nil {
+      throw FixtureError("Fixture updates need a signal file")
+    }
+    var named = scenario.overrides + scenario.updates
     if let failure = scenario.failure { named.append(failure) }
     let names = Set(fixtures.map(\.name))
     for name in named where !names.contains(name) {
@@ -272,8 +285,10 @@ public struct FixtureTransport: HTTPTransport {
   }
 
   private func match(_ incoming: Incoming) -> Fixture? {
+    let updated = updated()
     let ranked = fixtures.compactMap { fixture -> (Fixture, [Int])? in
-      let overridden = scenario.overrides.contains(fixture.name)
+      let update = updated && scenario.updates.contains(fixture.name)
+      let overridden = update || scenario.overrides.contains(fixture.name)
       guard fixture.request.method == incoming.method,
         fixture.request.action == incoming.action,
         fixture.response.status != 304,
@@ -285,6 +300,7 @@ public struct FixtureTransport: HTTPTransport {
       return (
         fixture,
         [
+          update ? 0 : 1,
           overridden ? 0 : 1,
           closeness.rawValue,
           closeness == .exact || succeeded ? 0 : 1,
@@ -298,6 +314,12 @@ public struct FixtureTransport: HTTPTransport {
     }
     guard let (fixture, _) = best else { return nil }
     return fixture
+  }
+
+  // Whether the scenario's update signal exists yet.
+  private func updated() -> Bool {
+    guard let signal = scenario.updateSignal else { return false }
+    return FileManager.default.fileExists(atPath: signal.path())
   }
 
   private func closeness(of fixture: Fixture, to incoming: Incoming) -> Closeness? {

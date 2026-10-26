@@ -242,6 +242,8 @@ uses it when launched with these arguments; Release builds ignore them:
 | `-ScreenrFixtureSession` | `signedIn` (default), `signedOut`, or `expired`: a saved session that gets `errors/signed-out` until the next sign-in. |
 | `-ScreenrFixtureProfile` | `complete` (default), or `pending` for a viewer without a profile, such as `pat`: member actions get `errors/incomplete-profile`, as on the server, until a setup request succeeds. |
 | `-ScreenrFixtureOverride` | A fixture that answers first, such as `screen/feed/empty`. Repeatable. |
+| `-ScreenrFixtureUpdate` | A fixture that answers before any other, overrides included, once the `-ScreenrFixtureUpdateSignal` file exists, such as `screen/feed/incoming`, so the app's next read, such as a poll, brings new activity. Repeatable. |
+| `-ScreenrFixtureUpdateSignal` | The file whose creation sends the `-ScreenrFixtureUpdate` fixtures. |
 | `-ScreenrFixtureFailure` | A fixture that answers every `/api/screenr` request, such as `errors/update-required`. |
 | `-ScreenrFixtureLog` | A file that gets a line per `/api/screenr` request, such as `GET /api/screenr/screen?path=%2F`, with ` visit` after the app's [visit](#visits) and a write's JSON body, keys sorted, after the write: `POST /api/screenr/read-notification {"id":"18"}`. An upload has its type and size instead: `POST /api/screenr/photo image/jpeg 41250 bytes`. Sent [feedback](#feedback) adds a `FEEDBACK` line. A [trailer](#trailers)'s player adds `WEB <url>` for each page it asks for. |
 | `-ScreenrFixturePush` | The notification permission the app finds: `undecided` (default), `allowed`, or `denied`; or `system` for iOS's own permission and APNs registration. See [push notifications](#push-notifications). |
@@ -252,8 +254,10 @@ uses it when launched with these arguments; Release builds ignore them:
 In UI tests, `app.launch(with: FixtureLaunch(viewer: "nora"))` passes them,
 with the directory found from the test's source path; `requestLog`, `link`,
 `appearance`, and `pushTap` pass `-ScreenrFixtureLog`, `-ScreenrOpenURL`,
-`-ScreenrAppearance`, and `-ScreenrPushTap`. The fixture API keeps the
-session in memory.
+`-ScreenrAppearance`, and `-ScreenrPushTap`; and
+`update: FixtureUpdate("screen/feed/incoming")` passes the update arguments,
+whose fixtures answer once the test calls `update.send()`. The fixture API
+keeps the session in memory.
 A request gets the fixture with the same action and
 query or body, then falls back to the screen's path or to a successful
 fixture for the action. A matching ETag gets 304. Apart from setup, writes
@@ -355,7 +359,7 @@ the account forget it. [Settings](#settings) ends with `SignOutButton`.
 | `DestinationView` | `Screenr/Shell/` | Maps each destination to its screen, owns its `ScreenModel`, and adds polling, the navigation title, and redirects. |
 | `ScreenContent`, `MessageView` | `Screenr/Shell/` | Render a model's phase: a spinner, the error with Try again, or the loaded screen; and a full-screen message. |
 | `.livePolling(_:)` | `Screenr/Shell/` | Connects any `LiveRead` to its view's visibility, the app's activity, pull-to-refresh, and pushes. |
-| `IncomingActivityButton` | `Screenr/Shell/` | The "New activity" and "New replies" controls; `.incomingActivity(_:count:show:)` floats one over a screen. |
+| `IncomingActivityButton` | `Screenr/Shell/` | The "New activity" and "New replies" controls; `.incomingActivity(_:count:show:)` floats one over a screen, and only the control animates. `show` must keep the reader's place, as `FeedList` does. The control's identifier is `incoming-activity`; `performShellAudit()` treats its glass like a bar's, so a test checks its label with `labelContrast()`. |
 | `ShareButton` | `Screenr/Shell/` | A `ShareLink` for a destination's screenr.club link. |
 | Feature screens | `Screenr/Screens/` | One file per screen. Each starts as a `PlaceholderScreen` that shows what the screen holds and its path. |
 
@@ -806,7 +810,8 @@ ScreenContent(model: model) { screen in
 
 | Piece | Where | What it does |
 | --- | --- | --- |
-| `FeedList` | `Screenr/Conversation/` | The scrolling feed beneath a header: entries in visible-activity order, New activity, the permalink's scroll and highlight, "This activity is unavailable.", the empty message, and the confirmation dialog. `style: .compact` drops the poster, title, Want to watch, and Recommend for title pages. Changing `headerRequests` scrolls back to the header, such as when Start a conversation opens. |
+| `FeedList` | `Screenr/Conversation/` | The scrolling feed beneath a header: entries in visible-activity order, New activity, the permalink's scroll and highlight, "This activity is unavailable.", the empty message, and the confirmation dialog. `style: .compact` drops the poster, title, Want to watch, and Recommend for title pages. Changing `headerRequests` scrolls back to the header, such as when Start a conversation opens. Its `ScrollPosition` keeps the reader's place; see Reading place below. |
+| `FeedAnchor` | ScreenrKit `Conversation/` | What the feed's scroll position names just before New activity shows: what it already names, the first entry before the reader scrolls, or nothing beneath a header that fills the screen. |
 | `EntryView`, `ThreadView`, `CommentView` | `Screenr/Conversation/` | An entry, its discussion, and one comment, following the web's `feed.tsx` and `thread.tsx`. Each entry and comment carries the accessibility identifier `entry-<id>` or `comment-<id>`. |
 | `CommentComposer`, `DiscussionComposer`, `StartConversationComposer` | `Screenr/Conversation/` | The one composer form, bound to a reply or comment target, or to a `ConversationStarter` with Season and Episode pickers on a TV title. |
 | `ReactionControls`, `ReactionPicker`, `FeedActionStyle`, `WriteFailure` | `Screenr/Conversation/` | Reaction counts and React, which opens the seven reactions beneath its line, as on the web (a SwiftUI `Menu` label does not follow Dynamic Type); the compact actions with 44-point hit areas; and a failed write's message beneath its control. |
@@ -823,6 +828,16 @@ ScreenContent(model: model) { screen in
   as on the web, whose feeds use it for replies too. The reader's own
   entries and replies show at once, with the parents their replies need.
   Removals, withdrawn actions, and spoiler flags apply at once.
+- **Reading place:** New activity keeps the entry at the top of the screen
+  where it is, as the web's `preservePosition` does, and the activity
+  arrives around it. Entries are the only scroll targets, so once the reader
+  scrolls, or a link or a title page's friend line scrolls the feed, the
+  scroll position names that entry, or the linked reply, and SwiftUI keeps it
+  still. Before the reader scrolls, the position names nothing, so
+  `FeedAnchor` names the first entry when it starts the screen; a header at
+  the top, such as an open composer or a title page's details, stays put on
+  its own, with new entries beneath it. `FeedTests` checks the second entry
+  stays put, against `screen/feed/incoming`, which `FixtureUpdate` sends.
 - **Writes:** after a write, `FeedModel` calls `refresh`, which reads again
   even while a poll is in flight, since that poll may have started before the
   write. Composers stay open with an empty draft after posting; Cancel keeps
@@ -844,9 +859,10 @@ ScreenContent(model: model) { screen in
   `app.comment(_:)`, `app.composerField(_:)`, `app.scrollTo(_:)`, and
   `RequestLog.wrote(_:_:)`, which waits for a write's logged JSON body and a
   read after it. `performShellAudit()` passes over what the audit cannot
-  measure in a scrolling screen: text beneath the glass bars or the
-  keyboard or past the screen's edges, and Dynamic Type for scrolling
-  content, which larger text moves past the screen's ends. To check large
+  measure in a scrolling screen: text beneath the glass bars, the floating
+  New activity control, or the keyboard, or past the screen's edges, and
+  Dynamic Type for scrolling content, which larger text moves past the
+  screen's ends. To check large
   text, launch with
   `FixtureLaunch(textSize: "UICTContentSizeCategoryAccessibilityXXXL")` and
   audit there, as `FeedTests` does. Audit a composer after typing, once the

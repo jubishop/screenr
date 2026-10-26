@@ -214,6 +214,49 @@ final class FeedTests: XCTestCase {
     wait(for: [log.wrote("remove-comment", #"{"id":"4"}"#)], timeout: 10)
   }
 
+  // Ben posts while the reader is a little way down the feed, reading the
+  // second entry. The post waits behind New activity, and showing it puts the
+  // post above that entry without moving the entry.
+  @MainActor
+  func testShowsNewActivityWithoutMovingTheReader() throws {
+    let update = FixtureUpdate("screen/feed/incoming")
+    let app = XCUIApplication()
+    app.launch(with: FixtureLaunch(update: update))
+    let reading = app.entry(FeedFixture.aliceOrchard)
+    XCTAssertTrue(reading.waitForExistence(timeout: 10))
+    // Dragging and holding moves the feed without a fling, so the entry
+    // rests just below the navigation bar.
+    let bar = app.navigationBars["Your circle"].frame.maxY
+    let start = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.75))
+    start.press(
+      forDuration: 0.1,
+      thenDragTo: start.withOffset(CGVector(dx: 0, dy: bar + 40 - reading.frame.minY)),
+      withVelocity: .slow,
+      thenHoldForDuration: 0.5
+    )
+
+    update.send()
+    let newActivity = app.buttons["New activity"]
+    XCTAssertTrue(newActivity.waitForExistence(timeout: 10))
+    XCTAssertEqual(newActivity.value as? String, "1")
+    try app.performShellAudit()
+    XCTAssertGreaterThanOrEqual(try newActivity.labelContrast(), 4.5)
+    let place = reading.frame
+    XCTAssertGreaterThan(place.minY, bar)
+    newActivity.tap()
+
+    XCTAssertTrue(newActivity.waitForNonExistence(timeout: 5))
+    XCTAssertEqual(reading.frame.minY, place.minY, accuracy: 1)
+    let post = app.entry(FeedFixture.benNewPost)
+    var swipes = 0
+    while !(post.exists && post.isHittable) && swipes < 5 {
+      app.swipeDown()
+      swipes += 1
+    }
+    XCTAssertTrue(post.isHittable)
+    XCTAssertLessThan(post.frame.maxY, reading.frame.minY)
+  }
+
   // Each friends feed fixture loads and shows its entries, its empty
   // message, its linked reply, or that its link is unavailable, without an
   // error.
@@ -225,7 +268,10 @@ final class FeedTests: XCTestCase {
       .map { String($0.dropLast(".json".count)) }
       .filter { $0 != "not-modified" }
       .sorted()
-    XCTAssertEqual(names, ["default", "empty", "joined", "linked-reply", "unavailable-link"])
+    XCTAssertEqual(
+      names,
+      ["default", "empty", "incoming", "joined", "linked-reply", "unavailable-link"]
+    )
     for name in names {
       let fixture = try FeedFixtureFile(directory.appending(path: "\(name).json"))
       let app = XCUIApplication()

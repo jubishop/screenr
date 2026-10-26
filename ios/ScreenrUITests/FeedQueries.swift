@@ -6,6 +6,8 @@ enum FeedFixture {
   // Ben recommends Night Crossing; a blocked member's comment is unavailable,
   // with Ben's reply 2 beneath it.
   static let benRecommend = "0601645c-005d-450f-8b22-ae05a508119d"
+  // Alice wants to watch The Quiet Orchard, the entry after Ben's recommend.
+  static let aliceOrchard = "0901c192-5fc6-4968-8b1e-d3cd4dda8ab7"
   // Alice's Harbor Lights comment, Season 1, Episode 3: Ben's comment 3 with
   // Alice's reply 4 and Ben's spoiler reply 5, and Cam's removed comment 6.
   static let aliceComment = "e22cb5a7-a2dd-4582-8f62-db3e31f2761b"
@@ -15,6 +17,8 @@ enum FeedFixture {
   static let alicePost = "872a205a-bab2-48f8-8c27-b737397eb469"
   // Cam's deleted post, kept for Ben's reply 9.
   static let camPost = "46cdc1d2-e78b-4103-8d5e-2081a05f727b"
+  // Ben's new post in `screen/feed/incoming`, which sorts first.
+  static let benNewPost = "00000000-0000-4000-8000-000000000001"
 }
 
 extension XCUIApplication {

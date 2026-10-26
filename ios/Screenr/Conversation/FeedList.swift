@@ -3,8 +3,9 @@ import SwiftUI
 
 // The interactive feed that the friends feed, title pages, and profiles
 // share: a scrolling list of entries with their discussions, beneath the
-// screen's own header. Other people's new activity waits behind New activity;
-// a permalink's entry or reply scrolls into view highlighted; and destructive
+// screen's own header. Other people's new activity waits behind New activity,
+// which shows it without moving the entry at the top of the screen; a
+// permalink's entry or reply scrolls into view highlighted; and destructive
 // actions ask first. The screen keeps `feed` across reads, since a failed
 // read replaces this view.
 struct FeedList<Header: View>: View {
@@ -28,6 +29,11 @@ struct FeedList<Header: View>: View {
 
   @State private var scrolled: FeedScrollTarget?
   @State private var pendingReply: String?
+  // The entry at the top of the screen once the reader scrolls, which stays
+  // where it is when New activity, or any other change, adds or moves entries
+  // above it.
+  @State private var position = ScrollPosition(idType: FeedScrollTarget.self)
+  @State private var report = ScrollReport()
 
   var body: some View {
     let layout = feed.layout(snapshot, viewer: viewer.userId)
@@ -37,7 +43,7 @@ struct FeedList<Header: View>: View {
         // Times such as "2h" read the minute from here, since an unchanged
         // screen does not render again.
         TimelineView(.everyMinute) { context in
-          LazyVStack(alignment: .leading, spacing: 0) {
+          VStack(alignment: .leading, spacing: 0) {
             Color.clear
               .frame(height: 0)
               .id(Top())
@@ -47,17 +53,29 @@ struct FeedList<Header: View>: View {
                 .foregroundStyle(.muted)
                 .padding()
             }
-            ForEach(layout.entries) { entry in
-              EntryView(
-                feed: feed,
-                entry: entry,
-                viewer: viewer.userId,
-                style: style,
-                targetReply: target?.item == entry.id ? target?.reply : nil,
-                highlighted: target?.item == entry.id && target?.reply == nil
-              )
-              .id(FeedScrollTarget.entry(entry.id))
-              Divider()
+            // Entries are the only scroll targets, so the place the scroll
+            // position keeps is never the header.
+            LazyVStack(alignment: .leading, spacing: 0) {
+              ForEach(layout.entries) { entry in
+                VStack(alignment: .leading, spacing: 0) {
+                  EntryView(
+                    feed: feed,
+                    entry: entry,
+                    viewer: viewer.userId,
+                    style: style,
+                    targetReply: target?.item == entry.id ? target?.reply : nil,
+                    highlighted: target?.item == entry.id && target?.reply == nil
+                  )
+                  Divider()
+                }
+                .id(FeedScrollTarget.entry(entry.id))
+              }
+            }
+            .scrollTargetLayout()
+            .onGeometryChange(for: FeedStart.self) { proxy in
+              proxy.frame(in: .named(FeedContent())).minY < 1 ? .entries : .header
+            } action: {
+              report.start = $0
             }
             if layout.entries.isEmpty, let emptyMessage {
               Text(emptyMessage)
@@ -67,18 +85,27 @@ struct FeedList<Header: View>: View {
                 .padding(32)
             }
           }
+          .coordinateSpace(.named(FeedContent()))
           .environment(\.feedNow, context.date)
         }
+      }
+      .scrollPosition($position, anchor: .top)
+      // Any part of an entry on screen counts.
+      .onScrollTargetVisibilityChange(idType: FeedScrollTarget.self, threshold: 0.001) {
+        report.visible = Set($0)
       }
       .scrollDismissesKeyboard(.interactively)
       .environment(
         \.pendingReplyScroll,
         PendingReplyScroll(comment: pendingReply) { comment in
           pendingReply = nil
-          withAnimation { proxy.scrollTo(FeedScrollTarget.comment(comment), anchor: .center) }
+          withAnimation {
+            position.scrollTo(id: FeedScrollTarget.comment(comment), anchor: .center)
+          }
         }
       )
       .incomingActivity(.activity, count: layout.incoming) {
+        keepPlace(in: layout)
         feed.showIncoming(snapshot, viewer: viewer.userId)
       }
       .onChange(of: snapshot, initial: true) { _, snapshot in
@@ -88,6 +115,8 @@ struct FeedList<Header: View>: View {
         scroll(to: target, in: layout, proxy)
       }
       .onChange(of: headerRequests) {
+        // The header, rather than an entry, is now the reader's place.
+        position = ScrollPosition(idType: FeedScrollTarget.self)
         withAnimation { proxy.scrollTo(Top(), anchor: .top) }
       }
       .onChange(of: entryRequest) { _, request in
@@ -96,7 +125,7 @@ struct FeedList<Header: View>: View {
         // The entry may join the list only as it renders again.
         Task {
           withAnimation {
-            proxy.scrollTo(FeedScrollTarget.entry(request.entry), anchor: .top)
+            position.scrollTo(id: FeedScrollTarget.entry(request.entry), anchor: .top)
           }
         }
       }
@@ -117,6 +146,23 @@ struct FeedList<Header: View>: View {
     }
   }
 
+  // Names the reader's place in `position` just before New activity shows.
+  private func keepPlace(in layout: FeedLayout) {
+    var first: FeedScrollTarget?
+    if let entry = layout.entries.first { first = .entry(entry.id) }
+    let anchor = FeedAnchor(
+      named: position.viewID(type: FeedScrollTarget.self),
+      visible: report.visible,
+      first: first,
+      start: report.start
+    )
+    switch anchor {
+    case .kept: break
+    case .pin(let entry): position.scrollTo(id: entry, anchor: .top)
+    case .release: position = ScrollPosition(idType: FeedScrollTarget.self)
+    }
+  }
+
   // Moves to a permalink's entry once, and then to its reply when the reply
   // shows, such as after the reader reveals a spoiler discussion. A reply in
   // an entry the list has not loaded yet scrolls once its row appears.
@@ -130,7 +176,7 @@ struct FeedList<Header: View>: View {
     scrolled = target
     switch target {
     case .entry:
-      withAnimation { proxy.scrollTo(target, anchor: .top) }
+      withAnimation { position.scrollTo(id: target, anchor: .top) }
     case .comment(let comment):
       if first,
         let entry = layout.entries.first(where: { $0.comments.contains { $0.id == comment } })
@@ -138,7 +184,7 @@ struct FeedList<Header: View>: View {
         proxy.scrollTo(FeedScrollTarget.entry(entry.id), anchor: .top)
       }
       pendingReply = comment
-      withAnimation { proxy.scrollTo(target, anchor: .center) }
+      withAnimation { position.scrollTo(id: target, anchor: .center) }
     }
   }
 }
@@ -168,6 +214,16 @@ extension FeedList where Header == EmptyView {
 
 // The header's place in the scroll view.
 private struct Top: Hashable {}
+
+// The coordinate space of the feed's content, header and all.
+private nonisolated struct FeedContent: Hashable, Sendable {}
+
+// What the scroll view reports as the reader scrolls, held outside the view's
+// state so that scrolling does not render the feed again.
+private final class ScrollReport {
+  var visible: Set<FeedScrollTarget> = []
+  var start = FeedStart.entries
+}
 
 // A screen's request to show one entry. Each request scrolls, even to the
 // entry the last one showed.
