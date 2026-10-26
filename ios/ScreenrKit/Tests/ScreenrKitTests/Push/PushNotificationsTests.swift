@@ -360,6 +360,193 @@ struct PushNotificationsTests {
     #expect(api.requests.map(\.action) == ["notification", "read-notification"])
   }
 
+  // MARK: Actions
+
+  private func respond(_ id: String, _ action: String) -> RecordingAPI.Sent {
+    RecordingAPI.Sent(
+      method: .post,
+      action: "respond-friend-request",
+      query: [:],
+      body: ["id": .string(id), "action": .string(action)]
+    )
+  }
+
+  private func lookUp(_ id: String) -> RecordingAPI.Sent {
+    RecordingAPI.Sent(method: .get, action: "notification", query: ["id": id], body: nil)
+  }
+
+  private func markRead(_ id: String) -> RecordingAPI.Sent {
+    RecordingAPI.Sent(
+      method: .post,
+      action: "read-notification",
+      query: [:],
+      body: ["id": .string(id)]
+    )
+  }
+
+  private func replying(_ body: String, to comment: String) -> RecordingAPI.Sent {
+    RecordingAPI.Sent(
+      method: .post,
+      action: "comment",
+      query: [:],
+      body: [
+        "conversation": .string(entry), "body": .string(body), "spoiler": false,
+        "replyTo": .string(comment),
+      ]
+    )
+  }
+
+  // Accept and Decline answer the request as the bell's buttons do, which
+  // also marks it read, and the live screens read again.
+  @Test func acceptingOrDecliningAnswersTheFriendRequest() async throws {
+    for (response, action) in [(FriendRequestResponse.accept, "accept"), (.decline, "decline")] {
+      let api = RecordingAPI([
+        "respond-friend-request": try .fixture("actions/respond-friend-request/accept")
+      ])
+      let (push, shell) = push(RecordingPushSystem(.allowed), api: api)
+      let refreshes = shell.liveRefreshes
+
+      await push.perform(.respond(response), notificationID: "14")
+
+      #expect(api.requests == [respond("14", action)])
+      #expect(shell.liveRefreshes == refreshes + 1)
+      #expect(shell.router.sheet == nil)
+      #expect(shell.router[stack: .circle].isEmpty)
+    }
+  }
+
+  // A request answered elsewhere, withdrawn, or hidden since the push is no
+  // longer pending, and the server changes nothing.
+  @Test func answeringARequestThatIsNoLongerPendingChangesNothing() async {
+    let api = RecordingAPI(["respond-friend-request": .failure(.notFound)])
+    let (push, shell) = push(RecordingPushSystem(.allowed), api: api)
+    let refreshes = shell.liveRefreshes
+
+    await push.perform(.respond(.accept), notificationID: "14")
+
+    #expect(api.requests == [respond("14", "accept")])
+    #expect(shell.liveRefreshes == refreshes)
+  }
+
+  // Reply answers the notification's comment in its conversation, then marks
+  // the notification read, since replying shows the member saw it.
+  @Test func replyingPostsTheReplyAndMarksTheNotificationRead() async throws {
+    let api = RecordingAPI([
+      "notification": try .fixture("actions/notification/comment"),
+      "comment": try .fixture("actions/comment/reply"),
+      "read-notification": try .fixture("actions/read-notification/default"),
+    ])
+    let (push, shell) = push(RecordingPushSystem(.allowed), api: api)
+    let refreshes = shell.liveRefreshes
+
+    await push.perform(.reply("Season 2 is worth it."), notificationID: "18")
+
+    #expect(
+      api.requests == [
+        lookUp("18"), replying("Season 2 is worth it.", to: "3"), markRead("18"),
+      ]
+    )
+    #expect(shell.liveRefreshes == refreshes + 1)
+    // Replying from the notification opens nothing.
+    #expect(shell.router.sheet == nil)
+    #expect(shell.router[stack: .circle].isEmpty)
+  }
+
+  // A reply to a reply answers that reply, which the server files under its
+  // first comment.
+  @Test func replyingToAReplyAnswersThatReply() async throws {
+    let api = RecordingAPI([
+      "notification": try .fixture("actions/notification/spoiler"),
+      "comment": try .fixture("actions/comment/reply"),
+      "read-notification": try .fixture("actions/read-notification/default"),
+    ])
+    let (push, _) = push(RecordingPushSystem(.allowed), api: api)
+
+    await push.perform(.reply("No spoilers here."), notificationID: "20")
+
+    #expect(
+      api.requests == [lookUp("20"), replying("No spoilers here.", to: "5"), markRead("20")]
+    )
+  }
+
+  // A notification the member can no longer see, such as after a block,
+  // gets no reply and stays as it was.
+  @Test func replyingToAHiddenNotificationPostsNothing() async throws {
+    let api = RecordingAPI(["notification": try .fixture("actions/notification/hidden")])
+    let (push, shell) = push(RecordingPushSystem(.allowed), api: api)
+    let refreshes = shell.liveRefreshes
+
+    await push.perform(.reply("Agreed."), notificationID: "2")
+
+    #expect(api.requests == [lookUp("2")])
+    #expect(shell.liveRefreshes == refreshes)
+  }
+
+  // A reply that fails leaves the notification unread in the bell, where the
+  // member can open the conversation and reply again.
+  @Test func aFailedReplyLeavesTheNotificationUnread() async throws {
+    let api = RecordingAPI([
+      "notification": try .fixture("actions/notification/comment"),
+      "comment": .failure(.offline),
+      "read-notification": try .fixture("actions/read-notification/default"),
+    ])
+    let (push, shell) = push(RecordingPushSystem(.allowed), api: api)
+    let refreshes = shell.liveRefreshes
+
+    await push.perform(.reply("Agreed."), notificationID: "18")
+
+    #expect(api.requests == [lookUp("18"), replying("Agreed.", to: "3")])
+    #expect(shell.liveRefreshes == refreshes)
+  }
+
+  @Test func aReplyStillCountsWhenMarkingItReadFails() async throws {
+    let api = RecordingAPI([
+      "notification": try .fixture("actions/notification/comment"),
+      "comment": try .fixture("actions/comment/reply"),
+      "read-notification": .failure(.server(status: 503)),
+    ])
+    let (push, shell) = push(RecordingPushSystem(.allowed), api: api)
+    let refreshes = shell.liveRefreshes
+
+    await push.perform(.reply("Agreed."), notificationID: "18")
+
+    #expect(api.requests == [lookUp("18"), replying("Agreed.", to: "3"), markRead("18")])
+    #expect(shell.liveRefreshes == refreshes + 1)
+  }
+
+  @Test func anEmptyReplyPostsNothing() async {
+    let api = RecordingAPI()
+    let (push, _) = push(RecordingPushSystem(.allowed), api: api)
+
+    await push.perform(.reply(" \n "), notificationID: "18")
+
+    #expect(api.requests.isEmpty)
+  }
+
+  // While signed out, the client sends nothing and the session's phase shows
+  // sign-in; the action stops there.
+  @Test func actionsWhileSignedOutStopAtTheirFirstRequest() async {
+    let api = RecordingAPI([
+      "notification": .failure(.signedOut), "respond-friend-request": .failure(.signedOut),
+    ])
+    let (push, _) = push(RecordingPushSystem(.allowed), api: api)
+
+    await push.perform(.reply("Agreed."), notificationID: "18")
+    await push.perform(.respond(.decline), notificationID: "14")
+
+    #expect(api.requests == [lookUp("18"), respond("14", "decline")])
+  }
+
+  @Test func anActionWithoutANotificationSendsNothing() async {
+    let api = RecordingAPI()
+    let (push, _) = push(RecordingPushSystem(.allowed), api: api)
+
+    await push.perform(.respond(.accept), notificationID: nil)
+    await push.perform(.reply("Agreed."), notificationID: nil)
+
+    #expect(api.requests.isEmpty)
+  }
+
   @Test func aPushThatArrivesWhileOpenRefreshesTheScreen() {
     let (push, shell) = push(RecordingPushSystem(.allowed))
     let refreshes = shell.liveRefreshes
@@ -390,6 +577,39 @@ struct PushNotificationsTests {
     #expect(
       Set(PushCategory.notificationCategories.map(\.identifier)) == ["FRIEND_REQUEST", "COMMENT"]
     )
+  }
+
+  // Friend requests offer Accept and Decline, and comments and replies a
+  // Reply field. Each changes data, so iOS asks for the passcode first on a
+  // locked phone, and none opens the app.
+  @Test func eachCategoryOffersItsActions() throws {
+    let friendRequest = PushCategory.friendRequest.notificationCategory.actions
+    #expect(friendRequest.map(\.identifier) == ["ACCEPT", "DECLINE"])
+    #expect(friendRequest.map(\.title) == ["Accept", "Decline"])
+    #expect(
+      friendRequest.map(\.options) == [
+        [.authenticationRequired], [.authenticationRequired, .destructive],
+      ]
+    )
+    #expect(!friendRequest.contains { $0 is UNTextInputNotificationAction })
+
+    let comment = PushCategory.comment.notificationCategory.actions
+    #expect(comment.map(\.identifier) == ["REPLY"])
+    let reply = try #require(comment.first as? UNTextInputNotificationAction)
+    #expect(reply.title == "Reply")
+    #expect(reply.options == [.authenticationRequired])
+    #expect(reply.textInputButtonTitle == "Post")
+  }
+
+  // The app delegate hands over the chosen action's identifier and, for
+  // Reply, the member's text.
+  @Test func readsTheChosenAction() {
+    #expect(PushAction(identifier: "ACCEPT", text: nil) == .respond(.accept))
+    #expect(PushAction(identifier: "DECLINE", text: nil) == .respond(.decline))
+    #expect(PushAction(identifier: "REPLY", text: "Agreed.") == .reply("Agreed."))
+    #expect(PushAction(identifier: "REPLY", text: nil) == .reply(""))
+    #expect(PushAction(identifier: UNNotificationDefaultActionIdentifier, text: nil) == nil)
+    #expect(PushAction(identifier: UNNotificationDismissActionIdentifier, text: nil) == nil)
   }
 
   @Test func readsALaunchTapOnlyInScreenrDev() {

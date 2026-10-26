@@ -14,6 +14,9 @@ import Observation
 // - Badge: the app icon shows the unread count the app last read.
 // - Taps: a tapped notification opens its item, as selecting it in the bell
 //   does, and marks it read. One the member can no longer see opens the bell.
+// - Actions: Accept and Decline answer a friend request, and Reply posts a
+//   reply to the notification's comment and marks it read, in the
+//   background, without opening the app.
 // - While open: an arriving push makes the visible screen read again.
 @MainActor
 @Observable
@@ -159,6 +162,104 @@ public final class PushNotifications {
       shell.refreshLiveReads()
     } catch {
       Log.push.warning("Marking a tapped notification read failed", .error(error))
+    }
+  }
+
+  // The member chose one of a notification's actions without opening the
+  // app. It returns once the action's requests finish, since iOS keeps a
+  // background app running only until then. Nothing opens; the bell and the
+  // conversation show the result when they next read.
+  public func perform(_ action: PushAction, notificationID: String?) async {
+    guard let id = notificationID else {
+      Log.push.warning(
+        "A notification action named no notification",
+        .label("action", action.identifier)
+      )
+      return
+    }
+    switch action {
+    case .respond(let response): await respond(to: id, response)
+    case .reply(let text): await reply(to: id, text)
+    }
+  }
+
+  // Accept and Decline answer the request as the bell's buttons do, which
+  // marks its notification read.
+  private func respond(to id: String, _ response: FriendRequestResponse) async {
+    let action = PushAction.respond(response).identifier
+    do throws(APIError) {
+      _ = try await api.send(.respondToFriendRequest(notification: id, response))
+    } catch {
+      actionFailed(action, error)
+      return
+    }
+    Log.push.info("Answered a friend request from its notification", .label("action", action))
+    shell.refreshLiveReads()
+  }
+
+  // Reply answers the notification's comment in its conversation, then marks
+  // the notification read. A reply that fails leaves it unread in the bell.
+  private func reply(to id: String, _ text: String) async {
+    guard CommentDraft(body: text).isPostable else {
+      Log.push.info("Skipped an empty reply from a notification")
+      return
+    }
+    let notification: PushNotification
+    do throws(APIError) {
+      switch try await api.send(.notification(id: id)) {
+      case .visible(let visible): notification = visible
+      case .hidden:
+        Log.push.info("A replied notification is no longer visible")
+        return
+      }
+    } catch {
+      actionFailed(.reply, error)
+      return
+    }
+    guard let thread = notification.thread, let comment = notification.comment else {
+      Log.push.warning("A replied notification names no comment")
+      return
+    }
+    do throws(APIError) {
+      _ = try await api.send(
+        .comment(conversation: thread, body: text, spoiler: false, replyTo: comment)
+      )
+    } catch {
+      actionFailed(.reply, error)
+      return
+    }
+    Log.push.info("Replied from a notification")
+    do throws(APIError) {
+      _ = try await api.send(.readNotification(id: id))
+    } catch {
+      Log.push.warning(
+        "Marking a replied notification read failed",
+        .error(error),
+        .identifier("request_id", error.requestID)
+      )
+    }
+    shell.refreshLiveReads()
+  }
+
+  // An action whose request or notification is gone, such as one answered
+  // elsewhere or a removed comment, or one while signed out or needing an
+  // update, which the session's phase shows, is expected. Other failures are
+  // warnings, which reach Sentry.
+  private func actionFailed(_ action: PushAction.Identifier, _ error: APIError) {
+    switch error.kind {
+    case .notFound, .signedOut, .updateRequired:
+      Log.push.info(
+        "A notification action no longer applies",
+        .label("action", action),
+        .identifier("request_id", error.requestID)
+      )
+    default:
+      Log.push.warning(
+        "A notification action failed",
+        .label("action", action),
+        .error(error),
+        .identifier("request_id", error.requestID)
+      )
     }
   }
 

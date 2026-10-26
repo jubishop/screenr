@@ -55,7 +55,82 @@ public enum PushCategory: String, CaseIterable, Sendable {
     Set(allCases.map(\.notificationCategory))
   }
 
+  public var actions: [PushAction.Identifier] {
+    switch self {
+    case .friendRequest: [.accept, .decline]
+    case .comment: [.reply]
+    }
+  }
+
   public var notificationCategory: UNNotificationCategory {
-    UNNotificationCategory(identifier: rawValue, actions: [], intentIdentifiers: [], options: [])
+    UNNotificationCategory(
+      identifier: rawValue,
+      actions: actions.map(\.notificationAction),
+      intentIdentifiers: [],
+      options: []
+    )
+  }
+}
+
+// An action the member chose on a notification instead of tapping it, which
+// the app performs in the background without opening.
+public enum PushAction: Hashable, Sendable {
+  case respond(FriendRequestResponse)
+  // The text the member typed.
+  case reply(String)
+
+  // The actions the categories offer. Each changes what others see, so a
+  // locked iPhone asks for the passcode or Face ID first.
+  public enum Identifier: String, CaseIterable, Sendable {
+    case accept = "ACCEPT"
+    case decline = "DECLINE"
+    case reply = "REPLY"
+
+    public var notificationAction: UNNotificationAction {
+      switch self {
+      case .accept:
+        UNNotificationAction(
+          identifier: rawValue,
+          title: "Accept",
+          options: [.authenticationRequired],
+          icon: UNNotificationActionIcon(systemImageName: "checkmark")
+        )
+      case .decline:
+        UNNotificationAction(
+          identifier: rawValue,
+          title: "Decline",
+          options: [.authenticationRequired, .destructive],
+          icon: UNNotificationActionIcon(systemImageName: "xmark")
+        )
+      case .reply:
+        UNTextInputNotificationAction(
+          identifier: rawValue,
+          title: "Reply",
+          options: [.authenticationRequired],
+          icon: UNNotificationActionIcon(systemImageName: "arrowshape.turn.up.left"),
+          textInputButtonTitle: "Post",
+          textInputPlaceholder: "What do you think?"
+        )
+      }
+    }
+  }
+
+  // The action behind a response's identifier, with the text a Reply sent.
+  // Nil for a tap, a dismissal, or an identifier this build does not offer.
+  public init?(identifier: String, text: String?) {
+    switch Identifier(rawValue: identifier) {
+    case .accept: self = .respond(.accept)
+    case .decline: self = .respond(.decline)
+    case .reply: self = .reply(text ?? "")
+    case nil: return nil
+    }
+  }
+
+  public var identifier: Identifier {
+    switch self {
+    case .respond(.accept): .accept
+    case .respond(.decline): .decline
+    case .reply: .reply
+    }
   }
 }
