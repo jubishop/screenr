@@ -724,13 +724,13 @@ rejection fails the run. Both attempts' logs are kept.
 
 When the checks pass and notes changed, the runner commits the change in the
 clone with the checkout's Git identity and pushes it to `main` on GitHub. Git
-hooks stay off in the clone; none gates a memory-only commit. The commit
-carries `Screenr-Deploy: skip` trailers, so
-[deployment](#main-branch-delivery) is skipped unless an earlier undeployed
-commit needs it; CI still runs. If `main` moved during the audit, the commit
-is rebased onto it, unless the move changed `memory/`; then the run fails and
-the next run audits the new notes. The local checkout is never touched; pull
-to see the change.
+hooks stay off in the clone; none gates a memory-only commit. CI ignores
+Markdown-only pushes, so the commit starts no checks or deployment itself.
+Its `Screenr-Deploy: skip` trailers keep it from forcing a
+[deployment](#main-branch-delivery) when a later push would otherwise skip
+one. If `main` moved during the audit, the commit is rebased onto it, unless
+the move changed `memory/`; then the run fails and the next run audits the
+new notes. The local checkout is never touched; pull to see the change.
 
 A failed run shows a macOS notification and opens a public GitHub issue titled
 `Memory audit failing`, or comments on the open one, with the error and the
