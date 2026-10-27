@@ -394,6 +394,23 @@ deliver: real push notifications, and touch drag reordering of the top 10.
 The [interface design decisions](interface-design.md) define the layout and
 presentation changes accepted after the 2026-10-12 design review.
 
+### No screen-reader support — 2026-10-27
+
+**Decision:** Screenr does not support VoiceOver or other screen readers, in
+the iPhone app or on the web. Code, tests, tooling, guidance, and docs that
+exist only for screen readers are removed. Screen-reader behavior that native
+controls and semantic HTML provide for free may remain, but nothing tests it
+or keeps it working. Other accessibility stays: contrast, Dynamic Type, text
+clipping, tap target size, and web keyboard focus. Accessible names and roles
+that tests use to find controls also stay, as test hooks.
+[Issue #337](https://github.com/jubishop/screenr/issues/337) tracks the
+removal.
+
+**Why:** The user said: "its too much work for this hobby app."
+
+**Supersedes:** the VoiceOver requirement in the iPhone app's accessibility
+rule, and the screen-reader reasons behind the interface design decisions.
+
 ### No release gate — 2026-10-12
 
 **Decision:** Screenr rolls out continuously. There is no first-release
