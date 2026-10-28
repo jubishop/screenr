@@ -734,11 +734,12 @@ The owner settled the two choices #309 left open
 
 - **Billing:** audits bill Screenr's own Anthropic API key, with an automatic
   fallback to the subscription when the key runs out of credit, reaches its
-  spend limit, or is rejected. Reason: the owner has Anthropic API credit to
-  use and is moving scheduled `claude -p` jobs off the subscription. Each
-  project has its own key. This supersedes subscription-only billing.
+  spend limit, or is rejected. Reason: the owner's Max plan includes $200 of
+  Anthropic API credit each month, which expires if unused, so scheduled
+  `claude -p` jobs move onto it. Each project has its own key. This
+  supersedes subscription-only billing.
 - **Model:** `claude-sonnet-5-5` at high effort replaces `claude-haiku-5-5`.
-  Reason: unknown.
+  Reason: the owner chose Sonnet for better audits.
 
 ## Project Starter
 
