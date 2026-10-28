@@ -702,6 +702,12 @@ validation, and failure handling. Screenr's `memoryAudit` settings in
 - **Index:** archiving a note removes its entry from the README's
   "Active memory index" list.
 
+Audits bill Screenr's own Anthropic API key, set as
+`MEMORY_AUDIT_ANTHROPIC_API_KEY` in the primary checkout's `.env` (mode 600),
+and fall back to the Claude subscription when the API refuses it, as the
+feature's [API key](foundation/memory-audit.md#api-key) section describes. The
+key is separate from PodHaven's and stays out of production's `app.env`.
+
 Run `bin/memory-audit install` in the primary checkout to register or update
 the LaunchAgent, and
 `launchctl print gui/$(id -u)/com.jubishop.screenr.memory-audit` to inspect
@@ -723,6 +729,17 @@ The owner settled the two choices #309 left open
   so fixes no longer need porting by hand. Project Starter 3.2.0 ships it,
   and [#333](https://github.com/jubishop/screenr/issues/333) replaced this
   project's copy with it. Rejected: separate copies in each repository.
+
+### Audit billing and model — 2026-10-28
+
+- **Billing:** audits bill Screenr's own Anthropic API key, with an automatic
+  fallback to the subscription when the key runs out of credit, reaches its
+  spend limit, or is rejected. Reason: the owner's Max plan includes $200 of
+  Anthropic API credit each month, which expires if unused, so scheduled
+  `claude -p` jobs move onto it. Each project has its own key. This
+  supersedes subscription-only billing.
+- **Model:** `claude-sonnet-5-5` at high effort replaces `claude-haiku-5-5`.
+  Reason: the owner chose Sonnet for better audits.
 
 ## Project Starter
 
