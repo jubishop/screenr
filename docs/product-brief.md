@@ -51,6 +51,9 @@ applies to every feature.
 - On title pages and title cards, show whether a movie is in US theaters and
   upcoming US theatrical, digital, and TV premiere dates, following the
   [release status decisions](title-availability.md#release-status-on-title-pages-and-cards--2026-10-16).
+- On title pages and title cards, show TMDB's user score as a percentage
+  beside the TMDB logo when at least 20 members have rated the title,
+  following the [TMDB user score decision](title-catalog.md#tmdb-user-score--2026-10-30).
 - Let members save their streaming services. On Find a title, mark matches
   in search results and suggestions, and offer an optional My services filter.
   Include free options automatically. Keep all titles available when the

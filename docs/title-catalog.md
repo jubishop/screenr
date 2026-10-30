@@ -7,7 +7,7 @@ status: current
 Screenr reads movie and TV details and trailers from TMDB on the server, using
 the `TMDB_READ_TOKEN` described in [local setup](running-screenr.md#local-setup).
 This page covers title search, how title details and trailers are
-cached, attributed, and shown, the season and episode lists for TV
+cached, attributed, and shown, the TMDB user score, the season and episode lists for TV
 discussion labels, and the titles that links shared to the iPhone app name.
 [Title availability](title-availability.md) covers US viewing options.
 
@@ -37,6 +37,44 @@ a title TMDB dropped.
 `public/tmdb.svg` is the unmodified approved short logo from the
 [TMDB logo page](https://www.themoviedb.org/about/logos-attribution).
 The Credits page supplies the required attribution notice.
+
+## TMDB user score — 2026-10-30
+
+**Decision:** Show TMDB's user score, the average rating TMDB members give a
+movie or show, on title pages and on every title card that shows
+[release status](title-availability.md#release-status-on-title-pages-and-cards--2026-10-16),
+in the web app and the iPhone app. Show the TMDB logo followed by the score
+as a whole percentage, such as 73% for TMDB's 7.3 out of 10. Show no score
+when fewer than 20 TMDB members have rated the title, which also covers
+unreleased titles that TMDB reports as 0 with no votes. Take the score from
+the title details and search results Screenr already requests, so it adds no
+provider, key, or request.
+
+**Why:** [Issue #339](https://github.com/jubishop/screenr/issues/339) asked
+for Rotten Tomatoes scores. After the findings below, the user chose TMDB's
+score instead, with the placement, format, and vote threshold above. No
+further reason was stated. A percentage keeps the score apart from members'
+[1-to-5 star ratings](product-brief.md#ratings-and-written-reviews--2026-09-04),
+and the logo credits the source.
+
+**Tradeoff:** The score is TMDB members' rating, not critics'. Titles with
+fewer than 20 votes show nothing. The rejected alternatives were Rotten
+Tomatoes scores through MDBList, OMDb, or scraping; title pages and search
+results only; title pages only; plain "TMDB 73%" text; the raw score out of 10; and
+thresholds of 1 and 100 votes.
+
+**Rotten Tomatoes findings (2026-10-30):** Rotten Tomatoes' own API serves
+only approved, licensed partners and no longer supports unofficial projects,
+according to the [Fandango developer page](https://web.archive.org/web/20220319011123/https:/developer.fandango.com/rotten_tomatoes),
+and its logos need permission under its
+[licensing terms](https://www.rottentomatoes.com/help_desk).
+[MDBList](https://docs.mdblist.com/docs/api) offers critic and audience
+scores for movies and TV by TMDB ID with a free key of 1,000 requests a day,
+but relays them without Rotten Tomatoes' license.
+[OMDb](https://www.omdbapi.com/) returns them for movies only; a reply on its
+[issue tracker](https://github.com/omdbapi/OMDb-API/issues/147) gives legal
+reasons for TV getting none.
+Scraping rottentomatoes.com would break its terms of use.
 
 ## Title trailers
 
