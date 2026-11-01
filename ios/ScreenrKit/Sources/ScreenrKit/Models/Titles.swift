@@ -128,6 +128,38 @@ public struct TitleViewing: Codable, Hashable, Sendable {
   public let sections: [WatchSection]
 }
 
+// Whether the server could load a title's US release dates.
+public enum ReleaseStatus: String, ServerEnum {
+  case ok
+  case unavailable
+  case unknown
+}
+
+// Which release an upcoming date is. Clients show its label whatever the kind.
+public enum ReleaseKind: String, ServerEnum {
+  case theatrical
+  case digital
+  case premiere
+  case seasonPremiere = "season_premiere"
+  case unknown
+}
+
+// An upcoming US release. `date` is a calendar date, `YYYY-MM-DD`, and
+// `label` the server's words for it, such as "Digital Dec 9".
+public struct ReleaseDate: Codable, Hashable, Sendable {
+  public let kind: ReleaseKind
+  public let date: String
+  public let label: String
+}
+
+// A title's US release status, which the server derives for today: whether a
+// movie is in theaters, and its upcoming dates in date order.
+public struct TitleRelease: Codable, Hashable, Sendable {
+  public let status: ReleaseStatus
+  public let inTheaters: Bool
+  public let upcoming: [ReleaseDate]
+}
+
 // What a link or text shared to the share extension names: its title, or,
 // when it names none, the text the extension's search starts from, which may
 // be empty.
@@ -136,21 +168,24 @@ public struct TitleResolution: Decodable, Hashable, Sendable {
   public let query: String
 }
 
-// A title with where it streams: a search result.
+// A title with where it streams and its release status: a search result.
 public struct ViewingTitle: Decodable, Hashable, Sendable, Identifiable {
   public let title: Title
   public let viewing: TitleViewing
+  public let release: TitleRelease?
 
   public var id: String { title.id }
 
   private enum CodingKeys: CodingKey {
     case viewing
+    case release
   }
 
   public init(from decoder: any Decoder) throws {
     title = try Title(from: decoder)
-    viewing = try decoder.container(keyedBy: CodingKeys.self)
-      .decode(TitleViewing.self, forKey: .viewing)
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    viewing = try container.decode(TitleViewing.self, forKey: .viewing)
+    release = try container.decodeIfPresent(TitleRelease.self, forKey: .release)
   }
 }
 
@@ -171,6 +206,7 @@ public struct Recommender: Codable, Hashable, Sendable {
 public struct TitleSuggestion: Decodable, Hashable, Sendable, Identifiable {
   public let title: Title
   public let viewing: TitleViewing
+  public let release: TitleRelease?
   public let recommendedBy: [Recommender]
   public let wantedBy: [PersonName]
   // Friends who are Watching or Caught up.
@@ -183,6 +219,7 @@ public struct TitleSuggestion: Decodable, Hashable, Sendable, Identifiable {
 
   private enum CodingKeys: CodingKey {
     case viewing
+    case release
     case recommendedBy
     case wantedBy
     case watchingBy
@@ -195,6 +232,7 @@ public struct TitleSuggestion: Decodable, Hashable, Sendable, Identifiable {
     title = try Title(from: decoder)
     let container = try decoder.container(keyedBy: CodingKeys.self)
     viewing = try container.decode(TitleViewing.self, forKey: .viewing)
+    release = try container.decodeIfPresent(TitleRelease.self, forKey: .release)
     recommendedBy = try container.decode([Recommender].self, forKey: .recommendedBy)
     wantedBy = try container.decode([PersonName].self, forKey: .wantedBy)
     watchingBy = try container.decode([PersonName].self, forKey: .watchingBy)
@@ -208,6 +246,7 @@ public struct TitleSuggestion: Decodable, Hashable, Sendable, Identifiable {
 public struct FriendsRecommendation: Decodable, Hashable, Sendable, Identifiable {
   public let title: Title
   public let viewing: TitleViewing
+  public let release: TitleRelease?
   public let recommendedBy: [Recommender]
   public let viewerStatus: WatchStatus?
   public let viewerRecommended: Bool
@@ -216,6 +255,7 @@ public struct FriendsRecommendation: Decodable, Hashable, Sendable, Identifiable
 
   private enum CodingKeys: CodingKey {
     case viewing
+    case release
     case recommendedBy
     case viewerStatus
     case viewerRecommended
@@ -225,6 +265,7 @@ public struct FriendsRecommendation: Decodable, Hashable, Sendable, Identifiable
     title = try Title(from: decoder)
     let container = try decoder.container(keyedBy: CodingKeys.self)
     viewing = try container.decode(TitleViewing.self, forKey: .viewing)
+    release = try container.decodeIfPresent(TitleRelease.self, forKey: .release)
     recommendedBy = try container.decode([Recommender].self, forKey: .recommendedBy)
     viewerStatus = try container.decodeIfPresent(WatchStatus.self, forKey: .viewerStatus)
     viewerRecommended = try container.decode(Bool.self, forKey: .viewerRecommended)
@@ -243,6 +284,7 @@ public enum ViewingAccess: String, ServerEnum {
 public struct SharedTitle: Decodable, Hashable, Sendable, Identifiable {
   public let title: Title
   public let viewing: TitleViewing
+  public let release: TitleRelease?
   public let access: ViewingAccess
   public let matchingServiceIds: [String]
 
@@ -250,6 +292,7 @@ public struct SharedTitle: Decodable, Hashable, Sendable, Identifiable {
 
   private enum CodingKeys: CodingKey {
     case viewing
+    case release
     case access
     case matchingServiceIds
   }
@@ -258,6 +301,7 @@ public struct SharedTitle: Decodable, Hashable, Sendable, Identifiable {
     title = try Title(from: decoder)
     let container = try decoder.container(keyedBy: CodingKeys.self)
     viewing = try container.decode(TitleViewing.self, forKey: .viewing)
+    release = try container.decodeIfPresent(TitleRelease.self, forKey: .release)
     access = try container.decode(ViewingAccess.self, forKey: .access)
     matchingServiceIds = try container.decode([String].self, forKey: .matchingServiceIds)
   }

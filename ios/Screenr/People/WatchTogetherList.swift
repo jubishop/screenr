@@ -43,6 +43,7 @@ struct WatchTogetherList: View {
               TitleRow(
                 title: title.title,
                 viewing: title.viewing,
+                release: title.release,
                 serviceIds: title.matchingServiceIds,
                 savedBy: .eitherPerson
               )
