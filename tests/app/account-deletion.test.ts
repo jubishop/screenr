@@ -2,9 +2,11 @@ import { test, mock, type TestContext } from "node:test";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
+import { Pool } from "pg";
 import {
   useDatabase,
   db,
+  testDatabaseURL,
   person,
   pending,
   friend,
@@ -20,6 +22,7 @@ import type { FeedItem } from "../../src/shared";
 
 const { POST } = await import("../../src/app/api/screenr/[action]/route");
 const { createAuth } = await import("../../src/server/auth");
+const { eraseAccounts } = await import("../../src/server/account-deletion");
 const { loadScreen } = await import("../../src/server/screens");
 const { addComment, createDiscussionPost, createTitleComment, removeComment } =
   await import("../../src/server/comments");
@@ -541,6 +544,58 @@ test("friends' feeds, title pages, profiles, and notifications still render afte
   await assert.rejects(loadScreen(alice, "/people/departing"), denied.person);
   // Someone who joined through the member's invitation keeps their account.
   assert.equal((await loadScreen(eve, "/")).kind, "feed");
+});
+
+// The comment table and every table whose foreign keys lead to it, directly
+// or through other keys, such as notifications. Read from the schema, so
+// tables added later are covered without changing this test.
+async function commentTables() {
+  const { rows } = await db.query<{ table: string; references: string }>(
+    `SELECT t.relname AS table,r.relname AS references FROM pg_constraint c
+    JOIN pg_class t ON t.oid=c.conrelid JOIN pg_class r ON r.oid=c.confrelid
+    WHERE c.contype='f' AND c.connamespace='public'::regnamespace`,
+  );
+  const tables = new Set(["comment"]);
+  for (let grown = true; grown;) {
+    grown = false;
+    for (const row of rows)
+      if (tables.has(row.references) && !tables.has(row.table)) {
+        tables.add(row.table);
+        grown = true;
+      }
+  }
+  return [...tables].sort();
+}
+
+// Erasure holds the domain lock while it runs, and PostgreSQL checks each
+// foreign key once per deleted row. A step that reads every comment, or every
+// row of a table that refers to them, therefore costs comments deleted ×
+// rows stored, which would soon keep other members' writes waiting past
+// their 2-second lock timeout. Tables this small make a sequential scan the
+// cheapest plan even where an index applies, so sequential scans are
+// disabled: any that remain are steps no index can serve. A new connection
+// prepares the foreign-key checks' plans under that setting.
+test("erasing an account reads comments and the tables that refer to them only through indexes", async (t) => {
+  const { departing } = await departingMember(t);
+  const tables = await commentTables();
+  assert.ok(tables.includes("notification"), "The schema scan finds tables");
+  const pool = new Pool({ connectionString: testDatabaseURL, max: 1 });
+  const client = await pool.connect();
+  try {
+    await client.query("SET enable_seqscan = off");
+    await client.query("BEGIN");
+    await eraseAccounts(client, [departing]);
+    const { rows } = await client.query(
+      `SELECT relname AS table,seq_scan::int AS scans FROM pg_stat_xact_user_tables
+      WHERE relname=ANY($1) AND seq_scan>0 ORDER BY relname`,
+      [tables],
+    );
+    assert.deepEqual(rows, []);
+  } finally {
+    await client.query("ROLLBACK");
+    client.release();
+    await pool.end();
+  }
 });
 
 test("deletion needs a sign-in from the last ten minutes", async () => {
