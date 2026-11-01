@@ -175,9 +175,9 @@ jobs:
           REVISION: ${{ github.sha }}
         run: bin/deployment-decision "$EVENT_NAME" "$REF" "$REVISION" >> "$GITHUB_OUTPUT"
       - uses: ./.github/actions/node-lts
-        if: steps.decision.outputs.deploy == 'true' && github.repository == 'jubishop/screenr'
+      # Every run packages and smoke-tests the release, so a pull request that
+      # breaks it fails here. Only a deploying run uploads it.
       - name: Build and package Linux release
-        if: steps.decision.outputs.deploy == 'true' && github.repository == 'jubishop/screenr'
         run: |
           npm ci
           npm run build

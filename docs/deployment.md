@@ -491,12 +491,15 @@ entries.
 ## Build and activate a release
 
 Follow the [main branch workflow](development-workflow.md#main-branch-delivery).
-Pushes to `main` run full checks and, by default, package a Linux x64
-release in the `release` job alongside them. A separate `deploy` job starts
-only after every [check job](development-workflow.md#ci-jobs) passes. Nonfunctional
-changes can skip packaging and deployment with the documented commit trailers;
-checks still run. PR workflows only run checks. **Run workflow** on `main`
-forces a checked deployment when needed. There is no local deployment command.
+Every run of the check workflow, pull requests included, packages and
+verifies a Linux x64 release in the `release` job alongside the other
+[check jobs](development-workflow.md#ci-jobs), so a change that breaks
+packaging fails before it merges. Pushes to `main` also upload that release by
+default, and a separate `deploy` job starts only after every check job passes.
+Nonfunctional changes can skip the upload and deployment with the documented
+commit trailers; checks, including packaging, still run. Pull request runs
+never upload or deploy their release. **Run workflow** on `main` forces a
+checked deployment when needed. There is no local deployment command.
 
 The deployment job downloads the archive from its own run, checks its revision
 and paths, and verifies the transfer checksum. It takes a backup unless the
@@ -769,7 +772,15 @@ Packaging copies the repository paths in `scripts/release-paths.ts` for the
 maintenance scripts, and an
 [application test](testing.md#coverage) checks that they cover every module
 those scripts load.
-Packaging excludes local environment files and generated caches. It then
+Packaging excludes local environment files and generated caches. It stages
+the release in a new directory under the system temporary directory and
+removes it afterward. Node finds a package by walking up from the file that
+imports it, so a release staged inside the checkout would load any runtime
+package missing from its own install from the checkout's development
+`node_modules`, and the check below would pass a release that fails on the
+server ([#370](https://github.com/jubishop/screenr/issues/370)). Packaging
+therefore stops when any directory above the staging directory has a
+`node_modules`; set `TMPDIR` to a directory outside any checkout. It then
 verifies the package against a disposable database, which it creates if
 needed: the checkout's own
 [application test database](testing.md#checkout-test-databases), or
@@ -780,7 +791,9 @@ the sign-in route. A signed-out `GET /api/auth/get-session` must return HTTP 200
 with `null`. The login page renders without the auth handler, and browser tests
 send auth requests to a separate fixture, so only this request runs the built
 sign-in route. This check also verifies that Next's generated dependency aliases
-are present.
+are present. Packaging then writes the archive to
+`.cache/screenr-REVISION.tar.gz` in the checkout, where CI uploads it, and
+removes earlier archives there.
 Inspect the archive manifest before transferring it. Extract into a new revision directory as root and
 keep application source and runtime packages read-only to the service users.
 Install the [deploy kit](#deploy-kit) of the same revision, so the activation

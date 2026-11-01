@@ -734,6 +734,12 @@ outside the paths in `scripts/release-paths.ts`, which `scripts/package.ts`
 copies. It also fails on an unresolved import, a computed `import()`, a
 package outside the production dependencies, or a script that `ops/` runs
 but the test does not list.
+On Linux x64, the same file runs `scripts/package.ts` in a stand-in checkout
+whose `node_modules` has a package that its release lacks. The packaging
+check must fail when the packaged server or migration loads that package,
+pass once the release has it, and refuse to stage the release below a
+directory with `node_modules`
+([#370](https://github.com/jubishop/screenr/issues/370)).
 An authentication test confirms that a Better Auth schema mismatch fails that
 session request.
 The proxy test runs the production Caddy routes on loopback with a temporary

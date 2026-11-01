@@ -1,4 +1,15 @@
-import { cp, mkdir, readdir, readlink, rm, writeFile } from "node:fs/promises";
+import { existsSync, rmSync } from "node:fs";
+import {
+  cp,
+  mkdir,
+  mkdtemp,
+  readdir,
+  readlink,
+  realpath,
+  rm,
+  writeFile,
+} from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { join, dirname, isAbsolute, relative, resolve } from "node:path";
 import { execFileSync, spawn } from "node:child_process";
 import { setTimeout as delay } from "node:timers/promises";
@@ -7,9 +18,22 @@ import { releasePaths } from "./release-paths";
 
 if (process.platform !== "linux" || process.arch !== "x64")
   throw new Error("Build the VPS release on Linux x64, outside the VPS.");
-const output = ".cache/release";
-await rm(output, { recursive: true, force: true });
-await mkdir(output, { recursive: true });
+// Stage the release outside the checkout. Node finds a package by walking up
+// from the importing file, so a release below the checkout's node_modules
+// would load any runtime package missing from its own install from the
+// checkout's development packages, and the smoke test would pass a release
+// that fails on the server.
+const output = await realpath(
+  await mkdtemp(join(tmpdir(), "screenr-release-")),
+);
+process.on("exit", () => rmSync(output, { recursive: true, force: true }));
+for (let parent = dirname(output); ; parent = dirname(parent)) {
+  if (existsSync(join(parent, "node_modules")))
+    throw new Error(
+      `The release smoke test could load packages from ${join(parent, "node_modules")}. Set TMPDIR to a directory outside any checkout.`,
+    );
+  if (parent === dirname(parent)) break;
+}
 for (const path of releasePaths) {
   await cp(path, join(output, path), { recursive: true });
 }
@@ -136,6 +160,11 @@ const revision = execFileSync("git", ["rev-parse", "HEAD"], {
   encoding: "utf8",
 }).trim();
 await writeFile(join(output, "REVISION"), revision + "\n");
+// CI uploads the archive from the checkout's .cache. Keep only this one, so
+// repeated packaging cannot fill the disk.
+await mkdir(".cache", { recursive: true });
+for (const name of await readdir(".cache"))
+  if (/^screenr-[0-9a-f]+\.tar\.gz$/.test(name)) await rm(join(".cache", name));
 const archive = `.cache/screenr-${revision}.tar.gz`;
 execFileSync("tar", ["-czf", archive, "-C", output, "."], { stdio: "inherit" });
 console.log(`Release: ${archive}`);
