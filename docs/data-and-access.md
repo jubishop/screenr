@@ -245,7 +245,10 @@ cookies, and the response returns the
   AES-256-GCM under a key derived from `BETTER_AUTH_SECRET`. Account deletion
   calls `revokeAppleTokens(userId)` in `src/server/apple.ts` before deleting
   the user. It revokes each token with Apple and clears it; when Apple does
-  not confirm, it throws and keeps the token for a retry. A token sealed
+  not confirm, it throws and keeps the token for a retry, and without the
+  Apple settings it throws `AppleSettingsMissing`. In the erase transaction,
+  `appleTokenStored` finds any token a sign-in stored meanwhile
+  ([account deletion](#account-deletion)). A token sealed
   under an earlier `BETTER_AUTH_SECRET` can never be read or revoked, so it
   logs `apple token unreadable` and skips it. An uninvited
   person's code is never redeemed, so Screenr keeps no token for them.
@@ -697,6 +700,17 @@ app uses the same action
   deletion logs `apple revoke failed`, erases nothing, and responds 503 with
   "Sign in with Apple could not be disconnected, so your account was not
   deleted. Please try again later." A retry revokes the kept token.
+- **Missing Apple settings:** without the
+  [Sign in with Apple settings](running-screenr.md#iphone-app-accounts-and-keys),
+  no token can be revoked, so deleting an account with a readable Apple token
+  logs `apple settings missing`, erases nothing, and responds 503 with "Sign
+  in with Apple is unavailable right now, so your account was not deleted.
+  Please try again later." Accounts without one are deleted as usual.
+- **Apple sign-in during deletion:** a sign-in while revocation runs can store
+  a newer token. The erase transaction first locks the user row and the Apple
+  account rows; if a readable token remains, it erases nothing and deletion
+  revokes again. After three rounds deletion logs `apple token replaced` and
+  responds with the same 503 as when Apple does not confirm.
 
 One transaction under the [write lock](#write-lock-and-refresh-behavior)
 then erases the person with `eraseAccounts`:
@@ -711,9 +725,12 @@ then erases the person with `eraseAccounts`:
 - **Connections:** friendships and requests, blocks in both directions, and
   their invitations go. So do the signup records of people who joined through
   those invitations; those members keep their accounts.
-- **Sign-in data:** pending codes and sign-in states in Better Auth's
-  `verification` table, and queued code emails, which name the address only
-  by a hash.
+- **Sign-in data:** in Better Auth's `verification` table, pending sign-in,
+  email verification, and password reset codes, matched by their exact
+  identifiers, `<type>-otp-<address>`, so a code for another address that
+  contains theirs stays; and sign-in states whose value names their user ID,
+  such as a Google link in progress. Also queued code emails, which name the
+  address only by a hash.
 - **The account:** deleting the `user` row cascades to the profile with its
   settings, push settings, and demo flag, and to the photo, sessions, push
   devices, sign-in accounts, saved services, notifications, reactions, usage
