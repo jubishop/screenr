@@ -491,8 +491,8 @@ entries.
 ## Build and activate a release
 
 Follow the [main branch workflow](development-workflow.md#main-branch-delivery).
-Every check run, pull requests included, packages and verifies a Linux x64
-release in the `release` job alongside the other
+Every run of the check workflow, pull requests included, packages and
+verifies a Linux x64 release in the `release` job alongside the other
 [check jobs](development-workflow.md#ci-jobs), so a change that breaks
 packaging fails before it merges. Pushes to `main` also upload that release by
 default, and a separate `deploy` job starts only after every check job passes.
