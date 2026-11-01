@@ -38,6 +38,8 @@ implementation, including validation, edge cases, ongoing maintenance,
 upgrades, and any additional packages it brings. Explain the concrete
 benefit for Screenr. Apply the preference through ordinary technical
 judgment; it does not create a separate approval requirement for packages.
+A dependency with an install script also needs a recorded
+[install-script decision](../docs/development-workflow.md#dependency-install-scripts).
 
 The [application stack decision](../docs/application-stack.md) owns the
 selected technologies. This preference does not itself replace an accepted

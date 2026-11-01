@@ -108,6 +108,12 @@ test("post replies, reactions, ordering, removal, and access changes follow the 
   await friend(ben, outsider);
   const post = await createDiscussionPost(alice, "Weekend picks?", true);
   const later = await createTitleComment(alice, "movie:1", "Later", false);
+  // Back-to-back saves can land in the same millisecond, where the feed falls
+  // back to entry IDs, so move the post a minute earlier.
+  await db.query(
+    "UPDATE discussion_post SET created_at=created_at-interval '1 minute' WHERE id::text=$1",
+    [post],
+  );
   assert.equal((await conversations(ben))[0].id, later);
   const parent = await addComment(ben, post, "Try a classic", false);
   const child = await addComment(cam, post, "Seconded", true, parent);

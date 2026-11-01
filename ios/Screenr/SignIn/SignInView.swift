@@ -79,7 +79,7 @@ private struct SignInForm: View {
   }
 }
 
-// A line about how the member arrived here, read aloud when it appears.
+// A line about how the member arrived here.
 private struct Notice: View {
   let text: String
   let systemImage: String
@@ -95,11 +95,9 @@ private struct Notice: View {
     HStack(alignment: .firstTextBaseline, spacing: 8) {
       Image(systemName: systemImage)
         .foregroundStyle(color)
-        .accessibilityHidden(true)
       Text(text)
     }
     .font(.callout)
     .multilineTextAlignment(.center)
-    .onAppear { AccessibilityNotification.Announcement(text).post() }
   }
 }

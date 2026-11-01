@@ -82,14 +82,22 @@ export type TitleRelease = {
   in_theaters: boolean;
   upcoming: ReleaseDate[];
 };
+// TMDB's user score (docs/title-catalog.md#tmdb-user-score-implementation),
+// the average rating TMDB members give a title as a whole percentage, such as
+// 73 for 7.3 out of 10. It is null when fewer than 20 members rated the title
+// or TMDB's votes are missing or invalid, which shows no score. Clients show
+// it beside the release status and never compute it themselves.
+export type TmdbScore = number | null;
 export type ViewingTitle<T extends Title = Title> = T & {
   viewing: TitleViewing;
   release: TitleRelease;
+  tmdb_score: TmdbScore;
 };
-// A title in an In theaters list, which shows its release status and no
-// viewing options.
+// A title in an In theaters list, which shows its release status and score
+// and no viewing options.
 export type ReleaseTitle<T extends Title = Title> = T & {
   release: TitleRelease;
+  tmdb_score: TmdbScore;
 };
 export type ViewingAccess = "available" | "unmatched" | "unknown";
 export type TitleSuggestion = Title & {

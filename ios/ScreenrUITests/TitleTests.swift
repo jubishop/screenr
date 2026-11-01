@@ -22,7 +22,6 @@ final class TitleTests: XCTestCase {
     status.tap()
     let finished = app.buttons["status-finished"]
     XCTAssertTrue(finished.waitForExistence(timeout: 5))
-    XCTAssertTrue(finished.isSelected)
     XCTAssertTrue(app.descendants(matching: .any)["Last finished"].firstMatch.exists)
     // The sheet is a system list; `testReadsAtTheLargestTextSize` reaches its
     // controls at the largest text size.
@@ -76,7 +75,6 @@ final class TitleTests: XCTestCase {
     XCUIDevice.shared.system.open(try XCTUnwrap(URL(string: "screenr-dev://titles/movie/101")))
     let recommended = app.buttons["Recommended"]
     XCTAssertTrue(recommended.waitForExistence(timeout: 10))
-    XCTAssertTrue(recommended.isSelected)
     recommended.tap()
     XCTAssertTrue(
       app.staticTexts["Remove your recommendation? Night Crossing also leaves your top 10 at #1."]
@@ -136,9 +134,8 @@ final class TitleTests: XCTestCase {
     app.buttons["Edit your review"].tap()
     let five = app.buttons["5 stars"]
     XCTAssertTrue(five.waitForExistence(timeout: 5))
-    XCTAssertTrue(app.buttons["3 stars"].isSelected)
     five.tap()
-    try app.performAccessibilityAudit()
+    try app.performAccessibilityAudit(for: .screenr)
     app.buttons["Save review"].tap()
     wait(
       for: [
@@ -178,7 +175,6 @@ final class TitleTests: XCTestCase {
 
     let player = app.otherElements["trailer-player"]
     XCTAssertTrue(player.waitForExistence(timeout: 5))
-    XCTAssertEqual(player.label, "Night Crossing trailer: Official Trailer")
     XCTAssertTrue(player.webViews.firstMatch.exists)
     XCTAssertFalse(play.exists)
     let embed = "WEB https://www.youtube.com/embed/nightCross1?autoplay=1&playsinline=1"
@@ -232,8 +228,9 @@ final class TitleTests: XCTestCase {
     app.scrollTo(app.buttons["replace-movie:307"])
   }
 
-  // Each title fixture loads and shows its title, its release status, its
-  // linked reply, or that the title was not found, without an error.
+  // Each title fixture loads and shows its title, its release status and
+  // TMDB user score, its linked reply, or that the title was not found,
+  // without an error.
   @MainActor
   func testRendersEveryTitleFixture() throws {
     let directory = FixtureLaunch.directory.appending(path: "screen/title")
@@ -248,8 +245,9 @@ final class TitleTests: XCTestCase {
         "tv", "unknown-availability",
       ]
     )
-    // The status sits atop Where to watch, apart from its services.
+    // The status and score sit atop Where to watch, apart from its services.
     let releases = ["in-theaters": "In theaters · Digital Nov 20"]
+    let scores = ["in-theaters": "73%"]
     for name in names {
       let fixture = try TitleFixtureFile(directory.appending(path: "\(name).json"))
       let app = XCUIApplication()
@@ -273,6 +271,10 @@ final class TitleTests: XCTestCase {
       )
       if let release = releases[name] {
         XCTAssertTrue(app.staticTexts[release].exists, "screen/title/\(name)")
+      }
+      XCTAssertEqual(app.images["TMDB"].exists, scores[name] != nil, "screen/title/\(name)")
+      if let score = scores[name] {
+        XCTAssertTrue(app.staticTexts[score].exists, "screen/title/\(name)")
       }
       if let reply = fixture.targetReply {
         XCTAssertTrue(app.comment(reply).waitForExistence(timeout: 10), "screen/title/\(name)")

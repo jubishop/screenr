@@ -76,3 +76,24 @@ test("the app tint and wordmark dot use the web's brand colors", () => {
   ]);
   assert.deepEqual(colorset("BrandDot"), [["any", token("--brand-dot")]]);
 });
+
+// The TMDB user score's logo (docs/title-catalog.md#tmdb-user-score-implementation)
+// is the web's unmodified file, kept as a vector so it stays sharp at every
+// text size.
+test("the app's TMDB logo is the web's unmodified logo", () => {
+  const imageset = `${assets}/TMDBLogo.imageset`;
+  assert.deepEqual(
+    readFileSync(new URL(`${imageset}/tmdb.svg`, root)),
+    readFileSync(new URL("public/tmdb.svg", root)),
+  );
+  assert.deepEqual(
+    JSON.parse(
+      readFileSync(new URL(`${imageset}/Contents.json`, root), "utf8"),
+    ),
+    {
+      images: [{ filename: "tmdb.svg", idiom: "universal" }],
+      info: { author: "xcode", version: 1 },
+      properties: { "preserves-vector-representation": true },
+    },
+  );
+});

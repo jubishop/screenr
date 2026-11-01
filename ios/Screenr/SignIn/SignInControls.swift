@@ -33,9 +33,6 @@ struct SignInControls: View {
     .onChange(of: model.step) { _, step in
       focus = step == .email ? .email : .code
     }
-    .onChange(of: model.failure) { _, failure in
-      if let failure { AccessibilityNotification.Announcement(failure).post() }
-    }
   }
 
   private var providers: some View {
@@ -170,7 +167,6 @@ struct SignInControls: View {
       HStack(alignment: .firstTextBaseline, spacing: 8) {
         Image(systemName: "exclamationmark.triangle.fill")
           .foregroundStyle(.red)
-          .accessibilityHidden(true)
         Text(failure)
       }
       .font(.callout)
@@ -178,7 +174,8 @@ struct SignInControls: View {
   }
 }
 
-// A full-width button label that shows a spinner while its request runs.
+// A full-width button label that shows a spinner while its request runs. Its
+// label stays the title while the spinner shows.
 struct ProgressLabel: View {
   let title: String
   let systemImage: String?
@@ -196,13 +193,11 @@ struct ProgressLabel: View {
         ProgressView()
       } else if let systemImage {
         Image(systemName: systemImage)
-          .accessibilityHidden(true)
       }
       Text(title)
     }
     .frame(maxWidth: .infinity)
     .accessibilityElement(children: .combine)
     .accessibilityLabel(title)
-    .accessibilityValue(busy ? "In progress" : "")
   }
 }

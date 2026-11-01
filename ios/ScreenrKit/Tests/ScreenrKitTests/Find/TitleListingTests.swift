@@ -40,7 +40,6 @@ struct TitleListingTests {
       ]
     )
     #expect(saved.map(\.text) == ["On Netflix", "Included in your saved services"])
-    #expect(saved.first?.spokenText == "On Netflix (saved)")
     // Watch together marks the services either person saved.
     #expect(
       night.lines(savedServices: ["service:netflix"], savedBy: .eitherPerson).map(\.text) == [
@@ -128,5 +127,47 @@ struct TitleReleaseTests {
       FindData.recommendation("movie:9", "Older")
     )
     #expect(recommendation.release == nil)
+  }
+}
+
+// TMDB's user score, as the server rounded it.
+struct TMDBScoreTests {
+  @Test func readsTheFixturesScores() throws {
+    guard case .watchTogether(let together) = try screen("screen/watch-together/default").content,
+      case .wantToWatch(let wanted) = try screen("screen/want-to-watch/friend").content,
+      case .title(let orchard) = try screen("screen/title/in-theaters").content,
+      case .title(let unknown) = try screen("screen/title/unknown-availability").content
+    else { throw FeedFixtureError(description: "not the expected screens") }
+
+    #expect(together.titles.map { $0.tmdbScore?.text } == [nil, "73%"])
+    #expect(wanted.titles.map { $0.tmdbScore?.text } == [nil, "73%", nil])
+    #expect(orchard.tmdbScore?.text == "73%")
+    #expect(unknown.tmdbScore == nil)
+
+    let lists = try FindData.page("screen/search/default")
+    #expect(lists.suggestions.map { $0.tmdbScore?.text } == [nil, "81%"])
+    #expect(lists.recommendations.map(\.tmdbScore) == [nil, nil, nil])
+    // Night Crossing has too few votes; Night Harbor's score came with its
+    // search result.
+    #expect(try FindData.results().map { $0.tmdbScore?.text } == [nil, "66%"])
+  }
+
+  // The server's whole percentage shows as it is. A payload without a score,
+  // or with none, decodes and shows nothing.
+  @Test func showsOnlyTheServersScore() throws {
+    let scored = { (score: JSONValue) throws -> ViewingTitle in
+      try FindData.decode(FindData.title("movie:9", "Scored", fields: ["tmdb_score": score]))
+    }
+    #expect(try scored(.integer(73)).tmdbScore?.text == "73%")
+    #expect(try scored(.integer(100)).tmdbScore?.text == "100%")
+    #expect(try scored(.integer(0)).tmdbScore?.text == "0%")
+    #expect(try scored(.null).tmdbScore == nil)
+
+    let older: ViewingTitle = try FindData.decode(FindData.title("movie:9", "Older", fields: [:]))
+    #expect(older.tmdbScore == nil)
+    let recommendation: FriendsRecommendation = try FindData.decode(
+      FindData.recommendation("movie:9", "Older")
+    )
+    #expect(recommendation.tmdbScore == nil)
   }
 }

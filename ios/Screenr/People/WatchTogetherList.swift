@@ -37,6 +37,7 @@ struct WatchTogetherList: View {
                 title: title.title,
                 viewing: title.viewing,
                 release: title.release,
+                score: title.tmdbScore,
                 serviceIds: title.matchingServiceIds,
                 savedBy: .eitherPerson
               )
@@ -59,10 +60,6 @@ struct WatchTogetherList: View {
       } else {
         ViewingAttribution()
       }
-    }
-    // The count is the filter's result, as the web's status line reads.
-    .onChange(of: filter) {
-      AccessibilityNotification.Announcement(page.count(filter)).post()
     }
   }
 }

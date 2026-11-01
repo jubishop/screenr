@@ -303,7 +303,7 @@ test("standalone deletion preserves discussions across feeds, keeps spoilers hid
         { times: 1 },
       );
       await confirmDelete.click();
-      await expect(heading(owner, id).getByRole("alert")).toHaveText(
+      await expect(heading(owner, id).locator(".error")).toHaveText(
         "Deletion failed. Please try again.",
       );
       await expect(
@@ -322,7 +322,7 @@ test("standalone deletion preserves discussions across feeds, keeps spoilers hid
         item(page, id).getByText(`Retained reply ${index}`, { exact: true }),
       ).toBeVisible();
     }
-    await expect(heading(owner, id).getByRole("alert")).toHaveCount(0);
+    await expect(heading(owner, id).locator(".error")).toHaveCount(0);
     await expect(button).toHaveCount(0);
     await owner.reload();
     await expect(
@@ -434,14 +434,14 @@ test("standalone composition retains drafts through posting and refresh failures
     route.fulfill({ status: 503, json: { error: "Posting unavailable" } }),
   );
   await submit.click();
-  await expect(composer.getByRole("alert")).toHaveText("Posting unavailable");
+  await expect(composer.locator(".error")).toHaveText("Posting unavailable");
   await expect(input).toHaveValue("Keep my standalone draft");
   await expect(composer.getByLabel("Contains spoilers")).toBeChecked();
   await page.route("**/api/screenr/screen?**", (route) =>
     route.fulfill({ status: 503, json: { error: "Refresh unavailable" } }),
   );
   await refreshOnReturn(page);
-  await expect(page.getByRole("main").getByRole("alert")).toContainText(
+  await expect(page.getByRole("main").locator(".error")).toContainText(
     "Refresh unavailable",
   );
   await expect(composer).toHaveCount(0);

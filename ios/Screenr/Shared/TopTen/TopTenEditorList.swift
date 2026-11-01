@@ -63,10 +63,8 @@ struct TopTenEditorList: UIViewRepresentable {
         guard let shown = self?.shown, let entry = shown.entries.first(where: { $0.id == id })
         else { return }
         cell.contentConfiguration = UIHostingConfiguration {
-          TopTenEditorRow(entry: entry, count: shown.entries.count) { rank in
-            shown.editor.move(entry, toRank: rank)
-          }
-          .environment(\.imageSource, shown.images)
+          TopTenEditorRow(entry: entry)
+            .environment(\.imageSource, shown.images)
         }
         cell.accessories = [.reorder(displayed: .always)]
       }
@@ -121,7 +119,7 @@ struct TopTenEditorList: UIViewRepresentable {
         list.entries.isEmpty ? [.empty] : list.entries.map { .entry($0.id) },
         toSection: .entries
       )
-      // Rows that stay show their new rank and move actions.
+      // Rows that stay show their new rank.
       let kept = list.entries.filter { entry in
         previous?.contains { $0.id == entry.id } ?? false
       }

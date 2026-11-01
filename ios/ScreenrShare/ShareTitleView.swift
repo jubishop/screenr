@@ -38,7 +38,6 @@ private struct ShareTitlePage: View {
               .font(.subheadline.weight(.semibold))
             Text(model.title.name)
               .font(.title2.bold())
-              .accessibilityAddTraits(.isHeader)
           }
         }
         if !model.title.overview.isEmpty {
@@ -100,7 +99,6 @@ private struct ShareTitleActions: View {
     } label: {
       Label(header.recommendLabel, systemImage: header.recommended ? "checkmark" : "plus")
     }
-    .accessibilityAddTraits(header.recommended ? .isSelected : [])
     .disabled(actions.write == .saving)
     Button {
       Task { await model.toggleWantToWatch(header) }
@@ -110,8 +108,6 @@ private struct ShareTitleActions: View {
         systemImage: model.wantToWatch ? "checkmark" : "plus"
       )
     }
-    .accessibilityAddTraits(model.wantToWatch ? .isSelected : [])
-    .accessibilityHint(model.wantToWatch ? "Removes it from Want to watch." : "")
     .disabled(actions.write == .saving)
     if let status = header.status, status != .wantToWatch {
       Text("Your status: \(status.label)")

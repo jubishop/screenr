@@ -1,14 +1,15 @@
 import ScreenrKit
 import SwiftUI
 
-// Where to watch in the United States: the title's release status, then
-// subscription and free services with their logos, or why there are none,
-// when the options were last checked, TMDB's viewing options page, and the
-// JustWatch and TMDB credits. A digital release date stays in the status,
-// never among the services.
+// Where to watch in the United States: the title's release status and TMDB
+// user score, then subscription and free services with their logos, or why
+// there are none, when the options were last checked, TMDB's viewing options
+// page, and the JustWatch and TMDB credits. A digital release date stays in
+// the status, never among the services.
 struct AvailabilitySection: View {
   let availability: WatchAvailability
   let release: TitleRelease?
+  let score: TMDBScore?
   let kind: TitleKind
 
   private static let justWatch = URL(string: "https://www.justwatch.com/")
@@ -19,12 +20,11 @@ struct AvailabilitySection: View {
       FlowLayout(spacing: 12) {
         Text("Where to watch")
           .font(.title3.bold())
-          .accessibilityAddTraits(.isHeader)
         Text("United States")
           .font(.subheadline)
           .foregroundStyle(.muted)
       }
-      ReleaseStatusLine(release: release, font: .subheadline)
+      TitleStatusLine(release: release, score: score, style: .subheadline)
       if let notice = availability.notice {
         Text(notice)
           .foregroundStyle(.muted)
@@ -38,7 +38,6 @@ struct AvailabilitySection: View {
           VStack(alignment: .leading, spacing: 8) {
             Text(section.label)
               .font(.headline)
-              .accessibilityAddTraits(.isHeader)
             ForEach(section.services) { service in
               HStack(spacing: 10) {
                 ServiceLogo(path: service.logoPath)
@@ -99,13 +98,12 @@ private struct ServiceLogo: View {
   var body: some View {
     AsyncImage(request: images.logo(path)) { phase in
       if case .success(let image) = phase {
-        image.resizable().scaledToFit().accessibilityHidden(true)
+        image.resizable().scaledToFit()
       } else {
         Color(uiColor: .secondarySystemFill)
       }
     }
     .frame(width: size, height: size)
     .clipShape(RoundedRectangle(cornerRadius: 6))
-    .accessibilityHidden(true)
   }
 }

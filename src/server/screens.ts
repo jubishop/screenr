@@ -102,7 +102,10 @@ async function loadContent(userId: string, route: MemberRoute) {
     ]);
     const listed = new Map(
       (await withViewingOptions([...suggestions, ...recommendations])).map(
-        ({ id, viewing, release }) => [id, { viewing, release }],
+        ({ id, viewing, release, tmdb_score }) => [
+          id,
+          { viewing, release, tmdb_score },
+        ],
       ),
     );
     const withViewing = <T extends Title>(titles: T[]) =>
@@ -168,7 +171,7 @@ async function loadContent(userId: string, route: MemberRoute) {
     // Catalog requests run together to fit the client's refresh deadline.
     const stored = getTitleWithRelease(id);
     const [
-      { title, release },
+      { title, release, tmdb_score },
       threads,
       trailer,
       availability,
@@ -189,8 +192,10 @@ async function loadContent(userId: string, route: MemberRoute) {
       title,
       trailer,
       availability,
-      // The US release status shown beside Where to watch.
+      // The US release status shown beside Where to watch, with the TMDB
+      // user score beside it.
       release,
+      tmdb_score,
       watch,
       // The viewer's own top 10, for its control and full-list prompt.
       topTen: own,

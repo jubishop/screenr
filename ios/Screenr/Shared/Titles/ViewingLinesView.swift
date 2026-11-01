@@ -14,7 +14,6 @@ struct ViewingLinesView: View {
     VStack(alignment: .leading, spacing: 2) {
       ForEach(viewing.lines(savedServices: serviceIds, savedBy: savedBy), id: \.self) { line in
         text(line)
-          .accessibilityLabel(line.spokenText)
       }
     }
     .font(.footnote)

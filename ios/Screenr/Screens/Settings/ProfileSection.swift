@@ -17,7 +17,6 @@ struct ProfileSection: View {
           .font(.headline)
         Text("@" + settings.user.username)
       }
-      .accessibilityElement(children: .combine)
       Button {
         let refresh = settings.refresh
         settings.open(
@@ -74,7 +73,6 @@ struct ProfileEditorSheet: View {
         ToolbarItem(placement: .confirmationAction) {
           if model.state == .saving {
             ProgressView()
-              .accessibilityLabel("Saving")
           } else {
             Button("Save", systemImage: "checkmark", role: .confirm) { save() }
               .disabled(!model.canSave)
@@ -82,9 +80,6 @@ struct ProfileEditorSheet: View {
         }
       }
       .interactiveDismissDisabled(model.state == .saving)
-      .onChange(of: model.failure) { _, failure in
-        if let failure { AccessibilityNotification.Announcement(failure).post() }
-      }
     }
   }
 
@@ -92,7 +87,6 @@ struct ProfileEditorSheet: View {
     Task {
       await model.save()
       guard model.state == .saved else { return }
-      AccessibilityNotification.Announcement("Profile saved.").post()
       dismiss()
     }
   }

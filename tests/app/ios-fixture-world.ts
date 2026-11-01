@@ -57,6 +57,10 @@ type CatalogTitle = {
   // theatrical release and a show premiered on its release date; null leaves
   // the release status unavailable.
   release?: StoredRelease | null;
+  // TMDB's average rating out of 10 and its number of votes, in details,
+  // search results, and the stored title. Without them, a title has no TMDB
+  // user score.
+  votes?: [average: number, count: number];
   stored?: false;
   // The IMDb ID that TMDB's find returns the title for.
   imdb?: string;
@@ -101,6 +105,8 @@ const catalog: CatalogTitle[] = [
     poster: "/night-crossing.jpg",
     trailer: "nightCross1",
     providers: { flatrate: [8], rent: [2] },
+    // Too few votes for a score.
+    votes: [7.9, 19],
     imdb: "tt0000101",
     netflix: "80000001",
   },
@@ -119,6 +125,7 @@ const catalog: CatalogTitle[] = [
     overview: "An orchard keeper hears the trees whispering.",
     poster: "/quiet-orchard.jpg",
     providers: { flatrate: [15] },
+    votes: [7.346, 412],
     // Back in theaters, with its first digital release ahead.
     release: {
       theatrical: ["2025-05-02", "2026-09-26"],
@@ -170,6 +177,7 @@ const catalog: CatalogTitle[] = [
     overview: "Dockworkers uncover a smuggling ring.",
     poster: "/night-harbor.jpg",
     providers: { flatrate: [9999] },
+    votes: [6.6, 230],
     stored: false,
   },
   {
@@ -179,6 +187,7 @@ const catalog: CatalogTitle[] = [
     overview: "Radio operators on a remote island hear a distress call.",
     poster: "/signal-fire.jpg",
     providers: { flatrate: [15] },
+    votes: [8.1, 96],
     release: {
       premiere: "2025-02-14",
       network: "Hulu",
@@ -294,6 +303,10 @@ function details(title: CatalogTitle, search = false) {
     [kind === "movie" ? "release_date" : "first_air_date"]: title.released,
     overview: title.overview,
     poster_path: title.poster,
+    ...(title.votes && {
+      vote_average: title.votes[0],
+      vote_count: title.votes[1],
+    }),
     ...(title.seasons && {
       seasons: [
         { season_number: 0, name: "Specials" },
@@ -365,8 +378,8 @@ export async function buildWorld() {
   for (const title of catalog.filter((item) => item.stored !== false)) {
     const [kind, id] = title.id.split(":");
     await db.query(
-      `INSERT INTO title(id,kind,tmdb_id,name,overview,poster_path,release_date,release)
-      VALUES($1,$2,$3,$4,$5,$6,$7,$8)`,
+      `INSERT INTO title(id,kind,tmdb_id,name,overview,poster_path,release_date,release,vote_average,vote_count)
+      VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
       [
         title.id,
         kind,
@@ -387,6 +400,8 @@ export async function buildWorld() {
                       seasons: [],
                     }),
             ),
+        title.votes?.[0] ?? null,
+        title.votes?.[1] ?? null,
       ],
     );
   }

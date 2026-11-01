@@ -133,27 +133,6 @@ struct FindListsTests {
     #expect(model.resultsMessage(results, serviceIds: ["service:netflix"]) == nil)
   }
 
-  @Test func summarizesAFinishedSearch() async throws {
-    let api = FindAPI([
-      "night": .body(try TestFixtures.body("actions/search/results")),
-      "none": .body(Data("[]".utf8)),
-    ])
-    let model = FindModel(api: api, clock: TestClock())
-    #expect(model.searchSummary(serviceIds: []) == nil)
-
-    model.edit("night")
-    model.submit()
-    if let search = model.searchTask { await finish(search) }
-    #expect(model.searchSummary(serviceIds: []) == "2 results")
-    model.serviceFilter = .myServices
-    #expect(model.searchSummary(serviceIds: ["service:netflix"]) == "1 result")
-
-    model.edit("none")
-    model.submit()
-    if let search = model.searchTask { await finish(search) }
-    #expect(model.searchSummary(serviceIds: []) == "No results")
-  }
-
   @Test func offersOneActionForEachRecommendation() throws {
     let alice = try FindData.page("screen/search/default")
     let cam = try FindData.page("screen/search/viewer-statuses")

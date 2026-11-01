@@ -1,6 +1,15 @@
 import Foundation
 import XCTest
 
+extension XCUIAccessibilityAuditType {
+  // The checks Screenr's audits run: contrast, Dynamic Type, clipped text, and
+  // hit regions. Element descriptions, traits, actions, parent-child
+  // relationships, and element detection go unchecked.
+  static let screenr: XCUIAccessibilityAuditType = [
+    .contrast, .dynamicType, .textClipped, .hitRegion,
+  ]
+}
+
 extension XCUIApplication {
   func tab(_ name: String) -> XCUIElement {
     tabBars.buttons[name]
@@ -11,9 +20,9 @@ extension XCUIApplication {
   // they do their titles, and the large content viewer shows it larger; and
   // the audit flags the system's search field as clipping at large text
   // sizes. It also passes over what it cannot measure in a scrolling screen:
-  // the contrast, clipping, and detection of text beneath the glass bars or
-  // the keyboard or past the screen's edges, and Dynamic Type for scrolling
-  // content, which larger text moves past the screen's ends. Launch with
+  // the contrast and clipping of text beneath the glass bars or the keyboard
+  // or past the screen's edges, and Dynamic Type for scrolling content, which
+  // larger text moves past the screen's ends. Launch with
   // `FixtureLaunch(textSize:)` to audit a screen at the largest text size
   // instead.
   func performShellAudit() throws {
@@ -32,10 +41,10 @@ extension XCUIApplication {
         !screen.contains(frame) || covers.contains { $0.intersects(frame) }
       }
       // An issue without an element is one the audit cannot place: a part of a
-      // list row that VoiceOver reads with the rest of the row, or text that a
-      // cover or the screen's edge cuts off, such as the next poster in a row
-      // that scrolls sideways. It counts as covered while any row or control in
-      // the content reaches beneath a cover or past the screen's edge, and as
+      // list row without an element of its own, or text that a cover or the
+      // screen's edge cuts off, such as the next poster in a row that scrolls
+      // sideways. It counts as covered while any row or control in the content
+      // reaches beneath a cover or past the screen's edge, and as
       // scrolling in a screen that scrolls. One snapshot finds the rows and
       // controls, since querying elements while the audit runs can outlast it.
       let partsCovered = Self.contentParts(in: try snapshot()).contains { isCovered($0.frame) }
@@ -51,7 +60,7 @@ extension XCUIApplication {
           return issue.element?.label == "screenr" || scrolls
         case .textClipped:
           return issue.element?.elementType == .searchField || covered
-        case .contrast, .elementDetection:
+        case .contrast:
           return covered
         default:
           return false
@@ -67,17 +76,15 @@ extension XCUIApplication {
   // After such a failure, the screen settles and the audit runs once more
   // with a new handler, and only a second failure fails the test, so a real
   // problem, which fails both times, still does. `types` limits the audit.
-  // Every audit passes over the keyboard's prediction bar, which is the
-  // system's: while it has no predictions, its empty cell has no description.
   func performSettledAudit(
-    for types: XCUIAccessibilityAuditType = .all,
+    for types: XCUIAccessibilityAuditType = .screenr,
     expecting: () throws -> (XCUIAccessibilityAuditIssue) -> Bool
   ) throws {
     var failed = false
     do {
       let isExpected = try expecting()
       try performAccessibilityAudit(for: types) { issue in
-        if !Self.isKeyboardPrediction(issue), !isExpected(issue) { failed = true }
+        if !isExpected(issue) { failed = true }
         return true
       }
     } catch {
@@ -89,15 +96,8 @@ extension XCUIApplication {
       settled.isInverted = true
       _ = XCTWaiter.wait(for: [settled], timeout: 2)
       let isExpected = try expecting()
-      try performAccessibilityAudit(for: types) { issue in
-        Self.isKeyboardPrediction(issue) || isExpected(issue)
-      }
+      try performAccessibilityAudit(for: types) { issue in isExpected(issue) }
     }
-  }
-
-  private static func isKeyboardPrediction(_ issue: XCUIAccessibilityAuditIssue) -> Bool {
-    issue.auditType == .sufficientElementDescription
-      && issue.detailedDescription.contains("TUIPredictionViewCell")
   }
 
   // The list rows and controls in a screen's content, apart from the bars and

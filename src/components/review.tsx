@@ -25,15 +25,12 @@ export function reviewPhrase(item: Pick<FeedItem, "active" | "body">) {
       : "rated";
 }
 
-// A review's rating as filled and empty stars, named for assistive technology.
+// A review's rating as filled and empty stars.
 export function ReviewStars({ rating }: { rating: number }) {
   return (
     <p className="review-stars">
-      <span aria-hidden="true">
-        {"★".repeat(rating)}
-        <span className="review-stars-empty">{"☆".repeat(5 - rating)}</span>
-      </span>
-      <span className="sr-only">Rated {starLabel(rating)} out of 5</span>
+      {"★".repeat(rating)}
+      <span className="review-stars-empty">{"☆".repeat(5 - rating)}</span>
     </p>
   );
 }
@@ -131,14 +128,14 @@ export function useReviewEditor({
                 type="radio"
                 name="review-rating"
                 value={rating}
+                aria-label={starLabel(rating)}
                 checked={draft.rating === rating}
                 disabled={!interactive}
                 onChange={() => change({ rating })}
               />
-              <span aria-hidden="true">
+              <span>
                 {draft.rating !== null && rating <= draft.rating ? "★" : "☆"}
               </span>
-              <span className="sr-only">{starLabel(rating)}</span>
             </label>
           ))}
           {draft.rating !== null && (
@@ -205,11 +202,7 @@ export function useReviewEditor({
           </ActionButton>
         </div>
       </div>
-      {error && (
-        <p className="error" role="alert">
-          {error}
-        </p>
-      )}
+      {error && <p className="error">{error}</p>}
       {saved && confirming && (
         <ConfirmAction
           message="Remove your review? Its rating and text will be erased."

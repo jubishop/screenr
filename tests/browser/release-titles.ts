@@ -8,8 +8,9 @@ export function fromToday(days: number) {
 }
 
 // TMDB details for the browser catalog's "release dates" search: a movie in
-// US theaters with its digital release ahead, and a show that premieres soon.
-// Dates move with today, so the labels stay current.
+// US theaters with its digital release ahead and a TMDB user score of 71%,
+// and a show that premieres soon, which TMDB members have not rated. Dates
+// move with today, so the labels stay current.
 export function releaseTitles() {
   return [
     {
@@ -19,6 +20,8 @@ export function releaseTitles() {
       overview: "A fictional movie that is in theaters now.",
       release_date: fromToday(-10),
       poster_path: null,
+      vote_average: 7.1,
+      vote_count: 233,
       release_dates: {
         results: [
           {
@@ -38,6 +41,8 @@ export function releaseTitles() {
       overview: "A fictional show that has not premiered yet.",
       first_air_date: fromToday(12),
       poster_path: null,
+      vote_average: 0,
+      vote_count: 0,
       networks: [{ id: 213, name: "Netflix", origin_country: "" }],
       seasons: [{ season_number: 1, air_date: fromToday(12) }],
     },

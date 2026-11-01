@@ -1,8 +1,8 @@
 import Foundation
 
 // What a title list shows for each title, in the web's words: its kind and
-// year, its release status, and where it streams, with the viewer's saved
-// services marked.
+// year, its release status and TMDB user score, and where it streams, with
+// the viewer's saved services marked.
 
 extension Title {
   // The kind and release year, such as "TV show · 2022", or only the kind
@@ -23,6 +23,11 @@ extension TitleRelease {
     let labels = (inTheaters ? ["In theaters"] : []) + upcoming.map(\.label)
     return labels.isEmpty ? nil : labels.joined(separator: " · ")
   }
+}
+
+extension TMDBScore {
+  // The score beside the TMDB logo, such as "73%".
+  public var text: String { "\(percent)%" }
 }
 
 // Whose saved services a title's streaming summary marks: the viewer's, or
@@ -75,13 +80,6 @@ extension ViewingLine {
     case .noOptions: "No subscription or free options listed."
     case .stale: "Older availability. Check title details."
     }
-  }
-
-  // The line for VoiceOver, which names each saved service as saved.
-  public var spokenText: String {
-    guard case .offers(let key, let services) = self else { return text }
-    return Self.prefix(of: key)
-      + services.map { $0.saved ? "\($0.name) (saved)" : $0.name }.joined(separator: ", ")
   }
 }
 

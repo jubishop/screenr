@@ -94,9 +94,8 @@ function Action({
             className="text-button"
             disabled={!interactive}
             unavailable={busy}
-            aria-describedby={failure.describedBy("want_to_watch")}
             onClick={() =>
-              void failure.run("want_to_watch", () =>
+              void failure.run(() =>
                 activity(title.id, "want_to_watch", !status, surface),
               )
             }

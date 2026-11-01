@@ -2,8 +2,9 @@ import ScreenrKit
 import SwiftUI
 
 // A title's TMDB poster in its 2:3 frame, or the title's initial while it
-// loads or without one. It is decorative: the title's name sits beside it or
-// labels the link around it.
+// loads or without one. The title's name sits beside it or labels the link
+// around it. It stays out of the accessibility tree, so the initial never
+// joins that label, which UI tests find the link by.
 struct PosterImage: View {
   let path: String?
   let name: String

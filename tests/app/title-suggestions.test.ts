@@ -306,8 +306,9 @@ test("top 10 Recommends count 1.5× at #10 up to 1.95× at #1 in groups that mee
   assert.deepEqual(byId.get("movie:6")!.recommended_by, [
     { username: "dee", display_name: "dee", rank: null },
   ]);
-  // Second-degree counts stay plain counts, and nothing returns a score or
-  // a friend of a friend's rank.
+  // Second-degree counts stay plain counts, and nothing returns a ranking
+  // score or a friend of a friend's rank. TMDB's user score is public title
+  // data.
   assert.equal(byId.get("movie:4")!.second_degree_recommended, 3);
   assert.equal(byId.get("movie:5")!.second_degree_recommended, 3);
   assert.equal(byId.get("movie:6")!.second_degree_recommended, 0);
@@ -325,6 +326,7 @@ test("top 10 Recommends count 1.5× at #10 up to 1.95× at #1 in groups that mee
       "second_degree_wanted",
       "second_degree_watching",
       "tmdb_id",
+      "tmdb_score",
       "viewing",
       "wanted_by",
       "watching_by",

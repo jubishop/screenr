@@ -64,11 +64,7 @@ export function DisplayNameEditor({
       </div>
       {children}
       {editing && (
-        <form
-          className="display-name-editor"
-          aria-label="Edit display name"
-          onSubmit={submit}
-        >
+        <form className="display-name-editor" onSubmit={submit}>
           <label>
             Display name
             <input
@@ -97,11 +93,7 @@ export function DisplayNameEditor({
               Cancel
             </ActionButton>
           </div>
-          {error && (
-            <p className="error" role="alert">
-              {error}
-            </p>
-          )}
+          {error && <p className="error">{error}</p>}
         </form>
       )}
     </>

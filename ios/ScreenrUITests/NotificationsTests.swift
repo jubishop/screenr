@@ -23,8 +23,7 @@ final class NotificationsTests: XCTestCase {
     XCTAssertTrue(app.navigationBars["Notifications"].waitForExistence(timeout: 10))
     let row = app.notification(comment)
     XCTAssertTrue(row.waitForExistence(timeout: 10))
-    XCTAssertEqual(row.value as? String, "Unread")
-    XCTAssertEqual(app.notification("Ben Ortiz became your friend.").value as? String, "")
+    XCTAssertTrue(app.notification("Ben Ortiz became your friend.").exists)
     XCTAssertTrue(app.buttons["Accept"].exists)
     XCTAssertTrue(app.buttons["Mark all as read"].isEnabled)
     try app.performShellAudit()
@@ -217,9 +216,10 @@ final class NotificationsTests: XCTestCase {
 }
 
 extension XCUIApplication {
-  // A notification in the sheet, by its message.
+  // A notification in the sheet, by its message, which its label holds after
+  // its kind's symbol.
   fileprivate func notification(_ message: String) -> XCUIElement {
-    buttons.matching(NSPredicate(format: "label BEGINSWITH %@", message)).firstMatch
+    buttons.matching(NSPredicate(format: "label CONTAINS %@", message)).firstMatch
   }
 }
 

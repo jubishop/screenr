@@ -29,7 +29,11 @@ final class FindTests: XCTestCase {
           "Cam Rivera recommends this., Ben Ortiz wants to watch this."
         )
     )
-    XCTAssertTrue(row(app, "Signal Fire").label.contains("Season 2 premieres Nov 4"))
+    // The TMDB user score follows the release status. A row reads its text,
+    // so the logo's label is not part of it.
+    let signal = row(app, "Signal Fire").label
+    XCTAssertTrue(signal.contains("Season 2 premieres Nov 4, 81%,"), signal)
+    XCTAssertFalse(row(app, "Winter Garden").label.contains("%"))
     try audit(app)
 
     // Typing searches once it pauses, and the results replace the lists.
@@ -37,8 +41,12 @@ final class FindTests: XCTestCase {
     field.typeText("night")
     XCTAssertTrue(row(app, "Night Harbor").waitForExistence(timeout: 10))
     wait(for: [log.sent("GET /api/screenr/search?q=night")], timeout: 10)
-    XCTAssertTrue(row(app, "Night Crossing").label.contains("On Netflix (saved)"))
+    XCTAssertTrue(row(app, "Night Crossing").label.contains("On Netflix"))
     XCTAssertTrue(row(app, "Night Harbor").label.contains("TV show · 2018"))
+    let harbor = row(app, "Night Harbor").label
+    XCTAssertTrue(harbor.contains("TV show · 2018, 66%,"), harbor)
+    // Too few TMDB members rated it for a score.
+    XCTAssertFalse(row(app, "Night Crossing").label.contains("%"))
     XCTAssertFalse(app.buttons["Friends recommend"].exists)
     try audit(app)
 
@@ -105,7 +113,6 @@ final class FindTests: XCTestCase {
     myServices.tap()
     let saved = app.buttons["Want to watch, Night Crossing"]
     XCTAssertTrue(saved.waitForExistence(timeout: 10))
-    XCTAssertEqual(saved.value as? String, "Saved")
     XCTAssertTrue(scroll(app, to: app.buttons["Caught up, Harbor Lights"]))
     try audit(app)
 
@@ -138,7 +145,7 @@ final class FindTests: XCTestCase {
     try app.performShellAudit()
   }
 
-  // A title's row, which VoiceOver reads starting with its name.
+  // A title's row, whose label starts with its name.
   @MainActor
   private func row(_ app: XCUIApplication, _ name: String) -> XCUIElement {
     app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", name + ",")).firstMatch

@@ -162,7 +162,7 @@ export function FeedView({
       // Focus moves to the feed when its last entry leaves.
       tabIndex={-1}
     >
-      {unavailable && <p role="status">This activity is unavailable.</p>}
+      {unavailable && <p>This activity is unavailable.</p>}
       <div className="feed-updates">
         {snapshot && incoming.length > 0 && (
           <button
@@ -241,7 +241,7 @@ function FeedEntry({
     }
   }, [target, item, hiddenSpoiler]);
   // Move to an entry chosen from the friend line once it is shown, and focus
-  // it so keyboard and screen reader users continue from there.
+  // it so keyboard users continue from there.
   const handledShow = useRef<object | null>(null);
   useEffect(() => {
     if (!shown || !item || handledShow.current === shown) return;
@@ -315,9 +315,7 @@ function FeedEntry({
       >
         <Icon name="link" />
       </ActionButton>
-      <span className="copy-status small" role="status">
-        {copyMessage}
-      </span>
+      <span className="copy-status small">{copyMessage}</span>
     </span>
   );
   // Deleted standalone comments and posts and removed reviews show no
@@ -367,12 +365,11 @@ function FeedEntry({
               className="text-button"
               disabled={!interactive}
               unavailable={busy}
-              aria-describedby={failure.describedBy("want_to_watch")}
               onClick={() => {
                 if (ranked && !item.viewer_want_to_watch) {
                   failure.clear();
                   setConfirming("want_to_watch");
-                } else void failure.run("want_to_watch", saveWantToWatch);
+                } else void failure.run(saveWantToWatch);
               }}
             >
               {item.viewer_want_to_watch
@@ -385,13 +382,12 @@ function FeedEntry({
             className="text-button"
             disabled={!interactive}
             unavailable={busy}
-            aria-describedby={failure.describedBy("recommended")}
             onClick={() => {
               if (ranked) {
                 failure.clear();
                 setConfirming("recommended");
               } else
-                void failure.run("recommended", () =>
+                void failure.run(() =>
                   activity(title.id, "recommended", !item.viewer_recommended),
                 );
             }}
@@ -473,12 +469,7 @@ function FeedEntry({
         <header className="activity-card" data-item-heading={item.id}>
           <div className="activity-summary">
             {!compact && title && (
-              <Link
-                className="poster-link"
-                href={titleURL}
-                prefetch={false}
-                aria-label={title.name}
-              >
+              <Link className="poster-link" href={titleURL} prefetch={false}>
                 <Poster path={item.poster_path} name={title.name} />
               </Link>
             )}

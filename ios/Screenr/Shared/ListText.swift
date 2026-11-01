@@ -12,7 +12,6 @@ struct ListHeader: View {
   var body: some View {
     Text(title)
       .font(.headline)
-      .accessibilityAddTraits(.isHeader)
   }
 }
 

@@ -10,7 +10,6 @@ struct StartConversationComposer: View {
 
   var body: some View {
     CommentComposer(
-      label: starter.formLabel,
       fieldLabel: starter.fieldLabel,
       submitLabel: starter.submitLabel,
       text: Binding(get: { starter.draft.body }, set: { starter.setBody($0) }),

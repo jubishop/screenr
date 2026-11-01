@@ -11,7 +11,7 @@
   },
   "response": {
     "status": 200,
-    "etag": "W/\"2msriWJG_IWPgsgVITUfku0YKPOWan-7KipZpAfv0zA\"",
+    "etag": "W/\"uPH3sH1HybayvUKIqpIVkW2xETElC9NunSowxbGFOeU\"",
     "body": {
       "kind": "title",
       "title": {
@@ -71,6 +71,7 @@
         "in_theaters": false,
         "upcoming": []
       },
+      "tmdb_score": null,
       "watch": {
         "status": "finished",
         "finished_on": "2026-09-20"

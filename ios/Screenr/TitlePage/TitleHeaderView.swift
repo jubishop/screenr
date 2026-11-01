@@ -27,7 +27,6 @@ struct TitleHeaderView: View {
             .foregroundStyle(.muted)
           Text(header.title.name)
             .font(.title2.bold())
-            .accessibilityAddTraits(.isHeader)
         }
       }
       Text(header.overview)
@@ -53,7 +52,6 @@ private struct TitleActions: View {
           Label(header.recommendLabel, systemImage: header.recommended ? "checkmark" : "plus")
         }
         .buttonStyle(.feedAction(chosen: header.recommended))
-        .accessibilityAddTraits(header.recommended ? .isSelected : [])
         // Adding also recommends the title; the listed state removes it from
         // the top 10 and keeps the Recommend.
         Button {
@@ -62,7 +60,6 @@ private struct TitleActions: View {
           Label(header.topTenLabel, systemImage: header.rank == nil ? "plus" : "checkmark")
         }
         .buttonStyle(.feedAction(chosen: header.rank != nil))
-        .accessibilityHint(header.rank == nil ? "" : "Removes it from your top 10.")
         Button {
           model.sheet = .status
         } label: {
@@ -70,7 +67,6 @@ private struct TitleActions: View {
         }
         .buttonStyle(.feedAction(chosen: header.status != nil))
         .accessibilityIdentifier("watch-status")
-        .accessibilityHint("Shows the watch statuses.")
         Button {
           model.openReview(header)
         } label: {
@@ -100,8 +96,7 @@ private struct TitleActions: View {
 
 // "Recommended by Ben Ortiz (#1)" above "Cam Rivera wants to watch". Each
 // name shows that friend's entry below. Hidden when no friend has either
-// action. Each group wraps word by word, so VoiceOver reads the line as one
-// sentence, before the names' buttons, rather than word by word.
+// action. Each group wraps word by word.
 private struct FriendLineView: View {
   let friends: FriendActivity
   let show: (FriendAction) -> Void
@@ -116,7 +111,6 @@ private struct FriendLineView: View {
               case .word(let word):
                 Text(word)
                   .font(.subheadline)
-                  .accessibilityHidden(true)
               case .name(let friend, let spaced):
                 Button {
                   show(friend)
@@ -125,19 +119,11 @@ private struct FriendLineView: View {
                 }
                 .buttonStyle(.feedText)
                 .accessibilityLabel(friend.displayName)
-                .accessibilityHint("Shows their entry below.")
               }
             }
           }
         }
       }
-      .background {
-        Color.clear
-          .accessibilityElement()
-          .accessibilityLabel(friends.sentence)
-          .accessibilityAddTraits(.isStaticText)
-      }
-      .accessibilityElement(children: .contain)
     }
   }
 }

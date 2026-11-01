@@ -253,13 +253,6 @@ public final class FindModel {
     guard visibleResults(titles, serviceIds: serviceIds).isEmpty else { return nil }
     return "No matches on your services or free. Turn off My services to see all results."
   }
-
-  // What VoiceOver hears when a search finishes, such as "2 results".
-  public func searchSummary(serviceIds: [String]?) -> String? {
-    guard case .found(_, let titles) = search else { return nil }
-    let count = visibleResults(titles, serviceIds: serviceIds).count
-    return count == 0 ? "No results" : "\(count) \(count == 1 ? "result" : "results")"
-  }
 }
 
 // Friends recommend after its filters.

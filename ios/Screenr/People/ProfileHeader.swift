@@ -20,7 +20,6 @@ struct ProfileHeader: View {
           Text("@" + profile.person.username)
             .foregroundStyle(.muted)
         }
-        .accessibilityElement(children: .combine)
       }
       if let action = relationship.action {
         actionButton(action)

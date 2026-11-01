@@ -14,7 +14,7 @@ import { TitleServices, ViewingAttribution } from "./title-services";
 import { api, useInteractive } from "./client";
 import { Poster } from "./poster";
 import { TitleCard } from "./title-card";
-import { ReleaseStatus } from "./title-release";
+import { TitleStatus } from "./title-status";
 import {
   FriendsRecommend,
   ofKind,
@@ -236,14 +236,6 @@ export function TitleSearch({
     (serviceIds !== null &&
       viewingAccess(title.viewing, serviceIds) === "available");
   const visibleResults = results?.filter(included);
-  // Screen readers hear how many results each finished search shows.
-  const count = visibleResults?.length ?? 0;
-  const summary =
-    results === null || searching || error
-      ? ""
-      : count
-        ? `${count} ${count === 1 ? "result" : "results"}`
-        : "No results";
   const visibleSuggestions = suggestions?.filter(included);
   const listed: ViewingTitle[] =
     results ??
@@ -268,12 +260,9 @@ export function TitleSearch({
           submit();
         }}
       >
-        <label className="sr-only" htmlFor="title-search">
-          Movie or show title
-        </label>
         <input
           disabled={!interactive}
-          id="title-search"
+          aria-label="Movie or show title"
           placeholder="Search movies and TV shows"
           value={query}
           minLength={2}
@@ -303,30 +292,18 @@ export function TitleSearch({
         </p>
       </div>
       {myServices && unknownCount > 0 && (
-        <p className="small muted" role="status">
+        <p className="small muted">
           {unknownCount} {unknownCount === 1 ? "title has" : "titles have"}{" "}
           unknown viewing options. Turn off My services to see{" "}
           {unknownCount === 1 ? "it" : "them"}.
         </p>
       )}
       {myServices && serviceIds === null && (
-        <p role="status">Your services could not be loaded. Try refreshing.</p>
+        <p>Your services could not be loaded. Try refreshing.</p>
       )}
-      {error && (
-        <div className="error" role="alert">
-          {error}
-        </div>
-      )}
-      {/* Rendered before any search so updates are announced. */}
-      <p className="sr-only" role="status">
-        {summary}
-      </p>
+      {error && <div className="error">{error}</div>}
       {results !== null ? (
-        <section
-          className="search-results"
-          aria-label="Search results"
-          aria-busy={searching}
-        >
+        <section className="search-results" aria-label="Search results">
           {visibleResults?.map((title) => (
             <TitleCard
               key={title.id}
@@ -398,7 +375,10 @@ export function TitleSearch({
                     sizes="(max-width: 560px) 45vw, 220px"
                   />
                   <h3>{title.name}</h3>
-                  <ReleaseStatus release={title.release} />
+                  <TitleStatus
+                    release={title.release}
+                    score={title.tmdb_score}
+                  />
                   <TitleServices
                     viewing={title.viewing}
                     serviceIds={serviceIds ?? []}

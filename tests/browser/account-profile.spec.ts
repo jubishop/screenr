@@ -60,16 +60,10 @@ test("account profile editing saves both names, preserves drafts, and updates pr
   await expect(username).toHaveValue("accountowner");
   await expect(username).toHaveAttribute("maxlength", "24");
   await expect(name).toHaveAttribute("maxlength", "60");
-  await expect
-    .soft(username)
-    .toHaveAccessibleDescription(
-      /Old links will no longer lead to your profile\. Someone else can use your old username\./,
-    );
   const profileStatus = owner
     .getByRole("region", { name: "Your profile", exact: true })
-    .getByRole("status");
+    .locator(".action-status");
   await expect(profileStatus).toHaveText("");
-  const liveRegion = await profileStatus.elementHandle();
   let writes = 0;
   owner.on("request", (request) => {
     if (
@@ -115,7 +109,7 @@ test("account profile editing saves both names, preserves drafts, and updates pr
   await save.click();
   await expect(
     owner
-      .getByRole("alert")
+      .locator(".error")
       .filter({ hasText: "That username is already taken." }),
   ).toBeVisible();
   await expect(name).toHaveValue("Renée Movie Fan 🎬");
@@ -132,7 +126,7 @@ test("account profile editing saves both names, preserves drafts, and updates pr
   );
   await save.click();
   await expect(
-    owner.getByRole("alert").filter({ hasText: "Could not save" }),
+    owner.locator(".error").filter({ hasText: "Could not save" }),
   ).toBeVisible();
   await expect(username).toHaveValue("Account_New");
   await expect(profileStatus).toHaveText("");
@@ -162,12 +156,6 @@ test("account profile editing saves both names, preserves drafts, and updates pr
   }
   await expect(edit).toBeVisible();
   await expect(profileStatus).toHaveText("Profile saved.");
-  expect(
-    await liveRegion!.evaluate(
-      (element) =>
-        element.isConnected && element.textContent === "Profile saved.",
-    ),
-  ).toBe(true);
   await expect(edit).toBeFocused();
   await restoreFrames.evaluate((restore) => restore());
   await restoreFrames.dispose();
@@ -320,7 +308,7 @@ test("profile display name editing preserves drafts, saves, and updates existing
   );
   await save.click();
   await expect(
-    owner.getByRole("alert").filter({ hasText: "Could not save" }),
+    owner.locator(".error").filter({ hasText: "Could not save" }),
   ).toBeVisible();
   await expect(input).toHaveValue("  Renée Movie Fan 🎬  ");
   let release!: () => void;

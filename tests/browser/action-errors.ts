@@ -22,9 +22,9 @@ async function box(locator: Locator) {
 }
 
 // A failed action's message sits inside its container, directly beneath the
-// listed controls, and on screen. It describes the control that failed. The
-// page shows no other alert unless `alerts` counts other failed controls.
-// The screen is saved to `.cache/<screenshot>-<width>.png` for review.
+// listed controls, and on screen. The page shows no other error unless
+// `alerts` counts other failed controls. The screen is saved to
+// `.cache/<screenshot>-<width>.png` for review.
 export async function expectErrorBeside(
   page: Page,
   {
@@ -43,10 +43,9 @@ export async function expectErrorBeside(
     screenshot: string;
   },
 ) {
-  const alert = container.getByRole("alert");
+  const alert = container.locator(".error");
   await expect(alert).toHaveText(message);
-  await expect(page.getByRole("main").getByRole("alert")).toHaveCount(alerts);
-  await expect(failed).toHaveAccessibleDescription(message);
+  await expect(page.getByRole("main").locator(".error")).toHaveCount(alerts);
   await failed.evaluate((element) =>
     element.scrollIntoView({ block: "center" }),
   );

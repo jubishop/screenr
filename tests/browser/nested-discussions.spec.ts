@@ -199,7 +199,12 @@ test("nested discussions group stored replies, preview direct comments, and keep
   await comment(child)
     .getByRole("button", { name: "Reply", exact: true })
     .click();
-  await expect(nested()).toHaveAccessibleName("Replying to @nestownerlayout");
+  await expect(
+    item.getByRole("form", {
+      name: "Replying to @nestownerlayout",
+      exact: true,
+    }),
+  ).toBeVisible();
   await expect(nested().getByRole("textbox")).toHaveValue("");
   await nested().getByRole("textbox").fill("Draft for child");
   await nested().getByRole("button", { name: "Cancel", exact: true }).click();
@@ -214,7 +219,7 @@ test("nested discussions group stored replies, preview direct comments, and keep
   await nested()
     .getByRole("button", { name: "Post reply", exact: true })
     .click();
-  await expect(nested().getByRole("alert")).toHaveText("Try this reply again");
+  await expect(nested().locator(".error")).toHaveText("Try this reply again");
   await expect(nested().getByRole("textbox")).toHaveValue("Draft for parent");
   await reader.unroute("**/api/screenr/comment");
   await direct.getByRole("button", { name: "Post reply", exact: true }).click();
@@ -235,7 +240,7 @@ test("nested discussions group stored replies, preview direct comments, and keep
   );
   await expect(direct).toHaveCount(0);
   await expect(
-    item.getByRole("alert").filter({ hasText: "Removal unavailable" }),
+    item.locator(".error").filter({ hasText: "Removal unavailable" }),
   ).toBeVisible();
   await reader.unroute("**/api/screenr/remove-comment");
   await item

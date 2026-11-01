@@ -23,8 +23,8 @@ final class WatchTogetherTests: XCTestCase {
     XCTAssertTrue(app.staticTexts["2 shared titles"].exists)
     let orchard = app.buttons(starting: "The Quiet Orchard")
     XCTAssertTrue(orchard.exists)
-    XCTAssertTrue(orchard.label.contains("In theaters · Digital Nov 20"))
-    XCTAssertTrue(orchard.label.contains("On Hulu (saved)"))
+    XCTAssertTrue(orchard.label.contains("In theaters · Digital Nov 20, 73%,"), orchard.label)
+    XCTAssertTrue(orchard.label.contains("On Hulu"))
     XCTAssertTrue(orchard.label.contains("Included in either person’s saved services"))
     try app.performShellAudit()
 

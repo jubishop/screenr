@@ -67,12 +67,8 @@ struct FeedbackSheet: View {
         switch phase {
         // The keyboard makes way for the screenshots.
         case .attaching: writing = false
-        case .sent: AccessibilityNotification.Announcement("Feedback sent.").post()
-        case .composing, .sending: break
+        case .composing, .sending, .sent: break
         }
-      }
-      .onChange(of: model.failure) { _, failure in
-        if let failure { AccessibilityNotification.Announcement(failure).post() }
       }
     }
   }
@@ -160,7 +156,6 @@ struct FeedbackSheet: View {
       ToolbarItem(placement: .confirmationAction) {
         if model.phase == .sending {
           ProgressView()
-            .accessibilityLabel("Sending")
         } else {
           Button("Send", systemImage: "paperplane", role: .confirm) {
             Task { await model.send() }
@@ -187,7 +182,6 @@ private struct ScreenshotRow: View {
           .scaledToFit()
           .frame(height: height)
           .clipShape(.rect(cornerRadius: 6))
-          .accessibilityHidden(true)
       }
       Text("Screenshot \(number)")
       Spacer()
@@ -199,7 +193,6 @@ private struct ScreenshotRow: View {
           .contentShape(.rect)
       }
       .buttonStyle(.borderless)
-      .accessibilityLabel("Remove screenshot \(number)")
     }
   }
 }

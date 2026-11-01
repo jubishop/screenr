@@ -73,7 +73,6 @@ export function WatchStatusMenu({
   finishedOn,
   disabled,
   unavailable,
-  describedBy,
   buttonRef,
   onStatus,
   onDate,
@@ -85,7 +84,6 @@ export function WatchStatusMenu({
   // when the button keeps focus but does not open.
   disabled: boolean;
   unavailable: boolean;
-  describedBy?: string;
   // Lets the page return focus to the button, such as after a confirmation.
   buttonRef?: RefObject<HTMLButtonElement | null>;
   onStatus: (status: WatchStatus | null) => void;
@@ -180,7 +178,6 @@ export function WatchStatusMenu({
         aria-haspopup="menu"
         aria-expanded={open}
         aria-controls={open ? menuId : undefined}
-        aria-describedby={describedBy}
         disabled={disabled}
         unavailable={unavailable}
         onClick={() =>
@@ -247,7 +244,7 @@ export function WatchStatusMenu({
                 className="clear-status"
                 onClick={() => choose(null)}
               >
-                <span className="menu-check" aria-hidden="true" />
+                <span className="menu-check" />
                 Clear status
               </button>
             )}

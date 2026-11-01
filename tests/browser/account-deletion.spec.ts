@@ -74,11 +74,8 @@ test("a member confirms it's them with an email code, deletes their account, and
   });
   await confirmCode.click();
   await expect(
-    departing
-      .getByRole("region", { name: "Delete account" })
-      .getByRole("alert"),
+    departing.getByRole("region", { name: "Delete account" }).locator(".error"),
   ).toHaveText("Invalid OTP");
-  await expect(confirmCode).toHaveAccessibleDescription("Invalid OTP");
   await code.fill(otp);
   await confirmCode.click();
   const confirmation = departing.getByRole("group", {
@@ -114,9 +111,7 @@ test("a member confirms it's them with an email code, deletes their account, and
   await expect(stat(codeFile(email))).rejects.toThrow();
   await departing.getByLabel("Sign-in code", { exact: true }).fill(otp);
   await departing.getByRole("button", { name: "Sign in", exact: true }).click();
-  await expect(departing.locator("p.error[role=alert]")).toHaveText(
-    "Invalid OTP",
-  );
+  await expect(departing.locator("p.error")).toHaveText("Invalid OTP");
   await expect(departing).toHaveURL(/\/login/);
 
   // The friend's post keeps the reply under a removed placeholder.

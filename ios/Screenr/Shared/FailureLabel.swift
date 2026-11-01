@@ -13,7 +13,6 @@ struct FailureLabel: View {
     HStack(alignment: .firstTextBaseline, spacing: 6) {
       Image(systemName: "exclamationmark.triangle.fill")
         .foregroundStyle(.red)
-        .accessibilityHidden(true)
       Text(message)
     }
   }

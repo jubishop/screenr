@@ -2,8 +2,10 @@ import ScreenrKit
 import SwiftUI
 
 // A member's profile photo, or their initial on a color their user ID picks,
-// so renaming keeps it. It always sits beside their visible name, so it is
-// decorative. A person who is not available gets a neutral placeholder.
+// so renaming keeps it. It always sits beside their visible name. It stays out
+// of the accessibility tree, so the initial never joins the label of a row or
+// link around it, which UI tests find it by. A person who is not available
+// gets a neutral placeholder.
 struct Avatar: View {
   struct Member: Hashable {
     let userId: String
