@@ -3,7 +3,7 @@ import { logFailure } from "./log";
 
 // pg emits an `error` event when PostgreSQL ends a connection outside a query,
 // as a restart or crash recovery does. The pool forwards an idle connection's
-// event; a checked-out one, such as the worker's during a Resend request,
+// event; a checked-out one, such as one between a transaction's queries,
 // emits its own. Unheard, either would stop the process. Each broken
 // connection is logged once. The pool then drops it, and the next query on a
 // checked-out one fails for its caller to handle.
@@ -66,9 +66,10 @@ export async function transaction<T>(
   const client = await db.connect();
   let rolledBack = true;
   try {
-    // Bound every lock wait, including the shared lock held during activity
-    // email sends, so queued writes return their pool connections well before
-    // the five-second connection timeout that session lookups also use.
+    // Bound every lock wait, including the shared lock the email worker holds
+    // while it builds an activity email, so queued writes return their pool
+    // connections well before the five-second connection timeout that session
+    // lookups also use.
     await client.query("BEGIN; SET LOCAL lock_timeout = '2s'");
     await client.query("SELECT pg_advisory_xact_lock($1)", [lock]);
     const result = await work(client);

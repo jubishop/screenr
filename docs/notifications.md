@@ -186,8 +186,20 @@ Activity jobs store notification references, with message text generated from
 current data immediately before each send. Each job keeps its original event
 membership during retries. Identical retries reuse a provider idempotency key;
 changes in visible content use a new key. As with any ambiguous network failure,
-provider acceptance cannot always be determined locally. The worker serializes
-delivery with access, preference, and read changes and prioritizes sign-in codes.
+provider acceptance cannot always be determined locally. The worker
+prioritizes sign-in codes. It builds each activity email under the write lock,
+so access, preference, and read changes are ordered with that check, then
+holds the job for a minute and calls Resend with no lock held
+([decision](#activity-email-sends-without-the-write-lock--2026-11-01),
+[issue #359](https://github.com/jubishop/screenr/issues/359)). Migration
+`036-email-send-generation.sql` gives each job a generation. Every block bumps
+the generation of all pending activity jobs, since a block also hides comments
+in mutual friends' conversations, and an opt-out bumps that member's. A send
+that fails after its job's generation changed is stale: the job expires at
+once, is never retried, and its failure log adds `stale`. Other changes during
+a send, such as reading a notification or unfriending, don't stop it; a retry
+checks them again. A send that never records its result, as when the worker
+stops abruptly, is retried once its hold ends.
 Activity jobs expire after 24 hours, or at once when Resend rejects them
 permanently; their notifications remain in the app.
 The current worker and Resend configuration need no new service or credentials.

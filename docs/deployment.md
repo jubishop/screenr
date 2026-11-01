@@ -909,7 +909,7 @@ journalctl -u screenr-worker --since '1 day ago' --no-pager | grep '"event":"ema
 | `apple settings missing` | web | No fields: account deletion found a Sign in with Apple token but the [Apple settings](running-screenr.md#iphone-app-accounts-and-keys) are missing, so the account was not deleted |
 | `apple token replaced` | web | No fields: Apple sign-ins kept storing new tokens through three rounds of revocation, so the account was not deleted |
 | `worker failed` | worker | `failures`, the loop's failed passes in a row; see [worker outages](#worker-outages) |
-| `email delivery failed` | worker | `job` ID, `kind` (`code` or `activity`), `attempt`, and `final` |
+| `email delivery failed` | worker | `job` ID, `kind` (`code` or `activity`), `attempt`, `final`, and `stale` when a block or opt-out committed during the send ([stale sends](notifications.md#activity-email)) |
 | `push delivery failed` | worker | `job` ID, `kind` (`alert` or `badge`), `environment` (`sandbox` or `production`), `attempt`, `final`, and `status` and `reason` for an APNs reply |
 | `push delivery off` | worker | `missing` setting names, or `reason` `invalid key` with error fields; see [push settings](#provisioning) |
 | `google photo copy failed` | web, worker | `user` ID, `trigger` (`account`, `choice`, or `backfill`), `reason`, and `status` for an HTTP reply |

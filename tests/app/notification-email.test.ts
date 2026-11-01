@@ -14,6 +14,8 @@ import {
   readNotification,
   saveActivityEmail,
 } from "../../src/server/notifications";
+import { setReaction } from "../../src/server/reactions";
+import { updateTitleActivity } from "../../src/server/title-actions";
 import { deliverOne, queueCode } from "../../src/server/email";
 
 useDatabase();
@@ -22,10 +24,13 @@ process.env.RESEND_API_KEY = "test-key-never-used-on-the-network";
 process.env.EMAIL_FROM = "Screenr <screenr@example.test>";
 let sent: { to: string[]; subject: string; text: string; key: string }[];
 let fail = false;
+// Set by `hang`: the next Resend request waits until the test answers it.
+let hung: { request: () => void; answer: Promise<void> } | undefined;
 beforeEach(async () => {
   await db.query("TRUNCATE email_job CASCADE");
   sent = [];
   fail = false;
+  hung = undefined;
   mock.method(
     globalThis,
     "fetch",
@@ -35,6 +40,12 @@ beforeEach(async () => {
         ...JSON.parse(String(options.body)),
         key: new Headers(options.headers).get("Idempotency-Key"),
       });
+      if (hung) {
+        const { request, answer } = hung;
+        hung = undefined;
+        request();
+        await answer;
+      }
       return fail
         ? new Response("Unavailable", { status: 503 })
         : Response.json({ id: "fixture" });
@@ -48,6 +59,18 @@ const due = () =>
   );
 const retry = () =>
   db.query("UPDATE email_job SET available_at=now() WHERE sent_at IS NULL");
+// Makes Resend hang on the next request, as during a provider incident.
+// `requested` settles once the request arrives; `answer` lets Resend reply.
+function hang() {
+  let request!: () => void;
+  let answer!: () => void;
+  const requested = new Promise<void>((resolve) => (request = resolve));
+  hung = {
+    request,
+    answer: new Promise<void>((resolve) => (answer = resolve)),
+  };
+  return { requested, answer };
+}
 
 test("email is opt-in without a backlog, waits ten minutes, groups unread events, and sends them once", async () => {
   const { alice, ben, conversation } = await setup();
@@ -256,6 +279,112 @@ test("a slow sign-in email does not delay an unrelated friendship request", asyn
     await delivery;
   }
 });
+
+test("member writes go ahead while Resend hangs on an activity email", async () => {
+  const { alice, ben, cam, conversation } = await setup();
+  await friend(alice, ben);
+  await friend(alice, cam);
+  await saveActivityEmail(alice, true);
+  await addComment(ben, conversation, "Queued", false);
+  await due();
+  const resend = hang();
+  const delivery = deliverOne();
+  try {
+    await resend.requested;
+    // A write that waited on a worker holding the write lock would fail
+    // after two seconds with "Screenr is busy".
+    await addComment(cam, conversation, "While Resend hangs", false);
+    await setReaction(cam, conversation, null, "love");
+    await updateTitleActivity(ben, "movie:1", "want_to_watch", true);
+    await changeRelationship(ben, cam, "request");
+    await readNotification(alice, (await notifications(alice)).items[0].id);
+  } finally {
+    resend.answer();
+    await delivery;
+  }
+  assert.equal(sent.length, 1);
+  assert.equal(await deliverOne(), false);
+});
+
+test("a block or opt-out committed before a send starts sends nothing", async () => {
+  const { alice, ben, cam, conversation } = await setup();
+  await friend(alice, ben);
+  await friend(ben, cam);
+  await saveActivityEmail(alice, true);
+  await saveActivityEmail(ben, true);
+  const own = await updateTitleActivity(ben, "movie:1", "want_to_watch", true);
+  await addComment(ben, conversation, "Blocked before the send", false);
+  await addComment(cam, own, "Opted out before the send", false);
+  await due();
+  captureFailures();
+  fail = true;
+  while (await deliverOne()) {
+    /* Queue both emails, whose first sends fail. */
+  }
+  assert.equal(sent.length, 2);
+  await changeRelationship(alice, ben, "block");
+  await saveActivityEmail(ben, false);
+  fail = false;
+  await retry();
+  while (await deliverOne()) {
+    /* Drain all due jobs. */
+  }
+  assert.equal(sent.length, 2);
+});
+
+for (const [change, during] of [
+  [
+    "a block",
+    (alice: string, ben: string) => changeRelationship(alice, ben, "block"),
+  ],
+  [
+    "an opt-out",
+    async (alice: string) => {
+      await saveActivityEmail(alice, false);
+      await saveActivityEmail(alice, true);
+    },
+  ],
+] as const)
+  test(`${change} committed during a failed send leaves the job stale, and it is never retried`, async () => {
+    const { alice, ben, cam, conversation } = await setup();
+    await friend(alice, ben);
+    await friend(alice, cam);
+    await saveActivityEmail(alice, true);
+    await addComment(ben, conversation, "From Ben", false);
+    // Cam's notification stays visible, so a retry would still send it.
+    await addComment(cam, conversation, "From Cam", false);
+    await due();
+    const printed = captureFailures();
+    const resend = hang();
+    fail = true;
+    const delivery = deliverOne();
+    try {
+      await resend.requested;
+      await during(alice, ben);
+    } finally {
+      resend.answer();
+      await delivery;
+    }
+    const { id } = (await db.query("SELECT id FROM email_job")).rows[0];
+    assert.deepEqual(
+      printed.map((line) => JSON.parse(line)),
+      [
+        {
+          event: "email delivery failed",
+          job: id,
+          kind: "activity",
+          attempt: 1,
+          status: 503,
+          final: true,
+          stale: true,
+        },
+      ],
+    );
+    fail = false;
+    await retry();
+    assert.equal(await deliverOne(), false);
+    assert.equal(sent.length, 1);
+  });
 
 test("email summaries order all new replies from newest to oldest across ID digit boundaries", async () => {
   const { alice, ben, conversation } = await setup();

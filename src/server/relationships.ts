@@ -84,6 +84,13 @@ export async function changeRelationship(
         "DELETE FROM friendship WHERE low_id=least($1,$2) AND high_id=greatest($1,$2)",
         pair,
       );
+      // A block can hide notifications from any member's activity email, such
+      // as comments in mutual friends' conversations, so an email being sent
+      // now becomes stale: if its send fails, it is never retried
+      // (docs/notifications.md#activity-email-sends-without-the-write-lock--2026-11-01).
+      await client.query(
+        "UPDATE email_job SET generation=generation+1 WHERE notification_recipient IS NOT NULL AND sent_at IS NULL",
+      );
     } else if (action === "unblock") {
       await client.query(
         "DELETE FROM block WHERE blocker_id=$1 AND blocked_id=$2",
