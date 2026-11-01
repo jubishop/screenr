@@ -1,4 +1,4 @@
-import { test } from "node:test";
+import { test, afterEach, mock } from "node:test";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import {
@@ -12,11 +12,14 @@ import {
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { setTimeout } from "node:timers/promises";
 import { pathToFileURL } from "node:url";
-import { useDatabase, db } from "./social-fixture";
+import type { PoolClient } from "pg";
+import { useDatabase, db, captureFailures } from "./social-fixture";
 const { migrate, migrateFrom } = await import("../../scripts/migrate");
 
 useDatabase();
+afterEach(() => mock.restoreAll());
 
 const files = (await readdir("db")).filter((name) => name.endsWith(".sql"));
 const latest = Math.max(...files.map((name) => Number(name.slice(0, 3))));
@@ -151,11 +154,19 @@ test(
     const pending = `${number(1)}-pending.sql`;
     const directory = await migrations({ [pending]: fails });
     const holder = await db.connect();
+    // Warnings that PostgreSQL sends the migration's connection, such as for
+    // releasing a lock it never held.
+    const notices: string[] = [];
+    const notice = ({ message }: { message?: string }) =>
+      notices.push(String(message));
+    const listen = (client: PoolClient) => client.on("notice", notice);
     try {
       await holder.query("SELECT pg_advisory_lock(713934202)");
+      db.on("acquire", listen);
       const message = await rejection(directory, { lockTimeout: "200ms" });
       assert.match(message, /waited 200ms for a database lock/);
       assert.match(message, /No SQL migration was applied/);
+      assert.deepEqual(notices, []);
       assert.equal(
         (
           await db.query("SELECT 1 FROM screenr_migration WHERE name=$1", [
@@ -165,6 +176,7 @@ test(
         0,
       );
     } finally {
+      db.off("acquire", listen);
       await holder.query("SELECT pg_advisory_unlock(713934202)");
       holder.release();
       await rm(directory, { recursive: true, force: true });
@@ -201,7 +213,37 @@ test(
   },
 );
 
-test("migration runs bound lock waits and statements by default, then restore the connection", async () => {
+test("a migration run whose connection breaks fails with that error and releases its client", async () => {
+  const name = `${number(1)}-broken.sql`;
+  const directory = await migrations({
+    [name]: "SELECT pg_terminate_backend(pg_backend_pid());",
+  });
+  // The broken connection may also be logged.
+  captureFailures();
+  const closed = new Promise((resolve) => db.once("remove", resolve));
+  try {
+    const error = await migrateFrom(pathToFileURL(`${directory}/`)).then(
+      () => assert.fail("The migration run must be rejected."),
+      (error: Error & { code?: string }) => error,
+    );
+    assert.equal(error.code, "57P01", String(error));
+    // The run released its client, and the pool closed it.
+    await Promise.race([
+      closed,
+      setTimeout(2_000).then(() => assert.fail("The client was not released.")),
+    ]);
+    assert.equal(
+      (await db.query("SELECT 1 FROM screenr_migration WHERE name=$1", [name]))
+        .rowCount,
+      0,
+    );
+  } finally {
+    await db.query("DELETE FROM screenr_migration WHERE name=$1", [name]);
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("migration runs bound lock waits and statements by default, and leave no pooled connection with those limits", async () => {
   const name = `${number(1)}-limits.sql`;
   const directory = await migrations({
     [name]:
@@ -213,7 +255,7 @@ test("migration runs bound lock waits and statements by default, then restore th
       (await db.query("SELECT * FROM migration_limit_probe")).rows,
       [{ lock_timeout: "30s", statement_timeout: "5min" }],
     );
-    // The pool hands out the connection the migration released last.
+    // No pooled connection keeps the migration's limits.
     assert.deepEqual(
       (
         await db.query(

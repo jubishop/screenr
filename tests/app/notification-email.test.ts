@@ -1,6 +1,12 @@
 import { test, beforeEach, afterEach, mock } from "node:test";
 import assert from "node:assert/strict";
-import { useDatabase, setup, friend, db } from "./social-fixture";
+import {
+  useDatabase,
+  setup,
+  friend,
+  db,
+  captureFailures,
+} from "./social-fixture";
 import { changeRelationship } from "../../src/server/relationships";
 import { addComment, removeComment } from "../../src/server/comments";
 import {
@@ -148,6 +154,49 @@ test("opt-out cancels queued retries and pending windows, even if the member opt
   await retry();
   await due();
   assert.equal(await deliverOne(), false);
+  assert.equal(sent.length, 1);
+});
+
+test("a database error while building an activity email still records the attempt and its backoff", async () => {
+  const { alice, ben, conversation } = await setup();
+  await friend(alice, ben);
+  await saveActivityEmail(alice, true);
+  await addComment(ben, conversation, "Queued", false);
+  await due();
+  const printed = captureFailures();
+  // Reading the email's notifications fails, which aborts the transaction.
+  await db.query(
+    "ALTER VIEW visible_notification RENAME TO visible_notification_hidden",
+  );
+  try {
+    assert.equal(await deliverOne(), true);
+  } finally {
+    await db.query(
+      "ALTER VIEW visible_notification_hidden RENAME TO visible_notification",
+    );
+  }
+  const { rows } = await db.query(
+    "SELECT id,attempts,available_at>now() AS delayed,sent_at FROM email_job",
+  );
+  assert.deepEqual(
+    rows.map(({ id, ...job }) => job),
+    [{ attempts: 1, delayed: true, sent_at: null }],
+  );
+  assert.equal(await deliverOne(), false, "The retry waits for its backoff");
+  assert.equal(printed.length, 1, printed.join("\n"));
+  const { stack, ...failure } = JSON.parse(printed[0]);
+  assert.ok(stack.length > 0);
+  assert.deepEqual(failure, {
+    event: "email delivery failed",
+    job: rows[0].id,
+    kind: "activity",
+    attempt: 1,
+    final: false,
+    error: "DatabaseError",
+    code: "42P01",
+  });
+  await retry();
+  assert.equal(await deliverOne(), true);
   assert.equal(sent.length, 1);
 });
 

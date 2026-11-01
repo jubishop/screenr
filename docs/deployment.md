@@ -884,12 +884,14 @@ journalctl -u screenr-worker --since '1 day ago' --no-pager | grep '"event":"ema
 | --- | --- | --- |
 | `request failed` | web | `action` (known names only), `method`, and `status` 500 |
 | `page failed` | web | `route`, the member route kind, such as `search` or `profile` |
-| `worker failed` | worker | Error fields only |
+| `worker failed` | worker | `failures`, the loop's failed passes in a row; see [worker outages](#worker-outages) |
 | `email delivery failed` | worker | `job` ID, `kind` (`code` or `activity`), `attempt`, and `final` |
 | `push delivery failed` | worker | `job` ID, `kind` (`alert` or `badge`), `environment` (`sandbox` or `production`), `attempt`, `final`, and `status` and `reason` for an APNs reply |
 | `push delivery off` | worker | `missing` setting names, or `reason` `invalid key` with error fields; see [push settings](#provisioning) |
 | `google photo copy failed` | web, worker | `user` ID, `trigger` (`account`, `choice`, or `backfill`), `reason`, and `status` for an HTTP reply |
 | `google photo backfill failed` | worker | Error fields only |
+| `database connection failed` | web, worker | Error fields only, once per connection that PostgreSQL ended, such as in a restart |
+| `database rollback failed` | web, worker | Error fields only; the failure that ended the transaction is still reported |
 | `sentry report failed` | web, worker | `status` for a Sentry reply, `reason` `invalid DSN`, or error fields; see [failure reports](#failure-reports-in-sentry) |
 
 A line written while an `/api/screenr` or `/api/photos` request runs adds
@@ -950,6 +952,32 @@ Messages and details can quote the values that failed. `email_job.last_error`
 keeps a short message until cleanup deletes the expired job, and
 `push_job.last_error` keeps the APNs status and reason or the error code
 until the push is sent or expires.
+
+#### Worker outages
+
+The worker's email and push loops each run a pass about once a second
+([issue #358](https://github.com/jubishop/screenr/issues/358)). During an
+outage, such as a PostgreSQL restart, every pass fails, so each failed pass
+in a row doubles the loop's pause, from 2 seconds up to 30. Each loop logs
+`worker failed` for the first failure of each kind in a run, by error class
+and code, and repeats a kind only once an hour while it lasts. `failures`
+counts the failed passes in a row so far. When a pass succeeds again, the
+loop prints how many failed, on standard output, and returns to its
+one-second pause:
+
+```sh
+journalctl -u screenr-worker --since '1 day ago' --no-pager | grep '"event":"worker'
+```
+
+```json
+{"event":"worker recovered","failures":14}
+```
+
+When PostgreSQL ends a pooled connection, the web and the worker log
+`database connection failed` instead of stopping, and the pool opens a new
+connection for the next query. An activity email whose content fails to load
+still records the attempt and waits for its retry, so it can't hold up the
+emails behind it.
 
 ### Failure reports in Sentry
 

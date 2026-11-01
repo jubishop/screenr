@@ -669,7 +669,22 @@ request names the client's.
 `tests/app/email.test.ts` also runs `scripts/worker.ts` with fetch disabled. The
 worker refuses to start without the Resend settings, deletes expired jobs on its
 first pass, says once that push delivery is off without APNs settings, and
-exits cleanly on SIGTERM.
+exits cleanly on SIGTERM. With PostgreSQL unreachable, it keeps running, logs
+each loop's failure once, and stops during its backoff.
+[Database failures](https://github.com/jubishop/screenr/issues/358) have their
+own tests. `tests/app/database-connections.test.ts` ends an idle pooled
+connection and a transaction's connection from another one, and checks that
+each is logged once without stopping the process, that the transaction
+rethrows its own error rather than its failed `ROLLBACK`'s, and that the
+broken client is released. `tests/app/email.test.ts` ends the worker's
+connection during a Resend request, and `tests/app/migrations.test.ts` ends a
+migration's, which must fail with that connection's error and release the
+client; a migration run stopped by the migration lock must cause no
+PostgreSQL warnings. `tests/app/notification-email.test.ts` fails an activity
+email's database read, which must still record the attempt and its backoff.
+`tests/app/worker-loop.test.ts` runs a worker loop on a fake clock and checks
+its backoff, its one line per kind of failure, the hourly repeat, and its
+recovery line.
 `tests/app/push-delivery.test.ts` sends
 [pushes](notifications.md#push-delivery) to two fake APNs servers, one per
 environment, that speak HTTP/2 without TLS on loopback. It checks each kind's

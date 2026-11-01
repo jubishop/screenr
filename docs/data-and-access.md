@@ -790,8 +790,10 @@ another run holds, and cancels any statement that runs longer than 5 minutes.
 Either limit rolls back the migration transaction, so no SQL migration is
 applied, and the command fails with an error that names the limit. Retry once
 the other migration or long transaction finishes; split a data migration that
-needs more than 5 minutes per statement. The command restores the
-connection's default limits before returning it to the pool. Better Auth's
+needs more than 5 minutes per statement. The command then closes its
+connection, which drops these limits and releases the migration lock only if
+the run held it, so no cleanup can fail and hide the run's own error
+([issue #358](https://github.com/jubishop/screenr/issues/358)). Better Auth's
 schema changes run first, on other pool connections, without these limits.
 
 Better Auth's migrations add tables, columns, and indexes but never relax or

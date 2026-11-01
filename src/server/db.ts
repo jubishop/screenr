@@ -1,4 +1,30 @@
 import { Pool, types, type PoolClient } from "pg";
+import { logFailure } from "./log";
+
+// pg emits an `error` event when PostgreSQL ends a connection outside a query,
+// as a restart or crash recovery does. The pool forwards an idle connection's
+// event; a checked-out one, such as the worker's during a Resend request,
+// emits its own. Unheard, either would stop the process. Each broken
+// connection is logged once. The pool then drops it, and the next query on a
+// checked-out one fails for its caller to handle.
+const brokenConnections = new WeakSet<PoolClient>();
+function connectionFailed(error: Error, client: PoolClient) {
+  if (brokenConnections.has(client)) return;
+  brokenConnections.add(client);
+  logFailure("database connection failed", {}, error);
+}
+function checkedOutConnectionFailed(this: PoolClient, error: Error) {
+  connectionFailed(error, this);
+}
+function watch(pool: Pool) {
+  pool.on("error", connectionFailed);
+  pool.on("acquire", (client) =>
+    client.on("error", checkedOutConnectionFailed),
+  );
+  pool.on("release", (_error, client) =>
+    client.off("error", checkedOutConnectionFailed),
+  );
+}
 
 const globalDB = globalThis as unknown as { screenrPool?: Pool };
 export const db =
@@ -25,6 +51,8 @@ export const db =
       },
     },
   });
+// A development reload reuses the pool, which keeps its listeners.
+if (db !== globalDB.screenrPool) watch(db);
 if (process.env.NODE_ENV !== "production") globalDB.screenrPool = db;
 
 // All domain mutations share this lock. This small invite-only app favors a
@@ -36,6 +64,7 @@ export async function transaction<T>(
   lock = domainLock,
 ): Promise<T> {
   const client = await db.connect();
+  let rolledBack = true;
   try {
     // Bound every lock wait, including the shared lock held during activity
     // email sends, so queued writes return their pool connections well before
@@ -46,12 +75,28 @@ export async function transaction<T>(
     await client.query("COMMIT");
     return result;
   } catch (error) {
-    await client.query("ROLLBACK");
+    rolledBack = await rollback(client);
     if ((error as { code?: string }).code === "55P03")
       throw new AppError("Screenr is busy. Please try again.", 503);
     throw error;
   } finally {
-    client.release();
+    client.release(!rolledBack);
+  }
+}
+
+// Rolls back a failed transaction and reports whether that worked. A failed
+// ROLLBACK, as on a broken connection, must not replace the error that ended
+// the transaction, so it is logged instead, unless the broken connection
+// already was. Release a client that could not roll back with `true`, so the
+// pool closes its connection instead of reusing it.
+export async function rollback(client: PoolClient) {
+  try {
+    await client.query("ROLLBACK");
+    return true;
+  } catch (error) {
+    if (!brokenConnections.has(client))
+      logFailure("database rollback failed", {}, error);
+    return false;
   }
 }
 
