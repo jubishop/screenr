@@ -17,26 +17,13 @@ load average passed 200 and Xcode's accessibility audits failed with "Audit
 failed to complete in time" or with false contrast failures. Three at a time
 kept the load below 30 with clean results.
 
-Cap the runs with `lockf` slots. This wrapper waits for one of three
-machine-wide slots and returns the command's own exit status:
-
-```sh
-#!/bin/sh
-# Usage: sh check-ios-slot.sh bin/check-ios --simulator <udid>
-while :; do
-  for slot in 1 2 3; do
-    lockf -t 0 "/tmp/screenr-check-ios-slot-$slot.lock" "$@"
-    status=$?
-    [ "$status" -ne 75 ] && exit "$status"
-  done
-  sleep 30
-done
-```
-
-`lockf` exits 75 when a slot is busy. An audit that fails on both settled
-attempts while the machine is loaded is usually load: rerun before assuming
-the change broke it. `performSettledAudit` (#295) already retries once after a
-two-second settle.
+`bin/check-ios` enforces that limit itself: each run waits for one of three
+machine-wide slots before its first step and says that it is waiting
+([check slots](../docs/development-workflow.md#ios-checks-before-a-push)).
+Run it directly. The `lockf` wrapper that agents used before
+[#308](https://github.com/jubishop/screenr/issues/308) would now hold a
+second slot for the same run. If audits still time out with three runs at
+once, lower `SLOTS` in `bin/check-ios`.
 
 ## Hooks come from the primary checkout
 

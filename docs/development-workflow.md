@@ -238,6 +238,20 @@ push finds a recorded pass. Never bypass the hook with `git push --no-verify`.
   Simulator tests. A reused pass takes under a second. A failed UI test
   reports at once, and a stuck test run stops after 40 minutes; see the
   [iPhone app guide](../ios/README.md#checks).
+- **Slots:** at most three `bin/check-ios` runs check at once on a Mac.
+  With five or more at once on 2026-10-14, the load average passed 200, and
+  the UI tests' accessibility audits timed out ("Audit failed to complete in
+  time") or measured contrast wrongly; three kept it below 30
+  ([#308](https://github.com/jubishop/screenr/issues/308)). Before its first
+  step, each run takes one of three lock files,
+  `/tmp/screenr-check-ios-slot-<n>.lock`, and holds it until it exits, even
+  when stopped, since the system releases the lock with the process. While
+  all three are taken, it prints that it is waiting and checks again every 2
+  seconds, so parallel agents queue instead of failing. The slot covers the
+  build as well as the Simulator tests, since building loads the Mac too. A
+  reused pass skips the check without a slot. If audits still time out with
+  three runs at once, lower `SLOTS` in `bin/check-ios`.
+  `tests/test_check_ios.py` covers the wait.
 - **Hook location:** Git runs the hooks in `core.hooksPath`. `bin/setup`
   sets it to the relative `bin/hooks`, so each checkout runs its own copy.
   On the user's Mac it is the primary checkout's absolute `bin/hooks`, so

@@ -83,6 +83,12 @@ deletes it afterward, so several checkouts can check at once. With
 `--simulator`, it uses that Simulator and leaves it in place. Logs and result
 bundles from the last run are in `ios/build/check/`.
 
+At most three checks run at once on the Mac, since more load it enough to
+make accessibility audits time out. Before its first step, a check waits for
+a free machine-wide slot, printing that it is waiting, and holds it until it
+exits; see
+[slots](../docs/development-workflow.md#ios-checks-before-a-push).
+
 The check fails fast and never hangs:
 
 - **Diagnostics:** the test run passes `-collect-test-diagnostics never`.
