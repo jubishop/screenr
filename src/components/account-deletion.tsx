@@ -9,8 +9,15 @@ import { ConfirmAction, Confirmation } from "./confirmation";
 // Account deletion (docs/data-and-access.md#account-deletion). The member
 // first confirms it's them by signing in again with an emailed code, since
 // the server deletes only from a sign-in in the last ten minutes, and then
-// confirms the deletion itself.
-export function AccountDeletion({ email }: { email: string }) {
+// confirms the deletion itself. A failed read keeps the step; its actions,
+// but not Cancel, wait until the account is `available` again.
+export function AccountDeletion({
+  email,
+  available,
+}: {
+  email: string;
+  available: boolean;
+}) {
   const interactive = useInteractive();
   const [step, setStep] = useState<"closed" | "verify" | "code" | "confirm">(
     "closed",
@@ -52,7 +59,7 @@ export function AccountDeletion({ email }: { email: string }) {
   }
   async function confirmCode(event: React.SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (busy) return;
+    if (busy || !available) return;
     setBusy(true);
     // A successful sign-in replaces this browser's session with a fresh one.
     const confirmed = await failure.run(async () => {
@@ -83,7 +90,7 @@ export function AccountDeletion({ email }: { email: string }) {
           ref={start}
           className="danger"
           disabled={!interactive}
-          unavailable={false}
+          unavailable={!available}
           onClick={() => setStep("verify")}
         >
           Delete account
@@ -94,6 +101,7 @@ export function AccountDeletion({ email }: { email: string }) {
           message={`First, confirm it’s you. We’ll email a sign-in code to ${email}.`}
           action="Email me a code"
           busy={busy}
+          unavailable={!available}
           onConfirm={() => void sendCode()}
           onCancel={cancel}
         >
@@ -120,7 +128,7 @@ export function AccountDeletion({ email }: { email: string }) {
             />
           </label>
           <div className="confirmation-actions">
-            <ActionButton className="primary" unavailable={busy}>
+            <ActionButton className="primary" unavailable={busy || !available}>
               Confirm code
             </ActionButton>
             <ActionButton
@@ -139,6 +147,7 @@ export function AccountDeletion({ email }: { email: string }) {
         <ConfirmAction
           message="Delete your Screenr account permanently? This can’t be undone."
           action="Delete account"
+          unavailable={!available}
           run={() => api("delete-account", {})}
           onDone={() => window.location.assign("/login?deleted=1")}
           onCancel={cancel}

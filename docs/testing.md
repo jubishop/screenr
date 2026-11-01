@@ -528,6 +528,12 @@ recipients. A full run checks:
   invitation open the in-page confirmation, by keyboard and pointer at phone
   and desktop widths. Cancel keeps the item and returns focus; no browser
   dialog opens and no write is sent until the action is confirmed.
+- A failed read keeps an open Unfriend or Friends-page Decline confirmation
+  with focus on Cancel while the page hides; its action waits for the next
+  read, and Cancel still closes it. On Account, a failed read keeps the
+  deletion code step with its typed digits and focus, the final deletion
+  confirmation, and Sign-in methods, whose actions wait the same way; the
+  confirmed code still deletes the account without a second code.
 - The Friends page orders its relationship sections and keeps row actions on
   the person's line at phone and desktop widths. Avatars keep their color
   after a rename and show a whole emoji initial.
@@ -611,6 +617,10 @@ recipients. A full run checks:
   advance each minute. `tests/app/screen-refresh.test.ts` covers every
   screen kind, the page's first version, each visible change, and versions
   sent by other members or for unreadable screens.
+- A failed notification Accept, Decline, selection, or Mark all as read
+  keeps the panel's list and focus and shows its message beside that
+  control. A notifications read past its deadline says "Refresh timed out.
+  Please try again." and Try again recovers.
 - The open notification panel reads once when the page becomes visible and
   not on focus. Its unchanged polls answer 304 without a body and commit no
   render; arrivals still appear, and Mark all as read sends the shown page's
