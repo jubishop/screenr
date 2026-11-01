@@ -65,6 +65,21 @@ not clear notifications they have not selected.
 **Tradeoff:** Members must select notifications or use the bulk action to
 clear the unread count, even if they have skimmed the list.
 
+## Notification retention — 2026-11-01
+
+**Decision:** Delete a notification once it is read and more than a year
+old, in the worker's existing periodic cleanup. Unread notifications stay
+until read. The privacy policy states this retention.
+
+**Why:** The user accepted the recommendation in
+[issue #377](https://github.com/jubishop/screenr/issues/377), which found
+notifications were never pruned. Keeping unread ones means nothing a member
+hasn't seen disappears, including a notice a block hid and an unblock
+restored.
+
+**Rejected:** deleting every notification after a year, read or unread, and
+keeping all notifications indefinitely.
+
 ## Activity email timing — 2026-09-11
 
 **Decision:** For members who enable activity emails, wait 10 minutes and
@@ -77,6 +92,24 @@ conversations and omit notifications already read in Screenr.
 
 **Tradeoff:** Email alerts arrive later than in-app notifications. Activity
 email remains off by default under the existing delivery decision.
+
+## Activity email sends without the write lock — 2026-11-01
+
+**Decision:** The worker checks an activity email's visibility and marks the
+job as sending while it holds the write lock, then calls Resend with no lock
+held. Blocks and email opt-outs bump a generation the job records; a send
+that raced one is recorded as stale and never retried. Member writes never
+wait on Resend.
+
+**Why:** The user accepted the recommendation in
+[issue #359](https://github.com/jubishop/screenr/issues/359). Holding the
+lock across a send of up to 10 seconds made member writes fail with
+"Screenr is busy" for as long as Resend was slow.
+
+**Tradeoff:** An email already in flight when a block or opt-out commits can
+still arrive seconds later. It holds only what the recipient could see when
+the send started. Rejected: keeping the lock across the send with a shorter
+Resend timeout and a pause after repeated failures.
 
 ## Current implementation
 

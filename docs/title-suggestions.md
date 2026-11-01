@@ -236,6 +236,15 @@ stage, consistent with Watch together.
 
 **Tradeoff:** The list can become long as the viewer's circle adds titles.
 
+**Superseded — 2026-11-01:** Find a title ranks and caps its suggestion and
+Friends recommend lists on the server, applying its filters before the cap,
+and refreshes viewing information only for the titles it sends. Titles
+below the cap are no longer listed there, though search still finds them.
+The user chose this over keeping every eligible title after a repository
+review measured a 1.8 MB Find screen with 1,516 suggestions for a synthetic
+one-year circle
+([issue #375](https://github.com/jubishop/screenr/issues/375)).
+
 ## Implementation guidance
 
 The guidance below follows the accepted decisions and existing application

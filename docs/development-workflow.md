@@ -753,6 +753,26 @@ the `release` job, which runs alongside the [check jobs](#ci-jobs). That job
 checks out full history and has `deployments: read` permission to query the
 deployment history.
 
+### Required check on main — 2026-11-01
+
+**Decision:** A repository ruleset on `main` requires the `check` job to pass
+before a pull request merges. Branches need not be up to date with `main`.
+The owner's account is the ruleset's bypass actor, so text and checked
+development code can still be pushed directly. The `check` job always
+reports a result, including for pull requests that change only Markdown, so
+none waits on a check that never runs. Agents never merge past the ruleset
+with an admin override.
+
+**Why:** The user accepted the recommendation in
+[issue #372](https://github.com/jubishop/screenr/issues/372). Until then,
+only agents waiting for CI kept a red or unfinished pull request from
+merging. Screenr is public, so its standard-runner CI minutes are free and a
+quota shortfall can't hold merges behind the ruleset.
+
+**Rejected:** also requiring up-to-date branches, which makes every open pull
+request update and rerun CI after each merge and still wouldn't test combined
+iOS code, since CI has no iOS job; and keeping the gate agent-enforced.
+
 ## Scheduled memory audit
 
 A weekly local job checks every active [memory](../memory/README.md) note

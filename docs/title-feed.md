@@ -420,6 +420,26 @@ get a standalone top-level comment composer as part of #8.
 new top-level title comments make sense on the title page. Posting directly
 to a friend's profile was mentioned only as a possible later feature.
 
+### Page feed and profile histories — 2026-11-01
+
+**Decision:** The Circle feed and profile screens stop sending all
+history. Each sends a page of the newest entries, with **Show older** to
+read further back, on the web and in the iPhone app. A link to an entry
+outside the loaded page fetches that entry on its own, so permalinks and
+notifications still open their target. This supersedes the small-circle,
+unpaginated read model described under
+[Shared feed implementation](#shared-feed-implementation).
+
+**Why:** The user chose to page now, before the circle accumulates months
+of activity, over keeping full histories and revisiting in 2027. A
+repository review measured a synthetic one-year, 15-member circle: an
+8.7 MB feed, about 2 s for an unchanged poll, and a page load past the web
+server's memory limit
+([issue #373](https://github.com/jubishop/screenr/issues/373)).
+
+**Rejected:** keeping full histories, with only cheaper unchanged polls,
+until production grows.
+
 ## Existing rules that continue to apply
 
 These rules come from the [product brief](product-brief.md). The feed
@@ -514,7 +534,9 @@ drafts so the reply being read stays in place. A fresh visit starts with the
 three-comment preview and collapsed groups. All eligible items and replies are
 currently read in one request; there is no loaded-page boundary that can omit
 a link target. This retains the application's small-circle, unpaginated read
-model.
+model, which
+[paging feed and profile histories](#page-feed-and-profile-histories--2026-11-01)
+replaces once it ships.
 
 Open feeds use the existing three-second poll, focus refresh, and ten-second
 refresh deadline. A failed refresh hides server content. Local drafts remain
