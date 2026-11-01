@@ -205,7 +205,8 @@ function presentTitle({
 // stored row is served and the refresh waits five minutes; only a title that
 // was never stored throws. Details without usable release dates are stored,
 // votes included, but count as a failed refresh: the last release data stays
-// and the refresh waits five minutes.
+// and the refresh waits five minutes. They are logged as an invalid answer,
+// naming the release dates but none of their values.
 async function refreshTitle(id: string, stored?: TitleRow): Promise<TitleRow> {
   const [kind, tmdbId] = id.split(":") as ["movie" | "tv", string];
   let title: Title;
@@ -230,6 +231,11 @@ async function refreshTitle(id: string, stored?: TitleRow): Promise<TitleRow> {
     );
     return stored;
   }
+  if (!release)
+    logFailureOnce("catalog response invalid", {
+      lookup: "details",
+      part: "release_dates",
+    });
   const save = () =>
     db.query<{ release: StoredRelease | null }>(
       `INSERT INTO title(id,kind,tmdb_id,name,overview,poster_path,release_date,release,vote_average,vote_count,fetched_at,retry_after)

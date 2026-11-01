@@ -410,9 +410,10 @@ a time zone). It follows the title details'
 [cache](title-catalog.md#title-details): 24-hour freshness and a five-minute
 retry after a failure, with the last dates kept. A details response without
 usable movie release dates still stores the details, but keeps the last
-dates, leaves `fetched_at` unchanged, and retries after five minutes. The
-migration marks every stored title due, so each picks up its dates the next
-time a title page or list shows it.
+dates, leaves `fetched_at` unchanged, retries after five minutes, and
+[logs](deployment.md#failure-logs) `catalog response invalid` with `part`
+`release_dates`. The migration marks every stored title due, so each picks
+up its dates the next time a title page or list shows it.
 
 **Status.** `src/server/title-release.ts` derives the status each time the
 server sends a screen, so a stored row never shows an old status. Today is
