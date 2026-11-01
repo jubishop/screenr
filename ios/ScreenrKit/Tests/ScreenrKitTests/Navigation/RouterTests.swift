@@ -103,6 +103,24 @@ struct RouterTests {
     #expect(router.paths[.you, default: []].isEmpty)
   }
 
+  // The viewer's own Want to watch page opens above You's root, as their
+  // profile's link opens it; another member's opens on the current tab.
+  @Test func opensTheViewersOwnWantToWatchPageInYou() {
+    let router = Router()
+    router.viewerUsername = "alice"
+    router.selectedTab = .friends
+    router.open(.title(id: "tv:201"))
+
+    router.open(.wantToWatch(username: "Alice"))
+    #expect(router.selectedTab == .you)
+    #expect(router.paths[.you] == [.wantToWatch(username: "Alice")])
+    #expect(router.paths[.friends] == [.title(id: "tv:201")])
+
+    router.open(.wantToWatch(username: "ben"))
+    #expect(router.selectedTab == .you)
+    #expect(router.paths[.you] == [.wantToWatch(username: "Alice"), .wantToWatch(username: "ben")])
+  }
+
   // Sign-in and setup send the token from the app's pending invitation.
   @Test func keepsAnInvitationForSignup() {
     let invitation = PendingInvitation()

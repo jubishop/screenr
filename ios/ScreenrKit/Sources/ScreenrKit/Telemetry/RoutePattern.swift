@@ -94,6 +94,8 @@ public struct RoutePattern: Sendable, Hashable, CustomStringConvertible {
       case (let page?, 1) where pages.contains(page): [page]
       case ("titles", 3): ["titles", ":kind", ":id"]
       case ("people", 2): ["people", ":username"]
+      case ("people", 3) where segments[2] == "want-to-watch":
+        ["people", ":username", "want-to-watch"]
       case ("conversations", 2): ["conversations", ":id"]
       case ("join", 2): ["join", ":token"]
       case ("api", _): apiPattern(segments)

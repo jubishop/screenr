@@ -59,6 +59,7 @@ private struct DestinationScreen: View {
     case .watchTogether: WatchTogetherView(model: model, destination: destination)
     case .title: TitleView(model: model, destination: destination)
     case .profile: ProfileWithTopTenEditor(model: model, destination: destination)
+    case .wantToWatch: WantToWatchView(model: model, destination: destination)
     // An old conversation link always redirects to its entry.
     case .conversation: ScreenContent(model: model) { _ in EmptyView() }
     case .join, .notFound: NotFoundView()

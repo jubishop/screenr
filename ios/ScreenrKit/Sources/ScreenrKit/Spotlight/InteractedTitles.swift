@@ -9,6 +9,8 @@ import Foundation
 // - A title page shows the viewer's place in its header. A page without one
 //   clears the title, since the viewer withdrew whatever they had.
 // - Friends recommend carries the viewer's status and Recommend.
+// - The viewer's own Want to watch page lists titles they saved to Want to
+//   watch. Another member's lists that member's, so it names none.
 public struct InteractedTitles: Hashable, Sendable {
   // In the screen's order, each title once.
   public private(set) var titles: [TitleSummary] = []
@@ -36,7 +38,12 @@ public struct InteractedTitles: Hashable, Sendable {
       where recommendation.viewerRecommended || recommendation.viewerStatus != nil {
         add(TitleSummary(recommendation.title))
       }
-    case .people, .invites, .account, .watchTogether, .wantToWatch, .redirect, .unknown:
+    case .wantToWatch(let page):
+      guard page.owner.userId == viewer else { break }
+      for title in page.titles {
+        add(TitleSummary(title.title))
+      }
+    case .people, .invites, .account, .watchTogether, .redirect, .unknown:
       break
     }
   }

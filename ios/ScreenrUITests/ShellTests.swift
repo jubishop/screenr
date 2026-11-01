@@ -129,6 +129,14 @@ final class ShellTests: XCTestCase {
     XCTAssertEqual(app.searchFields.firstMatch.value as? String, "Lost")
     try open(app, "people", reads: "/people", log: log, title: "Friends", tab: "Friends")
     try open(app, "people/alice", reads: "/people/alice", log: log, title: "Alice Park", tab: "You")
+    try open(
+      app,
+      "people/alice/want-to-watch",
+      reads: "/people/alice/want-to-watch",
+      log: log,
+      title: "Want to watch",
+      tab: "You"
+    )
 
     // Friends pages open in Friends.
     try open(

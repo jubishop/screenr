@@ -90,6 +90,25 @@ see what you can watch right now." note, linked to
 Saves started from this page's title links count under the `title` surface in
 [usage telemetry](usage-telemetry.md#save-attribution).
 
+## iPhone app
+
+The iPhone app follows the web page. `Destination.wantToWatch(username:)`
+reads and writes `/people/<username>/want-to-watch`, so universal links and
+`screenr-dev://` links open it: the viewer's own page above the You tab's
+profile, and a friend's on the current tab. `ProfileView` links to it above
+the Friends list when the profile's `canRead` is true. `WantToWatchView` and
+`WantToWatchList` render ScreenrKit's `WantToWatchScreen`, whose extension
+in `ios/ScreenrKit/Sources/ScreenrKit/People/WantToWatch.swift` holds the
+sections, the count, the empty states, and the introduction in the web's
+words. The page polls like other screens. The services note opens Settings,
+where streaming services are saved, and each title opens its title page
+without a list's surface, so a save there reports `title`. Block closes the
+blocked person's page on every tab. On the viewer's own page, each title
+joins Spotlight, since the viewer saved it to Want to watch; a friend's page
+adds nothing. The At home and In theaters switch from
+[issue #312](https://github.com/jubishop/screenr/issues/312) goes between
+the introduction and the filter.
+
 ## Verification
 
 `tests/app/want-to-watch.test.ts` uses a fake TMDB service and the real
@@ -102,3 +121,12 @@ for the list, and the friendship and blocking rules.
 1440, 390, and 320px without horizontal overflow, keyboard use of the link,
 filter, and title rows, the empty states and services note, refreshes, and
 the unfriend result, with no page or hydration errors.
+
+In the iPhone app, ScreenrKit's `WantToWatchTests`, `DestinationTests`,
+`RouterTests`, `ProfileModelTests`, and `TitleSpotlightTests` cover the
+model, route, placement, Block, and Spotlight. The UI tests'
+`WantToWatchTests` open the viewer's own page from the You tab, filter it,
+and open a title, open a friend's page, check that a non-friend's profile has
+no link, audit the largest text size, and render every
+`screen/want-to-watch` fixture from its link. `ShellTests` opens the
+viewer's own page from a link.

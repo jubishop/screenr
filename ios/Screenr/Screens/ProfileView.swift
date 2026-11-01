@@ -4,8 +4,8 @@ import SwiftUI
 // A profile, `/people/<username>`. The viewer's own profile is the root of
 // the You tab. Every member who can see the profile gets the person, their
 // relationship actions, their top 10, and their friends; only the person and
-// their friends get the person's activity, which the server leaves out for
-// anyone else, as on the web.
+// their friends get the person's activity and a link to their Want to watch
+// page, which the server leaves out for anyone else, as on the web.
 struct ProfileView: View {
   let model: ScreenModel
   let destination: Destination
@@ -64,6 +64,9 @@ private struct ProfilePage: View {
               entries: page.topTen,
               owner: relationship == .own ? .viewer(edit: editTopTen) : .otherMember
             )
+            if profile.canRead {
+              ProfileWantToWatchLink(username: profile.person.username)
+            }
             ProfileFriends(friends: profile.friends)
             if !profile.canRead {
               Text("You’ll see their activity after you become friends.")

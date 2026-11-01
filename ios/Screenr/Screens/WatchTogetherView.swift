@@ -9,7 +9,7 @@ struct WatchTogetherView: View {
   let model: ScreenModel
   let destination: Destination
   // Kept outside the screen's content, so it outlives a failed read.
-  @State private var filter = WatchTogetherFilter.all
+  @State private var filter = TitleKindFilter.all
 
   var body: some View {
     ScreenContent(model: model) { screen in
