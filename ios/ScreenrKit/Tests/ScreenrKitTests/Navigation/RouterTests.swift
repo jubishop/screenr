@@ -70,6 +70,7 @@ struct RouterTests {
 
   @Test func pushesOtherScreensOnTheCurrentTab() {
     let router = Router()
+    router.viewerUsername = "alice"
     router.selectedTab = .friends
     router.sheet = .notifications
 
@@ -119,6 +120,54 @@ struct RouterTests {
     router.open(.wantToWatch(username: "ben"))
     #expect(router.selectedTab == .you)
     #expect(router.paths[.you] == [.wantToWatch(username: "Alice"), .wantToWatch(username: "ben")])
+  }
+
+  // A link that names a member and arrives before a screen names the viewer,
+  // such as at launch, waits for them, so the viewer's own pages still open
+  // in You.
+  @Test(arguments: [
+    (Destination.profile(username: "Alice"), [Destination]()),
+    (.wantToWatch(username: "Alice"), [.wantToWatch(username: "Alice")]),
+  ])
+  func opensTheViewersOwnPagesInYouOnceTheViewerIsKnown(
+    _ link: Destination,
+    above path: [Destination]
+  ) {
+    let router = Router()
+
+    router.open(link)
+    #expect(router.selectedTab == .circle)
+    #expect(router.paths.values.allSatisfy { $0.isEmpty })
+
+    router.viewerUsername = "alice"
+    #expect(router.selectedTab == .you)
+    #expect(router.paths[.you] == path)
+  }
+
+  // Another member's pages wait too, then open on the current tab.
+  @Test(arguments: [Destination.profile(username: "ben"), .wantToWatch(username: "ben")])
+  func opensAnotherMembersPagesOnTheCurrentTabOnceTheViewerIsKnown(_ link: Destination) {
+    let router = Router()
+    router.selectedTab = .friends
+
+    router.open(link)
+    router.viewerUsername = "alice"
+
+    #expect(router.selectedTab == .friends)
+    #expect(router.paths[.friends] == [link])
+  }
+
+  // The member followed the later link last, so the earlier one no longer
+  // waits.
+  @Test func letsALaterLinkReplaceOneWaitingForTheViewer() {
+    let router = Router()
+
+    router.open(.profile(username: "alice"))
+    router.open(.title(id: "tv:201"))
+    router.viewerUsername = "alice"
+
+    #expect(router.selectedTab == .circle)
+    #expect(router.paths == [.circle: [.title(id: "tv:201")]])
   }
 
   // Sign-in and setup send the token from the app's pending invitation.
@@ -207,6 +256,42 @@ struct RouterTests {
     #expect(router.root(of: .you) == nil)
   }
 
+  // A link to the viewer's own page that the session expired before showing
+  // opens in You again once the next sign-in names the viewer.
+  @Test(arguments: [
+    (Destination.profile(username: "Alice"), [Destination]()),
+    (.wantToWatch(username: "Alice"), [.wantToWatch(username: "Alice")]),
+  ])
+  func reopensTheViewersOwnPagesInYouAfterTheSessionExpires(
+    _ link: Destination,
+    above path: [Destination]
+  ) {
+    let router = Router()
+    router.viewerUsername = "alice"
+    router.open(link)
+
+    router.sessionEnded(.expired)
+    #expect(router.selectedTab == .circle)
+    #expect(router.paths.values.allSatisfy { $0.isEmpty })
+
+    router.viewerUsername = "alice"
+    #expect(router.selectedTab == .you)
+    #expect(router.paths[.you] == path)
+  }
+
+  // The account check at launch can end an expired session before any screen
+  // names the viewer, and a link waiting for them waits for the next sign-in.
+  @Test func keepsALinkWaitingForTheViewerWhenTheSessionExpires() {
+    let router = Router()
+    router.open(.wantToWatch(username: "alice"))
+
+    router.sessionEnded(.expired)
+    router.viewerUsername = "alice"
+
+    #expect(router.selectedTab == .you)
+    #expect(router.paths[.you] == [.wantToWatch(username: "alice")])
+  }
+
   @Test func forgetsALinkOnceItsScreenLoads() {
     let router = Router()
     router.open(.title(id: "tv:201"))
@@ -217,14 +302,18 @@ struct RouterTests {
     #expect(router.paths.values.allSatisfy { $0.isEmpty })
   }
 
-  // Signing out or deleting the account leaves nothing for the next member.
+  // Signing out or deleting the account leaves nothing for the next member,
+  // even a link still waiting for the viewer.
   @Test(arguments: [SessionStore.Ending.signedOut, .accountDeleted])
   func forgetsALinkWhenTheMemberLeaves(_ ending: SessionStore.Ending) {
     let router = Router()
     router.open(.title(id: "tv:201"))
+    router.open(.profile(username: "alice"))
 
     router.sessionEnded(ending)
+    router.viewerUsername = "alice"
 
+    #expect(router.selectedTab == .circle)
     #expect(router.paths.values.allSatisfy { $0.isEmpty })
   }
 
