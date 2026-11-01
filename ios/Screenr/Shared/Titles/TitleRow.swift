@@ -3,9 +3,9 @@ import SwiftUI
 
 // One title in a list, such as search results, Friends recommend, or Watch
 // together: its poster, name, kind and year, release status and TMDB user
-// score, and where it streams. As on the web at phone widths, the overview waits for the title
-// page. At accessibility sizes the text moves beneath the poster, which would
-// otherwise leave it a few letters per line. Put it in a
+// score, and where it streams. As on the web at phone widths, the overview
+// waits for the title page. At accessibility sizes the text moves beneath the
+// poster, which would otherwise leave it a few letters per line. Put it in a
 // `NavigationLink(value: Destination.title(id:))` to open the title.
 struct TitleRow<Extra: View>: View {
   let title: Title

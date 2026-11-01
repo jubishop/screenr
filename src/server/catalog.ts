@@ -149,11 +149,12 @@ function presentTitle({
 }
 
 // Fetches a title's details, with a movie's release dates in the same
-// request, and stores them with the votes for its TMDB user score. When TMDB fails, times out, returns invalid
-// details, or no longer has the title, the stored row is served and the
-// refresh waits five minutes; only a title that was never stored throws.
-// Details without usable release dates are stored, but count as a failed
-// refresh: the last release data stays and the refresh waits five minutes.
+// request, and stores them with the votes for its TMDB user score. When TMDB
+// fails, times out, returns invalid details, or no longer has the title, the
+// stored row is served and the refresh waits five minutes; only a title that
+// was never stored throws. Details without usable release dates are stored,
+// votes included, but count as a failed refresh: the last release data stays
+// and the refresh waits five minutes.
 async function refreshTitle(id: string, stored?: TitleRow): Promise<TitleRow> {
   const [kind, tmdbId] = id.split(":") as ["movie" | "tv", string];
   let title: Title;

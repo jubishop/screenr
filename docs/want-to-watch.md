@@ -143,8 +143,8 @@ Watch together's In theaters payload has `kind`, `mode`, `participants`, and
 title card, which shows each movie's release status, such as "In theaters ·
 Digital Dec 9", with its
 [TMDB user score](title-catalog.md#tmdb-user-score-implementation) beside
-it, and no viewing options when a title has none. A count, such
-as "2 movies in theaters", comes first. **In theaters now** lists the movies
+it, and no viewing options when a title has none. A count, such as "2 movies
+in theaters", comes first. **In theaters now** lists the movies
 in theaters, noting that the status comes from US release dates and that
 showtimes are at local theaters. **Availability unknown** lists the movies
 whose release data could not be loaded below it. The All, Movies, and TV

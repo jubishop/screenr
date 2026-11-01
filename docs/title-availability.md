@@ -466,9 +466,9 @@ dates, or an unavailable status, and stays listed. Search summaries are
 stored without dates, so a search refreshes each new result's details.
 
 **Web.** `TitleStatus` in `src/components/title-status.tsx` shows the
-status, such as
-"In theaters · Digital Dec 9", on title cards, Find a title's suggestion
-tiles, and at the top of Where to watch, outside its Subs and Free groups.
+status, such as "In theaters · Digital Dec 9", on title cards, Find a
+title's suggestion tiles, and at the top of Where to watch, outside its Subs
+and Free groups.
 The text comes from the screen data, never the reader's clock, so server
 and hydration markup match.
 
