@@ -11,6 +11,7 @@ public struct APIRequestRecord: Hashable, Sendable {
   public let status: Int?
   public let duration: Duration
   public let error: APIError?
+  public let trigger: RequestTrigger
 }
 
 // Receives every request the client finishes, successful or not.

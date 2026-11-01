@@ -425,7 +425,10 @@ already in flight, which may have started before a write or the push. Each
 read gives up after ten seconds. A failed read replaces the content with the
 error; passing failures keep polling, and a permanent error stops it until a
 read succeeds. An unchanged screen keeps its `phase`, so nothing renders
-again. `ScreenModelTests` cover the timing with a `TestClock`.
+again. Each read after the three-second wait is a poll, sent as
+`RequestTrigger.poll`, which [Telemetry](#sentry) records quietly when it
+succeeds; every other read is `.demand`. `ScreenModelTests` cover the timing
+with a `TestClock`.
 
 ### Visits
 
@@ -1487,7 +1490,11 @@ Sentry organization `artisanal-software`, under these
   `GET /api/screenr/screen?path=/people/:username`. Both carry a `request_id`
   tag, the tag the server's failure reports use, as does an error captured
   with its request ID. A failed call logs a warning, and a cancelled one logs
-  at info.
+  at info. A successful [poll](#polling), usually an unchanged 304 every
+  three seconds, logs only at debug level, which the log file leaves out,
+  and adds no breadcrumb or transaction, so polling cannot crowd the log
+  tail that feedback attaches or the breadcrumbs before a crash. Writes,
+  failures, and first reads are recorded in full.
 - **Scrubbing:** `SentryPrivacy` runs as Sentry's `beforeSend`,
   `beforeBreadcrumb`, `beforeSendSpan`, and `beforeSendLog`. It keeps only the
   user ID, and reduces every URL to its `RoutePattern`, such as

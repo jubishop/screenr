@@ -17,6 +17,8 @@ public struct APIRequest<Response: Decodable & Sendable>: Sendable {
   // The endpoint without member content, such as search text or usernames,
   // for logs: `/api/screenr/screen?path=/people/:username`.
   public let route: String
+  // A live read marks its repeated reads as polls with `triggered(by:)`.
+  public private(set) var trigger = RequestTrigger.demand
 
   public init(
     method: HTTPMethod,
@@ -49,6 +51,13 @@ public struct APIRequest<Response: Decodable & Sendable>: Sendable {
         "\(QueryEncoding.encode(key))=\(QueryEncoding.encode(value))"
       }
     return endpoint.path + "?" + pairs.joined(separator: "&")
+  }
+
+  // The same request, sent for the reason given, such as a live read's poll.
+  public func triggered(by trigger: RequestTrigger) -> APIRequest {
+    var request = self
+    request.trigger = trigger
+    return request
   }
 }
 
@@ -88,6 +97,15 @@ public enum VisitSignal: Hashable, Sendable {
   case never
   // Carries `Screenr-Visit: 1` when a visit is due.
   case whenDue
+}
+
+// Why a request is sent. Telemetry records a successful poll quietly.
+public enum RequestTrigger: Hashable, Sendable {
+  // Something new asked for it: a member's action, a write, or a live read's first read.
+  case demand
+  // A live read repeats a read it already made, as it does every few seconds while its view
+  // shows.
+  case poll
 }
 
 // What a successful response does to the stored session.
