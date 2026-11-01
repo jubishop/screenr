@@ -224,12 +224,13 @@ public final class ProfileModel {
     return true
   }
 
-  // The person's profile and Watch together with them no longer load.
+  // The person's profile, their Want to watch page, and Watch together with
+  // them no longer load.
   private func leave(blocked person: Person) {
     let username = person.username.lowercased()
     shell.router.close { destination in
       switch destination {
-      case .profile(let other): other.lowercased() == username
+      case .profile(let other), .wantToWatch(let other): other.lowercased() == username
       case .watchTogether(let others): others.contains { $0.lowercased() == username }
       default: false
       }

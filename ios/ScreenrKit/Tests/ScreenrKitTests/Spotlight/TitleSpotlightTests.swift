@@ -57,6 +57,14 @@ struct TitleSpotlightTests {
         == ["movie:101", "tv:201"]
     )
     #expect(InteractedTitles(try screen("screen/people/default")).titles.isEmpty)
+    // The viewer's own Want to watch page lists titles they saved; a
+    // friend's page lists the friend's, which say nothing of the viewer's.
+    #expect(
+      InteractedTitles(try screen("screen/want-to-watch/own")).titles.map(\.id)
+        == ["movie:104", "movie:103"]
+    )
+    #expect(InteractedTitles(try screen("screen/want-to-watch/own")).cleared.isEmpty)
+    #expect(InteractedTitles(try screen("screen/want-to-watch/friend")).titles.isEmpty)
 
     let page = InteractedTitles(try screen("screen/title/movie"))
     #expect(page.titles == [Self.nightCrossing])

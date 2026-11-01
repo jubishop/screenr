@@ -31,13 +31,7 @@ private struct FindScreen: View {
     List {
       FindServicesSection(find: find, page: page)
       results
-      // A row, since a footer is too faint at its size.
-      Section {
-        Text(
-          "US availability from [JustWatch](https://www.justwatch.com/). Open a title for details."
-        )
-        .font(.footnote)
-      }
+      ViewingAttribution()
     }
     .searchable(
       text: Binding(get: { find.query }, set: { find.edit($0) }),

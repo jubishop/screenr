@@ -102,6 +102,30 @@ struct ProfileMenu: View {
   }
 }
 
+// The person's Want to watch page, for the person and their friends. Its
+// identifier tells it from a feed entry's Want to watch.
+struct ProfileWantToWatchLink: View {
+  let username: String
+
+  var body: some View {
+    NavigationLink(value: Destination.wantToWatch(username: username)) {
+      HStack {
+        Text("Want to watch")
+          .font(.headline)
+        Spacer(minLength: 8)
+        Image(systemName: "chevron.right")
+          .font(.footnote.bold())
+          .foregroundStyle(.muted)
+      }
+      .frame(minHeight: 44)
+      .contentShape(.rect)
+    }
+    .buttonStyle(.plain)
+    .accessibilityIdentifier("want-to-watch")
+    .padding(.horizontal)
+  }
+}
+
 // The person's friends, collapsed beneath a count as on the web, each
 // opening their profile. Pending requests stay private.
 struct ProfileFriends: View {

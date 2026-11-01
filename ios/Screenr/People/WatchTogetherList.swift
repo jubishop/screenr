@@ -6,7 +6,7 @@ import SwiftUI
 // your services, and Availability unknown, or why nothing shows.
 struct WatchTogetherList: View {
   let page: WatchTogetherScreen
-  @Binding var filter: WatchTogetherFilter
+  @Binding var filter: TitleKindFilter
   @Environment(ShellModel.self) private var shell
 
   var body: some View {
@@ -14,14 +14,7 @@ struct WatchTogetherList: View {
       Section {
         Participants(people: page.participants)
         Text(WatchTogetherScreen.introduction)
-        Picker("Title type", selection: $filter) {
-          ForEach(WatchTogetherFilter.allCases) { filter in
-            Text(filter.label).tag(filter)
-          }
-        }
-        .pickerStyle(.segmented)
-        // Segments as wide as their titles, which a full-width control clips.
-        .fixedSize()
+        TitleKindPicker(filter: $filter)
         Text(page.count(filter))
           .foregroundStyle(.muted)
         if !page.viewerHasServices {
@@ -65,21 +58,17 @@ struct WatchTogetherList: View {
           }
         }
       } else {
-        Section {
-          Text(
-            "US availability from [JustWatch](https://www.justwatch.com/). Open a title for details."
-          )
-          .font(.footnote)
-        }
+        ViewingAttribution()
       }
     }
   }
 }
 
-// "Alice Park & Ben Ortiz", with their photos, each name opening a profile.
-// At accessibility sizes the names move beneath the photos. The photos sit
+// The people a page is about, such as "Alice Park & Ben Ortiz" on Watch
+// together, with their photos, each name opening a profile. At
+// accessibility sizes the names move beneath the photos. The photos sit
 // apart, since an overlapping photo hides part of the other's initial.
-private struct Participants: View {
+struct Participants: View {
   let people: [Person]
   @Environment(\.dynamicTypeSize) private var size
 

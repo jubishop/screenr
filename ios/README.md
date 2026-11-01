@@ -377,9 +377,10 @@ the account forget it. [Settings](#settings) ends with `SignOutButton`.
 | `/search` | Find a title's root, which shows the link's search and tab from `router.findSearch`. |
 | `/people` | Friends' root. |
 | `/people/<viewer>` | You's root. |
+| `/people/<viewer>/want-to-watch` | Pushed on You. |
 | `/invites`, `/watch-together` | Pushed on Friends. |
 | `/account` | Settings over You. |
-| `/titles/…`, `/people/<other>`, `/conversations/…`, unknown paths | Pushed on the current tab. A conversation shows the entry it redirects to in its place. |
+| `/titles/…`, `/people/<other>`, `/people/<other>/want-to-watch`, `/conversations/…`, unknown paths | Pushed on the current tab. A conversation shows the entry it redirects to in its place. |
 | `/join/<token>` | Keeps the token in `PendingInvitation` for sign-in and setup, checks it with the server, and opens Circle's root. A member who has a profile lands there, as on the web, unless a later link took its place, and the app forgets the token. |
 
 Tab roots never change destination; a link adds to a stack or, for Find,
@@ -1032,6 +1033,8 @@ Views that list titles share these pieces:
 | `TitleRow` | `Screenr/Shared/Titles/` | A title's `PosterImage`, name, kind and year, release status and TMDB user score, and where it streams, with optional lines after them. As on the web at phone widths, it leaves out the overview. At accessibility sizes the text moves beneath the poster. Put it in a `NavigationLink`. |
 | `TitleStatusLine` | `Screenr/Shared/Titles/` | The [release status](../docs/title-availability.md#release-status-implementation), such as "In theaters · Digital Nov 20", with the [TMDB user score](../docs/title-catalog.md#tmdb-user-score-implementation) beside it, the `TMDBLogo` asset and a percentage such as 73%, in title rows, Find a title's suggestions, and atop Where to watch, or nothing without a label or score. |
 | `ViewingLinesView` | `Screenr/Shared/Titles/` | "On Netflix, Hulu" and "Free on Tubi TV", with saved services marked, or why there are no options. `savedBy: .eitherPerson` marks either person's services, as Watch together does. |
+| `TitleKindPicker`, `TitleKindFilter` | `Screenr/Shared/Titles/`, ScreenrKit `Titles/` | The All, Movies, and TV filter that Watch together and Want to watch pages share. Each choice keeps the list's order. |
+| `ViewingAttribution` | `Screenr/Shared/Titles/` | JustWatch's credit beneath a list of titles' viewing options. |
 | `Title.kindAndYear` | ScreenrKit `Titles/` | "Movie · 2024", or only the kind without a release date. |
 | `TMDBScore.text` | ScreenrKit `Titles/` | The server's whole percentage, such as "73%". The app never computes a score. |
 | `TitleRelease.text` | ScreenrKit `Titles/` | "In theaters", then each upcoming date's label as the server worded it, joined with " · ", or nil when there is none or the release data could not be loaded. The app never derives a status from the dates. |
@@ -1109,16 +1112,18 @@ in theaters with its digital date ahead and a TMDB user score of 73%.
 
 ## Friends and profiles
 
-Friends, profiles, and Watch together follow the web's People, profile, and
-Watch together pages. Their screens are `FriendsView`, `ProfileView`, and
-`WatchTogetherView` in `Screenr/Screens/`, with their parts in
-`Screenr/People/`, and their behavior is in ScreenrKit's `People/`.
+Friends, profiles, Want to watch pages, and Watch together follow the web's
+People, profile, [Want to watch](../docs/want-to-watch.md), and Watch
+together pages. Their screens are `FriendsView`, `ProfileView`,
+`WantToWatchView`, and `WatchTogetherView` in `Screenr/Screens/`, with their
+parts in `Screenr/People/`, and their behavior is in ScreenrKit's `People/`.
 
 | Piece | Where | What it does |
 | --- | --- | --- |
 | `FriendsSections`, `FriendsModel` | ScreenrKit `People/` | Friends in the web's order: Requests, Friends, Sent requests, People you may know with their mutual friends, and Blocked people. Accept, Decline after a confirmation, Cancel, Send friend request, and Unblock go through `relationship`, one at a time, and the page reads again after each. A failed action's message stays with its person. `searchDestination` opens an exact username's profile. |
 | `Relationship`, `ProfileModel` | ScreenrKit `People/` | `Relationship(profile, viewer:)` is `own`, `friend`, `requestSent`, `requestReceived`, or `none`, and gives the visible `action`, such as Watch together or Accept friend request, and the More actions `menu`. Unfriend and Block confirm in the web's words. |
-| `WatchTogetherFilter`, `WatchTogetherSection` | ScreenrKit `People/` | All, Movies, and TV; Ready to watch, Not on your services, and Availability unknown; and the count and empty states. Each shared title is a [`TitleRow`](#title-lists) that marks the services either person saved. |
+| `WatchTogetherSection` | ScreenrKit `People/` | Ready to watch, Not on your services, and Availability unknown, filtered by [`TitleKindFilter`](#title-lists); and the count and empty states. Each shared title is a [`TitleRow`](#title-lists) that marks the services either person saved. |
+| `WantToWatchSection`, `WantToWatchEmpty` | ScreenrKit `People/` | A Want to watch page's Ready to watch and Availability unknown, filtered by `TitleKindFilter`; the count of titles to watch now; and why nothing is ready, worded for the viewer's own page or a friend's. Each title is a `TitleRow` that marks the viewer's saved services. |
 | `TopTenSection`, `TopTenRow` | `Screenr/Shared/TopTen/` | A profile's Top 10 heading and its row of ranked posters, each a link named like "#1 Night Crossing" that opens the title. The row only displays the list. Another member's empty list shows nothing; the owner's explains how to start one. `TopTenSection(entries:owner: .viewer(edit:))` adds Edit to the heading. |
 | `TopTenEditorModel` | ScreenrKit `People/` | `@Observable`: the [top 10 editor](#top-10-editor)'s entries, one change at a time: `drop(_:dragged:)` and `move(_:toRank:)` send `top-ten` `move`, and `remove(_:)` sends `remove`. A change shows at once and a failed one returns the list to its order before the change, with `failure`. `reconcile(with:)` takes the profile's reads. |
 | `ProfileWithTopTenEditor`, `TopTenEditorList` | `Screenr/Shared/TopTen/` | The profile destination with the editor sheet that Edit opens, and the sheet's list. |
@@ -1134,7 +1139,8 @@ Watch together pages. Their screens are `FriendsView`, `ProfileView`, and
 - **Activity:** a profile's entries use the shared `FeedList` in its full
   style, with the profile's header, top 10, and friends above them.
 - **Block:** Block hides the profile, so after it succeeds, `ProfileModel`
-  closes the person's profile and Watch together on every tab with
+  closes the person's profile, their Want to watch page, and Watch together
+  on every tab with
   `Router.close(where:)`, leaves "You blocked …" for Friends with
   `ShellModel.leaveNotice(_:on:)`, and opens Friends. Friends shows the
   notice until it is dismissed or Friends is left.
@@ -1144,17 +1150,27 @@ Watch together pages. Their screens are `FriendsView`, `ProfileView`, and
   while the list has titles. `DestinationView` shows every profile through
   `ProfileWithTopTenEditor`, whose closure opens the
   [top 10 editor](#top-10-editor).
+- **Want to watch:** the viewer's own profile and an accepted friend's, whose
+  `canRead` is true, link to `/people/<username>/want-to-watch` above the
+  Friends list; the link's identifier is `want-to-watch`, apart from feed
+  entries' Want to watch. The page lists what the server sends, which holds
+  only titles the viewer can watch now or whose availability is unknown,
+  judged by the viewer's own services. Save your streaming services opens
+  Settings over the tab, and each title opens its page through
+  `WantToWatchScreen.destination(of:)`, which reports the `title` surface, as
+  the web's links do. Others' pages answer "Want to watch not found."
 - **Watch together:** a friend's profile links to
   `/watch-together?with=<username>`. Save your streaming services opens
   Settings over the tab, and each title opens its page through
   `SharedTitle.destination`, so a Want to watch saved there reports the web's
   `watch_together` surface.
-- **Tests:** `FriendsModelTests`, `ProfileModelTests`, and
-  `WatchTogetherTests` cover the models against the fixtures and
-  `RecordingAPI`. The UI tests `FriendsTests`, `ProfileTests`, and
-  `WatchTogetherTests` drive the journeys, check each write in the request
-  log, audit at the largest text size, and render every `screen/people`,
-  `screen/profile`, and `screen/watch-together` fixture. `app.person(_:)`
+- **Tests:** `FriendsModelTests`, `ProfileModelTests`, `WantToWatchTests`,
+  and `WatchTogetherTests` cover the models against the fixtures and
+  `RecordingAPI`. The UI tests `FriendsTests`, `ProfileTests`,
+  `WantToWatchTests`, and `WatchTogetherTests` drive the journeys, check each
+  write in the request log, audit at the largest text size, and render every
+  `screen/people`, `screen/profile`, `screen/want-to-watch`, and
+  `screen/watch-together` fixture. `app.person(_:)`
   finds a Friends row by username, `ScreenFixtureFile` reads a screen
   fixture's viewer, path, and body, and `app.openFixture(_:)` opens its link
   in the running app, so one launch for each viewer renders all of that
@@ -1309,8 +1325,9 @@ Intents are in `Screenr/Shortcuts/`.
 - **Spotlight index:** `ShellModel`'s `onScreen` hands `TitleSpotlight` every
   screen that loads. A feed or profile entry names the viewer's Recommend,
   status, and top 10 rank for its title, and the viewer's own review counts
-  too; Friends recommend names their status and Recommend. A title page
-  without any of these removes its title. Each title is indexed once per
+  too; Friends recommend names their status and Recommend; and the viewer's
+  own Want to watch page names each of its titles. A title page without any
+  of these removes its title. Each title is indexed once per
   launch until it changes, so polls write nothing, and the writes run in
   order. An item's identifier is the title ID, with its name, "Movie · 2024",
   and the poster when the image cache already holds it, so indexing

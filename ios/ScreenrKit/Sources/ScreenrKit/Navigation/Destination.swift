@@ -25,6 +25,8 @@ public enum Destination: Hashable, Sendable {
   case title(id: String, item: String? = nil, reply: String? = nil, from: SaveSurface? = nil)
   // A profile, `/people/<username>`.
   case profile(username: String)
+  // A profile's Want to watch page, `/people/<username>/want-to-watch`.
+  case wantToWatch(username: String)
   // An old conversation link, which the screen API redirects to its entry.
   case conversation(id: String, reply: String? = nil)
   // An invitation link, `/join/<token>`. It is not a member screen.
@@ -88,6 +90,8 @@ extension Destination {
       )
     case ("people"?, 2):
       self = .profile(username: parts[1])
+    case ("people"?, 3) where parts[2] == "want-to-watch":
+      self = .wantToWatch(username: parts[1])
     case ("conversations"?, 2):
       self = .conversation(id: parts[1], reply: reply)
     case ("join"?, 2):
@@ -121,6 +125,8 @@ extension Destination {
       )
     case .profile(let username):
       return "/people/" + PathEncoding.component(username)
+    case .wantToWatch(let username):
+      return "/people/" + PathEncoding.component(username) + "/want-to-watch"
     case .conversation(let id, let reply):
       return Self.path("/conversations/" + PathEncoding.component(id), [("reply", reply)])
     case .join(let token):
@@ -236,6 +242,7 @@ extension Destination {
     // The web titles it Account; in the app, the gear opens it as Settings.
     case (.account, _): "Settings"
     case (.watchTogether, _): "Watch together"
+    case (.wantToWatch, _): "Want to watch"
     case (.conversation, _): "Conversation"
     case (.join, _): "Invitation"
     case (.notFound, _): "Page not found"

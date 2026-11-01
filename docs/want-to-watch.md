@@ -155,6 +155,27 @@ own page, and otherwise "Nothing in theaters right now."; Watch together says
 "No shared movies in theaters." The Availability unknown section still
 follows the empty state.
 
+## iPhone app
+
+The iPhone app follows the web page. `Destination.wantToWatch(username:)`
+reads and writes `/people/<username>/want-to-watch`, so universal links and
+`screenr-dev://` links open it: the viewer's own page above the You tab's
+profile, and a friend's on the current tab. `ProfileView` links to it above
+the Friends list when the profile's `canRead` is true. `WantToWatchView` and
+`WantToWatchList` render ScreenrKit's `WantToWatchScreen`, whose extension
+in `ios/ScreenrKit/Sources/ScreenrKit/People/WantToWatch.swift` holds the
+sections, the count, the empty states, and the introduction in the web's
+words. Each title's row shows its release status and TMDB user score, as
+other iPhone title lists do. The page polls like other screens. The services note opens Settings,
+where streaming services are saved, and each title opens its title page
+without a list's surface, so a save there reports `title`. Block closes the
+blocked person's page on every tab. On the viewer's own page, each title
+joins Spotlight, since the viewer saved it to Want to watch; a friend's page
+adds nothing. The app shows At home only: it reads a link with
+`mode=theaters` as the At home page until
+[issue #312](https://github.com/jubishop/screenr/issues/312) adds the switch,
+which goes between the introduction and the filter.
+
 ## Verification
 
 `tests/app/want-to-watch.test.ts` uses a fake TMDB service and the real
@@ -180,3 +201,12 @@ release data through fixtures. It switches both pages to In theaters and
 back, including from the keyboard, reloads in In theaters, checks 1440,
 390, and 320px widths without horizontal overflow, opens a movie, and
 follows a refresh to Watch together's empty state.
+
+In the iPhone app, ScreenrKit's `WantToWatchTests`, `DestinationTests`,
+`RouterTests`, `ProfileModelTests`, and `TitleSpotlightTests` cover the
+model, route, placement, Block, and Spotlight. The UI tests'
+`WantToWatchTests` open the viewer's own page from the You tab, filter it,
+and open a title, open a friend's page, check that a non-friend's profile has
+no link, audit the largest text size, and render every
+`screen/want-to-watch` fixture from its link. `ShellTests` opens the
+viewer's own page from a link.

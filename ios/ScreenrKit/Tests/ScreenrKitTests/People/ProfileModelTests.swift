@@ -129,9 +129,9 @@ struct ProfileModelTests {
     #expect(confirmation.action == "Block")
   }
 
-  // Block closes the profile on every tab, with Watch together and anything
-  // opened above them, and opens Friends with the result instead of reading
-  // a profile that no longer loads.
+  // Block closes the profile on every tab, with their Want to watch page,
+  // Watch together, and anything opened above them, and opens Friends with
+  // the result instead of reading a profile that no longer loads.
   @Test func blockLeavesForFriends() async throws {
     let api = RecordingAPI(["relationship": .success(["ok": true])])
     let shell = ShellModel(api: api)
@@ -140,7 +140,8 @@ struct ProfileModelTests {
     shell.router.selectedTab = .circle
     shell.router[stack: .circle] = [.title(id: "tv:201"), .profile(username: "Ben"), .feed()]
     shell.router[stack: .friends] = [.watchTogether(with: ["ben"]), .title(id: "movie:101")]
-    shell.router[stack: .you] = [.profile(username: "cam")]
+    shell.router[stack: .you] = [.profile(username: "cam"), .wantToWatch(username: "BEN")]
+    shell.router[stack: .find] = [.wantToWatch(username: "cam"), .title(id: "tv:202")]
 
     model.ask(.block, about: ben, .friend)
     await model.confirm(try #require(model.confirmation(for: .friend)))
@@ -152,6 +153,7 @@ struct ProfileModelTests {
     #expect(shell.router[stack: .friends] == [])
     #expect(shell.router[stack: .circle] == [.title(id: "tv:201")])
     #expect(shell.router[stack: .you] == [.profile(username: "cam")])
+    #expect(shell.router[stack: .find] == [.wantToWatch(username: "cam"), .title(id: "tv:202")])
     #expect(shell.notices[.people] == "You blocked Ben Ortiz.")
   }
 

@@ -1,31 +1,5 @@
 import Foundation
 
-// Watch together's All, Movies, and TV filter. All is the default, and each
-// keeps the newest shared matches first.
-public enum WatchTogetherFilter: String, Hashable, Sendable, CaseIterable, Identifiable {
-  case all
-  case movies
-  case tv
-
-  public var id: Self { self }
-
-  public var label: String {
-    switch self {
-    case .all: "All"
-    case .movies: "Movies"
-    case .tv: "TV"
-    }
-  }
-
-  func includes(_ title: SharedTitle) -> Bool {
-    switch self {
-    case .all: true
-    case .movies: title.title.kind == .movie
-    case .tv: title.title.kind == .tv
-    }
-  }
-}
-
 // One of Watch together's sections: the shared titles either person can
 // watch now, those on neither's services, and those without known options.
 public struct WatchTogetherSection: Hashable, Sendable, Identifiable {
@@ -66,12 +40,12 @@ extension WatchTogetherScreen {
   public static let servicesPrompt =
     "Save your streaming services to see what you can watch right now."
 
-  public func titles(_ filter: WatchTogetherFilter) -> [SharedTitle] {
-    titles.filter(filter.includes)
+  public func titles(_ filter: TitleKindFilter) -> [SharedTitle] {
+    titles.filter { filter.includes($0.title) }
   }
 
   // The sections with titles, each in the server's newest-first order.
-  public func sections(_ filter: WatchTogetherFilter) -> [WatchTogetherSection] {
+  public func sections(_ filter: TitleKindFilter) -> [WatchTogetherSection] {
     let shown = titles(filter)
     return [ViewingAccess.available, .unmatched, .unknown]
       .compactMap { access in
@@ -81,13 +55,13 @@ extension WatchTogetherScreen {
   }
 
   // "2 shared titles".
-  public func count(_ filter: WatchTogetherFilter) -> String {
+  public func count(_ filter: TitleKindFilter) -> String {
     let count = titles(filter).count
     return "\(count) shared \(count == 1 ? "title" : "titles")"
   }
 
   // Nil while the filter shows titles.
-  public func empty(_ filter: WatchTogetherFilter) -> WatchTogetherEmpty? {
+  public func empty(_ filter: TitleKindFilter) -> WatchTogetherEmpty? {
     guard titles(filter).isEmpty else { return nil }
     if titles.isEmpty {
       return WatchTogetherEmpty(

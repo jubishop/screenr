@@ -14,6 +14,7 @@ struct RoutePatternTests {
     ("/watch-together?with=alice&with=bob", "/watch-together"),
     ("/titles/movie/438631?item=9&reply=4", "/titles/:kind/:id"),
     ("/people/alice", "/people/:username"),
+    ("/people/alice/want-to-watch", "/people/:username/want-to-watch"),
     ("/conversations/1b4e28ba-2fa1", "/conversations/:id"),
     ("/join/secret-invitation-token", "/join/:token"),
     ("/api/screenr/screen?path=%2Fpeople%2Falice", "/api/screenr/screen?path=/people/:username"),
@@ -22,6 +23,10 @@ struct RoutePatternTests {
       "/api/screenr/screen?path=/titles/:kind/:id"
     ),
     ("/api/screenr/screen?path=/people/:username", "/api/screenr/screen?path=/people/:username"),
+    (
+      "/api/screenr/screen?path=%2Fpeople%2Falice%2Fwant-to-watch",
+      "/api/screenr/screen?path=/people/:username/want-to-watch"
+    ),
     ("/api/screenr/screen", "/api/screenr/screen"),
     ("/api/screenr/search?q=dune", "/api/screenr/search"),
     ("/api/screenr/top-ten", "/api/screenr/top-ten"),
@@ -32,6 +37,7 @@ struct RoutePatternTests {
     ("/api/health", "/api/health"),
     ("/.well-known/apple-app-site-association", "/.well-known/apple-app-site-association"),
     ("/people/alice/extra", "/:segment/:segment/:segment"),
+    ("/people/want-to-watch/alice", "/:segment/:segment/:segment"),
     ("/alice", "/:segment"),
     ("/t/p/w500/poster.jpg", "/:segment/:segment/:segment/:segment"),
     ("/titles/movie/438631#comments", "/titles/:kind/:id"),

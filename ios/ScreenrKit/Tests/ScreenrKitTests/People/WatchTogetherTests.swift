@@ -74,7 +74,7 @@ struct WatchTogetherTests {
       WatchTogetherSection(access: .unknown, titles: []).description
         == "We could not confirm viewing options for these shared picks."
     )
-    #expect(WatchTogetherFilter.allCases.map(\.label) == ["All", "Movies", "TV"])
+    #expect(TitleKindFilter.allCases.map(\.label) == ["All", "Movies", "TV"])
   }
 
   // Each title marks the services either person saved.

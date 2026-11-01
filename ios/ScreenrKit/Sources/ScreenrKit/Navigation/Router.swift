@@ -91,7 +91,8 @@ public final class Router {
   //   their tab at its root, and Find shows the link's search. A link to a
   //   feed entry opens the feed at that entry above Circle's root. Account
   //   opens Settings over You.
-  // - Invitations and Watch together open in Friends.
+  // - Invitations and Watch together open in Friends, and the viewer's own
+  //   Want to watch page opens above You's root.
   // - Titles, other profiles, conversations, and unknown paths open on the
   //   current tab.
   // - An invitation link keeps its token for signup and opens Circle, where a
@@ -129,6 +130,9 @@ public final class Router {
       paths[.friends] = [destination]
     case .profile(let username) where username.lowercased() == viewerUsername?.lowercased():
       show(.you)
+    case .wantToWatch(let username) where username.lowercased() == viewerUsername?.lowercased():
+      show(.you)
+      paths[.you] = [destination]
     default:
       push(destination)
     }

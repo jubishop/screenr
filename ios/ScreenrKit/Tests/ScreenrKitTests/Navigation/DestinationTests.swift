@@ -25,6 +25,8 @@ struct DestinationTests {
       ("/titles/movie/42?from=watch_together", .title(id: "movie:42", from: .watchTogether)),
       ("/people/Alice", .profile(username: "Alice")),
       ("/people/a%20b", .profile(username: "a b")),
+      ("/people/Alice/want-to-watch", .wantToWatch(username: "Alice")),
+      ("/people/a%20b/want-to-watch?item=x", .wantToWatch(username: "a b")),
       ("/conversations/legacy?reply=old", .conversation(id: "legacy", reply: "old")),
       ("/join/AbC_123-xyz", .join(token: "AbC_123-xyz")),
       ("/?item=&reply=", .feed()),
@@ -47,7 +49,8 @@ struct DestinationTests {
   @Test(
     arguments: [
       "/unknown", "/search/extra", "/watch-together/ben", "/titles/movie", "/titles/movie/42/extra",
-      "/people/alice/friends", "/conversations", "/join", "/join/token/extra", "/login", "/setup",
+      "/people/alice/friends", "/people/alice/want-to-watch/extra", "/people/alice/Want-To-Watch",
+      "/conversations", "/join", "/join/token/extra", "/login", "/setup",
       "/credits", "/privacy", "/api/screenr/screen", "/%E0%A4%A",
     ]
   )
@@ -79,6 +82,8 @@ struct DestinationTests {
       ("/account?error=access_denied", "/account"),
       ("/people/alice?item=post", "/people/alice"),
       ("/people/a%20b", "/people/a%20b"),
+      ("/people/alice/want-to-watch?q=x", "/people/alice/want-to-watch"),
+      ("/people/a%20b/want-to-watch", "/people/a%20b/want-to-watch"),
       ("/titles/movie/42?reply=answer&item=post", "/titles/movie/42?item=post&reply=answer"),
       ("/titles/movie/1%3Fitem%3Dx", "/titles/movie/1%3Fitem%3Dx"),
       ("/watch-together?with=ben&with=&x=1", "/watch-together?with=ben&with="),
@@ -103,8 +108,9 @@ struct DestinationTests {
       .people, .invites, .account, .watchTogether(with: ["ben", "cam"]),
       .title(id: "movie:42"), .title(id: "tv:7", item: "post", reply: "answer"),
       .title(id: "movie:42", from: .friendsRecommend),
-      .profile(username: "a b"), .conversation(id: "legacy", reply: "old"),
-      .join(token: "AbC_123-xyz"), .notFound(path: "/unknown"),
+      .profile(username: "a b"), .wantToWatch(username: "a b"),
+      .conversation(id: "legacy", reply: "old"), .join(token: "AbC_123-xyz"),
+      .notFound(path: "/unknown"),
     ]
   )
   func convertsEveryDestinationToAPathAndBack(destination: Destination) {
@@ -118,6 +124,7 @@ struct DestinationTests {
       ("https://screenr.club/?item=post&reply=answer", .feed(item: "post", reply: "answer")),
       ("https://screenr.club/titles/tv/201?item=post", .title(id: "tv:201", item: "post")),
       ("https://Screenr.Club/people/ben#top", .profile(username: "ben")),
+      ("https://screenr.club/people/ben/want-to-watch", .wantToWatch(username: "ben")),
       ("https://screenr.club/search?q=Lost", .search(query: "Lost")),
       ("https://screenr.club/join/AbC_123-xyz", .join(token: "AbC_123-xyz")),
       ("https://screenr.club/conversations/legacy", .conversation(id: "legacy")),
@@ -135,6 +142,7 @@ struct DestinationTests {
       ("screenr-dev://", .feed()),
       ("screenr-dev://?item=post", .feed(item: "post")),
       ("screenr-dev://watch-together?with=ben", .watchTogether(with: ["ben"])),
+      ("screenr-dev://people/ben/want-to-watch", .wantToWatch(username: "ben")),
       ("screenr-dev://join/AbC_123-xyz", .join(token: "AbC_123-xyz")),
     ]
   )
@@ -207,6 +215,7 @@ struct DestinationTests {
       (.search(query: "Lost"), "Find a title"), (.people, "Friends"),
       (.invites, "Invite friends"), (.account, "Settings"),
       (.watchTogether(with: ["ben"]), "Watch together"),
+      (.wantToWatch(username: "ben"), "Want to watch"),
       (.conversation(id: "legacy"), "Conversation"),
       (.notFound(path: "/unknown"), "Page not found"),
       (.title(id: "movie:42"), "Movie"), (.title(id: "tv:7"), "TV show"),
@@ -234,6 +243,24 @@ struct DestinationTests {
     // Another screen's data never names the page.
     #expect(Destination.title(id: "tv:7").pageName(for: profile) == "TV show")
     #expect(Destination.profile(username: "alice").pageName(for: title) == "@alice")
+  }
+
+  // A profile's Want to watch page reads its own screen, as a universal link
+  // and a Dev link name it, rather than showing Page not found.
+  @Test func opensAProfilesWantToWatchPage() throws {
+    let page = Destination(path: "/people/ben/want-to-watch")
+    #expect(page.path == "/people/ben/want-to-watch")
+    #expect(page.screenPath == "/people/ben/want-to-watch")
+    #expect(page.pageName(for: nil) == "Want to watch")
+    #expect(page.shareURL.absoluteString == "https://screenr.club/people/ben/want-to-watch")
+    for link in [
+      "https://screenr.club/people/ben/want-to-watch", "screenr-dev://people/ben/want-to-watch",
+    ] {
+      let url = try #require(URL(string: link))
+      let opened = try #require(Destination(url: url))
+      #expect(opened == page, "\(link)")
+      #expect(opened.screenPath == "/people/ben/want-to-watch", "\(link)")
+    }
   }
 
   @Test func asksTheScreenAPIForEachMemberScreen() {
