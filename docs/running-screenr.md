@@ -138,9 +138,9 @@ tests use a fictional catalog served only on loopback.
 ### Several checkouts at once
 
 Checkouts that run the app at the same time each need their own development
-database, test database, and development port. The browser harness already
-derives its own ports and database from the checkout path; see
-[the browser harness](testing.md#browser-harness).
+database and development port. Test commands derive their own databases, and
+the browser harness its ports, from the checkout path; see
+[checkout test databases](testing.md#checkout-test-databases).
 
 Checkouts share the local PostgreSQL server. `npm run db:migrate` does not
 create databases, so create one for each additional checkout:
@@ -151,13 +151,7 @@ createdb -h 127.0.0.1 -p 5439 -U screenr screenr_feature
 
 In the additional checkout, set `DATABASE_URL` in `.env` to
 `postgresql://screenr:screenr-local-only@127.0.0.1:5439/screenr_feature`.
-Test commands do not read `.env`, so export a separate test database in that
-checkout's shell. They create the database if needed and reset it; its name
-must end in `_test`:
-
-```sh
-export TEST_DATABASE_URL=postgresql://screenr:screenr-local-only@127.0.0.1:5439/screenr_feature_test
-```
+Test commands do not read `.env`.
 
 The development server uses port 3000 unless you pass another one. Match it
 in that checkout's `BETTER_AUTH_URL`, such as `http://localhost:3001`, and

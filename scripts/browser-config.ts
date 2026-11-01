@@ -1,25 +1,24 @@
-import { createHash } from "node:crypto";
-import { realpathSync } from "node:fs";
+import {
+  checkoutDatabase,
+  checkoutIdentity,
+  checkoutRoot,
+  testDatabaseURL,
+} from "./checkout";
 
-// Every harness process and Playwright worker derives the same configuration
-// from the checkout, including when the checkout is reached through a symlink.
-const root = realpathSync(process.cwd());
-const identity = createHash("sha256").update(root).digest("hex");
 const mode = process.env.SCREENR_BROWSER_MODE ?? "production";
 if (mode !== "production" && mode !== "development")
   throw new Error("SCREENR_BROWSER_MODE must be production or development.");
 const port = Number(
   process.env.SCREENR_BROWSER_PORT ??
-    20_000 + (parseInt(identity.slice(0, 8), 16) % 10_000) * 4,
+    20_000 + (parseInt(checkoutIdentity.slice(0, 8), 16) % 10_000) * 4,
 );
 if (!Number.isInteger(port) || port < 1024 || port > 65532)
   throw new Error(
     "SCREENR_BROWSER_PORT must be an integer from 1024 to 65532.",
   );
-const database = new URL(
-  process.env.TEST_DATABASE_URL ??
-    "postgresql://screenr:screenr-local-only@127.0.0.1:5439/screenr_test",
-);
+// The browser database shares the application test database's server and
+// credentials.
+const database = new URL(testDatabaseURL);
 if (
   !["postgres:", "postgresql:"].includes(database.protocol) ||
   !["localhost", "127.0.0.1", "[::1]"].includes(database.hostname) ||
@@ -28,8 +27,7 @@ if (
 )
   throw new Error("Browser tests require a loopback PostgreSQL test database.");
 const databaseName =
-  process.env.SCREENR_BROWSER_DATABASE ??
-  `screenr_browser_${identity.slice(0, 12)}_test`;
+  process.env.SCREENR_BROWSER_DATABASE ?? checkoutDatabase("browser");
 if (
   !/^screenr_browser_[a-z0-9_]+_test$/.test(databaseName) ||
   databaseName.length > 63 ||
@@ -41,7 +39,7 @@ if (
 database.pathname = `/${databaseName}`;
 
 export const browserConfig = {
-  root,
+  root: checkoutRoot,
   mode,
   port,
   catalogPort: port + 1,

@@ -33,10 +33,12 @@ for focused checks during implementation and full validation before merge.
 CI runs on Linux and has no iOS job, so iOS changes need `bin/check-ios` on
 a Mac before every push, which a
 [pre-push hook](development-workflow.md#ios-checks-before-a-push) enforces.
-The local default test database is `screenr_test` on port 5439. Override it
-with `TEST_DATABASE_URL`. The test role must be able to create databases.
-All test databases are disposable and are reset by the harness; never point
-these commands at a database with records to keep.
+The local server on port 5439 holds each checkout's own test databases,
+so checkouts can run tests at the same time; see
+[checkout test databases](#checkout-test-databases). Override the
+application test database with `TEST_DATABASE_URL`. The test role must be able
+to create databases. All test databases are disposable and are reset by the
+harness; never point these commands at a database with records to keep.
 
 ## Running one suite
 
@@ -54,19 +56,39 @@ npx tsx --test tests/app/reactions.test.ts
 npm run test:browser -- tests/browser/reactions.spec.ts
 ```
 
-Set `TEST_DATABASE_URL` to a dedicated database ending in `_test` when another
-checkout is running application tests. The browser harness already owns a
-checkout-specific database and port range. `npm test` discovers all application
-`*.test.ts` files and keeps file execution serial; `npm run test:browser`
-discovers all browser `*.spec.ts` files with two workers and full parallel
-scheduling. CI splits both suites into shards on separate runners: set
-`SCREENR_TEST_SHARD=2/3` for the second of three application shards, or pass
-`-- --shard=2/3` to the browser command. See [CI jobs](development-workflow.md#ci-jobs).
+`npm test` discovers all application `*.test.ts` files and keeps file
+execution serial; `npm run test:browser` discovers all browser `*.spec.ts`
+files with two workers and full parallel scheduling. CI splits both suites
+into shards on separate runners: set `SCREENR_TEST_SHARD=2/3` for the second
+of three application shards, or pass `-- --shard=2/3` to the browser command.
+See [CI jobs](development-workflow.md#ci-jobs).
 
 Long scenarios that follow the same saved entries, drafts, or identities
 through later changes stay as one scenario. Their later checks depend on the
 earlier state, so splitting them would remove the persistence,
 authorization, or state-preservation evidence.
+
+## Checkout test databases
+
+Application tests default to a database named
+`screenr_app_<checkout hash>_test`, derived from the checkout's canonical path
+as the [browser harness](#browser-harness) derives its own. Concurrent
+checkouts on one machine therefore never share a database or reset each
+other's tables. An explicit `TEST_DATABASE_URL` overrides the default and is
+used as named; CI sets it on each runner.
+
+Preparing a checkout's own application or browser database records the
+checkout's path in the database comment. Each such preparation then drops the
+checkout databases whose recorded checkout no longer exists, so removing a
+worktree frees its databases on the next test run in any checkout. A
+database without a record, left by an interrupted preparation or created by
+a browser run before checkouts were recorded, is dropped too; its checkout's
+next run recreates and records it. A database stays while a process is
+connected to it or a browser run holds its database lock, which the harness
+takes before creating the database and keeps through the build. Preparation
+takes a lock on the server, so it never removes a database another checkout
+is creating. `tests/app/checkout-isolation.test.ts` covers the derived name,
+the override, and removal.
 
 ## Browser harness
 

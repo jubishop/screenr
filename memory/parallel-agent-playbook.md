@@ -33,8 +33,8 @@ any issue-specific notes. The shared brief covers:
   - Work only in its own worktree. Git installs its npm packages and
     Playwright's Chromium when it creates the worktree; if that install
     failed, rerun `bin/setup-application` there.
-  - Export a `TEST_DATABASE_URL` ending in `_test` on the shared native
-    PostgreSQL, and drop it when done.
+  - Leave `TEST_DATABASE_URL` unset; each checkout derives its own test
+    databases, and later test runs drop those of removed worktrees.
   - Create and delete its own Simulator.
   - Keep scratch files inside the worktree, never in the orchestrator's
     scratch directory.

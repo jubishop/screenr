@@ -55,8 +55,12 @@ primary checkout to `main` before relying on it.
 - **Scratch files:** keep scratch files in the agent's own worktree.
   Agents that shared an orchestrator scratch directory overwrote each other's
   `pr-body.md`.
-- **Test databases:** give each agent its own `TEST_DATABASE_URL` database
-  ending in `_test`.
+- **Test databases:** each checkout derives its own application and browser
+  test databases
+  ([#345](https://github.com/jubishop/screenr/issues/345)). Leave
+  `TEST_DATABASE_URL` unset: one shared between agents' checkouts makes their
+  test files reset each other's tables. On 2026-10-31 that caused a
+  `deadlock detected` failure in `tests/app/catalog.test.ts`.
 
 ## Waiting on CI
 

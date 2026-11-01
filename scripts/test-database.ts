@@ -1,19 +1,16 @@
-import { Pool } from "pg";
-const url = new URL(
-  process.env.TEST_DATABASE_URL ??
-    "postgresql://screenr:screenr-local-only@127.0.0.1:5439/screenr_test",
-);
+import { Client } from "pg";
+import { prepareTestDatabase, testDatabaseURL } from "./checkout";
+
+const url = new URL(testDatabaseURL);
 const name = url.pathname.slice(1);
 if (!/^[a-z0-9_]+_test$/.test(name))
   throw new Error("Use a dedicated database name ending in _test.");
 url.pathname = "/postgres";
-const admin = new Pool({ connectionString: url.href });
+// One connection keeps the preparation lock for its whole session.
+const admin = new Client({ connectionString: url.href });
+await admin.connect();
 try {
-  if (
-    !(await admin.query("SELECT 1 FROM pg_database WHERE datname=$1", [name]))
-      .rowCount
-  )
-    await admin.query(`CREATE DATABASE "${name}"`);
+  await prepareTestDatabase(admin, name);
 } finally {
   await admin.end();
 }

@@ -770,10 +770,11 @@ maintenance scripts, and an
 [application test](testing.md#coverage) checks that they cover every module
 those scripts load.
 Packaging excludes local environment files and generated caches. It then
-verifies the package against a disposable database. Set `TEST_DATABASE_URL` to
-an available database whose name ends in `_test`; the default is the local test
-database from `bin/check --full`. Like activation, packaging first applies
-migrations with the packaged migration command. It then starts the packaged
+verifies the package against a disposable database, which it creates if
+needed: the checkout's own
+[application test database](testing.md#checkout-test-databases), or
+`TEST_DATABASE_URL`, whose name must end in `_test`. Like activation,
+packaging first applies migrations with the packaged migration command. It then starts the packaged
 server on loopback port 3057 and checks database health, the login page, and
 the sign-in route. A signed-out `GET /api/auth/get-session` must return HTTP 200
 with `null`. The login page renders without the auth handler, and browser tests
