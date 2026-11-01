@@ -452,7 +452,10 @@ shows no label. `upcoming` kinds are `theatrical`, `digital`, `premiere`, and
 dates. Later features read `in_theaters` and `status` from
 `withViewingOptions` or `getTitleReleases` instead of computing theatrical
 status again; [In theaters lists](want-to-watch.md#in-theaters) read them
-through `inTheaters` in `src/server/title-viewing.ts`.
+through `inTheaters` in `src/server/title-viewing.ts`. Each title screen and
+list item also carries the
+[TMDB user score](title-catalog.md#tmdb-user-score-implementation), shown
+beside the status.
 
 **Lists.** `getTitleReleases` in `src/server/catalog.ts` reads a list's
 stored titles in one query and refreshes only missing or expired details, at
@@ -462,7 +465,8 @@ seven seconds after a search began. A title left unrefreshed keeps its stored
 dates, or an unavailable status, and stays listed. Search summaries are
 stored without dates, so a search refreshes each new result's details.
 
-**Web.** `src/components/title-release.tsx` shows the status, such as
+**Web.** `TitleStatus` in `src/components/title-status.tsx` shows the
+status, such as
 "In theaters · Digital Dec 9", on title cards, Find a title's suggestion
 tiles, and at the top of Where to watch, outside its Subs and Free groups.
 The text comes from the screen data, never the reader's clock, so server
@@ -472,7 +476,7 @@ and hydration markup match.
 title screens and on each list item, so a payload without it decodes and
 shows no label, and an unknown status or date kind decodes as `unknown`.
 `TitleRelease.text` joins "In theaters" and the labels, as the web does, and
-is nil unless the status is `ok`. `ReleaseStatusLine` shows it under the kind
+is nil unless the status is `ok`. `TitleStatusLine` shows it under the kind
 and year in `TitleRow`, which search results, Friends recommend, and Watch
 together use; under the name in Find a title's suggestions; and at the top
 of the title page's Where to watch, outside its Subs and Free groups.
