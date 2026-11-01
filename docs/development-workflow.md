@@ -53,11 +53,11 @@ application commands, CI, and production, following the
 [toolchain policy](foundation/engineering-policy.md#runtime-and-toolchain-versions).
 The minimum is Node 24, declared in `package.json`; application commands
 reject older versions before starting work and accept newer ones. CI installs
-`lts/*` on every run, and production uses the host's shared runtime, which a
-host updater moves to each new LTS release with health checks and rollback
-(see [deployment](deployment.md#node-runtime)). Fast and document-only
-repository checks do not require Node. This supersedes the 2026-09-08
-decision to stay on Node 24 and reassess Node 26 manually.
+the newest LTS release from nodejs.org on every run, and production uses the
+host's shared runtime, which a host updater moves to each new LTS release with
+health checks and rollback (see [deployment](deployment.md#node-runtime)).
+Fast and document-only repository checks do not require Node. This supersedes
+the 2026-09-08 decision to stay on Node 24 and reassess Node 26 manually.
 
 **Why:** The user chose the latest stable toolchains so versions do not go
 stale when nobody is watching.
@@ -67,6 +67,20 @@ production before anyone reviews it, and each updates on its own schedule, so
 they can briefly run different LTS releases. Full CI on each push and the
 production health checks with rollback limit that risk. Raise the minimum when
 the application starts relying on a newer release.
+
+Every CI job that runs Node installs it through
+[`.github/actions/node-lts`](../.github/actions/node-lts/action.yml)
+([#369](https://github.com/jubishop/screenr/issues/369)). `bin/node-lts` reads
+`https://nodejs.org/dist/index.json`, the index the host updater reads, and
+the action passes the newest LTS release's exact version to `setup-node`.
+After setup, `bin/node-lts --check` fails the job unless `node` is an LTS
+release of that major. The action replaced `setup-node`'s `lts/*`, which reads
+the `actions/node-versions` manifest instead. That manifest can mark a new LTS
+major later than nodejs.org does: on 2026-11-01 it marked no 26.x release LTS,
+four days after nodejs.org marked v26.13.0, so CI ran Node 24.22.2.
+`tests/test_node_lts.py` covers the resolution and the check, and fails when
+a workflow job runs npm or Node without the action. Run `bin/node-lts --check`
+to compare a machine's Node with the newest LTS.
 
 ## Dependency updates
 
@@ -94,7 +108,9 @@ security updates are on.
 
 [`.github/dependabot.yml`](../.github/dependabot.yml) schedules the weekly
 version updates. The npm `increase` strategy moves each exact `package.json`
-version to the new release, and Action updates keep commit-SHA pins. One
+version to the new release, and Action updates keep commit-SHA pins. The
+`github-actions` entry lists `.github/actions/*` beside the root, which finds
+only workflows, so the shared actions' references update too. One
 group per ecosystem collects minor and patch updates; every major update
 opens its own pull request. Update pull requests use only existing labels:
 `improvement`, plus `area: tooling` for Actions. Without configured labels,

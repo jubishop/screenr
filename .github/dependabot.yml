@@ -16,7 +16,8 @@ updates:
     labels: [improvement]
 
   - package-ecosystem: github-actions
-    directory: /
+    # The root finds only workflows; list the shared actions too.
+    directories: [/, /.github/actions/*]
     schedule:
       interval: weekly
     groups:

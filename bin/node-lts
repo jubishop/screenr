@@ -1,0 +1,93 @@
+#!/usr/bin/env python3
+"""Find the release nodejs.org marks as the newest Node LTS, or check that node runs its major.
+
+CI installs this release rather than setup-node's lts/*, whose manifest can
+mark a new LTS major later than nodejs.org does. The production host updater
+reads the same index. See docs/development-workflow.md#node-runtime.
+"""
+
+import argparse
+import http.client
+import json
+import re
+import subprocess
+import sys
+import time
+import urllib.request
+
+INDEX = "https://nodejs.org/dist/index.json"
+ATTEMPTS = 3
+
+
+def releases(index):
+    """Read the release index, retrying transient network failures."""
+    for attempt in range(1, ATTEMPTS + 1):
+        try:
+            with urllib.request.urlopen(index, timeout=30) as response:
+                body = response.read()
+            break
+        except (OSError, http.client.HTTPException) as error:
+            if attempt == ATTEMPTS:
+                raise RuntimeError(f"Could not read the Node release index {index}: {error}") from None
+            time.sleep(attempt)
+    try:
+        listed = json.loads(body)
+    except ValueError:
+        listed = None
+    if not isinstance(listed, list):
+        raise RuntimeError(f"The Node release index {index} is not a list of releases.")
+    return [release for release in listed if isinstance(release, dict)]
+
+
+def newest_lts(index):
+    """Return the newest LTS release's version, such as "v26.13.0", and its codename."""
+    newest = None
+    for release in releases(index):
+        match = re.fullmatch(r"v(\d+)\.(\d+)\.(\d+)", str(release.get("version")))
+        if match and release.get("lts"):
+            key = tuple(int(part) for part in match.groups())
+            if newest is None or key > newest[0]:
+                newest = (key, release["version"], str(release["lts"]))
+    if newest is None:
+        raise RuntimeError(f"The Node release index {index} marks no release as LTS.")
+    return newest[1], newest[2]
+
+
+def major(version):
+    return version.removeprefix("v").split(".")[0]
+
+
+def check(version, codename):
+    """Stop unless the node on PATH is an LTS release of the newest LTS major."""
+    found, lts = json.loads(subprocess.run(
+        ["node", "-p", "JSON.stringify([process.version, process.release.lts || null])"],
+        check=True, capture_output=True, text=True,
+    ).stdout)
+    if major(found) != major(version) or lts != codename:
+        kind = f"on the {lts} LTS line" if lts else "not an LTS release"
+        raise RuntimeError(f"Node {found} is {kind}, but nodejs.org marks {version} ({codename}) "
+                           "as the newest LTS release.")
+    print(f"Node {found} is on the newest LTS line: nodejs.org marks {version} ({codename}) "
+          "as the newest LTS release.")
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument("--index", default=INDEX, help="release index URL (default: %(default)s)")
+    parser.add_argument("--check", action="store_true",
+                        help="check the node on PATH instead of printing the version for setup-node")
+    args = parser.parse_args()
+    version, codename = newest_lts(args.index)
+    if args.check:
+        check(version, codename)
+        return
+    print(f"nodejs.org marks Node {version} ({codename}) as the newest LTS release.", file=sys.stderr)
+    print("version=" + version.removeprefix("v"))
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except (OSError, RuntimeError, ValueError, subprocess.CalledProcessError) as error:
+        print(error, file=sys.stderr)
+        sys.exit(1)
