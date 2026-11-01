@@ -12,7 +12,8 @@ to 12 agents worked in separate worktrees on the owner's Mac.
 
 ## Limit concurrent iOS checks
 
-`bin/check-ios` takes about 16 minutes. With five or more running at once, the
+`bin/check-ios` took about 16 minutes then, and about 31 on 2026-11-01, once
+its audits ran one check at a time. With five or more running at once, the
 load average passed 200 and Xcode's accessibility audits failed with "Audit
 failed to complete in time" or with false contrast failures. Three at a time
 kept the load below 30 with clean results.

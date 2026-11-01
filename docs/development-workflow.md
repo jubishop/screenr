@@ -235,8 +235,10 @@ push finds a recorded pass. Never bypass the hook with `git push --no-verify`.
   forget every pass.
 - **Duration:** a full `bin/check-ios` took 16 minutes on the user's Mac on
   2026-10-14, while other checkouts ran checks, and most of it was the
-  Simulator tests. A reused pass takes under a second. A failed UI test
-  reports at once, and a stuck test run stops after 40 minutes; see the
+  Simulator tests. Auditing one check at a time made it about 31 minutes on
+  2026-11-01, 30 of them the Simulator tests. A reused pass takes under a
+  second. A failed UI test reports at once, and a stuck test run stops after
+  60 minutes; see the
   [iPhone app guide](../ios/README.md#checks).
 - **Slots:** at most three `bin/check-ios` runs check at once on a Mac.
   With five or more at once on 2026-10-14, the load average passed 200, and

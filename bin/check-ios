@@ -41,9 +41,10 @@ ROOT = Path(__file__).resolve().parents[1]
 BUILD = ROOT / "ios/build"
 OUTPUT = BUILD / "check"
 MINIMUM_XCODE = 27
-# The Simulator tests took 13 minutes on the user's Mac on 2026-10-14; a run
-# that takes much longer is stuck.
-TEST_TIMEOUT_MINUTES = 40
+# The Simulator tests took 13 minutes on the user's Mac on 2026-10-14, and 30
+# on 2026-11-01 once the UI tests audited one check at a time; a run that takes
+# much longer is stuck.
+TEST_TIMEOUT_MINUTES = 60
 BOOT_TIMEOUT_MINUTES = 10
 # With five or more checks at once, the Mac's load average passed 200, and the
 # UI tests' accessibility audits timed out or measured contrast wrongly. Three

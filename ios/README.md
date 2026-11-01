@@ -94,7 +94,7 @@ The check fails fast and never hangs:
 - **Diagnostics:** the test run passes `-collect-test-diagnostics never`.
   Collecting a sysdiagnose after a failed UI test took about 10 minutes and
   sometimes never finished.
-- **Timeouts:** the Simulator tests stop and fail after 40 minutes, or after
+- **Timeouts:** the Simulator tests stop and fail after 60 minutes, or after
   `--test-timeout <minutes>`, and the Simulator boot after 10 minutes. The
   failure shows the end of the step's log.
 - **Stopping:** each step runs in its own process group. A timeout,
