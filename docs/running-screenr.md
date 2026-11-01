@@ -263,6 +263,9 @@ No paid-plan upgrade is part of this deployment.
 
 The email worker stores encrypted, expiring jobs in PostgreSQL. Failed sends
 retry with backoff and the same Resend idempotency key until the job expires.
+Each send holds its job for a minute and runs with no database connection or
+lock held; a send whose result could not be recorded, as when the worker stops
+abruptly, is retried once that minute ends.
 Resend 4xx replies other than 408, 409, and 429 expire the job at once, since
 a retry cannot fix invalid input, a missing or revoked key, or an unverified
 sender. The worker [logs](deployment.md#failure-logs) every failed send.

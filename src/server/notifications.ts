@@ -264,8 +264,10 @@ export async function saveActivityEmail(viewer: string, enabled: unknown) {
         "UPDATE notification SET email_pending=false,email_job_id=NULL WHERE recipient_id=$1",
         [viewer],
       );
+      // An email being sent now becomes stale: if its send fails, it is never
+      // retried (docs/notifications.md#activity-email-sends-without-the-write-lock--2026-11-01).
       await client.query(
-        "UPDATE email_job SET sent_at=now(),payload='' WHERE notification_recipient=$1 AND sent_at IS NULL",
+        "UPDATE email_job SET sent_at=now(),payload='',generation=generation+1 WHERE notification_recipient=$1 AND sent_at IS NULL",
         [viewer],
       );
     }

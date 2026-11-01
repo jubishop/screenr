@@ -688,12 +688,17 @@ own tests. `tests/app/database-connections.test.ts` ends an idle pooled
 connection and a transaction's connection from another one, and checks that
 each is logged once without stopping the process, that the transaction
 rethrows its own error rather than its failed `ROLLBACK`'s, and that the
-broken client is released. `tests/app/email.test.ts` ends the worker's
-connection during a Resend request, and `tests/app/migrations.test.ts` ends a
-migration's, which must fail with that connection's error and release the
-client; a migration run stopped by the migration lock must cause no
-PostgreSQL warnings. `tests/app/notification-email.test.ts` fails an activity
-email's database read, which must still record the attempt and its backoff.
+broken client is released. `tests/app/email.test.ts` fails the database
+while Resend accepts a send, which must hold the job for a minute and then
+retry it with the same key, and `tests/app/migrations.test.ts` ends a
+migration's connection, which must fail with that connection's error and
+release the client; a migration run stopped by the migration lock must cause
+no PostgreSQL warnings. `tests/app/notification-email.test.ts` fails an
+activity email's database read, which must still record the attempt and its
+backoff. It also hangs Resend during an activity email, while member writes
+must still succeed, and commits a block or opt-out during a failed send,
+which must leave the job stale and never retried
+([issue #359](https://github.com/jubishop/screenr/issues/359)).
 `tests/app/worker-loop.test.ts` runs a worker loop on a fake clock and checks
 its backoff, its one line per kind of failure, the hourly repeat, and its
 recovery line.

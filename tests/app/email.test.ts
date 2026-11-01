@@ -244,9 +244,8 @@ async function until(condition: () => boolean, limit = 2_000) {
   assert.ok(condition(), "Timed out");
 }
 
-test("a connection that breaks during a Resend request leaves the job for the next pass, which reuses its idempotency key", async () => {
-  await queueCode({ email: "broken@example.test", otp: "102938" });
-  const { id } = (await db.query("SELECT id FROM email_job")).rows[0];
+test("a send whose result cannot be recorded holds its job for a minute, then retries with the same idempotency key", async () => {
+  await queueCode({ email: "unrecorded@example.test", otp: "102938" });
   const printed = captureFailures();
   const keys: string[] = [];
   mock.method(
@@ -254,50 +253,81 @@ test("a connection that breaks during a Resend request leaves the job for the ne
     "fetch",
     async (_url: string, options: RequestInit) => {
       keys.push(new Headers(options.headers).get("Idempotency-Key")!);
-      if (keys.length === 1) {
-        // PostgreSQL ends the connection that holds the job while Resend
-        // handles the request.
+      // The database fails while Resend accepts the first request, so the
+      // worker cannot record that it was sent. A worker that still locked
+      // the job would fail the rename after a second instead of hanging.
+      if (keys.length === 1)
         await db.query(
-          `SELECT pg_terminate_backend(pid) FROM pg_stat_activity
-          WHERE datname=current_database() AND state='idle in transaction'`,
+          "SET lock_timeout='1s'; ALTER TABLE email_job RENAME TO email_job_hidden; RESET lock_timeout",
         );
-        await until(() => printed.length > 0);
-      }
       return Response.json({ id: "sent" });
     },
   );
-  const removed = new Promise((resolve) => db.once("remove", resolve));
-  await assert.rejects(deliverOne());
-  await removed;
+  try {
+    await assert.rejects(deliverOne(), { code: "42P01" });
+  } finally {
+    await db.query(
+      "ALTER TABLE IF EXISTS email_job_hidden RENAME TO email_job",
+    );
+  }
   assert.equal(db.idleCount, db.totalCount, "No client stays checked out");
-  assert.deepEqual(
-    printed.map((line) => {
-      const { stack, ...fields } = JSON.parse(line);
-      return fields;
-    }),
-    [
-      {
-        event: "database connection failed",
-        error: "DatabaseError",
-        code: "57P01",
-      },
-      {
-        event: "email delivery failed",
-        job: id,
-        kind: "code",
-        attempt: 1,
-        final: false,
-        error: "Error",
-      },
-    ],
-  );
-  const job = (await db.query("SELECT * FROM email_job")).rows[0];
-  assert.equal(job.attempts, 0);
-  assert.equal(job.sent_at, null);
+  // The worker loop logs the failed pass; Resend accepted the send.
+  assert.deepEqual(printed, []);
+  const job = (
+    await db.query(
+      `SELECT attempts,sent_at,available_at BETWEEN now()+interval '50 seconds'
+      AND now()+interval '1 minute' AS held FROM email_job`,
+    )
+  ).rows[0];
+  assert.deepEqual(job, { attempts: 0, sent_at: null, held: true });
+  assert.equal(await deliverOne(), false);
+  await db.query("UPDATE email_job SET available_at=now()");
   assert.equal(await deliverOne(), true);
   assert.equal(keys.length, 2);
   assert.equal(keys[0], keys[1]);
   assert.ok((await db.query("SELECT sent_at FROM email_job")).rows[0].sent_at);
+});
+
+test("a new code requested while the last one is being sent does not wait for Resend, and is sent next", async () => {
+  await queueCode({ email: "again@example.test", otp: "111111" });
+  let requested!: () => void;
+  let answer!: () => void;
+  const arrived = new Promise<void>((resolve) => (requested = resolve));
+  const reply = new Promise<void>((resolve) => (answer = resolve));
+  const texts: string[] = [];
+  mock.method(
+    globalThis,
+    "fetch",
+    async (_url: string, options: RequestInit) => {
+      texts.push(JSON.parse(String(options.body)).text);
+      if (texts.length === 1) {
+        requested();
+        await reply;
+      }
+      return Response.json({ id: "sent" });
+    },
+  );
+  const delivery = deliverOne();
+  const timer = new AbortController();
+  try {
+    await arrived;
+    await Promise.race([
+      queueCode({ email: "again@example.test", otp: "222222" }),
+      setTimeout(1000, undefined, { signal: timer.signal }).then(
+        () => assert.fail("The new code waited for the last send."),
+        () => {},
+      ),
+    ]);
+  } finally {
+    timer.abort();
+    answer();
+    await delivery;
+  }
+  // Recording the first send leaves the new code pending.
+  assert.equal(await deliverOne(), true);
+  assert.equal(texts.length, 2);
+  assert.match(texts[1], /222222/);
+  assert.equal(await deliverOne(), false);
 });
 
 // The worker runs as its own process with the suite's database and Resend

@@ -579,10 +579,11 @@ write waits at most two seconds for this lock or any other lock it needs. It
 then changes nothing and returns HTTP 503 with "Screenr is busy. Please try
 again." Waiting requests therefore release database connections before the
 pool's five-second connection timeout, which session lookups share. The email
-worker holds the lock during each activity email send, so a write during a slow
-send may need a retry; the accepted
-[send without the lock](notifications.md#activity-email-sends-without-the-write-lock--2026-11-01)
-replaces this once it ships. Page loads, refreshes, and
+worker holds the lock only while it chooses an activity email and builds it
+from current data. It calls Resend with no lock held, so a slow send never
+delays a write
+([send without the lock](notifications.md#activity-email-sends-without-the-write-lock--2026-11-01)).
+Page loads, refreshes, and
 [usage telemetry](usage-telemetry.md#active-days) don't take the lock. Listing
 invitations takes it only to store a missing share link, for an old invitation
 or after a secret rotation
