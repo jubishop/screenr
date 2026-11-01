@@ -38,7 +38,10 @@ Each failed TMDB request other than a 404 is
 [logged](deployment.md#failure-logs) once for each member request, with
 TMDB's status: `catalog token rejected` for a 401 or 403, which means
 `TMDB_READ_TOKEN` no longer works, and `catalog request failed` for anything
-else. A failed read or write of the title, trailer, or availability cache is
+else. A TMDB answer the catalog rejects as invalid, such as details without a
+name, is logged the same way as `catalog response invalid`, naming the lookup
+it answered but none of its values; the lookup still fails or serves what it
+has. A failed read or write of the title, trailer, or availability cache is
 logged as `catalog cache failed`; the page serves what it has, as for a TMDB
 failure.
 

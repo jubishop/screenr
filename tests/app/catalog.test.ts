@@ -90,6 +90,12 @@ const failureLines = () =>
       const { stack, ...fields } = JSON.parse(line);
       return fields;
     });
+// A TMDB answer without the shape Screenr reads logs the lookup it answered.
+const invalidAnswer = (lookup: string, error = "AppError") => ({
+  event: "catalog response invalid",
+  lookup,
+  error,
+});
 afterEach(() => mock.restoreAll());
 beforeEach(async () => {
   printed = captureFailures();
@@ -199,6 +205,13 @@ for (const unavailable of [
     assert.equal(result.trailer, null);
     assert.equal(result.title.name, "Test Movie");
     assert.equal(result.conversations.length, 1);
+    // A video list with no usable trailer is a valid answer.
+    assert.deepEqual(
+      failureLines(),
+      Array.isArray(unavailable?.results)
+        ? []
+        : [invalidAnswer("videos", "Error")],
+    );
   });
 }
 
@@ -298,6 +311,11 @@ for (const failure of [
       (await db.query("SELECT id FROM title ORDER BY id")).rows,
       [{ id: "movie:42" }, { id: "tv:42" }],
     );
+    if (failure === "invalid" || failure === "mismatched ID")
+      assert.deepEqual(failureLines(), [
+        invalidAnswer("details"),
+        invalidAnswer("details"),
+      ]);
   });
 }
 
@@ -434,6 +452,53 @@ test("a rejected TMDB token logs one failure for each request, with its status",
   ]);
 });
 
+test("invalid TMDB answers log one failure for each request, without their values", async () => {
+  const cookie = await cookieFor("viewer");
+  const get = (action: string, query: Record<string, string>) =>
+    GET(
+      new Request(
+        `http://localhost:3000/api/screenr/${action}?${new URLSearchParams(query)}`,
+        { headers: { Cookie: cookie } },
+      ),
+      { params: Promise.resolve({ action }) },
+    );
+  search.body = {
+    results: [{ media_type: "tv", id: 44, title: "Private Search Result" }],
+  };
+  const searched = await get("search", { q: "night" });
+  assert.equal(searched.status, 502);
+  // A stale title's details and trailer answers are both invalid, and its
+  // stored details still render.
+  await db.query("UPDATE title SET fetched_at=now()-interval '2 days'");
+  details.body = { id: 42, overview: "Private Overview" };
+  videos = { results: "Private Trailer" };
+  const page = await get("screen", { path: "/titles/movie/42" });
+  assert.equal(page.status, 200);
+  assert.ok(requests.some(({ path }) => path === detailPath("movie:42")));
+  assert.ok(requests.some(({ path }) => path === "/movie/42/videos"));
+  const requestId = (response: Response) =>
+    response.headers.get("Screenr-Request-Id");
+  const [found, shown, ...rest] = failureLines();
+  assert.deepEqual(found, {
+    ...invalidAnswer("search"),
+    requestId: requestId(searched),
+  });
+  // Details and trailer load in parallel, so either may log first.
+  assert.deepEqual(
+    shown,
+    shown?.lookup === "videos"
+      ? { ...invalidAnswer("videos", "Error"), requestId: requestId(page) }
+      : { ...invalidAnswer("details"), requestId: requestId(page) },
+  );
+  assert.deepEqual(rest, []);
+  for (const value of [
+    "Private Search Result",
+    "Private Overview",
+    "Private Trailer",
+  ])
+    assert.ok(!printed.join("\n").includes(value), `Logged ${value}`);
+});
+
 for (const [cache, table, read] of [
   ["title", "title", () => getTitleReleases(["movie:42"])],
   ["trailer", "title_trailer", () => getTitleTrailer("movie:42")],
@@ -495,10 +560,11 @@ for (const [kind, body] of [
   ["movie", { id: 43, name: "Show name only" }],
   ["tv", { id: 43, title: "Movie title only" }],
 ] as const) {
-  test(`a cold ${kind} rejects invalid TMDB details: ${JSON.stringify(body)}`, async () => {
+  test(`a cold ${kind} rejects and logs invalid TMDB details: ${JSON.stringify(body)}`, async () => {
     details.body = body;
     await assert.rejects(getTitle(`${kind}:43`), invalidTitle);
     assert.equal(await storedTitle(`${kind}:43`), undefined);
+    assert.deepEqual(failureLines(), [invalidAnswer("details")]);
   });
 }
 
@@ -657,13 +723,14 @@ for (const body of [
   { results: {} },
   { results: "movie" },
 ]) {
-  test(`search rejects invalid TMDB results: ${JSON.stringify(body)}`, async () => {
+  test(`search rejects and logs invalid TMDB results: ${JSON.stringify(body)}`, async () => {
     search.body = body;
     await assert.rejects(searchTitles("night"), invalidResults);
+    assert.deepEqual(failureLines(), [invalidAnswer("search")]);
   });
 }
 
-test("search rejects an invalid movie or TV result", async () => {
+test("search rejects and logs an invalid movie or TV result", async () => {
   for (const result of [
     { media_type: "movie", id: 0, title: "Zero ID" },
     { media_type: "tv", id: 44, title: "Movie title only" },
@@ -673,6 +740,10 @@ test("search rejects an invalid movie or TV result", async () => {
     };
     await assert.rejects(searchTitles("night"), invalidTitle);
   }
+  assert.deepEqual(failureLines(), [
+    invalidAnswer("search"),
+    invalidAnswer("search"),
+  ]);
 });
 
 test("the search API returns catalog errors with their statuses", async () => {

@@ -887,6 +887,7 @@ journalctl -u screenr-worker --since '1 day ago' --no-pager | grep '"event":"ema
 | `route failed` | web | `route`, Next's route pattern, such as `/api/photos/[user]/[version]`; `type` (`render`, `route`, `action`, or `proxy`); and `method`, for an error no handler caught |
 | `catalog token rejected` | web | `status` 401 or 403: TMDB rejected `TMDB_READ_TOKEN`, so every catalog lookup fails until it is replaced |
 | `catalog request failed` | web | `status` for another TMDB reply other than 404, or error fields for a timeout, network failure, or malformed JSON |
+| `catalog response invalid` | web | `lookup` (`details`, `search`, `seasons`, `episodes`, `find`, `videos`, or `providers`) and error fields, for a TMDB answer without the shape Screenr reads, such as after TMDB renames or retypes a field |
 | `catalog cache failed` | web | `cache` (`title`, `trailer`, or `availability`) for a failed read or write of that catalog cache |
 | `auth callback failed` | web | `callback`, the Better Auth callback, such as `sendVerificationOTP` or `user.create.before` |
 | `code email cap reached` | web | No fields: the Screenr-wide limit of 40 [code emails a day](running-screenr.md#provider-configuration) refused a code request |
@@ -919,7 +920,10 @@ member page load that meets the same catalog failure many times, such as a
 title page's details, trailer, and availability lookups during a TMDB outage,
 prints one line. TMDB 404s are not failures. A `catalog token rejected` line
 means the token was revoked, expired, or suspended: replace `TMDB_READ_TOKEN`
-in `app.env` and restart `screenr-web`. A Better Auth callback failure still
+in `app.env` and restart `screenr-web`. A `catalog response invalid` line
+means TMDB answered without the fields Screenr reads, for one title or, after
+a TMDB contract change, for every lookup of that kind. Its stack frames locate
+the check that rejected the answer. A Better Auth callback failure still
 gets Better Auth's own answer, such as success for a code request whose email
 was never queued, and Better Auth prints its own unstructured line beside
 this one.
