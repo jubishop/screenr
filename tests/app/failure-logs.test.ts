@@ -18,6 +18,7 @@ const { runWorkerPass } = await import("../../src/server/email");
 const { logFailure } = await import("../../src/server/log");
 const { runWorkerLoop } = await import("../../src/server/worker-loop");
 const { createAuth } = await import("../../src/server/auth");
+const { createInvitation } = await import("../../src/server/invitations");
 const { onRequestError } = await import("../../src/instrumentation");
 useDatabase();
 // Fake Sentry endpoints still open after a failed test.
@@ -247,8 +248,8 @@ test("an unparseable screen path is not found and logs nothing", async () => {
   assert.deepEqual(printed, []);
 });
 
-// Better Auth prints its own unstructured line for a failed callback; only
-// JSON lines are failure logs.
+// Better Auth and its router print their own unstructured lines beside a
+// failure; only JSON lines are failure logs.
 const structured = (printed: string[]) =>
   printed.filter((line) => line.startsWith("{"));
 
@@ -285,6 +286,89 @@ test("a sign-in code request whose email cannot be queued logs the callback and 
   });
   assert.ok(stack.some((frame) => frame.includes("failure-logs.test.ts")));
   excludes(structured(printed), [message, "member@example.test"]);
+});
+
+// Requests a sign-in code for an address, as the web does, and returns the
+// code with a sign-in that posts it. A cookie names a new address's
+// invitation.
+async function emailSignIn(email: string, cookie?: string) {
+  let code = "";
+  const auth = createAuth({
+    rateLimit: false,
+    sendCode: async ({ otp }) => {
+      code = otp;
+    },
+  });
+  const post = (path: string, body: unknown) =>
+    auth.handler(
+      new Request(`http://localhost:3000/api/auth/${path}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Origin: "http://localhost:3000",
+          ...(cookie && { Cookie: cookie }),
+        },
+        body: JSON.stringify(body),
+      }),
+    );
+  const request = await post("email-otp/send-verification-otp", {
+    email,
+    type: "sign-in",
+  });
+  assert.equal(request.status, 200);
+  assert.match(code, /^[0-9]{6}$/);
+  return {
+    code,
+    signIn: () => post("sign-in/email-otp", { email, otp: code }),
+  };
+}
+
+test("a database failure inside Better Auth during an email code sign-in logs its endpoint pattern, error class, code, and stack without the address or code", async () => {
+  await person("member");
+  const { code, signIn } = await emailSignIn("member@example.test");
+  // Better Auth checks the code against its verification table first.
+  await db.query("ALTER TABLE verification RENAME TO verification_hidden");
+  try {
+    const printed = captureFailures();
+    const response = await signIn();
+    assert.equal(response.status, 500);
+    const { fields, stack } = logged(structured(printed));
+    assert.deepEqual(fields, {
+      event: "auth endpoint failed",
+      endpoint: "/sign-in/email-otp",
+      error: "DatabaseError",
+      code: "42P01",
+    });
+    assert.ok(stack.some((frame) => frame.includes("/better-auth/")));
+    excludes(structured(printed), [code, "member@example.test", "exist"]);
+  } finally {
+    await db.query("ALTER TABLE verification_hidden RENAME TO verification");
+  }
+});
+
+test("a Screenr callback failure that fails a sign-in logs only the callback, not the endpoint as well", async () => {
+  const { token } = await createInvitation(null);
+  const { signIn } = await emailSignIn(
+    "new@example.test",
+    `screenr-invite=${token}`,
+  );
+  // Creating an account for a new address checks its invitation.
+  await db.query("ALTER TABLE invitation RENAME TO invitation_hidden");
+  try {
+    const printed = captureFailures();
+    const response = await signIn();
+    assert.equal(response.status, 500);
+    const { fields } = logged(structured(printed));
+    assert.deepEqual(fields, {
+      event: "auth callback failed",
+      callback: "user.create.before",
+      error: "DatabaseError",
+      code: "42P01",
+    });
+    excludes(structured(printed), [token, "new@example.test", "exist"]);
+  } finally {
+    await db.query("ALTER TABLE invitation_hidden RENAME TO invitation");
+  }
 });
 
 test("a request error that reaches Next logs the route pattern, its type, and the method without the path or headers", async () => {

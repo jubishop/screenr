@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from "node:async_hooks";
 import { createHash } from "node:crypto";
 import { betterAuth, type BetterAuthPlugin } from "better-auth";
 import {
@@ -135,6 +136,14 @@ async function reserveCodeEmail(email: string) {
   }, codeLock);
 }
 
+// Failures logCallbackFailure logged. Better Auth's router meets one again
+// when it ends the request, and logEndpointFailure skips it.
+const loggedCallbackFailures = new WeakSet<object>();
+const loggedCallbackFailure = (error: unknown) =>
+  typeof error === "object" &&
+  error !== null &&
+  loggedCallbackFailures.has(error);
+
 // Better Auth catches what Screenr's callbacks throw and prints only its own
 // unstructured line: a code request whose email fails still answers success,
 // and a failed sign-in step answers a generic error. Each callback runs
@@ -144,10 +153,36 @@ async function logCallbackFailure<T>(callback: string, run: () => Promise<T>) {
   try {
     return await run();
   } catch (error) {
-    if (!isAPIError(error))
+    if (!isAPIError(error)) {
       logFailure("auth callback failed", { callback }, error);
+      if (typeof error === "object" && error !== null)
+        loggedCallbackFailures.add(error);
+    }
     throw error;
   }
+}
+
+// The Better Auth endpoint that each request through the handler reached, as
+// its route pattern, such as /callback/:id, never the requested path, which
+// can hold a token. The router's error handler gets no request to read it from.
+const endpointReached = new AsyncLocalStorage<{ path?: string }>();
+
+// Better Auth's router calls this, in place of printing Better Auth's own line,
+// for an error that its endpoints, hooks, or adapter throw, such as a database
+// error while it checks a code, and answers 500 unless the error is an
+// APIError. An APIError is a deliberate answer unless it is a 500. Errors that
+// Better Auth catches itself never reach this, such as those that end an OAuth
+// callback in a redirect with ?error=.
+function logEndpointFailure(error: unknown) {
+  if (
+    isAPIError(error) ? error.statusCode !== 500 : loggedCallbackFailure(error)
+  )
+    return;
+  logFailure(
+    "auth endpoint failed",
+    { endpoint: endpointReached.getStore()?.path },
+    error,
+  );
 }
 
 // The bearer plugin returns the session token in `set-auth-token` whenever a
@@ -258,7 +293,7 @@ export function createAuth(
   // Tests and fixtures that disable rate limits also skip the code caps.
   const limited = options.rateLimit ?? true;
   const reviewCode = reviewSignInCode();
-  return betterAuth({
+  const betterAuthInstance = betterAuth({
     appName: "Screenr",
     baseURL: process.env.BETTER_AUTH_URL,
     secret: process.env.BETTER_AUTH_SECRET,
@@ -312,9 +347,13 @@ export function createAuth(
         "/invitation": { window: 60, max: 10 },
       },
     },
+    onAPIError: { onError: logEndpointFailure },
     hooks: {
-      before: createAuthMiddleware((ctx) =>
-        logCallbackFailure("hooks.before", async () => {
+      before: createAuthMiddleware((ctx) => {
+        // Better Auth runs this hook for every endpoint a request reaches.
+        const reached = endpointReached.getStore();
+        if (reached) reached.path ??= ctx.path;
+        return logCallbackFailure("hooks.before", async () => {
           // The web has no Sign in with Apple; its redirect sign-in would
           // otherwise fail for want of a client secret.
           if (
@@ -335,8 +374,8 @@ export function createAuth(
             throw new APIError("TOO_MANY_REQUESTS", {
               message: codeLimitMessage,
             });
-        }),
-      ),
+        });
+      }),
     },
     plugins: [
       // Native clients: docs/data-and-access.md#native-client-sessions. Like
@@ -434,6 +473,10 @@ export function createAuth(
       },
     },
   });
+  // Each request records the endpoint it reaches for logEndpointFailure.
+  const handler = (request: Request) =>
+    endpointReached.run({}, () => betterAuthInstance.handler(request));
+  return { ...betterAuthInstance, handler, fetch: handler };
 }
 
 let instance: ReturnType<typeof createAuth> | undefined;

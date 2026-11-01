@@ -903,6 +903,7 @@ journalctl -u screenr-worker --since '1 day ago' --no-pager | grep '"event":"ema
 | `catalog response invalid` | web | `lookup` (`details`, `search`, `seasons`, `episodes`, `find`, `videos`, or `providers`) and error fields, for a TMDB answer without the shape Screenr reads, such as after TMDB renames or retypes a field |
 | `catalog cache failed` | web | `cache` (`title`, `trailer`, or `availability`) for a failed read or write of that catalog cache |
 | `auth callback failed` | web | `callback`, the Better Auth callback, such as `sendVerificationOTP` or `user.create.before` |
+| `auth endpoint failed` | web | `endpoint`, Better Auth's route pattern, such as `/sign-in/email-otp` or `/callback/:id`, when known, for an unexpected error that Better Auth's router answered with a 500, such as a database error in its adapter |
 | `code email cap reached` | web | No fields: the Screenr-wide limit of 40 [code emails a day](running-screenr.md#provider-configuration) refused a code request |
 | `apple_token_failed` | web | `status` and Apple's `reason` for an HTTP reply from Apple's token endpoint, or error fields |
 | `apple token unreadable` | web | Error fields only: account deletion skipped a Sign in with Apple token sealed under an earlier `BETTER_AUTH_SECRET` |
@@ -936,10 +937,24 @@ means the token was revoked, expired, or suspended: replace `TMDB_READ_TOKEN`
 in `app.env` and restart `screenr-web`. A `catalog response invalid` line
 means TMDB answered without the fields Screenr reads, for one title or, after
 a TMDB contract change, for every lookup of that kind. Its stack frames locate
-the check that rejected the answer. A Better Auth callback failure still
-gets Better Auth's own answer, such as success for a code request whose email
-was never queued, and Better Auth prints its own unstructured line beside
-this one.
+the check that rejected the answer.
+
+A Better Auth callback failure still gets Better Auth's own answer, such as
+success for a code request whose email was never queued. When the failure
+ends the request, as in an email code sign-in whose account creation fails,
+it logs only `auth callback failed`, not `auth endpoint failed` as well. An
+`auth endpoint failed` line reports an error from Better Auth's own code, such
+as a database error in its adapter while it checks a sign-in code. Beside
+these lines, Better Auth prints its own unstructured line for a callback
+failure it catches, and its router prints a `# SERVER_ERROR:` line, with the
+error's message, for an unexpected error it answers with a 500.
+
+Errors that Better Auth catches and answers itself print only its own line. A
+database error while a Google or Apple sign-in finds or creates the account
+logs no event: it ends an OAuth callback in a redirect with `?error=` and an
+ID token sign-in in an error answer. A failed session read reaches Screenr's
+handler as a bare `APIError`, so that handler's line lacks the database
+error's fields.
 
 For a Resend reply, `email delivery failed` adds the HTTP `status` and the
 `provider` error name, such as `daily_quota_exceeded` or `invalid_api_key`.
