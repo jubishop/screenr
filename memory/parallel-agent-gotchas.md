@@ -93,3 +93,5 @@ fresh Simulator, a throwaway UI test that opens the bell with
 `addUIInterruptionMonitor` worked on 2026-10-25, where querying the
 springboard for the Allow button found none. `simctl privacy` has no
 notifications service.
+
+Throwaway demo line for jubishop/screenr#420, never merge: `systemd-run --uid=screenr node scripts/migrate.ts`.
