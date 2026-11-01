@@ -251,7 +251,12 @@ push finds a recorded pass. Never bypass the hook with `git push --no-verify`.
   build as well as the Simulator tests, since building loads the Mac too. A
   reused pass skips the check without a slot. If audits still time out with
   three runs at once, lower `SLOTS` in `bin/check-ios`.
-  `tests/test_check_ios.py` covers the wait.
+  `tests/test_check_ios.py` covers the wait. Load was not the only cause:
+  on 2026-11-01, with another Simulator running UI tests at a load average
+  of 7 to 15, an audit of all four checks on the Find screen timed out on
+  both attempts in 3 of 30 runs, and in none of 10 runs alone. Auditing one
+  check at a time passed 80 of 80, 20 of them with three Simulators at once
+  ([iPhone app guide](../ios/README.md#add-a-feature-screen)).
 - **Hook location:** Git runs the hooks in `core.hooksPath`. `bin/setup`
   sets it to the relative `bin/hooks`, so each checkout runs its own copy.
   On the user's Mac it is the primary checkout's absolute `bin/hooks`, so

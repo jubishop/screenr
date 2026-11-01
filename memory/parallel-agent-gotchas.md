@@ -25,6 +25,13 @@ Run it directly. The `lockf` wrapper that agents used before
 second slot for the same run. If audits still time out with three runs at
 once, lower `SLOTS` in `bin/check-ios`.
 
+Load is not the only cause of audit timeouts. On 2026-11-01 an audit of all
+four checks on the Find screen timed out on both settled attempts in 3 of 30
+runs beside one other Simulator run, at a load average of 7 to 15, and in
+none of 10 runs alone. UI tests now audit one check at a time through
+`performScreenrAudit()`, which passed 80 of 80 Find runs, 20 of them with
+three Simulators at once.
+
 ## Hooks come from the primary checkout
 
 `core.hooksPath` points at the primary checkout's `bin/hooks`, so every

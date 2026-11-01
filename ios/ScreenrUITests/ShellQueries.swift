@@ -15,15 +15,38 @@ extension XCUIApplication {
     tabBars.buttons[name]
   }
 
+  // Runs the accessibility audit one check at a time, passing over the
+  // issues that `handler` accepts. In the iOS 27 Simulator, while another
+  // Simulator ran UI tests, an audit of several checks at once sometimes
+  // never finished, even at a modest load, and failed with "Audit failed to
+  // complete in time", as did an audit of the same screen right after it.
+  // Audits of one check each finished every time. Use it in place of
+  // `performAccessibilityAudit(for:_:)`.
+  func performScreenrAudit(
+    for types: XCUIAccessibilityAuditType = .screenr,
+    _ handler: ((XCUIAccessibilityAuditIssue) throws -> Bool)? = nil
+  ) throws {
+    // Dynamic Type goes last: changing the text size can scroll a list,
+    // which would move what the other checks measure.
+    let checks: [XCUIAccessibilityAuditType] = [.hitRegion, .textClipped, .contrast, .dynamicType]
+    for check in checks where types.contains(check) {
+      try performAccessibilityAudit(for: check, handler)
+    }
+    let others = types.subtracting(.screenr)
+    if !others.isEmpty {
+      try performAccessibilityAudit(for: others, handler)
+    }
+  }
+
   // The accessibility audit for screens in the tabs. It passes over two
   // things the system sizes: navigation bars keep the wordmark's size, as
   // they do their titles, and the large content viewer shows it larger; and
-  // the audit flags the system's search field as clipping at large text
-  // sizes. It also passes over what it cannot measure in a scrolling screen:
-  // the contrast and clipping of text beneath the glass bars or the keyboard
-  // or past the screen's edges, and Dynamic Type for scrolling content, which
-  // larger text moves past the screen's ends. Launch with
-  // `FixtureLaunch(textSize:)` to audit a screen at the largest text size
+  // the audit flags the system's search field, and on Find the text in it, as
+  // clipping at large text sizes. It also passes over what it cannot measure
+  // in a scrolling screen: the contrast and clipping of text beneath the glass
+  // bars or the keyboard or past the screen's edges, and Dynamic Type for
+  // scrolling content, which larger text moves past the screen's ends. Launch
+  // with `FixtureLaunch(textSize:)` to audit a screen at the largest text size
   // instead.
   func performShellAudit() throws {
     try performSettledAudit {
@@ -48,6 +71,19 @@ extension XCUIApplication {
       // scrolling in a screen that scrolls. One snapshot finds the rows and
       // controls, since querying elements while the audit runs can outlast it.
       let partsCovered = Self.contentParts(in: try snapshot()).contains { isCovered($0.frame) }
+      // While Find's search field holds text, and only then, the clipped-text
+      // check also reports one issue it ties to no element, at every text
+      // size, though nothing in the app's content clips: the field's text,
+      // which the check flags as it flags the field itself. The audit passes
+      // over that one issue on Find alone. A second, an issue with an element
+      // in the content, or one while the field is empty still fails.
+      let find = searchFields["Search movies and TV shows"]
+      var unplacedSearchClips = 0
+      if find.exists, let value = find.value as? String, !value.isEmpty,
+        value != find.placeholderValue
+      {
+        unplacedSearchClips = 1
+      }
       return { issue in
         var covered = partsCovered
         var scrolls = !scrolling.isNull
@@ -59,7 +95,10 @@ extension XCUIApplication {
         case .dynamicType:
           return issue.element?.label == "screenr" || scrolls
         case .textClipped:
-          return issue.element?.elementType == .searchField || covered
+          if issue.element?.elementType == .searchField || covered { return true }
+          guard issue.element == nil, unplacedSearchClips > 0 else { return false }
+          unplacedSearchClips -= 1
+          return true
         case .contrast:
           return covered
         default:
@@ -83,7 +122,7 @@ extension XCUIApplication {
     var failed = false
     do {
       let isExpected = try expecting()
-      try performAccessibilityAudit(for: types) { issue in
+      try performScreenrAudit(for: types) { issue in
         if !isExpected(issue) { failed = true }
         return true
       }
@@ -96,7 +135,7 @@ extension XCUIApplication {
       settled.isInverted = true
       _ = XCTWaiter.wait(for: [settled], timeout: 2)
       let isExpected = try expecting()
-      try performAccessibilityAudit(for: types) { issue in isExpected(issue) }
+      try performScreenrAudit(for: types) { issue in isExpected(issue) }
     }
   }
 

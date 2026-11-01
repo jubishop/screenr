@@ -467,8 +467,12 @@ marks the visit for `ShellTests`.
    choosing fixtures with `viewer` and `overrides`, and audit screens in the
    tabs with `app.performShellAudit()`. Every audit checks only contrast,
    Dynamic Type, clipped text, and hit regions: `performSettledAudit` uses
-   `XCUIAccessibilityAuditType.screenr` by default, and a direct audit passes
-   it to `performAccessibilityAudit(for:)`. `performShellAudit()` passes over
+   `XCUIAccessibilityAuditType.screenr` by default, and a direct audit calls
+   `performScreenrAudit()`. Both audit one check at a time: in the iOS 27
+   Simulator, while another Simulator ran UI tests, an audit of all four
+   sometimes never finished ("Audit failed to complete in time"), even at a
+   modest load, and its retry then failed the same way.
+   `performShellAudit()` passes over
    what the audit cannot measure in a scrolling screen, as
    [Conversations](#conversations) describes. While a list row or control
    reaches beneath a bar or the keyboard or past the screen's edge, it also

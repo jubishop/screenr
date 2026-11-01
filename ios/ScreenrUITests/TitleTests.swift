@@ -135,7 +135,7 @@ final class TitleTests: XCTestCase {
     let five = app.buttons["5 stars"]
     XCTAssertTrue(five.waitForExistence(timeout: 5))
     five.tap()
-    try app.performAccessibilityAudit(for: .screenr)
+    try app.performScreenrAudit()
     app.buttons["Save review"].tap()
     wait(
       for: [

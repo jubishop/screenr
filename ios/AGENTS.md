@@ -64,7 +64,8 @@ layout, commands, and toolchain notes, and the
 - **Accessibility:** required for every UI change. Keep text contrast,
   support Dynamic Type without clipping text, and keep hit regions large
   enough to tap. UI tests audit the screens they reach for those four, with
-  `performAccessibilityAudit(for: .screenr)` or the helpers that use it. Add
+  `performScreenrAudit()` or the helpers that use it, never
+  `performAccessibilityAudit` directly. Add
   no hints, values, traits, actions, announcements, or groupings that only
   change what assistive technology says; add an accessibility label or
   identifier only for a UI test to find a control. See the

@@ -7,7 +7,7 @@ final class LaunchTests: XCTestCase {
     app.launch()
 
     XCTAssertTrue(app.staticTexts["screenr"].waitForExistence(timeout: 10))
-    try app.performAccessibilityAudit(for: .screenr)
+    try app.performScreenrAudit()
   }
 
   // The app starts its client against the fixture API, which reads every
