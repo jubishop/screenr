@@ -209,9 +209,10 @@ try await api.send(.comment(conversation: item.id, body: text, spoiler: false))
   the next sign-in, and `onEnd(_:)` handlers receive it. A sign-in made
   `.confirming(userId:)` keeps its new token only when the response names
   that user; see [account deletion](#account-deletion). A 401 to a request
-  that carried a token removes that token, unless a newer one replaced it. Linking a sign-in method is the
-  exception: its request's `unauthorized` is `.rejectsCredential`, so a 401
-  for the provider's token, such as `INVALID_TOKEN`, is
+  that carried a token removes that token, unless a newer one replaced it.
+  Linking a sign-in method and confirming the member are the exceptions:
+  their requests' `unauthorized` is `.rejectsCredential`, so a 401 for the
+  provider's token, such as `INVALID_TOKEN` or `OAUTH_LINK_ERROR`, is
   `.rejected(status: 401)` and keeps the session. Only Better Auth's
   `UNAUTHORIZED` code ends it.
 - **Caching:** each GET's response is kept in memory with its ETag. Reading
@@ -883,7 +884,9 @@ three steps, which `AccountDeletionModel` (ScreenrKit `Settings/`) tracks:
    when Better Auth's response names the signed-in member. A sign-in that
    reaches another account, which Sign in with Apple or Google can, fails
    with `APIError.Kind.otherAccount`, keeps the member's session, and signs
-   the other account's new session out.
+   the other account's new session out. A rejected Apple or Google
+   sign-in, such as an account that isn't connected or an ID token that
+   fails verification, also keeps the session.
 2. **Confirm the deletion:** Delete my account opens a confirmation dialog,
    which iOS 27 shows as a popover.
 3. **Delete:** `.deleteAccount` ends the session with `ending`

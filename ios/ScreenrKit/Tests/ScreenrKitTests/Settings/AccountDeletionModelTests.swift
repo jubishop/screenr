@@ -126,6 +126,72 @@ struct AccountDeletionModelTests {
     )
   }
 
+  // Better Auth rejects a Google account that matches the member's address
+  // but isn't connected, and an ID token it cannot verify, with 401. The
+  // member's session is still good, so they stay signed in and can confirm
+  // another way.
+  @Test(arguments: [
+    (
+      "OAUTH_LINK_ERROR",
+      "That Google account isn’t connected to this Screenr account. Use an email code instead."
+    ),
+    ("INVALID_TOKEN", "Screenr could not confirm your Google sign-in. Try again."),
+  ])
+  func staysSignedInWhenGoogleIsRejected(code: String, message: String) async throws {
+    let test = try TestClient(
+      token: "earlier-token",
+      replies: [
+        try .json(401, ["code": .string(code), "message": "Rejected"]),
+        try Self.codeSent(), try Self.signedIn(),
+      ]
+    )
+    var endings: [SessionStore.Ending] = []
+    test.session.onEnd { endings.append($0) }
+    let google = RecordingTransport([try .json(200, ["id_token": "google-id-token"])])
+    let deletion = AccountDeletionModel(
+      api: test.client,
+      member: Self.alice,
+      providers: providers(google: google)
+    )
+
+    await deletion.signIn.signInWithGoogle(using: RedirectingAuthenticator())
+
+    #expect(deletion.step == .verify)
+    #expect(deletion.signIn.failure == message)
+    #expect(try test.keychain.read() == "earlier-token")
+    #expect(test.session.phase == .signedIn)
+    #expect(endings.isEmpty)
+    await confirm(deletion)
+    #expect(deletion.step == .confirm)
+    #expect(try test.keychain.read() == "fresh-token")
+  }
+
+  // Screenr answers 401 when Apple won't redeem the sign-in's authorization
+  // code, which leaves the member signed in too.
+  @Test func staysSignedInWhenAppleIsRejected() async throws {
+    let rejected = "Apple did not confirm this sign-in. Try again."
+    let test = try TestClient(
+      token: "earlier-token",
+      replies: [try .json(401, ["message": .string(rejected)])]
+    )
+    let member = MemberConfirmation(
+      userId: "user-alice",
+      email: "alice@example.test",
+      methods: [.apple, .emailCode]
+    )
+    let deletion = AccountDeletionModel(api: test.client, member: member, providers: providers())
+
+    _ = deletion.signIn.startApple()
+    await deletion.signIn.signInWithApple(
+      AppleCredential(identityToken: "identity", authorizationCode: "code", name: nil)
+    )
+
+    #expect(deletion.step == .verify)
+    #expect(deletion.signIn.failure == rejected)
+    #expect(try test.keychain.read() == "earlier-token")
+    #expect(test.session.phase == .signedIn)
+  }
+
   @Test func deletesTheAccountOnceConfirmed() async throws {
     let test = try TestClient(
       token: "earlier-token",
