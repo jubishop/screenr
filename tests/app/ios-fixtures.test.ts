@@ -289,6 +289,16 @@ const screens: Record<MemberRoute["kind"], Record<string, Case>> = {
       "Watch together without a friend.",
       400,
     ),
+    theaters: screen(
+      "alice",
+      "/watch-together?with=ben&mode=theaters",
+      "In theaters: the movies Alice and Ben both want to watch, one in US theaters now and one whose release data could not be loaded.",
+    ),
+    "theaters-nothing-shared": screen(
+      "alice",
+      "/watch-together?with=cam&mode=theaters",
+      "In theaters with a friend who shares no Want to watch movies.",
+    ),
   },
   "want-to-watch": {
     own: screen(
@@ -316,6 +326,26 @@ const screens: Record<MemberRoute["kind"], Record<string, Case>> = {
       "/people/erin/want-to-watch",
       "A member who is not Alice's friend: no page.",
       404,
+    ),
+    "theaters-own": screen(
+      "alice",
+      "/people/alice/want-to-watch?mode=theaters",
+      "Alice's own page In theaters: a movie in US theaters now and one whose release data could not be loaded.",
+    ),
+    "theaters-friend": screen(
+      "alice",
+      "/people/ben/want-to-watch?mode=theaters",
+      "Ben's page In theaters as Alice sees it: his movie whose theatrical run ended years ago is left out.",
+    ),
+    "theaters-nothing": screen(
+      "cam",
+      "/people/cam/want-to-watch?mode=theaters",
+      "Cam's own page In theaters: his only Want to watch movie is not in theaters.",
+    ),
+    "theaters-empty": screen(
+      "nora",
+      "/people/nora/want-to-watch?mode=theaters",
+      "In theaters for a member with no Want to watch titles.",
     ),
   },
   title: {

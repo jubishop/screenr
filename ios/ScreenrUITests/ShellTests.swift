@@ -137,6 +137,19 @@ final class ShellTests: XCTestCase {
       title: "Want to watch",
       tab: "You"
     )
+    XCTAssertTrue(app.buttons["At home"].waitForExistence(timeout: 10))
+    XCTAssertTrue(app.buttons["At home"].isSelected)
+    // A link with the mode opens that mode.
+    try open(
+      app,
+      "people/alice/want-to-watch?mode=theaters",
+      reads: "/people/alice/want-to-watch?mode=theaters",
+      log: log,
+      title: "Want to watch",
+      tab: "You"
+    )
+    XCTAssertTrue(app.buttons["In theaters"].waitForExistence(timeout: 10))
+    XCTAssertTrue(app.buttons["In theaters"].isSelected)
 
     // Friends pages open in Friends.
     try open(
@@ -147,6 +160,16 @@ final class ShellTests: XCTestCase {
       title: "Watch together",
       tab: "Friends"
     )
+    try open(
+      app,
+      "watch-together?with=ben&mode=theaters",
+      reads: "/watch-together?with=ben&mode=theaters",
+      log: log,
+      title: "Watch together",
+      tab: "Friends"
+    )
+    XCTAssertTrue(app.buttons["In theaters"].waitForExistence(timeout: 10))
+    XCTAssertTrue(app.buttons["In theaters"].isSelected)
     try open(app, "invites", reads: "/invites", log: log, title: "Invite friends", tab: "Friends")
 
     // Account opens Settings over You.

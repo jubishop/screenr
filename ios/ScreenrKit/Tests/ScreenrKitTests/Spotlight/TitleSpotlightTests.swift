@@ -65,6 +65,12 @@ struct TitleSpotlightTests {
     )
     #expect(InteractedTitles(try screen("screen/want-to-watch/own")).cleared.isEmpty)
     #expect(InteractedTitles(try screen("screen/want-to-watch/friend")).titles.isEmpty)
+    // In theaters too.
+    #expect(
+      InteractedTitles(try screen("screen/want-to-watch/theaters-own")).titles.map(\.id)
+        == ["movie:104", "movie:103"]
+    )
+    #expect(InteractedTitles(try screen("screen/want-to-watch/theaters-friend")).titles.isEmpty)
 
     let page = InteractedTitles(try screen("screen/title/movie"))
     #expect(page.titles == [Self.nightCrossing])

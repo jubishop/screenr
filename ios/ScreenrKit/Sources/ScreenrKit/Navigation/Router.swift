@@ -154,7 +154,7 @@ public final class Router {
       paths[.friends] = [destination]
     case .profile(let username) where username.lowercased() == viewerUsername?.lowercased():
       show(.you)
-    case .wantToWatch(let username) where username.lowercased() == viewerUsername?.lowercased():
+    case .wantToWatch(let username, _) where username.lowercased() == viewerUsername?.lowercased():
       show(.you)
       paths[.you] = [destination]
     default:
@@ -168,6 +168,16 @@ public final class Router {
   // them.
   public func screenLoaded(_ destination: Destination) {
     if pendingLink?.shown(by: destination) == true { pendingLink = nil }
+  }
+
+  // Shows `replacement` in place of `destination` on top of the current tab,
+  // such as a list's other mode, so Back leaves both. A destination beneath
+  // the top, or a tab's root, stays.
+  public func replace(_ destination: Destination, with replacement: Destination) {
+    var stack = paths[selectedTab, default: []]
+    guard stack.last == destination else { return }
+    stack[stack.count - 1] = replacement
+    paths[selectedTab] = stack
   }
 
   // Closes destinations that no longer load, such as a blocked person's

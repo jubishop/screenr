@@ -2,7 +2,8 @@ import Foundation
 import XCTest
 
 // Watch together against the fixture API: opened from a friend's profile,
-// filtered by kind, and every Watch together fixture.
+// filtered by kind, switched to In theaters, and every Watch together
+// fixture.
 final class WatchTogetherTests: XCTestCase {
   override func setUp() {
     continueAfterFailure = false
@@ -21,6 +22,8 @@ final class WatchTogetherTests: XCTestCase {
     wait(for: [log.read("/watch-together?with=ben")], timeout: 10)
     XCTAssertTrue(app.staticTexts["Ready to watch"].waitForExistence(timeout: 10))
     XCTAssertTrue(app.staticTexts["2 shared titles"].exists)
+    // At home is the default.
+    XCTAssertTrue(app.buttons["At home"].isSelected)
     let orchard = app.buttons(starting: "The Quiet Orchard")
     XCTAssertTrue(orchard.exists)
     XCTAssertTrue(orchard.label.contains("In theaters · Digital Nov 20, 73%,"), orchard.label)
@@ -39,6 +42,52 @@ final class WatchTogetherTests: XCTestCase {
     wait(for: [log.read("/titles/movie/103")], timeout: 10)
   }
 
+  // In theaters takes Watch together's place with the shared movies in US
+  // theaters now, without the filter, services, or viewing options. Its
+  // movies keep Watch together's surface, and Back leaves the comparison.
+  @MainActor
+  func testSwitchesToInTheaters() throws {
+    let log = RequestLog.temporary()
+    let app = XCUIApplication()
+    app.launch(
+      with: FixtureLaunch(link: "screenr-dev://watch-together?with=ben", requestLog: log.file)
+    )
+    XCTAssertTrue(app.staticTexts["2 shared titles"].waitForExistence(timeout: 10))
+
+    app.buttons["In theaters"].tap()
+    wait(for: [log.read("/watch-together?with=ben&mode=theaters")], timeout: 10)
+    XCTAssertTrue(
+      app.staticTexts[
+        "Movies you both want to watch that are in US theaters now, newest shared first."
+      ]
+      .waitForExistence(timeout: 10)
+    )
+    XCTAssertTrue(app.buttons["In theaters"].isSelected)
+    XCTAssertTrue(app.navigationBars["Watch together"].exists)
+    XCTAssertTrue(app.staticTexts["Alice Park & Ben Ortiz"].exists)
+    XCTAssertTrue(app.staticTexts["1 shared movie in theaters"].exists)
+    XCTAssertTrue(app.staticTexts["In theaters now"].exists)
+    let orchard = app.buttons(starting: "The Quiet Orchard")
+    XCTAssertTrue(orchard.exists)
+    XCTAssertTrue(orchard.label.contains("In theaters · Digital Nov 20, 73%"), orchard.label)
+    XCTAssertFalse(orchard.label.contains("On Hulu"), orchard.label)
+    XCTAssertTrue(app.staticTexts["Availability unknown"].exists)
+    XCTAssertTrue(app.buttons(starting: "Glass Meridian").exists)
+    XCTAssertFalse(app.buttons["TV"].exists)
+    XCTAssertFalse(
+      app.buttons["Save your streaming services to see what you can watch right now."].exists
+    )
+    try app.performShellAudit()
+
+    orchard.tap()
+    XCTAssertTrue(app.navigationBars["The Quiet Orchard"].waitForExistence(timeout: 10))
+    wait(for: [log.read("/titles/movie/103")], timeout: 10)
+    app.navigationBars["The Quiet Orchard"].buttons.element(boundBy: 0).tap()
+    XCTAssertTrue(app.staticTexts["1 shared movie in theaters"].waitForExistence(timeout: 10))
+    app.navigationBars["Watch together"].buttons.element(boundBy: 0).tap()
+    XCTAssertTrue(app.navigationBars["Friends"].waitForExistence(timeout: 10))
+  }
+
   // At the largest accessibility text size, nothing clips or loses contrast.
   // The audit scrolls the list to reach each title.
   @MainActor
@@ -54,16 +103,40 @@ final class WatchTogetherTests: XCTestCase {
     try app.performShellAudit()
   }
 
-  // Each fixture shows its sections, that nothing is shared yet, or why the
-  // comparison needs a friend.
+  @MainActor
+  func testReadsInTheatersAtTheLargestTextSize() throws {
+    let app = XCUIApplication()
+    app.launch(
+      with: FixtureLaunch(
+        link: "screenr-dev://watch-together?with=ben&mode=theaters",
+        textSize: "UICTContentSizeCategoryAccessibilityXXXL"
+      )
+    )
+    XCTAssertTrue(
+      app.staticTexts[
+        "Movies you both want to watch that are in US theaters now, newest shared first."
+      ]
+      .waitForExistence(timeout: 10)
+    )
+    try app.performShellAudit()
+  }
+
+  // Each fixture shows its sections, that nothing is shared yet or in
+  // theaters, or why the comparison needs a friend, and the mode its link
+  // names.
   @MainActor
   func testRendersEveryWatchTogetherFixture() throws {
     let names = try FixtureNames.list("screen/watch-together")
-    XCTAssertEqual(names, ["default", "missing-friend", "nothing-shared"])
+    XCTAssertEqual(
+      names,
+      ["default", "missing-friend", "nothing-shared", "theaters", "theaters-nothing-shared"]
+    )
     let expected = [
       "default": "Ready to watch",
       "missing-friend": "Choose one friend from their profile.",
       "nothing-shared": "No shared titles yet.",
+      "theaters": "1 shared movie in theaters",
+      "theaters-nothing-shared": "No shared movies in theaters.",
     ]
     // They are all Alice's, so one launch opens each fixture's link.
     let app = XCUIApplication()
@@ -76,6 +149,10 @@ final class WatchTogetherTests: XCTestCase {
       let text = try XCTUnwrap(expected[name])
       XCTAssertTrue(app.staticTexts[text].waitForExistence(timeout: 10), fixture.name)
       XCTAssertTrue(app.navigationBars["Watch together"].exists, fixture.name)
+      if fixture.status == 200 {
+        let mode = fixture.body["mode"] == nil ? "At home" : "In theaters"
+        XCTAssertTrue(app.buttons[mode].isSelected, fixture.name)
+      }
     }
   }
 }

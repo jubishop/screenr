@@ -1,13 +1,16 @@
 import ScreenrKit
 import SwiftUI
 
-// A Want to watch page's list: the owner, the All, Movies, and TV filter
-// with its count, a prompt to save streaming services, then Ready to watch,
-// why nothing is ready to watch, and Availability unknown.
+// A Want to watch page's At home list: the owner, the At home and In
+// theaters switch, the All, Movies, and TV filter with its count, a prompt to
+// save streaming services, then Ready to watch, why nothing is ready to
+// watch, and Availability unknown.
 struct WantToWatchList: View {
   let page: WantToWatchScreen
   // The signed-in member's user ID.
   let viewer: String
+  // The screen the list is on, which the switch replaces.
+  let destination: Destination
   @Binding var filter: TitleKindFilter
   @Environment(ShellModel.self) private var shell
 
@@ -16,6 +19,7 @@ struct WantToWatchList: View {
       Section {
         Participants(people: [page.owner])
         Text(page.introduction(viewer: viewer))
+        ListModePicker(destination: destination)
         TitleKindPicker(filter: $filter)
         Text(page.count(filter))
           .foregroundStyle(.muted)

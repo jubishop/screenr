@@ -12,9 +12,9 @@ web, following the [Want to watch page decision](product-brief.md#want-to-watch-
 [At home and In theaters switch](product-brief.md#in-theaters-on-want-to-watch-pages--2026-10-16):
 At home is the page described under [Implementation](#implementation), and
 [In theaters](#in-theaters) lists the owner's movies in US theaters now.
-[Issue #314](https://github.com/jubishop/screenr/issues/314) adds the page to
+[Issue #314](https://github.com/jubishop/screenr/issues/314) added the page to
 the iPhone app, and [issue #312](https://github.com/jubishop/screenr/issues/312)
-adds the switch there.
+added the switch there.
 
 ## Implementation
 
@@ -171,10 +171,33 @@ where streaming services are saved, and each title opens its title page
 without a list's surface, so a save there reports `title`. Block closes the
 blocked person's page on every tab. On the viewer's own page, each title
 joins Spotlight, since the viewer saved it to Want to watch; a friend's page
-adds nothing. The app shows At home only: it reads a link with
-`mode=theaters` as the At home page until
-[issue #312](https://github.com/jubishop/screenr/issues/312) adds the switch,
-which goes between the introduction and the filter.
+adds nothing.
+
+[Issue #312](https://github.com/jubishop/screenr/issues/312) added the At
+home and In theaters switch to the iPhone app, on Want to watch pages and
+[Watch together](watch-together.md#implementation). Each mode is its own
+destination: `Destination.wantToWatch(username:mode:)` and
+`Destination.watchTogether(with:mode:)` read and write `mode=theaters` with
+the web's rules, so a link with the mode opens In theaters, and one without
+it, or with another value, opens At home. `ListModePicker` sits between the
+introduction and the filter. Choosing a mode replaces the screen on top of
+the tab through `Router.replace(_:with:)`, without a push, and the new
+destination reads its own screen, so Back leaves the page rather than
+returning to the other mode, as a segmented control does. The filter starts
+at All again, as after a web reload.
+
+ScreenrKit decodes a payload whose `mode` is `theaters` as
+`WantToWatchInTheatersScreen` or `WatchTogetherInTheatersScreen`, with
+`ReleaseTitle` titles, and a mode it does not know as a screen that needs a
+newer build. `InTheatersSections`, in
+`ios/ScreenrKit/Sources/ScreenrKit/People/InTheaters.swift`, holds the count,
+In theaters now, the empty states, and Availability unknown in the web's
+words, and `InTheatersList` renders them with `TitleRow`, which shows each
+movie's release status and TMDB user score without viewing options. The
+filter, the services note, and the JustWatch credit do not appear. Movies
+open their title pages as At home's titles do: from a Want to watch page
+with the `title` surface, and from Watch together with `watch_together`. On
+the viewer's own page, In theaters movies join Spotlight too.
 
 ## Verification
 
@@ -202,11 +225,15 @@ back, including from the keyboard, reloads in In theaters, checks 1440,
 390, and 320px widths without horizontal overflow, opens a movie, and
 follows a refresh to Watch together's empty state.
 
-In the iPhone app, ScreenrKit's `WantToWatchTests`, `DestinationTests`,
-`RouterTests`, `ProfileModelTests`, and `TitleSpotlightTests` cover the
-model, route, placement, Block, and Spotlight. The UI tests'
+In the iPhone app, ScreenrKit's `WantToWatchTests`, `InTheatersTests`,
+`DestinationTests`, `RouterTests`, `ProfileModelTests`, and
+`TitleSpotlightTests` cover the models in both modes, the route and its
+mode, placement and the mode switch, Block, and Spotlight. The UI tests'
 `WantToWatchTests` open the viewer's own page from the You tab, filter it,
-and open a title, open a friend's page, check that a non-friend's profile has
-no link, audit the largest text size, and render every
-`screen/want-to-watch` fixture from its link. `ShellTests` opens the
-viewer's own page from a link.
+and open a title, open a friend's page and switch it to In theaters and
+back, open a movie from In theaters, check that a non-friend's profile has
+no link, audit both modes at the largest text size, and render every
+`screen/want-to-watch` fixture from its link in its mode.
+`WatchTogetherTests` does the same for Watch together, and `ShellTests`
+opens the viewer's own page and Watch together from links with and without
+the mode.

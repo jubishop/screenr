@@ -1,0 +1,42 @@
+{
+  "description": "In theaters with a friend who shares no Want to watch movies.",
+  "viewer": "alice",
+  "request": {
+    "method": "GET",
+    "action": "screen",
+    "path": "/api/screenr/screen?path=%2Fwatch-together%3Fwith%3Dcam%26mode%3Dtheaters",
+    "query": {
+      "path": "/watch-together?with=cam&mode=theaters"
+    }
+  },
+  "response": {
+    "status": 200,
+    "etag": "W/\"7qqwJD7GGHw5LcXd_KSJMPXZDQpomLzV_R67fK-SbLE\"",
+    "body": {
+      "kind": "watch-together",
+      "mode": "theaters",
+      "participants": [
+        {
+          "photo": "486e0212c15728ee",
+          "user_id": "user-alice",
+          "username": "alice",
+          "display_name": "Alice Park"
+        },
+        {
+          "photo": null,
+          "user_id": "user-cam",
+          "username": "cam",
+          "display_name": "Cam Rivera"
+        }
+      ],
+      "titles": [],
+      "unreadNotifications": 6,
+      "user": {
+        "user_id": "user-alice",
+        "username": "alice",
+        "display_name": "Alice Park",
+        "photo": "486e0212c15728ee"
+      }
+    }
+  }
+}

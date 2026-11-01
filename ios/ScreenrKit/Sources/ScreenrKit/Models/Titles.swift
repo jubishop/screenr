@@ -336,3 +336,26 @@ public struct SharedTitle: Decodable, Hashable, Sendable, Identifiable {
     matchingServiceIds = try container.decode([String].self, forKey: .matchingServiceIds)
   }
 }
+
+// A movie in an In theaters list, with its release status and TMDB user
+// score but no viewing options. `release` says whether it is in US theaters
+// now or its release data could not be loaded.
+public struct ReleaseTitle: Decodable, Hashable, Sendable, Identifiable {
+  public let title: Title
+  public let release: TitleRelease
+  public let tmdbScore: TMDBScore?
+
+  public var id: String { title.id }
+
+  private enum CodingKeys: CodingKey {
+    case release
+    case tmdbScore
+  }
+
+  public init(from decoder: any Decoder) throws {
+    title = try Title(from: decoder)
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    release = try container.decode(TitleRelease.self, forKey: .release)
+    tmdbScore = try container.decodeIfPresent(TMDBScore.self, forKey: .tmdbScore)
+  }
+}
