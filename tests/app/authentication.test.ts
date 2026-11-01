@@ -1,4 +1,4 @@
-import { test } from "node:test";
+import { test, afterEach, mock } from "node:test";
 import assert from "node:assert/strict";
 import {
   useDatabase,
@@ -7,6 +7,7 @@ import {
   person,
   assertAuthError,
   invitationRequired,
+  captureFailures,
 } from "./social-fixture";
 const { createAuth } = await import("../../src/server/auth");
 const { loadScreen } = await import("../../src/server/screens");
@@ -15,6 +16,7 @@ const { createInvitation, completeSignup, revokeInvitation } =
 const { profileFor } = await import("../../src/server/profiles");
 
 useDatabase();
+afterEach(() => mock.restoreAll());
 
 async function accountScreen(userId: string) {
   const screen = await loadScreen(userId, "/account");
@@ -231,6 +233,18 @@ test("the Screenr-wide cap allows 40 login-code emails a day across addresses an
       200,
     );
   assert.equal(sent.length, 37);
+  // Each request the cap refuses logs one line, whether it is refused before
+  // a code is stored or, after losing a race, when the code would be sent.
+  const printed = captureFailures();
+  const capped = (count: number) =>
+    assert.deepEqual(
+      printed
+        .filter((line) => line.startsWith("{"))
+        .map((line) => JSON.parse(line)),
+      Array.from({ length: count }, () => ({
+        event: "code email cap reached",
+      })),
+    );
   const racing = await Promise.all(
     Array.from({ length: 6 }, (_, index) =>
       request(`racing${index}@example.test`, { token }),
@@ -239,10 +253,13 @@ test("the Screenr-wide cap allows 40 login-code emails a day across addresses an
   for (const response of racing)
     if (response.status !== 200) await assertCodeLimited(response);
   assert.equal(sent.length, 40, "Concurrent requests must not exceed the cap");
+  capped(3);
   await assertCodeLimited(await request("late@example.test", { token }));
+  capped(4);
   await person("member");
   await assertCodeLimited(await request("member@example.test"));
   assert.equal(sent.length, 40);
+  capped(5);
   await moveCodeRequestsBack("1 day");
   assert.equal((await request("member@example.test")).status, 200);
   assert.equal(sent.length, 41);

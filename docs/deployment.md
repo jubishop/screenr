@@ -884,6 +884,15 @@ journalctl -u screenr-worker --since '1 day ago' --no-pager | grep '"event":"ema
 | --- | --- | --- |
 | `request failed` | web | `action` (known names only), `method`, and `status` 500 |
 | `page failed` | web | `route`, the member route kind, such as `search` or `profile` |
+| `route failed` | web | `route`, Next's route pattern, such as `/api/photos/[user]/[version]`; `type` (`render`, `route`, `action`, or `proxy`); and `method`, for an error no handler caught |
+| `catalog token rejected` | web | `status` 401 or 403: TMDB rejected `TMDB_READ_TOKEN`, so every catalog lookup fails until it is replaced |
+| `catalog request failed` | web | `status` for another TMDB reply other than 404, or error fields for a timeout, network failure, or malformed JSON |
+| `catalog cache failed` | web | `cache` (`title`, `trailer`, or `availability`) for a failed read or write of that catalog cache |
+| `auth callback failed` | web | `callback`, the Better Auth callback, such as `sendVerificationOTP` or `user.create.before` |
+| `code email cap reached` | web | No fields: the Screenr-wide limit of 40 [code emails a day](running-screenr.md#provider-configuration) refused a code request |
+| `apple_token_failed` | web | `status` and Apple's `reason` for an HTTP reply from Apple's token endpoint, or error fields |
+| `apple token unreadable` | web | Error fields only: account deletion skipped a Sign in with Apple token sealed under an earlier `BETTER_AUTH_SECRET` |
+| `apple revoke failed` | web | Error fields only: Apple did not confirm revoking a token, so the account was not deleted |
 | `worker failed` | worker | `failures`, the loop's failed passes in a row; see [worker outages](#worker-outages) |
 | `email delivery failed` | worker | `job` ID, `kind` (`code` or `activity`), `attempt`, and `final` |
 | `push delivery failed` | worker | `job` ID, `kind` (`alert` or `badge`), `environment` (`sandbox` or `production`), `attempt`, `final`, and `status` and `reason` for an APNs reply |
@@ -902,6 +911,16 @@ an iPhone app error report:
 ```sh
 journalctl -u screenr-web --since '1 day ago' --no-pager | grep '"requestId":"REQUEST_ID"'
 ```
+
+The `catalog` events print at most once per request: one API request or
+member page load that meets the same catalog failure many times, such as a
+title page's details, trailer, and availability lookups during a TMDB outage,
+prints one line. TMDB 404s are not failures. A `catalog token rejected` line
+means the token was revoked, expired, or suspended: replace `TMDB_READ_TOKEN`
+in `app.env` and restart `screenr-web`. A Better Auth callback failure still
+gets Better Auth's own answer, such as success for a code request whose email
+was never queued, and Better Auth prints its own unstructured line beside
+this one.
 
 For a Resend reply, `email delivery failed` adds the HTTP `status` and the
 `provider` error name, such as `daily_quota_exceeded` or `invalid_api_key`.

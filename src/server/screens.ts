@@ -23,7 +23,7 @@ import { withViewingOptions } from "./title-viewing";
 import { activityEmail, unreadNotifications } from "./notifications";
 import { pushSettings } from "./push";
 import { appleConfigured } from "./apple";
-import { logFailure } from "./log";
+import { logFailure, withRequest } from "./log";
 import { watchStatus } from "./title-actions";
 import { topTen, topTenRanks } from "./top-ten";
 import { parseMemberRoute, type MemberRoute } from "../member-routes";
@@ -57,28 +57,30 @@ export function readVersion(body: string) {
 // message in the page instead of an error page, and its status tells the page
 // to respond 404 and the browser whether to keep polling. Unexpected failures
 // are logged with the route kind, not the path, which can name people or
-// search terms.
-export async function initialScreen(userId: string, requestedPath: string) {
-  try {
-    return {
-      data: await loadScreen(userId, requestedPath),
-      error: "",
-      status: 200,
-    };
-  } catch (error) {
-    if (error instanceof AppError)
-      return { data: null, error: error.message, status: error.status };
-    logFailure(
-      "page failed",
-      { route: parseMemberRoute(requestedPath).kind },
-      error,
-    );
-    return {
-      data: null,
-      error: "This page could not load. Please try again.",
-      status: 500,
-    };
-  }
+// search terms. The page load counts as one request for failures logged once.
+export function initialScreen(userId: string, requestedPath: string) {
+  return withRequest(async () => {
+    try {
+      return {
+        data: await loadScreen(userId, requestedPath),
+        error: "",
+        status: 200,
+      };
+    } catch (error) {
+      if (error instanceof AppError)
+        return { data: null, error: error.message, status: error.status };
+      logFailure(
+        "page failed",
+        { route: parseMemberRoute(requestedPath).kind },
+        error,
+      );
+      return {
+        data: null,
+        error: "This page could not load. Please try again.",
+        status: 500,
+      };
+    }
+  });
 }
 
 async function loadContent(userId: string, route: MemberRoute) {

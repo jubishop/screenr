@@ -27,7 +27,13 @@ const origin = "http://screenr.local";
 
 /** Parses a member path and its query, such as `/titles/movie/1?item=…`. */
 export function parseMemberRoute(path: string): MemberRoute {
-  const url = new URL(path, origin);
+  let url: URL;
+  try {
+    url = new URL(path, origin);
+  } catch {
+    // A request can name any text, such as `//[`, which no URL parses.
+    return { kind: "not-found", path };
+  }
   const param = (key: string) => url.searchParams.get(key) || undefined;
   const target = () => ({ item: param("item"), reply: param("reply") });
   const mode = param("mode") === "theaters" ? "theaters" : undefined;

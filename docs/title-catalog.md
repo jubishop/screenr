@@ -34,6 +34,14 @@ caches are written once the title is stored. Actions and comments use the
 stored title without contacting TMDB, so members can still remove actions on
 a title TMDB dropped.
 
+Each failed TMDB request other than a 404 is
+[logged](deployment.md#failure-logs) once for each member request, with
+TMDB's status: `catalog token rejected` for a 401 or 403, which means
+`TMDB_READ_TOKEN` no longer works, and `catalog request failed` for anything
+else. A failed read or write of the title, trailer, or availability cache is
+logged as `catalog cache failed`; the page serves what it has, as for a TMDB
+failure.
+
 `public/tmdb.svg` is the unmodified approved short logo from the
 [TMDB logo page](https://www.themoviedb.org/about/logos-attribution).
 The Credits page supplies the required attribution notice.
