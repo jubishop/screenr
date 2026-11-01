@@ -95,6 +95,8 @@ to ordinary memory pages. Create these records only when a review needs them.
 - [Development preferences](development-preferences.md): Project Starter as
   the source of repository conventions, the product decision process, and the
   preference to reduce third-party dependencies.
+- [Feed order in tests](feed-order-tests.md): give entries saved back to back
+  distinct times before asserting their feed or friend line order.
 - [Parallel agent gotchas](parallel-agent-gotchas.md): cap concurrent iOS
   checks, keep hooks current in the primary checkout, avoid broad process
   kills, and register new extension App IDs through the Xcode account.
