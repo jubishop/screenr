@@ -739,6 +739,19 @@ and `photo` null, `removed` true, and `unavailable` false, and the web
 labels it "Comment removed". The previous release leaves it out of
 conversations, as if it had no replies.
 
+Erasure holds the write lock, and PostgreSQL checks each foreign key once
+per deleted row, so every comment and notification key that erasure deletes
+or checks by has an index: reply roots, authors, addressed people, and
+notifications' comments (migration `035-erasure-indexes.sql`,
+[issue #374](https://github.com/jubishop/screenr/issues/374)). Without them,
+each deleted comment read the whole comment table. Erasing a member with 870
+comments from a synthetic circle of 33,500 took about 2 seconds without them
+and under 0.3 seconds with them. The account deletion test erases with
+sequential scans disabled and fails if any step still reads comments,
+notifications, or a table that refers to them in full. Index any new column
+that erasure deletes or updates through, and any new foreign key to a
+comment.
+
 `tests/app/account-deletion.test.ts` reads from the schema every column whose
 foreign keys lead to a person, and every text column, so its checks cover
 new tables. Give its departing member rows in any new table that refers to

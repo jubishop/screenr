@@ -82,17 +82,21 @@ export async function eraseAccounts(client: PoolClient, ids: string[]) {
   // on their entries, leave their badges
   // (docs/notifications.md#badge-only-updates).
   const queueBadges = await trackErasureBadges(client, ids);
+  // Erasure holds the domain lock, so each comment statement can reach its
+  // rows through an index (migration 035). PostgreSQL cannot use one for a
+  // subquery under OR, so each such deletion runs as two statements.
   for (const statement of [
     `DELETE FROM comment
-      WHERE conversation_id IN (SELECT id FROM conversation WHERE owner_id=ANY($1))
-      OR discussion_post_id IN (SELECT id FROM discussion_post WHERE owner_id=ANY($1))`,
+      WHERE conversation_id IN (SELECT id FROM conversation WHERE owner_id=ANY($1))`,
+    `DELETE FROM comment
+      WHERE discussion_post_id IN (SELECT id FROM discussion_post WHERE owner_id=ANY($1))`,
     `UPDATE comment cm SET author_id=NULL,body='[removed]',removed_at=coalesce(removed_at,now())
       WHERE author_id=ANY($1) AND root_id IS NULL AND EXISTS (
         SELECT 1 FROM comment reply WHERE reply.root_id=cm.id
           AND reply.author_id<>ALL($1) AND reply.removed_at IS NULL)`,
-    // Their other comments, with any removed replies beneath them.
-    `DELETE FROM comment WHERE author_id=ANY($1)
-      OR root_id IN (SELECT id FROM comment WHERE author_id=ANY($1))`,
+    // Their other comments, after any removed replies beneath them.
+    "DELETE FROM comment WHERE root_id IN (SELECT id FROM comment WHERE author_id=ANY($1))",
+    "DELETE FROM comment WHERE author_id=ANY($1)",
     "UPDATE comment SET addressed_id=NULL WHERE addressed_id=ANY($1)",
     "DELETE FROM feed_item WHERE owner_id=ANY($1)",
     "DELETE FROM review WHERE owner_id=ANY($1)",
