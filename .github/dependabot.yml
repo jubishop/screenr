@@ -37,3 +37,17 @@ updates:
     cooldown:
       default-days: 7
     labels: [improvement, "area: tooling"]
+
+  # The iPhone app's Swift packages, which ios/ScreenrKit/Package.swift pins
+  # exactly. No hosted CI runs the iOS checks, so run bin/check-ios on an
+  # update's branch before merging it (docs/development-workflow.md#dependency-updates).
+  - package-ecosystem: swift
+    directory: /ios/ScreenrKit
+    schedule:
+      interval: weekly
+    groups:
+      swift-minor-and-patch:
+        applies-to: version-updates
+        patterns: ["*"]
+        update-types: [minor, patch]
+    labels: [improvement, "area: ios"]

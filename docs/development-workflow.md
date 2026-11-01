@@ -118,6 +118,19 @@ including with an empty list, Dependabot creates and applies its own default
 labels. A third, `docker` entry updates the Caddy image that CI copies; see
 [CI Caddy](#ci-caddy).
 
+A fourth, `swift` entry, added on 2026-11-01
+([#380](https://github.com/jubishop/screenr/issues/380)), updates the iPhone
+app's Swift packages in `ios/ScreenrKit`. Its `Package.swift` pins each one
+exactly; the only one is `sentry-cocoa`. Like the others, it groups minor and
+patch updates, and labels them `improvement` and `area: ios`. A Swift update
+changes `ios/`, which no hosted CI checks, so run `bin/check-ios` on its
+branch before merging it ([iOS checks](#ios-checks-before-a-push)).
+Dependabot reads the manifest with `swift package show-dependencies` from its
+own toolchain, which its `swift/Dockerfile` set to Swift 6.3.1 on
+2026-11-01, and SwiftPM refuses a manifest that needs newer tools, as
+`Package.swift`'s 6.4 does. So its Swift jobs fail until Dependabot moves to
+Swift 6.4 or later, and then work without a change here.
+
 Dependabot pull requests run [the check workflow](../.github/workflows/check.yml),
 including every check `bin/check --full` runs, like any other pull request.
 GitHub gives them a read-only token and no Actions secrets, and the check jobs
