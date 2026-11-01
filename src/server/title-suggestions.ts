@@ -1,4 +1,5 @@
 import { db } from "./db";
+import { titleObject } from "./catalog";
 import type { TitleSuggestion } from "../shared";
 
 // Fewer friends of friends sharing an action could identify them, so their
@@ -13,14 +14,10 @@ export async function titleSuggestions(
   // still uses screenr_can_read and does not inherit this aggregate exception.
   const { rows } = await db.query<{ suggestion: TitleSuggestion }>(
     `WITH direct_friends AS (
-      SELECT CASE WHEN low_id=$1 THEN high_id ELSE low_id END AS user_id
-      FROM friendship
-      WHERE $1 IN (low_id,high_id) AND accepted_at IS NOT NULL
-        AND NOT screenr_blocked(low_id,high_id)
+      SELECT user_id FROM screenr_friends($1)
     ), second_degree AS (
-      SELECT DISTINCT CASE WHEN f.low_id=d.user_id THEN f.high_id ELSE f.low_id END AS user_id
-      FROM friendship f JOIN direct_friends d ON d.user_id IN (f.low_id,f.high_id)
-      WHERE f.accepted_at IS NOT NULL AND NOT screenr_blocked(f.low_id,f.high_id)
+      SELECT DISTINCT s.user_id
+      FROM direct_friends d CROSS JOIN screenr_friends(d.user_id) s
     ), circle AS (
       SELECT user_id,3 AS weight FROM direct_friends
       UNION ALL
@@ -77,9 +74,7 @@ export async function titleSuggestions(
         count(*) FILTER (WHERE weight=1 AND action='watching') AS second_degree_watching
       FROM qualified GROUP BY title_id
     )
-    SELECT jsonb_build_object(
-      'id',t.id,'kind',t.kind,'tmdb_id',t.tmdb_id,'name',t.name,
-      'overview',t.overview,'poster_path',t.poster_path,'release_date',t.release_date,
+    SELECT jsonb_build_object(${titleObject("t")},
       'recommended_by',s.recommended_by,'wanted_by',s.wanted_by,
       'watching_by',s.watching_by,
       'second_degree_recommended',s.second_degree_recommended,
