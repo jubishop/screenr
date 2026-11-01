@@ -55,6 +55,9 @@ await cp(".next/standalone", output, {
       ),
 });
 await cp(".next/static", join(output, ".next/static"), { recursive: true });
+// TEMPORARY demonstration for #370, reverted by the next commit: drop a
+// runtime package from the release, which the smoke test must now catch.
+await rm(join(output, "node_modules/pg"), { recursive: true, force: true });
 async function check(directory: string): Promise<void> {
   for (const item of await readdir(directory, { withFileTypes: true })) {
     const path = join(directory, item.name);
