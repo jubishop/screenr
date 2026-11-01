@@ -612,6 +612,10 @@ In the split workflow, a pull request run passed `check` 3 minutes 5 seconds
 after it started. Every job started within 4 seconds; `static` took 89
 seconds, the app shards 134 and 149, the browser shards 164 to 176, and
 `release` 22 without packaging. On `main`, deployment follows `check`.
+Since [#370](https://github.com/jubishop/screenr/issues/370), `release`
+packages on every run. In a pull request run on 2026-11-01 it took 68
+seconds, 45 of them to build and package, while the slowest app shard took
+212, and the run passed `check` 3 minutes 40 seconds after it started.
 
 To bring a run back under budget, find the slowest job with
 `gh run view <run> --json jobs`, then add a shard to its matrix or move work
