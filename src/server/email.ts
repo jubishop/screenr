@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { db, domainLock } from "./db";
+import { db, domainLock, rollback } from "./db";
 import { logFailure } from "./log";
 import { notificationEmail, queueNotificationEmails } from "./notifications";
 import { seal, unseal } from "./sealing";
@@ -89,6 +89,7 @@ async function providerError(response: Response) {
 
 export async function deliverOne(): Promise<boolean> {
   const client = await db.connect();
+  let rolledBack = true;
   try {
     await client.query("BEGIN");
     const due = (activity: boolean) =>
@@ -115,6 +116,9 @@ export async function deliverOne(): Promise<boolean> {
       await client.query("COMMIT");
       return false;
     }
+    // A failure below, even a database error that aborts the transaction,
+    // rolls back only to here, so recording the attempt and its backoff works.
+    await client.query("SAVEPOINT delivery");
     try {
       const mail = job.notification_recipient
         ? await notificationEmail(client, job.id, job.notification_recipient)
@@ -179,6 +183,7 @@ export async function deliverOne(): Promise<boolean> {
         error instanceof Error
           ? error.message.slice(0, 120)
           : "Delivery failed";
+      await client.query("ROLLBACK TO SAVEPOINT delivery");
       // A final failure expires the job, which cleanup then deletes. A new
       // code request for the same address replaces it.
       await client.query(
@@ -191,23 +196,19 @@ export async function deliverOne(): Promise<boolean> {
     await client.query("COMMIT");
     return true;
   } catch (error) {
-    await client.query("ROLLBACK");
+    rolledBack = await rollback(client);
     throw error;
   } finally {
-    client.release();
+    client.release(!rolledBack);
   }
 }
 
-// One pass of screenr-worker: send at most one due email. The first pass and
-// every 60th also delete expired jobs and old usage telemetry.
+// One pass of screenr-worker's email loop: send at most one due email. The
+// first pass and every 60th also delete expired jobs and old usage telemetry.
 export async function runWorkerPass(pass: number) {
-  try {
-    await deliverOne();
-    if (pass % 60 === 0) {
-      await db.query("DELETE FROM email_job WHERE expires_at < now()");
-      await pruneUsage();
-    }
-  } catch (error) {
-    logFailure("worker failed", {}, error);
+  await deliverOne();
+  if (pass % 60 === 0) {
+    await db.query("DELETE FROM email_job WHERE expires_at < now()");
+    await pruneUsage();
   }
 }

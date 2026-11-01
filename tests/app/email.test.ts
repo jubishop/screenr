@@ -2,9 +2,10 @@ import { test, before, beforeEach, after, afterEach, mock } from "node:test";
 import assert from "node:assert/strict";
 import { execFile, spawn } from "node:child_process";
 import { once } from "node:events";
+import { createServer, type AddressInfo } from "node:net";
 import { setTimeout } from "node:timers/promises";
 import { promisify } from "node:util";
-import { db, captureFailures } from "./social-fixture";
+import { db, captureFailures, testDatabaseURL } from "./social-fixture";
 
 process.env.EMAIL_TRANSPORT = "resend";
 process.env.RESEND_API_KEY = "test-key-never-used-on-the-network";
@@ -237,6 +238,68 @@ test("permanent Resend rejections are not retried; timeouts, conflicts, limits, 
   assert.match(sent[0], /975310/);
 });
 
+async function until(condition: () => boolean, limit = 2_000) {
+  const deadline = Date.now() + limit;
+  while (!condition() && Date.now() < deadline) await setTimeout(5);
+  assert.ok(condition(), "Timed out");
+}
+
+test("a connection that breaks during a Resend request leaves the job for the next pass, which reuses its idempotency key", async () => {
+  await queueCode({ email: "broken@example.test", otp: "102938" });
+  const { id } = (await db.query("SELECT id FROM email_job")).rows[0];
+  const printed = captureFailures();
+  const keys: string[] = [];
+  mock.method(
+    globalThis,
+    "fetch",
+    async (_url: string, options: RequestInit) => {
+      keys.push(new Headers(options.headers).get("Idempotency-Key")!);
+      if (keys.length === 1) {
+        // PostgreSQL ends the connection that holds the job while Resend
+        // handles the request.
+        await db.query(
+          `SELECT pg_terminate_backend(pid) FROM pg_stat_activity
+          WHERE datname=current_database() AND state='idle in transaction'`,
+        );
+        await until(() => printed.length > 0);
+      }
+      return Response.json({ id: "sent" });
+    },
+  );
+  const removed = new Promise((resolve) => db.once("remove", resolve));
+  await assert.rejects(deliverOne());
+  await removed;
+  assert.equal(db.idleCount, db.totalCount, "No client stays checked out");
+  assert.deepEqual(
+    printed.map((line) => {
+      const { stack, ...fields } = JSON.parse(line);
+      return fields;
+    }),
+    [
+      {
+        event: "database connection failed",
+        error: "DatabaseError",
+        code: "57P01",
+      },
+      {
+        event: "email delivery failed",
+        job: id,
+        kind: "code",
+        attempt: 1,
+        final: false,
+        error: "Error",
+      },
+    ],
+  );
+  const job = (await db.query("SELECT * FROM email_job")).rows[0];
+  assert.equal(job.attempts, 0);
+  assert.equal(job.sent_at, null);
+  assert.equal(await deliverOne(), true);
+  assert.equal(keys.length, 2);
+  assert.equal(keys[0], keys[1]);
+  assert.ok((await db.query("SELECT sent_at FROM email_job")).rows[0].sent_at);
+});
+
 // The worker runs as its own process with the suite's database and Resend
 // settings. Its fetch always fails, so it can never reach Resend.
 const worker = [
@@ -292,8 +355,8 @@ test("the worker deletes expired jobs on its first pass and exits cleanly on SIG
       await setTimeout(50);
     }
     child.kill("SIGTERM");
-    // A stopping worker finishes its pass and its one-second pause, then
-    // closes the database pool and exits.
+    // A stopping worker finishes its pass, ends its pause early, then closes
+    // the database pool and exits.
     const [code, signal] = await Promise.race([
       exited,
       setTimeout(5_000).then(() => assert.fail("The worker did not stop.")),
@@ -314,5 +377,65 @@ test("the worker deletes expired jobs on its first pass and exits cleanly on SIG
   } finally {
     child.kill("SIGKILL");
     await db.query("DELETE FROM screenr_backfill");
+  }
+});
+
+test("the worker keeps running while PostgreSQL is unreachable, logs each loop's failure once, and stops during its backoff", async () => {
+  // A loopback port that nothing listens on.
+  const closed = createServer();
+  await new Promise<void>((resolve) => closed.listen(0, "127.0.0.1", resolve));
+  const { port } = closed.address() as AddressInfo;
+  await new Promise((resolve) => closed.close(resolve));
+  const unreachable = new URL(testDatabaseURL);
+  unreachable.port = String(port);
+  const child = spawn(process.execPath, worker, {
+    env: { ...process.env, DATABASE_URL: unreachable.href },
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  let output = "";
+  child.stdout.on("data", (data) => (output += data));
+  child.stderr.on("data", (data) => (output += data));
+  const exited = once(child, "exit");
+  const lines = () =>
+    output
+      .split("\n")
+      .filter(Boolean)
+      .map((line) => JSON.parse(line));
+  try {
+    // Each loop's first pass fails at once and waits two seconds. Without
+    // APNs settings, the push loop's second pass needs no database, so it
+    // recovers. The email loop's second pass fails again without a line, and
+    // it then waits four seconds.
+    await until(
+      () => lines().some((line) => line.event === "worker recovered"),
+      10_000,
+    );
+    await setTimeout(300);
+    assert.equal(child.exitCode, null, output);
+    child.kill("SIGTERM");
+    // A stopping worker ends its pause early.
+    const [code, signal] = await Promise.race([
+      exited,
+      setTimeout(2_000).then(() => assert.fail("The worker did not stop.")),
+    ]);
+    assert.deepEqual({ code, signal }, { code: 0, signal: null }, output);
+    const failed = {
+      error: "Error",
+      code: "ECONNREFUSED",
+    };
+    assert.deepEqual(
+      lines()
+        .map(({ stack, ...fields }) => fields)
+        .sort((a, b) => a.event.localeCompare(b.event)),
+      [
+        { event: "google photo backfill failed", ...failed },
+        { event: "push delivery off", reason: "no APNs settings" },
+        { event: "worker failed", failures: 1, ...failed },
+        { event: "worker failed", failures: 1, ...failed },
+        { event: "worker recovered", failures: 1 },
+      ],
+    );
+  } finally {
+    child.kill("SIGKILL");
   }
 });

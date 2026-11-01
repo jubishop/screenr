@@ -15,6 +15,7 @@ const { POST } = await import("../../src/app/api/screenr/[action]/route");
 const { initialScreen } = await import("../../src/server/screens");
 const { runWorkerPass } = await import("../../src/server/email");
 const { logFailure } = await import("../../src/server/log");
+const { runWorkerLoop } = await import("../../src/server/worker-loop");
 useDatabase();
 // Fake Sentry endpoints still open after a failed test.
 const endpoints = new Set<Server>();
@@ -53,6 +54,15 @@ function excludes(printed: string[], values: string[]) {
 async function until(condition: () => boolean) {
   for (let wait = 0; wait < 400 && !condition(); wait++) await setTimeout(5);
   assert.ok(condition(), "Timed out");
+}
+
+// Runs screenr-worker's email loop until its first pass fails and is logged.
+async function failWorkerPass(printed: string[]) {
+  const stop = new AbortController();
+  const loop = runWorkerLoop(runWorkerPass, stop.signal);
+  await until(() => printed.length > 0);
+  stop.abort();
+  await loop;
 }
 
 // Posts a comment that only a probe check constraint rejects, so the request
@@ -222,10 +232,11 @@ test("a failed email worker pass logs its error class, code, and stack", async (
   await db.query("ALTER TABLE email_job RENAME TO email_job_hidden");
   try {
     const printed = captureFailures();
-    await runWorkerPass(1);
+    await failWorkerPass(printed);
     const { fields, stack } = logged(printed);
     assert.deepEqual(fields, {
       event: "worker failed",
+      failures: 1,
       error: "DatabaseError",
       code: "42P01",
     });
@@ -359,10 +370,10 @@ test("without a Sentry DSN, a failure is only logged", () => {
 
 test("a failed email worker pass is also reported to Sentry", async () => {
   const sentry = await fakeSentry();
-  captureFailures();
+  const printed = captureFailures();
   await db.query("ALTER TABLE email_job RENAME TO email_job_hidden");
   try {
-    await runWorkerPass(1);
+    await failWorkerPass(printed);
   } finally {
     await db.query("ALTER TABLE email_job_hidden RENAME TO email_job");
   }
@@ -372,6 +383,7 @@ test("a failed email worker pass is also reported to Sentry", async () => {
   const event = envelope(report.body);
   assert.deepEqual(event.contexts.failure, {
     event: "worker failed",
+    failures: 1,
     error: "DatabaseError",
     code: "42P01",
   });

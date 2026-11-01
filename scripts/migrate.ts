@@ -21,7 +21,9 @@ export const migrate = () => migrateFrom(new URL("../db/", import.meta.url));
 
 // Activation holds the deploy lock while migrations run. Bound each lock wait,
 // including the migration lock, and each statement, so a stuck run fails
-// with a clear error instead.
+// with a clear error instead. The run closes its connection afterwards, which
+// ends its transaction, drops its limits, and releases the migration lock if
+// it held it. No cleanup query runs, so none can fail and hide the run's error.
 export async function migrateFrom(
   directory: URL,
   { lockTimeout = "30s", statementTimeout = "5min" } = {},
@@ -112,8 +114,7 @@ export async function migrateFrom(
     }
     await client.query("COMMIT");
   } catch (error) {
-    await client.query("ROLLBACK");
-    // Every SQL migration runs in the transaction that was just rolled back.
+    // Every SQL migration runs in one transaction, which never committed.
     const unapplied = "No SQL migration was applied.";
     const { code, message } = error as { code?: string; message?: string };
     if (code === "55P03")
@@ -128,11 +129,7 @@ export async function migrateFrom(
       );
     throw error;
   } finally {
-    // The pool reuses this connection, so restore its default limits.
-    await client.query(
-      "SELECT pg_advisory_unlock(713934202); RESET lock_timeout; RESET statement_timeout",
-    );
-    client.release();
+    client.release(true);
   }
 }
 if (process.argv[1]?.endsWith("scripts/migrate.ts")) {

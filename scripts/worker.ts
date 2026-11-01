@@ -3,7 +3,7 @@ import { apnsFromEnvironment } from "../src/server/apns";
 import { db } from "../src/server/db";
 import { runPhotoBackfill } from "../src/server/photos";
 import { runPushPass } from "../src/server/push";
-import { setTimeout } from "node:timers/promises";
+import { runWorkerLoop } from "../src/server/worker-loop";
 if (
   process.env.EMAIL_TRANSPORT !== "resend" ||
   !process.env.RESEND_API_KEY ||
@@ -13,13 +13,9 @@ if (
     "Configure the Resend transport, API key, and sender before starting the worker.",
   );
 }
-let stopping = false;
 const stop = new AbortController();
 for (const signal of ["SIGTERM", "SIGINT"])
-  process.on(signal, () => {
-    stopping = true;
-    stop.abort();
-  });
+  process.on(signal, () => stop.abort());
 // Without APNs settings, as in development and CI, the push loop sends
 // nothing and only deletes expired push jobs.
 const apns = apnsFromEnvironment();
@@ -28,19 +24,11 @@ const apns = apnsFromEnvironment();
 const backfill = runPhotoBackfill(fetch, stop.signal);
 // Pushes have their own loop, so a slow email send never delays them.
 async function pushLoop() {
-  let pass = 0;
-  while (!stopping) {
-    await runPushPass(apns, pass++);
-    await setTimeout(1000);
-  }
+  await runWorkerLoop((pass) => runPushPass(apns, pass), stop.signal);
   apns?.close();
 }
 const pushes = pushLoop();
-let pass = 0;
-while (!stopping) {
-  await runWorkerPass(pass++);
-  await setTimeout(1000);
-}
+await runWorkerLoop(runWorkerPass, stop.signal);
 await pushes;
 await backfill;
 await db.end();

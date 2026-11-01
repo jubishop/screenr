@@ -368,11 +368,7 @@ export async function deliverPushes(apns: Apns, limit = 50) {
 // One pass of the worker's push loop, which sends only with APNs settings.
 // The first pass and every 60th also delete expired jobs.
 export async function runPushPass(apns: Apns | null, pass: number) {
-  try {
-    if (pass % 60 === 0)
-      await db.query("DELETE FROM push_job WHERE expires_at<=now()");
-    if (apns) await deliverPushes(apns);
-  } catch (error) {
-    logFailure("worker failed", {}, error);
-  }
+  if (pass % 60 === 0)
+    await db.query("DELETE FROM push_job WHERE expires_at<=now()");
+  if (apns) await deliverPushes(apns);
 }
