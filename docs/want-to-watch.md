@@ -165,8 +165,8 @@ the Friends list when the profile's `canRead` is true. `WantToWatchView` and
 `WantToWatchList` render ScreenrKit's `WantToWatchScreen`, whose extension
 in `ios/ScreenrKit/Sources/ScreenrKit/People/WantToWatch.swift` holds the
 sections, the count, the empty states, and the introduction in the web's
-words. Each title's row shows its release status, as other iPhone title
-lists do. The page polls like other screens. The services note opens Settings,
+words. Each title's row shows its release status and TMDB user score, as
+other iPhone title lists do. The page polls like other screens. The services note opens Settings,
 where streaming services are saved, and each title opens its title page
 without a list's surface, so a save there reports `title`. Block closes the
 blocked person's page on every tab. On the viewer's own page, each title

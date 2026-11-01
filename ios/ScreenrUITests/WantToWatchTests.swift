@@ -33,7 +33,8 @@ final class WantToWatchTests: XCTestCase {
     XCTAssertTrue(app.staticTexts["1 title to watch now"].exists)
     let orchard = app.buttons(starting: "The Quiet Orchard")
     XCTAssertTrue(orchard.exists)
-    XCTAssertTrue(orchard.label.contains("In theaters · Digital Nov 20"))
+    // The TMDB user score follows the release status.
+    XCTAssertTrue(orchard.label.contains("In theaters · Digital Nov 20, 73%,"), orchard.label)
     XCTAssertTrue(app.staticTexts["Availability unknown"].exists)
     XCTAssertTrue(app.buttons(starting: "Glass Meridian").exists)
     XCTAssertFalse(

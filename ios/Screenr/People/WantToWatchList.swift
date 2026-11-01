@@ -52,8 +52,8 @@ struct WantToWatchList: View {
 }
 
 // Ready to watch or Availability unknown: its heading, what it holds, and
-// its titles, each with its release status and the viewer's saved services
-// marked.
+// its titles, each with its release status, TMDB user score, and the
+// viewer's saved services marked.
 private struct TitlesSection: View {
   let section: WantToWatchSection
 
@@ -71,6 +71,7 @@ private struct TitlesSection: View {
             title: title.title,
             viewing: title.viewing,
             release: title.release,
+            score: title.tmdbScore,
             serviceIds: title.matchingServiceIds
           )
         }
