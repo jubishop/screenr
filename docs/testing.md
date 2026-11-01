@@ -670,11 +670,12 @@ rules, label validation and TMDB season lists, and migration 024 with the
 previous release's writes.
 `tests/app/failure-logs.test.ts` and `tests/app/email.test.ts` capture the
 [failure logs](deployment.md#failure-logs) of request, page, route, Better
-Auth callback, worker, and Resend failures. `tests/app/catalog.test.ts`
-captures TMDB failures, invalid TMDB answers, and catalog cache failures, once
-for each request; `tests/app/availability.test.ts`,
-`tests/app/discussion-labels.test.ts`, and `tests/app/shared-links.test.ts`
-capture invalid watch-provider, season, episode, and find answers; and
+Auth callback and endpoint, worker, and Resend failures.
+`tests/app/catalog.test.ts` captures TMDB failures, invalid TMDB answers, and
+catalog cache failures, once for each request;
+`tests/app/availability.test.ts`, `tests/app/discussion-labels.test.ts`, and
+`tests/app/shared-links.test.ts` capture invalid watch-provider, season,
+episode, and find answers; and
 `tests/app/authentication.test.ts` the Screenr-wide code cap's refusals.
 They compare the logged fields exactly, check that comment text, search terms, addresses, codes, cookies, keys, and error messages stay
 out, and confirm that permanent Resend rejections are not retried. A request
