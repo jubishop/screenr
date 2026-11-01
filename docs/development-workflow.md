@@ -290,12 +290,25 @@ push finds a recorded pass. Never bypass the hook with `git push --no-verify`.
   ([iPhone app guide](../ios/README.md#add-a-feature-screen)).
 - **Hook location:** Git runs the hooks in `core.hooksPath`. `bin/setup`
   sets it to the relative `bin/hooks`, so each checkout runs its own copy.
-  On the user's Mac it is the primary checkout's absolute `bin/hooks`, so
-  every worktree runs the primary checkout's hooks. Keep that checkout on
-  current `main`, or new and changed hooks do not apply. `pre-push` belongs
-  to this project; Project Starter manages only the four knowledge hooks.
+  On the user's Mac it is the primary checkout's absolute `bin/hooks`, so Git
+  runs the primary checkout's hook files for every worktree. Each one then
+  runs the pushing or committing checkout's own code
+  ([#380](https://github.com/jubishop/screenr/issues/380)). The four
+  knowledge hooks call that checkout's `bin/knowledge-hook`. `pre-push` hands
+  the push to that checkout's `bin/hooks/pre-push`, but only when the
+  checkout's `HEAD` has the last commit that changed the gate,
+  `bin/hooks/pre-push` or `bin/_ios_check_records.py`, in the checkout that
+  `core.hooksPath` names. So a branch's older copy never replaces a newer
+  gate. Without that commit, or without an executable copy, the configured
+  copy checks the push itself and says why; rebase onto `origin/main` to run
+  the branch's own copy. A copy whose gate files differ from the configured
+  ones names them before it runs, so a branch's changes to the gate run
+  visibly, as its own `bin/check-ios` always has. A new kind of hook still applies only once the
+  checkout that `core.hooksPath` names has it. `pre-push` belongs to this
+  project; Project Starter manages only the four knowledge hooks.
 - **Tests:** `tests/test_pre_push.py` pushes to a local remote, from the
-  checkout and from a linked worktree, with a simulated `bin/check-ios`, and
+  checkout and from linked worktrees, with a simulated `bin/check-ios`,
+  including the hand-off to a worktree's copy and its fallbacks, and
   `tests/test_check_ios.py` covers the records and the check's environment.
 
 ### iOS release gate

@@ -33,13 +33,25 @@ none of 10 runs alone. UI tests now audit one check at a time through
 `performScreenrAudit()`, which passed 80 of 80 Find runs, 20 of them with
 three Simulators at once.
 
-## Hooks come from the primary checkout
+## Hooks start in the primary checkout
 
-`core.hooksPath` points at the primary checkout's `bin/hooks`, so every
-worktree runs the hooks in that checkout's working tree. When a change adds or
-edits a hook, such as the iOS `pre-push` gate from
-[#291](https://github.com/jubishop/screenr/issues/291), fast-forward the
-primary checkout to `main` before relying on it.
+`core.hooksPath` points at the primary checkout's `bin/hooks`, so Git runs
+that checkout's hook files for every worktree. Each hook then runs the
+worktree's own code
+([#380](https://github.com/jubishop/screenr/issues/380)): the knowledge hooks
+call the worktree's `bin/knowledge-hook`, and the iOS `pre-push` gate hands
+the push to the worktree's `bin/hooks/pre-push` when the worktree's `HEAD`
+has the primary checkout's last change to the gate. A worktree that lacks
+that change, or has no copy, gets the primary checkout's gate, and the hook
+says so; rebase onto `origin/main` to run the branch's own copy. See
+[hook location](../docs/development-workflow.md#ios-checks-before-a-push).
+
+Fast-forward the primary checkout to `main` before relying on a new kind of
+hook, which Git looks for only in `core.hooksPath`. To try a hook change,
+push from a scratch repository with its own `core.hooksPath`, as
+`tests/test_pre_push.py` does. Never repoint `core.hooksPath` from a
+worktree: worktrees share the clone's configuration, so it would change the
+hooks of every agent's pushes.
 
 ## Shared processes and files
 
