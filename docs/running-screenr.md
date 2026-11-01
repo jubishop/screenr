@@ -355,6 +355,16 @@ Apple sign-in stores a new one; deleting an account meanwhile skips its
 unreadable token. Apple sign-in has no web button, return URL,
 or domain to register.
 
+Never remove these settings while any account holds an Apple token. Account
+deletion needs them to revoke the token, as Apple requires, so without them
+it refuses to delete those accounts and logs `apple settings missing`
+([account deletion](data-and-access.md#account-deletion)). This counts the
+accounts that hold one:
+
+```sh
+runuser -u screenr-db -- psql -h /run/screenr-db -p 5439 -d screenr -c "SELECT count(*) FROM account WHERE \"providerId\"='apple' AND \"refreshToken\" IS NOT NULL"
+```
+
 ### Apple key files
 
 Apple allows each `.p8` key to be downloaded only once. The original files

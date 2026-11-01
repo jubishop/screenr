@@ -1,5 +1,9 @@
 import type { PoolClient } from "pg";
-import { revokeAppleTokens } from "./apple";
+import {
+  AppleSettingsMissing,
+  appleTokenStored,
+  revokeAppleTokens,
+} from "./apple";
 import { AppError, db, transaction } from "./db";
 import { codeRecipientHash, codeTypes } from "./email";
 import { logFailure } from "./log";
@@ -14,6 +18,16 @@ import { trackErasureBadges } from "./push";
 // Better Auth's freshAge uses the same window.
 export const freshSignInSeconds = 10 * 60;
 
+// Rounds of revocation that deletion tries while Apple sign-ins keep storing
+// newer tokens.
+const revocationRounds = 3;
+
+const notDisconnected = () =>
+  new AppError(
+    "Sign in with Apple could not be disconnected, so your account was not deleted. Please try again later.",
+    503,
+  );
+
 export async function deleteAccount(userId: string, sessionId: string) {
   const fresh = await db.query(
     `SELECT 1 FROM session WHERE id=$1 AND "userId"=$2
@@ -27,18 +41,41 @@ export async function deleteAccount(userId: string, sessionId: string) {
     );
   // Apple requires revoking Sign in with Apple when an account is deleted.
   // The tokens live in the account rows that deletion erases, so when Apple
-  // does not confirm, nothing is erased and the member can try again.
+  // does not confirm, nothing is erased and the member can try again. An
+  // Apple sign-in during revocation can store a newer token, so erasure
+  // starts only once none remains, and otherwise revokes again.
+  for (let round = 1; ; round++) {
+    await revokeApple(userId);
+    const erased = await transaction(async (client) => {
+      if (await appleTokenStored(client, userId)) return false;
+      await eraseAccounts(client, [userId]);
+      return true;
+    });
+    if (erased) break;
+    if (round === revocationRounds) {
+      logFailure("apple token replaced", {});
+      throw notDisconnected();
+    }
+  }
+  journalDeletion(userId);
+}
+
+async function revokeApple(userId: string) {
   try {
     await revokeAppleTokens(userId);
   } catch (error) {
+    // Deletion waits until the settings are restored
+    // (docs/running-screenr.md#iphone-app-accounts-and-keys).
+    if (error instanceof AppleSettingsMissing) {
+      logFailure("apple settings missing", {});
+      throw new AppError(
+        "Sign in with Apple is unavailable right now, so your account was not deleted. Please try again later.",
+        503,
+      );
+    }
     logFailure("apple revoke failed", {}, error);
-    throw new AppError(
-      "Sign in with Apple could not be disconnected, so your account was not deleted. Please try again later.",
-      503,
-    );
+    throw notDisconnected();
   }
-  await transaction((client) => eraseAccounts(client, [userId]));
-  journalDeletion(userId);
 }
 
 // Each deletion prints one line, naming only the user ID, to the journal.
@@ -65,6 +102,10 @@ export async function redeleteAccounts(ids: string[]) {
     return rows.length;
   });
 }
+
+// Better Auth stores a pending code of each of these types under the address,
+// though Screenr emails only codeTypes.
+const otpTypes = [...codeTypes, "forget-password"];
 
 // Erases these people and every row that refers to them, in the caller's
 // transaction. Their entries go with whole conversations. A comment of
@@ -112,16 +153,26 @@ export async function eraseAccounts(client: PoolClient, ids: string[]) {
     `DELETE FROM invitation_signup WHERE user_id=ANY($1)
       OR invitation_id IN (SELECT id FROM invitation WHERE creator_id=ANY($1))`,
     "DELETE FROM invitation WHERE creator_id=ANY($1)",
-    // Better Auth's pending codes and sign-in states name the address or ID.
-    `DELETE FROM verification v USING "user" u WHERE u.id=ANY($1)
-      AND (strpos(lower(v.identifier),lower(u.email))>0
-        OR strpos(lower(v.value),lower(u.email))>0 OR strpos(v.value,u.id)>0)`,
     // The profile, photo, sessions, push devices, sign-in accounts, saved
     // services, notifications, reactions, usage rows, and activity emails
     // cascade.
     'DELETE FROM "user" WHERE id=ANY($1)',
   ])
     await client.query(statement, [ids]);
+  // Better Auth's pending codes name the address in their identifier, which
+  // matches exactly, so another address that contains this one keeps its
+  // code. Its sign-in states, such as a Google link in progress, name the
+  // user ID in their value.
+  await client.query(
+    `DELETE FROM verification WHERE identifier=ANY($1)
+      OR EXISTS (SELECT 1 FROM unnest($2::text[]) id WHERE strpos(value,id)>0)`,
+    [
+      emails.flatMap((email) =>
+        otpTypes.map((type) => `${type}-otp-${email.toLowerCase()}`),
+      ),
+      ids,
+    ],
+  );
   // Queued code emails name their recipient only by a hash of the address.
   await client.query("DELETE FROM email_job WHERE recipient_hash=ANY($1)", [
     emails.flatMap((email) =>

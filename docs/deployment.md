@@ -893,6 +893,8 @@ journalctl -u screenr-worker --since '1 day ago' --no-pager | grep '"event":"ema
 | `apple_token_failed` | web | `status` and Apple's `reason` for an HTTP reply from Apple's token endpoint, or error fields |
 | `apple token unreadable` | web | Error fields only: account deletion skipped a Sign in with Apple token sealed under an earlier `BETTER_AUTH_SECRET` |
 | `apple revoke failed` | web | Error fields only: Apple did not confirm revoking a token, so the account was not deleted |
+| `apple settings missing` | web | No fields: account deletion found a Sign in with Apple token but the [Apple settings](running-screenr.md#iphone-app-accounts-and-keys) are missing, so the account was not deleted |
+| `apple token replaced` | web | No fields: Apple sign-ins kept storing new tokens through three rounds of revocation, so the account was not deleted |
 | `worker failed` | worker | `failures`, the loop's failed passes in a row; see [worker outages](#worker-outages) |
 | `email delivery failed` | worker | `job` ID, `kind` (`code` or `activity`), `attempt`, and `final` |
 | `push delivery failed` | worker | `job` ID, `kind` (`alert` or `badge`), `environment` (`sandbox` or `production`), `attempt`, `final`, and `status` and `reason` for an APNs reply |
