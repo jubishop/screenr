@@ -9,13 +9,16 @@ import {
   setup,
   cookieFor,
   captureFailures,
+  person,
 } from "./social-fixture";
 
-const { POST } = await import("../../src/app/api/screenr/[action]/route");
+const { GET, POST } = await import("../../src/app/api/screenr/[action]/route");
 const { initialScreen } = await import("../../src/server/screens");
 const { runWorkerPass } = await import("../../src/server/email");
 const { logFailure } = await import("../../src/server/log");
 const { runWorkerLoop } = await import("../../src/server/worker-loop");
+const { createAuth } = await import("../../src/server/auth");
+const { onRequestError } = await import("../../src/instrumentation");
 useDatabase();
 // Fake Sentry endpoints still open after a failed test.
 const endpoints = new Set<Server>();
@@ -226,6 +229,91 @@ test("expected page errors show their message and log nothing", async () => {
   });
   await settled();
   assert.deepEqual(printed, []);
+});
+
+test("an unparseable screen path is not found and logs nothing", async () => {
+  const { alice } = await setup();
+  const cookie = await cookieFor(alice);
+  const printed = captureFailures();
+  const response = await GET(
+    new Request(
+      `http://localhost:3000/api/screenr/screen?${new URLSearchParams({ path: "//[" })}`,
+      { headers: { Cookie: cookie } },
+    ),
+    { params: Promise.resolve({ action: "screen" }) },
+  );
+  assert.equal(response.status, 404);
+  assert.deepEqual(await response.json(), { error: "Page not found." });
+  assert.deepEqual(printed, []);
+});
+
+// Better Auth prints its own unstructured line for a failed callback; only
+// JSON lines are failure logs.
+const structured = (printed: string[]) =>
+  printed.filter((line) => line.startsWith("{"));
+
+test("a sign-in code request whose email cannot be queued logs the callback and error, while Better Auth still answers success", async () => {
+  await person("member");
+  const message = "Private detail 662607";
+  const auth = createAuth({
+    rateLimit: false,
+    sendCode: async () => {
+      throw new TypeError(message);
+    },
+  });
+  const printed = captureFailures();
+  const response = await auth.handler(
+    new Request(
+      "http://localhost:3000/api/auth/email-otp/send-verification-otp",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Origin: "http://localhost:3000",
+        },
+        body: JSON.stringify({ email: "member@example.test", type: "sign-in" }),
+      },
+    ),
+  );
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), { success: true });
+  const { fields, stack } = logged(structured(printed));
+  assert.deepEqual(fields, {
+    event: "auth callback failed",
+    callback: "sendVerificationOTP",
+    error: "TypeError",
+  });
+  assert.ok(stack.some((frame) => frame.includes("failure-logs.test.ts")));
+  excludes(structured(printed), [message, "member@example.test"]);
+});
+
+test("a request error that reaches Next logs the route pattern, its type, and the method without the path or headers", async () => {
+  const printed = captureFailures();
+  const message = "Private detail 602214";
+  await onRequestError(
+    new TypeError(message),
+    {
+      path: "/people/alice?q=private",
+      method: "GET",
+      headers: { cookie: "session=private-cookie" },
+    },
+    {
+      routerKind: "App Router",
+      routePath: "/[[...path]]",
+      routeType: "render",
+      renderSource: "server-rendering",
+      revalidateReason: undefined,
+    },
+  );
+  const { fields } = logged(printed);
+  assert.deepEqual(fields, {
+    event: "route failed",
+    route: "/[[...path]]",
+    type: "render",
+    method: "GET",
+    error: "TypeError",
+  });
+  excludes(printed, [message, "alice", "private"]);
 });
 
 test("a failed email worker pass logs its error class, code, and stack", async () => {

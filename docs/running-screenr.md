@@ -277,8 +277,10 @@ windows: 3 requests per address in 15 minutes, 10 per address in a day, and 40
 code emails across Screenr in a day. The per-address limits count every
 request, including those that send nothing, so a limited response does not
 reveal membership. Requests that send nothing do not use the Screenr-wide
-allowance. Better Auth separately allows 3 code requests per IP each minute
-and five attempts per code. A limited request leaves the last delivered code
+allowance. Each request the Screenr-wide cap refuses is
+[logged](deployment.md#failure-logs) as `code email cap reached`, since
+reaching it blocks email-code sign-in for everyone. Better Auth separately
+allows 3 code requests per IP each minute and five attempts per code. A limited request leaves the last delivered code
 usable, and the sign-in page shows "Too many codes requested. Try again later,
 or continue with Google." Migration `011-login-code-limits.sql` stores hashed
 recipients for a day. Because Screenr has no passwords, it sends no

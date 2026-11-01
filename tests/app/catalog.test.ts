@@ -1,13 +1,20 @@
-import { test, before, beforeEach, after } from "node:test";
+import { test, before, beforeEach, after, afterEach, mock } from "node:test";
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
-import { db, cookieFor } from "./social-fixture";
+import { setTimeout as sleep } from "node:timers/promises";
+import { db, cookieFor, captureFailures } from "./social-fixture";
 
 const { migrate } = await import("../../scripts/migrate");
-const { loadScreen } = await import("../../src/server/screens");
+const { initialScreen, loadScreen } = await import("../../src/server/screens");
 const { GET, POST } = await import("../../src/app/api/screenr/[action]/route");
-const { getTitle, searchTitles } = await import("../../src/server/catalog");
+const {
+  getTitle,
+  getTitleAvailability,
+  getTitleReleases,
+  getTitleTrailer,
+  searchTitles,
+} = await import("../../src/server/catalog");
 
 const official = {
   site: "YouTube",
@@ -74,7 +81,18 @@ before(async () => {
   process.env.SCREENR_TEST_TMDB_URL = `http://127.0.0.1:${(catalog.address() as AddressInfo).port}`;
   process.env.TMDB_READ_TOKEN = "catalog-test-token";
 });
+// What each test's failures print. Lines from Better Auth are not JSON.
+let printed: string[] = [];
+const failureLines = () =>
+  printed
+    .filter((line) => line.startsWith("{"))
+    .map((line) => {
+      const { stack, ...fields } = JSON.parse(line);
+      return fields;
+    });
+afterEach(() => mock.restoreAll());
 beforeEach(async () => {
+  printed = captureFailures();
   videos = { results: [official] };
   status = 200;
   slow = false;
@@ -331,17 +349,31 @@ test("a title missing from storage still needs the catalog", async () => {
   await assert.rejects(loadScreen("viewer", "/titles/movie/43"), unavailable);
 });
 
-// Every TMDB failure except a 404 means the catalog is unavailable.
-const failures: Record<string, Partial<Reply>> = {
-  "server error": { status: 500 },
-  outage: { status: 503 },
-  "rate limit": { status: 429 },
-  "rejected token": { status: 401 },
-  "malformed JSON": { text: "{not json" },
-  "dropped connection": { reset: true },
+// Every TMDB failure except a 404 means the catalog is unavailable. Each
+// logs its TMDB status or error class; a rejected token is a configuration
+// failure, and the rest may pass on their own.
+const transient = "catalog request failed";
+const rejected = "catalog token rejected";
+const failures: Record<
+  string,
+  [Partial<Reply>, { event: string; status?: number; error?: string }]
+> = {
+  "server error": [{ status: 500 }, { event: transient, status: 500 }],
+  outage: [{ status: 503 }, { event: transient, status: 503 }],
+  "rate limit": [{ status: 429 }, { event: transient, status: 429 }],
+  "rejected token": [{ status: 401 }, { event: rejected, status: 401 }],
+  "suspended token": [{ status: 403 }, { event: rejected, status: 403 }],
+  "malformed JSON": [
+    { text: "{not json" },
+    { event: transient, error: "SyntaxError" },
+  ],
+  "dropped connection": [
+    { reset: true },
+    { event: transient, error: "TypeError" },
+  ],
 };
-for (const [failure, reply] of Object.entries(failures)) {
-  test(`a TMDB ${failure} makes a cold title and search unavailable`, async () => {
+for (const [failure, [reply, logged]] of Object.entries(failures)) {
+  test(`a TMDB ${failure} makes a cold title and search unavailable and logs each failure`, async () => {
     Object.assign(details, reply);
     Object.assign(search, reply);
     await assert.rejects(getTitle("movie:43"), unavailable);
@@ -351,6 +383,82 @@ for (const [failure, reply] of Object.entries(failures)) {
       "/search/multi?query=night&include_adult=false",
     ]);
     assert.equal(await storedTitle("movie:43"), undefined);
+    const expected = { status: undefined, error: undefined, ...logged };
+    assert.deepEqual(
+      failureLines().map(({ event, status, error }) => ({
+        event,
+        status,
+        error,
+      })),
+      [expected, expected],
+    );
+  });
+}
+
+test("a rejected TMDB token logs one failure for each request, with its status", async () => {
+  const cookie = await cookieFor("viewer");
+  const get = (action: string, query: Record<string, string>) =>
+    GET(
+      new Request(
+        `http://localhost:3000/api/screenr/${action}?${new URLSearchParams(query)}`,
+        { headers: { Cookie: cookie } },
+      ),
+      { params: Promise.resolve({ action }) },
+    );
+  details.status = search.status = status = 401;
+  const searched = await get("search", { q: "night" });
+  assert.equal(searched.status, 502);
+  // A stale title's details and trailer lookups both fail, and its stored
+  // details still render.
+  await db.query("UPDATE title SET fetched_at=now()-interval '2 days'");
+  const page = await get("screen", { path: "/titles/movie/42" });
+  assert.equal(page.status, 200);
+  assert.ok(requests.some(({ path }) => path === detailPath("movie:42")));
+  assert.ok(requests.some(({ path }) => path === "/movie/42/videos"));
+  // A server-rendered page counts as one request too.
+  assert.equal((await initialScreen("viewer", "/titles/tv/42")).status, 200);
+  assert.ok(requests.some(({ path }) => path === "/tv/42/videos"));
+  // A cold title fails. Its trailer and availability requests finish after
+  // the response, and the title they would be stored under never was.
+  const cold = await get("screen", { path: "/titles/movie/43" });
+  assert.equal(cold.status, 502);
+  while (active > 0 || providerRequests < 3) await sleep(5);
+  await sleep(50);
+  const requestId = (response: Response) =>
+    response.headers.get("Screenr-Request-Id");
+  assert.deepEqual(failureLines(), [
+    { event: rejected, requestId: requestId(searched), status: 401 },
+    { event: rejected, requestId: requestId(page), status: 401 },
+    { event: rejected, status: 401 },
+    { event: rejected, requestId: requestId(cold), status: 401 },
+  ]);
+});
+
+for (const [cache, table, read] of [
+  ["title", "title", () => getTitleReleases(["movie:42"])],
+  ["trailer", "title_trailer", () => getTitleTrailer("movie:42")],
+  [
+    "availability",
+    "title_availability",
+    () => getTitleAvailability("movie:42"),
+  ],
+] as const) {
+  test(`an unreadable ${cache} cache logs its database error`, async () => {
+    await db.query(`ALTER TABLE ${table} RENAME TO ${table}_hidden`);
+    try {
+      await read();
+    } finally {
+      await db.query(`ALTER TABLE ${table}_hidden RENAME TO ${table}`);
+    }
+    assert.deepEqual(failureLines(), [
+      {
+        event: "catalog cache failed",
+        cache,
+        error: "DatabaseError",
+        code: "42P01",
+      },
+    ]);
+    assert.deepEqual(requests, [], "No TMDB request was made");
   });
 }
 

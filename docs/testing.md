@@ -659,9 +659,11 @@ the same audience, reply, reaction, removal, notification, link, and usage
 rules, label validation and TMDB season lists, and migration 024 with the
 previous release's writes.
 `tests/app/failure-logs.test.ts` and `tests/app/email.test.ts` capture the
-[failure logs](deployment.md#failure-logs) of request, page, worker, and
-Resend failures. They compare the logged fields exactly, check that comment
-text, search terms, addresses, codes, cookies, keys, and error messages stay
+[failure logs](deployment.md#failure-logs) of request, page, route, Better
+Auth callback, worker, and Resend failures. `tests/app/catalog.test.ts`
+captures TMDB and catalog cache failures, once for each request, and
+`tests/app/authentication.test.ts` the Screenr-wide code cap's refusals.
+They compare the logged fields exactly, check that comment text, search terms, addresses, codes, cookies, keys, and error messages stay
 out, and confirm that permanent Resend rejections are not retried. A request
 failure names the generated request ID, and
 `tests/app/profile-photos.test.ts` checks that a failed Use my Google photo

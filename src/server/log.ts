@@ -3,13 +3,31 @@ import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { DatabaseError } from "pg";
 
-const request = new AsyncLocalStorage<string>();
+// The request a failure happens in, and the events logFailureOnce has logged
+// for it.
+const request = new AsyncLocalStorage<{ id?: string; logged: Set<string> }>();
 
 // Runs an API request. Failures logged while it runs name its request ID,
 // which the response also carries, so a client's error report and the
 // server's line can be matched: docs/data-and-access.md#client-headers
 export function withRequestId<T>(requestId: string, run: () => T) {
-  return request.run(requestId, run);
+  return request.run({ id: requestId, logged: new Set() }, run);
+}
+
+// Runs a request that has no ID, such as a server-rendered page, as one
+// request for logFailureOnce.
+export function withRequest<T>(run: () => T) {
+  return request.run({ logged: new Set() }, run);
+}
+
+// Logs a failure that one request can meet many times, such as each TMDB
+// lookup for a page during an outage, only the first time that request meets
+// the event. Outside a request, every failure logs.
+export function logFailureOnce(...failure: Parameters<typeof logFailure>) {
+  const logged = request.getStore()?.logged;
+  if (logged?.has(failure[0])) return;
+  logged?.add(failure[0]);
+  logFailure(...failure);
 }
 
 // Failures print one JSON line to standard error, which the journal keeps
@@ -26,7 +44,7 @@ export function logFailure(
 ) {
   const record = {
     event,
-    requestId: request.getStore(),
+    requestId: request.getStore()?.id,
     ...fields,
     ...(error === undefined ? {} : describe(error, true)),
   };

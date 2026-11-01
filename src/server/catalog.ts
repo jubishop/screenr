@@ -1,4 +1,5 @@
 import { AppError, db } from "./db";
+import { logFailureOnce } from "./log";
 import { watchSections } from "./watch-sources";
 import {
   parseRelease,
@@ -51,6 +52,15 @@ function catalogConfig() {
     throw new AppError("The movie catalog is not configured yet.", 503);
   return { base, token: process.env.TMDB_READ_TOKEN ?? "test" };
 }
+const catalogUnavailable = () =>
+  new AppError(
+    "The movie catalog is temporarily unavailable. Please try again.",
+    502,
+  );
+// Every failure but a 404 is logged here, once for each request, so callers
+// that recover from it log nothing more. TMDB rejects a revoked, expired, or
+// suspended TMDB_READ_TOKEN with 401 or 403, which every lookup would meet
+// until the token is replaced; other failures may pass.
 async function fetchCatalog(path: string, timeout = 8000) {
   const { base, token } = catalogConfig();
   try {
@@ -60,16 +70,29 @@ async function fetchCatalog(path: string, timeout = 8000) {
       cache: "no-store",
     });
     if (response.status === 404) throw new AppError("Title not found.", 404);
-    if (!response.ok) throw new Error("Catalog request failed");
+    if (!response.ok) {
+      logFailureOnce(
+        response.status === 401 || response.status === 403
+          ? "catalog token rejected"
+          : "catalog request failed",
+        { status: response.status },
+      );
+      throw catalogUnavailable();
+    }
     return await response.json();
   } catch (error) {
     if (error instanceof AppError) throw error;
-    throw new AppError(
-      "The movie catalog is temporarily unavailable. Please try again.",
-      502,
-    );
+    logFailureOnce("catalog request failed", {}, error);
+    throw catalogUnavailable();
   }
 }
+// Whether a title that cache rows reference was stored. A failure to store
+// it fails the request that asked for the title, which reports it.
+const stored = (titleStored: Promise<unknown>) =>
+  titleStored.then(
+    () => true,
+    () => false,
+  );
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
@@ -278,14 +301,16 @@ export async function getTitleReleases(
           const row = due[next++];
           try {
             results.set(row.id, status(await refreshTitle(row.id, row)));
-          } catch {
+          } catch (error) {
             // A failed write keeps the stored status already in `results`.
+            logFailureOnce("catalog cache failed", { cache: "title" }, error);
           }
         }
       }),
     );
-  } catch {
+  } catch (error) {
     // An unreadable title table leaves every release unavailable.
+    logFailureOnce("catalog cache failed", { cache: "title" }, error);
   }
   return ids.map(
     (id) =>
@@ -430,7 +455,7 @@ export async function getTitleTrailer(
     } catch {
       lifetime = 300;
     }
-    await titleStored;
+    if (!(await stored(titleStored))) return null;
     await db.query(
       `INSERT INTO title_trailer(title_id,trailer,expires_at)
        VALUES($1,$2,now()+$3*interval '1 second')
@@ -438,7 +463,8 @@ export async function getTitleTrailer(
       [id, trailer, lifetime],
     );
     return trailer;
-  } catch {
+  } catch (error) {
+    logFailureOnce("catalog cache failed", { cache: "trailer" }, error);
     return null;
   }
 }
@@ -538,7 +564,7 @@ async function refreshAvailability(
         id,
       );
     } catch {
-      await titleStored;
+      if (!(await stored(titleStored))) return availabilityResult(cached);
       const failed = (
         await db.query<CachedAvailability>(
           `INSERT INTO title_availability(title_id,country,refresh_after)
@@ -551,7 +577,7 @@ async function refreshAvailability(
       ).rows[0];
       return availabilityResult(failed);
     }
-    await titleStored;
+    if (!(await stored(titleStored))) return availabilityResult(cached);
     const saved = (
       await db.query<CachedAvailability>(
         `INSERT INTO title_availability(title_id,country,availability,fetched_at,refresh_after)
@@ -563,7 +589,8 @@ async function refreshAvailability(
       )
     ).rows[0];
     return availabilityResult(saved);
-  } catch {
+  } catch (error) {
+    logFailureOnce("catalog cache failed", { cache: "availability" }, error);
     return availabilityResult(cached);
   }
 }
@@ -602,8 +629,9 @@ export async function getTitleAvailabilities(
         }
       }),
     );
-  } catch {
+  } catch (error) {
     // An unreadable cache leaves every title unknown without provider calls.
+    logFailureOnce("catalog cache failed", { cache: "availability" }, error);
   }
   return ids.map((id) => results.get(id) ?? availabilityResult());
 }

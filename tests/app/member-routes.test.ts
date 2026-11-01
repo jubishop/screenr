@@ -106,6 +106,8 @@ test("member routes reject unknown paths and extra segments", () => {
     "/people/alice/Want-to-watch",
     "/conversations",
     "/%E0%A4%A",
+    // Not a URL at all: a protocol-relative path with an invalid host.
+    "//[",
   ])
     assert.equal(parseMemberRoute(path).kind, "not-found", path);
 });

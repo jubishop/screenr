@@ -4,6 +4,7 @@ import {
   APIError,
   createAuthEndpoint,
   createAuthMiddleware,
+  isAPIError,
 } from "better-auth/api";
 import { bearer, emailOTP } from "better-auth/plugins";
 import { codeLimitMessage } from "../shared";
@@ -16,6 +17,7 @@ import {
 import { db, transaction } from "./db";
 import { activeInvitation, invitationHash } from "./invitations";
 import { queueCode } from "./email";
+import { logFailure } from "./log";
 import { copyGooglePhoto } from "./photos";
 
 // Every invitation token is 32 random bytes in base64url.
@@ -72,6 +74,13 @@ const codeRecipient = (email: string) =>
     .update(`login-code:${email.toLowerCase()}`)
     .digest("hex");
 
+// Reaching the Screenr-wide cap blocks email-code sign-in for everyone until
+// the day's oldest sends age out, so each request it refuses is logged.
+function codeEmailCapped() {
+  logFailure("code email cap reached", {});
+  return false;
+}
+
 // Count every request for an address, sent or not, so a limited response
 // never reveals whether the address belongs to a member.
 async function acceptCodeRequest(email: string) {
@@ -87,10 +96,10 @@ async function acceptCodeRequest(email: string) {
     );
     if (
       rows[0].recent >= codeLimits.recipient15Minutes ||
-      rows[0].today >= codeLimits.recipientDay ||
-      rows[0].sent >= codeLimits.screenrDay
+      rows[0].today >= codeLimits.recipientDay
     )
       return false;
+    if (rows[0].sent >= codeLimits.screenrDay) return codeEmailCapped();
     await client.query(
       "DELETE FROM login_code_request WHERE created_at<=now()-interval '1 day'",
     );
@@ -110,7 +119,7 @@ async function reserveCodeEmail(email: string) {
     const { rows } = await client.query(
       "SELECT count(*) AS sent FROM login_code_request WHERE sent AND created_at>now()-interval '1 day'",
     );
-    if (rows[0].sent >= codeLimits.screenrDay) return false;
+    if (rows[0].sent >= codeLimits.screenrDay) return codeEmailCapped();
     const marked = await client.query(
       `UPDATE login_code_request SET sent=true WHERE id=(SELECT id
         FROM login_code_request WHERE recipient_hash=$1 AND NOT sent
@@ -124,6 +133,21 @@ async function reserveCodeEmail(email: string) {
       );
     return true;
   }, codeLock);
+}
+
+// Better Auth catches what Screenr's callbacks throw and prints only its own
+// unstructured line: a code request whose email fails still answers success,
+// and a failed sign-in step answers a generic error. Each callback runs
+// through this, which logs an unexpected failure and rethrows it. An APIError
+// is a deliberate answer, such as a missing invitation.
+async function logCallbackFailure<T>(callback: string, run: () => Promise<T>) {
+  try {
+    return await run();
+  } catch (error) {
+    if (!isAPIError(error))
+      logFailure("auth callback failed", { callback }, error);
+    throw error;
+  }
 }
 
 // The bearer plugin returns the session token in `set-auth-token` whenever a
@@ -162,15 +186,16 @@ const invitationCheck = {
     invitationAvailability: createAuthEndpoint(
       "/invitation",
       { method: "GET" },
-      async (ctx) => {
-        const token = ctx.query?.token;
-        const available =
-          typeof token === "string" &&
-          invitationFormat.test(token) &&
-          Boolean(await activeInvitation(invitationHash(token)));
-        ctx.setHeader("Cache-Control", "private, no-store");
-        return ctx.json({ available });
-      },
+      (ctx) =>
+        logCallbackFailure("invitation", async () => {
+          const token = ctx.query?.token;
+          const available =
+            typeof token === "string" &&
+            invitationFormat.test(token) &&
+            Boolean(await activeInvitation(invitationHash(token)));
+          ctx.setHeader("Cache-Control", "private, no-store");
+          return ctx.json({ available });
+        }),
     ),
   },
 } satisfies BetterAuthPlugin;
@@ -288,28 +313,30 @@ export function createAuth(
       },
     },
     hooks: {
-      before: createAuthMiddleware(async (ctx) => {
-        // The web has no Sign in with Apple; its redirect sign-in would
-        // otherwise fail for want of a client secret.
-        if (
-          (ctx.path === "/sign-in/social" || ctx.path === "/link-social") &&
-          ctx.body?.provider === "apple" &&
-          !ctx.body?.idToken
-        )
-          throw new APIError("NOT_FOUND", { message: appleOnlyInApp });
-        // Runs before Better Auth replaces the address's current code, so a
-        // limited request leaves an already delivered code usable.
-        const email = ctx.body?.email;
-        if (
-          limited &&
-          ctx.path === "/email-otp/send-verification-otp" &&
-          typeof email === "string" &&
-          !(await acceptCodeRequest(email))
-        )
-          throw new APIError("TOO_MANY_REQUESTS", {
-            message: codeLimitMessage,
-          });
-      }),
+      before: createAuthMiddleware((ctx) =>
+        logCallbackFailure("hooks.before", async () => {
+          // The web has no Sign in with Apple; its redirect sign-in would
+          // otherwise fail for want of a client secret.
+          if (
+            (ctx.path === "/sign-in/social" || ctx.path === "/link-social") &&
+            ctx.body?.provider === "apple" &&
+            !ctx.body?.idToken
+          )
+            throw new APIError("NOT_FOUND", { message: appleOnlyInApp });
+          // Runs before Better Auth replaces the address's current code, so a
+          // limited request leaves an already delivered code usable.
+          const email = ctx.body?.email;
+          if (
+            limited &&
+            ctx.path === "/email-otp/send-verification-otp" &&
+            typeof email === "string" &&
+            !(await acceptCodeRequest(email))
+          )
+            throw new APIError("TOO_MANY_REQUESTS", {
+              message: codeLimitMessage,
+            });
+        }),
+      ),
     },
     plugins: [
       // Native clients: docs/data-and-access.md#native-client-sessions. Like
@@ -331,63 +358,67 @@ export function createAuth(
           type === "sign-in" && email.toLowerCase() === reviewerEmail
             ? reviewCode
             : undefined,
-        sendVerificationOTP: async (data, context) => {
-          // Password reset codes would be unusable.
-          if (data.type === "forget-password") return;
-          if (seededDemoAddress(data.email)) return;
-          const token = invitationToken(
-            context?.headers ?? context?.request?.headers,
-          );
-          const existing = await db.query(
-            'SELECT 1 FROM "user" WHERE email=$1',
-            [data.email],
-          );
-          // Preserve the same response for unknown addresses without spending
-          // the shared email allowance on uninvited signups.
-          if (
-            !existing.rowCount &&
-            (!token || !(await activeInvitation(invitationHash(token))))
-          )
-            return;
-          // Better Auth ignores this callback's errors, so a request that
-          // loses a race for the last daily slot returns success unsent.
-          if (limited && !(await reserveCodeEmail(data.email))) return;
-          await (options.sendCode ?? queueCode)(data);
-        },
+        sendVerificationOTP: (data, context) =>
+          logCallbackFailure("sendVerificationOTP", async () => {
+            // Password reset codes would be unusable.
+            if (data.type === "forget-password") return;
+            if (seededDemoAddress(data.email)) return;
+            const token = invitationToken(
+              context?.headers ?? context?.request?.headers,
+            );
+            const existing = await db.query(
+              'SELECT 1 FROM "user" WHERE email=$1',
+              [data.email],
+            );
+            // Preserve the same response for unknown addresses without
+            // spending the shared email allowance on uninvited signups.
+            if (
+              !existing.rowCount &&
+              (!token || !(await activeInvitation(invitationHash(token))))
+            )
+              return;
+            // Better Auth ignores this callback's errors, so a request that
+            // loses a race for the last daily slot returns success unsent.
+            if (limited && !(await reserveCodeEmail(data.email))) return;
+            await (options.sendCode ?? queueCode)(data);
+          }),
       }),
     ],
     databaseHooks: {
       user: {
         create: {
-          before: async (user, context) => {
-            const token = invitationToken(
-              context?.headers ?? context?.request?.headers,
-            );
-            const hash = token ? invitationHash(token) : "";
-            if (!hash || !(await activeInvitation(hash)))
-              throw new APIError("FORBIDDEN", {
-                message: "A valid invitation is required to join Screenr.",
-              });
-            return { data: { ...user, invitationHash: hash } };
-          },
+          before: (user, context) =>
+            logCallbackFailure("user.create.before", async () => {
+              const token = invitationToken(
+                context?.headers ?? context?.request?.headers,
+              );
+              const hash = token ? invitationHash(token) : "";
+              if (!hash || !(await activeInvitation(hash)))
+                throw new APIError("FORBIDDEN", {
+                  message: "A valid invitation is required to join Screenr.",
+                });
+              return { data: { ...user, invitationHash: hash } };
+            }),
         },
       },
       account: {
         update: {
           // Each later Apple sign-in, or a link to an already linked Apple
           // ID, stores the newest refresh token.
-          before: async (account, context) => {
-            if (account.providerId === "apple" && account.idToken)
-              return withAppleRefreshToken(account, context);
-          },
+          before: (account, context) =>
+            logCallbackFailure("account.update.before", async () => {
+              if (account.providerId === "apple" && account.idToken)
+                return withAppleRefreshToken(account, context);
+            }),
         },
         create: {
           // An Apple account row is created only with its refresh token. A
           // failed exchange rolls back a new user, or fails a link.
-          before: async (account, context) => {
-            if (account.providerId === "apple")
-              return withAppleRefreshToken(account, context);
-          },
+          before: (account, context) =>
+            logCallbackFailure("account.create.before", async () => {
+              if (account.providerId === "apple")
+                return withAppleRefreshToken(account, context);
+            }),
           // A Google signup or link copies the Google picture once, unless
           // the person already has a photo or removed one. Better Auth runs
           // this after its transaction commits; failures keep the initial.
