@@ -158,6 +158,54 @@ final class TitleTests: XCTestCase {
     wait(for: [log.wrote("remove-review", #"{"title":"movie:102"}"#)], timeout: 10)
   }
 
+  // A failed read beneath the review form, as during a deploy, leaves the
+  // form open with the typed draft, which saves once reads succeed again.
+  @MainActor
+  func testKeepsTheReviewFormAndDraftThroughAFailedRead() throws {
+    let log = RequestLog.temporary()
+    let outage = FixtureOutage()
+    let app = XCUIApplication()
+    app.launch(
+      with: FixtureLaunch(
+        link: "screenr-dev://titles/movie/101",
+        requestLog: log.file,
+        outage: outage
+      )
+    )
+    XCTAssertTrue(app.buttons["watch-status"].waitForExistence(timeout: 10))
+    app.buttons["Rate or review"].tap()
+    let form = app.navigationBars["Rate or review"]
+    let field = app.textFields["review-text"]
+    XCTAssertTrue(field.waitForExistence(timeout: 5))
+    field.tap()
+    field.typeText("Tense and gorgeous.")
+
+    // The first failed read has replaced the page beneath with the error by
+    // the time the app polls again.
+    outage.begin()
+    let reads = try log.screenPaths().count
+    wait(for: [log.screenReads(atLeast: reads + 2)], timeout: 15)
+    let failure = app.staticTexts["Screenr didn't load"]
+    XCTAssertTrue(failure.exists)
+    XCTAssertTrue(form.exists)
+    XCTAssertEqual(field.value as? String, "Tense and gorgeous.")
+
+    outage.end()
+    XCTAssertTrue(failure.waitForNonExistence(timeout: 10))
+    XCTAssertTrue(form.exists)
+    XCTAssertEqual(field.value as? String, "Tense and gorgeous.")
+    app.buttons["Save review"].tap()
+    wait(
+      for: [
+        log.wrote(
+          "review",
+          #"{"body":"Tense and gorgeous.","rating":null,"spoiler":false,"title":"movie:101"}"#
+        )
+      ],
+      timeout: 10
+    )
+  }
+
   // Nothing loads from YouTube until Play trailer, which opens the player and
   // asks for the embed.
   @MainActor
