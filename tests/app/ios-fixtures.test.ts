@@ -337,7 +337,7 @@ const screens: Record<MemberRoute["kind"], Record<string, Case>> = {
     "in-theaters": screen(
       "alice",
       "/titles/movie/103",
-      "A movie back in US theaters, with its first digital release ahead.",
+      "A movie back in US theaters, with its first digital release ahead and a TMDB user score of 73%.",
     ),
     "finished-review": screen(
       "alice",

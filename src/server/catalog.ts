@@ -6,12 +6,14 @@ import {
   titleRelease,
   type StoredRelease,
 } from "./title-release";
+import { parseScore, tmdbScore, type StoredScore } from "./title-score";
 import {
   watchCategories,
   type Episode,
   type Season,
   type Title,
   type TitleRelease,
+  type TmdbScore,
   type Trailer,
   type WatchAvailability,
 } from "../shared";
@@ -106,7 +108,10 @@ function parseTitle(
         : "",
   };
 }
-export async function searchTitles(query: string): Promise<Title[]> {
+// Search results, with the votes for each result's TMDB user score.
+export async function searchTitles(
+  query: string,
+): Promise<(Title & StoredScore)[]> {
   if (query.trim().length < 2) return [];
   if (query.length > 120) throw new AppError("Use a shorter search.");
   const data = await fetchCatalog(
@@ -119,20 +124,32 @@ export async function searchTitles(query: string): Promise<Title[]> {
       (r): r is Record<string, unknown> =>
         isRecord(r) && (r.media_type === "movie" || r.media_type === "tv"),
     )
-    .map((r) => parseTitle(r, r.media_type as "movie" | "tv"));
+    .map((r) => ({
+      ...parseTitle(r, r.media_type as "movie" | "tv"),
+      ...parseScore(r),
+    }));
 }
-type TitleRow = Title & { release: StoredRelease | null };
+type TitleRow = Title & StoredScore & { release: StoredRelease | null };
 const titleColumns =
-  "id,kind,tmdb_id,name,overview,poster_path,release_date,release";
+  "id,kind,tmdb_id,name,overview,poster_path,release_date,release,vote_average,vote_count";
 const currentTitle =
   "(fetched_at>now()-interval '1 day' OR retry_after>now()) IS TRUE AS current";
-function presentTitle({ release, ...title }: TitleRow & { current?: boolean }) {
+function presentTitle({
+  release,
+  vote_average,
+  vote_count,
+  ...title
+}: TitleRow & { current?: boolean }) {
   delete title.current;
-  return { title: title as Title, release: titleRelease(title.kind, release) };
+  return {
+    title: title as Title,
+    release: titleRelease(title.kind, release),
+    tmdb_score: tmdbScore({ vote_average, vote_count }),
+  };
 }
 
 // Fetches a title's details, with a movie's release dates in the same
-// request, and stores them. When TMDB fails, times out, returns invalid
+// request, and stores them with the votes for its TMDB user score. When TMDB fails, times out, returns invalid
 // details, or no longer has the title, the stored row is served and the
 // refresh waits five minutes; only a title that was never stored throws.
 // Details without usable release dates are stored, but count as a failed
@@ -141,6 +158,7 @@ async function refreshTitle(id: string, stored?: TitleRow): Promise<TitleRow> {
   const [kind, tmdbId] = id.split(":") as ["movie" | "tv", string];
   let title: Title;
   let release: StoredRelease | null;
+  let score: StoredScore;
   try {
     const raw = await fetchCatalog(
       `/${kind}/${tmdbId}${kind === "movie" ? "?append_to_response=release_dates" : ""}`,
@@ -148,6 +166,7 @@ async function refreshTitle(id: string, stored?: TitleRow): Promise<TitleRow> {
     );
     title = parseTitle(raw, kind, Number(tmdbId));
     release = parseRelease(raw as Record<string, unknown>, kind);
+    score = parseScore(raw as Record<string, unknown>);
   } catch (error) {
     if (!stored) throw error;
     await db.query(
@@ -158,12 +177,13 @@ async function refreshTitle(id: string, stored?: TitleRow): Promise<TitleRow> {
   }
   const save = () =>
     db.query<{ release: StoredRelease | null }>(
-      `INSERT INTO title(id,kind,tmdb_id,name,overview,poster_path,release_date,release,fetched_at,retry_after)
-    VALUES($1,$2,$3,$4,$5,$6,$7,$8::jsonb,
+      `INSERT INTO title(id,kind,tmdb_id,name,overview,poster_path,release_date,release,vote_average,vote_count,fetched_at,retry_after)
+    VALUES($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9,$10,
       CASE WHEN $8::jsonb IS NULL THEN 'epoch'::timestamptz ELSE now() END,
       CASE WHEN $8::jsonb IS NULL THEN now()+interval '5 minutes' END)
     ON CONFLICT(id) DO UPDATE SET name=excluded.name,overview=excluded.overview,poster_path=excluded.poster_path,
     release_date=excluded.release_date,release=coalesce(excluded.release,title.release),
+    vote_average=excluded.vote_average,vote_count=excluded.vote_count,
     fetched_at=CASE WHEN excluded.release IS NULL THEN title.fetched_at ELSE now() END,
     retry_after=excluded.retry_after
     RETURNING release`,
@@ -176,6 +196,8 @@ async function refreshTitle(id: string, stored?: TitleRow): Promise<TitleRow> {
         title.poster_path,
         title.release_date,
         release && JSON.stringify(release),
+        score.vote_average,
+        score.vote_count,
       ],
     );
   let saved;
@@ -188,14 +210,18 @@ async function refreshTitle(id: string, stored?: TitleRow): Promise<TitleRow> {
     if ((error as { code?: string }).code !== "23505") throw error;
     saved = await save();
   }
-  return { ...title, release: saved.rows[0].release };
+  return { ...title, ...score, release: saved.rows[0].release };
 }
+
+// What a title page and each listed title show beside the title's details:
+// its US release status and its TMDB user score, a whole percentage or null.
+export type TitleStatus = { release: TitleRelease; tmdb_score: TmdbScore };
 
 // Stored details refresh after a day. Only a title that was never stored
 // depends on the catalog response.
 export async function getTitleWithRelease(
   id: string,
-): Promise<{ title: Title; release: TitleRelease }> {
+): Promise<{ title: Title } & TitleStatus> {
   if (!/^(movie|tv):[1-9][0-9]*$/.test(id))
     throw new AppError("Title not found.", 404);
   const stored = (
@@ -212,21 +238,26 @@ export async function getTitle(id: string): Promise<Title> {
   return (await getTitleWithRelease(id)).title;
 }
 
-// Release status for a title list, in the order of `ids`. Reads every stored
-// title in one query, then refreshes only missing or expired details, at
-// most four at a time, as for availability. No request starts at or after
-// `refreshBefore`; those titles keep their stored dates, or an unavailable
-// status when they have none. A title that is not stored is unavailable.
+// Release status and TMDB user score for a title list, in the order of
+// `ids`. Reads every stored title in one query, then refreshes only missing
+// or expired details, at most four at a time, as for availability. No
+// request starts at or after `refreshBefore`; those titles keep their stored
+// dates and score, or an unavailable status when they have no dates. A title
+// that is not stored is unavailable and has no score.
 export async function getTitleReleases(
   ids: string[],
   refreshBefore = Infinity,
-): Promise<TitleRelease[]> {
-  const results = new Map<string, TitleRelease>();
+): Promise<TitleStatus[]> {
+  const results = new Map<string, TitleStatus>();
   const valid = [...new Set(ids)].filter((id) =>
     /^(movie|tv):[1-9][0-9]*$/.test(id),
   );
   // One date for the whole list, even across midnight.
   const today = releaseCalendar.today();
+  const status = (row: TitleRow): TitleStatus => ({
+    release: titleRelease(row.kind, row.release, today),
+    tmdb_score: tmdbScore(row),
+  });
   try {
     const { rows } = valid.length
       ? await db.query<TitleRow & { current: boolean }>(
@@ -236,7 +267,7 @@ export async function getTitleReleases(
       : { rows: [] };
     const due: TitleRow[] = [];
     for (const row of rows) {
-      results.set(row.id, titleRelease(row.kind, row.release, today));
+      results.set(row.id, status(row));
       if (!row.current) due.push(row);
     }
     let next = 0;
@@ -245,10 +276,9 @@ export async function getTitleReleases(
         while (next < due.length && Date.now() < refreshBefore) {
           const row = due[next++];
           try {
-            const { release } = await refreshTitle(row.id, row);
-            results.set(row.id, titleRelease(row.kind, release, today));
+            results.set(row.id, status(await refreshTitle(row.id, row)));
           } catch {
-            // A failed write keeps the stored dates already in `results`.
+            // A failed write keeps the stored status already in `results`.
           }
         }
       }),
@@ -256,7 +286,13 @@ export async function getTitleReleases(
   } catch {
     // An unreadable title table leaves every release unavailable.
   }
-  return ids.map((id) => results.get(id) ?? titleRelease("movie", null));
+  return ids.map(
+    (id) =>
+      results.get(id) ?? {
+        release: titleRelease("movie", null),
+        tmdb_score: null,
+      },
+  );
 }
 
 // The movie or show TMDB lists under an IMDb ID, such as `tt0111161`, as a

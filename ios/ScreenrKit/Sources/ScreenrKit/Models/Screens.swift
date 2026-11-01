@@ -125,6 +125,7 @@ public struct TitleScreen: Codable, Hashable, Sendable {
   public let trailer: Trailer?
   public let availability: WatchAvailability
   public let release: TitleRelease?
+  public let tmdbScore: TMDBScore?
   public let watch: TitleWatch
   // The viewer's own top 10.
   public let topTen: [TopTenEntry]

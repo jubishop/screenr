@@ -87,7 +87,7 @@ private struct SuggestionRow: View {
       VStack(alignment: .leading, spacing: 4) {
         Text(suggestion.title.name)
           .font(.headline)
-        ReleaseStatusLine(release: suggestion.release)
+        TitleStatusLine(release: suggestion.release, score: suggestion.tmdbScore)
         ViewingLinesView(viewing: suggestion.viewing, serviceIds: serviceIds)
         ForEach(suggestion.reasons, id: \.self) { reason in
           Text(reason)

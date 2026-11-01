@@ -11,7 +11,7 @@
   },
   "response": {
     "status": 200,
-    "etag": "W/\"CxVdYHHUlGnQRA3CsF1geSL9Q6_2lVoG6L_uqWrIZ_Y\"",
+    "etag": "W/\"cm5hNEPJCcRpQww8ATV_ddBdHAuYHDUdEf2U8aIoWfk\"",
     "body": {
       "kind": "want-to-watch",
       "owner": {
@@ -41,6 +41,7 @@
             "in_theaters": false,
             "upcoming": []
           },
+          "tmdb_score": null,
           "access": "unknown",
           "matchingServiceIds": []
         },
@@ -81,6 +82,7 @@
               }
             ]
           },
+          "tmdb_score": 73,
           "access": "available",
           "matchingServiceIds": [
             "service:hulu"
@@ -117,6 +119,7 @@
             "in_theaters": false,
             "upcoming": []
           },
+          "tmdb_score": null,
           "access": "available",
           "matchingServiceIds": [
             "service:netflix"

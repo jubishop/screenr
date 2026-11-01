@@ -4,21 +4,24 @@ import type { StoredRelease } from "../../src/server/title-release";
 
 const { titleRelease } = await import("../../src/server/title-release");
 
-// Stores a title with current details and US release data, so pages read it
-// without the catalog. A null release leaves the status unavailable. Specs
-// share one database when they run in one process, so this replaces any row
+// Stores a title with current details, US release data, and TMDB votes, so
+// pages read it without the catalog. A null release leaves the status
+// unavailable, and no votes leave it without a TMDB user score. Specs share
+// one database when they run in one process, so this replaces any row
 // another spec stored under the same ID rather than keeping it.
 export async function storeTitle(
   id: string,
   name: string,
   release: StoredRelease | null,
+  votes?: { average: number; count: number },
 ) {
   const [kind, tmdbId] = id.split(":");
   await db.query(
-    `INSERT INTO title(id,kind,tmdb_id,name,overview,release_date,release)
-    VALUES($1,$2,$3,$4,$5,$6,$7)
+    `INSERT INTO title(id,kind,tmdb_id,name,overview,release_date,release,vote_average,vote_count)
+    VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)
     ON CONFLICT(id) DO UPDATE SET name=excluded.name,overview=excluded.overview,
       release_date=excluded.release_date,release=excluded.release,
+      vote_average=excluded.vote_average,vote_count=excluded.vote_count,
       fetched_at=now(),retry_after=NULL`,
     [
       id,
@@ -28,6 +31,8 @@ export async function storeTitle(
       "A fictional title for release status checks.",
       fromToday(-200),
       release && JSON.stringify(release),
+      votes?.average ?? null,
+      votes?.count ?? null,
     ],
   );
   // The label the server derives today, such as "In theaters · Digital Dec 9".

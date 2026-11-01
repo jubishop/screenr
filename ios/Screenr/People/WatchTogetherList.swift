@@ -44,6 +44,7 @@ struct WatchTogetherList: View {
                 title: title.title,
                 viewing: title.viewing,
                 release: title.release,
+                score: title.tmdbScore,
                 serviceIds: title.matchingServiceIds,
                 savedBy: .eitherPerson
               )

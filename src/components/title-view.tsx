@@ -234,6 +234,7 @@ export function TitleView({
           <TitleAvailability
             availability={data.availability}
             release={data.release}
+            score={data.tmdb_score}
             kind={data.title.kind}
           />
           {data.trailer && (

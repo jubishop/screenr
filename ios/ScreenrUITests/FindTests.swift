@@ -29,7 +29,8 @@ final class FindTests: XCTestCase {
           "Cam Rivera recommends this., Ben Ortiz wants to watch this."
         )
     )
-    XCTAssertTrue(row(app, "Signal Fire").label.contains("Season 2 premieres Nov 4"))
+    XCTAssertTrue(row(app, "Signal Fire").label.contains("Season 2 premieres Nov 4, TMDB, 81%"))
+    XCTAssertFalse(row(app, "Winter Garden").label.contains("TMDB"))
     try audit(app)
 
     // Typing searches once it pauses, and the results replace the lists.
@@ -39,6 +40,9 @@ final class FindTests: XCTestCase {
     wait(for: [log.sent("GET /api/screenr/search?q=night")], timeout: 10)
     XCTAssertTrue(row(app, "Night Crossing").label.contains("On Netflix (saved)"))
     XCTAssertTrue(row(app, "Night Harbor").label.contains("TV show · 2018"))
+    XCTAssertTrue(row(app, "Night Harbor").label.contains("TMDB, 66%"))
+    // Too few TMDB members rated it for a score.
+    XCTAssertFalse(row(app, "Night Crossing").label.contains("TMDB"))
     XCTAssertFalse(app.buttons["Friends recommend"].exists)
     try audit(app)
 

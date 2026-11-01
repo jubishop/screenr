@@ -11,7 +11,7 @@
   },
   "response": {
     "status": 200,
-    "etag": "W/\"__miCJ-SW1PP9Ds3d3F5Ot-P9YxmJ-EQ1NATeUs2R3g\"",
+    "etag": "W/\"P2l5qkdv1Iw971qbBgH-aVLR9MvH2eqQbofMBf1jPlA\"",
     "body": {
       "kind": "search",
       "suggestions": [
@@ -62,7 +62,8 @@
             "status": "ok",
             "in_theaters": false,
             "upcoming": []
-          }
+          },
+          "tmdb_score": null
         },
         {
           "id": "tv:204",
@@ -111,7 +112,8 @@
                 "label": "Season 2 premieres Nov 4"
               }
             ]
-          }
+          },
+          "tmdb_score": 81
         }
       ],
       "recommendations": [
@@ -154,7 +156,8 @@
             "status": "ok",
             "in_theaters": false,
             "upcoming": []
-          }
+          },
+          "tmdb_score": null
         },
         {
           "id": "tv:201",
@@ -201,7 +204,8 @@
             "status": "ok",
             "in_theaters": false,
             "upcoming": []
-          }
+          },
+          "tmdb_score": null
         },
         {
           "id": "movie:105",
@@ -242,7 +246,8 @@
             "status": "ok",
             "in_theaters": false,
             "upcoming": []
-          }
+          },
+          "tmdb_score": null
         }
       ],
       "serviceIds": [

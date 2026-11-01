@@ -499,6 +499,8 @@ test("search keeps valid movie and TV results and drops other media", async () =
         overview: "Plot",
         poster_path: "/movie.jpg",
         release_date: "2024-01-02",
+        vote_average: 6.4,
+        vote_count: 120,
       },
       { media_type: "collection", id: 8, name: "A Collection" },
       { id: 9, title: "No media type" },
@@ -522,6 +524,8 @@ test("search keeps valid movie and TV results and drops other media", async () =
       overview: "Plot",
       poster_path: "/movie.jpg",
       release_date: "2024-01-02",
+      vote_average: 6.4,
+      vote_count: 120,
     },
     {
       id: "tv:44",
@@ -531,6 +535,8 @@ test("search keeps valid movie and TV results and drops other media", async () =
       overview: "",
       poster_path: null,
       release_date: "2023-03-04",
+      vote_average: null,
+      vote_count: null,
     },
   ]);
 });

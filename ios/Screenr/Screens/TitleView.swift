@@ -65,6 +65,7 @@ private struct TitleScreen: View {
             AvailabilitySection(
               availability: title.availability,
               release: title.release,
+              score: title.tmdbScore,
               kind: title.title.kind
             )
             if let video = title.trailer {

@@ -41,6 +41,7 @@ struct FriendsRecommendView: View {
               title: title.title,
               viewing: title.viewing,
               release: title.release,
+              score: title.tmdbScore,
               serviceIds: page.serviceIds
             ) {
               Text(title.recommendedByText)

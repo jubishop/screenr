@@ -2,8 +2,8 @@ import ScreenrKit
 import SwiftUI
 
 // One title in a list, such as search results, Friends recommend, or Watch
-// together: its poster, name, kind and year, release status, and where it
-// streams. As on the web at phone widths, the overview waits for the title
+// together: its poster, name, kind and year, release status and TMDB user
+// score, and where it streams. As on the web at phone widths, the overview waits for the title
 // page. At accessibility sizes the text moves beneath the poster, which would
 // otherwise leave it a few letters per line. Put it in a
 // `NavigationLink(value: Destination.title(id:))` to open the title.
@@ -11,6 +11,7 @@ struct TitleRow<Extra: View>: View {
   let title: Title
   let viewing: TitleViewing
   let release: TitleRelease?
+  let score: TMDBScore?
   let serviceIds: [String]
   // Whose saved services `serviceIds` are.
   var savedBy = SavedServicesOwner.viewer
@@ -31,7 +32,7 @@ struct TitleRow<Extra: View>: View {
         Text(title.kindAndYear)
           .font(.subheadline)
           .foregroundStyle(.muted)
-        ReleaseStatusLine(release: release)
+        TitleStatusLine(release: release, score: score)
         ViewingLinesView(viewing: viewing, serviceIds: serviceIds, savedBy: savedBy)
         extra()
       }
@@ -45,6 +46,7 @@ extension TitleRow where Extra == EmptyView {
     title: Title,
     viewing: TitleViewing,
     release: TitleRelease?,
+    score: TMDBScore?,
     serviceIds: [String],
     savedBy: SavedServicesOwner = .viewer
   ) {
@@ -52,6 +54,7 @@ extension TitleRow where Extra == EmptyView {
       title: title,
       viewing: viewing,
       release: release,
+      score: score,
       serviceIds: serviceIds,
       savedBy: savedBy
     ) {

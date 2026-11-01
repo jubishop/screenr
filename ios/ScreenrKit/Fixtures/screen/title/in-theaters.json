@@ -1,5 +1,5 @@
 {
-  "description": "A movie back in US theaters, with its first digital release ahead.",
+  "description": "A movie back in US theaters, with its first digital release ahead and a TMDB user score of 73%.",
   "viewer": "alice",
   "request": {
     "method": "GET",
@@ -11,7 +11,7 @@
   },
   "response": {
     "status": 200,
-    "etag": "W/\"r9IjQ9N42d0_uN0EMPGxy5qeCslrXPIst65KT4RqT6g\"",
+    "etag": "W/\"I69y4w4ANk1wiI9YB3mKd7xLJcGRad6SzNEOCeflVoM\"",
     "body": {
       "kind": "title",
       "title": {
@@ -64,6 +64,7 @@
           }
         ]
       },
+      "tmdb_score": 73,
       "watch": {
         "status": "want_to_watch",
         "finished_on": null

@@ -11,7 +11,7 @@
   },
   "response": {
     "status": 200,
-    "etag": "W/\"fEOhH9tZINDRsLjvt3KcPhxg7mAAqCmxsc190cXCV7A\"",
+    "etag": "W/\"B9RcwBjPF3e-tMmTlR6HaHQSHGnUCC8mkZ7tWkz0VAM\"",
     "body": {
       "kind": "title",
       "title": {
@@ -72,6 +72,7 @@
         "in_theaters": false,
         "upcoming": []
       },
+      "tmdb_score": null,
       "watch": {
         "status": null,
         "finished_on": null

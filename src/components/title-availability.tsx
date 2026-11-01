@@ -1,17 +1,20 @@
 import Image from "next/image";
-import type { TitleRelease, WatchAvailability } from "../shared";
+import type { TitleRelease, TmdbScore, WatchAvailability } from "../shared";
 import { dateLabel, useInteractive } from "./client";
-import { ReleaseStatus } from "./title-release";
+import { TitleStatus } from "./title-status";
 
-// Where to watch: the title's US release status, then its Subs and Free
-// options. A digital release date stays in the status, never in a section.
+// Where to watch: the title's US release status and TMDB user score, then
+// its Subs and Free options. A digital release date stays in the status,
+// never in a section.
 export function TitleAvailability({
   availability,
   release,
+  score,
   kind,
 }: {
   availability: WatchAvailability;
   release?: TitleRelease;
+  score?: TmdbScore;
   kind: "movie" | "tv";
 }) {
   const interactive = useInteractive();
@@ -25,7 +28,7 @@ export function TitleAvailability({
         <h2 id="availability-heading">Where to watch</h2>
         <span className="muted">United States</span>
       </div>
-      <ReleaseStatus release={release} />
+      <TitleStatus release={release} score={score} />
       {availability.status === "unavailable" ? (
         <p className="muted">
           Viewing options could not be loaded. Please check again later.
