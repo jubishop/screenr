@@ -98,9 +98,10 @@ CI and deploys.
 
 Follow the [check schedule](foundation/engineering-policy.md#checks).
 `bin/check-application`, which `bin/check --full` runs after the foundation
-checks, verifies the Node runtime, lints the POSIX shell scripts in `ops/`,
-runs the Python tests, and then runs formatting, typechecking, application
-and PostgreSQL tests, and browser tests against the production build.
+checks, verifies the Node runtime and the installed packages, lints the POSIX
+shell scripts in `ops/`, runs the Python tests, and then runs formatting,
+typechecking, application and PostgreSQL tests, and browser tests against the
+production build.
 `tests/test_check_application.py` covers its order and failure handling.
 On a Mac with Xcode, it then runs `bin/check-ios --reuse` when the
 [iOS files](#ios-checks-before-a-push) differ from where the branch left
@@ -108,6 +109,19 @@ On a Mac with Xcode, it then runs `bin/check-ios --reuse` when the
 the iOS checks. The
 [iPhone app guide](../ios/README.md#checks) describes `bin/check-ios`, and
 `tests/test_check_ios.py` covers it with simulated Xcode tools.
+
+Before any check, and in every CI part, `bin/check-application` compares
+`node_modules/.package-lock.json`, which npm writes after each install, with
+`package-lock.json`. When a package's version or source differs, a locked
+package is not installed, an unlocked one is, or nothing is installed, it
+lists the differences and stops, naming `npm ci`. A checkout that pulls a
+lockfile change keeps its old packages until someone reinstalls them, and
+checks would then test packages that CI and production don't use
+([#334](https://github.com/jubishop/screenr/issues/334)). It stops instead of
+running `npm ci` itself, because reinstalling would replace `node_modules`
+under a development server or other command running in the same checkout.
+Optional packages that npm skipped, such as another platform's builds, may be
+absent.
 
 GitHub Actions runs the same checks on pull requests and pushes to `main`
 through [the check workflow](../.github/workflows/check.yml), split into
