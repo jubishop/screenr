@@ -53,15 +53,13 @@ test("watch status migration keeps existing data and the previous release's writ
       "reaction",
       "notification",
     ];
-    const snapshot = async () =>
-      Object.fromEntries(
-        await Promise.all(
-          tables.map(async (table) => [
-            table,
-            await rows(`SELECT * FROM ${table} ORDER BY 1,2,3,4,5`),
-          ]),
-        ),
-      );
+    // One client runs one query at a time.
+    const snapshot = async () => {
+      const result: Record<string, Record<string, unknown>[]> = {};
+      for (const table of tables)
+        result[table] = await rows(`SELECT * FROM ${table} ORDER BY 1,2,3,4,5`);
+      return result;
+    };
     const notifications = await rows(
       "SELECT id,item_id FROM visible_notification ORDER BY id",
     );
