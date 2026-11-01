@@ -14,9 +14,12 @@ behind browser setup, coverage placement, serving mode, and validation modes.
 ## Running checks
 
 ```sh
-npx playwright install chromium
 bin/check --full
 ```
+
+[Setup](development-workflow.md#setup) installs the packages and Playwright's
+Chromium that these checks need, in each new worktree too. After pulling a
+lockfile change, rerun `bin/setup-application`.
 
 `bin/check --full` preserves the repository foundation tests and adds formatting,
 TypeScript, PostgreSQL tests, and the browser suite against a fresh production

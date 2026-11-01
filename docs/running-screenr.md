@@ -24,7 +24,7 @@ To run several checkouts at once, give each its own database and development
 port as described in [several checkouts at once](#several-checkouts-at-once).
 QMD search is described in [knowledge search](foundation/knowledge-search.md).
 
-Select the latest Node LTS release in your shell before running `npm ci` or
+Select the latest Node LTS release in your shell before running `bin/setup` or
 application commands. Use its bundled npm or a newer compatible npm that
 supports [`devEngines`](https://docs.npmjs.com/cli/v11/configuring-npm/package-json/#devengines).
 The package policy rejects Node versions below 24 before installation or script
@@ -52,11 +52,16 @@ Then set up the checkout:
 
 ```sh
 bin/setup
-npm ci
 cp .env.example .env
 chmod 600 .env
 openssl rand -base64 32
 ```
+
+`bin/setup` runs `bin/setup-application`, which runs `npm ci` unless
+`node_modules` already holds the packages that `package-lock.json` names, then
+installs Playwright's Chromium for browser tests. Git runs it in each new
+worktree too, and `bin/prep-worktree` reruns it; see
+[setup](development-workflow.md#setup).
 
 Put the generated random value in `BETTER_AUTH_SECRET` in `.env`. Keep that
 file private. Set `TMDB_READ_TOKEN` to the API Read Access Token from TMDB's

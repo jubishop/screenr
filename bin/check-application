@@ -7,7 +7,6 @@ check that a full run does, except the iOS checks, which only run locally.
 """
 
 import argparse
-import json
 import os
 import re
 from pathlib import Path
@@ -17,9 +16,11 @@ import sys
 
 sys.dont_write_bytecode = True
 import _ios_check_records as records  # noqa: E402
+import _npm_packages as packages  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 PARTS = ("static", "app", "browser")
+INSTALL_HELP = "Run npm ci to install the packages that package-lock.json names, then rerun the checks."
 
 
 def run(*command, env=None):
@@ -71,16 +72,12 @@ def main():
     args = arguments()
     # npm test runs one shard of the application tests only when --shard names it.
     os.environ.pop("SCREENR_TEST_SHARD", None)
-    required = json.loads((ROOT / "package.json").read_text())["engines"]["node"]
-    minimum = int(required.removeprefix(">="))
-    runtime_help = (f"Node.js {required} is required for application checks. "
-                    "Select the latest Node LTS release and rerun bin/check --full.")
-    if not shutil.which("node"):
-        raise RuntimeError(runtime_help)
-    found = subprocess.check_output(["node", "--version"], cwd=ROOT, text=True).strip()
-    major = found.removeprefix("v").split(".")[0]
-    if not major.isdigit() or int(major) < minimum:
-        raise RuntimeError(f"{runtime_help} Found {found}.")
+    packages.require_node(ROOT, "application checks", "bin/check --full")
+    try:
+        # Stop rather than run npm ci, which would replace node_modules under a development server.
+        packages.require_locked_packages(ROOT)
+    except packages.StalePackages as error:
+        raise RuntimeError(f"{error}\n{INSTALL_HELP}") from None
     if args.part in (None, "static"):
         scripts = [str(path) for path in sorted((ROOT / "ops").iterdir())
                    if path.is_file() and path.read_bytes().startswith(b"#!/bin/sh")]

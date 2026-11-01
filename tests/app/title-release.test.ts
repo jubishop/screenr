@@ -490,7 +490,7 @@ test("failed release data leaves title details, Where to watch, conversations, a
   assert.ok(page.conversations.some((c) => c.comments.length === 1));
 
   const together = await loadScreen(viewer, "/watch-together?with=other");
-  if (together.kind !== "watch-together")
+  if (together.kind !== "watch-together" || "mode" in together)
     throw new Error("Expected Watch together");
   assert.deepEqual(
     together.titles.map((title) => [title.name, title.release.status]),

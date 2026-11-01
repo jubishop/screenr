@@ -89,7 +89,7 @@ async function want(owner: string, titles: string[]) {
 
 async function page(viewer: string, username: string) {
   const screen = await loadScreen(viewer, `/people/${username}/want-to-watch`);
-  if (screen.kind !== "want-to-watch")
+  if (screen.kind !== "want-to-watch" || "mode" in screen)
     throw new Error("Expected Want to watch");
   return screen;
 }

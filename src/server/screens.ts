@@ -122,7 +122,7 @@ async function loadContent(userId: string, route: MemberRoute) {
       throw new AppError("Choose one friend from their profile.");
     return {
       kind: "watch-together" as const,
-      ...(await watchTogether(userId, usernames)),
+      ...(await watchTogether(userId, usernames, route.mode)),
     };
   }
   if (route.kind === "invites")
@@ -219,7 +219,7 @@ async function loadContent(userId: string, route: MemberRoute) {
   if (route.kind === "want-to-watch")
     return {
       kind: "want-to-watch" as const,
-      ...(await wantToWatch(userId, route.username)),
+      ...(await wantToWatch(userId, route.username, route.mode)),
     };
   if (route.kind === "conversation")
     return {

@@ -25,6 +25,7 @@ struct WantToWatchTests {
     #expect(ready.heading == "Ready to watch")
     #expect(ready.description == "On your services or free.")
     #expect(ready.titles.map(\.title.name) == ["The Quiet Orchard"])
+    #expect(ready.titles.first?.release?.text == "In theaters · Digital Nov 20")
     let unknown = try #require(page.section(.unknown, .all))
     #expect(unknown.heading == "Availability unknown")
     #expect(unknown.description == "We could not confirm viewing options for these titles.")

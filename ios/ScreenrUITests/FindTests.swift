@@ -29,6 +29,7 @@ final class FindTests: XCTestCase {
           "Cam Rivera recommends this., Ben Ortiz wants to watch this."
         )
     )
+    XCTAssertTrue(row(app, "Signal Fire").label.contains("Season 2 premieres Nov 4"))
     try audit(app)
 
     // Typing searches once it pauses, and the results replace the lists.

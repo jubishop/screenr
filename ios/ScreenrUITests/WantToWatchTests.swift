@@ -33,6 +33,7 @@ final class WantToWatchTests: XCTestCase {
     XCTAssertTrue(app.staticTexts["1 title to watch now"].exists)
     let orchard = app.buttons(starting: "The Quiet Orchard")
     XCTAssertTrue(orchard.exists)
+    XCTAssertTrue(orchard.label.contains("In theaters · Digital Nov 20"))
     XCTAssertTrue(app.staticTexts["Availability unknown"].exists)
     XCTAssertTrue(app.buttons(starting: "Glass Meridian").exists)
     XCTAssertFalse(
@@ -74,6 +75,7 @@ final class WantToWatchTests: XCTestCase {
     XCTAssertTrue(app.buttons(starting: "The Quiet Orchard").exists)
     let garden = app.buttons(starting: "Winter Garden")
     XCTAssertTrue(garden.exists)
+    XCTAssertTrue(app.buttons(starting: "The Quiet Orchard").label.contains("In theaters"))
     XCTAssertTrue(garden.label.contains("Included in your saved services"))
     try app.performShellAudit()
 

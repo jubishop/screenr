@@ -1,9 +1,18 @@
 import { AppError, db } from "./db";
 import type { Person, Title } from "../shared";
-import { withViewingOptions } from "./title-viewing";
+import type { ListMode } from "../member-routes";
+import { inTheaters, withViewingOptions } from "./title-viewing";
 import { matchingServices, viewingAccess } from "../viewing";
 
-export async function watchTogether(viewer: string, usernames: string[]) {
+// Watch together (docs/watch-together.md): every title all participants
+// currently want to watch, newest shared first. At home sorts them by the
+// participants' streaming services; In theaters keeps the shared movies in
+// US theaters now and reads no services.
+export async function watchTogether(
+  viewer: string,
+  usernames: string[],
+  mode?: ListMode,
+) {
   const names = usernames.map((name) => name.toLowerCase());
   if (!names.length || new Set(names).size !== names.length)
     throw new AppError("Watch together not found.", 404);
@@ -43,6 +52,8 @@ export async function watchTogether(viewer: string, usernames: string[]) {
   );
   if (!rows[0]) throw new AppError("Watch together not found.", 404);
   const { participants, titles } = rows[0];
+  if (mode === "theaters")
+    return { mode, participants, titles: await inTheaters(titles) };
   const { rows: services } = await db.query<{
     service_id: string;
     viewer: boolean;

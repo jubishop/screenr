@@ -147,12 +147,15 @@ Run once after cloning:
 ./bin/setup
 ```
 
-Setup requires Git and Python 3.9 or later. QMD supplies optional local
-Markdown search. Direnv is optional for application environment settings;
-search does not need shell-wide exports. Missing optional tools produce notices.
+Setup requires Git, Python 3.9 or later, and the latest Node.js LTS release.
+QMD supplies optional local Markdown search. Direnv is optional for
+application environment settings; search does not need shell-wide exports.
+Missing optional tools produce notices.
 
 Setup activates the tracked Git hooks without displacing another hook manager,
-prepares local caches, and builds the QMD index when QMD is available. Run
+prepares local caches, and builds the QMD index when QMD is available. It then
+installs the npm packages and Playwright's Chromium through
+`bin/setup-application`, which Git also runs in each new worktree. Run
 `bin/doctor` to inspect setup and search freshness.
 [Knowledge search](docs/foundation/knowledge-search.md) covers worktree
 commands, existing hook managers, and search recovery.

@@ -52,7 +52,8 @@ struct WantToWatchList: View {
 }
 
 // Ready to watch or Availability unknown: its heading, what it holds, and
-// its titles, each marking the viewer's saved services.
+// its titles, each with its release status and the viewer's saved services
+// marked.
 private struct TitlesSection: View {
   let section: WantToWatchSection
 
@@ -69,6 +70,7 @@ private struct TitlesSection: View {
           TitleRow(
             title: title.title,
             viewing: title.viewing,
+            release: title.release,
             serviceIds: title.matchingServiceIds
           )
         }

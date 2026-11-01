@@ -15,6 +15,16 @@ SOURCE = Path(__file__).resolve().parents[1]
 SCRIPTS = ("format:check", "typecheck", "test", "test:browser")
 # A recorded pass for the same iOS files lets bin/check-ios skip itself.
 IOS_CHECK = ["check-ios", "--reuse"]
+NEXT = {"version": "16.4.2", "resolved": "https://registry.npmjs.org/next/-/next-16.4.2.tgz",
+        "integrity": "sha512-next-16.4.2"}
+REACT = {"version": "19.3.1", "resolved": "https://registry.npmjs.org/react/-/react-19.3.1.tgz",
+         "integrity": "sha512-react-19.3.1"}
+# npm skips an optional package built for another platform, as it does esbuild's Linux build on a Mac.
+LINUX_ESBUILD = {"version": "0.28.2", "resolved": "https://registry.npmjs.org/@esbuild/linux-x64/-/linux-x64-0.28.2.tgz",
+                 "integrity": "sha512-esbuild-0.28.2", "optional": True, "os": ["linux"], "cpu": ["x64"]}
+LOCKED = {"node_modules/next": NEXT, "node_modules/react": REACT, "node_modules/@esbuild/linux-x64": LINUX_ESBUILD}
+# What npm ci installs from LOCKED on a Mac, recorded in its hidden lockfile.
+INSTALLED = {"node_modules/next": NEXT, "node_modules/react": REACT}
 
 
 class CheckApplicationTests(unittest.TestCase):
@@ -24,9 +34,11 @@ class CheckApplicationTests(unittest.TestCase):
         base = Path(temporary.name)
         self.repo = base / "checkout"
         (self.repo / "bin").mkdir(parents=True)
-        for name in ("bin/check-application", "bin/_ios_check_records.py"):
+        for name in ("bin/check-application", "bin/_ios_check_records.py", "bin/_npm_packages.py"):
             shutil.copy2(SOURCE / name, self.repo / name)
         shutil.copy2(SOURCE / "package.json", self.repo / "package.json")
+        (self.repo / "package-lock.json").write_text(json.dumps(self.lockfile(LOCKED, root=True)))
+        self.install(INSTALLED)
         (self.repo / "ops").mkdir()
         (self.repo / "ops/deploy.sh").write_text("#!/bin/sh\nexit 0\n")
         (self.repo / "ops/Caddyfile").write_text("example.invalid\n")
@@ -64,6 +76,28 @@ class CheckApplicationTests(unittest.TestCase):
                              "open(os.environ['CHECK_EVENTS'], 'a').write(json.dumps(['check-ios', *sys.argv[1:]]) + '\\n')\n"
                              "sys.exit(19 if 'FAIL_IOS' in os.environ else 0)\n")
         check_ios.chmod(0o755)
+
+    @staticmethod
+    def lockfile(packages, root=False):
+        """Return an npm lockfile; the hidden one that npm writes in node_modules leaves out the root package."""
+        top = {"": {"name": "screenr", "version": "0.1.0"}} if root else {}
+        return {"name": "screenr", "version": "0.1.0", "lockfileVersion": 3, "requires": True,
+                "packages": top | packages}
+
+    def install(self, packages, root=False):
+        (self.repo / "node_modules").mkdir(exist_ok=True)
+        (self.repo / "node_modules/.package-lock.json").write_text(json.dumps(self.lockfile(packages, root)))
+
+    def assert_stops_for_packages(self, *details):
+        for args in ([], ["--part", "static"], ["--part", "app"], ["--part", "browser", "--shard", "1/2"]):
+            with self.subTest(args=args):
+                self.events.unlink(missing_ok=True)
+                result = self.check(*args)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("Run npm ci", result.stderr)
+                for detail in details:
+                    self.assertIn(detail, result.stderr)
+                self.assertEqual(self.recorded(), [])
 
     def tool(self, name, body):
         path = self.tools / name
@@ -129,6 +163,43 @@ class CheckApplicationTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("Node.js >=24 is required", result.stderr)
         self.assertEqual(self.recorded(), [])
+
+    def test_stale_installed_packages_stop_before_any_check(self):
+        # A pull moved package-lock.json to Next.js 16.4.2 while node_modules kept 16.4.0 (#334).
+        self.install(INSTALLED | {"node_modules/next": NEXT | {
+            "version": "16.4.0", "resolved": "https://registry.npmjs.org/next/-/next-16.4.0.tgz",
+            "integrity": "sha512-next-16.4.0"}})
+        self.assert_stops_for_packages("node_modules/next: 16.4.0 is installed but 16.4.2 is locked")
+
+    def test_any_difference_from_the_lockfile_stops_before_any_check(self):
+        for installed, detail in (
+                ({"node_modules/next": NEXT}, "node_modules/react: 19.3.1 is locked but not installed"),
+                (INSTALLED | {"node_modules/left-pad": {"version": "1.3.0"}},
+                 "node_modules/left-pad: 1.3.0 is installed but not in package-lock.json"),
+                (INSTALLED | {"node_modules/next": NEXT | {"integrity": "sha512-rebuilt"}},
+                 "node_modules/next: 16.4.2 is installed from another source than the locked one"),
+                (INSTALLED | {"node_modules/@esbuild/linux-x64": LINUX_ESBUILD | {"version": "0.27.0"}},
+                 "node_modules/@esbuild/linux-x64: 0.27.0 is installed but 0.28.2 is locked")):
+            with self.subTest(detail=detail):
+                self.install(installed)
+                self.assert_stops_for_packages(detail)
+
+    def test_missing_or_unreadable_installed_packages_stop_before_any_check(self):
+        shutil.rmtree(self.repo / "node_modules")
+        self.assert_stops_for_packages("No packages are installed", "node_modules/.package-lock.json")
+        self.install(INSTALLED)
+        (self.repo / "node_modules/.package-lock.json").write_text("{")
+        self.assert_stops_for_packages("node_modules/.package-lock.json cannot be read")
+
+    def test_installed_packages_may_leave_out_optional_ones_npm_skipped(self):
+        # Only the packages count, not the project's own entry at the root.
+        for installed, root in ((INSTALLED, False), (LOCKED, False), (INSTALLED, True)):
+            with self.subTest(optional="node_modules/@esbuild/linux-x64" in installed, root=root):
+                self.events.unlink(missing_ok=True)
+                self.install(installed, root)
+                result = self.check()
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(self.recorded()[-1], ["npm", "run", SCRIPTS[-1]])
 
     def test_failures_propagate_and_stop_later_commands(self):
         result = self.check(FAIL_PYTHON="1")

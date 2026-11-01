@@ -1,14 +1,20 @@
 import { AppError, db } from "./db";
 import type { Person, Title, ViewingAccess } from "../shared";
+import type { ListMode } from "../member-routes";
 import { savedServices } from "./streaming-services";
-import { withViewingOptions } from "./title-viewing";
+import { inTheaters, withViewingOptions } from "./title-viewing";
 import { matchingServices, viewingAccess } from "../viewing";
 
 // A profile's Want to watch page (docs/want-to-watch.md): the owner's current
 // Want to watch titles that the viewer can watch now, newest first, and those
 // whose availability is unknown. The viewer's saved services decide, even on
-// a friend's page; the owner's are never read.
-export async function wantToWatch(viewer: string, username: string) {
+// a friend's page; the owner's are never read. In theaters lists the owner's
+// movies in US theaters now instead, whatever services anyone saved.
+export async function wantToWatch(
+  viewer: string,
+  username: string,
+  mode?: ListMode,
+) {
   // Check access and read the owner's current choices in one snapshot. The
   // viewer always reads their own page; others need an accepted friendship
   // and no block, as private feeds do.
@@ -32,6 +38,13 @@ export async function wantToWatch(viewer: string, username: string) {
   );
   if (!rows[0]) throw new AppError("Want to watch not found.", 404);
   const { owner, titles } = rows[0];
+  if (mode === "theaters")
+    return {
+      mode,
+      owner,
+      hasWantToWatch: titles.length > 0,
+      titles: await inTheaters(titles),
+    };
   const [serviceIds, viewing] = await Promise.all([
     savedServices(viewer),
     withViewingOptions(titles),

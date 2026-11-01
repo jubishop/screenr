@@ -385,9 +385,7 @@ an age warning, and failed lookups stay distinct from known unmatched titles.
 
 This implements the
 [release status decisions](#release-status-on-title-pages-and-cards--2026-10-16)
-for the server and web app. The iPhone app receives the same fields; showing
-them there is the remaining part of
-[issue #310](https://github.com/jubishop/screenr/issues/310).
+for the server, the web app, and the iPhone app.
 
 **Source.** Movie details ask TMDB for
 [release dates](https://developer.themoviedb.org/reference/movie-release-dates)
@@ -451,9 +449,10 @@ list item that carries `viewing`, from the Find a title screen's
 shows no label. `upcoming` kinds are `theatrical`, `digital`, `premiere`, and
 `season_premiere`, in date order. Clients show "In theaters" when
 `in_theaters` is set, then each `label`, and never derive either from the
-dates. Later features, such as In theaters lists, read `in_theaters` and
-`status` from `withViewingOptions` or `getTitleReleases` instead of
-computing theatrical status again.
+dates. Later features read `in_theaters` and `status` from
+`withViewingOptions` or `getTitleReleases` instead of computing theatrical
+status again; [In theaters lists](want-to-watch.md#in-theaters) read them
+through `inTheaters` in `src/server/title-viewing.ts`.
 
 **Lists.** `getTitleReleases` in `src/server/catalog.ts` reads a list's
 stored titles in one query and refreshes only missing or expired details, at
@@ -468,6 +467,15 @@ stored without dates, so a search refreshes each new result's details.
 tiles, and at the top of Where to watch, outside its Subs and Free groups.
 The text comes from the screen data, never the reader's clock, so server
 and hydration markup match.
+
+**iPhone.** ScreenrKit decodes `release` as an optional `TitleRelease` on
+title screens and on each list item, so a payload without it decodes and
+shows no label, and an unknown status or date kind decodes as `unknown`.
+`TitleRelease.text` joins "In theaters" and the labels, as the web does, and
+is nil unless the status is `ok`. `ReleaseStatusLine` shows it under the kind
+and year in `TitleRow`, which search results, Friends recommend, and Watch
+together use; under the name in Find a title's suggestions; and at the top
+of the title page's Where to watch, outside its Subs and Free groups.
 
 ## Provider registry and maintenance
 
@@ -559,4 +567,8 @@ or only weekly episodes, cache reuse and expiry, failed and unusable
 responses, one stored-title read per list, and bounded requests within the
 search deadline. `tests/browser/title-release.spec.ts` checks the title page
 and the cards in Find a title, Friends recommend, Want to watch, and Watch
-together at desktop, mobile, and 320px widths.
+together at desktop, mobile, and 320px widths. On the iPhone,
+ScreenrKit's `TitleReleaseTests` read the fixtures' statuses and cover
+unavailable, unknown, and missing release data, and the UI tests check the
+status on a Find a title suggestion, a Watch together row, and the
+`screen/title/in-theaters` title page.

@@ -232,8 +232,8 @@ final class TitleTests: XCTestCase {
     app.scrollTo(app.buttons["replace-movie:307"])
   }
 
-  // Each title fixture loads and shows its title, its linked reply, or that
-  // the title was not found, without an error.
+  // Each title fixture loads and shows its title, its release status, its
+  // linked reply, or that the title was not found, without an error.
   @MainActor
   func testRendersEveryTitleFixture() throws {
     let directory = FixtureLaunch.directory.appending(path: "screen/title")
@@ -244,10 +244,12 @@ final class TitleTests: XCTestCase {
     XCTAssertEqual(
       names,
       [
-        "finished-review", "full-top-ten", "linked-reply", "movie", "not-found", "tv",
-        "unknown-availability",
+        "finished-review", "full-top-ten", "in-theaters", "linked-reply", "movie", "not-found",
+        "tv", "unknown-availability",
       ]
     )
+    // The status sits atop Where to watch, apart from its services.
+    let releases = ["in-theaters": "In theaters · Digital Nov 20"]
     for name in names {
       let fixture = try TitleFixtureFile(directory.appending(path: "\(name).json"))
       let app = XCUIApplication()
@@ -269,6 +271,9 @@ final class TitleTests: XCTestCase {
         fixture.title == nil || app.staticTexts["Where to watch"].exists,
         "screen/title/\(name)"
       )
+      if let release = releases[name] {
+        XCTAssertTrue(app.staticTexts[release].exists, "screen/title/\(name)")
+      }
       if let reply = fixture.targetReply {
         XCTAssertTrue(app.comment(reply).waitForExistence(timeout: 10), "screen/title/\(name)")
       }

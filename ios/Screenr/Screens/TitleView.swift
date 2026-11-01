@@ -62,7 +62,11 @@ private struct TitleScreen: View {
             TitleHeaderView(friends: title.friends, header: header, model: page) { friend in
               entryRequest = EntryRequest(entry: friend.item)
             }
-            AvailabilitySection(availability: title.availability, kind: title.title.kind)
+            AvailabilitySection(
+              availability: title.availability,
+              release: title.release,
+              kind: title.title.kind
+            )
             if let video = title.trailer {
               TrailerSection(title: title.title, trailer: video, player: trailer)
             }

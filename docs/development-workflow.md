@@ -15,12 +15,29 @@ bin/doctor
 bin/check --full
 ```
 
-Setup needs Git and Python 3.9 or later, and checks also need ShellCheck.
+Setup needs Git, Python 3.9 or later, and the latest Node.js LTS release;
+checks also need ShellCheck.
 QMD and direnv are optional; setup reports skipped features.
 Complete [app setup](running-screenr.md#local-setup) before running
 `bin/check --full`. Review `.envrc` before running `direnv allow`, and add
 project-specific environment settings to it deliberately; search does not
 need it.
+
+After the foundation setup, `bin/setup` runs `bin/setup-application`, as Git
+does in each new worktree and `bin/prep-worktree` does again, so a checkout
+gets its application dependencies without a manual install
+([#341](https://github.com/jubishop/screenr/issues/341)). After the Node
+check that `bin/check-application` applies, it compares `node_modules` with
+`package-lock.json` the [same way](#checks). It runs `npm ci` only when they
+differ or nothing is installed, so rerunning setup doesn't replace
+`node_modules` under a running development server. It then runs
+`playwright install chromium` for browser tests. Checkouts share
+Playwright's browsers, so this downloads only on a new machine or after a
+Playwright update and otherwise finishes in under a second; each install also
+removes browser versions that no remaining checkout uses. A failure fails
+`bin/setup` and `bin/prep-worktree`. In a new worktree, Git reports it and
+still creates the worktree; rerun `bin/setup-application` there.
+`tests/test_setup_application.py` covers it.
 
 For clones created before the 2026-09-04 knowledge foundation, copy any
 existing local `screenr.homeMemoryPath` value to `knowledge.homeMemoryPath`
@@ -98,9 +115,10 @@ CI and deploys.
 
 Follow the [check schedule](foundation/engineering-policy.md#checks).
 `bin/check-application`, which `bin/check --full` runs after the foundation
-checks, verifies the Node runtime, lints the POSIX shell scripts in `ops/`,
-runs the Python tests, and then runs formatting, typechecking, application
-and PostgreSQL tests, and browser tests against the production build.
+checks, verifies the Node runtime and the installed packages, lints the POSIX
+shell scripts in `ops/`, runs the Python tests, and then runs formatting,
+typechecking, application and PostgreSQL tests, and browser tests against the
+production build.
 `tests/test_check_application.py` covers its order and failure handling.
 On a Mac with Xcode, it then runs `bin/check-ios --reuse` when the
 [iOS files](#ios-checks-before-a-push) differ from where the branch left
@@ -108,6 +126,20 @@ On a Mac with Xcode, it then runs `bin/check-ios --reuse` when the
 the iOS checks. The
 [iPhone app guide](../ios/README.md#checks) describes `bin/check-ios`, and
 `tests/test_check_ios.py` covers it with simulated Xcode tools.
+
+Before any check, and in every CI part, `bin/check-application` compares
+`node_modules/.package-lock.json`, which npm writes after each install, with
+`package-lock.json`. When a package's version or source differs, a locked
+package is not installed, an unlocked one is, or nothing is installed, it
+lists the differences and stops, naming `npm ci`. A checkout that pulls a
+lockfile change keeps its old packages until someone reinstalls them, and
+checks would then test packages that CI and production don't use
+([#334](https://github.com/jubishop/screenr/issues/334)). It stops instead of
+running `npm ci` itself, because reinstalling would replace `node_modules`
+under a development server or other command running in the same checkout.
+Run `npm ci` or [`bin/setup-application`](#setup) to reinstall.
+Optional packages that npm skipped, such as another platform's builds, may be
+absent.
 
 GitHub Actions runs the same checks on pull requests and pushes to `main`
 through [the check workflow](../.github/workflows/check.yml), split into

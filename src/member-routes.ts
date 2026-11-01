@@ -6,16 +6,19 @@ type ItemTarget = { item?: string; reply?: string };
 // Find a title's tabs. Suggestions is the default, so only Friends recommend
 // appears in the URL.
 export type SearchTab = "friends-recommend";
+// Want to watch pages' and Watch together's lists. At home is the default, so
+// only In theaters appears in the URL, as `mode=theaters`.
+export type ListMode = "theaters";
 export type MemberRoute =
   | ({ kind: "feed" } & ItemTarget)
   | { kind: "search"; q?: string; tab?: SearchTab }
   | { kind: "people" }
   | { kind: "invites" }
   | { kind: "account" }
-  | { kind: "watch-together"; with: string[] }
+  | { kind: "watch-together"; with: string[]; mode?: ListMode }
   | ({ kind: "title"; id: string } & ItemTarget)
   | { kind: "profile"; username: string }
-  | { kind: "want-to-watch"; username: string }
+  | { kind: "want-to-watch"; username: string; mode?: ListMode }
   | { kind: "conversation"; id: string; reply?: string }
   | { kind: "not-found"; path: string };
 
@@ -27,6 +30,7 @@ export function parseMemberRoute(path: string): MemberRoute {
   const url = new URL(path, origin);
   const param = (key: string) => url.searchParams.get(key) || undefined;
   const target = () => ({ item: param("item"), reply: param("reply") });
+  const mode = param("mode") === "theaters" ? "theaters" : undefined;
   let parts: string[];
   try {
     parts = url.pathname.split("/").filter(Boolean).map(decodeURIComponent);
@@ -47,7 +51,7 @@ export function parseMemberRoute(path: string): MemberRoute {
             : undefined,
       };
     if (section === "watch-together")
-      return { kind: section, with: url.searchParams.getAll("with") };
+      return { kind: section, with: url.searchParams.getAll("with"), mode };
     const page = pages.find((name) => name === section);
     if (page) return { kind: page };
   }
@@ -56,7 +60,7 @@ export function parseMemberRoute(path: string): MemberRoute {
   if (section === "people" && rest.length === 1)
     return { kind: "profile", username: rest[0] };
   if (section === "people" && rest.length === 2 && rest[1] === "want-to-watch")
-    return { kind: "want-to-watch", username: rest[0] };
+    return { kind: "want-to-watch", username: rest[0], mode };
   if (section === "conversations" && rest.length === 1)
     return { kind: "conversation", id: rest[0], reply: param("reply") };
   return { kind: "not-found", path: url.pathname };
@@ -74,11 +78,16 @@ export function memberPath(route: MemberRoute): string {
     case "search":
       return withQuery("/search", { tab: route.tab, q: route.q });
     case "watch-together":
-      return withQuery("/watch-together", { with: route.with });
+      return withQuery("/watch-together", {
+        with: route.with,
+        mode: route.mode,
+      });
     case "profile":
       return `/people/${segments(route.username)}`;
     case "want-to-watch":
-      return `/people/${segments(route.username)}/want-to-watch`;
+      return withQuery(`/people/${segments(route.username)}/want-to-watch`, {
+        mode: route.mode,
+      });
     case "conversation":
       return withQuery(`/conversations/${segments(route.id)}`, {
         reply: route.reply,
@@ -113,7 +122,13 @@ function withQuery(
     tab,
     q,
     with: usernames = [],
-  }: ItemTarget & { tab?: SearchTab; q?: string; with?: string[] },
+    mode,
+  }: ItemTarget & {
+    tab?: SearchTab;
+    q?: string;
+    with?: string[];
+    mode?: ListMode;
+  },
 ) {
   const query = new URLSearchParams();
   if (item) query.set("item", item);
@@ -121,6 +136,7 @@ function withQuery(
   if (tab) query.set("tab", tab);
   if (q) query.set("q", q);
   for (const username of usernames) query.append("with", username);
+  if (mode) query.set("mode", mode);
   return query.size ? `${path}?${query}` : path;
 }
 
