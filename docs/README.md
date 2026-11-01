@@ -78,7 +78,7 @@ both memory and design documents.
   Want to watch titles the viewer can watch now, from issue #313, and its
   screen payload.
 - [Interface design](interface-design.md): accepted layout and presentation
-  decisions from the 2026-10-12 design review.
+  decisions from the 2026-10-12 design review, and the supported browsers.
 - [Title availability](title-availability.md): accepted US viewing options,
   data acquisition, cache behavior, and title-page scope for issue #7, and
   theatrical and upcoming release status for issue #310.

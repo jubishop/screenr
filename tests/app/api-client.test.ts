@@ -1,6 +1,11 @@
-import { afterEach, test } from "node:test";
+import { afterEach, test, type TestContext } from "node:test";
 import assert from "node:assert/strict";
-import { api, ApiError, readChanged } from "../../src/components/client";
+import {
+  anySignal,
+  api,
+  ApiError,
+  readChanged,
+} from "../../src/components/client";
 
 const unavailable =
   "Screenr is temporarily unavailable. Please try again in a moment.";
@@ -191,6 +196,57 @@ test("caller cancellation keeps its abort error", async () => {
     assert.equal((error as Error).name, "AbortError");
     return true;
   });
+});
+
+// Safari before 17.4, a supported browser, has no AbortSignal.any
+// (docs/interface-design.md#supported-browsers--2026-11-01).
+function removeAbortSignalAny(t: TestContext) {
+  const any = Object.getOwnPropertyDescriptor(AbortSignal, "any")!;
+  Reflect.deleteProperty(AbortSignal, "any");
+  t.after(() => Object.defineProperty(AbortSignal, "any", any));
+}
+
+test("without AbortSignal.any, requests stop at their deadline or the caller's cancellation", async (t) => {
+  removeAbortSignalAny(t);
+  const deadlines = controlDeadlines();
+  stall();
+  const controller = new AbortController();
+  const timedOut = failure(
+    api("relationship", { target: "a", action: "x" }, controller.signal),
+  );
+  deadlines[0].expire();
+  assert.equal(
+    (await timedOut).message,
+    "The request timed out. Please try again.",
+  );
+  const cancelled = api("screen?path=%2F", undefined, controller.signal);
+  controller.abort();
+  await assert.rejects(cancelled, (error: unknown) => {
+    assert.ok(!(error instanceof ApiError));
+    assert.equal((error as Error).name, "AbortError");
+    return true;
+  });
+});
+
+test("anySignal aborts with the first signal to abort, with or without AbortSignal.any", (t) => {
+  const check = () => {
+    const first = new AbortController();
+    const second = new AbortController();
+    const combined = anySignal([first.signal, second.signal]);
+    assert.equal(combined.aborted, false);
+    second.abort("second");
+    first.abort("first");
+    assert.equal(combined.aborted, true);
+    assert.equal(combined.reason, "second");
+    const done = new AbortController();
+    done.abort("already");
+    const late = anySignal([new AbortController().signal, done.signal]);
+    assert.equal(late.aborted, true);
+    assert.equal(late.reason, "already");
+  };
+  check();
+  removeAbortSignalAny(t);
+  check();
 });
 
 test("network failures produce a connection message", async () => {

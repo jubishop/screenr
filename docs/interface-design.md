@@ -4,9 +4,10 @@ status: current
 
 # Interface design
 
-Layout and presentation decisions for Screenr's member pages. They came
-from a 2026-10-12 design review of the phone (390px) and desktop (1366px)
-layouts with seeded local data. Behavior rules for feeds stay in the
+Layout and presentation decisions for Screenr's member pages, and the
+browsers they support. Most came from a 2026-10-12 design review of the
+phone (390px) and desktop (1366px) layouts with seeded local data. Behavior
+rules for feeds stay in the
 [unified title feed](title-feed.md) decisions. The review's Watch together
 change is recorded with the other
 [Watch together decisions](watch-together.md#prompt-to-save-streaming-services--2026-10-12).
@@ -714,3 +715,31 @@ and cards. [Issue #196](https://github.com/jubishop/screenr/issues/196)
 darkened the light focus ring to `#6c9440` and borders to `#849286`.
 `tests/browser/contrast.spec.ts` audits text contrast and painted colors in
 both schemes.
+
+### Supported browsers — 2026-11-01
+
+**Decision:** The web app supports Next.js's default browser targets: Chrome
+and Edge 111, Firefox 111, and Safari 16.4, including Safari on iOS 16.4.
+Client code that uses a newer browser API checks for it and falls back.
+
+**Why:** An agent settled this as a routine detail in
+[issue #360](https://github.com/jubishop/screenr/issues/360); the user may
+override it. Next.js compiles client code for these versions by default, but
+doesn't polyfill newer APIs, so members on an older supported browser got a
+broken page with no explanation. iOS 16 is the last release for the iPhone 8
+and iPhone X.
+
+**Rejected alternative:** A static check for newer APIs, or a matching
+`browserslist` entry, was optional in #360 and skipped: the fallbacks and
+their tests cover the two APIs found.
+
+**Implementation note:** `anySignal` in `src/components/client.ts` uses
+`AbortSignal.any` (Safari 17.4, Chrome 116, Firefox 124) when it exists and
+otherwise follows each signal with an abort listener. Requests, screen
+refreshes, the notification panel, and title search combine their signals
+through it. Member paths check for a query with `toString()` rather than
+`URLSearchParams.size` (Safari 17, Chrome 113, Firefox 112).
+`tests/browser/supported-browsers.spec.ts` removes both APIs, then refreshes
+a page, switches a Find a title tab, searches, and opens notifications.
+`tests/app/api-client.test.ts` and `tests/app/member-routes.test.ts` cover
+requests and member paths without them.
