@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { codeLimitMessage } from "../shared";
 import { api, authClient, useInteractive } from "./client";
 import { ActionButton } from "./action-button";
@@ -18,7 +18,6 @@ export function AccountDeletion({ email }: { email: string }) {
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
   const failure = useActionError();
-  const prompt = useId();
   const start = useRef<HTMLButtonElement>(null);
   // Cancel returns focus to Delete account.
   const restoreFocus = useRef(false);
@@ -35,7 +34,7 @@ export function AccountDeletion({ email }: { email: string }) {
   }
   async function sendCode() {
     setBusy(true);
-    const sent = await failure.run("send", async () => {
+    const sent = await failure.run(async () => {
       const result = await authClient.emailOtp.sendVerificationOtp({
         email,
         type: "sign-in",
@@ -56,7 +55,7 @@ export function AccountDeletion({ email }: { email: string }) {
     if (busy) return;
     setBusy(true);
     // A successful sign-in replaces this browser's session with a fresh one.
-    const confirmed = await failure.run("code", async () => {
+    const confirmed = await failure.run(async () => {
       const result = await authClient.signIn.emailOtp({
         email,
         otp: code.trim(),
@@ -97,18 +96,13 @@ export function AccountDeletion({ email }: { email: string }) {
           busy={busy}
           onConfirm={() => void sendCode()}
           onCancel={cancel}
-          describedBy={failure.describedBy("send")}
         >
           {failure.alert}
         </Confirmation>
       )}
       {step === "code" && (
-        <form
-          className="confirmation"
-          aria-labelledby={prompt}
-          onSubmit={confirmCode}
-        >
-          <p id={prompt}>
+        <form className="confirmation" onSubmit={confirmCode}>
+          <p>
             Enter the sign-in code we emailed to {email}. It expires in 10
             minutes.
           </p>
@@ -126,11 +120,7 @@ export function AccountDeletion({ email }: { email: string }) {
             />
           </label>
           <div className="confirmation-actions">
-            <ActionButton
-              className="primary"
-              unavailable={busy}
-              aria-describedby={failure.describedBy("code")}
-            >
+            <ActionButton className="primary" unavailable={busy}>
               Confirm code
             </ActionButton>
             <ActionButton

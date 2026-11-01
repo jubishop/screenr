@@ -96,7 +96,6 @@ struct WatchTogetherTests {
     #expect(
       lines(orchard).map(\.text) == ["On Hulu", "Included in either person’s saved services"]
     )
-    #expect(lines(orchard).first?.spokenText == "On Hulu (saved)")
     #expect(meridian.title.kindAndYear == "Movie · 2022")
     #expect(lines(meridian).map(\.text) == ["Viewing options unknown."])
   }

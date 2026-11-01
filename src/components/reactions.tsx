@@ -88,7 +88,7 @@ export function Reactions({
                 unavailable={busy}
                 onClick={() => void react(option.kind)}
               >
-                <span aria-hidden="true">{option.emoji}</span> {reaction.count}
+                <span>{option.emoji}</span> {reaction.count}
               </ActionButton>
             ) : null;
           })}
@@ -127,17 +127,13 @@ export function Reactions({
               unavailable={busy}
               onClick={() => void react(option.kind)}
             >
-              <span aria-hidden="true">{option.emoji}</span>
+              <span>{option.emoji}</span>
               <span>{option.label}</span>
             </ActionButton>
           ))}
         </div>
       )}
-      {error && (
-        <p className="error" role="alert">
-          {error}
-        </p>
-      )}
+      {error && <p className="error">{error}</p>}
     </>
   );
 }

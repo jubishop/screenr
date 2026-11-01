@@ -66,13 +66,9 @@ export function AccountView({
             Email codes sign you in to this same account. Use the email address
             you joined with.
           </p>
-          {googleError && (
-            <p className="error" role="alert">
-              {googleError}
-            </p>
-          )}
+          {googleError && <p className="error">{googleError}</p>}
           {data.googleConnected ? (
-            <p role="status">Google connected.</p>
+            <p>Google connected.</p>
           ) : data.googleEnabled ? (
             <>
               <p>
@@ -120,10 +116,9 @@ export function AccountView({
             className="text-button"
             disabled={!interactive}
             unavailable={signingOut || connectingGoogle}
-            aria-describedby={signOutFailure.describedBy("sign-out")}
             onClick={async () => {
               setSigningOut(true);
-              await signOutFailure.run("sign-out", signOut);
+              await signOutFailure.run(signOut);
               setSigningOut(false);
             }}
           >

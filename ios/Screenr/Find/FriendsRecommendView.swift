@@ -81,8 +81,6 @@ private struct RecommendationActionRow: View {
       }
       .disabled(isSaving)
       .accessibilityLabel("\(title.action.label), \(title.title.name)")
-      .accessibilityValue(saved ? "Saved" : "")
-      .accessibilityHint(saved ? "Removes it from Want to watch." : "Saves it to Want to watch.")
     case .status, .recommended:
       NavigationLink(value: title.destination) {
         SymbolText(title.action.label, systemImage: "checkmark")

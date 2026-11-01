@@ -70,7 +70,7 @@ export function SignIn({
             ? "You’re invited. Sign in to find your people and something worth watching."
             : "Welcome back. Sign in to your circle. New members need an invitation."}
         </p>
-        {notice && <p role="status">{notice}</p>}
+        {notice && <p>{notice}</p>}
         {googleEnabled && (
           <ActionButton
             className="secondary wide"
@@ -134,11 +134,7 @@ export function SignIn({
               />
             </label>
           )}
-          {error && (
-            <p role="alert" className="error">
-              {error}
-            </p>
-          )}
+          {error && <p className="error">{error}</p>}
           <ActionButton
             className="primary wide"
             disabled={!interactive}
@@ -260,12 +256,11 @@ export function Setup({
                   autoComplete="username"
                   autoCapitalize="none"
                   spellCheck={false}
-                  aria-describedby="username-help"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
                 />
               </label>
-              <p id="username-help" className="small muted">
+              <p className="small muted">
                 3–24 letters, numbers, or underscores.
               </p>
               <fieldset className="setup-photo">
@@ -295,11 +290,7 @@ export function Setup({
               </label>
             )
           )}
-          {error && (
-            <p role="alert" className="error">
-              {error}
-            </p>
-          )}
+          {error && <p className="error">{error}</p>}
           <ActionButton
             className="primary wide"
             disabled={!interactive}

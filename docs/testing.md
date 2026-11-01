@@ -521,10 +521,9 @@ recipients. A full run checks:
   activity. `tests/app/title-page.test.ts` covers the line's grouping, order,
   name limit, and friendship and blocking rules.
 - While a held navigation, title, or notification link waits for the next
-  screen, the current screen stays in place and busy, and the progress bar
-  fades in across the top at phone and desktop widths. The next screen's
-  focused heading is not busy. Background refreshes show no bar, and reduced
-  motion keeps it still.
+  screen, the current screen stays in place, and the progress bar fades in
+  across the top at phone and desktop widths. Background refreshes show no
+  bar, and reduced motion keeps it still.
 - The profile top 10 shows a scrolling row of numbered posters beneath the
   header, and its edit mode moves and removes entries with focus following
   them, at phone and desktop widths. Title pages add titles, replace one
@@ -553,8 +552,8 @@ recipients. A full run checks:
   that each light value has a dark one, and the contrast of their pairings.
 - A failed feed entry, comment, title header, Friends row, profile,
   confirmation, invitation, or sign-out action shows its error beneath that
-  control at phone and desktop widths. The error describes the control, other
-  controls stay usable, and no page-level alert appears.
+  control at phone and desktop widths. Other controls stay usable, and no
+  page-level error appears.
 - Pending feed entry, title header, Post, profile, confirmation, Friends row,
   notification, invitation, and Account actions keep keyboard focus, and
   repeated presses send no second request. Focus then stays on the control

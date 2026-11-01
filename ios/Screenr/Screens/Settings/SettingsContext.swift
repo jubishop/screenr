@@ -70,11 +70,5 @@ struct SettingsFooter: View {
       }
     }
     .foregroundStyle(.muted)
-    .onChange(of: failure) { _, failure in
-      if let failure { AccessibilityNotification.Announcement(failure).post() }
-    }
-    .onChange(of: status) { _, status in
-      if let status { AccessibilityNotification.Announcement(status).post() }
-    }
   }
 }

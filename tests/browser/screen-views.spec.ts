@@ -15,7 +15,7 @@ async function failRefresh(page: Page) {
     }),
   );
   await refreshOnReturn(page);
-  await expect(page.getByRole("main").getByRole("alert")).toContainText(
+  await expect(page.getByRole("main").locator(".error")).toContainText(
     "View refresh unavailable",
   );
 }
@@ -49,7 +49,7 @@ test("People retains the username draft and focus on refresh, and restores the d
   await input.press("Enter");
   await expect(page).toHaveURL(/\/people\/some_friend$/);
   // Client navigation to a missing person keeps the member's navigation.
-  await expect(page.getByRole("main").getByRole("alert")).toContainText(
+  await expect(page.getByRole("main").locator(".error")).toContainText(
     "Person not found.",
   );
   await expect(
@@ -117,12 +117,12 @@ test("proxy error pages show a retryable message instead of parser errors", asyn
     route.fulfill({ status: 502, body: "" }),
   );
   await create.click();
-  await expect(main.getByRole("alert")).toContainText(unavailable);
+  await expect(main.locator(".error")).toContainText(unavailable);
   await expect(create).toBeEnabled();
   await page.unroute("**/api/screenr/invite");
   await create.click();
   await expect(page.getByText("0 of 1 signups", { exact: true })).toBeVisible();
-  await expect(main.getByRole("alert")).toHaveCount(0);
+  await expect(main.locator(".error")).toHaveCount(0);
 
   await page.route(screenRead, (route) =>
     route.fulfill({
@@ -132,12 +132,12 @@ test("proxy error pages show a retryable message instead of parser errors", asyn
     }),
   );
   await refreshOnReturn(page);
-  await expect(main.getByRole("alert")).toContainText(unavailable);
+  await expect(main.locator(".error")).toContainText(unavailable);
   await expect(main).not.toContainText(/Unexpected|JSON/);
   await expect(create).toHaveCount(0);
   await page.unroute(screenRead);
   await page.getByRole("button", { name: "Try again", exact: true }).click();
-  await expect(main.getByRole("alert")).toHaveCount(0);
+  await expect(main.locator(".error")).toHaveCount(0);
   await expect(create).toBeEnabled();
 });
 
@@ -168,7 +168,7 @@ test("invitation and sign-out failures show their errors beside the control", as
   await press(create);
   const card = page.locator(".invite-card");
   await expect(card).toContainText("0 of 1 signups");
-  await expect(main.getByRole("alert")).toHaveCount(0);
+  await expect(main.locator(".error")).toHaveCount(0);
   // A failed Revoke keeps its confirmation open with the message.
   const confirmation = card.getByRole("group", {
     name: /^Revoke this invitation\?/,
@@ -240,7 +240,7 @@ test("missing titles, people, and pages respond 404 and stop polling until the r
   ]) {
     const response = await page.goto(path);
     expect(response?.status()).toBe(404);
-    await expect(main.getByRole("alert")).toContainText(message);
+    await expect(main.locator(".error")).toContainText(message);
     await expect(
       page.getByRole("navigation", { name: "Main navigation" }),
     ).toBeVisible();
@@ -252,7 +252,7 @@ test("missing titles, people, and pages respond 404 and stop polling until the r
     );
     await main.getByRole("button", { name: "Try again", exact: true }).click();
     expect((await retry).status()).toBe(404);
-    await expect(main.getByRole("alert")).toContainText(message);
+    await expect(main.locator(".error")).toContainText(message);
     expect(readsOf(path)).toEqual([path, path]);
   }
 
@@ -260,7 +260,7 @@ test("missing titles, people, and pages respond 404 and stop polling until the r
   // it until the reader tries again.
   const response = await page.goto("/watch-together");
   expect(response?.status()).toBe(200);
-  await expect(main.getByRole("alert")).toContainText(
+  await expect(main.locator(".error")).toContainText(
     "Choose one friend from their profile.",
   );
   await page.clock.runFor(30_000);
@@ -277,7 +277,7 @@ test("polling retries transient refresh errors and stops after a permanent one u
 }) => {
   const page = await member("pollingerrors");
   const main = page.getByRole("main");
-  const alert = main.getByRole("alert");
+  const alert = main.locator(".error");
   await page.clock.install();
   await page.clock.pauseAt(Date.now() + 1000);
   // Each failed read names its position, so the alert shows which read
@@ -349,7 +349,7 @@ test("a stalled write times out and re-enables its controls", async ({
   await started.promise;
   await expect(create).toBeDisabled();
   await page.clock.fastForward(15_000);
-  await expect(page.getByRole("main").getByRole("alert")).toContainText(
+  await expect(page.getByRole("main").locator(".error")).toContainText(
     "The request timed out. Please try again.",
   );
   await expect(create).toBeEnabled();
@@ -394,14 +394,14 @@ test("account linking and sign-out keep pending states and errors across read re
   } finally {
     release.resolve();
   }
-  await expect(page.getByRole("main").getByRole("alert")).toHaveText(
+  await expect(page.getByRole("main").locator(".error")).toHaveText(
     "Link unavailable",
   );
   await expect(connect).toBeEnabled();
   await expect(signOut).toBeEnabled();
   await failRefresh(page);
   await recover(page);
-  await expect(page.getByRole("main").getByRole("alert")).toHaveText(
+  await expect(page.getByRole("main").locator(".error")).toHaveText(
     "Link unavailable",
   );
   await page.unroute("**/api/auth/link-social");
@@ -409,7 +409,7 @@ test("account linking and sign-out keep pending states and errors across read re
     route.fulfill({ json: {} }),
   );
   await connect.click();
-  await expect(page.getByRole("main").getByRole("alert")).toHaveText(
+  await expect(page.getByRole("main").locator(".error")).toHaveText(
     "Google sign-in did not start. Please try again.",
   );
   await expect(connect).toBeEnabled();
@@ -439,7 +439,7 @@ test("account linking and sign-out keep pending states and errors across read re
   await expect(
     page
       .getByRole("main")
-      .getByRole("alert")
+      .locator(".error")
       .filter({ hasText: "Sign-out unavailable" }),
   ).toBeVisible();
   await expect(signOut).toBeEnabled();
@@ -448,7 +448,7 @@ test("account linking and sign-out keep pending states and errors across read re
   await expect(
     page
       .getByRole("main")
-      .getByRole("alert")
+      .locator(".error")
       .filter({ hasText: "Sign-out unavailable" }),
   ).toBeVisible();
   await expect(page).toHaveURL(/\/account$/);

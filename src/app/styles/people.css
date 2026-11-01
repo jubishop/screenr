@@ -84,10 +84,10 @@
 .account-profile > p {
   overflow-wrap: anywhere;
 }
-.account-profile > [role="status"] {
+.account-profile > .action-status {
   margin-bottom: 0;
 }
-.account-profile > [role="status"]:not(:empty) {
+.account-profile > .action-status:not(:empty) {
   margin-top: 16px;
 }
 /* A person and their actions share one line at every width. Notes, such as
@@ -208,10 +208,10 @@ a.person:hover strong {
 .photo-editor .inline-actions {
   gap: 10px 12px;
 }
-.photo-editor [role="status"] {
+.photo-editor .action-status {
   margin: 0;
 }
-.photo-editor [role="status"]:not(:empty) {
+.photo-editor .action-status:not(:empty) {
   margin-top: 12px;
 }
 .joined-person {
@@ -270,7 +270,7 @@ a.person:hover strong {
 .invitation-created input {
   cursor: pointer;
 }
-.invitation-created [role="status"] {
+.invitation-created .action-status {
   margin-bottom: 0;
 }
 /* The profile top 10: a scrolling row of numbered posters beneath the

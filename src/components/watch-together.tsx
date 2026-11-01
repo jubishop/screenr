@@ -73,7 +73,7 @@ function AtHome({ data: { titles, viewerHasServices } }: { data: AtHomePage }) {
   return (
     <>
       <TitleKindButtons value={filter} onChange={setFilter} />
-      <p className="small muted watch-together-count" role="status">
+      <p className="small muted watch-together-count">
         {visible.length} shared {visible.length === 1 ? "title" : "titles"}
       </p>
       {!viewerHasServices && <ServicesPrompt />}

@@ -62,7 +62,7 @@ test("a limited code request explains how to continue", async ({ page }) => {
     exact: true,
   });
   await send.click();
-  await expect(page.getByRole("main").getByRole("alert")).toHaveText(
+  await expect(page.getByRole("main").locator(".error")).toHaveText(
     "Too many codes requested. Try again later, or continue with Google.",
   );
   await expect(page.getByLabel("Sign-in code", { exact: true })).toHaveCount(0);
@@ -76,7 +76,7 @@ test("stalled email code requests time out and re-enable the sign-in form", asyn
   await page.clock.install();
   await page.clock.pauseAt(Date.now() + 1000);
   await page.goto("/login");
-  const alert = page.getByRole("main").getByRole("alert");
+  const alert = page.getByRole("main").locator(".error");
   const waiting = page.getByRole("button", { name: "One moment…" });
   const send = page.getByRole("button", {
     name: "Send sign-in code",
@@ -150,16 +150,16 @@ test("Google signup preserves edited display names across email and Google sign-
     page.getByRole("heading", { name: "Chosen Google Name", exact: true }),
   ).toBeVisible();
   await page.goto("/account");
-  await expect(
-    page.getByRole("status").filter({ hasText: "Google connected." }),
-  ).toHaveText("Google connected.");
+  await expect(page.getByText("Google connected.", { exact: true })).toHaveText(
+    "Google connected.",
+  );
   await expect(
     page.getByRole("button", { name: "Connect Google", exact: true }),
   ).toHaveCount(0);
   await page.reload();
-  await expect(
-    page.getByRole("status").filter({ hasText: "Google connected." }),
-  ).toHaveText("Google connected.");
+  await expect(page.getByText("Google connected.", { exact: true })).toHaveText(
+    "Google connected.",
+  );
   await page.getByRole("button", { name: "Sign out", exact: true }).click();
   await page.getByLabel("Email address").fill(email);
   await page
@@ -173,7 +173,7 @@ test("Google signup preserves edited display names across email and Google sign-
   const invalid = String((Number(otp) + 1) % 1_000_000).padStart(6, "0");
   await page.getByLabel("Sign-in code", { exact: true }).fill(invalid);
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
-  await expect(page.getByRole("main").getByRole("alert")).toContainText(
+  await expect(page.getByRole("main").locator(".error")).toContainText(
     /invalid|incorrect/i,
   );
   await page.getByLabel("Sign-in code", { exact: true }).fill(otp);
@@ -184,9 +184,9 @@ test("Google signup preserves edited display names across email and Google sign-
     page.getByRole("heading", { name: "Chosen Google Name", exact: true }),
   ).toBeVisible();
   await page.goto("/account");
-  await expect(
-    page.getByRole("status").filter({ hasText: "Google connected." }),
-  ).toHaveText("Google connected.");
+  await expect(page.getByText("Google connected.", { exact: true })).toHaveText(
+    "Google connected.",
+  );
   await page.getByRole("button", { name: "Sign out", exact: true }).click();
   await page
     .getByRole("button", { name: "Continue with Google", exact: true })
@@ -222,12 +222,12 @@ test("email members can recover from linking failures, connect Google, and sign 
   };
   await page.route("**/api/auth/link-social", failure);
   await connect.click();
-  await expect(page.getByRole("main").getByRole("alert")).toHaveText(
+  await expect(page.getByRole("main").locator(".error")).toHaveText(
     "Google is temporarily unavailable.",
   );
   await expect(connect).toBeEnabled();
   await nextAccountRefresh(page);
-  await expect(page.getByRole("main").getByRole("alert")).toHaveText(
+  await expect(page.getByRole("main").locator(".error")).toHaveText(
     "Google is temporarily unavailable.",
   );
   await page.unroute("**/api/auth/link-social", failure);
@@ -237,17 +237,17 @@ test("email members can recover from linking failures, connect Google, and sign 
     page.getByRole("heading", { name: "Test identity provider" }),
   ).toBeVisible();
   await page.getByRole("button", { name: "Cancel", exact: true }).click();
-  await expect(page.getByRole("main").getByRole("alert")).toHaveText(
+  await expect(page.getByRole("main").locator(".error")).toHaveText(
     "Google connection was canceled. You can try again.",
   );
   await nextAccountRefresh(page);
-  await expect(page.getByRole("main").getByRole("alert")).toHaveText(
+  await expect(page.getByRole("main").locator(".error")).toHaveText(
     "Google connection was canceled. You can try again.",
   );
 
   await connect.click();
   await approveGoogle(page, "different.browser@example.test");
-  await expect(page.getByRole("main").getByRole("alert")).toHaveText(
+  await expect(page.getByRole("main").locator(".error")).toHaveText(
     "Choose the Google account with the same email address as your Screenr account.",
   );
   await expect(connect).toBeEnabled();
@@ -257,15 +257,15 @@ test("email members can recover from linking failures, connect Google, and sign 
 
   await connect.click();
   await approveGoogle(page, "linkflow.browser@example.test");
-  await expect(
-    page.getByRole("status").filter({ hasText: "Google connected." }),
-  ).toHaveText("Google connected.");
+  await expect(page.getByText("Google connected.", { exact: true })).toHaveText(
+    "Google connected.",
+  );
   await expect(connect).toHaveCount(0);
-  await expect(page.getByRole("main").getByRole("alert")).toHaveCount(0);
+  await expect(page.getByRole("main").locator(".error")).toHaveCount(0);
   await page.reload();
-  await expect(
-    page.getByRole("status").filter({ hasText: "Google connected." }),
-  ).toHaveText("Google connected.");
+  await expect(page.getByText("Google connected.", { exact: true })).toHaveText(
+    "Google connected.",
+  );
 
   await page.getByRole("button", { name: "Sign out", exact: true }).click();
   await page.getByRole("button", { name: "Continue with Google" }).click();
@@ -289,7 +289,7 @@ for (const complete of [true, false]) {
     if (complete) await page.goto("/account");
     const startURL = page.url();
     const signOut = page.getByRole("button", { name: "Sign out", exact: true });
-    const alert = page.getByRole("main").getByRole("alert");
+    const alert = page.getByRole("main").locator(".error");
     for (const transportFailure of [false, true]) {
       await page.route("**/api/auth/sign-out", (route) =>
         transportFailure
@@ -348,7 +348,7 @@ test("stalled Google link and sign-out requests time out and re-enable Account",
   ).toBeDisabled();
   await expect(signOut).toBeDisabled();
   await page.clock.fastForward(15_000);
-  await expect(methods.getByRole("alert")).toHaveText(timedOut);
+  await expect(methods.locator(".error")).toHaveText(timedOut);
   await expect(connect).toBeEnabled();
   await expect(signOut).toBeEnabled();
 
@@ -358,7 +358,7 @@ test("stalled Google link and sign-out requests time out and re-enable Account",
   await expect(signOut).toBeDisabled();
   await expect(connect).toBeDisabled();
   await page.clock.fastForward(15_000);
-  await expect(signOut).toHaveAccessibleDescription(timedOut);
+  await expect(methods.locator(".action-error")).toHaveText(timedOut);
   await expect(signOut).toBeEnabled();
   await expect(connect).toBeEnabled();
   await expect(page).toHaveURL(/\/account$/);
@@ -383,7 +383,7 @@ test("Google sign-in recovers from transport failure and an empty redirect", asy
         : route.fulfill({ status: 200, json: {} }),
     );
     await google.click();
-    await expect(page.getByRole("main").getByRole("alert")).toHaveText(
+    await expect(page.getByRole("main").locator(".error")).toHaveText(
       transportFailure
         ? unreachable
         : "Google sign-in did not start. Please try again.",
@@ -506,7 +506,7 @@ test("a signed-out member returns to a linked reply after email sign-in and sess
   await page.getByRole("button", { name: "Continue with Google" }).click();
   await page.getByRole("button", { name: "Cancel", exact: true }).click();
   await expect(page).toHaveURL(`${link.login}&error=access_denied`);
-  await expect(page.getByRole("main").getByRole("alert")).toBeVisible();
+  await expect(page.getByRole("main").locator(".error")).toBeVisible();
   await signInWithCode(page, "returnreader@example.test");
   await expectReply(page, link);
 

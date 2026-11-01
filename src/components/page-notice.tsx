@@ -10,8 +10,9 @@ export function leaveNotice(path: string, message: string) {
   next = { path, message };
 }
 
-// The notice takes focus, so a reader hears the result where the action left
-// them. Dismiss removes it and calls `onDismiss` to place focus.
+// The notice takes focus, so keyboard users continue from the result where
+// the action left them. Dismiss removes it and calls `onDismiss` to place
+// focus.
 export function PageNotice({
   path,
   onDismiss,

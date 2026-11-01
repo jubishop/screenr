@@ -43,8 +43,7 @@ private struct RootToolbar: ViewModifier {
   }
 }
 
-// Opens Notifications, with a badge counting the unread ones, which VoiceOver
-// reads as the button's value.
+// Opens Notifications, with a badge counting the unread ones.
 struct BellButton: View {
   let unread: Int
   let action: () -> Void

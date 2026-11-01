@@ -132,7 +132,7 @@ export function PhotoEditor({
   ) {
     setBusy(control);
     setStatus("");
-    const saved = await failure.run(control, async () => save(await prepare()));
+    const saved = await failure.run(async () => save(await prepare()));
     setBusy(null);
     if (!saved) return;
     setStatus(done);
@@ -155,7 +155,6 @@ export function PhotoEditor({
             className="secondary"
             disabled={!interactive}
             unavailable={busy !== null}
-            aria-describedby={failure.describedBy("upload")}
             onClick={() => file.current?.click()}
           >
             {busy === "upload"
@@ -187,7 +186,6 @@ export function PhotoEditor({
               className="secondary"
               disabled={!interactive}
               unavailable={busy !== null}
-              aria-describedby={failure.describedBy("google")}
               onClick={() =>
                 void change(
                   "google",
@@ -205,7 +203,6 @@ export function PhotoEditor({
               className="secondary"
               disabled={!interactive}
               unavailable={busy !== null}
-              aria-describedby={failure.describedBy("remove")}
               onClick={() =>
                 void change("remove", async () => "remove", "Photo removed.")
               }
@@ -214,9 +211,7 @@ export function PhotoEditor({
             </ActionButton>
           )}
         </div>
-        <p className="small" role="status" aria-atomic="true">
-          {status}
-        </p>
+        <p className="small action-status">{status}</p>
         {failure.alert}
       </div>
     </div>

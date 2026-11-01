@@ -5,17 +5,15 @@ import { useActionError } from "./action-error";
 
 // The in-page confirmation for destructive actions; never a browser dialog.
 // It states the effect, then offers the action and Cancel. Cancel takes focus,
-// so a reader hears the question and an accidental Enter changes nothing.
-// While the action is pending, both buttons keep focus but ignore presses.
-// A failed action's message, `children`, follows the buttons and describes
-// the action through `describedBy`.
+// so an accidental Enter changes nothing. While the action is pending, both
+// buttons keep focus but ignore presses. A failed action's message,
+// `children`, follows the buttons.
 export function Confirmation({
   message,
   action,
   busy,
   onConfirm,
   onCancel,
-  describedBy,
   children,
 }: {
   message: string;
@@ -23,7 +21,6 @@ export function Confirmation({
   busy: boolean;
   onConfirm: () => void;
   onCancel: () => void;
-  describedBy?: string;
   children?: ReactNode;
 }) {
   const question = useId();
@@ -39,7 +36,6 @@ export function Confirmation({
           type="button"
           className="danger"
           unavailable={busy}
-          aria-describedby={describedBy}
           onClick={onConfirm}
         >
           {action}
@@ -81,7 +77,7 @@ export function ConfirmAction({
   const [pending, setPending] = useState(false);
   async function confirm() {
     setPending(true);
-    const done = await failure.run(action, run);
+    const done = await failure.run(run);
     setPending(false);
     if (done) onDone();
   }
@@ -92,7 +88,6 @@ export function ConfirmAction({
       busy={busy || pending}
       onConfirm={() => void confirm()}
       onCancel={onCancel}
-      describedBy={failure.describedBy(action)}
     >
       {failure.alert}
     </Confirmation>

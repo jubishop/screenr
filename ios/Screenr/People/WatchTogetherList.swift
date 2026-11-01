@@ -73,10 +73,6 @@ struct WatchTogetherList: View {
         }
       }
     }
-    // The count is the filter's result, as the web's status line reads.
-    .onChange(of: filter) {
-      AccessibilityNotification.Announcement(page.count(filter)).post()
-    }
   }
 }
 

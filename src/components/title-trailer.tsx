@@ -18,10 +18,7 @@ export function TitleTrailer({
     if (open) player.current?.focus();
   }, [open]);
   return (
-    <section className="title-trailer" aria-labelledby="trailer-heading">
-      <h2 id="trailer-heading" className="sr-only">
-        Trailer
-      </h2>
+    <section className="title-trailer" aria-label="Trailer">
       <div className="inline-actions">
         {!open && (
           <button

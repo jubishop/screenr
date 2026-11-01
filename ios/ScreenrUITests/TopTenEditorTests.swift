@@ -68,35 +68,6 @@ final class TopTenEditorTests: XCTestCase {
     XCTAssertEqual(app.editorOrder(), ["#1 Night Crossing", "#2 Harbor Lights"])
   }
 
-  // VoiceOver reads each entry, which offers its actions, then the entry's
-  // handle, which it drags with the list's own reorder gesture.
-  @MainActor
-  func testVoiceOverReadsEachEntryAndItsHandle() throws {
-    let log = RequestLog.temporary()
-    _ = openEditor(log: log)
-    let voiceOver = XCUIDevice.shared.voiceOverService
-    try voiceOver.enable()
-    addTeardownBlock { @MainActor in
-      do {
-        try voiceOver.disable()
-      } catch {
-        XCTFail("VoiceOver did not stop: \(error)")
-      }
-    }
-
-    var spoken: [String] = []
-    while spoken.count < 12, !(spoken.last ?? "").hasPrefix("Reorder #3 Harbor Lights") {
-      spoken.append(try voiceOver.moveForward().utterance)
-    }
-
-    for name in ["#1 Night Crossing", "#2 Paper Lanterns", "#3 Harbor Lights"] {
-      let entry = try XCTUnwrap(spoken.firstIndex { $0.hasPrefix(name) }, name)
-      XCTAssertTrue(spoken[entry].contains("Actions available"), spoken[entry])
-      let handle = spoken.dropFirst(entry + 1).first ?? ""
-      XCTAssertTrue(handle.hasPrefix("Reorder \(name) Button Draggable"), handle)
-    }
-  }
-
   // At the largest accessibility text size, every row's handle and the
   // explanation beneath them can be reached.
   @MainActor

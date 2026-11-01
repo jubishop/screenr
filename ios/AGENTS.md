@@ -61,10 +61,14 @@ layout, commands, and toolchain notes, and the
   and the `AccentColor` tint. Do not copy the web's custom components.
 - **Icons:** SF Symbols only, through `Image(systemName:)` or
   `Label(_:systemImage:)`. Add no icon images or icon catalogs.
-- **Accessibility:** required for every UI change. Give VoiceOver accurate
-  labels, values, traits, and actions, hide decorative elements, and support
-  Dynamic Type. UI tests run `performAccessibilityAudit()` on the screens
-  they reach.
+- **Accessibility:** required for every UI change. Keep text contrast,
+  support Dynamic Type without clipping text, and keep hit regions large
+  enough to tap. UI tests audit the screens they reach for those four, with
+  `performAccessibilityAudit(for: .screenr)` or the helpers that use it. Add
+  no hints, values, traits, actions, announcements, or groupings that only
+  change what assistive technology says; add an accessibility label or
+  identifier only for a UI test to find a control. See the
+  [product brief's accepted decisions](../docs/product-brief.md#accepted-decisions).
 - **Views:** keep views declarative. Put behavior in ScreenrKit view models.
 
 ## Tests

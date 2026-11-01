@@ -128,9 +128,8 @@ export function Screen({
   const stopped = useRef(isPermanent(initialStatus));
   const main = useRef<HTMLElement>(null);
   // After client navigation, focus the new page's heading, or the main region
-  // when an error replaces it, so screen readers announce the page and
-  // keyboard users continue from it. Refreshes keep focus, and linked entries
-  // keep their scroll position.
+  // when an error replaces it, so keyboard users continue from it. Refreshes
+  // keep focus, and linked entries keep their scroll position.
   const screenNumber = useRef(0);
   useEffect(() => {
     screenNumber.current ||= ++screensShown;
@@ -386,14 +385,9 @@ export function Screen({
           </p>
         </div>
       </header>
-      <main
-        className="main"
-        id="main-content"
-        ref={main}
-        aria-busy={navigating || undefined}
-      >
+      <main className="main" id="main-content" ref={main}>
         {loadError && (
-          <div className="error" role="alert">
+          <div className="error">
             {loadError}
             <button className="text-button" onClick={() => void refresh()}>
               Try again

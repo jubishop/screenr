@@ -10,11 +10,9 @@ struct Wordmark: View {
       Text(verbatim: "screenr")
         .font(font)
         .foregroundStyle(.tint)
-        .accessibilityAddTraits(.isHeader)
       Image(systemName: "circle.fill")
         .font(.caption2)
         .foregroundStyle(Color.brandDot)
-        .accessibilityHidden(true)
     }
   }
 }

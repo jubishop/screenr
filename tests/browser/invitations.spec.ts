@@ -53,11 +53,11 @@ test("invitation links copy on repeated mobile taps and keyboard activation", as
   await link.tap();
   try {
     await expect.poll(() => copied).toEqual([url]);
-    await expect(page.getByRole("status")).not.toHaveText("Link copied.");
+    await expect(page.locator(".action-status")).not.toHaveText("Link copied.");
   } finally {
     release();
   }
-  await expect(page.getByRole("status")).toHaveText("Link copied.");
+  await expect(page.locator(".action-status")).toHaveText("Link copied.");
   await link.tap();
   await expect.poll(() => copied).toEqual([url, url]);
   const copy = page.getByRole("button", { name: "Copy link", exact: true });
@@ -76,7 +76,7 @@ test("invitation links copy on repeated mobile taps and keyboard activation", as
   } finally {
     release();
   }
-  await expect(page.getByRole("status")).toHaveText("Link copied.");
+  await expect(page.locator(".action-status")).toHaveText("Link copied.");
   await expect(copy).toBeFocused();
   await page.keyboard.press("Space");
   await expect.poll(() => copied).toEqual([url, url, url, url]);
@@ -88,7 +88,9 @@ test("invitation links copy on repeated mobile taps and keyboard activation", as
   await expect(links).toHaveCount(2);
   const newest = links.first();
   await expect(newest).not.toHaveValue(url);
-  await expect(page.getByRole("status").first()).not.toHaveText("Link copied.");
+  await expect(page.locator(".action-status").first()).not.toHaveText(
+    "Link copied.",
+  );
   await newest.tap();
   await expect.poll(() => copied.at(-1)).toBe(await newest.inputValue());
   await page.context().close();
@@ -233,7 +235,9 @@ test("invitation links remain manually copyable when clipboard access fails or i
       });
     }, available);
     await link.tap();
-    await expect(page.getByRole("status")).toContainText("copy it manually");
+    await expect(page.locator(".action-status")).toContainText(
+      "copy it manually",
+    );
     await expect(link).toHaveValue(url);
     expect(
       await link.evaluate((input: HTMLInputElement) =>
@@ -308,10 +312,12 @@ test("invitation links share the exact URL and handle cancellation, failure, and
     await share.tap();
     await expect(share).toBeEnabled();
     if (failure === "AbortError") {
-      await expect(page.getByRole("status")).toBeEmpty();
+      await expect(page.locator(".action-status")).toBeEmpty();
       expect(copied).toEqual([]);
     } else {
-      await expect(page.getByRole("status")).toContainText("Could not share");
+      await expect(page.locator(".action-status")).toContainText(
+        "Could not share",
+      );
     }
   }
   await page.getByRole("button", { name: "Copy link", exact: true }).tap();
@@ -319,7 +325,7 @@ test("invitation links share the exact URL and handle cancellation, failure, and
   await page.evaluate(() => sessionStorage.removeItem("share-failure"));
   await share.tap();
   await expect.poll(() => shared.length).toBe(4);
-  await expect(page.getByRole("status")).toBeEmpty();
+  await expect(page.locator(".action-status")).toBeEmpty();
   for (const width of [390, 320, 1440]) {
     await page.setViewportSize({ width, height: 900 });
     for (const control of [

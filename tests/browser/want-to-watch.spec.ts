@@ -123,7 +123,7 @@ test("Want to watch opens from own and friends' profiles, lists what the viewer 
     name: "Availability unknown",
     exact: true,
   });
-  const count = page.getByRole("status").filter({ hasText: /to watch now$/ });
+  const count = page.locator(".watch-together-count");
   // The viewer's Netflix counts; the owner's AMC+ does not.
   await expect(ready.getByRole("heading", { level: 3 })).toHaveText([
     "Night Orchard",
@@ -235,7 +235,7 @@ test("Want to watch opens from own and friends' profiles, lists what the viewer 
     action: "remove",
   });
   await expect(
-    page.getByRole("alert").filter({ hasText: "Want to watch not found." }),
+    page.locator(".error").filter({ hasText: "Want to watch not found." }),
   ).toBeVisible();
   await expect(unknown).toHaveCount(0);
   expect((await page.reload())?.status()).toBe(404);

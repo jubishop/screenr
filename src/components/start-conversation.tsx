@@ -92,10 +92,7 @@ export function StartConversation({
         </div>
       )}
       {open && (
-        <section
-          className="title-comment-composer"
-          aria-label="Start a conversation"
-        >
+        <section className="title-comment-composer">
           <CommentComposer
             id={id}
             inputRef={area}
@@ -200,7 +197,7 @@ function EpisodeLabel({
 }) {
   if (seasons === null)
     return (
-      <p className="small muted" role="status">
+      <p className="small muted">
         Seasons are unavailable right now, so this comment will have no season
         label.
       </p>

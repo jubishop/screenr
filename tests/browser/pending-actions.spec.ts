@@ -141,9 +141,8 @@ test("feed entry and title actions keep keyboard focus while their writes are pe
     "remove-comment",
     { fail: message, screenshot: "pending-confirm-delete" },
   );
-  await expect(confirmation.getByRole("alert")).toHaveText(message);
+  await expect(confirmation.locator(".error")).toHaveText(message);
   await expect(pending.pressed).toBeFocused();
-  await expect(pending.pressed).toHaveAccessibleDescription(message);
   expect(pending.requests()).toBe(1);
 
   await reader.goto("/titles/movie/987655");
@@ -308,7 +307,7 @@ test("Friends rows, notification answers, invitations, and Account settings keep
     "relationship",
     { fail: message, screenshot: "pending-row" },
   );
-  await expect(row.getByRole("alert")).toHaveText(message);
+  await expect(row.locator(".error")).toHaveText(message);
   await expect(pending.pressed).toBeFocused();
   await expect(pending.pressed).toHaveAttribute("aria-disabled", "false");
   expect(pending.requests()).toBe(1);

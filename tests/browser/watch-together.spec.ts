@@ -112,13 +112,13 @@ test("watch together opens from a friend profile, filters shared titles, and ref
   await friend.goto("/people/watchowner");
   await confirmProfileAction(friend, "Unfriend");
   await expect(
-    owner.getByRole("alert").filter({ hasText: "Watch together not found." }),
+    owner.locator(".error").filter({ hasText: "Watch together not found." }),
   ).toBeVisible();
   await expect(results).toHaveCount(0);
   expect((await owner.request.get(apiPath)).status()).toBe(404);
   expect((await owner.reload())?.status()).toBe(404);
   await expect(
-    owner.getByRole("alert").filter({ hasText: "Watch together not found." }),
+    owner.locator(".error").filter({ hasText: "Watch together not found." }),
   ).toBeVisible();
   await owner.goto("/people/watchfriend");
   await expect(

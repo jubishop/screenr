@@ -43,9 +43,7 @@ export function InvitationsView({
         className="invite-form"
         onSubmit={(e) => {
           e.preventDefault();
-          void failure.run("create", () =>
-            mutate("invite", { limit: inviteLimit }),
-          );
+          void failure.run(() => mutate("invite", { limit: inviteLimit }));
         }}
       >
         <label>
@@ -66,7 +64,6 @@ export function InvitationsView({
           className="primary"
           disabled={!interactive}
           unavailable={busy}
-          aria-describedby={failure.describedBy("create")}
         >
           Create invitation
         </ActionButton>

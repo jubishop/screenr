@@ -60,9 +60,7 @@ test("streaming preferences persist, cancel, survive a failed save, and clear on
   const amc = settings.getByRole("checkbox", { name: "AMC+", exact: true });
   await amc.focus();
   await amc.press("Space");
-  await expect(
-    settings.getByRole("status").filter({ hasText: "2 selected" }),
-  ).toBeVisible();
+  await expect(settings.getByText("2 selected", { exact: true })).toBeVisible();
   await noOverflow(page, "streaming-account");
   await page.route(
     "**/api/screenr/streaming-services",
@@ -70,7 +68,7 @@ test("streaming preferences persist, cancel, survive a failed save, and clear on
     { times: 1 },
   );
   await settings.getByRole("button", { name: "Save services" }).click();
-  await expect(settings.getByRole("alert")).toBeVisible();
+  await expect(settings.locator(".error")).toBeVisible();
   await expect(
     settings.getByRole("checkbox", { name: "AMC+", exact: true }),
   ).toBeChecked();
@@ -146,11 +144,9 @@ test("Find a title filters catalog results and suggestions using current service
   await page.getByRole("button", { name: "Search", exact: true }).click();
   const results = page.getByRole("region", { name: "Search results" });
   const filter = page.getByRole("button", { name: "My services", exact: true });
-  const summary = page.getByRole("status").filter({ hasText: /results?$/ });
   await expect(results.getByRole("heading")).toHaveText(
     fixtures.map((t) => t.name),
   );
-  await expect(summary).toHaveText("5 results");
   // These fixtures have no release date, so cards show only the kind.
   await expect(results.getByText("Movie", { exact: true })).toHaveCount(3);
   await expect(results.getByText("TV show", { exact: true })).toHaveCount(2);
@@ -169,8 +165,6 @@ test("Find a title filters catalog results and suggestions using current service
     "Night Crossing",
     "Night Orchard",
   ]);
-  // The count follows the My services filter.
-  await expect(summary).toHaveText("2 results");
   await expect(
     page.getByText(/1 title has unknown viewing options/),
   ).toBeVisible();

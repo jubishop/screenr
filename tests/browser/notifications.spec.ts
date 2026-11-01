@@ -98,7 +98,7 @@ test("an open panel reads once on return and skips unchanged polls without rende
   expect((await marked).postDataJSON()).toEqual({
     through: (await arrival.json()).through,
   });
-  await expect(bell(owner)).toHaveAccessibleName("Notifications");
+  await expect(bell(owner).locator(".notification-badge")).toHaveCount(0);
   await expect(
     panel.getByRole("img", { name: "Unread", exact: true }),
   ).toHaveCount(0);
@@ -164,7 +164,7 @@ test("desktop dropdown and mobile panel preserve drafts, scroll, and unread stat
       await panel.getByRole("button", { name: "Close notifications" }).click();
     await expect(panel).not.toBeVisible();
     await expect(bell(owner)).toBeFocused();
-    await expect(bell(owner)).toHaveAccessibleName("Notifications, 6 unread");
+    await expect(bell(owner).locator(".notification-badge")).toHaveText("6");
     expect(owner.url()).toBe(originalURL);
     expect(await owner.evaluate(() => window.scrollY)).toBe(scroll);
     await expect(draft).toHaveValue("Keep my unfinished comment.");
@@ -210,7 +210,7 @@ test("notification selection opens the exact older reply, with read filters and 
     `${browserConfig.baseURL}/titles/tv/987657?item=${id}&reply=${first.id}`,
   );
   await expect(owner.locator(`[data-comment-id="${first.id}"]`)).toBeVisible();
-  await expect(bell(owner)).toHaveAccessibleName("Notifications, 6 unread");
+  await expect(bell(owner).locator(".notification-badge")).toHaveText("6");
   await owner.evaluate(() => window.scrollTo(0, 0));
   await expect(
     owner.locator(`[data-comment-id="${first.id}"]`),
@@ -224,7 +224,7 @@ test("notification selection opens the exact older reply, with read filters and 
   await expect(
     owner.locator(`[data-comment-id="${first.id}"]`),
   ).toBeInViewport();
-  await expect(bell(owner)).toHaveAccessibleName("Notifications, 6 unread");
+  await expect(bell(owner).locator(".notification-badge")).toHaveText("6");
   await bell(owner).click();
   panel = owner.getByRole("dialog");
   await panel.getByRole("button", { name: "Unread", exact: true }).click();
@@ -232,9 +232,9 @@ test("notification selection opens the exact older reply, with read filters and 
   await panel.getByRole("button", { name: "Mark all as read" }).click();
   await expect(panel.getByText("You're all caught up.")).toBeVisible();
   await panel.getByRole("button", { name: "Close notifications" }).click();
-  await expect(bell(owner)).toHaveAccessibleName("Notifications");
+  await expect(bell(owner).locator(".notification-badge")).toHaveCount(0);
   await owner.reload();
-  await expect(bell(owner)).toHaveAccessibleName("Notifications");
+  await expect(bell(owner).locator(".notification-badge")).toHaveCount(0);
 });
 
 test("open panel removes blocked activity, recovers from failed reads, and activity-email settings persist", async ({
@@ -254,7 +254,7 @@ test("open panel removes blocked activity, recovers from failed reads, and activ
   await expect(setting).not.toBeChecked();
   const failure = owner
     .getByRole("region", { name: "Activity emails" })
-    .getByRole("alert");
+    .locator(".error");
   // The checkbox shows the choice while it saves, and a failed save
   // restores the saved setting.
   const hold = async (fail: boolean) => {
@@ -296,7 +296,7 @@ test("open panel removes blocked activity, recovers from failed reads, and activ
   );
   await bell(owner).click();
   const panel = owner.getByRole("dialog");
-  await expect(panel.getByRole("alert")).toBeVisible();
+  await expect(panel.locator(".error")).toBeVisible();
   await panel.getByRole("button", { name: "Try again" }).click();
   await expect(
     panel.getByText("noticeblocked became your friend."),
@@ -338,9 +338,9 @@ test("mark all on a polled older page preserves new arrivals until Latest is dis
     body: "A new arrival while browsing an older page",
     spoiler: false,
   });
-  await expect(bell(owner)).toHaveAccessibleName("Notifications, 36 unread");
+  await expect(bell(owner).locator(".notification-badge")).toHaveText("36");
   await panel.getByRole("button", { name: "Mark all as read" }).click();
-  await expect(bell(owner)).toHaveAccessibleName("Notifications, 1 unread");
+  await expect(bell(owner).locator(".notification-badge")).toHaveText("1");
   await expect(
     panel.getByRole("img", { name: "Unread", exact: true }),
   ).toHaveCount(0);
@@ -349,7 +349,7 @@ test("mark all on a polled older page preserves new arrivals until Latest is dis
     panel.getByRole("img", { name: "Unread", exact: true }),
   ).toHaveCount(1);
   await panel.getByRole("button", { name: "Mark all as read" }).click();
-  await expect(bell(owner)).toHaveAccessibleName("Notifications");
+  await expect(bell(owner).locator(".notification-badge")).toHaveCount(0);
 });
 
 test("pending friend-request notifications accept or confirm Decline in the panel by keyboard", async ({
@@ -379,7 +379,7 @@ test("pending friend-request notifications accept or confirm Decline in the pane
     await expect(
       request.getByRole("button", { name: /^(Accept|Decline)$/ }),
     ).toHaveText(["Accept", "Decline"]);
-  await expect(bell(owner)).toHaveAccessibleName("Notifications, 2 unread");
+  await expect(bell(owner).locator(".notification-badge")).toHaveText("2");
   for (const width of [390, 1440]) {
     await owner.setViewportSize({ width, height: 844 });
     expect(
@@ -401,7 +401,7 @@ test("pending friend-request notifications accept or confirm Decline in the pane
     mayaItem.getByRole("button", { name: /^(Accept|Decline)$/ }),
   ).toHaveCount(0);
   await expect(mayaItem.getByRole("img", { name: "Unread" })).toHaveCount(0);
-  await expect(bell(owner)).toHaveAccessibleName("Notifications, 1 unread");
+  await expect(bell(owner).locator(".notification-badge")).toHaveText("1");
   await expect(requests.getByRole("article")).toHaveCount(1);
   // The answered request stays with its result through the panel's polling.
   await owner.waitForResponse((response) =>
@@ -420,7 +420,7 @@ test("pending friend-request notifications accept or confirm Decline in the pane
   await owner.keyboard.press("Enter");
   await expect(confirm).toHaveCount(0);
   await expect(decline).toBeFocused();
-  await expect(bell(owner)).toHaveAccessibleName("Notifications, 1 unread");
+  await expect(bell(owner).locator(".notification-badge")).toHaveText("1");
   await owner.keyboard.press("Enter");
   await owner.keyboard.press("Shift+Tab");
   await expect(
@@ -430,7 +430,7 @@ test("pending friend-request notifications accept or confirm Decline in the pane
   await expect(
     samItem.getByText("Friend request declined.", { exact: true }),
   ).toBeFocused();
-  await expect(bell(owner)).toHaveAccessibleName("Notifications");
+  await expect(bell(owner).locator(".notification-badge")).toHaveCount(0);
   await expect(requests).toHaveCount(0);
 
   // Selecting the rest of an answered notification still opens the person.
