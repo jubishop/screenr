@@ -169,7 +169,7 @@ test("emoji reactions persist across feeds on entries and replies, with change, 
           reactions.getByRole("button", { name: "Angry: 1", exact: true }),
         ).toHaveCount(0);
       } else {
-        await expect(heading.getByRole("alert")).toHaveText(
+        await expect(heading.locator(".error")).toHaveText(
           "Reaction failed. Please retry.",
         );
         await expect(

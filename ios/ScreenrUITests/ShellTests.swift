@@ -201,7 +201,7 @@ final class ShellTests: XCTestCase {
       .exists
     )
     XCTAssertFalse(app.tabBars.firstMatch.exists)
-    try app.performAccessibilityAudit()
+    try app.performAccessibilityAudit(for: .screenr)
   }
 
   @MainActor
@@ -211,7 +211,7 @@ final class ShellTests: XCTestCase {
 
     XCTAssertTrue(app.staticTexts["What should friends call you?"].waitForExistence(timeout: 10))
     XCTAssertFalse(app.tabBars.firstMatch.exists)
-    try app.performAccessibilityAudit()
+    try app.performAccessibilityAudit(for: .screenr)
   }
 
   @MainActor
@@ -222,7 +222,7 @@ final class ShellTests: XCTestCase {
     XCTAssertTrue(app.staticTexts["Update Screenr"].waitForExistence(timeout: 10))
     XCTAssertTrue(app.buttons["Open TestFlight"].exists)
     XCTAssertFalse(app.tabBars.firstMatch.exists)
-    try app.performAccessibilityAudit()
+    try app.performAccessibilityAudit(for: .screenr)
   }
 
   // The visible screen polls every three seconds while the app is active,

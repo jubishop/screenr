@@ -80,7 +80,7 @@ extension FriendActivity {
     return tokens
   }
 
-  // The whole line as one sentence, for VoiceOver.
+  // The whole line as one sentence, as the share extension shows it.
   public var sentence: String {
     lineParts.map { part in
       switch part {

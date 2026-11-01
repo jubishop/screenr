@@ -4,8 +4,7 @@ import Observation
 // The member's own top 10 in the editor sheet that Edit opens on their
 // profile, with the web's rules:
 //
-// - A drag, or VoiceOver's Move up or Move down, sends one `top-ten` `move`
-//   with the entry's new rank.
+// - A drag sends one `top-ten` `move` with the entry's new rank.
 // - Removing sends `remove`, which keeps the title's Recommend.
 // - Each change saves at once, and one change saves at a time.
 // - The list shows a change while it saves. A failed save returns the list to

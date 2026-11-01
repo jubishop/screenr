@@ -40,7 +40,6 @@ struct TitleListingTests {
       ]
     )
     #expect(saved.map(\.text) == ["On Netflix", "Included in your saved services"])
-    #expect(saved.first?.spokenText == "On Netflix (saved)")
     // Watch together marks the services either person saved.
     #expect(
       night.lines(savedServices: ["service:netflix"], savedBy: .eitherPerson).map(\.text) == [

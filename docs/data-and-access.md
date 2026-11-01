@@ -627,10 +627,9 @@ list ([issue #191](https://github.com/jubishop/screenr/issues/191)); see
 [removed controls](interface-design.md#confirm-other-destructive-actions--2026-10-12).
 Proxy error pages, empty bodies, and other
 unreadable replies show a message asking the member to try again instead of
-parser errors. A failed write shows its message as an alert beneath the
-control that started it, in the same entry, comment, person row, invitation,
-or settings card, and the message describes that control
-([issue #141](https://github.com/jubishop/screenr/issues/141)). Refreshes
+parser errors. A failed write shows its message beneath the control that
+started it, in the same entry, comment, person row, invitation, or settings
+card ([issue #141](https://github.com/jubishop/screenr/issues/141)). Refreshes
 keep it, and the next action in that place replaces it. A failed confirmed
 action keeps its confirmation open with the message until Cancel. Only refresh
 failures appear at the top of the page. Access changes clear content on the

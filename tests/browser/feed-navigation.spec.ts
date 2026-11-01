@@ -107,9 +107,9 @@ test("discussion links copy from every feed without navigating or losing drafts 
         exact: true,
       });
       await expect(copy).toBeVisible();
-      await expect(entry.getByRole("status")).toBeEmpty();
+      await expect(entry.locator(".copy-status")).toBeEmpty();
       await copy.tap();
-      await expect(entry.getByRole("status")).toHaveText("Link copied.");
+      await expect(entry.locator(".copy-status")).toHaveText("Link copied.");
       expect(await reader.evaluate(() => navigator.clipboard.readText())).toBe(
         expectedURL,
       );
@@ -147,7 +147,7 @@ test("discussion links copy from every feed without navigating or losing drafts 
       });
     }, unavailable);
     await copy.tap();
-    await expect(entry.getByRole("status")).toHaveText(
+    await expect(entry.locator(".copy-status")).toHaveText(
       "Could not copy the link. Please try again.",
     );
     await expect(reader).toHaveURL(`${browserConfig.baseURL}/people/copyowner`);
@@ -159,7 +159,7 @@ test("discussion links copy from every feed without navigating or losing drafts 
     Reflect.deleteProperty(navigator, "clipboard");
   });
   await copy.tap();
-  await expect(entry.getByRole("status")).toHaveText("Link copied.");
+  await expect(entry.locator(".copy-status")).toHaveText("Link copied.");
   const sharedURL = await reader.evaluate(() => navigator.clipboard.readText());
   await owner.goto(sharedURL);
   await expect(
@@ -179,7 +179,7 @@ test("discussion links copy from every feed without navigating or losing drafts 
   await reader.context().close();
 });
 
-test("feed poster links name their titles and support keyboard navigation with and without artwork", async ({
+test("feed poster links open their titles and support keyboard navigation with and without artwork", async ({
   member,
 }) => {
   const owner = await member("posterowner");
@@ -199,10 +199,11 @@ test("feed poster links name their titles and support keyboard navigation with a
   await owner.goto("/search");
   await owner.getByLabel("Movie or show title").fill("Lantern");
   await owner.getByRole("button", { name: "Search", exact: true }).click();
-  const result = owner.locator(".search-result");
-  await expect(result).toHaveAccessibleName(
-    "The Lantern Room Movie · 2026 No subscription or free options listed.",
-  );
+  const result = owner.getByRole("link", {
+    name: "The Lantern Room Movie · 2026 No subscription or free options listed.",
+    exact: true,
+  });
+  await expect(result).toBeVisible();
   await result.click();
   await expect(owner).toHaveURL(/\/titles\/movie\/987654$/);
 
@@ -226,7 +227,6 @@ test("feed poster links name their titles and support keyboard navigation with a
       });
       const poster = entry.locator(".poster-link");
       await expect(poster.getByRole("img")).toHaveCount(hasArtwork ? 1 : 0);
-      await expect(poster).toHaveAccessibleName(name);
       await poster.focus();
       await expect(poster).toBeFocused();
       await reader.keyboard.press("Enter");

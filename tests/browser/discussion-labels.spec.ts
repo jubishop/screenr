@@ -123,9 +123,12 @@ test("TV discussion posts take a season or episode label from TMDB pickers that 
   await owner
     .getByRole("button", { name: "Start a conversation", exact: true })
     .click();
-  await expect(composer.getByRole("status")).toHaveText(
-    "Seasons are unavailable right now, so this comment will have no season label.",
-  );
+  await expect(
+    composer.getByText(
+      "Seasons are unavailable right now, so this comment will have no season label.",
+      { exact: true },
+    ),
+  ).toBeVisible();
   await expect(season).toHaveCount(0);
   await composer
     .getByLabel("Your comment", { exact: true })

@@ -43,8 +43,8 @@ test("members rate, review, edit, and remove from the title page while friends r
   // Distinct names let the scenario repeat against the same database.
   const name = `review_${randomUUID().slice(0, 8)}`;
   const author = await member(name);
-  const reader = await member(`${name}_reader`);
-  await prepareFriendship(author, reader);
+  const friend = await member(`${name}_reader`);
+  await prepareFriendship(author, friend);
   await author.goto("/titles/movie/998301");
   const action = (label: string) =>
     author.getByRole("button", { name: label, exact: true });
@@ -98,11 +98,11 @@ test("members rate, review, edit, and remove from the title page while friends r
   ).toEqual(["solid", "3px"]);
   await author.screenshot({ path: ".cache/review-stars-focus.png" });
   await expect(form.locator(".star-choices label")).toHaveText([
-    "★1 star",
-    "★2 stars",
-    "★3 stars",
-    "★4 stars",
-    "☆5 stars",
+    "★",
+    "★",
+    "★",
+    "★",
+    "☆",
   ]);
   await expect(save).toHaveAttribute("aria-disabled", "false");
   await text.fill("Quiet, warm, and lovely to look at.");
@@ -110,7 +110,7 @@ test("members rate, review, edit, and remove from the title page while friends r
   // A failed save keeps the form and draft with the error.
   await failAction(author, "review", "Screenr is busy. Please try again.");
   await save.click();
-  await expect(form.getByRole("alert")).toHaveText(
+  await expect(form.locator(".error")).toHaveText(
     "Screenr is busy. Please try again.",
   );
   await author.unroute("**/api/screenr/review");
@@ -121,9 +121,7 @@ test("members rate, review, edit, and remove from the title page while friends r
   const id = (await own.getAttribute("data-item-id"))!;
   await expect(byline(own)).toHaveText("reviewed");
   await expect(own.locator(".activity-by")).not.toContainText("Edited");
-  await expect(own.locator(".review-stars")).toHaveText(
-    "★★★★☆Rated 4 stars out of 5",
-  );
+  await expect(own.locator(".review-stars")).toHaveText("★★★★☆");
   await expect(own.locator(".comment-body")).toHaveText(
     "Quiet, warm, and lovely to look at.",
   );
@@ -132,25 +130,23 @@ test("members rate, review, edit, and remove from the title page while friends r
   // A friend reads the full entry in the friends feed and on the author's
   // profile, then replies and reacts there.
   for (const path of ["/", `/people/${name}`]) {
-    await reader.goto(path);
-    const entry = reader.locator(`[data-item-id="${id}"]`);
+    await friend.goto(path);
+    const entry = friend.locator(`[data-item-id="${id}"]`);
     await expect(
       entry.getByRole("heading", { name: "Paper Lanterns" }),
     ).toBeVisible();
     await expect(byline(entry)).toHaveText("reviewed");
-    await expect(entry.locator(".review-stars")).toContainText(
-      "Rated 4 stars out of 5",
-    );
+    await expect(entry.locator(".review-stars")).toHaveText("★★★★☆");
     await expect(entry.locator(".comment-body")).toHaveText(
       "Quiet, warm, and lovely to look at.",
     );
   }
-  const entry = reader.locator(`[data-item-id="${id}"]`);
+  const entry = friend.locator(`[data-item-id="${id}"]`);
   for (const width of [390, 1366]) {
-    await reader.setViewportSize({ width, height: 844 });
-    await expectOnScreen(reader, entry, "review-entry");
+    await friend.setViewportSize({ width, height: 844 });
+    await expectOnScreen(friend, entry, "review-entry");
   }
-  await expectBothThemes(reader, "review-entry-themes");
+  await expectBothThemes(friend, "review-entry-themes");
   await entry.getByRole("button", { name: "Comment", exact: true }).click();
   await entry.getByLabel("Add your reply").fill("Was the ending happy?");
   await entry.getByRole("button", { name: "Post reply", exact: true }).click();
@@ -170,7 +166,7 @@ test("members rate, review, edit, and remove from the title page while friends r
 
   // The comment notifies the author and opens the review on the title page.
   const bell = author.getByRole("button", { name: /^Notifications/ });
-  await expect(bell).toHaveAccessibleName("Notifications, 1 unread");
+  await expect(bell.locator(".notification-badge")).toHaveText("1");
   await bell.click();
   const notice = author
     .getByRole("dialog", { name: "Notifications" })
@@ -206,18 +202,14 @@ test("members rate, review, edit, and remove from the title page while friends r
   await expect(own).toHaveCount(1);
   await expect(own).toHaveAttribute("data-item-id", id);
   await expect(own.locator(".activity-by")).toContainText("· Edited");
-  await expect(own.locator(".review-stars")).toContainText(
-    "Rated 2 stars out of 5",
-  );
+  await expect(own.locator(".review-stars")).toHaveText("★★☆☆☆");
 
   // The spoiler flag hides the text and discussion until revealed, but not
   // the rating.
-  await reader.goto(`/titles/movie/998301`);
-  const compact = reader.locator(`[data-item-id="${id}"]`);
+  await friend.goto(`/titles/movie/998301`);
+  const compact = friend.locator(`[data-item-id="${id}"]`);
   await expect(compact.locator(".activity-by")).toContainText("· Edited");
-  await expect(compact.locator(".review-stars")).toContainText(
-    "Rated 2 stars out of 5",
-  );
+  await expect(compact.locator(".review-stars")).toHaveText("★★☆☆☆");
   await expect(compact.getByText("they never find")).toHaveCount(0);
   await expect(compact.getByText("Was the ending happy?")).toHaveCount(0);
   await compact
@@ -272,7 +264,7 @@ test("members rate, review, edit, and remove from the title page while friends r
   ).toHaveCount(
     1, // the reply's
   );
-  await reader.reload();
+  await friend.reload();
   await expect(byline(compact)).toHaveText("removed their review");
   await expect(compact.getByText("Was the ending happy?")).toBeVisible();
 

@@ -41,7 +41,6 @@ private struct SetupForm: View {
         VStack(alignment: .leading, spacing: 12) {
           Text("Profile photo (optional)")
             .font(.headline)
-            .accessibilityAddTraits(.isHeader)
           ProfilePhotoEditor(model: model.photo, name: model.name)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -56,9 +55,6 @@ private struct SetupForm: View {
     .scrollDismissesKeyboard(.interactively)
     .background(Color(uiColor: .systemBackground))
     .task { await model.load() }
-    .onChange(of: model.failure) { _, failure in
-      if let failure { AccessibilityNotification.Announcement(failure).post() }
-    }
   }
 
   private var header: some View {
@@ -66,7 +62,6 @@ private struct SetupForm: View {
       Wordmark()
       Text("What should friends call you?")
         .font(.title2.weight(.bold))
-        .accessibilityAddTraits(.isHeader)
       Text(
         "Two details, and you’re in. Joining through a member’s invitation automatically makes you friends with them."
       )
@@ -82,7 +77,6 @@ private struct SetupForm: View {
       VStack(alignment: .leading, spacing: 8) {
         Text("Display name")
           .font(.subheadline.weight(.semibold))
-          .accessibilityHidden(true)
         TextField("Display name", text: $model.name)
           .textContentType(.name)
           .submitLabel(.next)
@@ -93,7 +87,6 @@ private struct SetupForm: View {
       VStack(alignment: .leading, spacing: 8) {
         Text("Username")
           .font(.subheadline.weight(.semibold))
-          .accessibilityHidden(true)
         TextField("Username", text: $model.username)
           .textContentType(.username)
           .textInputAutocapitalization(.never)
@@ -102,10 +95,8 @@ private struct SetupForm: View {
           .focused($focus, equals: .username)
           .onSubmit(submit)
           .textFieldStyle(.roundedBorder)
-          .accessibilityHint("3–24 letters, numbers, or underscores.")
         Text("3–24 letters, numbers, or underscores.")
           .font(.footnote)
-          .accessibilityHidden(true)
       }
     }
   }
@@ -126,7 +117,6 @@ private struct SetupForm: View {
     HStack(alignment: .firstTextBaseline, spacing: 8) {
       Image(systemName: "exclamationmark.triangle.fill")
         .foregroundStyle(.red)
-        .accessibilityHidden(true)
       Text(text)
     }
     .font(.callout)

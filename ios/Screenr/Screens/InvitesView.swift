@@ -61,12 +61,6 @@ private struct InvitationsScreen: View {
       }
       Button("Cancel", role: .cancel) {}
     }
-    .onChange(of: invitations.status) { _, status in
-      if let status { AccessibilityNotification.Announcement(status).post() }
-    }
-    .onChange(of: invitations.failure) { _, failure in
-      if let failure { AccessibilityNotification.Announcement(failure).post() }
-    }
   }
 
   private var create: some View {
@@ -116,7 +110,6 @@ private struct InvitationSection: View {
         Text("Expires \(invitation.expiresAt.formatted(date: .long, time: .omitted))")
           .font(.subheadline)
       }
-      .accessibilityElement(children: .combine)
       ForEach(invitation.joined, id: \.username) { person in
         NavigationLink(value: Destination.profile(username: person.username)) {
           Text("Joined: \(person.displayName) (@\(person.username))")

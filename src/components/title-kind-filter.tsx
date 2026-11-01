@@ -12,7 +12,7 @@ export function TitleKindButtons({
   onChange: (value: TitleKindFilter) => void;
 }) {
   return (
-    <div className="inline-actions" role="group" aria-label="Title type">
+    <div className="inline-actions">
       {(
         [
           ["all", "All"],

@@ -276,7 +276,7 @@ extension XCUIApplication {
   // fails, once `performSettledAudit` has audited the settled screen again.
   @MainActor
   func performSettingsAudit() throws {
-    try performSettledAudit(for: .all.subtracting([.dynamicType, .textClipped])) {
+    try performSettledAudit(for: .screenr.subtracting([.dynamicType, .textClipped])) {
       let screen = windows.firstMatch.frame
       let covers = glassCovers()
       return { issue in

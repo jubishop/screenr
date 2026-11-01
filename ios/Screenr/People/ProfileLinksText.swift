@@ -3,8 +3,7 @@ import SwiftUI
 
 // People named in a line of text, each name linking to their profile, such
 // as "Mutual friends: Ben Ortiz (@ben), Cam Rivera (@cam)". Links in text
-// keep the line wrapping as a sentence, where buttons would not, and
-// VoiceOver offers them through its links rotor.
+// keep the line wrapping as a sentence, where buttons would not.
 struct ProfileLinksText: View {
   var prefix = ""
   let people: [Person]

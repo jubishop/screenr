@@ -295,9 +295,10 @@ public final class FeedModel {
     return entry.comments.first { $0.id == id && $0.isLive }
   }
 
-  // "Replying to @ben", or that the comment is no longer there.
-  public func composerLabel(_ target: ComposerTarget, in entry: FeedEntry) -> String {
-    guard case .reply = target else { return "Reply to feed item" }
+  // "Replying to @ben" above a reply's composer, or that the comment is no
+  // longer there. A comment on the entry itself has none.
+  public func composerLabel(_ target: ComposerTarget, in entry: FeedEntry) -> String? {
+    guard case .reply = target else { return nil }
     guard let comment = replyTarget(target, in: entry), let username = comment.username else {
       return "Reply target unavailable."
     }

@@ -7,7 +7,6 @@ import WebKit
 // embedded player opens inline, can play full screen, and stays open while
 // the page reads again.
 struct TrailerSection: View {
-  let title: Title
   let trailer: Trailer
   let player: TrailerPlayer
   @Environment(\.trailerLoading) private var loading
@@ -17,14 +16,12 @@ struct TrailerSection: View {
     VStack(alignment: .leading, spacing: 12) {
       Text("Trailer")
         .font(.title3.bold())
-        .accessibilityAddTraits(.isHeader)
       if let page = player.page(for: trailer) {
         WebView(page)
           .webViewElementFullscreenBehavior(.enabled)
           .aspectRatio(16 / 9, contentMode: .fit)
           .frame(minHeight: 200)
           .clipShape(RoundedRectangle(cornerRadius: 12))
-          .accessibilityLabel("\(title.name) trailer: \(trailer.name)")
           .accessibilityIdentifier("trailer-player")
           .onAppear { TrailerOrientation.shared.playerAppeared() }
           .onDisappear { TrailerOrientation.shared.playerDisappeared() }

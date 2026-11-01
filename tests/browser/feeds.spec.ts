@@ -289,7 +289,7 @@ test("feed entries lay out actions in full-width rows with an icon copy link and
   }
   await copy.focus();
   await reader.keyboard.press("Enter");
-  const status = header.getByRole("status");
+  const status = header.locator(".copy-status");
   await expect(status).toHaveText("Link copied.");
   await expect(copy).toBeFocused();
   await expect(reader).toHaveURL(/\/people\/actionsowner$/);
@@ -428,22 +428,20 @@ test("a failed entry, comment, or title action shows its error beside that contr
       message,
       screenshot: "action-error-entry",
     });
-    await expect(recommend).toHaveAccessibleDescription("");
   }
-  await expect(otherHeader.getByRole("alert")).toHaveCount(0);
+  await expect(otherHeader.locator(".error")).toHaveCount(0);
   await expect(
     otherHeader.getByRole("button", { name: "+ Want to watch", exact: true }),
   ).toBeEnabled();
   // Refreshes keep the message; the entry's next action replaces it.
   await nextAccountRefreshForPath(reader, "/");
-  await expect(header.getByRole("alert")).toHaveText(message);
+  await expect(header.locator(".error")).toHaveText(message);
   await reader.unroute("**/api/screenr/activity");
   await press(recommend);
   await expect(
     header.getByRole("button", { name: "✓ Recommended", exact: true }),
   ).toBeVisible();
-  await expect(header.getByRole("alert")).toHaveCount(0);
-  await expect(want).toHaveAccessibleDescription("");
+  await expect(header.locator(".error")).toHaveCount(0);
 
   // A comment's removal error stays in its confirmation, inside the comment.
   const comment = reader.locator(`[data-comment-id="${ownComment}"]`);
@@ -478,7 +476,7 @@ test("a failed entry, comment, or title action shows its error beside that contr
   await expect(
     reader.getByText("A reply to remove", { exact: true }),
   ).toHaveCount(0);
-  await expect(reader.getByRole("main").getByRole("alert")).toHaveCount(0);
+  await expect(reader.getByRole("main").locator(".error")).toHaveCount(0);
 
   // The title page header shows its own actions' errors beneath them.
   await reader.goto("/titles/movie/987655");
@@ -739,7 +737,7 @@ test("slow and failed refreshes enforce access while preserving reply drafts", a
   await page.route("**/api/screenr/screen?**", (route) =>
     route.fulfill({ status: 503, json: { error: "Refresh unavailable." } }),
   );
-  await expect(page.getByRole("main").getByRole("alert")).toContainText(
+  await expect(page.getByRole("main").locator(".error")).toContainText(
     "Refresh unavailable.",
   );
   await expect(
@@ -811,9 +809,9 @@ test("slow and failed refreshes enforce access while preserving reply drafts", a
   await expect.poll(() => reads.length).toBe(2);
   await viewer.clock.runFor(3000);
   await reads[1].continue();
-  await expect(viewer.getByRole("status")).toContainText(
-    "This activity is unavailable.",
-  );
+  await expect(
+    viewer.getByText("This activity is unavailable.", { exact: true }),
+  ).toBeVisible();
   await expect(
     viewer.getByText("A slow incoming reply", { exact: true }),
   ).toHaveCount(0);
@@ -826,7 +824,7 @@ test("slow and failed refreshes enforce access while preserving reply drafts", a
   // The deadline counts from the held read, which started with the first
   // poll on the paused clock.
   await viewer.clock.runFor(10_000);
-  await expect(viewer.getByRole("main").getByRole("alert")).toContainText(
+  await expect(viewer.getByRole("main").locator(".error")).toContainText(
     "Refresh timed out. Please try again.",
   );
   await expect(
@@ -889,7 +887,7 @@ test("posting preserves later typing and background refresh preserves action err
   );
   await page.getByLabel("Movie or show title").fill("Lantern");
   await page.getByRole("button", { name: "Search", exact: true }).click();
-  const alert = page.getByRole("main").getByRole("alert");
+  const alert = page.getByRole("main").locator(".error");
   await expect(alert).toContainText("Catalog temporarily unavailable.");
   await nextAccountRefreshForPath(page, "/search");
   await expect(alert).toContainText("Catalog temporarily unavailable.");

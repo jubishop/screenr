@@ -288,7 +288,7 @@ export function Notifications({
       <button
         ref={bell}
         className="notification-bell"
-        aria-label={`Notifications${unread ? `, ${unread} unread` : ""}`}
+        aria-label="Notifications"
         aria-haspopup="dialog"
         aria-expanded={open}
         disabled={!interactive}
@@ -301,7 +301,6 @@ export function Notifications({
           fill="none"
           stroke="currentColor"
           strokeWidth="1.8"
-          aria-hidden="true"
         >
           <path
             d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9Z"
@@ -310,7 +309,7 @@ export function Notifications({
           <path d="M9 20a3 3 0 0 0 6 0" strokeLinecap="round" />
         </svg>
         {!!unread && (
-          <span className="notification-badge" aria-hidden="true">
+          <span className="notification-badge">
             {unread > 99 ? "99+" : unread}
           </span>
         )}
@@ -349,11 +348,7 @@ export function Notifications({
           </button>
         </header>
         <div className="notification-controls">
-          <div
-            role="group"
-            aria-label="Filter notifications"
-            className="notification-filters"
-          >
+          <div className="notification-filters">
             {([false, true] as const).map((onlyUnread) => (
               <ActionButton
                 key={String(onlyUnread)}
@@ -380,16 +375,14 @@ export function Notifications({
         </div>
         <div className="notification-content">
           {error ? (
-            <div className="error" role="alert">
+            <div className="error">
               {error}
               <button className="text-button" onClick={() => void refresh()}>
                 Try again
               </button>
             </div>
           ) : !page ? (
-            <p className="muted" role="status">
-              Loading notifications…
-            </p>
+            <p className="muted">Loading notifications…</p>
           ) : (
             <>
               {items.length ? (

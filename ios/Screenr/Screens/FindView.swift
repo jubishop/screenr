@@ -55,7 +55,6 @@ private struct FindScreen: View {
     .onChange(of: shell.router.findSearch, initial: true) { _, link in
       find.apply(link)
     }
-    .onChange(of: find.search) { _, search in announce(search) }
     .alert(
       "Could not update Want to watch",
       isPresented: Binding(get: { saveFailure != nil }, set: { _ in find.dismissSaveFailure() }),
@@ -100,17 +99,5 @@ private struct FindScreen: View {
     case .found(_, let titles):
       FindResultsSection(find: find, titles: titles, serviceIds: page?.serviceIds)
     }
-  }
-
-  // VoiceOver hears how each search ends, as the web's status line says.
-  private func announce(_ search: FindModel.Search) {
-    let message: String? =
-      switch search {
-      case .found: find.searchSummary(serviceIds: page?.serviceIds)
-      case .failed(_, let message): message
-      case .tooShort: FindWording.tooShort
-      case .none, .searching: nil
-      }
-    if let message { AccessibilityNotification.Announcement(message).post() }
   }
 }

@@ -29,8 +29,6 @@ struct IncomingActivityButton: View {
     }
     .buttonStyle(.glass)
     .accessibilityLabel(kind.title)
-    .accessibilityValue(Text("\(count)"))
-    .accessibilityHint("Shows it without moving what you are reading.")
     .accessibilityIdentifier("incoming-activity")
   }
 }

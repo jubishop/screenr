@@ -5,7 +5,6 @@ import { prepareFriendship } from "./member-fixture";
 
 type ProgressWindow = Window & {
   firstProgressOpacity?: Promise<string>;
-  focusedHeadingBusy?: Promise<string | null>;
 };
 
 // Holds the server render that the next client navigation to the path waits
@@ -24,8 +23,7 @@ async function holdNavigation(page: Page, pathname: string) {
   return release;
 }
 
-// Records the bar's opacity when it enters the page, before any delay ends,
-// and whether the heading that the next screen focuses is in a busy region.
+// Records the bar's opacity when it enters the page, before any delay ends.
 async function watchNavigation(page: Page) {
   await page.evaluate(() => {
     const progress = window as ProgressWindow;
@@ -37,13 +35,6 @@ async function watchNavigation(page: Page) {
         resolve(getComputedStyle(bar).opacity);
       });
       observer.observe(document.body, { childList: true, subtree: true });
-    });
-    progress.focusedHeadingBusy = new Promise((resolve) => {
-      document.addEventListener("focusin", ({ target }) => {
-        const main = (target as Element).closest("main");
-        if (main && (target as Element).matches("h1"))
-          resolve(main.getAttribute("aria-busy"));
-      });
     });
   });
 }
@@ -71,8 +62,8 @@ test("member screens show a progress bar while the next screen loads", async ({
   const heading = (name: string) =>
     main.getByRole("heading", { level: 1, name, exact: true });
 
-  // A navigation link keeps the current screen in place, marks it busy, and
-  // fades a bar in across the top of the window until the next screen loads.
+  // A navigation link keeps the current screen in place and fades a bar in
+  // across the top of the window until the next screen loads.
   for (const [width, find] of [
     [390, "Find"],
     [1366, "Find a title"],
@@ -85,7 +76,6 @@ test("member screens show a progress bar while the next screen loads", async ({
     await watchNavigation(viewer);
     await nav.getByRole("link", { name: find, exact: true }).click();
     await expect(progress).toBeAttached();
-    await expect(main).toHaveAttribute("aria-busy", "true");
     expect(
       await viewer.evaluate(
         () => (window as ProgressWindow).firstProgressOpacity,
@@ -103,13 +93,7 @@ test("member screens show a progress bar while the next screen loads", async ({
     expect(new URL(viewer.url()).pathname).toBe("/");
     release();
     await expect(heading("Find a title")).toBeFocused();
-    expect(
-      await viewer.evaluate(
-        () => (window as ProgressWindow).focusedHeadingBusy,
-      ),
-    ).toBeNull();
     await expect(progress).toHaveCount(0);
-    await expect(main).not.toHaveAttribute("aria-busy");
   }
 
   // Title links in a feed show the same pending state.
@@ -123,12 +107,10 @@ test("member screens show a progress bar while the next screen loads", async ({
   const releaseTitle = await holdNavigation(viewer, "/titles/tv/987657");
   await titleLink.click();
   await expect(progress).toHaveCSS("opacity", "1");
-  await expect(main).toHaveAttribute("aria-busy", "true");
   await expect(heading("Your circle")).toBeVisible();
   releaseTitle();
   await expect(heading(title)).toBeVisible();
   await expect(progress).toHaveCount(0);
-  await expect(main).not.toHaveAttribute("aria-busy");
 
   // So does choosing a notification, which opens its page after closing the
   // panel.
@@ -139,12 +121,10 @@ test("member screens show a progress bar while the next screen loads", async ({
     .getByRole("button", { name: /progressfriend became your friend/ })
     .click();
   await expect(progress).toHaveCSS("opacity", "1");
-  await expect(main).toHaveAttribute("aria-busy", "true");
   await expect(heading(title)).toBeVisible();
   releaseProfile();
   await expect(heading("progressfriend")).toBeVisible();
   await expect(progress).toHaveCount(0);
-  await expect(main).not.toHaveAttribute("aria-busy");
 
   // Background refreshes keep the page as it is.
   let releaseRefresh = () => {};
@@ -165,7 +145,6 @@ test("member screens show a progress bar while the next screen loads", async ({
   );
   await refresh;
   await expect(progress).toHaveCount(0);
-  await expect(main).not.toHaveAttribute("aria-busy");
   releaseRefresh();
 
   // Reduced motion keeps the bar still.

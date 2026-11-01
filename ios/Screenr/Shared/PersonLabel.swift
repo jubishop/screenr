@@ -2,7 +2,7 @@ import ScreenrKit
 import SwiftUI
 
 // A member in a list: their photo or initial, display name, and @username
-// beneath. VoiceOver reads the name and username together.
+// beneath.
 struct PersonLabel: View {
   enum Detail {
     case username
@@ -28,6 +28,5 @@ struct PersonLabel: View {
       }
       .multilineTextAlignment(.leading)
     }
-    .accessibilityElement(children: .combine)
   }
 }

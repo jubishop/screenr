@@ -161,8 +161,4 @@ test("avatars mark every person with a whole initial and a color that survives r
   await page.goto("/");
   await expect(filmAuthor).toHaveText("Z");
   expect(await background(filmAuthor)).toBe(filmColor);
-  // Every avatar is decorative beside its visible name.
-  await expect(page.locator(".avatar:not([aria-hidden='true'])")).toHaveCount(
-    0,
-  );
 });

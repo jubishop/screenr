@@ -34,7 +34,7 @@ test("invited friends discover, save, and share inline discussions with live acc
   await alice
     .getByRole("button", { name: "Copy link to discussion", exact: true })
     .click();
-  await expect(alice.getByRole("status")).toHaveText("Link copied.");
+  await expect(alice.locator(".copy-status")).toHaveText("Link copied.");
   await expect(alice).toHaveURL(titleURL);
   const conversationURL = await alice.evaluate(() =>
     navigator.clipboard.readText(),
@@ -111,9 +111,9 @@ test("invited friends discover, save, and share inline discussions with live acc
     });
   expect((await write(outsider, "Unauthorized")).status()).toBe(404);
   await outsider.goto(conversationURL);
-  await expect(outsider.getByRole("status")).toHaveText(
-    "This activity is unavailable.",
-  );
+  await expect(
+    outsider.getByText("This activity is unavailable.", { exact: true }),
+  ).toBeVisible();
   await expect(item(outsider)).toHaveCount(0);
   await cam.goto(conversationURL);
   await expect(
@@ -199,7 +199,7 @@ test("invited friends discover, save, and share inline discussions with live acc
     { times: 1 },
   );
   await confirmAction(ownComment(ben), "Delete");
-  await expect(item(ben).getByRole("alert")).toHaveText(
+  await expect(item(ben).locator(".error")).toHaveText(
     "Deletion failed. Please try again.",
   );
   await expect(ownComment(ben)).toBeVisible();
@@ -208,7 +208,7 @@ test("invited friends discover, save, and share inline discussions with live acc
     .getByRole("group", { name: /^Delete / })
     .getByRole("button", { name: "Delete", exact: true })
     .click();
-  await expect(item(ben).getByRole("alert")).toHaveCount(0);
+  await expect(item(ben).locator(".error")).toHaveCount(0);
   for (const page of [ben, alice]) {
     await expect(
       item(page).locator(`[data-comment-id="${ownId}"]`),

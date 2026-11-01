@@ -24,7 +24,6 @@ struct RequiredUpdateView: View {
         openURL(Self.updateURL)
       }
       .buttonStyle(.bordered)
-      .accessibilityHint("Opens TestFlight, where you can install the latest Screenr.")
     }
     .background(Color(uiColor: .systemBackground))
   }

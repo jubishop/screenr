@@ -80,9 +80,6 @@ struct AccountDeletionSheet: View {
         }
       }
       .interactiveDismissDisabled(model.step == .deleting)
-      .onChange(of: model.failure) { _, failure in
-        if let failure { AccessibilityNotification.Announcement(failure).post() }
-      }
     }
   }
 

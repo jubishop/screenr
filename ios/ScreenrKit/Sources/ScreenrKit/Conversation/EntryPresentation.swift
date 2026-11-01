@@ -150,16 +150,11 @@ extension ReactionKind {
   }
 }
 
-// A review's rating as filled and empty stars, and its spoken form.
+// A review's rating as filled and empty stars.
 public enum ReviewStars {
   public static func symbols(_ rating: Int) -> String {
     let filled = min(max(rating, 0), 5)
     return String(repeating: "★", count: filled) + String(repeating: "☆", count: 5 - filled)
-  }
-
-  // "3 stars out of 5", which VoiceOver reads as the rating's value.
-  public static func value(_ rating: Int) -> String {
-    "\(rating) star\(rating == 1 ? "" : "s") out of 5"
   }
 }
 
@@ -206,12 +201,6 @@ public enum RelativeTime {
     let sameYear = calendar.component(.year, from: date) == calendar.component(.year, from: now)
     let style = dayStyle(calendar)
     return sameYear ? date.formatted(style) : date.formatted(style.year())
-  }
-
-  // The full local date and time, such as "Oct 12, 2026 at 3:05 PM", which
-  // VoiceOver reads in place of the short form.
-  public static func fullDate(_ date: Date, calendar: Calendar = .current) -> String {
-    date.formatted(dayStyle(calendar).year().hour().minute())
   }
 
   private static func dayStyle(_ calendar: Calendar) -> Date.FormatStyle {

@@ -52,11 +52,7 @@ export function AccountProfileEditor({
     >
       <h2 id="account-profile-heading">Your profile</h2>
       {draft ? (
-        <form
-          className="display-name-editor"
-          aria-label="Edit profile"
-          onSubmit={submit}
-        >
+        <form className="display-name-editor" onSubmit={submit}>
           <label>
             Display name
             <input
@@ -79,7 +75,6 @@ export function AccountProfileEditor({
               autoComplete="username"
               autoCapitalize="none"
               spellCheck={false}
-              aria-describedby="username-help"
               value={draft.username}
               readOnly={busy}
               onChange={(event) =>
@@ -87,7 +82,7 @@ export function AccountProfileEditor({
               }
             />
           </label>
-          <p id="username-help" className="small muted">
+          <p className="small muted">
             Use 3–24 letters, numbers, or underscores. Usernames are saved in
             lowercase. Changing your username changes your profile link. Old
             links will no longer lead to your profile. Someone else can use your
@@ -106,11 +101,7 @@ export function AccountProfileEditor({
               Cancel
             </ActionButton>
           </div>
-          {error && (
-            <p className="error" role="alert">
-              {error}
-            </p>
-          )}
+          {error && <p className="error">{error}</p>}
         </form>
       ) : (
         <>
@@ -147,9 +138,7 @@ export function AccountProfileEditor({
           </div>
         </>
       )}
-      <p className="small" role="status" aria-atomic="true">
-        {saved ? "Profile saved." : ""}
-      </p>
+      <p className="small action-status">{saved ? "Profile saved." : ""}</p>
     </section>
   );
 }

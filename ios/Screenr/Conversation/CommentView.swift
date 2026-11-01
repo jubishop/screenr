@@ -72,9 +72,6 @@ struct CommentView: View {
           .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(
-          "\(member.name), @\(username), \(RelativeTime.fullDate(comment.createdAt))"
-        )
       } else {
         Avatar(nil, size: 28)
         Text(comment.hasDeletedAuthor ? "Comment removed" : "Comment unavailable")
@@ -83,11 +80,9 @@ struct CommentView: View {
       }
       Spacer(minLength: 0)
       if !comment.unavailable {
-        // The author's link reads the full time.
         Text(RelativeTime.label(comment.createdAt, now: now))
           .font(.footnote)
           .foregroundStyle(.muted)
-          .accessibilityHidden(true)
       }
     }
   }

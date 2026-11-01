@@ -122,8 +122,7 @@ only on wider screens.
 
 **Implementation note:** [Issue #167](https://github.com/jubishop/screenr/issues/167)
 renders one navigation for both layouts in `src/components/screen.tsx`. Each
-item shows the full name in the sidebar and the short label in the phone bar;
-the hidden label is not exposed, so each link's name matches its visible text.
+item shows the full name in the sidebar and the short label in the phone bar.
 The current item has `aria-current="page"`, and Friends has
 `aria-current="true"` on the invitations page. Phone pages pad their content
 and give it scroll margins, so the 56px header and the 60px bar never cover
@@ -140,9 +139,9 @@ main content. The four-item navigation marks the current page with
 `aria-current="page"`. This is the decided approach in
 [issue #136](https://github.com/jubishop/screenr/issues/136).
 
-**Why:** Screen-reader users heard nothing when they navigated. Every tab,
-history entry, and bookmark read "Screenr · Better with friends", and
-keyboard users started from the top of the sidebar after each navigation.
+**Why:** Every tab, history entry, and bookmark read "Screenr · Better with
+friends", and keyboard users started from the top of the sidebar after each
+navigation.
 
 **Implementation note:** `memberTitle` in `src/member-routes.ts` names each
 page with its heading, the title's name, or the person's display name,
@@ -151,9 +150,7 @@ or profile loads, the route names the page: "Movie", "TV show", or
 "@username". `src/components/screen.tsx` renders the title, which React places
 in the document head, and the member page drops the layout's title. The server
 sends the title with the page, and client navigation changes it in the same
-render, so Next's route announcer reads the new title aloud. A metadata title
-arrives after the navigation renders, so the announcer would read only the
-heading. A refresh that renames the title or person updates the title. A read
+render. A refresh that renames the title or person updates the title. A read
 that finds the page missing titles it "Page not found"; other failed reads
 keep the title. Every screen after the first in a document comes from client
 navigation and focuses its heading, or the main region when an error replaces
@@ -404,7 +401,7 @@ the main privacy gain. The user chose `youtube.com` after reviewing this
 tradeoff for [issue #112](https://github.com/jubishop/screenr/issues/112).
 
 **Implementation note:** The collapsed row holds the Play trailer button and
-the Watch on YouTube link, under a "Trailer" heading kept for screen readers.
+the Watch on YouTube link, in a section named "Trailer".
 Opening the player moves focus to it. `src/components/title-trailer.tsx`
 implements the section, and
 [Title trailers](title-catalog.md#title-trailers) lists its checks.
@@ -442,7 +439,8 @@ Until profile photos exist, show the first letter of the display name on a
 muted background color. Choose the color from a small fixed palette using the
 member's stable user ID, so it stays the same after a username change. The
 letter must meet the existing text contrast requirements. Avatars beside a
-visible name are decorative for assistive technology. Comments without an
+visible name stay out of the accessibility tree, so a link or row is named
+for the person alone. Comments without an
 available author use a neutral placeholder.
 
 The profile header shows the avatar beside the display name, with the
@@ -514,9 +512,9 @@ Decline confirmation and the notice that Block leaves on this page.
 **Decision:** On another member's profile, move Unfriend (for accepted
 friends) and Block into a "More actions" menu shown as "…" after the main
 actions. Watch together and the friend-request actions (send, cancel, or
-accept) stay visible. The menu button names the person for assistive
-technology, reports whether it is expanded, and closes on Escape or when the
-reader moves focus or clicks outside it.
+accept) stay visible. The menu button's name includes the person, it reports
+whether it is expanded, and it closes on Escape or when the reader moves
+focus or clicks outside it.
 
 Choosing Unfriend or Block shows an in-page confirmation that states the
 effect under the existing [unfriending](product-brief.md#access-after-unfriending--2026-09-04)
@@ -663,14 +661,13 @@ navigation during each load, because `Screen` renders it.
 **Implementation note:** `src/components/pending-navigation.tsx` wraps
 `next/link`, so every member link reports its `useLinkStatus` pending state.
 Choosing a notification reports its `router.push` transition the same way.
-Each screen counts its own reports, so the next screen, and the heading it
-focuses, never start busy.
-While either waits, the current screen stays in place, its `main` region has
-`aria-busy="true"`, and a 3px bar spans the top of the window, with a dark
-segment sliding along a lime track. The bar fades in after 200ms, so fast
-navigations don't flash it, and it takes no layout space. With reduced
-motion it is a still, full-width line in the text color. Background
-refreshes don't show it.
+Each screen counts its own reports, so the next screen never starts with the
+bar showing.
+While either waits, the current screen stays in place, and a 3px bar spans
+the top of the window, with a dark segment sliding along a lime track. The
+bar fades in after 200ms, so fast navigations don't flash it, and it takes
+no layout space. With reduced motion it is a still, full-width line in the
+text color. Background refreshes don't show it.
 
 ### Dark theme follows the system setting — 2026-10-12
 

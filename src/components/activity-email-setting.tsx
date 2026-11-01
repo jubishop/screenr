@@ -50,11 +50,7 @@ export function ActivityEmailSetting({
         />
         Email me about new activity
       </label>
-      {error && (
-        <p className="error" role="alert">
-          {error}
-        </p>
-      )}
+      {error && <p className="error">{error}</p>}
     </section>
   );
 }

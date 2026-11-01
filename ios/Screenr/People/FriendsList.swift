@@ -127,8 +127,6 @@ private struct UsernameSearch: View {
   private func find() {
     if let destination = friends.find() {
       shell.router.open(destination)
-    } else if let problem = friends.searchProblem {
-      AccessibilityNotification.Announcement(problem).post()
     }
   }
 }
@@ -245,7 +243,8 @@ extension PersonActionsRow where Note == EmptyView {
   }
 }
 
-// A button's title, with a spinner while its action waits for the server.
+// A button's title, with a spinner while its action waits for the server. Its
+// label stays the title while the spinner shows.
 struct PendingLabel: View {
   let title: String
   let sending: Bool
@@ -259,7 +258,6 @@ struct PendingLabel: View {
     }
     .accessibilityElement(children: .ignore)
     .accessibilityLabel(title)
-    .accessibilityValue(sending ? "In progress" : "")
   }
 }
 
@@ -279,8 +277,7 @@ private struct MutualFriends: View {
   }
 }
 
-// What Block left for Friends, such as "You blocked Ben Ortiz.", which
-// VoiceOver reads as it appears.
+// What Block left for Friends, such as "You blocked Ben Ortiz."
 private struct FriendsNotice: View {
   let message: String
   let dismiss: () -> Void
@@ -291,9 +288,6 @@ private struct FriendsNotice: View {
         .frame(maxWidth: .infinity, alignment: .leading)
       Button("Dismiss", action: dismiss)
         .buttonStyle(.borderless)
-    }
-    .onAppear {
-      AccessibilityNotification.Announcement(message).post()
     }
   }
 }

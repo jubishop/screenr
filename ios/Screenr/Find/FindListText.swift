@@ -12,6 +12,5 @@ struct EmptyListMessage: View {
       Text(message)
     }
     .padding(.vertical, 4)
-    .accessibilityElement(children: .combine)
   }
 }

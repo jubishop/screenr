@@ -453,15 +453,18 @@ marks the visit for `ShellTests`.
    `FixtureTransport`. Write UI journeys with
    `app.launch(with: FixtureLaunch(link: "screenr-dev://titles/tv/201"))`,
    choosing fixtures with `viewer` and `overrides`, and audit screens in the
-   tabs with `app.performShellAudit()`. It passes over what the audit cannot
-   measure in a scrolling screen, as [Conversations](#conversations)
-   describes. While a list row or control reaches beneath a bar or the
-   keyboard or past the screen's edge, it also passes over contrast,
-   clipping, and text detection issues without an element, which are in parts
-   of a row that VoiceOver reads with the rest of the row or in text cut off
-   at that edge, such as the next poster in a row that scrolls sideways. In a
-   screen that scrolls, it passes over Dynamic Type issues without an element
-   too. `ShellTests`
+   tabs with `app.performShellAudit()`. Every audit checks only contrast,
+   Dynamic Type, clipped text, and hit regions: `performSettledAudit` uses
+   `XCUIAccessibilityAuditType.screenr` by default, and a direct audit passes
+   it to `performAccessibilityAudit(for:)`. `performShellAudit()` passes over
+   what the audit cannot measure in a scrolling screen, as
+   [Conversations](#conversations) describes. While a list row or control
+   reaches beneath a bar or the keyboard or past the screen's edge, it also
+   passes over contrast and clipping issues without an element, which are in
+   parts of a row without an element of their own or in text cut off at that
+   edge, such as the next poster in a row that scrolls sideways. In a screen
+   that scrolls, it passes over Dynamic Type issues without an element too.
+   `ShellTests`
    check the shell through navigation titles and `FixtureLaunch(requestLog:)`,
    so they hold when a placeholder changes; keep `DestinationView`'s
    navigation titles. To check dark mode, launch with
@@ -951,9 +954,7 @@ ScreenContent(model: model) { screen in
 - **Sharing:** each entry's Share uses `ShareButton` with `item.link()`: the
   title page with `?item=`, or the friends feed for a post.
 - **Times:** `FeedList` keeps one minute timeline, `\.feedNow`, for every
-  "2h" in the list. A time's text is hidden from VoiceOver, and the author's
-  link reads the full date instead, since a label longer than its text fails
-  the audit's clipping check.
+  "2h" in the list.
 - **Tests:** `ScreenrUITests/FeedQueries.swift` adds `app.entry(_:)`,
   `app.comment(_:)`, `app.composerField(_:)`, `app.scrollTo(_:)`, and
   `RequestLog.wrote(_:_:)`, which waits for a write's logged JSON body and a
@@ -1180,16 +1181,14 @@ the web's [top 10 rules](../docs/profile-top-ten.md#reorder-in-an-edit-mode--202
   keeps the title's Recommend. The rows below move up.
 - **Saving:** one change saves at a time, and the list shows it at once. A
   failed save returns the rows to their order before the change and shows
-  the reason above them, which VoiceOver announces. A successful one reads
-  the profile again.
+  the reason above them. A successful one reads the profile again.
 - **Reads:** the profile beneath keeps polling. A read whose list differs
   from the last one replaces the editor's, after any save in flight, so a
   change on the web shows; an unchanged read, like the fixture API's after a
   write, keeps the saved change.
-- **VoiceOver:** each row reads like "#1 Night Crossing" and offers Remove,
-  Move up, and Move down; its handle reads "Reorder #1 Night Crossing,
-  button, draggable" and drags with the list's own double-tap-and-hold
-  gesture.
+- **Labels:** each row's accessibility label, such as "#1 Night Crossing",
+  also names its handle, "Reorder #1 Night Crossing", which UI tests find
+  and drag.
 
 `TopTenEditorList` is a UIKit collection view list, with SwiftUI rows through
 `UIHostingConfiguration`, since SwiftUI's `List` shows reorder handles only
@@ -1201,9 +1200,7 @@ for saves in flight, and the fixture API's refusal. `TopTenEditorTests` drag
 Harbor Lights to #1, roll back the move that the
 `actions/top-ten/move-unlisted` override refuses, remove Paper Lanterns by
 swiping, check the writes in the request log, and reach every handle at the
-largest text size. They also turn on VoiceOver with
-`XCUIDevice.shared.voiceOverService` and check what it reads for each row and
-handle.
+largest text size.
 
 ## Share extension
 
@@ -1341,9 +1338,7 @@ system otherwise launches the app without them, against the server. Then:
   Alice's feed, such as Paper Lanterns. Selecting the Screenr Dev result
   opens its page. After signing out, the search finds no Screenr Dev result.
 
-Use a Simulator you will not pass to `bin/check-ios --simulator`: typing in
-Spotlight and Safari leaves keyboard predictions, whose cells fail the
-accessibility audit in tests that type. Siri's spoken phrases need a device.
+Siri's spoken phrases need a device.
 
 ## Fixtures
 

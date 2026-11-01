@@ -557,9 +557,7 @@ row. They did not give a reason.
 built the sheet; [Top 10 editor](../ios/README.md#top-10-editor) in the
 iPhone guide describes it. SwiftUI's list shows drag handles only in its edit
 mode, where rows do not swipe, so the sheet uses UIKit's list, whose rows
-show their handles and swipe at once. VoiceOver drags a handle with the
-list's own gesture, and each row also offers Move up and Move down, like the
-web's edit mode.
+show their handles and swipe at once.
 
 ### Sentry is the only package — 2026-10-13
 
@@ -764,7 +762,10 @@ deterministic and fast.
 - **Code safety:** no `try?`, no force unwraps, and no `Task.detached`.
 - **Types:** model state as enums rather than Bool flags. Prefer `struct`.
 - **File size:** keep each file under 1,000 lines.
-- **Accessibility:** required for every UI change.
+- **Accessibility:** required for every UI change: contrast, Dynamic Type,
+  text clipping, and hit regions. Since the 2026-10-27 decision in the
+  [product brief](product-brief.md#accepted-decisions), the rule no longer
+  asks for spoken labels, values, traits, or actions.
 - **Tests:** red-green tests for behavior changes.
 
 It drops the PodHaven rules that do not apply here:

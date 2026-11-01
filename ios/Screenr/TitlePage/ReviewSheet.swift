@@ -77,8 +77,8 @@ struct ReviewSheet: View {
   }
 }
 
-// Five stars, each a choice named for VoiceOver, with Clear rating once one
-// is chosen.
+// Five stars, each a choice named like "3 stars", with Clear rating once
+// one is chosen.
 private struct StarRating: View {
   let editor: ReviewEditor
 
@@ -100,7 +100,6 @@ private struct StarRating: View {
           }
           .buttonStyle(.plain)
           .accessibilityLabel("\(stars) star\(stars == 1 ? "" : "s")")
-          .accessibilityAddTraits(editor.draft.rating == stars ? .isSelected : [])
         }
         if editor.draft.rating != nil {
           Button("Clear rating") { editor.rate(nil) }

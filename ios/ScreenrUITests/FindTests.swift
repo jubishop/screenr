@@ -37,7 +37,7 @@ final class FindTests: XCTestCase {
     field.typeText("night")
     XCTAssertTrue(row(app, "Night Harbor").waitForExistence(timeout: 10))
     wait(for: [log.sent("GET /api/screenr/search?q=night")], timeout: 10)
-    XCTAssertTrue(row(app, "Night Crossing").label.contains("On Netflix (saved)"))
+    XCTAssertTrue(row(app, "Night Crossing").label.contains("On Netflix"))
     XCTAssertTrue(row(app, "Night Harbor").label.contains("TV show · 2018"))
     XCTAssertFalse(app.buttons["Friends recommend"].exists)
     try audit(app)
@@ -105,7 +105,6 @@ final class FindTests: XCTestCase {
     myServices.tap()
     let saved = app.buttons["Want to watch, Night Crossing"]
     XCTAssertTrue(saved.waitForExistence(timeout: 10))
-    XCTAssertEqual(saved.value as? String, "Saved")
     XCTAssertTrue(scroll(app, to: app.buttons["Caught up, Harbor Lights"]))
     try audit(app)
 
@@ -138,7 +137,7 @@ final class FindTests: XCTestCase {
     try app.performShellAudit()
   }
 
-  // A title's row, which VoiceOver reads starting with its name.
+  // A title's row, whose label starts with its name.
   @MainActor
   private func row(_ app: XCUIApplication, _ name: String) -> XCUIElement {
     app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", name + ",")).firstMatch
