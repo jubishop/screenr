@@ -282,8 +282,12 @@ as "now". Like other dates since
 [issue #86](https://github.com/jubishop/screenr/issues/86), the server and
 hydration render the UTC date and a UTC hover time, then localize once the
 page is interactive. Unchanged screen refreshes don't render again, so a
-shared timer renders the shown times again each minute
-([issue #138](https://github.com/jubishop/screenr/issues/138)).
+shared timer renders shown times again
+([issue #138](https://github.com/jubishop/screenr/issues/138)): times under a
+week old each minute, and older dates only when the reader's time zone or
+current year changes. Dates with the same options share one formatter, rebuilt
+when the reader's time zone changes, so a large feed's times stay cheap
+([issue #376](https://github.com/jubishop/screenr/issues/376)).
 
 ### Compact entries on title pages — 2026-10-12
 

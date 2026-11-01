@@ -1,6 +1,6 @@
 "use client";
 import { useSyncExternalStore } from "react";
-import { dateLabel } from "./client";
+import { dateLabel, readerCalendar } from "./client";
 
 const fullDate: Intl.DateTimeFormatOptions = {
   month: "short",
@@ -9,25 +9,45 @@ const fullDate: Intl.DateTimeFormatOptions = {
   hour: "numeric",
   minute: "2-digit",
 };
+const week = 7 * 24 * 60 * 60_000;
 
 // Unchanged screen refreshes don't render again, so one shared timer renders
-// every shown time again each minute, the format's smallest step.
-const listeners = new Set<() => void>();
+// shown times again when their text can change. Times under a week old, or
+// ahead of the reader's clock, change each minute, the format's smallest
+// step. Older times show a date, which changes only with the reader's time
+// zone or current year, so a feed's many older times render again only then.
+const recent = new Set<() => void>();
+const dated = new Set<() => void>();
 let minutes = 0;
+let calendarChanges = 0;
+let calendar = "";
 let timer: ReturnType<typeof setInterval> | undefined;
-function subscribe(listener: () => void) {
+function subscribe(listeners: Set<() => void>, listener: () => void) {
   listeners.add(listener);
-  timer ??= setInterval(() => {
-    minutes++;
-    for (const notify of listeners) notify();
-  }, 60_000);
+  if (!timer) {
+    calendar = readerCalendar();
+    timer = setInterval(() => {
+      minutes++;
+      const current = readerCalendar();
+      if (current !== calendar) {
+        calendar = current;
+        calendarChanges++;
+        for (const notify of dated) notify();
+      }
+      for (const notify of recent) notify();
+    }, 60_000);
+  }
   return () => {
     listeners.delete(listener);
-    if (listeners.size) return;
+    if (recent.size || dated.size) return;
     clearInterval(timer);
     timer = undefined;
   };
 }
+const subscribeRecent = (listener: () => void) => subscribe(recent, listener);
+const subscribeDated = (listener: () => void) => subscribe(dated, listener);
+const minuteCount = () => minutes;
+const calendarCount = () => calendarChanges;
 
 // A feed entry, comment, or notification time, such as "2h", with the full
 // local date and time on hover. Both stay in UTC fields until the page is
@@ -41,9 +61,11 @@ export function ActivityTime({
   interactive: boolean;
   className?: string;
 }) {
+  // UTC fields don't change with time.
+  const ticking = interactive && Date.now() - Date.parse(value) < week;
   useSyncExternalStore(
-    subscribe,
-    () => minutes,
+    ticking ? subscribeRecent : subscribeDated,
+    ticking ? minuteCount : calendarCount,
     () => 0,
   );
   return (

@@ -191,13 +191,59 @@ export function dateLabel(
       : iso.slice(0, 10);
   }
   if (options === "relative") return relativeTime(value, Date.now());
-  return date.toLocaleDateString("en-US", options);
+  if (Number.isNaN(date.getTime())) return "Invalid Date";
+  return dateFormat(options).format(date);
 }
 
 const minute = 60_000,
   hour = 60 * minute,
   day = 24 * hour,
   week = 7 * day;
+
+// Building a date formatter takes far longer than formatting with one, and a
+// feed can show thousands of dates, so dates with the same options share a
+// formatter. Formatters keep the time zone they were built in, so they are
+// built again when the reader's zone changes. Dates check the zone at most
+// once a minute, and `readerCalendar` checks it on every call.
+const formats = new Map<string, Intl.DateTimeFormat>();
+let formatZone: string | undefined;
+let zoneChecked = -Infinity;
+function readerTimeZone(now: number) {
+  zoneChecked = now;
+  const zone = new Intl.DateTimeFormat().resolvedOptions().timeZone;
+  if (zone !== formatZone) {
+    formats.clear();
+    formatZone = zone;
+  }
+  return zone;
+}
+function dateFormat(options: Intl.DateTimeFormatOptions) {
+  const now = Date.now();
+  if (!(Math.abs(now - zoneChecked) < minute)) readerTimeZone(now);
+  const key = JSON.stringify(options);
+  let format = formats.get(key);
+  if (!format) {
+    // Like toLocaleDateString, show the date when the options name no part
+    // of it.
+    const { weekday, year, month, day, dateStyle } = options;
+    format = new Intl.DateTimeFormat(
+      "en-US",
+      weekday || year || month || day || dateStyle
+        ? options
+        : { ...options, year: "numeric", month: "numeric", day: "numeric" },
+    );
+    formats.set(key, format);
+  }
+  return format;
+}
+
+// The reader's time zone and current year, which together decide how a date
+// a week or older reads.
+export function readerCalendar() {
+  const now = Date.now();
+  return `${readerTimeZone(now)} ${dateFormat({ year: "numeric" }).format(now)}`;
+}
+
 // Feed entries, comments, and notifications share one format: "now", "5m",
 // "2h", or "3d" under a week, then "Oct 12", with the year when it is not the
 // reader's current year. Elapsed time ignores daylight saving changes, and a
@@ -213,12 +259,11 @@ export function relativeTime(value: string, now: number, timeZone?: string) {
     if (elapsed < day) return `${Math.floor(elapsed / hour)}h`;
     return `${Math.floor(elapsed / day)}d`;
   }
-  const year = (time: Date) =>
-    time.toLocaleDateString("en-US", { year: "numeric", timeZone });
-  return date.toLocaleDateString("en-US", {
+  const year = dateFormat({ year: "numeric", timeZone });
+  return dateFormat({
     month: "short",
     day: "numeric",
-    year: year(date) === year(new Date(now)) ? undefined : "numeric",
+    year: year.format(date) === year.format(now) ? undefined : "numeric",
     timeZone,
-  });
+  }).format(date);
 }
