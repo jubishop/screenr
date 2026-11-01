@@ -38,8 +38,8 @@ any issue-specific notes. The shared brief covers:
   - Create and delete its own Simulator.
   - Keep scratch files inside the worktree, never in the orchestrator's
     scratch directory.
-- **iOS checks:** run `bin/check-ios` only through the three-slot `lockf`
-  wrapper from the gotchas page, before pushing. Never use `--no-verify`.
+- **iOS checks:** run `bin/check-ios` before pushing; it waits for one of
+  three machine-wide slots on its own. Never use `--no-verify`.
 - **Red-green and docs:** a failing test first, root-cause fixes, and the docs
   the issue names.
 - **Landing:**

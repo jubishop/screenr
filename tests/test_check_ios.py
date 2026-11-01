@@ -1,5 +1,7 @@
 """Verify bin/check-ios with simulated Xcode tools, so it runs on any platform."""
 
+import contextlib
+import fcntl
 import json
 import os
 from pathlib import Path
@@ -107,6 +109,9 @@ class CheckIOSTests(unittest.TestCase):
         for name in ("bin/check-ios", "bin/_ios_check_records.py"):
             shutil.copy2(SOURCE / name, self.repo / name)
         self.events = base / "events.jsonl"
+        # The check's machine-wide slots, kept apart from real checks on this Mac.
+        self.slots = base / "slots"
+        self.slots.mkdir()
         self.tools = base / "tools"
         self.tools.mkdir()
         (self.tools / "python3").symlink_to(sys.executable)
@@ -115,7 +120,7 @@ class CheckIOSTests(unittest.TestCase):
         self.env = {key: value for key, value in os.environ.items()
                     if not key.startswith("FAKE_") and not key.startswith("GIT_")}
         self.env.update(PATH=str(self.tools), CHECK_EVENTS=str(self.events), PYTHONDONTWRITEBYTECODE="1",
-                        FAKE_RUNTIMES=json.dumps(RUNTIMES),
+                        FAKE_RUNTIMES=json.dumps(RUNTIMES), SCREENR_CHECK_IOS_SLOT_DIR=str(self.slots),
                         SDKROOT="/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform")
 
     def tool(self, name, body):
@@ -135,6 +140,15 @@ class CheckIOSTests(unittest.TestCase):
 
     def steps(self):
         return [event[0] if event[0] != "xcrun" else " ".join(event[1:3]) for event in self.recorded()]
+
+    @contextlib.contextmanager
+    def holding_slots(self, *numbers):
+        """Hold these check slots, as other checks on the Mac would, until the block ends."""
+        with contextlib.ExitStack() as stack:
+            for number in numbers:
+                slot = stack.enter_context((self.slots / f"screenr-check-ios-slot-{number}.lock").open("w"))
+                fcntl.flock(slot, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            yield
 
     def test_runs_package_tests_a_release_build_then_simulator_tests_on_its_own_simulator(self):
         result = self.check()
@@ -266,6 +280,43 @@ class CheckIOSTests(unittest.TestCase):
                 self.assert_stopped(pids)
                 self.assertEqual(self.steps()[-2:], ["simctl shutdown", "simctl delete"])
 
+    def start(self, **extra):
+        """Start a check in the background, and stop it if the test ends first."""
+        process = subprocess.Popen([str(self.repo / "bin/check-ios")], cwd=self.repo, env=self.env | extra,
+                                   text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                   preexec_fn=default_interrupt)
+
+        def stop():
+            if process.poll() is None:
+                process.terminate()
+                process.communicate(timeout=30)
+        self.addCleanup(stop)
+        return process
+
+    def test_waits_for_a_free_slot_and_holds_its_own_until_it_exits(self):
+        pids = self.events.parent / "hung.pids"
+        # Other checks hold slots 1 and 3, so the first check here takes slot 2
+        # and holds it through its hung test run.
+        with self.holding_slots(1, 3):
+            first = self.start(FAKE_HANG_TEST=str(pids))
+            self.assertEqual(first.stdout.readline(), "Took iOS check slot 2 of 3.\n")
+            deadline = time.monotonic() + 30
+            while not (pids.exists() and pids.read_text()):
+                self.assertLess(time.monotonic(), deadline, "the first check's test run never started")
+                time.sleep(0.05)
+            second = self.start(CHECK_EVENTS=str(self.events.parent / "second.jsonl"))
+            self.assertEqual(second.stdout.readline(), "Waiting for an iOS check slot: all 3 are in use "
+                                                       "by other bin/check-ios runs on this Mac.\n")
+            first.send_signal(signal.SIGTERM)
+            first.communicate(timeout=30)
+            output, error = second.communicate(timeout=30)
+        self.assertEqual(second.returncode, 0, error)
+        # It took the first check's slot before it started its first step.
+        lines = output.splitlines()
+        self.assertRegex(lines[0], r"^Took iOS check slot 2 of 3 after waiting \d+\.\d minutes\.$")
+        self.assertEqual(lines[1], "==> ScreenrKit tests")
+        self.assertIn("iOS checks passed with no warnings", output)
+
     def test_requires_xcode_27_and_an_ios_27_runtime(self):
         result = self.check(FAKE_XCODE_VERSION="Xcode 26.4\nBuild version 17E192")
         self.assertNotEqual(result.returncode, 0)
@@ -303,7 +354,9 @@ class CheckIOSTests(unittest.TestCase):
         self.events.unlink()
         # Markdown directly in ios/ is not an iOS file, committed or not.
         (self.repo / "ios/Notes.md").write_text("Draft notes.\n")
-        result = self.check("--reuse")
+        # A reused pass needs no slot.
+        with self.holding_slots(1, 2, 3):
+            result = self.check("--reuse")
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("iOS checks already passed for these iOS files with Xcode 27.0", result.stdout)
         self.assertEqual(self.recorded(), [])

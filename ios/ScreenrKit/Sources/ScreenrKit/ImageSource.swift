@@ -4,11 +4,12 @@ import Foundation
 // through `AppServices.imageSession`. Posters are TMDB's, at the size the web
 // shows. Photos are the server's `/api/photos/<user ID>/<version>`, which
 // needs the session's bearer token. Against the fixture API, nothing loads, so
-// every poster and avatar shows its placeholder. Views read it with
-// `@Environment(\.imageSource)`.
+// every poster and avatar shows its placeholder, unless the scenario asks for
+// solid posters. Views read it with `@Environment(\.imageSource)`.
 public struct ImageSource: Sendable {
   private enum Origin: Sendable {
     case none
+    case solidPosters
     case network(serverURL: URL, clientHeader: String, session: SessionStore)
   }
 
@@ -16,6 +17,16 @@ public struct ImageSource: Sendable {
 
   // Loads nothing, so posters and avatars show their placeholders.
   public static let none = ImageSource(origin: .none)
+
+  // Loads a solid gray poster for every title with a poster path, without the
+  // network, so UI tests can see loaded posters. Logos and photos load nothing.
+  public static let solidPosters = ImageSource(origin: .solidPosters)
+
+  // A 2 by 3 opaque gray PNG.
+  private static let solidPoster = URL(
+    string: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAIAAAADCAIAAAA2iEnWAAAADklEQVR4"
+      + "2mNIAAMGFAoARvUGwYxH0SMAAAAASUVORK5CYII="
+  )
 
   private init(origin: Origin) {
     self.origin = origin
@@ -29,7 +40,11 @@ public struct ImageSource: Sendable {
 
   // A title's TMDB poster, such as `/abc.jpg`, or nil without one.
   public func poster(_ path: String?) -> URLRequest? {
-    tmdb(path, size: "w342")
+    if case .solidPosters = origin {
+      guard let path, !path.isEmpty, let url = Self.solidPoster else { return nil }
+      return URLRequest(url: url)
+    }
+    return tmdb(path, size: "w342")
   }
 
   // A streaming service's TMDB logo, or nil without one.

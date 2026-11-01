@@ -42,7 +42,7 @@ final class AccountDeletionTests: XCTestCase {
       try log.loggedLines().filter { $0.hasPrefix("POST") },
       [Self.deleteRequest]
     )
-    try app.performAccessibilityAudit(for: .screenr)
+    try app.performScreenrAudit()
   }
 
   // Apple did not confirm revoking Sign in with Apple, so nothing was

@@ -14,7 +14,7 @@ final class SignInTests: XCTestCase {
   @MainActor
   func testSignsInWithAnEmailCode() throws {
     let app = launchSignedOut()
-    try app.performAccessibilityAudit(for: .screenr)
+    try app.performScreenrAudit()
 
     // The code field takes focus, and the keyboard would cover the screen the
     // audit reads, so the attempt limit's test audits the code step.
@@ -34,7 +34,7 @@ final class SignInTests: XCTestCase {
 
     XCTAssertTrue(app.staticTexts[Self.codeLimit].waitForExistence(timeout: 5))
     XCTAssertFalse(app.textFields["Sign-in code"].exists)
-    try app.performAccessibilityAudit(for: .screenr)
+    try app.performScreenrAudit()
   }
 
   @MainActor
@@ -45,7 +45,7 @@ final class SignInTests: XCTestCase {
     enterCode(app, "000000")
 
     XCTAssertTrue(app.staticTexts["Too many attempts"].waitForExistence(timeout: 5))
-    try app.performAccessibilityAudit(for: .screenr)
+    try app.performScreenrAudit()
     app.buttons["Use another email or request a new code"].tap()
     let email = app.textFields["Email address"]
     XCTAssertTrue(email.waitForExistence(timeout: 5))

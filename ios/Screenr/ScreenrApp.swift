@@ -11,6 +11,7 @@ struct ScreenrApp: App {
   private let logFile: LogFile?
   private let telemetry: Telemetry
   private let colorScheme: ColorScheme?
+  private let auditProbe: AuditProbe?
 
   init() {
     let configuration: AppConfiguration
@@ -107,6 +108,7 @@ struct ScreenrApp: App {
       shell.router.open(link)
     }
     colorScheme = LaunchAppearance.colorScheme(in: arguments, variant: configuration.variant)
+    auditProbe = AuditProbe.launch(in: arguments, variant: configuration.variant)
     if let tap = PushTap.launch(arguments, variant: configuration.variant) {
       Task { await push.open(tap) }
     }
@@ -119,6 +121,9 @@ struct ScreenrApp: App {
         .environment(shell)
         .environment(push)
         .preferredColorScheme(colorScheme)
+        .overlay {
+          if let auditProbe { AuditProbeView(probe: auditProbe) }
+        }
     }
   }
 }

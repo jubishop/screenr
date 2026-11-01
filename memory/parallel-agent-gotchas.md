@@ -12,31 +12,26 @@ to 12 agents worked in separate worktrees on the owner's Mac.
 
 ## Limit concurrent iOS checks
 
-`bin/check-ios` takes about 16 minutes. With five or more running at once, the
+`bin/check-ios` took about 16 minutes then, and about 31 on 2026-11-01, once
+its audits ran one check at a time. With five or more running at once, the
 load average passed 200 and Xcode's accessibility audits failed with "Audit
 failed to complete in time" or with false contrast failures. Three at a time
 kept the load below 30 with clean results.
 
-Cap the runs with `lockf` slots. This wrapper waits for one of three
-machine-wide slots and returns the command's own exit status:
+`bin/check-ios` enforces that limit itself: each run waits for one of three
+machine-wide slots before its first step and says that it is waiting
+([check slots](../docs/development-workflow.md#ios-checks-before-a-push)).
+Run it directly. The `lockf` wrapper that agents used before
+[#308](https://github.com/jubishop/screenr/issues/308) would now hold a
+second slot for the same run. If audits still time out with three runs at
+once, lower `SLOTS` in `bin/check-ios`.
 
-```sh
-#!/bin/sh
-# Usage: sh check-ios-slot.sh bin/check-ios --simulator <udid>
-while :; do
-  for slot in 1 2 3; do
-    lockf -t 0 "/tmp/screenr-check-ios-slot-$slot.lock" "$@"
-    status=$?
-    [ "$status" -ne 75 ] && exit "$status"
-  done
-  sleep 30
-done
-```
-
-`lockf` exits 75 when a slot is busy. An audit that fails on both settled
-attempts while the machine is loaded is usually load: rerun before assuming
-the change broke it. `performSettledAudit` (#295) already retries once after a
-two-second settle.
+Load is not the only cause of audit timeouts. On 2026-11-01 an audit of all
+four checks on the Find screen timed out on both settled attempts in 3 of 30
+runs beside one other Simulator run, at a load average of 7 to 15, and in
+none of 10 runs alone. UI tests now audit one check at a time through
+`performScreenrAudit()`, which passed 80 of 80 Find runs, 20 of them with
+three Simulators at once.
 
 ## Hooks come from the primary checkout
 

@@ -445,7 +445,7 @@ struct APISourceTests {
         "errors/signed-out", "-ScreenrFixtureLog", "/tmp/requests.log", "-AppleLanguages", "(en)",
         "-ScreenrOpenURL", "screenr-dev://people", "-ScreenrFixtureProfile", "pending",
         "-ScreenrFixturePush", "denied", "-ScreenrFixtureUpdate", "screen/feed/incoming",
-        "-ScreenrFixtureUpdateSignal", "/tmp/update",
+        "-ScreenrFixtureUpdateSignal", "/tmp/update", "-ScreenrFixturePosters", "solid",
       ],
       variant: .dev
     )
@@ -463,7 +463,8 @@ struct APISourceTests {
             requestLog: URL(filePath: "/tmp/requests.log"),
             push: .denied,
             updates: ["screen/feed/incoming"],
-            updateSignal: URL(filePath: "/tmp/update")
+            updateSignal: URL(filePath: "/tmp/update"),
+            posters: .solid
           )
         )
     )
@@ -521,6 +522,15 @@ struct APISourceTests {
     )
   }
 
+  @Test func showsTheAuditProbeAtLaunchInDev() {
+    let arguments = ["Screenr", "-ScreenrAuditProbe", "faintClippedText"]
+    #expect(AuditProbe.launch(in: arguments, variant: .dev) == .faintClippedText)
+    #expect(AuditProbe.launch(in: arguments, variant: .release) == nil)
+    #expect(AuditProbe.launch(in: ["Screenr"], variant: .dev) == nil)
+    #expect(AuditProbe.launch(in: ["Screenr", "-ScreenrAuditProbe"], variant: .dev) == nil)
+    #expect(AuditProbe.launch(in: ["Screenr", "-ScreenrAuditProbe", "x"], variant: .dev) == nil)
+  }
+
   @Test func ignoresFixturesInRelease() throws {
     let arguments = ["Screenr", "-ScreenrFixtures", "/tmp/Fixtures"]
     #expect(try APISource(arguments: arguments, variant: .release) == .network)
@@ -531,6 +541,7 @@ struct APISourceTests {
     ["Screenr", "-ScreenrFixtures", "/tmp", "-ScreenrFixtureSession", "maybe"],
     ["Screenr", "-ScreenrFixtures", "/tmp", "-ScreenrFixtureColor", "red"],
     ["Screenr", "-ScreenrFixtures", "/tmp", "-ScreenrFixturePush", "maybe"],
+    ["Screenr", "-ScreenrFixtures", "/tmp", "-ScreenrFixturePosters", "real"],
   ])
   func rejectsMalformedArguments(_ arguments: [String]) {
     #expect(throws: APISource.ArgumentError.self) {

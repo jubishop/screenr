@@ -8,6 +8,10 @@ it. Without --simulator, the check creates its own Simulator and deletes it
 afterward, so concurrent checkouts never share one.
 Build output, logs, and result bundles stay in ios/build/, which Git ignores.
 
+At most SLOTS checks run at once on the Mac. Before its first step, a check
+waits for a free slot, saying so, and holds it until it exits. The slots are
+lock files in /tmp, or in SCREENR_CHECK_IOS_SLOT_DIR, which tests set.
+
 A failing test reports at once, without collecting a sysdiagnose. Each step
 runs in its own process group, and a Simulator test run that outlasts
 --test-timeout, or an interrupted check, stops that whole group.
@@ -18,6 +22,7 @@ is recent; the pre-push hook and bin/ios-testflight rely on the same records.
 """
 
 import argparse
+import fcntl
 import json
 import os
 from pathlib import Path
@@ -36,10 +41,18 @@ ROOT = Path(__file__).resolve().parents[1]
 BUILD = ROOT / "ios/build"
 OUTPUT = BUILD / "check"
 MINIMUM_XCODE = 27
-# The Simulator tests took 13 minutes on the user's Mac on 2026-10-14; a run
-# that takes much longer is stuck.
-TEST_TIMEOUT_MINUTES = 40
+# The Simulator tests took 13 minutes on the user's Mac on 2026-10-14, and 30
+# on 2026-11-01 once the UI tests audited one check at a time; a run that takes
+# much longer is stuck.
+TEST_TIMEOUT_MINUTES = 60
 BOOT_TIMEOUT_MINUTES = 10
+# With five or more checks at once, the Mac's load average passed 200, and the
+# UI tests' accessibility audits timed out or measured contrast wrongly. Three
+# kept it below 30 on 2026-10-14. Building loads the Mac too, so a slot covers
+# the whole check.
+SLOTS = 3
+SLOT_DIRECTORY = Path(os.environ.get("SCREENR_CHECK_IOS_SLOT_DIR", "/tmp"))
+SLOT_POLL_SECONDS = 2
 # How long a stopped step's processes get to exit before SIGKILL.
 STOP_GRACE_SECONDS = 5
 WARNING =re.compile(r"warning:", re.IGNORECASE)
@@ -143,6 +156,46 @@ def check_results(label, bundle, tests):
         raise CheckFailure(f"{label}: " + "; ".join(problems) + f"; see {bundle}")
 
 
+def lock_slot(path):
+    """Lock a slot's file without waiting, and report whether this check now holds it.
+
+    The descriptor stays open, so the check holds the slot until it exits. The
+    system releases the lock when the process ends, however it ends, and the
+    check's child processes do not inherit the descriptor.
+    """
+    descriptor = os.open(path, os.O_RDWR | os.O_CREAT, 0o666)
+    try:
+        fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        # lockf(1) removes its lock file when its command ends, so a file
+        # opened just before that can lock after another check has made a
+        # new one at the path. Such a lock holds nothing.
+        locked = os.fstat(descriptor)
+        current = os.stat(path)
+        if (locked.st_dev, locked.st_ino) == (current.st_dev, current.st_ino):
+            return True
+    except (BlockingIOError, FileNotFoundError):
+        pass
+    os.close(descriptor)
+    return False
+
+
+def take_slot():
+    """Wait for one of the Mac's SLOTS check slots, and hold it until this process exits."""
+    started = time.monotonic()
+    waiting = False
+    while True:
+        for number in range(1, SLOTS + 1):
+            if lock_slot(SLOT_DIRECTORY / f"screenr-check-ios-slot-{number}.lock"):
+                waited = f" after waiting {(time.monotonic() - started) / 60:.1f} minutes" if waiting else ""
+                print(f"Took iOS check slot {number} of {SLOTS}{waited}.", flush=True)
+                return
+        if not waiting:
+            print(f"Waiting for an iOS check slot: all {SLOTS} are in use by other bin/check-ios runs "
+                  "on this Mac.", flush=True)
+            waiting = True
+        time.sleep(SLOT_POLL_SECONDS)
+
+
 def create_simulator():
     """Create an iPhone Simulator on the newest iOS runtime and return its UDID."""
     listing = json.loads(capture("xcrun", "simctl", "list", "--json", "runtimes"))
@@ -200,6 +253,7 @@ def main():
               f"in {found.get('checkout')}; skipping. Run bin/check-ios without --reuse to check again.",
               flush=True)
         return
+    take_slot()
     shutil.rmtree(OUTPUT, ignore_errors=True)
     OUTPUT.mkdir(parents=True)
     run("ScreenrKit tests", ["swift", "test", "--package-path", "ios/ScreenrKit",

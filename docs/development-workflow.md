@@ -235,9 +235,30 @@ push finds a recorded pass. Never bypass the hook with `git push --no-verify`.
   forget every pass.
 - **Duration:** a full `bin/check-ios` took 16 minutes on the user's Mac on
   2026-10-14, while other checkouts ran checks, and most of it was the
-  Simulator tests. A reused pass takes under a second. A failed UI test
-  reports at once, and a stuck test run stops after 40 minutes; see the
+  Simulator tests. Auditing one check at a time made it about 31 minutes on
+  2026-11-01, 30 of them the Simulator tests. A reused pass takes under a
+  second. A failed UI test reports at once, and a stuck test run stops after
+  60 minutes; see the
   [iPhone app guide](../ios/README.md#checks).
+- **Slots:** at most three `bin/check-ios` runs check at once on a Mac.
+  With five or more at once on 2026-10-14, the load average passed 200, and
+  the UI tests' accessibility audits timed out ("Audit failed to complete in
+  time") or measured contrast wrongly; three kept it below 30
+  ([#308](https://github.com/jubishop/screenr/issues/308)). Before its first
+  step, each run takes one of three lock files,
+  `/tmp/screenr-check-ios-slot-<n>.lock`, and holds it until it exits, even
+  when stopped, since the system releases the lock with the process. While
+  all three are taken, it prints that it is waiting and checks again every 2
+  seconds, so parallel agents queue instead of failing. The slot covers the
+  build as well as the Simulator tests, since building loads the Mac too. A
+  reused pass skips the check without a slot. If audits still time out with
+  three runs at once, lower `SLOTS` in `bin/check-ios`.
+  `tests/test_check_ios.py` covers the wait. Load was not the only cause:
+  on 2026-11-01, with another Simulator running UI tests at a load average
+  of 7 to 15, an audit of all four checks on the Find screen timed out on
+  both attempts in 3 of 30 runs, and in none of 10 runs alone. Auditing one
+  check at a time passed 80 of 80, 20 of them with three Simulators at once
+  ([iPhone app guide](../ios/README.md#add-a-feature-screen)).
 - **Hook location:** Git runs the hooks in `core.hooksPath`. `bin/setup`
   sets it to the relative `bin/hooks`, so each checkout runs its own copy.
   On the user's Mac it is the primary checkout's absolute `bin/hooks`, so

@@ -83,12 +83,18 @@ deletes it afterward, so several checkouts can check at once. With
 `--simulator`, it uses that Simulator and leaves it in place. Logs and result
 bundles from the last run are in `ios/build/check/`.
 
+At most three checks run at once on the Mac, since more load it enough to
+make accessibility audits time out. Before its first step, a check waits for
+a free machine-wide slot, printing that it is waiting, and holds it until it
+exits; see
+[slots](../docs/development-workflow.md#ios-checks-before-a-push).
+
 The check fails fast and never hangs:
 
 - **Diagnostics:** the test run passes `-collect-test-diagnostics never`.
   Collecting a sysdiagnose after a failed UI test took about 10 minutes and
   sometimes never finished.
-- **Timeouts:** the Simulator tests stop and fail after 40 minutes, or after
+- **Timeouts:** the Simulator tests stop and fail after 60 minutes, or after
   `--test-timeout <minutes>`, and the Simulator boot after 10 minutes. The
   failure shows the end of the step's log.
 - **Stopping:** each step runs in its own process group. A timeout,
@@ -253,11 +259,14 @@ uses it when launched with these arguments; Release builds ignore them:
 | `-ScreenrOpenURL` | A link the app opens at launch, as if the system delivered it, such as `screenr-dev://titles/tv/201`. |
 | `-ScreenrAppearance` | `dark` or `light`, in place of the system's appearance, which a Simulator changes for its apps only after it restarts. |
 | `-ScreenrPushTap` | A notification ID the app opens at launch, as if the member had tapped its push, such as `18`. |
+| `-ScreenrFixturePosters` | `placeholders` (default), so every poster shows its title's initial, or `solid` for a solid gray poster, from a data URL, for every poster path. |
+| `-ScreenrAuditProbe` | `faintClippedText` shows one line of faint, cut-off text over every screen, which the accessibility audit must fail. |
 
 In UI tests, `app.launch(with: FixtureLaunch(viewer: "nora"))` passes them,
 with the directory found from the test's source path; `requestLog`, `link`,
-`appearance`, and `pushTap` pass `-ScreenrFixtureLog`, `-ScreenrOpenURL`,
-`-ScreenrAppearance`, and `-ScreenrPushTap`; and
+`appearance`, `pushTap`, `posters`, and `auditProbe` pass
+`-ScreenrFixtureLog`, `-ScreenrOpenURL`, `-ScreenrAppearance`,
+`-ScreenrPushTap`, `-ScreenrFixturePosters`, and `-ScreenrAuditProbe`; and
 `update: FixtureUpdate("screen/feed/incoming")` passes the update arguments,
 whose fixtures answer once the test calls `update.send()`. The fixture API
 keeps the session in memory.
@@ -461,8 +470,12 @@ marks the visit for `ShellTests`.
    choosing fixtures with `viewer` and `overrides`, and audit screens in the
    tabs with `app.performShellAudit()`. Every audit checks only contrast,
    Dynamic Type, clipped text, and hit regions: `performSettledAudit` uses
-   `XCUIAccessibilityAuditType.screenr` by default, and a direct audit passes
-   it to `performAccessibilityAudit(for:)`. `performShellAudit()` passes over
+   `XCUIAccessibilityAuditType.screenr` by default, and a direct audit calls
+   `performScreenrAudit()`. Both audit one check at a time: in the iOS 27
+   Simulator, while another Simulator ran UI tests, an audit of all four
+   sometimes never finished ("Audit failed to complete in time"), even at a
+   modest load, and its retry then failed the same way.
+   `performShellAudit()` passes over
    what the audit cannot measure in a scrolling screen, as
    [Conversations](#conversations) describes. While a list row or control
    reaches beneath a bar or the keyboard or past the screen's edge, it also
@@ -470,6 +483,14 @@ marks the visit for `ShellTests`.
    parts of a row without an element of their own or in text cut off at that
    edge, such as the next poster in a row that scrolls sideways. In a screen
    that scrolls, it passes over Dynamic Type issues without an element too.
+   While Find's search field holds text, and only then, the clipped-text
+   check also reports one issue without an element at every text size,
+   though nothing in the app's content clips: the field's text. The shell
+   audit passes over that one issue; a second, one with an element, or one
+   while the field is empty still fails.
+   `FindTests.testAuditStillFailsFaintAndClippedTextWhileSearching` launches
+   with `FixtureLaunch(auditProbe: .faintClippedText)` and checks that the
+   shell audit still fails faint and cut-off text on Find's results.
    `ShellTests`
    check the shell through navigation titles and `FixtureLaunch(requestLog:)`,
    so they hold when a placeholder changes; keep `DestinationView`'s
@@ -923,13 +944,13 @@ ScreenContent(model: model) { screen in
 | `EntryView`, `ThreadView`, `CommentView` | `Screenr/Conversation/` | An entry, its discussion, and one comment, following the web's `feed.tsx` and `thread.tsx`. Each entry and comment carries the accessibility identifier `entry-<id>` or `comment-<id>`. |
 | `CommentComposer`, `DiscussionComposer`, `StartConversationComposer` | `Screenr/Conversation/` | The one composer form, bound to a reply or comment target, or to a `ConversationStarter` with Season and Episode pickers on a TV title. |
 | `ReactionControls`, `ReactionPicker`, `FeedActionStyle`, `WriteFailure` | `Screenr/Conversation/` | Reaction counts and React, which opens the seven reactions beneath its line, as on the web (a SwiftUI `Menu` label does not follow Dynamic Type); the compact actions with 44-point hit areas; and a failed write's message beneath its control. |
-| `Avatar`, `PosterImage`, `FlowLayout`, `.muted`, `.danger`, `.onAccent` | `Screenr/Shared/` | A member's photo or initial on the web's colors; a TMDB poster or the title's initial; a row that wraps; and text colors that keep 4.5:1 contrast, which the system's secondary label and red miss at small sizes, and the system's white misses on the dark theme's lime accent. |
+| `Avatar`, `PosterImage`, `FlowLayout`, `.muted`, `.danger`, `.onAccent` | `Screenr/Shared/` | A member's photo or initial on the web's colors; a TMDB poster, or the title's initial only while no poster shows, so an audit never measures an initial beneath a poster; a row that wraps; and text colors that keep 4.5:1 contrast, which the system's secondary label and red miss at small sizes, and the system's white misses on the dark theme's lime accent. |
 | `.buttonStyle(.accent)` | `Screenr/Shared/AccentButtonStyle.swift` | The prominent accent-filled button, such as Accept, Send sign-in code, or Join Screenr, with its label in `.onAccent`. Use it in place of `.borderedProminent`. |
 | `FeedModel` | ScreenrKit `Conversation/` | `@Observable` page state: accepted activity (`layout(_:viewer:)`, `receive`, `showIncoming`, and `show(entry:in:viewer:)` for a title page's friend line), revealed spoilers, each discussion's preview and groups, composers and their drafts, reactions, removals through `confirmation`, and Want to watch and Recommend with the top 10 confirmations. Every write reads the screen again through its `refresh` closure. |
 | `FeedLayout`, `ThreadLayout` | ScreenrKit `Conversation/` | The web's rules as values: which entries and replies show, their order, the New activity count, the three-comment preview, Show earlier comments, and nested groups. |
 | `ConversationStarter` | ScreenrKit `Conversation/` | Start a conversation: `.post` on the friends feed, or `.title(id:kind:)`, which loads a TV show's seasons and each chosen season's episodes. |
 | Presentation | ScreenrKit `EntryPresentation.swift` | `item.action(style:)`, `item.title`, `discussionLabel`, `removedLabel`, `link(reply:)`, `RelativeTime`, `FinishedDate`, `ReviewStars`, `ReactionKind.options`, and `TopTenLeaving`. |
-| `ImageSource` | ScreenrKit | `@Environment(\.imageSource)`: TMDB poster requests, and profile photo requests with the bearer token. Against the fixture API it loads nothing, so UI tests show placeholders. |
+| `ImageSource` | ScreenrKit | `@Environment(\.imageSource)`: TMDB poster requests, and profile photo requests with the bearer token. Against the fixture API it loads nothing, so UI tests show placeholders, unless `FixtureLaunch(posters: .solid)` (`-ScreenrFixturePosters solid`) asks for a solid gray poster from a data URL for every poster path. |
 
 - **Incoming activity:** other people's new entries, moved entries, and new
   replies wait behind the shell's New activity control in all three feeds,
@@ -1012,7 +1033,8 @@ failed screen read and the search keeps working:
 `FindSearchTests`, `FindWantToWatchTests`, and `FindListsTests` cover the
 model with `FindAPI`, a fake that answers searches by their text, and
 `TestClock`. `FindTests` drives the tab: searching, opening a result,
-Friends recommend, and every `screen/search` and `actions/search` fixture.
+Friends recommend, every `screen/search` and `actions/search` fixture, and
+a loaded poster in place of its title's initial.
 `screen/search/viewer-statuses` shows Cam's own statuses, free options,
 unknown availability, and no saved services.
 
