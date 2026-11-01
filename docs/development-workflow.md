@@ -111,6 +111,48 @@ pushes and manual runs on `main`, and the `production` environment accepts
 only `main`. Merging an update pull request pushes to `main`, which runs full
 CI and deploys.
 
+## Dependency install scripts
+
+`allowScripts` in `package.json` records whether each dependency with an
+install script may run it: esbuild's is approved and fsevents' is denied
+([#344](https://github.com/jubishop/screenr/issues/344)). Without an entry,
+npm 11.19 and 11.20, which Node 24.22 and Node 26.13 bundle, run the script
+and warn after every install, and npm 12.2 skips it, so what an install does
+depends on the npm version. [`.npmrc`](../.npmrc) sets `strict-allow-scripts`,
+so an install stops on any install script without a decision and names the
+package, and `allow-scripts-pin=false`, so `npm install-scripts approve <pkg>`
+writes a name-only entry that later versions keep. Record a decision with
+`npm install-scripts approve <pkg>` or `npm install-scripts deny <pkg>`, and
+add its reason here. npm checks only the packages it installs on the current
+platform, so `tests/test_npm_install_scripts.py` checks every package in
+`package-lock.json`: Linux CI catches a new macOS-only script before it stops
+`npm ci` on a Mac. `--ignore-scripts`, which release packaging uses, skips
+every install script regardless.
+
+- **esbuild, approved.** tsx depends on it. Its `postinstall`,
+  `node install.js`, confirms that the platform's binary package, such as
+  `@esbuild/darwin-arm64`, is installed, or else installs it and checks the
+  binary against esbuild's recorded hash. It then replaces the `esbuild`
+  command's Node wrapper with the native binary and checks the binary's
+  version. tsx works without the script, because esbuild's JavaScript API
+  finds the platform package itself: release packaging installs with
+  `--ignore-scripts` and still runs migrations through tsx. Approving keeps
+  the install esbuild documents, and denying would protect nothing, because
+  every tsx command runs esbuild's native binary anyway. For the same reason
+  the approval covers every version: a pinned one, npm's default, would stop
+  the install whenever an update, such as a Dependabot tsx update, changed
+  esbuild's version, until someone approved it again.
+- **fsevents, denied.** It is an optional, macOS-only dependency of tsx, whose
+  command-line tool tries to load it at startup for the file watcher behind
+  `tsx watch`. Screenr doesn't run that command, and tsx runs normally,
+  falling back to Node's file watching, when fsevents doesn't load. Linux
+  skips the package. npm lists it because its registry metadata names
+  `install: node-gyp rebuild`, but the published package contains no build
+  files; it ships a prebuilt `fsevents.node` for Intel and Apple silicon, and
+  npm ran nothing for it before the denial either. Denying it leaves the same
+  files installed and keeps a later version from running a build without
+  review.
+
 ## Checks
 
 Follow the [check schedule](foundation/engineering-policy.md#checks).
