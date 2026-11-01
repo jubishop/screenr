@@ -131,11 +131,10 @@ export function TitleView({
                   className="primary"
                   disabled={!interactive}
                   unavailable={busy}
-                  aria-describedby={failure.describedBy("recommended")}
                   onClick={() => {
                     if (recommended && rank) ask("withdraw");
                     else
-                      void failure.run("recommended", () =>
+                      void failure.run(() =>
                         activity(data.title.id, "recommended", !recommended),
                       );
                   }}
@@ -149,17 +148,11 @@ export function TitleView({
                   className="secondary"
                   disabled={!interactive}
                   unavailable={busy}
-                  aria-describedby={failure.describedBy("top-ten")}
                   onClick={() => {
                     if (rank)
-                      void failure.run("top-ten", () =>
-                        topTen(data.title.id, "remove"),
-                      );
+                      void failure.run(() => topTen(data.title.id, "remove"));
                     else if (entries.length >= topTenLimit) ask("replace");
-                    else
-                      void failure.run("top-ten", () =>
-                        topTen(data.title.id, "add"),
-                      );
+                    else void failure.run(() => topTen(data.title.id, "add"));
                   }}
                 >
                   {rank ? `✓ #${rank} in your top 10` : "Add to top 10"}
@@ -170,13 +163,12 @@ export function TitleView({
                   finishedOn={data.watch.finished_on}
                   disabled={!interactive}
                   unavailable={busy}
-                  describedBy={failure.describedBy("status")}
                   buttonRef={statusButton}
                   onStatus={(status) => {
                     if (status === "want_to_watch" && recommended && rank)
                       ask("switch");
                     else
-                      void failure.run("status", () =>
+                      void failure.run(() =>
                         watchStatus(
                           data.title.id,
                           status,
@@ -186,9 +178,7 @@ export function TitleView({
                       );
                   }}
                   onDate={(date) =>
-                    void failure.run("status", () =>
-                      finishedDate(data.title.id, date),
-                    )
+                    void failure.run(() => finishedDate(data.title.id, date))
                   }
                 />
                 {review.button}

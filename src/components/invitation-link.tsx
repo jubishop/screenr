@@ -1,12 +1,11 @@
 "use client";
-import { useId, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { useInteractive } from "./client";
 import { ActionButton } from "./action-button";
 
 export function InvitationLink({ url }: { url: string }) {
   const interactive = useInteractive();
   const input = useRef<HTMLInputElement>(null);
-  const hint = useId();
   const [pending, setPending] = useState(false);
   const [message, setMessage] = useState("");
 
@@ -51,7 +50,6 @@ export function InvitationLink({ url }: { url: string }) {
           disabled={!interactive}
           readOnly
           value={url}
-          aria-describedby={hint}
           onFocus={(event) => event.currentTarget.select()}
           onClick={(event) => {
             event.currentTarget.select();
@@ -78,7 +76,6 @@ export function InvitationLink({ url }: { url: string }) {
             onClick={() => void share()}
           >
             <svg
-              aria-hidden="true"
               width="18"
               height="18"
               viewBox="0 0 24 24"
@@ -94,12 +91,10 @@ export function InvitationLink({ url }: { url: string }) {
           </ActionButton>
         )}
       </div>
-      <p id={hint} className="small muted">
+      <p className="small muted">
         Tap the link or use Copy link to share it with your friends.
       </p>
-      <p className="small" role="status">
-        {message}
-      </p>
+      <p className="small action-status">{message}</p>
     </div>
   );
 }

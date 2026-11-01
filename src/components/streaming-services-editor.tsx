@@ -40,7 +40,6 @@ export function StreamingServicesEditor({
       </p>
       {draft ? (
         <form
-          aria-label="Edit streaming services"
           onSubmit={async (event) => {
             event.preventDefault();
             if (busy) return;
@@ -67,14 +66,8 @@ export function StreamingServicesEditor({
               onChange={(event) => setQuery(event.target.value)}
             />
           </label>
-          <p className="small muted" role="status">
-            {draft.length} selected
-          </p>
-          <div
-            className="service-options"
-            role="group"
-            aria-label="Streaming services"
-          >
+          <p className="small muted">{draft.length} selected</p>
+          <div className="service-options">
             {visible.map((service) => (
               <label key={service.id} className="service-option">
                 <input
@@ -115,11 +108,7 @@ export function StreamingServicesEditor({
               Clear selections
             </ActionButton>
           </div>
-          {error && (
-            <p className="error" role="alert">
-              {error}
-            </p>
-          )}
+          {error && <p className="error">{error}</p>}
         </form>
       ) : (
         <>
@@ -153,9 +142,7 @@ export function StreamingServicesEditor({
           </button>
         </>
       )}
-      <p className="small" role="status" aria-atomic="true">
-        {saved ? "Services saved." : ""}
-      </p>
+      <p className="small">{saved ? "Services saved." : ""}</p>
     </section>
   );
 }

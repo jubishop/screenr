@@ -309,7 +309,7 @@ test("a confirmed Block opens the Friends page with a dismissible notice", async
     await expect(
       blocked.getByRole("button", { name: "Unblock", exact: true }),
     ).toBeVisible();
-    await expect(viewer.getByRole("main").getByRole("alert")).toHaveCount(0);
+    await expect(viewer.getByRole("main").locator(".error")).toHaveCount(0);
     expect(hidden).toEqual([]);
     blocking = false;
     // The notice fits beneath the page heading and survives a refresh.
@@ -382,7 +382,6 @@ test("a failed Friends page action shows its error on that person's row", async 
       message,
       screenshot: "action-error-request",
     });
-    await expect(decline).toHaveAccessibleDescription("");
   }
   // Each row keeps its own message beneath the person and any note.
   await page.setViewportSize({ width: 390, height: 900 });
@@ -408,15 +407,15 @@ test("a failed Friends page action shows its error on that person's row", async 
       screenshot: `action-error-row-${index}`,
     });
   }
-  await expect(accept).toHaveAccessibleDescription(message);
+  await expect(request.locator(".error")).toHaveText(message);
   // A successful retry moves the person on without their old message.
   await page.unroute("**/api/screenr/relationship");
   await press(accept);
   await expect(region(page, "Requests")).toHaveCount(0);
   const friends = region(page, "Friends");
   await expect(friends).toContainText("Rae Requester");
-  await expect(friends.getByRole("alert")).toHaveCount(0);
-  await expect(page.getByRole("main").getByRole("alert")).toHaveCount(3);
+  await expect(friends.locator(".error")).toHaveCount(0);
+  await expect(page.getByRole("main").locator(".error")).toHaveCount(3);
 });
 
 test("a failed profile action shows its error beneath the actions or in its confirmation", async ({
@@ -457,7 +456,7 @@ test("a failed profile action shows its error beneath the actions or in its conf
   await expect(
     page.getByRole("link", { name: "Watch together", exact: true }),
   ).toBeVisible();
-  await expect(page.getByRole("main").getByRole("alert")).toHaveCount(0);
+  await expect(page.getByRole("main").locator(".error")).toHaveCount(0);
   await failAction(page, "relationship", message);
   const confirmation = page.getByRole("group", { name: /^Unfriend Opal/ });
   const unfriend = confirmation.getByRole("button", {
@@ -483,13 +482,13 @@ test("a failed profile action shows its error beneath the actions or in its conf
   }
   await cancel.click();
   await expect(confirmation).toHaveCount(0);
-  await expect(page.getByRole("main").getByRole("alert")).toHaveCount(0);
+  await expect(page.getByRole("main").locator(".error")).toHaveCount(0);
   await more.click();
   await page.getByRole("menuitem", { name: "Unfriend", exact: true }).click();
-  await expect(confirmation.getByRole("alert")).toHaveCount(0);
+  await expect(confirmation.locator(".error")).toHaveCount(0);
   await page.unroute("**/api/screenr/relationship");
   await unfriend.click();
   await expect(send).toBeVisible();
   await expect(confirmation).toHaveCount(0);
-  await expect(page.getByRole("main").getByRole("alert")).toHaveCount(0);
+  await expect(page.getByRole("main").locator(".error")).toHaveCount(0);
 });

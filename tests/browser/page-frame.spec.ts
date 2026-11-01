@@ -409,10 +409,6 @@ test("each member page has its own title, and navigation focuses its heading", a
     await expect(viewer).toHaveURL(/\/search$/);
     await expect(viewer).toHaveTitle("Find a title · Screenr");
     await expect(heading("Find a title")).toBeFocused();
-    // Next's route announcer reads the new title aloud.
-    await expect(viewer.locator("#__next-route-announcer__")).toHaveText(
-      "Find a title · Screenr",
-    );
     expect(
       await viewer.evaluate(() => document.querySelectorAll("title").length),
     ).toBe(1);

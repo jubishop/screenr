@@ -84,7 +84,7 @@ test("profile friends support discovery and refresh accepted friendships and blo
   await owner.goto("/people/circleviewer");
   await confirmProfileAction(owner, "Block");
   await expect(
-    viewer.getByRole("alert").filter({ hasText: "Person not found." }),
+    viewer.locator(".error").filter({ hasText: "Person not found." }),
   ).toBeVisible();
   await expect(viewer.getByText("Friends (0)", { exact: true })).toHaveCount(0);
   await owner.context().close();
@@ -112,7 +112,7 @@ test("an unavailable legacy link navigates after friendship restores access", as
   monitorErrors(waiting);
   const missing = await waiting.goto(`/conversations/${entry.conversation_id}`);
   expect(missing?.status()).toBe(404);
-  await expect(waiting.getByRole("main").getByRole("alert")).toContainText(
+  await expect(waiting.getByRole("main").locator(".error")).toContainText(
     "Conversation not found.",
   );
   await befriend(owner, reader, "recoveryreader", "recoveryowner");

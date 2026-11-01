@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 
 // Screenr's own inline SVG icon set. Add icons here instead of adding an icon
-// dependency. Icons are decorative: the control that shows one names itself.
+// dependency.
 const icons = {
   link: (
     <g transform="rotate(-45 12 12)">
@@ -76,7 +76,6 @@ export function Icon({ name }: { name: IconName }) {
     <svg
       className="icon"
       viewBox="0 0 24 24"
-      aria-hidden="true"
       focusable="false"
       fill="none"
       stroke="currentColor"

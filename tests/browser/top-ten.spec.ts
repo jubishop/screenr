@@ -109,7 +109,7 @@ for (const width of [390, 1366])
     const row = section.getByRole("list");
     const links = row.getByRole("link");
     await expect(links).toHaveCount(10);
-    await expect(links.first()).toHaveAccessibleName("#1 Row Pick 1");
+    await expect(links.first().locator(".top-ten-rank")).toHaveText("#1");
     await expect(links.first()).toHaveAttribute(
       "href",
       `/titles/movie/${ids[0].slice(6)}`,
@@ -457,7 +457,7 @@ test("on desktop, dragging a poster in your own row moves it to the dropped rank
   await page.screenshot({ path: ".cache/top-ten-drag-1366.png" });
   await page.mouse.up();
   await expect(shown).toHaveText(names(1, 3, 4, 5, 2, 6, 7, 8, 9, 10));
-  await expect(links.nth(4)).toHaveAccessibleName("#5 Drag Pick 2");
+  await expect(links.nth(4).locator(".top-ten-rank")).toHaveText("#5");
   await saved();
   await expect(row).not.toHaveAttribute("data-dragging");
   await expect(lifted.or(marker)).toHaveCount(0);
@@ -478,7 +478,7 @@ test("on desktop, dragging a poster in your own row moves it to the dropped rank
   await page.mouse.move(last.x, last.y, { steps: 4 });
   await page.mouse.up();
   await expect(shown).toHaveText(names(3, 4, 5, 2, 6, 7, 8, 9, 10, 1));
-  await expect(links.last()).toHaveAccessibleName("#10 Drag Pick 1");
+  await expect(links.last().locator(".top-ten-rank")).toHaveText("#10");
   await saved();
   await pressAndDrag(page, links.last());
   await page.mouse.move(area.x + 6, area.y + area.height / 3, { steps: 8 });

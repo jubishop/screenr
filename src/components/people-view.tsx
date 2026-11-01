@@ -104,14 +104,13 @@ function PersonRow({
               className={action.primary ? "primary" : "text-button"}
               disabled={disabled}
               unavailable={busy}
-              aria-describedby={failure.describedBy(action.label)}
               onClick={(event) => {
                 if (action.confirm) {
                   trigger.current = event.currentTarget;
                   return setConfirming(action.label);
                 }
                 leave(event.currentTarget, action);
-                void failure.run(action.label, action.run).then((done) => {
+                void failure.run(action.run).then((done) => {
                   if (done) removal?.done();
                 });
               }}
@@ -213,12 +212,9 @@ export function PeopleView({
           );
         }}
       >
-        <label className="sr-only" htmlFor="friend-search">
-          Exact username
-        </label>
         <input
           disabled={!interactive}
-          id="friend-search"
+          aria-label="Exact username"
           placeholder="Find an exact username"
           autoCapitalize="none"
           spellCheck={false}

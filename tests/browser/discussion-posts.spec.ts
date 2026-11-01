@@ -116,7 +116,7 @@ test("members start conversations without a title from Your circle, and friends 
   await post
     .getByRole("button", { name: "Copy link to discussion", exact: true })
     .click();
-  await expect(post.getByRole("status")).toHaveText("Link copied.");
+  await expect(post.locator(".copy-status")).toHaveText("Link copied.");
   expect(await reader.evaluate(() => navigator.clipboard.readText())).toBe(
     `${browserConfig.baseURL}/?item=${id}`,
   );

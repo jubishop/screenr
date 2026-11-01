@@ -87,11 +87,7 @@ export function CommentComposer({
           </ActionButton>
         </div>
       </div>
-      {error && (
-        <p className="error" role="alert">
-          {error}
-        </p>
-      )}
+      {error && <p className="error">{error}</p>}
     </form>
   );
 }

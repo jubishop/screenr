@@ -166,11 +166,10 @@ function ProfileActions({
   const act = (action: string) => ({
     disabled: !interactive,
     unavailable: busy,
-    "aria-describedby": failure.describedBy(action),
     onClick: (event: React.MouseEvent<HTMLButtonElement>) => {
       if (event.currentTarget === document.activeElement)
         restoreFocus.current = "row";
-      void failure.run(action, () => relationship(profile.user_id, action));
+      void failure.run(() => relationship(profile.user_id, action));
     },
   });
   function close() {

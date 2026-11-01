@@ -119,7 +119,7 @@ test("members add, replace, and remove a profile photo on Account, and friends s
     name: "Profile photo",
     exact: true,
   });
-  const status = card.getByRole("status");
+  const status = card.locator(".action-status");
   const add = card.getByRole("button", { name: "Add photo", exact: true });
   await expect(card).toContainText("Your initial shows until you add a photo.");
   await expect(
@@ -210,8 +210,7 @@ test("members add, replace, and remove a profile photo on Account, and friends s
   });
   const unopened =
     "This photo could not be opened. Choose a JPEG or PNG image. Details: open failed; text/plain, 11 bytes";
-  await expect(card.getByRole("alert")).toHaveText(unopened);
-  await expect(replace).toHaveAccessibleDescription(unopened);
+  await expect(card.locator(".error")).toHaveText(unopened);
   expect((await storedPhoto(ownerId)).version).toBe(second.version);
 
   for (const width of [390, 1280]) {
@@ -262,7 +261,7 @@ test("detailed camera photos fit the upload limit, at a smaller size when no 512
     name: "Profile photo",
     exact: true,
   });
-  const status = card.getByRole("status");
+  const status = card.locator(".action-status");
   const header = owner.locator(".header-profile .avatar img");
   await choosePhoto(
     owner,
@@ -315,12 +314,11 @@ test("each photo preparation failure names its step with details to copy", async
     exact: true,
   });
   const add = card.getByRole("button", { name: "Add photo", exact: true });
-  const alert = card.getByRole("alert");
+  const alert = card.locator(".error");
   const photo = await widePhoto(owner, "#ff0000");
   const file = `image/png, ${photo.buffer.length} bytes, 1200×800`;
   async function expectFailure(message: string) {
     await expect(alert).toHaveText(message);
-    await expect(add).toHaveAccessibleDescription(message);
     await expect(card.locator(".avatar img")).toHaveCount(0);
   }
 
@@ -379,7 +377,7 @@ test("setup offers an optional photo that the new profile keeps", async ({
     photo.getByRole("button", { name: "Add photo", exact: true }),
     await widePhoto(guest, "#ff0000"),
   );
-  await expect(photo.getByRole("status")).toHaveText("Photo added.");
+  await expect(photo.locator(".action-status")).toHaveText("Photo added.");
   const { version } = await storedPhoto(guestId);
   const preview = photo.locator(".avatar img");
   await expect(preview).toHaveAttribute(
@@ -432,10 +430,7 @@ test("members with Google sign-in see Use my Google photo, which explains a miss
     exact: true,
   });
   await google.click();
-  await expect(card.getByRole("alert")).toHaveText(
-    "Your Google account has no photo to use.",
-  );
-  await expect(google).toHaveAccessibleDescription(
+  await expect(card.locator(".error")).toHaveText(
     "Your Google account has no photo to use.",
   );
   await expect(card.locator(".avatar img")).toHaveCount(0);

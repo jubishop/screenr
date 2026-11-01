@@ -54,15 +54,13 @@ test("avatar colors follow the stable user ID, not the name", () => {
   for (const value of tones) assert.ok(value >= 0 && value < avatarTones);
 });
 
-test("avatars show a whole first character and stay decorative", () => {
+test("avatars show a whole first character", () => {
   const markup = person("user-2", "👩‍👩‍👧 Family Night");
-  assert.match(markup, /aria-hidden="true"/);
   assert.match(markup, />👩‍👩‍👧</);
   assert.ok(!markup.includes("Family"));
   const placeholder = renderToStaticMarkup(
     createElement(Avatar, { person: null }),
   );
   assert.match(placeholder, /avatar-placeholder/);
-  assert.match(placeholder, /aria-hidden="true"/);
   assert.doesNotMatch(placeholder, /data-tone/);
 });

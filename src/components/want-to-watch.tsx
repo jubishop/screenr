@@ -117,11 +117,11 @@ function AtHome({ data, own }: { data: AtHomePage; own: boolean }) {
   return (
     <>
       <TitleKindButtons value={filter} onChange={setFilter} />
-      <p className="small muted watch-together-count" role="status">
+      <p className="small muted watch-together-count">
         {ready.length} {ready.length === 1 ? "title" : "titles"} to watch now
       </p>
       {!data.viewerHasServices && <ServicesPrompt />}
-      <section aria-label="Want to watch titles">
+      <section>
         {ready.length > 0 && (
           <section className="watch-section" aria-label="Ready to watch">
             <h2>Ready to watch</h2>

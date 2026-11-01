@@ -306,7 +306,7 @@ export function TopTenSection({
     order.splice(rank - 1, 0, entry);
     setMoved(order.map((other, index) => ({ ...other, rank: index + 1 })));
     void failure
-      .run(`move ${entry.id}`, () => change(entry.id, "move", { rank }))
+      .run(() => change(entry.id, "move", { rank }))
       .then(() => setMoved(null));
   }
   // Once a change finishes, focus follows the moved entry, falling back to
@@ -349,7 +349,7 @@ export function TopTenSection({
   const editable = editing && listed.length > 0;
   function run(entry: TopTenEntry, control: Control) {
     focusAfter.current = { title: entry.id, control, index: entry.rank - 1 };
-    void failure.run(`${control} ${entry.id}`, () => change(entry.id, control));
+    void failure.run(() => change(entry.id, control));
   }
   return (
     <section className="top-ten" aria-labelledby={headingId}>
@@ -390,7 +390,6 @@ export function TopTenSection({
                   data-control="up"
                   aria-label={`Move ${entry.name} up`}
                   title="Move up"
-                  aria-describedby={failure.describedBy(`up ${entry.id}`)}
                   disabled={!interactive || entry.rank === 1}
                   unavailable={busy}
                   onClick={() => run(entry, "up")}
@@ -403,7 +402,6 @@ export function TopTenSection({
                   data-control="down"
                   aria-label={`Move ${entry.name} down`}
                   title="Move down"
-                  aria-describedby={failure.describedBy(`down ${entry.id}`)}
                   disabled={!interactive || entry.rank === listed.length}
                   unavailable={busy}
                   onClick={() => run(entry, "down")}
@@ -416,7 +414,6 @@ export function TopTenSection({
                   data-control="remove"
                   aria-label={`Remove ${entry.name} from your top 10`}
                   title="Remove"
-                  aria-describedby={failure.describedBy(`remove ${entry.id}`)}
                   disabled={!interactive}
                   unavailable={busy}
                   onClick={() => run(entry, "remove")}
@@ -432,7 +429,6 @@ export function TopTenSection({
           <ol
             className={`top-ten-row${draggable ? " draggable" : ""}`}
             ref={row}
-            aria-labelledby={headingId}
             aria-busy={moved ? true : undefined}
             data-dragging={drag.dragging ? "" : undefined}
             {...drag.handlers}
@@ -453,12 +449,7 @@ export function TopTenSection({
                     : undefined
                 }
               >
-                <Link
-                  href={titlePath(entry.id)}
-                  prefetch={false}
-                  aria-label={`#${entry.rank} ${entry.name}`}
-                  aria-describedby={failure.describedBy(`move ${entry.id}`)}
-                >
+                <Link href={titlePath(entry.id)} prefetch={false}>
                   <span className="top-ten-poster">
                     <Poster
                       path={entry.poster_path}
@@ -507,7 +498,7 @@ export function TopTenReplace({
   }, []);
   async function choose(replace: string) {
     setPending(true);
-    const done = await failure.run(replace, () => run(replace));
+    const done = await failure.run(() => run(replace));
     setPending(false);
     if (done) onDone();
   }
@@ -528,7 +519,6 @@ export function TopTenReplace({
               type="button"
               className="secondary"
               aria-label={`Remove #${entry.rank} ${entry.name}`}
-              aria-describedby={failure.describedBy(entry.id)}
               unavailable={busy || pending}
               onClick={() => void choose(entry.id)}
             >
