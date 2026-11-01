@@ -1,0 +1,20 @@
+# Every CI job installs Node here. setup-node's lts/* reads a manifest that can
+# mark a new LTS major later than nodejs.org does, so this resolves the newest
+# LTS from nodejs.org, the index the production host updater reads, and fails
+# the job unless Node runs that major. See docs/development-workflow.md#node-runtime.
+name: Set up the newest Node LTS
+description: Install the release nodejs.org marks as the newest Node LTS, with the npm cache.
+runs:
+  using: composite
+  steps:
+    - name: Find the newest Node LTS on nodejs.org
+      id: lts
+      shell: bash
+      run: bin/node-lts >> "$GITHUB_OUTPUT"
+    - uses: actions/setup-node@v7
+      with:
+        node-version: ${{ steps.lts.outputs.version }}
+        cache: npm
+    - name: Require the newest Node LTS major
+      shell: bash
+      run: bin/node-lts --check

@@ -31,11 +31,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
-      - uses: actions/setup-node@v7
-        with:
-          node-version: lts/*
-          check-latest: true
-          cache: npm
+      - uses: ./.github/actions/node-lts
       - run: npm ci
       - name: Isolate CI APT sources
         # tests/test_ci_apt.py exercises the policy installed here.
@@ -83,11 +79,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
-      - uses: actions/setup-node@v7
-        with:
-          node-version: lts/*
-          check-latest: true
-          cache: npm
+      - uses: ./.github/actions/node-lts
       - run: npm ci
       # The browser harness tests run Playwright's headless Chromium. The runner
       # image already has its libraries, so the install skips --with-deps and APT.
@@ -132,11 +124,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
-      - uses: actions/setup-node@v7
-        with:
-          node-version: lts/*
-          check-latest: true
-          cache: npm
+      - uses: ./.github/actions/node-lts
       - run: npm ci
       # Headless Chromium without --with-deps, as in the app job.
       - run: npx playwright install --only-shell chromium
@@ -186,12 +174,8 @@ jobs:
           REF: ${{ github.ref }}
           REVISION: ${{ github.sha }}
         run: bin/deployment-decision "$EVENT_NAME" "$REF" "$REVISION" >> "$GITHUB_OUTPUT"
-      - uses: actions/setup-node@v7
+      - uses: ./.github/actions/node-lts
         if: steps.decision.outputs.deploy == 'true' && github.repository == 'jubishop/screenr'
-        with:
-          node-version: lts/*
-          check-latest: true
-          cache: npm
       - name: Build and package Linux release
         if: steps.decision.outputs.deploy == 'true' && github.repository == 'jubishop/screenr'
         run: |
