@@ -522,6 +522,15 @@ struct APISourceTests {
     )
   }
 
+  @Test func showsTheAuditProbeAtLaunchInDev() {
+    let arguments = ["Screenr", "-ScreenrAuditProbe", "faintClippedText"]
+    #expect(AuditProbe.launch(in: arguments, variant: .dev) == .faintClippedText)
+    #expect(AuditProbe.launch(in: arguments, variant: .release) == nil)
+    #expect(AuditProbe.launch(in: ["Screenr"], variant: .dev) == nil)
+    #expect(AuditProbe.launch(in: ["Screenr", "-ScreenrAuditProbe"], variant: .dev) == nil)
+    #expect(AuditProbe.launch(in: ["Screenr", "-ScreenrAuditProbe", "x"], variant: .dev) == nil)
+  }
+
   @Test func ignoresFixturesInRelease() throws {
     let arguments = ["Screenr", "-ScreenrFixtures", "/tmp/Fixtures"]
     #expect(try APISource(arguments: arguments, variant: .release) == .network)

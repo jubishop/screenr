@@ -1,5 +1,6 @@
 import Foundation
 import XCTest
+import os
 
 // Find a title, the search-role tab: searching, opening a result, Friends
 // recommend, and each Find fixture. ScreenrKit's FindSearchTests and
@@ -135,6 +136,31 @@ final class FindTests: XCTestCase {
     let title = row(app, "Winter Garden")
     XCTAssertTrue(title.waitForExistence(timeout: 10))
     XCTAssertTrue(title.staticTexts["W"].waitForNonExistence(timeout: 10))
+  }
+
+  // The audit passes over the search field's own clipped text on Find's
+  // results, but still fails faint or clipped text in the app's content there.
+  @MainActor
+  func testAuditStillFailsFaintAndClippedTextWhileSearching() throws {
+    let app = try openFind(FixtureLaunch(auditProbe: .faintClippedText))
+    let field = app.searchFields["Search movies and TV shows"]
+    field.tap()
+    field.typeText("night")
+    XCTAssertTrue(row(app, "Night Harbor").waitForExistence(timeout: 10))
+    let found = OSAllocatedUnfairLock(initialState: Set<String>())
+    let options = XCTExpectedFailure.Options()
+    options.issueMatcher = { issue in
+      let check = ["Contrast failed", "Text clipped"].first { issue.compactDescription == $0 }
+      guard let check else { return false }
+      found.withLock { _ = $0.insert(check) }
+      return true
+    }
+    // Each failing check reports, rather than the first ending the test.
+    continueAfterFailure = true
+    try XCTExpectFailure("The probe's text is faint and cut off", options: options) {
+      try audit(app)
+    }
+    XCTAssertEqual(found.withLock { $0 }, ["Contrast failed", "Text clipped"])
   }
 
   // Launches the app and selects Find a title.

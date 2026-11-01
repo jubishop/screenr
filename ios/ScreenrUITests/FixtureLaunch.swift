@@ -25,6 +25,11 @@ struct FixtureLaunch {
     case pending
   }
 
+  enum AuditProbe: String {
+    // One line of faint text, cut off at its width, over every screen.
+    case faintClippedText
+  }
+
   enum Posters: String {
     // Nothing loads, so every poster shows its title's initial.
     case placeholders
@@ -56,6 +61,8 @@ struct FixtureLaunch {
   // Fixtures that answer the app's reads once the test sends them.
   var update: FixtureUpdate?
   var posters = Posters.placeholders
+  // Text over every screen that the audit must fail.
+  var auditProbe: AuditProbe?
 
   static let directory = URL(filePath: #filePath)
     .deletingLastPathComponent()  // ScreenrUITests
@@ -75,6 +82,7 @@ struct FixtureLaunch {
     if let appearance { arguments += ["-ScreenrAppearance", appearance.rawValue] }
     if let pushTap { arguments += ["-ScreenrPushTap", pushTap] }
     arguments += ["-ScreenrFixturePosters", posters.rawValue]
+    if let auditProbe { arguments += ["-ScreenrAuditProbe", auditProbe.rawValue] }
     if let update {
       for name in update.fixtures { arguments += ["-ScreenrFixtureUpdate", name] }
       arguments += ["-ScreenrFixtureUpdateSignal", update.signal.path()]

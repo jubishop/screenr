@@ -259,11 +259,14 @@ uses it when launched with these arguments; Release builds ignore them:
 | `-ScreenrOpenURL` | A link the app opens at launch, as if the system delivered it, such as `screenr-dev://titles/tv/201`. |
 | `-ScreenrAppearance` | `dark` or `light`, in place of the system's appearance, which a Simulator changes for its apps only after it restarts. |
 | `-ScreenrPushTap` | A notification ID the app opens at launch, as if the member had tapped its push, such as `18`. |
+| `-ScreenrFixturePosters` | `placeholders` (default), so every poster shows its title's initial, or `solid` for a solid gray poster, from a data URL, for every poster path. |
+| `-ScreenrAuditProbe` | `faintClippedText` shows one line of faint, cut-off text over every screen, which the accessibility audit must fail. |
 
 In UI tests, `app.launch(with: FixtureLaunch(viewer: "nora"))` passes them,
 with the directory found from the test's source path; `requestLog`, `link`,
-`appearance`, and `pushTap` pass `-ScreenrFixtureLog`, `-ScreenrOpenURL`,
-`-ScreenrAppearance`, and `-ScreenrPushTap`; and
+`appearance`, `pushTap`, `posters`, and `auditProbe` pass
+`-ScreenrFixtureLog`, `-ScreenrOpenURL`, `-ScreenrAppearance`,
+`-ScreenrPushTap`, `-ScreenrFixturePosters`, and `-ScreenrAuditProbe`; and
 `update: FixtureUpdate("screen/feed/incoming")` passes the update arguments,
 whose fixtures answer once the test calls `update.send()`. The fixture API
 keeps the session in memory.
@@ -480,6 +483,14 @@ marks the visit for `ShellTests`.
    parts of a row without an element of their own or in text cut off at that
    edge, such as the next poster in a row that scrolls sideways. In a screen
    that scrolls, it passes over Dynamic Type issues without an element too.
+   While Find's search field holds text, and only then, the clipped-text
+   check also reports one issue without an element at every text size,
+   though nothing in the app's content clips: the field's text. The shell
+   audit passes over that one issue; a second, one with an element, or one
+   while the field is empty still fails.
+   `FindTests.testAuditStillFailsFaintAndClippedTextWhileSearching` launches
+   with `FixtureLaunch(auditProbe: .faintClippedText)` and checks that the
+   shell audit still fails faint and cut-off text on Find's results.
    `ShellTests`
    check the shell through navigation titles and `FixtureLaunch(requestLog:)`,
    so they hold when a placeholder changes; keep `DestinationView`'s
