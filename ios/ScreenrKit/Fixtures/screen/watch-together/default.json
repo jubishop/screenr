@@ -11,7 +11,7 @@
   },
   "response": {
     "status": 200,
-    "etag": "W/\"0Qos19ZoSQq3ccJ6jAwQ4mlfFcwN0c84sHsaUD1YSXU\"",
+    "etag": "W/\"6Nmg349Bnno0xpIoKkclIkE965Uy_ty0Fj4R3E4ubds\"",
     "body": {
       "kind": "watch-together",
       "participants": [
@@ -48,6 +48,7 @@
             "in_theaters": false,
             "upcoming": []
           },
+          "tmdb_score": null,
           "access": "unknown",
           "matchingServiceIds": []
         },
@@ -88,6 +89,7 @@
               }
             ]
           },
+          "tmdb_score": 73,
           "access": "available",
           "matchingServiceIds": [
             "service:hulu"

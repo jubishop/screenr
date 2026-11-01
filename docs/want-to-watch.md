@@ -130,8 +130,9 @@ mode            "theaters"; At home's payload has no mode
 owner           the profile owner: user_id, username, display_name, photo
 hasWantToWatch  whether the owner has any current Want to watch titles,
                 including shows and movies not in theaters
-titles          movies newest first; each title's fields and release, whose
-                in_theaters is set, or whose status is "unavailable"
+titles          movies newest first; each title's fields, tmdb_score, and
+                release, whose in_theaters is set, or whose status is
+                "unavailable"
 ```
 
 Watch together's In theaters payload has `kind`, `mode`, `participants`, and
@@ -140,8 +141,10 @@ Watch together's In theaters payload has `kind`, `mode`, `participants`, and
 
 `InTheatersList`, in the same file, renders both pages' lists with the shared
 title card, which shows each movie's release status, such as "In theaters ·
-Digital Dec 9", and no viewing options when a title has none. A count, such
-as "2 movies in theaters", comes first. **In theaters now** lists the movies
+Digital Dec 9", with its
+[TMDB user score](title-catalog.md#tmdb-user-score-implementation) beside
+it, and no viewing options when a title has none. A count, such as "2 movies
+in theaters", comes first. **In theaters now** lists the movies
 in theaters, noting that the status comes from US release dates and that
 showtimes are at local theaters. **Availability unknown** lists the movies
 whose release data could not be loaded below it. The All, Movies, and TV

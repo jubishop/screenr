@@ -11,7 +11,7 @@
   },
   "response": {
     "status": 200,
-    "etag": "W/\"Qeh6_nSq_B4_a2tFLoiwzxfsv9n4JwiTa-M-LFimo48\"",
+    "etag": "W/\"mEy2kp_AuCdOVr354nZLumsdc2xPSw0k4x_eJaj7UUY\"",
     "body": [
       {
         "id": "movie:101",
@@ -43,7 +43,8 @@
           "status": "ok",
           "in_theaters": false,
           "upcoming": []
-        }
+        },
+        "tmdb_score": null
       },
       {
         "id": "tv:203",
@@ -75,7 +76,8 @@
           "status": "ok",
           "in_theaters": false,
           "upcoming": []
-        }
+        },
+        "tmdb_score": 66
       }
     ]
   }

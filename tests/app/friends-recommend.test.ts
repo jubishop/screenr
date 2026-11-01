@@ -106,6 +106,7 @@ test("Friends recommend sorts by recommending friends, then the most recent reco
       viewer_recommended: false,
       viewing: show.viewing,
       release: show.release,
+      tmdb_score: null,
     },
   );
 
@@ -210,7 +211,12 @@ test("Friends recommend sums top 10 weights, then the most recent recommendation
       ["theo", null],
     ],
   );
-  assert.ok(!JSON.stringify(await recommendations(viewer)).includes("score"));
+  // No ranking score is returned; TMDB's user score is public title data.
+  assert.ok(
+    !JSON.stringify(await recommendations(viewer))
+      .replaceAll('"tmdb_score"', "")
+      .includes("score"),
+  );
 });
 
 test("Friends recommend counts only current, unblocked direct friends", async () => {

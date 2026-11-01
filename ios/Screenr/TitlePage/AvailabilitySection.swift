@@ -1,14 +1,15 @@
 import ScreenrKit
 import SwiftUI
 
-// Where to watch in the United States: the title's release status, then
-// subscription and free services with their logos, or why there are none,
-// when the options were last checked, TMDB's viewing options page, and the
-// JustWatch and TMDB credits. A digital release date stays in the status,
-// never among the services.
+// Where to watch in the United States: the title's release status and TMDB
+// user score, then subscription and free services with their logos, or why
+// there are none, when the options were last checked, TMDB's viewing options
+// page, and the JustWatch and TMDB credits. A digital release date stays in
+// the status, never among the services.
 struct AvailabilitySection: View {
   let availability: WatchAvailability
   let release: TitleRelease?
+  let score: TMDBScore?
   let kind: TitleKind
 
   private static let justWatch = URL(string: "https://www.justwatch.com/")
@@ -23,7 +24,7 @@ struct AvailabilitySection: View {
           .font(.subheadline)
           .foregroundStyle(.muted)
       }
-      ReleaseStatusLine(release: release, font: .subheadline)
+      TitleStatusLine(release: release, score: score, style: .subheadline)
       if let notice = availability.notice {
         Text(notice)
           .foregroundStyle(.muted)

@@ -1029,10 +1029,11 @@ Views that list titles share these pieces:
 
 | Piece | Where | What it does |
 | --- | --- | --- |
-| `TitleRow` | `Screenr/Shared/Titles/` | A title's `PosterImage`, name, kind and year, release status, and where it streams, with optional lines after them. As on the web at phone widths, it leaves out the overview. At accessibility sizes the text moves beneath the poster. Put it in a `NavigationLink`. |
-| `ReleaseStatusLine` | `Screenr/Shared/Titles/` | The [release status](../docs/title-availability.md#release-status-implementation), such as "In theaters · Digital Nov 20", in title rows, Find a title's suggestions, and atop Where to watch, or nothing without a label. |
+| `TitleRow` | `Screenr/Shared/Titles/` | A title's `PosterImage`, name, kind and year, release status and TMDB user score, and where it streams, with optional lines after them. As on the web at phone widths, it leaves out the overview. At accessibility sizes the text moves beneath the poster. Put it in a `NavigationLink`. |
+| `TitleStatusLine` | `Screenr/Shared/Titles/` | The [release status](../docs/title-availability.md#release-status-implementation), such as "In theaters · Digital Nov 20", with the [TMDB user score](../docs/title-catalog.md#tmdb-user-score-implementation) beside it, the `TMDBLogo` asset and a percentage such as 73%, in title rows, Find a title's suggestions, and atop Where to watch, or nothing without a label or score. |
 | `ViewingLinesView` | `Screenr/Shared/Titles/` | "On Netflix, Hulu" and "Free on Tubi TV", with saved services marked, or why there are no options. `savedBy: .eitherPerson` marks either person's services, as Watch together does. |
 | `Title.kindAndYear` | ScreenrKit `Titles/` | "Movie · 2024", or only the kind without a release date. |
+| `TMDBScore.text` | ScreenrKit `Titles/` | The server's whole percentage, such as "73%". The app never computes a score. |
 | `TitleRelease.text` | ScreenrKit `Titles/` | "In theaters", then each upcoming date's label as the server worded it, joined with " · ", or nil when there is none or the release data could not be loaded. The app never derives a status from the dates. |
 | `TitleViewing.matchingServices(_:)`, `access(for:)`, `lines(savedServices:savedBy:)` | ScreenrKit `Titles/` | The viewer's saved services that offer a title, whether the viewer can watch it, and the lines `ViewingLinesView` shows. |
 | `ScreenrAPI.send(_:within:clock:)` | ScreenrKit `API/Deadline.swift` | Sends a request that fails as `.timedOut` after a deadline. |
@@ -1104,7 +1105,7 @@ their controls instead.
 `screen/title/full-top-ten` shows Winter Garden while Alice's top 10 is full,
 `screen/title/finished-review` shows Paper Lanterns, which Alice finished,
 reviewed, and ranks #2, and `screen/title/in-theaters` shows The Quiet Orchard
-in theaters with its digital date ahead.
+in theaters with its digital date ahead and a TMDB user score of 73%.
 
 ## Friends and profiles
 

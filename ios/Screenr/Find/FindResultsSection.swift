@@ -16,6 +16,7 @@ struct FindResultsSection: View {
             title: result.title,
             viewing: result.viewing,
             release: result.release,
+            score: result.tmdbScore,
             serviceIds: serviceIds ?? []
           )
         }

@@ -76,6 +76,78 @@ but relays them without Rotten Tomatoes' license.
 reasons for TV getting none.
 Scraping rottentomatoes.com would break its terms of use.
 
+### TMDB user score implementation
+
+This implements the decision above for the server, the web app, and the
+iPhone app.
+
+**Source.** TMDB's `vote_average`, out of 10, and `vote_count` arrive in the
+movie and TV details and the multi search results Screenr already requests,
+so the score adds no provider, key, or request. `parseScore` in
+`src/server/title-score.ts` keeps an average that is a number from 0 to 10
+and a count that is a whole number from 0. A missing or non-numeric value,
+an average outside 0 to 10, or a negative or fractional count becomes null,
+which shows no score.
+
+**Storage.** [`db/034-title-score.sql`](../db/034-title-score.sql) adds the
+nullable `title.vote_average` and `title.vote_count` columns, which the
+previous release ignores. They follow the [title details](#title-details)
+cache: each refresh stores the details' votes with the rest of the details,
+so a successful refresh whose votes are missing or invalid clears them, and
+a failed refresh keeps the stored ones. A search stores a new result's votes
+with its summary, so the result has a score before its details load, and
+never replaces a stored title's votes. The migration marks no title due:
+a title stored before it shows a score once its details next refresh, which
+happens when a page or list shows it a day or more after its last fetch.
+
+**Score.** `tmdbScore` derives the score each time the server sends a
+screen: the average times 10, rounded to the nearest whole number with
+halves rounding up, such as 73 for 7.3 or 7.25 and 72 for 7.249. It is null
+when fewer than 20 members (`minimumVotes`) rated the title or either value
+is unusable, which also covers unreleased titles at 0 with no votes.
+
+**Payload.** Title screens send `tmdb_score` beside `release`, and every
+title list item that carries `release`, including
+[In theaters](want-to-watch.md#in-theaters) lists, carries `tmdb_score` too.
+Its type is `TmdbScore` in `src/shared.ts`: the whole percentage from 0 to
+100, or null for no score. Clients show it and never compute it. It is a new
+optional field, so installed iPhone builds ignore it and
+`SCREENR_IOS_MINIMUM_BUILD` stays unchanged
+([additive payloads](data-and-access.md#changes-that-app-builds-depend-on)).
+`getTitleReleases` and `withViewingOptions` return it beside each title's
+release status.
+
+**Web.** `TitleStatus` in `src/components/title-status.tsx` shows the
+release status and, beside it, the unmodified `public/tmdb.svg`, with the
+alt text "TMDB", followed by the percentage, such as 73%. It appears on
+title cards, Find a title's suggestion tiles, and at the top of the title
+page's Where to watch, wherever the release status does, and alone when a
+title has a score but no release label. The logo is about as tall as the
+capitals beside it, and the score moves beneath the release status when the
+line is too narrow for both. The Credits page's TMDB notice covers
+attribution.
+
+**iPhone.** ScreenrKit decodes `tmdb_score` as an optional `TMDBScore` on
+title screens and on each list item, so a payload without it decodes and
+shows no score. `TMDBScore.text` is the percentage, such as "73%". The app's
+`TMDBLogo` asset is the same unmodified SVG, kept as a vector.
+`TitleStatusLine` shows the logo, scaled with Dynamic Type, and the score
+beside the release status in `TitleRow`, Find a title's suggestions, and
+the top of the title page's Where to watch.
+
+**Tests.** `tests/app/title-score.test.ts` covers rounding, the 19- and
+20-vote boundary, missing and invalid values, the cache and a failed
+refresh, the title lists, and search summaries, against a fake TMDB and the
+real database, and checks that no request is added.
+`tests/browser/title-score.spec.ts` checks the logo and score on a title
+page and on Find a title and Watch together cards at desktop, mobile, and
+320px widths, and that fewer than 20 votes show none.
+`tests/app/ios-assets.test.ts` checks that the app's logo is the web's file.
+On the iPhone, ScreenrKit's `TMDBScoreTests` read the fixtures' scores and
+cover missing and null scores, and the UI tests check the score on a Find a
+title suggestion and search result, a Watch together row, and the
+`screen/title/in-theaters` title page.
+
 ## Title trailers
 
 Title pages use TMDB's [movie videos](https://developer.themoviedb.org/reference/movie-videos)
