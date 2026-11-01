@@ -250,6 +250,9 @@ export function createAuth(
       "/email-otp/request-password-reset",
       "/forget-password/email-otp",
       "/email-otp/reset-password",
+      // Screenr never calls this one. It checks a code without consuming it,
+      // and concurrent guesses evade its attempt limit.
+      "/email-otp/check-verification-otp",
     ],
     socialProviders: { ...googleProvider(), ...appleProvider() },
     user: {

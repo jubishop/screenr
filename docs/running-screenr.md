@@ -283,9 +283,12 @@ usable, and the sign-in page shows "Too many codes requested. Try again later,
 or continue with Google." Migration `011-login-code-limits.sql` stores hashed
 recipients for a day. Because Screenr has no passwords, it sends no
 password-reset codes, and Better Auth's password routes, such as
-`/api/auth/email-otp/reset-password`, return 404. The shared Resend free
-allowance can still be exhausted by other applications; inspect Resend
-delivery activity if codes do not arrive.
+`/api/auth/email-otp/reset-password`, return 404. So does
+`/api/auth/email-otp/check-verification-otp`, which Screenr never calls: it
+checks a code without consuming it, and concurrent guesses evade the
+five-attempt limit. The shared Resend free allowance can still be exhausted
+by other applications; inspect Resend delivery activity if codes do not
+arrive.
 
 ## iPhone app accounts and keys
 
