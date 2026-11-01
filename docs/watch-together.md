@@ -125,8 +125,10 @@ location setting.
 Adding showtimes and nearby theaters. Filing the data source as research
 first.
 
-Implementation is tracked in [issue #311](https://github.com/jubishop/screenr/issues/311)
-and, for the iPhone app, [issue #312](https://github.com/jubishop/screenr/issues/312).
+[Issue #311](https://github.com/jubishop/screenr/issues/311) implemented it
+for the web, as described under [Implementation](#implementation), and
+[issue #312](https://github.com/jubishop/screenr/issues/312) tracks the iPhone
+app.
 
 ### In theaters uses shared choices — 2026-10-16
 
@@ -203,3 +205,17 @@ while visible and when the page becomes visible again. A failed refresh
 clears private results until a successful read. Unfriending or blocking
 makes the comparison unavailable on the next access check. Data already
 delivered to a browser cannot be retracted.
+
+`/watch-together?with=<friend-username>&mode=theaters` opens In theaters;
+the URL without the mode stays At home. The server reads the same
+participants, permissions, and shared choices in the same snapshot, then
+keeps the shared movies with In theaters status, and those whose release
+data cannot be loaded, through `inTheaters`, newest shared first. It reads
+neither participant's streaming services and no viewing options, so the
+payload has no `viewerHasServices`. The page shows the At home and In
+theaters switch between the heading and the list, hides the title-type
+filter and the save-services prompt, and lists **In theaters now**, then
+**Availability unknown**, with "No shared movies in theaters." when none
+are showing. Title links keep `?from=watch_together`. Refreshes and access
+checks are unchanged. [In theaters on Want to watch pages](want-to-watch.md#in-theaters)
+describes the mode parameter, the shared list, and the payload.

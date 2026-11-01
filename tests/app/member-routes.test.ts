@@ -41,6 +41,10 @@ test("member routes name each screen and its parameters", () => {
       "/watch-together?with=ben&with=&with=cam",
       { kind: "watch-together", with: ["ben", "", "cam"] },
     ],
+    [
+      "/watch-together?with=ben&mode=theaters",
+      { kind: "watch-together", with: ["ben"], mode: "theaters" },
+    ],
     ["/titles/movie/42", { kind: "title", id: "movie:42" }],
     [
       "/titles/tv/7?item=post&reply=answer",
@@ -57,6 +61,10 @@ test("member routes name each screen and its parameters", () => {
       { kind: "want-to-watch", username: "a b" },
     ],
     [
+      "/people/Alice/want-to-watch?mode=theaters",
+      { kind: "want-to-watch", username: "Alice", mode: "theaters" },
+    ],
+    [
       "/conversations/legacy?reply=old",
       { kind: "conversation", id: "legacy", reply: "old" },
     ],
@@ -67,6 +75,19 @@ test("member routes name each screen and its parameters", () => {
   // Suggestions is the default tab, so only Friends recommend is named.
   for (const tab of ["", "suggestions", "Friends-Recommend", "other"])
     assert.deepEqual(parse(`/search?tab=${tab}`), { kind: "search" }, tab);
+  // At home is the default mode, so only In theaters is named.
+  for (const mode of ["", "home", "Theaters", "other"]) {
+    assert.deepEqual(
+      parse(`/people/alice/want-to-watch?mode=${mode}`),
+      { kind: "want-to-watch", username: "alice" },
+      mode,
+    );
+    assert.deepEqual(
+      parse(`/watch-together?with=ben&mode=${mode}`),
+      { kind: "watch-together", with: ["ben"] },
+      mode,
+    );
+  }
   assert.deepEqual(parse("/titles/movie/42?item="), {
     kind: "title",
     id: "movie:42",
@@ -111,11 +132,23 @@ test("member paths keep only each screen's parameters and round-trip", () => {
     ["/people/alice/want-to-watch?q=x", "/people/alice/want-to-watch"],
     ["/people/a%20b/want-to-watch", "/people/a%20b/want-to-watch"],
     [
+      "/people/alice/want-to-watch?mode=theaters&item=x",
+      "/people/alice/want-to-watch?mode=theaters",
+    ],
+    ["/people/alice/want-to-watch?mode=home", "/people/alice/want-to-watch"],
+    ["/people/alice?mode=theaters", "/people/alice"],
+    ["/search?mode=theaters", "/search"],
+    [
       "/titles/movie/42?reply=answer&item=post",
       "/titles/movie/42?item=post&reply=answer",
     ],
     ["/titles/movie/1%3Fitem%3Dx", "/titles/movie/1%3Fitem%3Dx"],
     ["/watch-together?with=ben&with=&x=1", "/watch-together?with=ben&with="],
+    [
+      "/watch-together?mode=theaters&with=ben",
+      "/watch-together?with=ben&mode=theaters",
+    ],
+    ["/watch-together?with=ben&mode=other", "/watch-together?with=ben"],
     [
       "/conversations/legacy?reply=old&item=x",
       "/conversations/legacy?reply=old",
@@ -145,7 +178,15 @@ test("return paths keep same-origin member pages in canonical form", () => {
     ["/people/%2F%2Fevil.example", "/people/%2F%2Fevil.example"],
     ["/conversations/legacy?reply=old", "/conversations/legacy?reply=old"],
     ["/watch-together?with=ben", "/watch-together?with=ben"],
+    [
+      "/watch-together?with=ben&mode=theaters",
+      "/watch-together?with=ben&mode=theaters",
+    ],
     ["/people/ben/want-to-watch", "/people/ben/want-to-watch"],
+    [
+      "/people/ben/want-to-watch?mode=theaters",
+      "/people/ben/want-to-watch?mode=theaters",
+    ],
     ["/account?error=access_denied", "/account"],
   ])
     assert.equal(returnPath(next), path, next);

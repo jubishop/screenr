@@ -245,7 +245,7 @@ test("suggestion and Watch together lists read cached availability in one query 
   };
 
   const together = await loadScreen(alice, "/watch-together?with=ben");
-  if (together.kind !== "watch-together")
+  if (together.kind !== "watch-together" || "mode" in together)
     throw new Error("Expected Watch together");
   assert.equal(together.titles.length, cache.length);
   assert.equal(cacheReads(), 1);

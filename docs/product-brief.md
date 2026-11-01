@@ -826,8 +826,10 @@ supersedes it. A Find a title tab. A home feed strip.
 and the [mode in the URL](watch-together.md#the-selected-mode-stays-in-the-url--2026-10-16)
 follow the Watch together decisions.
 
-Implementation is tracked in [issue #311](https://github.com/jubishop/screenr/issues/311)
-and, for the iPhone app, [issue #312](https://github.com/jubishop/screenr/issues/312).
+[In theaters](want-to-watch.md#in-theaters) describes the web implementation
+from [issue #311](https://github.com/jubishop/screenr/issues/311).
+[Issue #312](https://github.com/jubishop/screenr/issues/312) tracks the
+iPhone app.
 
 ### Ratings and written reviews — 2026-09-04
 

@@ -1,6 +1,6 @@
 import { Link } from "./pending-navigation";
 import type { ReactNode } from "react";
-import type { SaveSurface, Title, ViewingTitle } from "../shared";
+import type { ReleaseTitle, SaveSurface, Title, ViewingTitle } from "../shared";
 import { Poster } from "./poster";
 import { TitleServices } from "./title-services";
 import { ReleaseStatus } from "./title-release";
@@ -18,7 +18,8 @@ export function titleDetails(title: Pick<Title, "kind" | "release_date">) {
 // heading level follows the list's place in the page outline. `from` tells
 // the title page where a Want to watch save started, for usage telemetry.
 // Children, such as Friends recommend's recommenders and action, follow the
-// link beneath its text, outside the link so they can hold controls.
+// link beneath its text, outside the link so they can hold controls. Titles
+// in an In theaters list carry no viewing options, so their cards show none.
 export function TitleCard({
   title,
   heading: Heading,
@@ -27,9 +28,9 @@ export function TitleCard({
   from,
   children,
 }: {
-  title: ViewingTitle;
+  title: ViewingTitle | ReleaseTitle;
   heading: "h2" | "h3";
-  serviceIds: string[];
+  serviceIds?: string[];
   shared?: boolean;
   from?: SaveSurface;
   children?: ReactNode;
@@ -46,11 +47,13 @@ export function TitleCard({
         <p className="muted">{titleDetails(title)}</p>
         <ReleaseStatus release={title.release} />
         {title.overview && <p className="small overview">{title.overview}</p>}
-        <TitleServices
-          viewing={title.viewing}
-          serviceIds={serviceIds}
-          shared={shared}
-        />
+        {"viewing" in title && (
+          <TitleServices
+            viewing={title.viewing}
+            serviceIds={serviceIds ?? []}
+            shared={shared}
+          />
+        )}
       </div>
       <Icon name="chevron" />
     </Link>

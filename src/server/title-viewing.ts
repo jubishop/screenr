@@ -1,10 +1,13 @@
-import type { Title, ViewingTitle } from "../shared";
+import type { ReleaseTitle, Title, ViewingTitle } from "../shared";
 import {
   getTitleAvailabilities,
   getTitleReleases,
   searchTitles,
 } from "./catalog";
 import { db } from "./db";
+
+// A title list stops starting provider requests this long after it begins.
+const listRefreshMs = 3000;
 
 // Adds each title's viewing options and release status, as every title list
 // shows them.
@@ -18,7 +21,7 @@ export async function withViewingOptions<T extends Title>(
   // request also has the catalog's two-second timeout. Availability and
   // release details refresh side by side within the same deadline.
   const ids = titles.map((title) => title.id);
-  const deadline = Math.min(Date.now() + 3000, refreshDeadline);
+  const deadline = Math.min(Date.now() + listRefreshMs, refreshDeadline);
   const [availability, releases] = await Promise.all([
     getTitleAvailabilities(ids, deadline),
     getTitleReleases(ids, deadline),
@@ -31,6 +34,25 @@ export async function withViewingOptions<T extends Title>(
       release: releases[index],
     };
   });
+}
+
+// An In theaters list (docs/want-to-watch.md#in-theaters): the movies among
+// `titles` whose release status says In theaters, and those whose release
+// data could not be loaded, in the list's order. Shows never count. Release
+// data refreshes as for any title list, and no viewing options are read.
+export async function inTheaters<T extends Title>(
+  titles: T[],
+): Promise<ReleaseTitle<T>[]> {
+  const movies = titles.filter((title) => title.kind === "movie");
+  const releases = await getTitleReleases(
+    movies.map((title) => title.id),
+    Date.now() + listRefreshMs,
+  );
+  return movies
+    .map((title, index) => ({ ...title, release: releases[index] }))
+    .filter(
+      ({ release }) => release.in_theaters || release.status === "unavailable",
+    );
 }
 
 export async function findTitles(query: string) {
