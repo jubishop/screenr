@@ -70,7 +70,7 @@ def check_release(revision, host, kit):
     if installed != kit:
         raise ValueError(f'The deploy kit on the host ({installed[:12]}) does not match ops/ at {revision} '
                          f'({kit[:12]}). From a trusted checkout, run bin/install-deploy-kit root@HOST {revision}, '
-                         'then re-run the failed deploy job.')
+                         'then use Re-run all jobs in GitHub Actions.')
     if active is None:
         print(f'Main contains {revision}; production has no active release, '
               'so this is the first deployment.', flush=True)
@@ -133,6 +133,8 @@ def main():
         manifest = next(m for m in members if str(PurePosixPath(m.name)) == 'REVISION')
         if not manifest.isfile() or release.extractfile(manifest).read().decode().strip() != revision:
             raise ValueError('Archive revision does not match checked revision.')
+    # Once this deletes the artifact, rerunning only this job cannot download
+    # it, so every recovery message here and in ops/ says Re-run all jobs.
     artifacts = json.loads(run('gh', 'api', f'repos/{REPO}/actions/runs/{run_id}/artifacts', capture=True))
     for artifact in artifacts['artifacts']:
         if artifact['name'] == artifact_name:

@@ -142,6 +142,9 @@ class HostConfigTests(unittest.TestCase):
     def assert_drift_changes_nothing(self, result, *messages):
         self.assertEqual(result.returncode, 1)
         self.assertIn('HOST CONFIGURATION DRIFT', result.stderr)
+        # bin/deploy-ci deleted the release artifact before this step, so a
+        # retry must rebuild it: rerunning only the deploy job cannot.
+        self.assertIn('Re-run all jobs', result.stderr)
         for message in messages:
             self.assertIn(message, result.stderr)
         # Nothing is installed when the deployment stops.

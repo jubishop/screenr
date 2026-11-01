@@ -86,10 +86,14 @@ to compare a machine's Node with the newest LTS.
 
 **Decision — 2026-10-12:** Enable GitHub vulnerability alerts and Dependabot
 security updates. Add weekly Dependabot version updates for the `npm` and
-`github-actions` ecosystems. They keep exact npm versions and commit-SHA
-Action pins. Group minor and patch updates into one pull request per
-ecosystem, and open major updates separately. Every update pull request runs
-the full CI gate and merges only after review and passing CI.
+`github-actions` ecosystems. They keep exact npm versions, and Action major
+tags or commit pins as the
+[toolchain policy](foundation/engineering-policy.md#runtime-and-toolchain-versions)
+sets them. Group minor and patch updates into one pull request per ecosystem,
+and open major updates separately. Every update pull request runs the full CI
+gate and merges only after review and passing CI. The decision first kept
+commit-SHA pins on every Action; the Project Starter 2.3.0 sync replaced them
+with major tags on 2026-10-15.
 
 **Why:** The user chose automatic update pull requests so security fixes and
 routine releases do not depend on someone noticing them. This follows the
@@ -108,15 +112,19 @@ security updates are on.
 
 [`.github/dependabot.yml`](../.github/dependabot.yml) schedules the weekly
 version updates. The npm `increase` strategy moves each exact `package.json`
-version to the new release, and Action updates keep commit-SHA pins. The
-`github-actions` entry lists `.github/actions/*` beside the root, which finds
-only workflows, so the shared actions' references update too. One
-group per ecosystem collects minor and patch updates; every major update
-opens its own pull request. Update pull requests use only existing labels:
-`improvement`, plus `area: tooling` for Actions. Without configured labels,
-including with an empty list, Dependabot creates and applies its own default
-labels. A third, `docker` entry updates the Caddy image that CI copies; see
-[CI Caddy](#ci-caddy).
+version to the new release. The workflows and the shared action reference
+Actions by major tag, such as `actions/checkout@v7`, which already runs that
+major's newest release, so Dependabot changes one only for a new major
+release. Only the deploy job's `tailscale/github-action` is pinned to a
+commit, because that job holds deployment credentials; Dependabot moves the
+pin to each new release's commit. The `github-actions` entry lists
+`.github/actions/*` beside the root, which finds only workflows, so the shared
+actions' references update too. One group per ecosystem collects minor and
+patch updates; every major update opens its own pull request. Update pull
+requests use only existing labels: `improvement`, plus `area: tooling` for
+Actions. Without configured labels, including with an empty list, Dependabot
+creates and applies its own default labels. A third, `docker` entry updates
+the Caddy image that CI copies; see [CI Caddy](#ci-caddy).
 
 Dependabot pull requests run [the check workflow](../.github/workflows/check.yml),
 including every check `bin/check --full` runs, like any other pull request.

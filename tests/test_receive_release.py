@@ -28,6 +28,9 @@ from _deploy_kit import kit_digest  # noqa: E402
 
 REVISION = 'a' * 40
 OTHER = 'b' * 40
+# bin/deploy-ci deletes the release artifact before uploading it, so a retry
+# must rebuild it: rerunning only the deploy job cannot download it.
+RETRY = 'Re-run all jobs'
 
 
 def load_receiver():
@@ -352,7 +355,9 @@ class UploadTests(ReceiverTests):
     def test_upload_waits_for_no_one_holding_the_deploy_lock(self):
         with (self.screenr / 'deploy.lock').open('a') as lock:
             fcntl.flock(lock, fcntl.LOCK_EX)
-            self.assert_rejected(self.upload_archive(), 'holds /opt/screenr/deploy.lock')
+            result = self.upload_archive()
+            self.assert_rejected(result, 'holds /opt/screenr/deploy.lock')
+            self.assertIn(RETRY, result[2])
 
     def test_transfer_runs_without_the_deploy_lock(self):
         # A slow or stalled client must not block deployments, cleanup, or restores.
@@ -400,6 +405,7 @@ class UploadTests(ReceiverTests):
         status, stdout, error = nested[0]
         self.assertEqual(status, 1)
         self.assertIn('Another upload', error)
+        self.assertIn(RETRY, error)
         self.assertEqual(self.upload.read_bytes(), data)
 
     def test_stalled_transfer_ends_at_the_deadline(self):
@@ -507,6 +513,7 @@ class DeployTests(ReceiverTests):
         status, stdout, stderr, checksum = self.deploy(kit='c' * 64)
         self.assertEqual(status, 1)
         self.assertIn('bin/install-deploy-kit', stderr)
+        self.assertIn(RETRY, stderr)
         self.assertEqual(self.recorded(), [])
 
     def test_missing_upload_refuses_before_deploying(self):
@@ -514,6 +521,7 @@ class DeployTests(ReceiverTests):
         status, stdout, stderr = self.receive(f'deploy {REVISION} {"c" * 64} {kit}')
         self.assertEqual(status, 1)
         self.assertIn('No uploaded release', stderr)
+        self.assertIn(RETRY, stderr)
         self.assertEqual(self.recorded(), [])
 
     def test_kit_mode_digests_a_kit_directory_without_root(self):

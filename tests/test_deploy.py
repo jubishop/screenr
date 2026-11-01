@@ -19,6 +19,9 @@ sys.path.insert(0, str(ROOT / 'bin'))
 from _deploy_kit import SCRIPTS, SHARED, checked_kit, kit_digest  # noqa: E402
 
 REVISION = 'a' * 40
+# bin/deploy-ci deletes the release artifact before uploading it, so a retry
+# must rebuild it: rerunning only the deploy job cannot download it.
+RETRY = 'Re-run all jobs'
 # The installed deploy kit and the receiver's kept upload on the host.
 KIT = '/usr/local/lib/screenr-deploy'
 UPLOAD = '/var/lib/screenr-deploy/release.tar.gz'
@@ -273,6 +276,7 @@ class CIDeploymentTests(DeploymentFixture):
         result = self.execute()
         self.assertNotEqual(result.returncode, 0)
         self.assertIn(f'bin/install-deploy-kit root@HOST {REVISION}', result.stderr)
+        self.assertIn(RETRY, result.stderr)
         self.assertFalse(self.uploaded())
 
     def test_unreadable_checked_files_never_contact_host(self):
@@ -818,6 +822,7 @@ class RemoteDeploymentTests(unittest.TestCase):
         result, events, current = self.execute_remote(KIT_CHANGED='yes')
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('bin/install-deploy-kit root@HOST', result.stderr)
+        self.assertIn(RETRY, result.stderr)
         self.assertEqual(self.systemctl_calls, ['kit digest'])
         self.assertEqual(events, '')
         self.assertEqual(current, '/opt/screenr/releases/previous')
@@ -827,7 +832,7 @@ class RemoteDeploymentTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         # A held lock must not fail with a bare exit status.
         self.assertIn('holds /opt/screenr/deploy.lock', result.stderr)
-        self.assertIn('rerun the deploy job', result.stderr)
+        self.assertIn(RETRY, result.stderr)
         self.assertNotIn('start screenr-backup.service', self.systemctl_calls)
         self.assertEqual(events, '')
         self.assertEqual(current, '/opt/screenr/releases/previous')
