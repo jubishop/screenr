@@ -127,8 +127,8 @@ first.
 
 [Issue #311](https://github.com/jubishop/screenr/issues/311) implemented it
 for the web, as described under [Implementation](#implementation), and
-[issue #312](https://github.com/jubishop/screenr/issues/312) tracks the iPhone
-app.
+[issue #312](https://github.com/jubishop/screenr/issues/312) brought it to the
+iPhone app, as [the iPhone app](want-to-watch.md#iphone-app) describes.
 
 ### In theaters uses shared choices — 2026-10-16
 

@@ -10,7 +10,8 @@ import Foundation
 //   clears the title, since the viewer withdrew whatever they had.
 // - Friends recommend carries the viewer's status and Recommend.
 // - The viewer's own Want to watch page lists titles they saved to Want to
-//   watch. Another member's lists that member's, so it names none.
+//   watch, in either mode. Another member's lists that member's, so it names
+//   none.
 public struct InteractedTitles: Hashable, Sendable {
   // In the screen's order, each title once.
   public private(set) var titles: [TitleSummary] = []
@@ -43,7 +44,13 @@ public struct InteractedTitles: Hashable, Sendable {
       for title in page.titles {
         add(TitleSummary(title.title))
       }
-    case .people, .invites, .account, .watchTogether, .redirect, .unknown:
+    case .wantToWatchInTheaters(let page):
+      guard page.owner.userId == viewer else { break }
+      for title in page.titles {
+        add(TitleSummary(title.title))
+      }
+    case .people, .invites, .account, .watchTogether, .watchTogetherInTheaters, .redirect,
+      .unknown:
       break
     }
   }

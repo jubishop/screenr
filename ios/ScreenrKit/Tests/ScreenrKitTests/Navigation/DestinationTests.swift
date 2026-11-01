@@ -19,6 +19,7 @@ struct DestinationTests {
       ("/account?error=access_denied", .account),
       ("/watch-together", .watchTogether(with: [])),
       ("/watch-together?with=ben&with=&with=cam", .watchTogether(with: ["ben", "", "cam"])),
+      ("/watch-together?with=ben&mode=theaters", .watchTogether(with: ["ben"], mode: .inTheaters)),
       ("/titles/movie/42", .title(id: "movie:42")),
       ("/titles/tv/7?item=post&reply=answer", .title(id: "tv:7", item: "post", reply: "answer")),
       ("/titles/movie/42?from=suggestion", .title(id: "movie:42", from: .suggestion)),
@@ -27,6 +28,10 @@ struct DestinationTests {
       ("/people/a%20b", .profile(username: "a b")),
       ("/people/Alice/want-to-watch", .wantToWatch(username: "Alice")),
       ("/people/a%20b/want-to-watch?item=x", .wantToWatch(username: "a b")),
+      (
+        "/people/Alice/want-to-watch?mode=theaters",
+        .wantToWatch(username: "Alice", mode: .inTheaters)
+      ),
       ("/conversations/legacy?reply=old", .conversation(id: "legacy", reply: "old")),
       ("/join/AbC_123-xyz", .join(token: "AbC_123-xyz")),
       ("/?item=&reply=", .feed()),
@@ -44,6 +49,18 @@ struct DestinationTests {
   )
   func namesEachScreenAndItsParameters(path: String, destination: Destination) {
     #expect(Destination(path: path) == destination)
+  }
+
+  // At home is the default mode, so only In theaters is named.
+  @Test(arguments: ["", "home", "Theaters", "other"])
+  func readsAnyOtherModeAsAtHome(mode: String) {
+    #expect(
+      Destination(path: "/people/alice/want-to-watch?mode=\(mode)")
+        == .wantToWatch(username: "alice")
+    )
+    #expect(
+      Destination(path: "/watch-together?with=ben&mode=\(mode)") == .watchTogether(with: ["ben"])
+    )
   }
 
   @Test(
@@ -84,9 +101,18 @@ struct DestinationTests {
       ("/people/a%20b", "/people/a%20b"),
       ("/people/alice/want-to-watch?q=x", "/people/alice/want-to-watch"),
       ("/people/a%20b/want-to-watch", "/people/a%20b/want-to-watch"),
+      (
+        "/people/alice/want-to-watch?mode=theaters&item=x",
+        "/people/alice/want-to-watch?mode=theaters"
+      ),
+      ("/people/alice/want-to-watch?mode=home", "/people/alice/want-to-watch"),
+      ("/people/alice?mode=theaters", "/people/alice"),
+      ("/search?mode=theaters", "/search"),
       ("/titles/movie/42?reply=answer&item=post", "/titles/movie/42?item=post&reply=answer"),
       ("/titles/movie/1%3Fitem%3Dx", "/titles/movie/1%3Fitem%3Dx"),
       ("/watch-together?with=ben&with=&x=1", "/watch-together?with=ben&with="),
+      ("/watch-together?mode=theaters&with=ben", "/watch-together?with=ben&mode=theaters"),
+      ("/watch-together?with=ben&mode=other", "/watch-together?with=ben"),
       ("/conversations/legacy?reply=old&item=x", "/conversations/legacy?reply=old"),
       ("/unknown?item=post", "/unknown"),
       ("/join/AbC_123-xyz", "/join/AbC_123-xyz"),
@@ -106,9 +132,11 @@ struct DestinationTests {
       Destination.feed(), .feed(item: "post"), .feed(item: "post", reply: "answer"),
       .search(), .search(query: "The Office"), .search(query: "Lost", tab: .friendsRecommend),
       .people, .invites, .account, .watchTogether(with: ["ben", "cam"]),
+      .watchTogether(with: ["ben"], mode: .inTheaters),
       .title(id: "movie:42"), .title(id: "tv:7", item: "post", reply: "answer"),
       .title(id: "movie:42", from: .friendsRecommend),
       .profile(username: "a b"), .wantToWatch(username: "a b"),
+      .wantToWatch(username: "a b", mode: .inTheaters),
       .conversation(id: "legacy", reply: "old"), .join(token: "AbC_123-xyz"),
       .notFound(path: "/unknown"),
     ]
@@ -125,6 +153,10 @@ struct DestinationTests {
       ("https://screenr.club/titles/tv/201?item=post", .title(id: "tv:201", item: "post")),
       ("https://Screenr.Club/people/ben#top", .profile(username: "ben")),
       ("https://screenr.club/people/ben/want-to-watch", .wantToWatch(username: "ben")),
+      (
+        "https://screenr.club/people/ben/want-to-watch?mode=theaters",
+        .wantToWatch(username: "ben", mode: .inTheaters)
+      ),
       ("https://screenr.club/search?q=Lost", .search(query: "Lost")),
       ("https://screenr.club/join/AbC_123-xyz", .join(token: "AbC_123-xyz")),
       ("https://screenr.club/conversations/legacy", .conversation(id: "legacy")),
@@ -142,6 +174,10 @@ struct DestinationTests {
       ("screenr-dev://", .feed()),
       ("screenr-dev://?item=post", .feed(item: "post")),
       ("screenr-dev://watch-together?with=ben", .watchTogether(with: ["ben"])),
+      (
+        "screenr-dev://watch-together?with=ben&mode=theaters",
+        .watchTogether(with: ["ben"], mode: .inTheaters)
+      ),
       ("screenr-dev://people/ben/want-to-watch", .wantToWatch(username: "ben")),
       ("screenr-dev://join/AbC_123-xyz", .join(token: "AbC_123-xyz")),
     ]
@@ -193,6 +229,30 @@ struct DestinationTests {
     #expect(together.titles.first?.destination.path == "/titles/movie/104?from=watch_together")
   }
 
+  // A list's mode is part of the screen it reads and the link it shares.
+  // Switching modes keeps the list's owner or participants.
+  @Test func switchesAListsMode() {
+    let theaters = Destination.wantToWatch(username: "ben", mode: .inTheaters)
+    #expect(theaters.screenPath == "/people/ben/want-to-watch?mode=theaters")
+    #expect(
+      theaters.shareURL.absoluteString
+        == "https://screenr.club/people/ben/want-to-watch?mode=theaters"
+    )
+    #expect(theaters.listMode == .inTheaters)
+    #expect(theaters.inMode(.atHome) == .wantToWatch(username: "ben"))
+    #expect(Destination.wantToWatch(username: "ben").listMode == .atHome)
+
+    let together = Destination.watchTogether(with: ["ben"])
+    #expect(together.listMode == .atHome)
+    #expect(together.inMode(.inTheaters) == .watchTogether(with: ["ben"], mode: .inTheaters))
+    #expect(together.inMode(.inTheaters).screenPath == "/watch-together?with=ben&mode=theaters")
+
+    // Other screens have no modes.
+    #expect(Destination.profile(username: "ben").listMode == nil)
+    #expect(Destination.profile(username: "ben").inMode(.inTheaters) == .profile(username: "ben"))
+    #expect(Destination.ListMode.allCases.map(\.label) == ["At home", "In theaters"])
+  }
+
   @Test func sharesScreenrClubLinks() {
     #expect(
       Destination.title(id: "tv:201", item: "post").shareURL.absoluteString
@@ -216,6 +276,8 @@ struct DestinationTests {
       (.invites, "Invite friends"), (.account, "Settings"),
       (.watchTogether(with: ["ben"]), "Watch together"),
       (.wantToWatch(username: "ben"), "Want to watch"),
+      (.wantToWatch(username: "ben", mode: .inTheaters), "Want to watch"),
+      (.watchTogether(with: ["ben"], mode: .inTheaters), "Watch together"),
       (.conversation(id: "legacy"), "Conversation"),
       (.notFound(path: "/unknown"), "Page not found"),
       (.title(id: "movie:42"), "Movie"), (.title(id: "tv:7"), "TV show"),

@@ -56,6 +56,9 @@ struct RouterTests {
 
     router.open(.invites)
     #expect(router.paths[.friends] == [.invites])
+
+    router.open(.watchTogether(with: ["ben"], mode: .inTheaters))
+    #expect(router.paths[.friends] == [.watchTogether(with: ["ben"], mode: .inTheaters)])
   }
 
   @Test func opensAccountAsSettingsOverYou() {
@@ -120,14 +123,45 @@ struct RouterTests {
     router.open(.wantToWatch(username: "ben"))
     #expect(router.selectedTab == .you)
     #expect(router.paths[.you] == [.wantToWatch(username: "Alice"), .wantToWatch(username: "ben")])
+
+    router.open(.wantToWatch(username: "alice", mode: .inTheaters))
+    #expect(router.paths[.you] == [.wantToWatch(username: "alice", mode: .inTheaters)])
+  }
+
+  // Switching a list's mode shows the other mode in its place on the current
+  // tab, so Back leaves the list rather than returning to the other mode.
+  @Test func replacesTheScreenOnTopOfTheCurrentTab() {
+    let router = Router()
+    let atHome = Destination.watchTogether(with: ["ben"])
+    let inTheaters = Destination.watchTogether(with: ["ben"], mode: .inTheaters)
+    router.selectedTab = .friends
+    router.paths[.friends] = [.profile(username: "ben"), atHome]
+    router.paths[.circle] = [atHome]
+
+    router.replace(atHome, with: inTheaters)
+    #expect(router.paths[.friends] == [.profile(username: "ben"), inTheaters])
+    #expect(router.paths[.circle] == [atHome])
+
+    // A screen beneath the top stays.
+    router.replace(.profile(username: "ben"), with: .profile(username: "cam"))
+    #expect(router.paths[.friends] == [.profile(username: "ben"), inTheaters])
+
+    // So does a tab root.
+    router.selectedTab = .find
+    router.replace(.search(), with: inTheaters)
+    #expect(router.paths[.find, default: []].isEmpty)
   }
 
   // A link that names a member and arrives before a screen names the viewer,
   // such as at launch, waits for them, so the viewer's own pages still open
-  // in You.
+  // in You, in the mode the link names.
   @Test(arguments: [
     (Destination.profile(username: "Alice"), [Destination]()),
     (.wantToWatch(username: "Alice"), [.wantToWatch(username: "Alice")]),
+    (
+      .wantToWatch(username: "Alice", mode: .inTheaters),
+      [.wantToWatch(username: "Alice", mode: .inTheaters)]
+    ),
   ])
   func opensTheViewersOwnPagesInYouOnceTheViewerIsKnown(
     _ link: Destination,
@@ -145,7 +179,10 @@ struct RouterTests {
   }
 
   // Another member's pages wait too, then open on the current tab.
-  @Test(arguments: [Destination.profile(username: "ben"), .wantToWatch(username: "ben")])
+  @Test(arguments: [
+    Destination.profile(username: "ben"), .wantToWatch(username: "ben"),
+    .wantToWatch(username: "ben", mode: .inTheaters),
+  ])
   func opensAnotherMembersPagesOnTheCurrentTabOnceTheViewerIsKnown(_ link: Destination) {
     let router = Router()
     router.selectedTab = .friends
@@ -261,6 +298,10 @@ struct RouterTests {
   @Test(arguments: [
     (Destination.profile(username: "Alice"), [Destination]()),
     (.wantToWatch(username: "Alice"), [.wantToWatch(username: "Alice")]),
+    (
+      .wantToWatch(username: "Alice", mode: .inTheaters),
+      [.wantToWatch(username: "Alice", mode: .inTheaters)]
+    ),
   ])
   func reopensTheViewersOwnPagesInYouAfterTheSessionExpires(
     _ link: Destination,

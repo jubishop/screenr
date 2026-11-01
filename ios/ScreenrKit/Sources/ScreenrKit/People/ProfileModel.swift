@@ -230,8 +230,8 @@ public final class ProfileModel {
     let username = person.username.lowercased()
     shell.router.close { destination in
       switch destination {
-      case .profile(let other), .wantToWatch(let other): other.lowercased() == username
-      case .watchTogether(let others): others.contains { $0.lowercased() == username }
+      case .profile(let other), .wantToWatch(let other, _): other.lowercased() == username
+      case .watchTogether(let others, _): others.contains { $0.lowercased() == username }
       default: false
       }
     }

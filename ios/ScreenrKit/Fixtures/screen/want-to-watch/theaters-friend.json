@@ -1,0 +1,72 @@
+{
+  "description": "Ben's page In theaters as Alice sees it: his movie whose theatrical run ended years ago is left out.",
+  "viewer": "alice",
+  "request": {
+    "method": "GET",
+    "action": "screen",
+    "path": "/api/screenr/screen?path=%2Fpeople%2Fben%2Fwant-to-watch%3Fmode%3Dtheaters",
+    "query": {
+      "path": "/people/ben/want-to-watch?mode=theaters"
+    }
+  },
+  "response": {
+    "status": 200,
+    "etag": "W/\"XvjzUeb1xiGrXsniUbufi7ROWOOk0jkfTiUP_hw4aNA\"",
+    "body": {
+      "kind": "want-to-watch",
+      "mode": "theaters",
+      "owner": {
+        "photo": "8fc275dfeaca5cf8",
+        "user_id": "user-ben",
+        "username": "ben",
+        "display_name": "Ben Ortiz"
+      },
+      "hasWantToWatch": true,
+      "titles": [
+        {
+          "id": "movie:104",
+          "kind": "movie",
+          "name": "Glass Meridian",
+          "tmdb_id": 104,
+          "overview": "",
+          "poster_path": null,
+          "release_date": "2022-08-19",
+          "release": {
+            "status": "unavailable",
+            "in_theaters": false,
+            "upcoming": []
+          },
+          "tmdb_score": null
+        },
+        {
+          "id": "movie:103",
+          "kind": "movie",
+          "name": "The Quiet Orchard",
+          "tmdb_id": 103,
+          "overview": "An orchard keeper hears the trees whispering.",
+          "poster_path": "/quiet-orchard.jpg",
+          "release_date": "2025-05-02",
+          "release": {
+            "status": "ok",
+            "in_theaters": true,
+            "upcoming": [
+              {
+                "kind": "digital",
+                "date": "2026-11-20",
+                "label": "Digital Nov 20"
+              }
+            ]
+          },
+          "tmdb_score": 73
+        }
+      ],
+      "unreadNotifications": 6,
+      "user": {
+        "user_id": "user-alice",
+        "username": "alice",
+        "display_name": "Alice Park",
+        "photo": "486e0212c15728ee"
+      }
+    }
+  }
+}

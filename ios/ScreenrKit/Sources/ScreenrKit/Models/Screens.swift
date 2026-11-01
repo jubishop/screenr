@@ -15,7 +15,9 @@ public struct Screen: Decodable, Hashable, Sendable {
     case invites(InvitesScreen)
     case account(AccountScreen)
     case watchTogether(WatchTogetherScreen)
+    case watchTogetherInTheaters(WatchTogetherInTheatersScreen)
     case wantToWatch(WantToWatchScreen)
+    case wantToWatchInTheaters(WantToWatchInTheatersScreen)
     case title(TitleScreen)
     case profile(ProfileScreen)
     // A conversation link resolves to the member path of its entry.
@@ -29,6 +31,7 @@ public struct Screen: Decodable, Hashable, Sendable {
     case user
     case unreadNotifications
     case url
+    case mode
   }
 
   public init(from decoder: any Decoder) throws {
@@ -42,12 +45,29 @@ public struct Screen: Decodable, Hashable, Sendable {
     case "people": content = .people(try PeopleScreen(from: decoder))
     case "invites": content = .invites(try InvitesScreen(from: decoder))
     case "account": content = .account(try AccountScreen(from: decoder))
-    case "watch-together": content = .watchTogether(try WatchTogetherScreen(from: decoder))
-    case "want-to-watch": content = .wantToWatch(try WantToWatchScreen(from: decoder))
+    case "watch-together", "want-to-watch":
+      let mode = try container.decodeIfPresent(String.self, forKey: .mode)
+      content = try Self.list(kind, mode: mode, from: decoder)
     case "title": content = .title(try TitleScreen(from: decoder))
     case "profile": content = .profile(try ProfileScreen(from: decoder))
     case "redirect": content = .redirect(path: try container.decode(String.self, forKey: .url))
     default: content = .unknown(kind: kind)
+    }
+  }
+
+  // A Want to watch page or Watch together. At home's payload has no mode,
+  // and a mode this build does not know is a screen it does not know.
+  private static func list(_ kind: String, mode: String?, from decoder: any Decoder) throws
+    -> Content
+  {
+    switch (kind, mode) {
+    case ("watch-together", nil): .watchTogether(try WatchTogetherScreen(from: decoder))
+    case ("watch-together", "theaters"):
+      .watchTogetherInTheaters(try WatchTogetherInTheatersScreen(from: decoder))
+    case ("want-to-watch", nil): .wantToWatch(try WantToWatchScreen(from: decoder))
+    case ("want-to-watch", "theaters"):
+      .wantToWatchInTheaters(try WantToWatchInTheatersScreen(from: decoder))
+    default: .unknown(kind: kind)
     }
   }
 }
@@ -105,6 +125,15 @@ public struct WatchTogetherScreen: Decodable, Hashable, Sendable {
   public let titles: [SharedTitle]
 }
 
+// Watch together In theaters, at
+// `/watch-together?with=<username>&mode=theaters`: the movies both people
+// want to watch that are in US theaters now, newest shared first, and those
+// whose release data could not be loaded. Neither person's services count.
+public struct WatchTogetherInTheatersScreen: Decodable, Hashable, Sendable {
+  public let participants: [Person]
+  public let titles: [ReleaseTitle]
+}
+
 // A profile's Want to watch page, at `/people/<username>/want-to-watch`: the
 // owner's current Want to watch titles the viewer can watch now, newest first,
 // and those whose availability is unknown. The viewer's own saved services
@@ -117,6 +146,18 @@ public struct WantToWatchScreen: Decodable, Hashable, Sendable {
   public let hasWantToWatch: Bool
   // Each title's access is available or unknown, never unmatched.
   public let titles: [SharedTitle]
+}
+
+// A Want to watch page In theaters, at
+// `/people/<username>/want-to-watch?mode=theaters`: the owner's movies in US
+// theaters now, newest first, and those whose release data could not be
+// loaded. No one's services count, so every viewer gets the same list.
+public struct WantToWatchInTheatersScreen: Decodable, Hashable, Sendable {
+  public let owner: Person
+  // Whether the owner has any current Want to watch titles, including shows
+  // and movies not in theaters, so an empty page can say which is the case.
+  public let hasWantToWatch: Bool
+  public let titles: [ReleaseTitle]
 }
 
 // A title page, at `/titles/<kind>/<TMDB ID>`.

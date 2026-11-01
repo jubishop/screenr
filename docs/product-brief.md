@@ -828,8 +828,8 @@ follow the Watch together decisions.
 
 [In theaters](want-to-watch.md#in-theaters) describes the web implementation
 from [issue #311](https://github.com/jubishop/screenr/issues/311).
-[Issue #312](https://github.com/jubishop/screenr/issues/312) tracks the
-iPhone app.
+[Issue #312](https://github.com/jubishop/screenr/issues/312) brought it to
+the [iPhone app](want-to-watch.md#iphone-app).
 
 ### Ratings and written reviews — 2026-09-04
 

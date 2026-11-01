@@ -139,8 +139,12 @@ struct ProfileModelTests {
     let model = ProfileModel(shell: shell) { await refreshes.refresh() }
     shell.router.selectedTab = .circle
     shell.router[stack: .circle] = [.title(id: "tv:201"), .profile(username: "Ben"), .feed()]
-    shell.router[stack: .friends] = [.watchTogether(with: ["ben"]), .title(id: "movie:101")]
-    shell.router[stack: .you] = [.profile(username: "cam"), .wantToWatch(username: "BEN")]
+    shell.router[stack: .friends] = [
+      .watchTogether(with: ["ben"], mode: .inTheaters), .title(id: "movie:101"),
+    ]
+    shell.router[stack: .you] = [
+      .profile(username: "cam"), .wantToWatch(username: "BEN", mode: .inTheaters),
+    ]
     shell.router[stack: .find] = [.wantToWatch(username: "cam"), .title(id: "tv:202")]
 
     model.ask(.block, about: ben, .friend)

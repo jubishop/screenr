@@ -377,7 +377,7 @@ the account forget it. [Settings](#settings) ends with `SignOutButton`.
 | `/search` | Find a title's root, which shows the link's search and tab from `router.findSearch`. |
 | `/people` | Friends' root. |
 | `/people/<viewer>` | You's root. |
-| `/people/<viewer>/want-to-watch` | Pushed on You. |
+| `/people/<viewer>/want-to-watch`, with or without `?mode=theaters` | Pushed on You. |
 | `/invites`, `/watch-together` | Pushed on Friends. |
 | `/account` | Settings over You. |
 | `/titles/…`, `/people/<other>`, `/people/<other>/want-to-watch`, `/conversations/…`, unknown paths | Pushed on the current tab. A conversation shows the entry it redirects to in its place. |
@@ -1129,6 +1129,8 @@ parts in `Screenr/People/`, and their behavior is in ScreenrKit's `People/`.
 | `Relationship`, `ProfileModel` | ScreenrKit `People/` | `Relationship(profile, viewer:)` is `own`, `friend`, `requestSent`, `requestReceived`, or `none`, and gives the visible `action`, such as Watch together or Accept friend request, and the More actions `menu`. Unfriend and Block confirm in the web's words. |
 | `WatchTogetherSection` | ScreenrKit `People/` | Ready to watch, Not on your services, and Availability unknown, filtered by [`TitleKindFilter`](#title-lists); and the count and empty states. Each shared title is a [`TitleRow`](#title-lists) that marks the services either person saved. |
 | `WantToWatchSection`, `WantToWatchEmpty` | ScreenrKit `People/` | A Want to watch page's Ready to watch and Availability unknown, filtered by `TitleKindFilter`; the count of titles to watch now; and why nothing is ready, worded for the viewer's own page or a friend's. Each title is a `TitleRow` that marks the viewer's saved services. |
+| `ListModePicker`, `Destination.ListMode` | `Screenr/Shared/Titles/`, ScreenrKit `Navigation/` | The At home and In theaters switch between the introduction and the filter on Want to watch pages and Watch together. Each mode is its own destination, `mode=theaters` in its path, and choosing one replaces the screen on top of the tab with `Router.replace(_:with:)`, so Back leaves the page. |
+| `InTheatersSections`, `InTheatersList` | ScreenrKit `People/`, `Screenr/People/` | [In theaters](../docs/want-to-watch.md#in-theaters) on both pages: the count, In theaters now, the empty states, and Availability unknown, from `WantToWatchInTheatersScreen` or `WatchTogetherInTheatersScreen`. Each movie is a `TitleRow` with its release status and TMDB user score and no viewing options. |
 | `TopTenSection`, `TopTenRow` | `Screenr/Shared/TopTen/` | A profile's Top 10 heading and its row of ranked posters, each a link named like "#1 Night Crossing" that opens the title. The row only displays the list. Another member's empty list shows nothing; the owner's explains how to start one. `TopTenSection(entries:owner: .viewer(edit:))` adds Edit to the heading. |
 | `TopTenEditorModel` | ScreenrKit `People/` | `@Observable`: the [top 10 editor](#top-10-editor)'s entries, one change at a time: `drop(_:dragged:)` and `move(_:toRank:)` send `top-ten` `move`, and `remove(_:)` sends `remove`. A change shows at once and a failed one returns the list to its order before the change, with `failure`. `reconcile(with:)` takes the profile's reads. |
 | `ProfileWithTopTenEditor`, `TopTenEditorList` | `Screenr/Shared/TopTen/` | The profile destination with the editor sheet that Edit opens, and the sheet's list. |
@@ -1163,15 +1165,20 @@ parts in `Screenr/People/`, and their behavior is in ScreenrKit's `People/`.
   judged by the viewer's own services. Save your streaming services opens
   Settings over the tab, and each title opens its page through
   `WantToWatchScreen.destination(of:)`, which reports the `title` surface, as
-  the web's links do. Others' pages answer "Want to watch not found."
+  the web's links do. Others' pages answer "Want to watch not found." In
+  theaters lists the owner's movies in US theaters now, whatever services
+  anyone saved, and each opens through
+  `WantToWatchInTheatersScreen.destination(of:)`, also with `title`.
 - **Watch together:** a friend's profile links to
   `/watch-together?with=<username>`. Save your streaming services opens
   Settings over the tab, and each title opens its page through
   `SharedTitle.destination`, so a Want to watch saved there reports the web's
-  `watch_together` surface.
+  `watch_together` surface. In theaters lists the shared movies in US
+  theaters now, and `WatchTogetherInTheatersScreen.destination(of:)` keeps
+  that surface.
 - **Tests:** `FriendsModelTests`, `ProfileModelTests`, `WantToWatchTests`,
-  and `WatchTogetherTests` cover the models against the fixtures and
-  `RecordingAPI`. The UI tests `FriendsTests`, `ProfileTests`,
+  `InTheatersTests`, and `WatchTogetherTests` cover the models against the
+  fixtures and `RecordingAPI`. The UI tests `FriendsTests`, `ProfileTests`,
   `WantToWatchTests`, and `WatchTogetherTests` drive the journeys, check each
   write in the request log, audit at the largest text size, and render every
   `screen/people`, `screen/profile`, `screen/want-to-watch`, and
