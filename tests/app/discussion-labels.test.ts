@@ -1,4 +1,4 @@
-import { test, before, after } from "node:test";
+import { test, before, after, mock } from "node:test";
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
@@ -9,6 +9,7 @@ import {
   friend,
   setup,
   assertRouteError,
+  captureFailures,
 } from "./social-fixture";
 const { loadScreen } = await import("../../src/server/screens");
 const { thread } = await import("../../src/server/feed");
@@ -21,7 +22,8 @@ const { GET, POST } = await import("../../src/app/api/screenr/[action]/route");
 useDatabase();
 
 // TMDB's season list and season details. Show 8 lists Specials and two
-// seasons; show 9 fails; show 10 returns malformed details.
+// seasons; show 9 fails; show 10 returns a malformed season list and
+// episode list.
 const catalog = createServer((request, response) => {
   const reply = (status: number, body: unknown) => {
     response.writeHead(status, { "Content-Type": "application/json" });
@@ -51,6 +53,8 @@ const catalog = createServer((request, response) => {
     });
   if (request.url === "/tv/9") return reply(503, {});
   if (request.url === "/tv/10") return reply(200, { id: 10, seasons: "none" });
+  if (request.url === "/tv/10/season/1")
+    return reply(200, { season_number: 1, episodes: "Private Episode" });
   reply(404, {});
 });
 
@@ -192,7 +196,6 @@ test("season and episode pickers read TMDB's lists for TV titles", async () => {
       message: "Invalid season.",
     });
   await assert.rejects(titleSeasons("tv:9"), { status: 502 });
-  await assert.rejects(titleSeasons("tv:10"), { status: 502 });
 
   const cookie = await cookieFor(alice);
   const get = (path: string, action: string) =>
@@ -227,4 +230,29 @@ test("season and episode pickers read TMDB's lists for TV titles", async () => {
     ),
     { status: 401, message: "Sign in to continue." },
   );
+});
+
+test("malformed TMDB season and episode lists fail and log their lookup", async () => {
+  const printed = captureFailures();
+  try {
+    await assert.rejects(titleSeasons("tv:10"), {
+      status: 502,
+      message: "The catalog returned an invalid season list.",
+    });
+    await assert.rejects(seasonEpisodes("tv:10", 1), { status: 502 });
+  } finally {
+    mock.restoreAll();
+  }
+  assert.deepEqual(
+    printed.map((line) => {
+      const { stack, ...fields } = JSON.parse(line);
+      return fields;
+    }),
+    ["seasons", "episodes"].map((lookup) => ({
+      event: "catalog response invalid",
+      lookup,
+      error: "AppError",
+    })),
+  );
+  assert.ok(!printed.join("\n").includes("Private Episode"));
 });

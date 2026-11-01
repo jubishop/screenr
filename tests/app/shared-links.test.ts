@@ -1,8 +1,8 @@
-import { test, before, beforeEach, after } from "node:test";
+import { test, before, beforeEach, after, mock } from "node:test";
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
-import { db, bearerFor } from "./social-fixture";
+import { db, bearerFor, captureFailures } from "./social-fixture";
 
 // The share extension's `resolve-title` action (docs/title-catalog.md#shared-links):
 // TMDB, IMDb, and JustWatch links name one title, and Netflix and other links
@@ -28,6 +28,9 @@ const catalog = createServer((request, response) => {
     response.end(JSON.stringify(body));
   };
   const find = /^\/find\/(tt\d+)$/.exec(url.pathname);
+  // A list stands in for an answer that is not an object.
+  if (find && Array.isArray(findResults[find[1]]))
+    return send(200, findResults[find[1]]);
   if (find && url.searchParams.get("external_source") === "imdb_id")
     return send(200, {
       movie_results: [],
@@ -137,6 +140,27 @@ test("IMDb links resolve through TMDB's find by IMDb ID", async () => {
   assert.ok(
     catalogRequests.includes("/find/tt0000042?external_source=imdb_id"),
   );
+});
+
+test("an invalid TMDB find answer fails and logs its lookup", async () => {
+  findResults.tt0000045 = [{ id: 45, title: "Private Find Result" }];
+  const printed = captureFailures();
+  try {
+    await assert.rejects(
+      resolveSharedTitle("https://www.imdb.com/title/tt0000045/", ""),
+      { status: 502, message: "The catalog returned an invalid title." },
+    );
+  } finally {
+    mock.restoreAll();
+  }
+  assert.equal(printed.length, 1, printed.join("\n"));
+  const { stack, ...fields } = JSON.parse(printed[0]);
+  assert.deepEqual(fields, {
+    event: "catalog response invalid",
+    lookup: "find",
+    error: "AppError",
+  });
+  assert.ok(!printed[0].includes("Private Find Result"));
 });
 
 test("a link TMDB does not know leaves a search of the shared text", async () => {
