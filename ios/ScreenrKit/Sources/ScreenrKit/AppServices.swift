@@ -150,7 +150,12 @@ public struct AppServices: Sendable {
           session: session
         )
       // The fixture API serves no images, so tests never reach the network.
-      case .fixtures: .none
+      // Solid posters come from a data URL.
+      case .fixtures(_, let scenario):
+        switch scenario.posters {
+        case .placeholders: .none
+        case .solid: .solidPosters
+        }
       }
     self.init(
       api: ScreenrClient(
@@ -202,6 +207,7 @@ public struct AppServices: Sendable {
 //   -ScreenrFixtureUpdate <fixture name>      (repeatable)
 //   -ScreenrFixtureUpdateSignal <file whose creation brings the updates>
 //   -ScreenrFixturePush undecided|allowed|denied|system (default undecided)
+//   -ScreenrFixturePosters placeholders|solid (default placeholders)
 //
 // Release builds ignore them.
 public enum APISource: Hashable, Sendable {
@@ -236,6 +242,11 @@ public enum APISource: Hashable, Sendable {
           )
         }
         scenario.push = push
+      case "-ScreenrFixturePosters":
+        guard let posters = FixtureScenario.Posters(rawValue: value) else {
+          throw ArgumentError(description: "\(argument) is placeholders or solid, not \(value)")
+        }
+        scenario.posters = posters
       case "-ScreenrFixtureSession":
         guard let session = FixtureScenario.Session(rawValue: value) else {
           throw ArgumentError(

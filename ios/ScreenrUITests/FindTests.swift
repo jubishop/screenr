@@ -124,6 +124,19 @@ final class FindTests: XCTestCase {
     )
   }
 
+  // A title's initial shows only until its poster loads, so it never sits
+  // beneath the poster, where an audit would measure the poster as its
+  // background.
+  @MainActor
+  func testShowsAPosterInPlaceOfItsInitial() throws {
+    var app = try openFind(FixtureLaunch())
+    XCTAssertTrue(row(app, "Winter Garden").staticTexts["W"].waitForExistence(timeout: 10))
+    app = try openFind(FixtureLaunch(posters: .solid))
+    let title = row(app, "Winter Garden")
+    XCTAssertTrue(title.waitForExistence(timeout: 10))
+    XCTAssertTrue(title.staticTexts["W"].waitForNonExistence(timeout: 10))
+  }
+
   // Launches the app and selects Find a title.
   @MainActor
   private func openFind(_ fixtures: FixtureLaunch) throws -> XCUIApplication {

@@ -47,6 +47,19 @@ struct ImageSourceTests {
     #expect(request.httpShouldHandleCookies == false)
   }
 
+  // UI tests that need loaded posters get a solid one for each poster path,
+  // from a data URL rather than the network, and still no logos or photos.
+  @Test func loadsSolidPostersWithoutTheNetwork() throws {
+    let url = try #require(ImageSource.solidPosters.poster("/harbor-lights.jpg")?.url)
+    #expect(url.scheme == "data")
+    let image = try Data(contentsOf: url)
+    #expect(image.starts(with: [0x89, 0x50, 0x4E, 0x47]))
+    #expect(ImageSource.solidPosters.poster(nil) == nil)
+    #expect(ImageSource.solidPosters.poster("") == nil)
+    #expect(ImageSource.solidPosters.logo("/netflix.png") == nil)
+    #expect(ImageSource.solidPosters.photo(userId: "user-ben", version: "8fc2") == nil)
+  }
+
   @Test func showsInitialsWithoutAPhotoOrSession() throws {
     #expect(try source(token: "token-1").photo(userId: "user-ben", version: nil) == nil)
     #expect(try source(token: nil).photo(userId: "user-ben", version: "8fc2") == nil)

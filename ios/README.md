@@ -929,13 +929,13 @@ ScreenContent(model: model) { screen in
 | `EntryView`, `ThreadView`, `CommentView` | `Screenr/Conversation/` | An entry, its discussion, and one comment, following the web's `feed.tsx` and `thread.tsx`. Each entry and comment carries the accessibility identifier `entry-<id>` or `comment-<id>`. |
 | `CommentComposer`, `DiscussionComposer`, `StartConversationComposer` | `Screenr/Conversation/` | The one composer form, bound to a reply or comment target, or to a `ConversationStarter` with Season and Episode pickers on a TV title. |
 | `ReactionControls`, `ReactionPicker`, `FeedActionStyle`, `WriteFailure` | `Screenr/Conversation/` | Reaction counts and React, which opens the seven reactions beneath its line, as on the web (a SwiftUI `Menu` label does not follow Dynamic Type); the compact actions with 44-point hit areas; and a failed write's message beneath its control. |
-| `Avatar`, `PosterImage`, `FlowLayout`, `.muted`, `.danger`, `.onAccent` | `Screenr/Shared/` | A member's photo or initial on the web's colors; a TMDB poster or the title's initial; a row that wraps; and text colors that keep 4.5:1 contrast, which the system's secondary label and red miss at small sizes, and the system's white misses on the dark theme's lime accent. |
+| `Avatar`, `PosterImage`, `FlowLayout`, `.muted`, `.danger`, `.onAccent` | `Screenr/Shared/` | A member's photo or initial on the web's colors; a TMDB poster, or the title's initial only while no poster shows, so an audit never measures an initial beneath a poster; a row that wraps; and text colors that keep 4.5:1 contrast, which the system's secondary label and red miss at small sizes, and the system's white misses on the dark theme's lime accent. |
 | `.buttonStyle(.accent)` | `Screenr/Shared/AccentButtonStyle.swift` | The prominent accent-filled button, such as Accept, Send sign-in code, or Join Screenr, with its label in `.onAccent`. Use it in place of `.borderedProminent`. |
 | `FeedModel` | ScreenrKit `Conversation/` | `@Observable` page state: accepted activity (`layout(_:viewer:)`, `receive`, `showIncoming`, and `show(entry:in:viewer:)` for a title page's friend line), revealed spoilers, each discussion's preview and groups, composers and their drafts, reactions, removals through `confirmation`, and Want to watch and Recommend with the top 10 confirmations. Every write reads the screen again through its `refresh` closure. |
 | `FeedLayout`, `ThreadLayout` | ScreenrKit `Conversation/` | The web's rules as values: which entries and replies show, their order, the New activity count, the three-comment preview, Show earlier comments, and nested groups. |
 | `ConversationStarter` | ScreenrKit `Conversation/` | Start a conversation: `.post` on the friends feed, or `.title(id:kind:)`, which loads a TV show's seasons and each chosen season's episodes. |
 | Presentation | ScreenrKit `EntryPresentation.swift` | `item.action(style:)`, `item.title`, `discussionLabel`, `removedLabel`, `link(reply:)`, `RelativeTime`, `FinishedDate`, `ReviewStars`, `ReactionKind.options`, and `TopTenLeaving`. |
-| `ImageSource` | ScreenrKit | `@Environment(\.imageSource)`: TMDB poster requests, and profile photo requests with the bearer token. Against the fixture API it loads nothing, so UI tests show placeholders. |
+| `ImageSource` | ScreenrKit | `@Environment(\.imageSource)`: TMDB poster requests, and profile photo requests with the bearer token. Against the fixture API it loads nothing, so UI tests show placeholders, unless `FixtureLaunch(posters: .solid)` (`-ScreenrFixturePosters solid`) asks for a solid gray poster from a data URL for every poster path. |
 
 - **Incoming activity:** other people's new entries, moved entries, and new
   replies wait behind the shell's New activity control in all three feeds,
@@ -1018,7 +1018,8 @@ failed screen read and the search keeps working:
 `FindSearchTests`, `FindWantToWatchTests`, and `FindListsTests` cover the
 model with `FindAPI`, a fake that answers searches by their text, and
 `TestClock`. `FindTests` drives the tab: searching, opening a result,
-Friends recommend, and every `screen/search` and `actions/search` fixture.
+Friends recommend, every `screen/search` and `actions/search` fixture, and
+a loaded poster in place of its title's initial.
 `screen/search/viewer-statuses` shows Cam's own statuses, free options,
 unknown availability, and no saved services.
 

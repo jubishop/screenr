@@ -46,6 +46,15 @@ public struct FixtureScenario: Hashable, Sendable {
   // creates the file when it wants the app's next read to bring new activity.
   public var updates: [String]
   public var updateSignal: URL?
+  // The posters the app shows; see `ImageSource.solidPosters`.
+  public var posters: Posters
+
+  public enum Posters: String, Hashable, Sendable {
+    // Nothing loads, so every poster shows its title's initial.
+    case placeholders
+    // Every title with a poster path shows a solid gray poster.
+    case solid
+  }
 
   public init(
     viewer: String = "alice",
@@ -56,7 +65,8 @@ public struct FixtureScenario: Hashable, Sendable {
     requestLog: URL? = nil,
     push: Push = .undecided,
     updates: [String] = [],
-    updateSignal: URL? = nil
+    updateSignal: URL? = nil,
+    posters: Posters = .placeholders
   ) {
     self.viewer = viewer
     self.session = session
@@ -67,6 +77,7 @@ public struct FixtureScenario: Hashable, Sendable {
     self.push = push
     self.updates = updates
     self.updateSignal = updateSignal
+    self.posters = posters
   }
 }
 
