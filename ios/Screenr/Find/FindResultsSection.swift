@@ -12,7 +12,12 @@ struct FindResultsSection: View {
       ListHeader("Search results")
       ForEach(find.visibleResults(titles, serviceIds: serviceIds)) { result in
         NavigationLink(value: Destination.title(id: result.id)) {
-          TitleRow(title: result.title, viewing: result.viewing, serviceIds: serviceIds ?? [])
+          TitleRow(
+            title: result.title,
+            viewing: result.viewing,
+            release: result.release,
+            serviceIds: serviceIds ?? []
+          )
         }
       }
       if let message = find.resultsMessage(titles, serviceIds: serviceIds) {

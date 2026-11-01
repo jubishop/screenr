@@ -37,7 +37,12 @@ struct FriendsRecommendView: View {
       ForEach(list.titles) { title in
         Section {
           NavigationLink(value: title.destination) {
-            TitleRow(title: title.title, viewing: title.viewing, serviceIds: page.serviceIds) {
+            TitleRow(
+              title: title.title,
+              viewing: title.viewing,
+              release: title.release,
+              serviceIds: page.serviceIds
+            ) {
               Text(title.recommendedByText)
                 .font(.subheadline)
             }

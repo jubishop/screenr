@@ -1,7 +1,8 @@
 import Foundation
 
 // What a title list shows for each title, in the web's words: its kind and
-// year, and where it streams, with the viewer's saved services marked.
+// year, its release status, and where it streams, with the viewer's saved
+// services marked.
 
 extension Title {
   // The kind and release year, such as "TV show · 2022", or only the kind
@@ -10,6 +11,17 @@ extension Title {
     let name = kind == .movie ? "Movie" : "TV show"
     let year = releaseDate.prefix(4)
     return year.isEmpty ? name : "\(name) · \(year)"
+  }
+}
+
+extension TitleRelease {
+  // The status that title lists and Where to watch show, such as "In theaters
+  // · Digital Nov 20": In theaters, then each upcoming date's label, as the
+  // server worded them. Nil without a label or when the dates could not load.
+  public var text: String? {
+    guard status == .ok else { return nil }
+    let labels = (inTheaters ? ["In theaters"] : []) + upcoming.map(\.label)
+    return labels.isEmpty ? nil : labels.joined(separator: " · ")
   }
 }
 

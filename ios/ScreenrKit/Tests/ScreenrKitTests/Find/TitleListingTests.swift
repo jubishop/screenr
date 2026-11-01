@@ -61,3 +61,72 @@ struct TitleListingTests {
     )
   }
 }
+
+// A title's US release status, as the server worded it for today.
+struct TitleReleaseTests {
+  private func release(
+    _ status: String,
+    inTheaters: Bool = false,
+    _ upcoming: [(kind: String, label: String)] = []
+  ) -> JSONValue {
+    [
+      "status": .string(status),
+      "in_theaters": .bool(inTheaters),
+      "upcoming": .array(
+        upcoming.map { date in
+          ["kind": .string(date.kind), "date": "2026-12-09", "label": .string(date.label)]
+        }
+      ),
+    ]
+  }
+
+  @Test func readsTheFixturesReleaseStatus() throws {
+    guard case .watchTogether(let together) = try screen("screen/watch-together/default").content,
+      case .title(let orchard) = try screen("screen/title/in-theaters").content,
+      case .title(let unknown) = try screen("screen/title/unknown-availability").content
+    else { throw FeedFixtureError(description: "not the expected screens") }
+
+    let shared = together.titles.map { $0.release?.text }
+    #expect(together.titles.map(\.id) == ["movie:104", "movie:103"])
+    #expect(shared == [nil, "In theaters · Digital Nov 20"])
+    #expect(together.titles.first?.release?.status == .unavailable)
+    #expect(orchard.release?.text == "In theaters · Digital Nov 20")
+    #expect(orchard.release?.upcoming.map(\.kind) == [.digital])
+    #expect(unknown.release?.status == .unavailable)
+    #expect(unknown.release?.text == nil)
+
+    let lists = try FindData.page("screen/search/default")
+    #expect(lists.suggestions.map { $0.release?.text } == [nil, "Season 2 premieres Nov 4"])
+    #expect(lists.recommendations.map { $0.release?.text } == [nil, nil, nil])
+    #expect(try FindData.results().map { $0.release?.status } == [.ok, .ok])
+  }
+
+  // The server's labels show in its order after In theaters, whatever their
+  // kind. Only release data the server could load shows, and a server that
+  // sends none shows nothing.
+  @Test func showsOnlyTheServersLabels() throws {
+    let dates: TitleRelease = try FindData.decode(
+      release("ok", [("theatrical", "In theaters Nov 21"), ("streaming_debut", "Streaming Jan 2")])
+    )
+    #expect(dates.upcoming.map(\.kind) == [.theatrical, .unknown])
+    #expect(dates.text == "In theaters Nov 21 · Streaming Jan 2")
+    let theaters: TitleRelease = try FindData.decode(release("ok", inTheaters: true))
+    #expect(theaters.text == "In theaters")
+    let none: TitleRelease = try FindData.decode(release("ok"))
+    #expect(none.text == nil)
+    let unavailable: TitleRelease = try FindData.decode(
+      release("unavailable", inTheaters: true, [("digital", "Digital Dec 9")])
+    )
+    #expect(unavailable.text == nil)
+    let future: TitleRelease = try FindData.decode(release("partial", inTheaters: true))
+    #expect(future.status == .unknown)
+    #expect(future.text == nil)
+
+    let older: ViewingTitle = try FindData.decode(FindData.title("movie:9", "Older", fields: [:]))
+    #expect(older.release == nil)
+    let recommendation: FriendsRecommendation = try FindData.decode(
+      FindData.recommendation("movie:9", "Older")
+    )
+    #expect(recommendation.release == nil)
+  }
+}

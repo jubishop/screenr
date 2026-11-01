@@ -334,6 +334,11 @@ const screens: Record<MemberRoute["kind"], Record<string, Case>> = {
       "/titles/movie/104",
       "A title with no poster or trailer whose availability could not be checked.",
     ),
+    "in-theaters": screen(
+      "alice",
+      "/titles/movie/103",
+      "A movie back in US theaters, with its first digital release ahead.",
+    ),
     "finished-review": screen(
       "alice",
       "/titles/movie/102",
