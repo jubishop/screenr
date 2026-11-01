@@ -1,4 +1,4 @@
-import { test, type TestContext } from "node:test";
+import { mock, test, type TestContext } from "node:test";
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
@@ -6,7 +6,9 @@ import {
   useDatabase,
   db,
   denied,
+  assertAuthError,
   assertRouteError,
+  captureFailures,
   person,
   cookieFor,
   bearerFor,
@@ -328,6 +330,73 @@ test("invalid, unsigned, and signed-out bearer tokens get 401", async () => {
     query: profilePath,
   });
   assert.equal(remaining.status, 200);
+});
+
+// Better Auth logs a failed session delete and still answers success, so a
+// client would drop a session that stays live, with its push devices.
+test("a sign-out whose session delete fails keeps the session and says so", async (t) => {
+  const alice = await person("alice");
+  const token = await bearerFor(alice);
+  const cookie = await cookieFor(alice);
+  const allowDeletes = () =>
+    db.query(
+      "DROP TRIGGER IF EXISTS keep_session ON session; DROP FUNCTION IF EXISTS keep_session()",
+    );
+  await allowDeletes();
+  t.after(allowDeletes);
+  await db.query(`CREATE FUNCTION keep_session() RETURNS trigger
+    LANGUAGE plpgsql AS $$BEGIN RAISE EXCEPTION 'delete failed'; END$$`);
+  await db.query(`CREATE TRIGGER keep_session BEFORE DELETE ON session
+    FOR EACH ROW EXECUTE FUNCTION keep_session()`);
+  const failures = captureFailures();
+  t.after(() => mock.restoreAll());
+
+  for (const headers of [
+    { Authorization: `Bearer ${token}` },
+    { Cookie: cookie, Origin: origin },
+  ] as Record<string, string>[]) {
+    const response = await auth().handler(
+      new Request(`${origin}/api/auth/sign-out`, { method: "POST", headers }),
+    );
+    await assertAuthError(response, 500, {
+      message: "Could not sign out. Try again.",
+    });
+    // The browser keeps its cookie, so either client can try again.
+    assert.deepEqual(response.headers.getSetCookie(), []);
+  }
+  assert.ok(await sessionRow(token));
+  const screen = await native("screen", `Bearer ${token}`, {
+    query: profilePath,
+  });
+  assert.equal(screen.status, 200);
+  assert.equal((await get("notifications", cookie)).status, 200);
+  // A database that cannot say whether the session survived fails too.
+  const showSessions = () =>
+    db.query("ALTER TABLE IF EXISTS session_hidden RENAME TO session");
+  t.after(showSessions);
+  await db.query("ALTER TABLE session RENAME TO session_hidden");
+  await assertAuthError(await signOut(`Bearer ${token}`), 500, {
+    message: "Could not sign out. Try again.",
+  });
+  await showSessions();
+  assert.deepEqual(
+    failures
+      .filter((line) => line.startsWith("{"))
+      .map((line) => {
+        const { event, error, code } = JSON.parse(line);
+        return [event, error, code];
+      }),
+    [
+      ["sign out failed", undefined, undefined],
+      ["sign out failed", undefined, undefined],
+      ["sign out failed", "DatabaseError", "42P01"],
+    ],
+  );
+
+  await allowDeletes();
+  const retried = await signOut(`Bearer ${token}`);
+  assert.equal(retried.status, 200);
+  assert.equal(await sessionRow(token), undefined);
 });
 
 // The iPhone app names its build on every request, and the server refuses

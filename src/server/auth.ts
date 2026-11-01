@@ -226,6 +226,44 @@ const nativeTokenOnly = {
   },
 } satisfies BetterAuthPlugin;
 
+// Better Auth's sign-out logs a failed session delete and still answers
+// success. The client would then drop a session that stays live, and an
+// iPhone's push devices with it would keep receiving alerts. While the
+// session row survives, or the check cannot tell, sign-out fails instead and
+// keeps the browser's cookie, so either client keeps its session and can try
+// again (docs/data-and-access.md#native-client-sessions).
+const confirmedSignOut = {
+  id: "confirmed-sign-out",
+  hooks: {
+    after: [
+      {
+        matcher: (context) => context.path === "/sign-out",
+        handler: createAuthMiddleware(async (ctx) => {
+          const token = await ctx.getSignedCookie(
+            ctx.context.authCookies.sessionToken.name,
+            ctx.context.secret,
+          );
+          if (!token) return;
+          try {
+            const { rowCount } = await db.query(
+              "SELECT 1 FROM session WHERE token=$1",
+              [token],
+            );
+            if (!rowCount) return;
+            logFailure("sign out failed", {});
+          } catch (error) {
+            logFailure("sign out failed", {}, error);
+          }
+          ctx.context.responseHeaders?.delete("set-cookie");
+          throw new APIError("INTERNAL_SERVER_ERROR", {
+            message: "Could not sign out. Try again.",
+          });
+        }),
+      },
+    ],
+  },
+} satisfies BetterAuthPlugin;
+
 // Whether an invitation link can still be used to join: GET
 // /api/auth/invitation?token=<token> answers `{ "available": true|false }`
 // (docs/data-and-access.md#invitation-tokens). The iPhone app asks when it
@@ -402,6 +440,7 @@ export function createAuth(
       // session row's stored token alone never signs anyone in.
       bearer({ requireSignature: true }),
       nativeTokenOnly,
+      confirmedSignOut,
       invitationCheck,
       emailOTP({
         expiresIn: 600,

@@ -85,7 +85,8 @@ struct ScreenrApp: App {
       api: services.api,
       shell: shell,
       system: pushSystem,
-      target: pushTarget
+      target: pushTarget,
+      session: services.session
     )
     self.push = push
     AppDelegate.push = push

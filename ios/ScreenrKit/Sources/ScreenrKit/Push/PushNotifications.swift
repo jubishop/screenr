@@ -12,6 +12,9 @@ import Observation
 //   Turning notifications off in iOS Settings removes the session's device.
 //   Signing out ends the session, which removes its devices on the server.
 // - Badge: the app icon shows the unread count the app last read.
+// - Session end: the badge and Notification Center clear. A launch without a
+//   session clears them too, since the session may have ended in an
+//   extension.
 // - Taps: a tapped notification opens its item, as selecting it in the bell
 //   does, and marks it read. One the member can no longer see opens the bell.
 // - Actions: Accept and Decline answer a friend request, and Reply posts a
@@ -48,17 +51,25 @@ public final class PushNotifications {
   @ObservationIgnored private var badge: Int?
   @ObservationIgnored private(set) var badgeUpdate: Task<Void, Never>?
 
+  // `session` says whether this launch has one.
   public init(
     api: any ScreenrAPI,
     shell: ShellModel,
     system: any PushSystem,
-    target: PushTarget
+    target: PushTarget,
+    session: SessionStore
   ) {
     self.api = api
     self.shell = shell
     self.system = system
     self.target = target
     shell.onUnreadCount { [weak self] count in self?.showBadge(count) }
+    // An extension that got 401 removed the token and ran no end handler
+    // here, so the last member's badge and notifications may remain.
+    if session.phase == .signedOut {
+      showBadge(0)
+      system.removeDeliveredNotifications()
+    }
   }
 
   // The member's tabs show, at launch, after sign-in or setup, or on a

@@ -218,6 +218,11 @@ try await api.send(.comment(conversation: item.id, body: text, spoiler: false))
 - **Caching:** each GET's response is kept in memory with its ETag. Reading
   the same path again sends `If-None-Match`, and a 304 returns the cached
   value. Signing in or out clears the cache.
+- **Late responses:** a successful or unchanged response to a request that
+  carried a token, arriving after that session ended or another replaced it,
+  belongs to the earlier member. The client neither caches nor returns it
+  and fails the request as `.cancelled`, which callers ignore. Requests that
+  change the session, such as `.signOut`, still apply.
 - **Errors:** 401, 403, 404, 408, 426, 429, other 4xx, and 5xx each have a
   kind, as do no response, a timeout, cancellation, and an unreadable body.
   A 426 also moves `SessionStore.phase` to `.updateRequired`. A signed-in
@@ -309,7 +314,11 @@ redirects to `com.googleusercontent.apps.<client>:/oauthredirect`.
 When the session ends, by signing out or because the server ended it, the
 client clears its screen cache and `SessionStore.onEnd` handlers run.
 `AppServices` empties the image cache there, and error reporting clears its
-user there. Posters and profile photos load through `AppServices.imageSession`,
+user there. A read that the ended session started reports nothing to
+`ShellModel` when it answers. A session that an extension ended runs no
+handler in the app, so a launch without a session also empties the image
+cache, clears the badge and Notification Center, and removes the Spotlight
+titles. Posters and profile photos load through `AppServices.imageSession`,
 which `.screenrServices(_:)` sets as the `AsyncImage` session, with requests
 from `AppServices.images`, an `ImageSource`; see [Conversations](#conversations).
 
@@ -421,8 +430,9 @@ screen appears and every three seconds after, sending the cached ETag. It
 stops in the background or when the screen disappears, and reads again when
 either returns, on pull-to-refresh, and when `ShellModel.pushArrived()` or
 `refreshLiveReads()` runs. Each of these, except a return, replaces a read
-already in flight, which may have started before a write or the push. Each
-read gives up after ten seconds. A failed read replaces the content with the
+already in flight, which may have started before a write or the push. A
+read that answers after its screen stopped never applies. Each read gives up
+after ten seconds. A failed read replaces the content with the
 error; passing failures keep polling, and a permanent error stops it until a
 read succeeds. An unchanged screen keeps its `phase`, so nothing renders
 again. Each read after the three-second wait is a poll, sent as
@@ -558,8 +568,8 @@ before launch finishes, and puts it in the environment.
   the member turns notifications off in iOS Settings after this launch
   registered, the next return removes the device. Signing out ends the
   session, and the server deletes the session's devices with it; the app
-  clears Notification Center and the badge, and the next member registers
-  the device again.
+  clears Notification Center and the badge, as it does on a launch without
+  a session, and the next member registers the device again.
 - **Environment:** `SCREENR_APS_ENVIRONMENT` in `Dev.xcconfig` and
   `Release.xcconfig` sets both the `aps-environment` entitlement and the
   `ScreenrAPSEnvironment` Info.plist key, so a token always names the APNs

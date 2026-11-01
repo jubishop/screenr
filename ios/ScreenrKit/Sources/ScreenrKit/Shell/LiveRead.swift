@@ -113,8 +113,11 @@ public final class LiveRead<Value: Decodable & Hashable & Sendable> {
   private func stop() {
     pollTask?.cancel()
     pollTask = nil
-    // A read cut off by the background ends as cancelled, which keeps the data.
+    // A read cut off by the background ends as cancelled, which keeps the
+    // data. One that answers anyway, such as one already on its way as the
+    // session ends, never applies.
     readTask?.cancel()
+    readGeneration += 1
   }
 
   // How polling begins: at once, with the read in flight or a new one, or

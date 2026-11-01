@@ -236,6 +236,56 @@ struct ShellModelTests {
     #expect(shell.router.paths.values.allSatisfy { $0.isEmpty })
   }
 
+  // A screen can answer just after the session ends, such as the one beneath
+  // Settings as the member signs out. It reports nothing to the shell, so the
+  // member does not come back.
+  @Test func ignoresAScreenThatAnswersAfterTheSessionEnds() async throws {
+    let hold = Hold()
+    defer { hold.release() }
+    let api = ScriptedAPI([
+      .screen(try screen("screen/feed/default")),
+      .held(hold, try screen("screen/people/default")),
+      .screen(try screen("screen/people/default")),
+    ])
+    let clock = TestClock()
+    var viewers: [String] = []
+    let shell = ShellModel(api: api, clock: clock) { viewers.append($0.userId) }
+    await shell.checkAccount()
+    let model = try #require(shell.screenModel(for: .people))
+    model.appeared(appActive: true)
+    await hold.arrival()
+
+    shell.sessionEnded(.signedOut)
+    hold.release()
+    await clock.waitForSleep(until: .seconds(3))
+
+    #expect(shell.viewer == nil)
+    #expect(shell.router.viewerUsername == nil)
+    #expect(shell.unreadNotifications == 0)
+    #expect(viewers == ["user-alice"])
+  }
+
+  @Test func ignoresAnAccountCheckThatAnswersAfterTheSessionEnds() async throws {
+    let hold = Hold()
+    defer { hold.release() }
+    let api = ScriptedAPI([
+      .held(hold, try screen("screen/feed/default")), .screen(try screen("screen/feed/default")),
+    ])
+    let shell = ShellModel(api: api, clock: TestClock())
+    let check = Task { await shell.checkAccount() }
+    await hold.arrival()
+
+    shell.sessionEnded(.signedOut)
+    hold.release()
+    await check.value
+
+    #expect(shell.account == .checking)
+    #expect(shell.viewer == nil)
+    // The next session's check is its own.
+    await shell.checkAccount()
+    #expect(shell.account == .ready)
+  }
+
   @Test func startsOverWhenTheMemberSignsOut() async throws {
     let (shell, _) = try shell()
     await shell.checkAccount()

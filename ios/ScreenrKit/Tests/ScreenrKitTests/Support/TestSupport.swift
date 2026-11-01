@@ -29,11 +29,74 @@ enum TestFixtures {
   }
 }
 
+// Holds a reply until the test releases it, as a slow server would. The reply
+// comes even if its request was cancelled meanwhile, like one already on its
+// way. Cancelling a test that waits for the request, as its time limit does,
+// ends the wait.
+final class Hold: Sendable {
+  private struct State {
+    var arrived = false
+    var released = false
+    var arrivals: [CheckedContinuation<Void, Never>] = []
+    var releases: [CheckedContinuation<Void, Never>] = []
+  }
+
+  private let state = Mutex(State())
+
+  // The request arrived: returns once the test releases its reply.
+  func hold() async {
+    let arrivals = state.withLock { state in
+      state.arrived = true
+      defer { state.arrivals = [] }
+      return state.arrivals
+    }
+    for arrival in arrivals { arrival.resume() }
+    await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+      let released = state.withLock { state in
+        if !state.released { state.releases.append(continuation) }
+        return state.released
+      }
+      if released { continuation.resume() }
+    }
+  }
+
+  // Waits until the request arrives.
+  func arrival() async {
+    await withTaskCancellationHandler {
+      await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+        let waiting = state.withLock { state in
+          guard !Task.isCancelled, !state.arrived else { return false }
+          state.arrivals.append(continuation)
+          return true
+        }
+        if !waiting { continuation.resume() }
+      }
+    } onCancel: {
+      let arrivals = state.withLock { state in
+        defer { state.arrivals = [] }
+        return state.arrivals
+      }
+      for arrival in arrivals { arrival.resume() }
+    }
+  }
+
+  func release() {
+    let releases = state.withLock { state in
+      state.released = true
+      defer { state.releases = [] }
+      return state.releases
+    }
+    for release in releases { release.resume() }
+  }
+}
+
 // Answers requests in order with canned replies, and records each request.
 final class RecordingTransport: HTTPTransport {
   enum Reply: Sendable {
     case response(status: Int, headers: [String: String] = [:], body: Data = Data())
     case failure(URLError)
+    // The reply, once the test releases `hold`.
+    indirect case held(Hold, Reply)
 
     static func json(
       _ status: Int,
@@ -55,7 +118,11 @@ final class RecordingTransport: HTTPTransport {
 
   func send(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {
     sent.withLock { $0.append(request) }
-    let reply = replies.withLock { $0.isEmpty ? nil : $0.removeFirst() }
+    var reply = replies.withLock { $0.isEmpty ? nil : $0.removeFirst() }
+    while case .held(let hold, let held) = reply {
+      await hold.hold()
+      reply = held
+    }
     switch reply {
     case .response(let status, let headers, let body):
       guard
@@ -69,7 +136,7 @@ final class RecordingTransport: HTTPTransport {
       else { throw URLError(.cannotParseResponse) }
       return (body, response)
     case .failure(let error): throw error
-    case nil: throw URLError(.resourceUnavailable)
+    case .held, nil: throw URLError(.resourceUnavailable)
     }
   }
 }
