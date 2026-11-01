@@ -122,8 +122,7 @@ only on wider screens.
 
 **Implementation note:** [Issue #167](https://github.com/jubishop/screenr/issues/167)
 renders one navigation for both layouts in `src/components/screen.tsx`. Each
-item shows the full name in the sidebar and the short label in the phone bar;
-the hidden label is not exposed, so each link's name matches its visible text.
+item shows the full name in the sidebar and the short label in the phone bar.
 The current item has `aria-current="page"`, and Friends has
 `aria-current="true"` on the invitations page. Phone pages pad their content
 and give it scroll margins, so the 56px header and the 60px bar never cover
