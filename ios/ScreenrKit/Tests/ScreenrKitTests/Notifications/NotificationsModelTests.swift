@@ -13,8 +13,10 @@ import Testing
 struct NotificationsModelTests {
   private let entry = "e22cb5a7-a2dd-4582-8f62-db3e31f2761b"
 
+  // The bell opens over the tabs, which show once a screen names the viewer.
   private func sheet(_ api: NotificationsAPI) -> (NotificationsModel, ShellModel) {
     let shell = ShellModel(api: api, clock: TestClock())
+    shell.router.viewerUsername = "alice"
     shell.router.sheet = .notifications
     return (NotificationsModel(shell: shell, clock: TestClock()), shell)
   }

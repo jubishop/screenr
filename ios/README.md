@@ -383,6 +383,11 @@ the account forget it. [Settings](#settings) ends with `SignOutButton`.
 | `/titles/…`, `/people/<other>`, `/people/<other>/want-to-watch`, `/conversations/…`, unknown paths | Pushed on the current tab. A conversation shows the entry it redirects to in its place. |
 | `/join/<token>` | Keeps the token in `PendingInvitation` for sign-in and setup, checks it with the server, and opens Circle's root. A member who has a profile lands there, as on the web, unless a later link took its place, and the app forgets the token. |
 
+A profile or Want to watch link that arrives before a screen names the
+viewer, such as at launch or after the session expired, waits in the router
+and opens by these rules once one does, so the viewer's own pages still open
+in You. A later link takes its place, and signing out forgets it.
+
 Tab roots never change destination; a link adds to a stack or, for Find,
 sets `router.findSearch`. SwiftUI did not report a root as appearing when its
 identity changed as its tab was selected, so it never polled. Replacing a

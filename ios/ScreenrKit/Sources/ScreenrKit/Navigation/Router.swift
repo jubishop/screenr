@@ -23,7 +23,8 @@ public enum ShellSheet: String, Hashable, Sendable, Identifiable {
 // sheet over them. Views push destinations onto a tab's stack with
 // `NavigationLink(value:)`; links from outside the app, such as universal
 // links and notifications, arrive through `open(_:)`. A link keeps its place
-// until the tabs show it, even when the server ends the session first.
+// until the tabs show it, even when the server ends the session first, and a
+// link that names a member waits for a screen to name the viewer.
 @MainActor
 @Observable
 public final class Router {
@@ -33,23 +34,41 @@ public final class Router {
   public var sheet: ShellSheet?
   // Where an invitation link's token waits for sign-in and setup to send it.
   public let invitation: PendingInvitation
-  // The signed-in member, whose profile is the You tab.
-  public var viewerUsername: String?
+  // The signed-in member, whose profile is the You tab. Once a screen names
+  // them, a link that waited for them opens.
+  public var viewerUsername: String? {
+    didSet {
+      guard viewerUsername != nil, case .awaitingViewer(let link) = pendingLink else { return }
+      open(link)
+    }
+  }
   // The search and tab a link asked Find a title to show, which its root
   // screen applies. Roots keep their destinations, so their screens persist.
   public private(set) var findSearch: Destination = .search()
-  // The last destination `open(_:)` showed, until its screen loads.
+  // The last destination `open(_:)` received, until its screen loads.
   @ObservationIgnored private var pendingLink: PendingLink?
 
-  private struct PendingLink {
-    let destination: Destination
-    // The screen showing it, such as Find's root for a search.
-    let screen: Destination?
+  private enum PendingLink {
+    // A link that names a member, until a screen names the viewer, since the
+    // viewer's own pages open in You.
+    case awaitingViewer(Destination)
+    // A link placed on a tab, with the screen that shows it, such as Find's
+    // root for a search.
+    case placed(Destination, screen: Destination?)
+
+    var destination: Destination {
+      switch self {
+      case .awaitingViewer(let destination), .placed(let destination, _): destination
+      }
+    }
 
     // Whether a screen that loaded shows the link. A link that names no
     // screen, such as an unknown path, has shown once any screen loads.
     func shown(by loaded: Destination) -> Bool {
-      screen?.screenPath == nil || screen == loaded
+      switch self {
+      case .awaitingViewer: false
+      case .placed(_, let screen): screen?.screenPath == nil || screen == loaded
+      }
     }
   }
 
@@ -99,9 +118,14 @@ public final class Router {
   //   member who already has a profile lands, as on the web.
   //
   // A sheet over the tabs closes, except for Settings. The link waits until
-  // its screen loads; see `sessionEnded(_:)`.
+  // its screen loads; see `sessionEnded(_:)`. Until a screen names the
+  // viewer, such as at launch or after the session expired, a link to a
+  // profile or a Want to watch page waits for them before it opens.
   public func open(_ destination: Destination) {
     switch destination {
+    case .profile where viewerUsername == nil, .wantToWatch where viewerUsername == nil:
+      pendingLink = .awaitingViewer(destination)
+      return
     case .join(let token):
       invitation.open(token)
       open(.feed())
@@ -109,7 +133,7 @@ public final class Router {
     case .account:
       show(.you)
       sheet = .settings
-      pendingLink = PendingLink(destination: destination, screen: .account)
+      pendingLink = .placed(destination, screen: .account)
       return
     default:
       sheet = nil
@@ -137,7 +161,7 @@ public final class Router {
       push(destination)
     }
     let screen = paths[selectedTab, default: []].last ?? root(of: selectedTab)
-    pendingLink = PendingLink(destination: destination, screen: screen)
+    pendingLink = .placed(destination, screen: screen)
   }
 
   // A screen loaded for the signed-in member, so a link it shows has reached

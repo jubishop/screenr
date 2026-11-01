@@ -168,15 +168,46 @@ struct ShellModelTests {
     #expect(shell.liveRefreshes == before + 1)
   }
 
+  // A link that arrives at launch, before the account check names the viewer,
+  // opens where it would for a member already using the app.
+  @Test(arguments: [
+    (Destination.title(id: "tv:201"), AppTab.circle, [Destination.title(id: "tv:201")]),
+    (.profile(username: "alice"), .you, []),
+    (.wantToWatch(username: "alice"), .you, [.wantToWatch(username: "alice")]),
+  ])
+  func opensALinkFromLaunchOnceTheAccountCheckNamesTheViewer(
+    _ link: Destination,
+    in tab: AppTab,
+    above path: [Destination]
+  ) async throws {
+    let (shell, _) = try shell()
+    shell.router.open(link)
+
+    await shell.checkAccount()
+
+    #expect(shell.account == .ready)
+    #expect(shell.router.selectedTab == tab)
+    #expect(shell.router[stack: tab] == path)
+  }
+
   // A member whose saved session expired follows a link. The account check's
   // 401 ends the session, and the link opens once they sign in again.
-  @Test func opensALinkAfterSigningInAgainWhenTheSessionExpired() async throws {
+  @Test(arguments: [
+    (Destination.title(id: "tv:201"), AppTab.circle, [Destination.title(id: "tv:201")]),
+    (.profile(username: "alice"), .you, []),
+    (.wantToWatch(username: "alice"), .you, [.wantToWatch(username: "alice")]),
+  ])
+  func opensALinkAfterSigningInAgainWhenTheSessionExpired(
+    _ link: Destination,
+    in tab: AppTab,
+    above path: [Destination]
+  ) async throws {
     let (shell, session) = try shell(
       FixtureScenario(session: .expired),
       token: FixtureTransport.expiredToken
     )
     session.onEnd { shell.sessionEnded($0) }
-    shell.router.open(.title(id: "tv:201"))
+    shell.router.open(link)
 
     await shell.checkAccount()
     #expect(session.phase == .signedOut)
@@ -184,8 +215,8 @@ struct ShellModelTests {
     await shell.checkAccount()
 
     #expect(shell.account == .ready)
-    #expect(shell.router.selectedTab == .circle)
-    #expect(shell.router.paths[.circle] == [.title(id: "tv:201")])
+    #expect(shell.router.selectedTab == tab)
+    #expect(shell.router[stack: tab] == path)
   }
 
   // A link whose screen loaded reached the member, so the next sign-in

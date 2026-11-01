@@ -294,6 +294,8 @@ struct PushNotificationsTests {
       "read-notification": .success(["href": "/people/fay"]),
     ])
     let (push, shell) = push(RecordingPushSystem(.allowed), api: api)
+    // The bell is open over the tabs, which show once a screen names the viewer.
+    shell.router.viewerUsername = "alice"
     shell.router.selectedTab = .friends
     shell.router.sheet = .notifications
 
