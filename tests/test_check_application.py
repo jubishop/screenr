@@ -34,7 +34,7 @@ class CheckApplicationTests(unittest.TestCase):
         base = Path(temporary.name)
         self.repo = base / "checkout"
         (self.repo / "bin").mkdir(parents=True)
-        for name in ("bin/check-application", "bin/_ios_check_records.py"):
+        for name in ("bin/check-application", "bin/_ios_check_records.py", "bin/_npm_packages.py"):
             shutil.copy2(SOURCE / name, self.repo / name)
         shutil.copy2(SOURCE / "package.json", self.repo / "package.json")
         (self.repo / "package-lock.json").write_text(json.dumps(self.lockfile(LOCKED, root=True)))

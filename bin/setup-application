@@ -1,0 +1,38 @@
+#!/usr/bin/env python3
+"""Install the npm packages that package-lock.json names, and Playwright's Chromium.
+
+bin/setup, bin/prep-worktree, and each new worktree run this. npm ci replaces
+node_modules, so it runs only when node_modules differs from package-lock.json;
+rerunning setup leaves a running development server's packages alone.
+"""
+
+from pathlib import Path
+import subprocess
+import sys
+
+sys.dont_write_bytecode = True
+import _npm_packages as packages  # noqa: E402
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+def main():
+    packages.require_node(ROOT, "application setup", "bin/setup-application")
+    try:
+        packages.require_locked_packages(ROOT)
+    except packages.StalePackages as reason:
+        print(f"{reason}\nInstalling the locked packages with npm ci.", flush=True)
+        subprocess.run(["npm", "ci"], cwd=ROOT, check=True)
+    else:
+        print("node_modules holds the packages that package-lock.json names, so npm ci is not needed.", flush=True)
+    # Browser tests need Chromium. Checkouts share Playwright's browsers, so this downloads only on a new machine
+    # or after a Playwright update.
+    subprocess.run([str(ROOT / "node_modules/.bin/playwright"), "install", "chromium"], cwd=ROOT, check=True)
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except (OSError, RuntimeError, subprocess.SubprocessError) as error:
+        print(error, file=sys.stderr)
+        sys.exit(1)

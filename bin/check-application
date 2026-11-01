@@ -7,7 +7,6 @@ check that a full run does, except the iOS checks, which only run locally.
 """
 
 import argparse
-import json
 import os
 import re
 from pathlib import Path
@@ -17,11 +16,10 @@ import sys
 
 sys.dont_write_bytecode = True
 import _ios_check_records as records  # noqa: E402
+import _npm_packages as packages  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 PARTS = ("static", "app", "browser")
-# The lockfile fields that name what npm installs at each path.
-PACKAGE_IDENTITY = ("version", "resolved", "integrity", "link")
 INSTALL_HELP = "Run npm ci to install the packages that package-lock.json names, then rerun the checks."
 
 
@@ -51,49 +49,6 @@ def git(*args):
     return subprocess.run(["git", *args], cwd=ROOT, check=True, capture_output=True, text=True).stdout
 
 
-def lockfile_packages(path):
-    """Read an npm lockfile's packages by node_modules path, leaving out the project itself at the empty path."""
-    return {name: entry for name, entry in json.loads((ROOT / path).read_text())["packages"].items() if name}
-
-
-def package_differences(locked, installed):
-    """List how the installed packages differ from the locked ones, by their node_modules paths."""
-    for path, entry in sorted(locked.items()):
-        found = installed.get(path)
-        if found is None:
-            # npm skips optional packages that don't fit this machine, such as another platform's build.
-            if not entry.get("optional"):
-                yield f"{path}: {entry.get('version')} is locked but not installed"
-        elif found.get("version") != entry.get("version"):
-            yield f"{path}: {found.get('version')} is installed but {entry.get('version')} is locked"
-        elif any(found.get(field) != entry.get(field) for field in PACKAGE_IDENTITY):
-            yield f"{path}: {found.get('version')} is installed from another source than the locked one"
-    for path in sorted(installed.keys() - locked.keys()):
-        yield f"{path}: {installed[path].get('version')} is installed but not in package-lock.json"
-
-
-def require_locked_packages():
-    """Stop unless node_modules holds what npm ci installs from package-lock.json, as in CI and production."""
-    unreadable = (OSError, ValueError, LookupError, TypeError, AttributeError)
-    try:
-        locked = lockfile_packages("package-lock.json")
-    except unreadable as error:
-        raise RuntimeError(f"package-lock.json cannot be read ({type(error).__name__}: {error}).") from None
-    # npm records what it installed here after each install.
-    record = "node_modules/.package-lock.json"
-    if not (ROOT / record).exists():
-        raise RuntimeError(f"No packages are installed: {record} is missing. {INSTALL_HELP}")
-    try:
-        differences = list(package_differences(locked, lockfile_packages(record)))
-    except unreadable as error:
-        raise RuntimeError(f"{record} cannot be read ({type(error).__name__}: {error}). {INSTALL_HELP}") from None
-    if differences:
-        shown = differences[:10] + ([f"and {len(differences) - 10} more"] if len(differences) > 10 else [])
-        raise RuntimeError("The installed packages differ from package-lock.json, so the checks would test "
-                           "packages that CI and production don't use:\n  " + "\n  ".join(shown) + "\n" +
-                           INSTALL_HELP)
-
-
 def ios_checks_needed():
     """Report whether this Mac should run bin/check-ios: its files differ from where this branch left main."""
     if not shutil.which("xcodebuild"):
@@ -117,17 +72,12 @@ def main():
     args = arguments()
     # npm test runs one shard of the application tests only when --shard names it.
     os.environ.pop("SCREENR_TEST_SHARD", None)
-    required = json.loads((ROOT / "package.json").read_text())["engines"]["node"]
-    minimum = int(required.removeprefix(">="))
-    runtime_help = (f"Node.js {required} is required for application checks. "
-                    "Select the latest Node LTS release and rerun bin/check --full.")
-    if not shutil.which("node"):
-        raise RuntimeError(runtime_help)
-    found = subprocess.check_output(["node", "--version"], cwd=ROOT, text=True).strip()
-    major = found.removeprefix("v").split(".")[0]
-    if not major.isdigit() or int(major) < minimum:
-        raise RuntimeError(f"{runtime_help} Found {found}.")
-    require_locked_packages()
+    packages.require_node(ROOT, "application checks", "bin/check --full")
+    try:
+        # Stop rather than run npm ci, which would replace node_modules under a development server.
+        packages.require_locked_packages(ROOT)
+    except packages.StalePackages as error:
+        raise RuntimeError(f"{error}\n{INSTALL_HELP}") from None
     if args.part in (None, "static"):
         scripts = [str(path) for path in sorted((ROOT / "ops").iterdir())
                    if path.is_file() and path.read_bytes().startswith(b"#!/bin/sh")]
