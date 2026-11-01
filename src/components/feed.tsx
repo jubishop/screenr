@@ -73,8 +73,11 @@ export function FeedView({
   const [slots, setSlots] = useState(() => snapshot?.map((c) => c.id) ?? []);
   const accepted = known ?? capture(snapshot ?? []);
   if (!known && snapshot) setKnown(accepted);
+  // Large feeds hold thousands of entries, so lookups use sets and maps
+  // built once per render instead of scanning the list for each entry.
+  const slotted = new Set(slots);
   const newSlots =
-    snapshot?.filter((c) => !slots.includes(c.id)).map((c) => c.id) ?? [];
+    snapshot?.filter((c) => !slotted.has(c.id)).map((c) => c.id) ?? [];
   if (newSlots.length) setSlots([...slots, ...newSlots]);
   const incoming =
     snapshot?.filter(
@@ -138,9 +141,10 @@ export function FeedView({
       ];
     })
     .sort((a, b) => b.visibleTime - a.visibleTime || a.id.localeCompare(b.id));
+  const visibleById = new Map(visible.map((c) => [c.id, c]));
   const order = [
     ...visible.map((c) => c.id),
-    ...slots.filter((id) => !visible.some((c) => c.id === id)),
+    ...slots.filter((id) => !visibleById.has(id)),
   ];
   // A friend line name can name an entry still waiting behind New activity.
   // Showing it accepts the pending activity, as New activity would.
@@ -150,7 +154,7 @@ export function FeedView({
     if (
       snapshot &&
       shownEntry &&
-      !visible.some((c) => c.id === shownEntry.item) &&
+      !visibleById.has(shownEntry.item) &&
       snapshot.some((c) => c.id === shownEntry.item)
     )
       setKnown(capture(snapshot));
@@ -177,7 +181,7 @@ export function FeedView({
         {order.map((id) => (
           <FeedEntry
             key={id}
-            item={visible.find((c) => c.id === id) ?? null}
+            item={visibleById.get(id) ?? null}
             user={user}
             refresh={refresh}
             activity={activity}
