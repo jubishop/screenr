@@ -43,7 +43,7 @@ final class InvitationTests: XCTestCase {
     waitForName(in: app)
     XCTAssertTrue(app.buttons["Add photo"].exists)
     XCTAssertFalse(app.buttons["Join Screenr"].isEnabled)
-    try app.performAccessibilityAudit()
+    try app.performAccessibilityAudit(for: .screenr)
     let username = app.textFields["Username"]
     username.tap()
     username.typeText("pat")
@@ -82,7 +82,7 @@ final class InvitationTests: XCTestCase {
         .exists
     )
     XCTAssertFalse(app.staticTexts[Self.invited].exists)
-    try app.performAccessibilityAudit()
+    try app.performAccessibilityAudit(for: .screenr)
   }
 
   @MainActor
@@ -99,7 +99,7 @@ final class InvitationTests: XCTestCase {
 
     XCTAssertTrue(app.staticTexts["That username is already taken."].waitForExistence(timeout: 5))
     XCTAssertFalse(app.tabBars.firstMatch.exists)
-    try app.performAccessibilityAudit()
+    try app.performAccessibilityAudit(for: .screenr)
   }
 
   // Waits for setup to fill in the name from the account.

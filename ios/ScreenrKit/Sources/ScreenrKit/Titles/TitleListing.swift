@@ -76,13 +76,6 @@ extension ViewingLine {
     case .stale: "Older availability. Check title details."
     }
   }
-
-  // The line for VoiceOver, which names each saved service as saved.
-  public var spokenText: String {
-    guard case .offers(let key, let services) = self else { return text }
-    return Self.prefix(of: key)
-      + services.map { $0.saved ? "\($0.name) (saved)" : $0.name }.joined(separator: ", ")
-  }
 }
 
 extension TitleViewing {

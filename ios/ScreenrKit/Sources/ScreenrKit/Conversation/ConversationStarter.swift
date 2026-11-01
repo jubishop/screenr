@@ -59,7 +59,6 @@ public final class ConversationStarter {
     self.refresh = refresh
   }
 
-  public var formLabel: String { subject == .post ? "New post" : "New title comment" }
   public var fieldLabel: String { subject == .post ? "Your post" : "Your comment" }
   public var submitLabel: String { subject == .post ? "Post" : "Post comment" }
   public var explanation: String {

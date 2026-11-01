@@ -5,8 +5,9 @@ import SwiftUI
 // The signed-in member's own photo, which setup and Settings share: the photo
 // or initial, and controls to add or replace it from the photo library, use
 // the Google account's picture, or remove it, as on the web. Each change
-// saves at once, and its result is announced. Against the fixture API, Add
-// and Replace photo choose `FixturePhoto` instead of opening the library.
+// saves at once, and its result shows beneath the controls. Against the
+// fixture API, Add and Replace photo choose `FixturePhoto` instead of opening
+// the library.
 struct ProfilePhotoEditor: View {
   let model: ProfilePhotoModel
   // The name whose initial shows without a photo.
@@ -71,7 +72,6 @@ struct ProfilePhotoEditor: View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
           Image(systemName: "exclamationmark.triangle.fill")
             .foregroundStyle(.red)
-            .accessibilityHidden(true)
           Text(failure)
         }
         .font(.callout)
@@ -84,12 +84,6 @@ struct ProfilePhotoEditor: View {
       guard let item else { return }
       selection = nil
       Task { await model.upload { try await item.loadTransferable(type: Data.self) } }
-    }
-    .onChange(of: model.status) { _, status in
-      if let status { AccessibilityNotification.Announcement(status).post() }
-    }
-    .onChange(of: model.failure) { _, failure in
-      if let failure { AccessibilityNotification.Announcement(failure).post() }
     }
   }
 }

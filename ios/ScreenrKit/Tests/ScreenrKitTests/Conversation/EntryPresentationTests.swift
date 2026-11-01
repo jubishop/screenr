@@ -110,14 +110,6 @@ struct EntryPresentationTests {
     #expect(try label("2025-12-31T12:00:00.000Z") == "Dec 31, 2025")
   }
 
-  @Test func namesTheFullDateForVoiceOver() throws {
-    let date = try Self.date("2026-10-13T19:05:00.000Z")
-    // Foundation puts a narrow no-break space before PM.
-    #expect(
-      RelativeTime.fullDate(date, calendar: Self.pacific) == "Oct 13, 2026 at 12:05\u{202F}PM"
-    )
-  }
-
   @Test func showsFinishedDatesWithTheYearOutsideThisYear() throws {
     let now = try Self.date("2026-10-13T12:00:00.000Z")
     #expect(FinishedDate.label("2026-09-20", now: now, calendar: Self.pacific) == "Sep 20")
@@ -147,8 +139,6 @@ struct EntryPresentationTests {
       ]
     )
     #expect(ReviewStars.symbols(3) == "★★★☆☆")
-    #expect(ReviewStars.value(1) == "1 star out of 5")
-    #expect(ReviewStars.value(4) == "4 stars out of 5")
   }
 
   @Test func namesTitleActionsAndStatuses() {

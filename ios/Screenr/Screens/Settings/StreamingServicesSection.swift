@@ -38,7 +38,6 @@ struct StreamingServicesSection: View {
         }
       }
       .foregroundStyle(Color.primary)
-      .accessibilityHint("Edit your streaming services")
     } header: {
       SectionHeading("Streaming services")
     } footer: {
@@ -72,11 +71,9 @@ struct StreamingServicesSheet: View {
                 if selected {
                   Image(systemName: "checkmark")
                     .foregroundStyle(.tint)
-                    .accessibilityHidden(true)
                 }
               }
             }
-            .accessibilityAddTraits(selected ? .isSelected : [])
           }
           if model.visible.isEmpty {
             Text("No services match that name.")
@@ -98,7 +95,6 @@ struct StreamingServicesSheet: View {
         ToolbarItem(placement: .confirmationAction) {
           if model.state == .saving {
             ProgressView()
-              .accessibilityLabel("Saving")
           } else {
             Button("Save", systemImage: "checkmark", role: .confirm) { save() }
               .disabled(!model.canEdit)
@@ -110,9 +106,6 @@ struct StreamingServicesSheet: View {
         }
       }
       .interactiveDismissDisabled(model.state == .saving)
-      .onChange(of: model.failure) { _, failure in
-        if let failure { AccessibilityNotification.Announcement(failure).post() }
-      }
     }
   }
 
@@ -120,7 +113,6 @@ struct StreamingServicesSheet: View {
     Task {
       await model.save()
       guard model.state == .saved else { return }
-      AccessibilityNotification.Announcement("Services saved.").post()
       dismiss()
     }
   }

@@ -68,7 +68,7 @@ private struct TitleScreen: View {
               kind: title.title.kind
             )
             if let video = title.trailer {
-              TrailerSection(title: title.title, trailer: video, player: trailer)
+              TrailerSection(trailer: video, player: trailer)
             }
             ConversationHeading(starter: starter)
           }
@@ -99,7 +99,6 @@ private struct ConversationHeading: View {
       FlowLayout(spacing: 12) {
         Text("Around this title")
           .font(.title3.bold())
-          .accessibilityAddTraits(.isHeader)
         Button {
           Task { await starter.open() }
         } label: {

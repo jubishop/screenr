@@ -24,12 +24,10 @@ struct EntryView: View {
     VStack(alignment: .leading, spacing: 10) {
       HStack(alignment: .top, spacing: 12) {
         if style == .full, let title = item.title {
-          // The title link beside it names the same page for VoiceOver.
           NavigationLink(value: title.destination) {
             PosterImage(path: item.posterPath, name: title.name)
           }
           .buttonStyle(.plain)
-          .accessibilityHidden(true)
         }
         VStack(alignment: .leading, spacing: 6) {
           byline
@@ -47,8 +45,6 @@ struct EntryView: View {
               .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .accessibilityElement(children: .combine)
-            .accessibilityAddTraits(.isHeader)
           }
           details
         }
@@ -93,10 +89,6 @@ struct EntryView: View {
       .contentShape(Rectangle())
     }
     .buttonStyle(.plain)
-    .accessibilityLabel(
-      ([item.displayName] + activity(at: RelativeTime.fullDate(entry.visibleActivity)))
-        .joined(separator: ", ")
-    )
   }
 
   // What the author did, when, and whether they edited it since.
@@ -119,8 +111,6 @@ struct EntryView: View {
     if let rating = item.rating {
       Text(ReviewStars.symbols(rating))
         .foregroundStyle(.tint)
-        .accessibilityLabel("Rating")
-        .accessibilityValue(ReviewStars.value(rating))
     }
     if feed.isHidden(item) {
       Button {
@@ -159,7 +149,6 @@ struct EntryView: View {
       }
       ShareButton(destination: item.link(), subject: item.title?.name ?? "A post on Screenr")
         .labelStyle(.iconOnly)
-        .accessibilityLabel("Share link to discussion")
     }
     .buttonStyle(.feedAction)
   }
@@ -178,7 +167,6 @@ private struct TitleActionButtons: View {
       NavigationLink(value: title.destination) {
         Label(status.label, systemImage: "checkmark")
       }
-      .accessibilityHint("Opens \(title.name) to change your status.")
     } else {
       Button {
         Task { await feed.toggleWantToWatch(item) }
@@ -187,7 +175,6 @@ private struct TitleActionButtons: View {
       }
       .buttonStyle(.feedAction(chosen: item.viewerWantToWatch))
       .disabled(saving)
-      .accessibilityAddTraits(item.viewerWantToWatch ? .isSelected : [])
     }
     Button {
       Task { await feed.toggleRecommend(item) }
@@ -199,6 +186,5 @@ private struct TitleActionButtons: View {
     }
     .buttonStyle(.feedAction(chosen: item.viewerRecommended))
     .disabled(saving)
-    .accessibilityAddTraits(item.viewerRecommended ? .isSelected : [])
   }
 }

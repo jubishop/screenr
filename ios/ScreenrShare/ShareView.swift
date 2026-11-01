@@ -108,19 +108,6 @@ struct ShareSearchView: View {
     .autocorrectionDisabled()
     .onSubmit(of: .search) { find.submit() }
     .scrollDismissesKeyboard(.immediately)
-    .onChange(of: find.search) { _, search in announce(search) }
-  }
-
-  // VoiceOver hears how each search ends.
-  private func announce(_ search: FindModel.Search) {
-    let message: String? =
-      switch search {
-      case .found: find.searchSummary(serviceIds: nil)
-      case .failed(_, let message): message
-      case .tooShort: FindWording.tooShort
-      case .none, .searching: nil
-      }
-    if let message { AccessibilityNotification.Announcement(message).post() }
   }
 }
 
@@ -144,12 +131,11 @@ struct ShareTitleRow: View {
           .font(.subheadline)
       }
     }
-    .accessibilityElement(children: .combine)
   }
 }
 
 // A title's TMDB poster in its 2:3 frame, or its initial while it loads or
-// without one. It is decorative: the title's name sits beside it.
+// without one. The title's name sits beside it.
 struct SharePoster: View {
   let title: Title
   let width: CGFloat
@@ -158,14 +144,12 @@ struct SharePoster: View {
 
   var body: some View {
     AsyncImage(request: images.poster(title.posterPath)) { phase in
-      // AsyncImage hosts its content apart, so it is hidden here too.
       if case .success(let image) = phase {
-        image.resizable().scaledToFill().accessibilityHidden(true)
+        image.resizable().scaledToFill()
       }
     }
     .frame(width: width * scale, height: width * scale * 1.5)
-    // The initial sits outside AsyncImage, whose hosted content can escape
-    // the hiding below, and shows until a poster covers it.
+    // The initial sits behind the poster and shows until a poster covers it.
     .background {
       Text(String(title.name.prefix(1)))
         .font(.title2.weight(.semibold))
@@ -174,7 +158,6 @@ struct SharePoster: View {
         .background(Color(uiColor: .secondarySystemFill))
     }
     .clipShape(RoundedRectangle(cornerRadius: 8))
-    .accessibilityHidden(true)
   }
 }
 
@@ -193,10 +176,8 @@ struct ShareMessage<Actions: View>: View {
           Image(systemName: systemImage)
             .font(.largeTitle)
             .foregroundStyle(.tint)
-            .accessibilityHidden(true)
           Text(title)
             .font(.title2.bold())
-            .accessibilityAddTraits(.isHeader)
           Text(message)
           actions()
             .padding(.top, 8)

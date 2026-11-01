@@ -24,11 +24,6 @@ struct ReactionControls: View {
         .buttonStyle(.feedAction(chosen: reaction.reacted))
         .disabled(saving)
         .accessibilityLabel(kind.label)
-        .accessibilityValue("\(reaction.count)")
-        .accessibilityAddTraits(reaction.reacted ? .isSelected : [])
-        .accessibilityHint(
-          reaction.reacted ? "Removes your \(kind.label) reaction." : "Reacts with \(kind.label)."
-        )
       }
     }
     Button {
@@ -38,7 +33,6 @@ struct ReactionControls: View {
     }
     .buttonStyle(.feedAction(chosen: feed.reactionPicker == target))
     .disabled(saving)
-    .accessibilityValue(feed.reactionPicker == target ? "Expanded" : "Collapsed")
   }
 
   private func react(_ kind: ReactionKind) {
@@ -66,11 +60,9 @@ struct ReactionPicker: View {
           .buttonStyle(.feedAction(chosen: chosen))
           .disabled(feed.state(of: target) == .saving)
           .accessibilityLabel(kind.label)
-          .accessibilityAddTraits(chosen ? .isSelected : [])
         }
       }
       .accessibilityElement(children: .contain)
-      .accessibilityLabel("Choose a reaction")
       .accessibilityIdentifier("reaction-picker")
     }
   }
@@ -85,7 +77,6 @@ struct WriteFailure: View {
       Text(message)
         .font(.footnote)
         .foregroundStyle(.danger)
-        .onAppear { AccessibilityNotification.Announcement(message).post() }
     }
   }
 }

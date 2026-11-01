@@ -2,8 +2,8 @@ import SwiftUI
 import UIKit
 
 // A member's photo in a circle over their initial, which shows when there is
-// no photo or it has not loaded. It is decorative: the member's name or a
-// description appears beside it.
+// no photo or it has not loaded. The member's name or a description appears
+// beside it.
 struct ProfilePhotoView: View {
   // The photo's JPEG, when it is here.
   let jpeg: Data?
@@ -26,7 +26,6 @@ struct ProfilePhotoView: View {
     }
     .frame(width: size, height: size)
     .clipShape(.circle)
-    .accessibilityHidden(true)
   }
 
   private var initial: String {

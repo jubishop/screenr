@@ -42,8 +42,6 @@ struct ThreadView: View {
         DiscussionComposer(feed: feed, target: .entry(entry.id), entry: entry)
       }
     }
-    .accessibilityElement(children: .contain)
-    .accessibilityLabel("Conversation")
   }
 
   @ViewBuilder
@@ -69,7 +67,6 @@ struct ThreadView: View {
           )
         }
         .buttonStyle(.feedText)
-        .accessibilityValue(group.disclosure == .expanded ? "Expanded" : "Collapsed")
         if group.disclosure == .expanded {
           VStack(alignment: .leading, spacing: 4) {
             ForEach(group.replies) { reply in
@@ -89,7 +86,6 @@ struct ThreadView: View {
             Rectangle()
               .fill(.separator)
               .frame(width: 2)
-              .accessibilityHidden(true)
           }
         }
       }

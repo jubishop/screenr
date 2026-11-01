@@ -98,12 +98,10 @@ struct WatchStatusSheet: View {
         if chosen {
           Image(systemName: "checkmark")
             .foregroundStyle(.tint)
-            .accessibilityHidden(true)
         }
       }
       .contentShape(Rectangle())
     }
-    .accessibilityAddTraits(chosen ? .isSelected : [])
   }
 
   // A row's label as text that follows Dynamic Type, which a plain titled

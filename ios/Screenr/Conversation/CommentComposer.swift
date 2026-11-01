@@ -6,8 +6,6 @@ import SwiftUI
 // focused, and Cancel keeps the draft, which its model holds. A failure shows
 // beneath the form until the next post.
 struct CommentComposer<Context: View>: View {
-  // Names the form for VoiceOver, such as "Replying to @ben".
-  let label: String
   // The text field's name, such as "Add your reply".
   let fieldLabel: String
   let submitLabel: String
@@ -52,14 +50,7 @@ struct CommentComposer<Context: View>: View {
     }
     .padding(12)
     .background(RoundedRectangle(cornerRadius: 12).strokeBorder(.separator))
-    .accessibilityElement(children: .contain)
-    .accessibilityLabel(label)
     .onAppear { focused = true }
-    .onChange(of: state) { _, state in
-      if case .failed(let message) = state {
-        AccessibilityNotification.Announcement(message).post()
-      }
-    }
   }
 }
 
@@ -92,7 +83,6 @@ private struct PostButtonLabel<Label: View>: View {
 
 extension CommentComposer where Context == EmptyView {
   init(
-    label: String,
     fieldLabel: String,
     submitLabel: String,
     text: Binding<String>,
@@ -103,7 +93,6 @@ extension CommentComposer where Context == EmptyView {
     cancel: @escaping () -> Void
   ) {
     self.init(
-      label: label,
       fieldLabel: fieldLabel,
       submitLabel: submitLabel,
       text: text,
@@ -124,9 +113,7 @@ struct DiscussionComposer: View {
 
   var body: some View {
     let nested = if case .reply = target { true } else { false }
-    let label = feed.composerLabel(target, in: entry)
     CommentComposer(
-      label: label,
       fieldLabel: nested ? "Your nested reply" : "Add your reply",
       submitLabel: "Post reply",
       text: Binding(get: { feed.draft(for: target).body }, set: { feed.setBody($0, for: target) }),
@@ -139,7 +126,7 @@ struct DiscussionComposer: View {
       post: { Task { await feed.post(target, in: entry) } },
       cancel: { feed.close(target) },
       context: {
-        if nested {
+        if let label = feed.composerLabel(target, in: entry) {
           Text(label)
             .font(.footnote)
             .foregroundStyle(.muted)

@@ -37,7 +37,6 @@ struct TopTenSection: View {
             Button(action: edit) {
               Label("Edit", systemImage: "pencil")
             }
-            .accessibilityHint("Reorder or remove titles in your top 10.")
             .padding(.horizontal)
           }
         }
@@ -54,7 +53,6 @@ struct TopTenSection: View {
   private var heading: some View {
     Text("Top 10")
       .font(.title3.bold())
-      .accessibilityAddTraits(.isHeader)
       .padding(.horizontal)
   }
 }

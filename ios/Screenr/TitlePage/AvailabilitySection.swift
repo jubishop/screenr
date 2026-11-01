@@ -19,7 +19,6 @@ struct AvailabilitySection: View {
       FlowLayout(spacing: 12) {
         Text("Where to watch")
           .font(.title3.bold())
-          .accessibilityAddTraits(.isHeader)
         Text("United States")
           .font(.subheadline)
           .foregroundStyle(.muted)
@@ -38,7 +37,6 @@ struct AvailabilitySection: View {
           VStack(alignment: .leading, spacing: 8) {
             Text(section.label)
               .font(.headline)
-              .accessibilityAddTraits(.isHeader)
             ForEach(section.services) { service in
               HStack(spacing: 10) {
                 ServiceLogo(path: service.logoPath)
@@ -99,13 +97,12 @@ private struct ServiceLogo: View {
   var body: some View {
     AsyncImage(request: images.logo(path)) { phase in
       if case .success(let image) = phase {
-        image.resizable().scaledToFit().accessibilityHidden(true)
+        image.resizable().scaledToFit()
       } else {
         Color(uiColor: .secondarySystemFill)
       }
     }
     .frame(width: size, height: size)
     .clipShape(RoundedRectangle(cornerRadius: 6))
-    .accessibilityHidden(true)
   }
 }

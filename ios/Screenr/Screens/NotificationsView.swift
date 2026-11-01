@@ -144,8 +144,6 @@ private struct NotificationRow: View {
         summary
       }
       .buttonStyle(.plain)
-      .accessibilityValue(row.isUnread ? "Unread" : "")
-      .accessibilityHint(row.item.kind.hint)
       if let answer = row.answer {
         Text(answer.result)
           .font(.subheadline)
@@ -162,7 +160,6 @@ private struct NotificationRow: View {
       Image(systemName: row.item.kind.symbol)
         .font(.title3)
         .foregroundStyle(.tint)
-        .accessibilityHidden(true)
       VStack(alignment: .leading, spacing: 2) {
         Text(row.item.message)
           .fontWeight(row.isUnread ? .semibold : .regular)
@@ -180,7 +177,6 @@ private struct NotificationRow: View {
           .fill(.tint)
           .frame(width: dot, height: dot)
           .padding(.top, 6)
-          .accessibilityHidden(true)
       }
     }
     .contentShape(.rect)
@@ -191,10 +187,7 @@ private struct NotificationRow: View {
     let declining = model.declining?.id == row.id
     return HStack(spacing: 12) {
       Button("Accept") {
-        Task {
-          await model.respond(to: row.item, .accept)
-          announce()
-        }
+        Task { await model.respond(to: row.item, .accept) }
       }
       .buttonStyle(.accent)
       Button("Decline") { model.askToDecline(row.item) }
@@ -205,22 +198,13 @@ private struct NotificationRow: View {
           titleVisibility: .visible
         ) {
           Button("Decline", role: .destructive) {
-            Task {
-              await model.respond(to: row.item, .decline)
-              announce()
-            }
+            Task { await model.respond(to: row.item, .decline) }
           }
           Button("Cancel", role: .cancel) { model.cancelDecline() }
         } message: {
           Text("The request will be removed.")
         }
     }
-  }
-
-  // VoiceOver hears the result that replaces the buttons.
-  private func announce() {
-    guard let answer = model.rows.first(where: { $0.id == row.id })?.answer else { return }
-    AccessibilityNotification.Announcement(answer.result).post()
   }
 }
 
@@ -264,13 +248,6 @@ extension NotificationKind {
     case .comment: "bubble.left"
     case .reply: "arrowshape.turn.up.left"
     case .unknown: "bell"
-    }
-  }
-
-  fileprivate var hint: String {
-    switch self {
-    case .friendRequest, .friendAccepted: "Opens their profile."
-    case .comment, .reply, .unknown: "Opens the comment."
     }
   }
 }
