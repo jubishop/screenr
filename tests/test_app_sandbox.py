@@ -67,6 +67,9 @@ NEEDED = ('/opt/screenr', '/opt/node', '/etc/screenr', '/usr', '/etc/ssl', '/etc
           '/var/lib/dpkg', '/etc/apt', '/var/lib/private')
 # Other applications' directories on the shared host.
 OTHER_APPLICATIONS = ('/opt/health', '/opt/kidsbank', '/opt/news', '/opt/trading', '/etc/caddy')
+# The Markdown that the runbook test scans. CI's path filter skips other
+# Markdown and re-includes these globs, which GitHub matches as pathlib does.
+RUNBOOKS = ('docs/**/*.md', 'memory/**/*.md', '*.md')
 # Records the arguments systemd-run receives and exits with FIXTURE_STATUS.
 FAKE_SYSTEMD_RUN = '''#!/usr/bin/env python3
 import json, os, sys
@@ -97,6 +100,16 @@ def words(settings, key):
 
 def sandbox(settings):
     return {key: settings.get(key) for key in SANDBOX}
+
+
+def trigger_paths(workflow):
+    """Map each event in a workflow's triggers that has a paths filter to its
+    patterns, without comment lines."""
+    text = re.sub(r'^ *#.*\n', '', workflow.read_text(), flags=re.M)
+    triggers = text.split('\non:\n', 1)[1].split('\n\n', 1)[0] + '\n'
+    events = re.findall(r'^  ([a-z_]+):\n((?:    .*\n)*)', triggers, re.M)
+    return {event: re.findall(r"^      - '(.*)'$", paths[1], re.M) for event, body in events
+            if (paths := re.search(r'^    paths:\n((?:      .*\n)*)', body, re.M))}
 
 
 def run_release_script(*arguments, status=0):
@@ -262,12 +275,20 @@ class ReleaseScriptSandboxTests(unittest.TestCase):
         # A documented systemd-run as screenr would run release code outside
         # the sandbox. screenr-db runs only system programs and kit scripts.
         unsandboxed = re.compile(r'(--uid=|User=|-u )screenr(?![\w-])')
-        sources = [*ROOT.glob('docs/**/*.md'), *ROOT.glob('memory/**/*.md'), *ROOT.glob('*.md'),
+        sources = [*(path for runbooks in RUNBOOKS for path in ROOT.glob(runbooks)),
                    *(path for path in (ROOT / 'ops').iterdir()
                      if path.is_file() and path.name not in APPS + (RUNNER.name,))]
         for path in sources:
             with self.subTest(path=str(path.relative_to(ROOT))):
                 self.assertIsNone(unsandboxed.search(path.read_text()))
+
+    def test_ci_runs_when_only_a_scanned_runbook_changes(self):
+        # Otherwise a runbook pushed alone would fail the next unrelated pull
+        # request instead (#371). The engineering policy's filter: every path,
+        # then no Markdown, then the Markdown that tests read.
+        expected = ['**', '!**.md', *RUNBOOKS]
+        self.assertEqual(trigger_paths(ROOT / '.github' / 'workflows' / 'check.yml'),
+                         {'push': expected, 'pull_request': expected})
 
 
 if __name__ == '__main__':

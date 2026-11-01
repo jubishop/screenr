@@ -594,6 +594,16 @@ job uses its `strategy.job-total` as N, so adding a `shard` entry adds a shard.
 checks and every part and shard, that `check` covers every other job, and
 that every run packages the release while only a deploying run uploads it.
 
+The workflow runs for pull requests, pushes to `main`, and manual runs. Its
+`paths` filter takes the
+[engineering policy's](foundation/engineering-policy.md#hosted-ci) form: it
+skips a change only to Markdown, except Markdown in `docs/`, `memory/`, and
+the root. `tests/test_app_sandbox.py` scans those pages for runbooks that
+would run release code outside the sandbox, so a change to one alone still
+runs CI ([#371](https://github.com/jubishop/screenr/issues/371)). The same
+test checks that the filter re-includes exactly the globs it scans. A change
+only to other Markdown, such as `ios/README.md`, starts no run.
+
 Each browser shard builds its own production artifact, as the
 [browser harness](testing.md#browser-harness) requires, and the `release` job
 builds the one it packages. A build takes about 12 seconds on a runner, less than
@@ -831,8 +841,8 @@ validation, and failure handling. Screenr's `memoryAudit` settings in
   feature's shared lock.
 - **Deployment:** each audit commit carries `Screenr-Deploy: skip` trailers,
   so a memory-only commit never forces a
-  [deployment](#main-branch-delivery). CI ignores Markdown-only pushes, so the
-  commit starts no checks itself.
+  [deployment](#main-branch-delivery). CI still runs its checks on each audit
+  push, because tests read memory notes ([CI jobs](#ci-jobs)).
 - **Failure issue:** a new `Memory audit failing` issue gets the `bug` and
   `area: tooling` labels.
 - **Index:** archiving a note removes its entry from the README's
