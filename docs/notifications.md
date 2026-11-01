@@ -136,7 +136,14 @@ page becomes visible again. Each poll sends the version of the page it shows,
 and an unchanged page answers 304 without a body, so the panel keeps its list,
 paging, and boundary without rendering again
 ([issue #199](https://github.com/jubishop/screenr/issues/199)). Changing the
-view or a failed read clears the version, so the next read is whole.
+view or a failed read clears the version, so the next read is whole. A
+failed read replaces the list with its message and Try again; one that
+passes its ten-second deadline says "Refresh timed out. Please try again.",
+as a failed screen read does. A failed selection, Accept, Decline, or Mark
+all as read keeps the list and focus, and shows its message beside the
+control: beneath the notification's buttons, in its Decline confirmation, or
+beneath the panel controls
+([issue #361](https://github.com/jubishop/screenr/issues/361)).
 
 The iPhone app's bell, at the root of every tab, opens the same panel as a
 sheet over the current screen

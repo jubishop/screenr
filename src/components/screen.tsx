@@ -14,7 +14,14 @@ import {
   parseMemberRoute,
   type MemberRoute,
 } from "../member-routes";
-import { anySignal, api, ApiError, isPermanent, readChanged } from "./client";
+import {
+  anySignal,
+  api,
+  ApiError,
+  isPermanent,
+  readChanged,
+  refreshTimedOut,
+} from "./client";
 import { Avatar } from "./avatar";
 import { Icon, type IconName } from "./icons";
 import { FeedView } from "./feed";
@@ -176,9 +183,7 @@ export function Screen({
           setPageTitle(memberTitle({ kind: "not-found", path }, null));
         setData(null);
         setLoadError(
-          timeout.aborted
-            ? "Refresh timed out. Please try again."
-            : (error as Error).message,
+          timeout.aborted ? refreshTimedOut : (error as Error).message,
         );
       }
     } finally {

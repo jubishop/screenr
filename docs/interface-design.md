@@ -584,7 +584,11 @@ runs the confirmed action and keeps a failure's message in the confirmation
 ([issue #132](https://github.com/jubishop/screenr/issues/132)). Each
 confirmation opens beneath its action's line, in the comment, entry, Friends
 row, or invitation card, while the action stays in place. Cancel returns
-focus to that action. Remove asks "Remove this comment? Its text will be
+focus to that action. A failed read that hides a profile or the Friends page
+keeps an open Unfriend, Block, or Decline confirmation, alone and with its
+focus, from the last snapshot; its action waits for the next read, and Cancel
+still closes it. Account keeps Sign-in methods and the deletion step the same
+way ([issue #361](https://github.com/jubishop/screenr/issues/361)). Remove asks "Remove this comment? Its text will be
 erased.", Decline uses the notification's question, and Revoke asks "Revoke
 this invitation? Its link will stop working."
 

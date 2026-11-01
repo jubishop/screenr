@@ -30,6 +30,9 @@ export function isPermanent(status: number | undefined) {
 // eight-second timeout. Reads also pass shorter deadlines with their own
 // messages.
 const requestDeadline = 15_000;
+// What a screen or notification read says when it passes its own
+// ten-second deadline.
+export const refreshTimedOut = "Refresh timed out. Please try again.";
 const unavailable =
   "Screenr is temporarily unavailable. Please try again in a moment.";
 // A signal that aborts with the first of `signals` to abort, and its reason.

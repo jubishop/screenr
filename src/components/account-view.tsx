@@ -32,6 +32,12 @@ export function AccountView({
   const [connectingGoogle, setConnectingGoogle] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
   const signOutFailure = useActionError();
+  // A failed read clears `data`. Sign-in methods and Delete account keep the
+  // last account, so a step in progress, such as an emailed deletion code,
+  // survives; their actions wait for the next read.
+  const [account, setAccount] = useState(data);
+  if (data && data !== account) setAccount(data);
+  const waiting = !data;
   return (
     <>
       <div className="page-heading">
@@ -55,7 +61,7 @@ export function AccountView({
         serviceIds={data?.serviceIds ?? null}
         save={saveServices}
       />
-      {data?.kind === "account" && (
+      {account && (
         <section className="settings-card" aria-labelledby="sign-in-heading">
           <h2 id="sign-in-heading">Sign-in methods</h2>
           <p>
@@ -67,9 +73,9 @@ export function AccountView({
             you joined with.
           </p>
           {googleError && <p className="error">{googleError}</p>}
-          {data.googleConnected ? (
+          {account.googleConnected ? (
             <p>Google connected.</p>
-          ) : data.googleEnabled ? (
+          ) : account.googleEnabled ? (
             <>
               <p>
                 Connect Google to add another way to sign in. Choose the Google
@@ -78,7 +84,7 @@ export function AccountView({
               <ActionButton
                 className="secondary"
                 disabled={!interactive}
-                unavailable={signingOut || connectingGoogle}
+                unavailable={signingOut || connectingGoogle || waiting}
                 onClick={async () => {
                   setConnectingGoogle(true);
                   setGoogleError("");
@@ -115,7 +121,7 @@ export function AccountView({
           <ActionButton
             className="text-button"
             disabled={!interactive}
-            unavailable={signingOut || connectingGoogle}
+            unavailable={signingOut || connectingGoogle || waiting}
             onClick={async () => {
               setSigningOut(true);
               await signOutFailure.run(signOut);
@@ -127,7 +133,9 @@ export function AccountView({
           {signOutFailure.alert}
         </section>
       )}
-      {data?.kind === "account" && <AccountDeletion email={data.email} />}
+      {account && (
+        <AccountDeletion email={account.email} available={!waiting} />
+      )}
     </>
   );
 }

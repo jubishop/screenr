@@ -15,7 +15,8 @@ async function failRefresh(page: Page) {
     }),
   );
   await refreshOnReturn(page);
-  await expect(page.getByRole("main").locator(".error")).toContainText(
+  // The page's message comes first; views may keep their own beneath it.
+  await expect(page.getByRole("main").locator(".error").first()).toContainText(
     "View refresh unavailable",
   );
 }
@@ -386,8 +387,10 @@ test("account linking and sign-out keep pending states and errors across read re
     await started.promise;
     await expect(connecting).toBeDisabled();
     await expect(signOut).toBeDisabled();
+    // Sign-in methods stay through a failed read and keep waiting.
     await failRefresh(page);
-    await expect(signOut).toHaveCount(0);
+    await expect(connecting).toBeDisabled();
+    await expect(signOut).toBeDisabled();
     await recover(page);
     await expect(connecting).toBeDisabled();
     await expect(signOut).toBeDisabled();

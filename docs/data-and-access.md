@@ -678,8 +678,10 @@ app uses the same action
   again, which starts the fresh session; an
   [in-page confirmation](interface-design.md#confirm-other-destructive-actions--2026-10-12)
   then asks before deleting. Code requests count toward the usual
-  [login-code limits](running-screenr.md#provider-configuration). The web
-  ends on the sign-in page with "Your Screenr account was deleted."
+  [login-code limits](running-screenr.md#provider-configuration). A failed
+  account read keeps the step in progress with the last known address, and
+  its actions wait for the next read, so a confirmed code is never lost. The
+  web ends on the sign-in page with "Your Screenr account was deleted."
 - **iPhone app:** Delete account in You → Settings signs in again with an
   email code to the account's address or a sign-in method connected to the
   account, without an invitation. The app keeps the new bearer token only

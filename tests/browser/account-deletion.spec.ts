@@ -5,6 +5,7 @@ import { test } from "./monitored-test";
 import { prepareFriendship, userId } from "./member-fixture";
 import { db } from "./database-fixture";
 import { browserConfig } from "../../scripts/browser-config";
+import { openWithoutPolling, refreshOnReturn } from "./refresh-helpers";
 
 // Where the file transport delivers an address's sign-in code.
 const codeFile = (email: string) =>
@@ -125,4 +126,94 @@ test("a member confirms it's them with an email code, deletes their account, and
       .locator("article.comment")
       .filter({ hasText: "Deal, bring snacks." }),
   ).toBeVisible();
+});
+
+test("a failed read keeps the deletion step, the sign-in methods, and focus, with their actions waiting for the next read", async ({
+  member,
+}) => {
+  const departing = await member("retrydeletion");
+  const email = "retrydeletion.browser@example.test";
+  const id = await userId(departing);
+  // Each read is one the test starts, so the failure lasts until it reads
+  // again.
+  await openWithoutPolling(departing, "/account");
+  const failure = departing.getByRole("main").locator(".error").first();
+  // Returning to the page reads it once; this read fails.
+  async function failOneRead() {
+    await departing.route(
+      "**/api/screenr/screen?**",
+      (route) => route.abort("failed"),
+      { times: 1 },
+    );
+    await refreshOnReturn(departing);
+    await expect(failure).toContainText("Could not reach Screenr.");
+  }
+  async function readAgain() {
+    await refreshOnReturn(departing);
+    await expect(failure).toHaveCount(0);
+  }
+  let signIns = 0;
+  departing.on("request", (request) => {
+    if (new URL(request.url()).pathname === "/api/auth/sign-in/email-otp")
+      signIns++;
+  });
+  const methods = departing.getByRole("region", { name: "Sign-in methods" });
+  const signOut = methods.getByRole("button", { name: "Sign out" });
+
+  await departing
+    .getByRole("button", { name: "Delete account", exact: true })
+    .click();
+  await rm(codeFile(email), { force: true });
+  await departing
+    .getByRole("button", { name: "Email me a code", exact: true })
+    .click();
+  const code = departing.getByLabel("Sign-in code", { exact: true });
+  await expect(code).toBeFocused();
+  const { otp } = JSON.parse(await readFile(codeFile(email), "utf8"));
+  await code.fill(otp.slice(0, 3));
+  const confirmCode = departing.getByRole("button", {
+    name: "Confirm code",
+    exact: true,
+  });
+
+  // The member switches to Mail, and the read on their return fails. The
+  // code step keeps the typed digits and focus, and Confirm code waits.
+  await failOneRead();
+  await expect(code).toBeFocused();
+  await expect(code).toHaveValue(otp.slice(0, 3));
+  await expect(confirmCode).toHaveAttribute("aria-disabled", "true");
+  await expect(methods).toBeVisible();
+  await expect(signOut).toHaveAttribute("aria-disabled", "true");
+  await code.pressSequentially(otp.slice(3));
+  await code.press("Enter");
+  await readAgain();
+  expect(signIns).toBe(0);
+  await expect(confirmCode).toHaveAttribute("aria-disabled", "false");
+  await expect(signOut).toHaveAttribute("aria-disabled", "false");
+  await expect(code).toBeFocused();
+  await code.press("Enter");
+
+  // A failed read after the code keeps the final confirmation. Its Cancel
+  // keeps focus, and Delete account waits for the next read.
+  const confirmation = departing.getByRole("group", {
+    name: "Delete your Screenr account permanently? This can’t be undone.",
+  });
+  const cancel = confirmation.getByRole("button", { name: "Cancel" });
+  const confirmDelete = confirmation.getByRole("button", {
+    name: "Delete account",
+    exact: true,
+  });
+  await expect(cancel).toBeFocused();
+  await failOneRead();
+  await expect(cancel).toBeFocused();
+  await expect(confirmDelete).toHaveAttribute("aria-disabled", "true");
+  await expect(cancel).toHaveAttribute("aria-disabled", "false");
+  await readAgain();
+  await expect(cancel).toBeFocused();
+  // The confirmed code still deletes the account, with no second code.
+  await confirmDelete.click();
+  await expect(departing).toHaveURL(/\/login\?deleted=1$/);
+  expect(
+    (await db.query('SELECT 1 FROM "user" WHERE id=$1', [id])).rowCount,
+  ).toBe(0);
 });
