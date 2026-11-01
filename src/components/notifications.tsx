@@ -10,7 +10,7 @@ import {
 } from "react";
 import { useRouter } from "next/navigation";
 import type { NotificationPage } from "../server/notifications";
-import { api, readChanged, useInteractive } from "./client";
+import { anySignal, api, readChanged, useInteractive } from "./client";
 import { ActivityTime } from "./activity-time";
 import { Avatar } from "./avatar";
 import { Confirmation } from "./confirmation";
@@ -74,7 +74,7 @@ export function Notifications({
       const result = await readChanged<NotificationPage>(
         `notifications?${query}`,
         version.current,
-        AbortSignal.any([controller.signal, AbortSignal.timeout(10_000)]),
+        anySignal([controller.signal, AbortSignal.timeout(10_000)]),
       );
       if (!controller.signal.aborted && result) {
         version.current = result.version;

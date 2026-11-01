@@ -14,7 +14,7 @@ import {
   parseMemberRoute,
   type MemberRoute,
 } from "../member-routes";
-import { api, ApiError, isPermanent, readChanged } from "./client";
+import { anySignal, api, ApiError, isPermanent, readChanged } from "./client";
 import { Avatar } from "./avatar";
 import { Icon, type IconName } from "./icons";
 import { FeedView } from "./feed";
@@ -152,7 +152,7 @@ export function Screen({
       const latest = await readChanged<ScreenData & { user: Person }>(
         `screen?path=${encodeURIComponent(path)}`,
         version.current,
-        AbortSignal.any([controller.signal, timeout]),
+        anySignal([controller.signal, timeout]),
       );
       if (!controller.signal.aborted) {
         if (latest?.data.kind === "redirect") {

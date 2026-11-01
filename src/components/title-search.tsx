@@ -11,7 +11,7 @@ import type {
 import { memberPath, parseMemberRoute, type SearchTab } from "../member-routes";
 import { viewingAccess } from "../viewing";
 import { TitleServices, ViewingAttribution } from "./title-services";
-import { api, useInteractive } from "./client";
+import { anySignal, api, useInteractive } from "./client";
 import { Poster } from "./poster";
 import { TitleCard } from "./title-card";
 import { TitleStatus } from "./title-status";
@@ -213,7 +213,7 @@ export function TitleSearch({
       const titles = await api<ViewingTitle[]>(
         `search?q=${encodeURIComponent(text)}`,
         undefined,
-        AbortSignal.any([controller.signal, timeout]),
+        anySignal([controller.signal, timeout]),
       );
       if (pending.current === controller) setResults(titles);
     } catch (error) {

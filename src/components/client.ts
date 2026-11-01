@@ -32,6 +32,24 @@ export function isPermanent(status: number | undefined) {
 const requestDeadline = 15_000;
 const unavailable =
   "Screenr is temporarily unavailable. Please try again in a moment.";
+// A signal that aborts with the first of `signals` to abort, and its reason.
+// Safari before 17.4, a supported browser, has no AbortSignal.any
+// (docs/interface-design.md#supported-browsers--2026-11-01).
+export function anySignal(signals: AbortSignal[]): AbortSignal {
+  if (typeof AbortSignal.any === "function") return AbortSignal.any(signals);
+  const controller = new AbortController();
+  for (const signal of signals) {
+    if (signal.aborted) {
+      controller.abort(signal.reason);
+      break;
+    }
+    // Aborting the controller removes every listener added here.
+    signal.addEventListener("abort", () => controller.abort(signal.reason), {
+      signal: controller.signal,
+    });
+  }
+  return controller.signal;
+}
 // The deadline also covers the body, so the whole reply is read here.
 async function send(input: string | URL | Request, init: RequestInit) {
   const deadline = AbortSignal.timeout(requestDeadline);
@@ -39,7 +57,7 @@ async function send(input: string | URL | Request, init: RequestInit) {
   try {
     const response = await fetch(input, {
       ...init,
-      signal: signal ? AbortSignal.any([signal, deadline]) : deadline,
+      signal: signal ? anySignal([signal, deadline]) : deadline,
     });
     return { response, text: await response.text() };
   } catch (error) {

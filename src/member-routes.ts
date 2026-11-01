@@ -137,7 +137,9 @@ function withQuery(
   if (q) query.set("q", q);
   for (const username of usernames) query.append("with", username);
   if (mode) query.set("mode", mode);
-  return query.size ? `${path}?${query}` : path;
+  // Safari before 17, a supported browser, has no URLSearchParams size.
+  const search = query.toString();
+  return search ? `${path}?${search}` : path;
 }
 
 function segments(...parts: string[]) {

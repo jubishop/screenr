@@ -110,51 +110,51 @@ test("member routes reject unknown paths and extra segments", () => {
     assert.equal(parseMemberRoute(path).kind, "not-found", path);
 });
 
-test("member paths keep only each screen's parameters and round-trip", () => {
-  for (const [path, canonical] of [
-    ["/?item=post&reply=answer&utm=x", "/?item=post&reply=answer"],
-    ["/?item=", "/"],
-    ["/search?item=post", "/search"],
-    ["/search?item=post&q=The%20Office", "/search?q=The+Office"],
-    ["/search?q=+Lost+", "/search?q=Lost"],
-    ["/search?q=", "/search"],
-    ["/search?tab=friends-recommend", "/search?tab=friends-recommend"],
-    [
-      "/search?q=Lost&tab=friends-recommend",
-      "/search?tab=friends-recommend&q=Lost",
-    ],
-    ["/search?tab=other&q=Lost", "/search?q=Lost"],
-    ["/?tab=friends-recommend", "/"],
-    ["/?q=Lost", "/"],
-    ["/account?error=access_denied", "/account"],
-    ["/people/alice?item=post", "/people/alice"],
-    ["/people/a%20b", "/people/a%20b"],
-    ["/people/alice/want-to-watch?q=x", "/people/alice/want-to-watch"],
-    ["/people/a%20b/want-to-watch", "/people/a%20b/want-to-watch"],
-    [
-      "/people/alice/want-to-watch?mode=theaters&item=x",
-      "/people/alice/want-to-watch?mode=theaters",
-    ],
-    ["/people/alice/want-to-watch?mode=home", "/people/alice/want-to-watch"],
-    ["/people/alice?mode=theaters", "/people/alice"],
-    ["/search?mode=theaters", "/search"],
-    [
-      "/titles/movie/42?reply=answer&item=post",
-      "/titles/movie/42?item=post&reply=answer",
-    ],
-    ["/titles/movie/1%3Fitem%3Dx", "/titles/movie/1%3Fitem%3Dx"],
-    ["/watch-together?with=ben&with=&x=1", "/watch-together?with=ben&with="],
-    [
-      "/watch-together?mode=theaters&with=ben",
-      "/watch-together?with=ben&mode=theaters",
-    ],
-    ["/watch-together?with=ben&mode=other", "/watch-together?with=ben"],
-    [
-      "/conversations/legacy?reply=old&item=x",
-      "/conversations/legacy?reply=old",
-    ],
-    ["/unknown?item=post", "/unknown"],
-  ]) {
+// Requested paths and their canonical member paths.
+const canonicalPaths = [
+  ["/?item=post&reply=answer&utm=x", "/?item=post&reply=answer"],
+  ["/?item=", "/"],
+  ["/search?item=post", "/search"],
+  ["/search?item=post&q=The%20Office", "/search?q=The+Office"],
+  ["/search?q=+Lost+", "/search?q=Lost"],
+  ["/search?q=", "/search"],
+  ["/search?tab=friends-recommend", "/search?tab=friends-recommend"],
+  [
+    "/search?q=Lost&tab=friends-recommend",
+    "/search?tab=friends-recommend&q=Lost",
+  ],
+  ["/search?tab=other&q=Lost", "/search?q=Lost"],
+  ["/?tab=friends-recommend", "/"],
+  ["/?q=Lost", "/"],
+  ["/account?error=access_denied", "/account"],
+  ["/people/alice?item=post", "/people/alice"],
+  ["/people/a%20b", "/people/a%20b"],
+  ["/people/alice/want-to-watch?q=x", "/people/alice/want-to-watch"],
+  ["/people/a%20b/want-to-watch", "/people/a%20b/want-to-watch"],
+  [
+    "/people/alice/want-to-watch?mode=theaters&item=x",
+    "/people/alice/want-to-watch?mode=theaters",
+  ],
+  ["/people/alice/want-to-watch?mode=home", "/people/alice/want-to-watch"],
+  ["/people/alice?mode=theaters", "/people/alice"],
+  ["/search?mode=theaters", "/search"],
+  [
+    "/titles/movie/42?reply=answer&item=post",
+    "/titles/movie/42?item=post&reply=answer",
+  ],
+  ["/titles/movie/1%3Fitem%3Dx", "/titles/movie/1%3Fitem%3Dx"],
+  ["/watch-together?with=ben&with=&x=1", "/watch-together?with=ben&with="],
+  [
+    "/watch-together?mode=theaters&with=ben",
+    "/watch-together?with=ben&mode=theaters",
+  ],
+  ["/watch-together?with=ben&mode=other", "/watch-together?with=ben"],
+  ["/conversations/legacy?reply=old&item=x", "/conversations/legacy?reply=old"],
+  ["/unknown?item=post", "/unknown"],
+];
+
+function assertCanonicalPaths() {
+  for (const [path, canonical] of canonicalPaths) {
     assert.equal(memberPath(parseMemberRoute(path)), canonical, path);
     assert.deepEqual(
       parseMemberRoute(canonical),
@@ -162,6 +162,23 @@ test("member paths keep only each screen's parameters and round-trip", () => {
       canonical,
     );
   }
+}
+
+test("member paths keep only each screen's parameters and round-trip", () => {
+  assertCanonicalPaths();
+});
+
+// Safari before 17, a supported browser, has no URLSearchParams size
+// (docs/interface-design.md#supported-browsers--2026-11-01).
+test("member paths keep their parameters without URLSearchParams size", (t) => {
+  const size = Object.getOwnPropertyDescriptor(
+    URLSearchParams.prototype,
+    "size",
+  )!;
+  Reflect.deleteProperty(URLSearchParams.prototype, "size");
+  t.after(() => Object.defineProperty(URLSearchParams.prototype, "size", size));
+  assert.equal("size" in URLSearchParams.prototype, false);
+  assertCanonicalPaths();
 });
 
 test("return paths keep same-origin member pages in canonical form", () => {
