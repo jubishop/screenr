@@ -240,6 +240,39 @@ test("current access removes notices and counts, and restored comments retain th
   assert.equal((await notifications(ben)).items.length, 0);
 });
 
+test("mark all read skips notifications a block hides, so after unblock they return unread and still due for email", async () => {
+  const { alice, ben, cam, conversation } = await setup();
+  await friend(alice, ben);
+  await friend(alice, cam);
+  await saveActivityEmail(ben, true);
+  const parent = await addComment(ben, conversation, "Ben parent", false);
+  await addComment(cam, conversation, "Cam reply", false, parent);
+  const [hidden] = (await notifications(ben)).items;
+  // A later notice gives the bulk-read boundary an ID past the hidden one.
+  await addComment(alice, conversation, "Alice reply", false, parent);
+  const [visible] = (await notifications(ben)).items;
+  assert.ok(BigInt(visible.id) > BigInt(hidden.id));
+  await changeRelationship(ben, cam, "block");
+  const page = await notifications(ben);
+  assert.deepEqual(
+    page.items.map((n) => n.id),
+    [visible.id],
+  );
+  await readAllNotifications(ben, page.through);
+  await changeRelationship(ben, cam, "unblock");
+  assert.deepEqual(
+    (await notifications(ben)).items.map((n) => [n.id, n.read]),
+    [
+      [visible.id, true],
+      [hidden.id, false],
+    ],
+  );
+  assert.deepEqual(await readAt(hidden.id), {
+    read: false,
+    email_pending: true,
+  });
+});
+
 test("withdrawn requests and previous friendships never become notifications for a replacement friendship", async () => {
   const { alice, ben } = await setup();
   await changeRelationship(ben, alice, "request");

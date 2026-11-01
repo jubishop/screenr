@@ -596,6 +596,13 @@ test("the iPhone app signs in again while signed in, then deletes with the new t
   assert.equal((await confirmed.json()).user.id, departing);
   const token = confirmed.headers.get("set-auth-token");
   assert.ok(token);
+  // Freshness belongs to the requesting session: the new sign-in leaves the
+  // stale token unable to delete.
+  await assertRouteError(await deleteAccount(stale), {
+    status: 403,
+    message:
+      "To delete your account, confirm it’s you again with a new sign-in.",
+  });
 
   const response = await deleteAccount({ Authorization: `Bearer ${token}` });
   assert.equal(response.status, 200, await response.clone().text());

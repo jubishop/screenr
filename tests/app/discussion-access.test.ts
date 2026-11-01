@@ -7,6 +7,9 @@ const { changeRelationship } = await import("../../src/server/relationships");
 const { thread, conversations } = await import("../../src/server/feed");
 const { updateTitleActivity } = await import("../../src/server/title-actions");
 const { addComment } = await import("../../src/server/comments");
+const { notifications, readNotification } =
+  await import("../../src/server/notifications");
+const { uploadPhoto, viewablePhoto } = await import("../../src/server/photos");
 
 useDatabase();
 
@@ -92,8 +95,95 @@ test("blocking hides the pair on mutual threads, prevents requests, and excludes
   );
   await assert.rejects(changeRelationship(cam, ben, "request"), denied.person);
   await assert.rejects(profileFor(ben, "cam"), denied.person);
+  // Only the blocker can lift a block; the blocked member's unblock changes
+  // nothing.
+  await changeRelationship(cam, ben, "unblock");
+  await assert.rejects(changeRelationship(cam, ben, "request"), denied.person);
+  await assert.rejects(profileFor(cam, "ben"), denied.person);
   await changeRelationship(ben, cam, "unblock");
   assert.equal((await thread(ben, conversation)).comments.length, 2);
+});
+
+test("a block beside a retained friendship hides feeds, profiles, Want to watch, Watch together, notifications, and photos in both directions", async () => {
+  const { alice, ben, cam, conversation } = await setup();
+  await friend(alice, ben);
+  await friend(alice, cam);
+  // Ben's notice comes from Cam, whom no block here affects, about Alice's
+  // discussion, so only Ben's access to Alice's content decides it.
+  const parent = await addComment(ben, conversation, "Ben parent", false);
+  await addComment(cam, conversation, "Cam reply", false, parent);
+  const [notice] = (await notifications(ben)).items;
+  const jpeg = Buffer.alloc(3000, 5);
+  jpeg.set([0xff, 0xd8, 0xff, 0xe0]);
+  const { photo } = await uploadPhoto(alice, jpeg);
+  // Each read asserts whether Ben can see Alice or her activity.
+  const denial =
+    (read: () => Promise<unknown>, error: object) =>
+    async (blocked: boolean, label: string) => {
+      if (blocked) await assert.rejects(read(), error, label);
+      else await read();
+    };
+  const reads: Record<string, (blocked: boolean, label: string) => unknown> = {
+    "home feed": async (blocked, label) =>
+      assert.equal(
+        (await conversations(ben)).some((c) => c.id === conversation),
+        !blocked,
+        label,
+      ),
+    "title feed": async (blocked, label) =>
+      assert.equal(
+        (await conversations(ben, { title: "movie:1" })).some(
+          (c) => c.id === conversation,
+        ),
+        !blocked,
+        label,
+      ),
+    thread: denial(() => thread(ben, conversation), denied.conversation),
+    profile: denial(() => profileFor(ben, "alice"), denied.person),
+    "Want to watch": denial(
+      () => loadScreen(ben, "/people/alice/want-to-watch"),
+      denied.wantToWatch,
+    ),
+    "Watch together": denial(
+      () => loadScreen(ben, "/watch-together?with=alice"),
+      denied.watchTogether,
+    ),
+    bell: async (blocked, label) =>
+      assert.equal(
+        (await notifications(ben)).items.some((n) => n.id === notice.id),
+        !blocked,
+        label,
+      ),
+    notification: denial(
+      () => readNotification(ben, notice.id),
+      denied.notification,
+    ),
+    photo: async (blocked, label) =>
+      assert.equal(
+        (await viewablePhoto(ben, alice, photo)) === null,
+        blocked,
+        label,
+      ),
+  };
+  for (const [blocker, blocked, direction] of [
+    [ben, alice, "Ben blocks Alice"],
+    [alice, ben, "Alice blocks Ben"],
+  ]) {
+    for (const [name, check] of Object.entries(reads))
+      await check(false, `before ${direction}: ${name}`);
+    // Blocking through the relationship rules also ends the friendship, so
+    // the row is written directly to keep the friendship beside it.
+    await db.query("INSERT INTO block(blocker_id,blocked_id) VALUES($1,$2)", [
+      blocker,
+      blocked,
+    ]);
+    for (const [name, check] of Object.entries(reads))
+      await check(true, `${direction}: ${name}`);
+    await db.query("DELETE FROM block WHERE blocker_id=$1 AND blocked_id=$2", [
+      blocker,
+      blocked,
+    ]);
+  }
 });
 
 test("screen reads and legacy links preserve item identity and filter reply targets before navigation", async () => {
