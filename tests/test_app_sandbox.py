@@ -283,9 +283,9 @@ class ReleaseScriptSandboxTests(unittest.TestCase):
                 self.assertIsNone(unsandboxed.search(path.read_text()))
 
     def test_ci_runs_when_only_a_scanned_runbook_changes(self):
-        # Otherwise a runbook pushed alone would fail the next unrelated pull
-        # request instead (#371). The engineering policy's filter: every path,
-        # then no Markdown, then the Markdown that tests read.
+        # A runbook pushed alone must start CI, or its failure would surface in
+        # the next unrelated pull request (#371). The engineering policy's
+        # filter: every path, then no Markdown, then the Markdown tests read.
         expected = ['**', '!**.md', *RUNBOOKS]
         self.assertEqual(trigger_paths(ROOT / '.github' / 'workflows' / 'check.yml'),
                          {'push': expected, 'pull_request': expected})
