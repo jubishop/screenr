@@ -451,9 +451,10 @@ list item that carries `viewing`, from the Find a title screen's
 shows no label. `upcoming` kinds are `theatrical`, `digital`, `premiere`, and
 `season_premiere`, in date order. Clients show "In theaters" when
 `in_theaters` is set, then each `label`, and never derive either from the
-dates. Later features, such as In theaters lists, read `in_theaters` and
-`status` from `withViewingOptions` or `getTitleReleases` instead of
-computing theatrical status again.
+dates. Later features read `in_theaters` and `status` from
+`withViewingOptions` or `getTitleReleases` instead of computing theatrical
+status again; [In theaters lists](want-to-watch.md#in-theaters) read them
+through `inTheaters` in `src/server/title-viewing.ts`.
 
 **Lists.** `getTitleReleases` in `src/server/catalog.ts` reads a list's
 stored titles in one query and refreshes only missing or expired details, at

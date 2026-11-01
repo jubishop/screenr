@@ -1,7 +1,6 @@
 "use client";
 import { Link } from "./pending-navigation";
 import { useState } from "react";
-import type { Person } from "../shared";
 import type { ScreenData } from "../server/screens";
 import { TitleCard } from "./title-card";
 import {
@@ -11,24 +10,27 @@ import {
 } from "./title-kind-filter";
 import { ServicesPrompt, ViewingAttribution } from "./title-services";
 import { Avatar } from "./avatar";
+import { InTheatersList, ListModeSwitch, type ListRoute } from "./list-mode";
 
+type Page = Extract<ScreenData, { kind: "watch-together" }>;
+type AtHomePage = Exclude<Page, { mode: "theaters" }>;
+
+// Watch together (docs/watch-together.md). At home lists every title both
+// people want to watch, their services and free options first. In theaters
+// lists the shared movies in US theaters now.
 export function WatchTogether({
-  participants,
-  titles,
-  viewerHasServices,
+  data,
+  route,
 }: {
-  participants: Person[];
-  titles: Extract<ScreenData, { kind: "watch-together" }>["titles"];
-  viewerHasServices: boolean;
+  data: Page;
+  route: ListRoute;
 }) {
-  const [filter, setFilter] = useState<TitleKindFilter>("all");
-  const visible = ofKind(titles, filter);
   return (
     <>
       <div className="page-heading">
         <h1 className="page-title">Watch together</h1>
         <p className="participants">
-          {participants.map((person, index) => (
+          {data.participants.map((person, index) => (
             <span key={person.user_id}>
               {index > 0 && " & "}
               <span className="participant">
@@ -41,10 +43,35 @@ export function WatchTogether({
           ))}
         </p>
         <p>
-          Everything you both want to watch. Your services and free options
-          first, then your other shared picks.
+          {"mode" in data
+            ? "Movies you both want to watch that are in US theaters now, newest shared first."
+            : "Everything you both want to watch. Your services and free options first, then your other shared picks."}
         </p>
       </div>
+      <ListModeSwitch route={route} />
+      {"mode" in data ? (
+        <InTheatersList
+          titles={data.titles}
+          noun="shared movie"
+          empty={{
+            heading: "No shared movies in theaters.",
+            message:
+              "When you both want to watch a movie that is in US theaters now, it will appear here.",
+          }}
+          from="watch_together"
+        />
+      ) : (
+        <AtHome data={data} />
+      )}
+    </>
+  );
+}
+
+function AtHome({ data: { titles, viewerHasServices } }: { data: AtHomePage }) {
+  const [filter, setFilter] = useState<TitleKindFilter>("all");
+  const visible = ofKind(titles, filter);
+  return (
+    <>
       <TitleKindButtons value={filter} onChange={setFilter} />
       <p className="small muted watch-together-count" role="status">
         {visible.length} shared {visible.length === 1 ? "title" : "titles"}

@@ -103,7 +103,7 @@ test("Watch together identifies free shared titles without saved subscriptions",
       await updateTitleActivity(user, id, "want_to_watch", true);
   const screen = await loadScreen(alice, "/watch-together?with=ben");
   assert.equal(screen.kind, "watch-together");
-  if (screen.kind !== "watch-together")
+  if (screen.kind !== "watch-together" || "mode" in screen)
     throw new Error("Expected Watch together");
   assert.equal(screen.titles.find((t) => t.id === free)?.access, "available");
   assert.equal(screen.titles.find((t) => t.id === paid)?.access, "unmatched");
@@ -182,7 +182,7 @@ test("Watch together combines either member's services, preserves other picks, a
       await updateTitleActivity(user, id, "want_to_watch", true);
   const read = async (viewer = alice, other = "ben") => {
     const screen = await loadScreen(viewer, `/watch-together?with=${other}`);
-    if (screen.kind !== "watch-together")
+    if (screen.kind !== "watch-together" || "mode" in screen)
       throw new Error("Expected Watch together");
     return screen;
   };

@@ -440,15 +440,11 @@ export function Screen({
             relationship={relationship}
           />
         )}
-        {data?.kind === "watch-together" && (
-          <WatchTogether
-            participants={data.participants}
-            titles={data.titles}
-            viewerHasServices={data.viewerHasServices}
-          />
+        {data?.kind === "watch-together" && route.kind === "watch-together" && (
+          <WatchTogether data={data} route={route} />
         )}
-        {data?.kind === "want-to-watch" && (
-          <WantToWatch data={data} user={user} />
+        {data?.kind === "want-to-watch" && route.kind === "want-to-watch" && (
+          <WantToWatch data={data} user={user} route={route} />
         )}
         {route.kind === "profile" && (
           <ProfileView

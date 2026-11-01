@@ -12,17 +12,84 @@ import {
 } from "./title-kind-filter";
 import { ServicesPrompt, ViewingAttribution } from "./title-services";
 import { Avatar } from "./avatar";
+import { InTheatersList, ListModeSwitch, type ListRoute } from "./list-mode";
 
 type Page = Extract<ScreenData, { kind: "want-to-watch" }>;
+type AtHomePage = Exclude<Page, { mode: "theaters" }>;
 
-// A profile's Want to watch page (docs/want-to-watch.md): the owner's titles
-// the viewer can watch now, on the viewer's services or free, newest first,
-// then those whose availability is unknown. Selecting a title opens its page,
+// A profile's Want to watch page (docs/want-to-watch.md). At home lists the
+// owner's titles the viewer can watch now, on the viewer's services or free,
+// newest first, then those whose availability is unknown. In theaters lists
+// the owner's movies in US theaters now. Selecting a title opens its page,
 // where the viewer changes their own choices.
-export function WantToWatch({ data, user }: { data: Page; user: Person }) {
+export function WantToWatch({
+  data,
+  user,
+  route,
+}: {
+  data: Page;
+  user: Person;
+  route: ListRoute;
+}) {
+  const { owner } = data;
+  const own = owner.user_id === user.user_id;
+  return (
+    <>
+      <div className="page-heading">
+        <h1 className="page-title">Want to watch</h1>
+        <p className="participants">
+          <span className="participant">
+            <Avatar person={owner} />
+            <Link
+              href={memberPath({ kind: "profile", username: owner.username })}
+              prefetch={false}
+            >
+              {owner.display_name}
+            </Link>
+          </span>
+        </p>
+        <p>
+          {"mode" in data
+            ? own
+              ? "Movies you want to watch that are in US theaters now, newest first."
+              : `Movies ${owner.display_name} wants to watch that are in US theaters now, newest first.`
+            : own
+              ? "Titles you want to watch that are on your services or free, newest first."
+              : `Titles ${owner.display_name} wants to watch that are on your services or free, newest first.`}
+        </p>
+      </div>
+      <ListModeSwitch route={route} />
+      {"mode" in data ? (
+        <InTheatersList
+          titles={data.titles}
+          noun="movie"
+          empty={
+            !data.hasWantToWatch
+              ? {
+                  heading: "No Want to watch titles yet.",
+                  message: own
+                    ? "When you add movies to Want to watch, the ones in US theaters now appear here."
+                    : `When ${owner.display_name} adds movies to Want to watch, the ones in US theaters now appear here.`,
+                  findTitle: own,
+                }
+              : {
+                  heading: "Nothing in theaters right now.",
+                  message: own
+                    ? "None of your Want to watch movies are in US theaters now."
+                    : `None of ${owner.display_name}’s Want to watch movies are in US theaters now.`,
+                }
+          }
+        />
+      ) : (
+        <AtHome data={data} own={own} />
+      )}
+    </>
+  );
+}
+
+function AtHome({ data, own }: { data: AtHomePage; own: boolean }) {
   const [filter, setFilter] = useState<TitleKindFilter>("all");
   const { owner, titles } = data;
-  const own = owner.user_id === user.user_id;
   const shown = ofKind(titles, filter);
   const ready = shown.filter((title) => title.access === "available");
   const unknown = shown.filter((title) => title.access === "unknown");
@@ -49,26 +116,6 @@ export function WantToWatch({ data, user }: { data: Page; user: Person }) {
         : null;
   return (
     <>
-      <div className="page-heading">
-        <h1 className="page-title">Want to watch</h1>
-        <p className="participants">
-          <span className="participant">
-            <Avatar person={owner} />
-            <Link
-              href={memberPath({ kind: "profile", username: owner.username })}
-              prefetch={false}
-            >
-              {owner.display_name}
-            </Link>
-          </span>
-        </p>
-        <p>
-          {own
-            ? "Titles you want to watch that are on your services or free, newest first."
-            : `Titles ${owner.display_name} wants to watch that are on your services or free, newest first.`}
-        </p>
-      </div>
-      {/* The At home and In theaters switch goes above the list (#311). */}
       <TitleKindButtons value={filter} onChange={setFilter} />
       <p className="small muted watch-together-count" role="status">
         {ready.length} {ready.length === 1 ? "title" : "titles"} to watch now

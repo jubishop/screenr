@@ -8,10 +8,13 @@ A profile's Want to watch page lists the profile owner's current Want to
 watch titles that the viewer can watch now.
 [Issue #313](https://github.com/jubishop/screenr/issues/313) built it for the
 web, following the [Want to watch page decision](product-brief.md#want-to-watch-page--2026-10-16).
-[Issue #311](https://github.com/jubishop/screenr/issues/311) adds its
-[At home and In theaters switch](product-brief.md#in-theaters-on-want-to-watch-pages--2026-10-16),
-and [issue #314](https://github.com/jubishop/screenr/issues/314) adds the page
-to the iPhone app. The page described here becomes At home.
+[Issue #311](https://github.com/jubishop/screenr/issues/311) added its
+[At home and In theaters switch](product-brief.md#in-theaters-on-want-to-watch-pages--2026-10-16):
+At home is the page described under [Implementation](#implementation), and
+[In theaters](#in-theaters) lists the owner's movies in US theaters now.
+[Issue #314](https://github.com/jubishop/screenr/issues/314) adds the page to
+the iPhone app, and [issue #312](https://github.com/jubishop/screenr/issues/312)
+adds the switch there.
 
 ## Implementation
 
@@ -76,7 +79,7 @@ opens its title page; the page has no inline title actions. The All, Movies,
 and TV filter in `src/components/title-kind-filter.tsx`, shared with Watch
 together, keeps the server's order and resets to All on reload. **Ready to
 watch** lists the available titles, and **Availability unknown** follows it.
-The At home and In theaters switch from issue #311 goes between the page
+The [At home and In theaters switch](#in-theaters) sits between the page
 heading and the filter.
 
 Empty states distinguish an owner with no Want to watch titles ("No Want to
@@ -90,6 +93,65 @@ see what you can watch right now." note, linked to
 Saves started from this page's title links count under the `title` surface in
 [usage telemetry](usage-telemetry.md#save-attribution).
 
+## In theaters
+
+`mode=theaters` selects In theaters on Want to watch pages, such as
+`/people/<username>/want-to-watch?mode=theaters`, and on
+[Watch together](watch-together.md#implementation). `src/member-routes.ts`
+parses it as the route's `mode`, and the canonical path keeps it, so a reload,
+a sign-in return path, and the screen API all name the same mode. At home is
+the default, so its URL has no mode, and any other value opens At home.
+
+`ListModeSwitch` in `src/components/list-mode.tsx` shows At home and In
+theaters as links styled like Find a title's tabs, with `aria-current` on the
+selected one. Choosing one navigates to that mode's URL, which reads its list
+from the server; Back returns to the previous mode. Both pages place it
+between the page heading and the list.
+
+The server reads the owner, access, and Want to watch entries with the same
+statement and checks as At home, then passes the titles to `inTheaters` in
+`src/server/title-viewing.ts`. That keeps the movies in their order and reads
+their release status through `getTitleReleases`, with the same three-second
+refresh deadline as other title lists. It keeps a movie whose
+[release status](title-availability.md#release-status-implementation) has
+`in_theaters` set, or whose status is `unavailable`, and never computes
+theatrical status itself. Shows never appear. Neither person's streaming
+services nor any viewing options are read, so In theaters is the same for
+every viewer. The status is derived on each read, so a movie leaves on the
+next refresh after its Want to watch is removed or its theatrical window ends.
+
+The screen payload for In theaters, which the iPhone app can read through
+`/api/screenr/screen?path=/people/<username>/want-to-watch?mode=theaters`
+(URL-encoded), is:
+
+```text
+kind            "want-to-watch"
+mode            "theaters"; At home's payload has no mode
+owner           the profile owner: user_id, username, display_name, photo
+hasWantToWatch  whether the owner has any current Want to watch titles,
+                including shows and movies not in theaters
+titles          movies newest first; each title's fields and release, whose
+                in_theaters is set, or whose status is "unavailable"
+```
+
+Watch together's In theaters payload has `kind`, `mode`, `participants`, and
+`titles` in the same shape, newest shared first. Neither has
+`viewerHasServices`, `viewing`, `access`, or `matchingServiceIds`.
+
+`InTheatersList`, in the same file, renders both pages' lists with the shared
+title card, which shows each movie's release status, such as "In theaters ·
+Digital Dec 9", and no viewing options when a title has none. A count, such
+as "2 movies in theaters", comes first. **In theaters now** lists the movies
+in theaters, noting that the status comes from US release dates and that
+showtimes are at local theaters. **Availability unknown** lists the movies
+whose release data could not be loaded below it. The All, Movies, and TV
+filter, the save-your-services note, and the JustWatch attribution do not
+appear. When no movie is in theaters, a Want to watch page says "No Want to
+watch titles yet." for an owner with none, with Find a title on the viewer's
+own page, and otherwise "Nothing in theaters right now."; Watch together says
+"No shared movies in theaters." The Availability unknown section still
+follows the empty state.
+
 ## Verification
 
 `tests/app/want-to-watch.test.ts` uses a fake TMDB service and the real
@@ -97,8 +159,21 @@ database. It covers saved-service matches, free options, rental-only
 exclusion, the viewer's services deciding on a friend's page, unknown and
 older availability, ordering, titles moved off Want to watch, one cache read
 for the list, and the friendship and blocking rules.
-`tests/app/member-routes.test.ts` covers the route and its document title.
+`tests/app/member-routes.test.ts` covers the route, its mode, and its
+document title. `tests/app/in-theaters.test.ts` uses a fake TMDB service and
+the real database to cover In theaters on a friend's page and the viewer's
+own, the viewer's services having no effect, Watch together's shared-choice
+rule and order, both edges of the theatrical window, limited releases,
+digital-only and upcoming movies, shows, removed choices and a window that
+ends between reads, unknown release data and a catalog outage, empty pages,
+no watch provider requests, one release read per list, and the friendship
+and blocking rules on both pages.
 `tests/browser/want-to-watch.spec.ts` covers the profile links, the page at
 1440, 390, and 320px without horizontal overflow, keyboard use of the link,
 filter, and title rows, the empty states and services note, refreshes, and
 the unfriend result, with no page or hydration errors.
+`tests/browser/in-theaters.spec.ts` sets up members, friendships, and stored
+release data through fixtures. It switches both pages to In theaters and
+back, including from the keyboard, reloads in In theaters, checks 1440,
+390, and 320px widths without horizontal overflow, opens a movie, and
+follows a refresh to Watch together's empty state.

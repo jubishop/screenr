@@ -86,6 +86,11 @@ export type ViewingTitle<T extends Title = Title> = T & {
   viewing: TitleViewing;
   release: TitleRelease;
 };
+// A title in an In theaters list, which shows its release status and no
+// viewing options.
+export type ReleaseTitle<T extends Title = Title> = T & {
+  release: TitleRelease;
+};
 export type ViewingAccess = "available" | "unmatched" | "unknown";
 export type TitleSuggestion = Title & {
   // Direct friends who recommend the title, with their profile top 10 rank
