@@ -199,10 +199,11 @@ test("feed poster links open their titles and support keyboard navigation with a
   await owner.goto("/search");
   await owner.getByLabel("Movie or show title").fill("Lantern");
   await owner.getByRole("button", { name: "Search", exact: true }).click();
-  const result = owner.locator(".search-result");
-  await expect(result).toHaveAccessibleName(
-    "The Lantern Room Movie · 2026 No subscription or free options listed.",
-  );
+  const result = owner.getByRole("link", {
+    name: "The Lantern Room Movie · 2026 No subscription or free options listed.",
+    exact: true,
+  });
+  await expect(result).toBeVisible();
   await result.click();
   await expect(owner).toHaveURL(/\/titles\/movie\/987654$/);
 

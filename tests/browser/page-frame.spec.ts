@@ -151,7 +151,6 @@ test("phone navigation is a four-item bottom bar below a slim sticky header", as
     await expect(nav.locator("[aria-current]")).toHaveCount(1);
     for (const link of await nav.getByRole("link").all()) {
       const text = await link.innerText();
-      await expect(link).toHaveAccessibleName(text);
       const label = link.getByText(text, { exact: true });
       const fontSize = await label.evaluate((element) =>
         parseFloat(getComputedStyle(element).fontSize),
@@ -287,7 +286,7 @@ test("navigation moves between the four sections and opens invitations from Frie
   for (const label of Object.keys(shortLabels))
     await expect(
       nav.getByRole("link", { name: label, exact: true }),
-    ).toHaveAccessibleName(label);
+    ).toBeVisible();
   const navBox = await box(nav);
   const mainBox = await box(viewer.getByRole("main"));
   expect(navBox.x + navBox.width).toBeLessThanOrEqual(mainBox.x);

@@ -199,7 +199,12 @@ test("nested discussions group stored replies, preview direct comments, and keep
   await comment(child)
     .getByRole("button", { name: "Reply", exact: true })
     .click();
-  await expect(nested()).toHaveAccessibleName("Replying to @nestownerlayout");
+  await expect(
+    item.getByRole("form", {
+      name: "Replying to @nestownerlayout",
+      exact: true,
+    }),
+  ).toBeVisible();
   await expect(nested().getByRole("textbox")).toHaveValue("");
   await nested().getByRole("textbox").fill("Draft for child");
   await nested().getByRole("button", { name: "Cancel", exact: true }).click();

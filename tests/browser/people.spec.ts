@@ -25,8 +25,8 @@ test("profile friends support discovery and refresh accepted friendships and blo
   await expect(
     owner
       .getByRole("region", { name: "Friends", exact: true })
-      .getByRole("link"),
-  ).toHaveAccessibleName(`${displayName} @circlefriend`);
+      .getByRole("link", { name: `${displayName} @circlefriend`, exact: true }),
+  ).toBeVisible();
 
   await viewer.goto("/people/circleowner");
   await viewer.getByText("Friends (1)", { exact: true }).click();

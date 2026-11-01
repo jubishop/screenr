@@ -59,9 +59,12 @@ test("the Friends page orders relationship sections and keeps each person's acti
   await expect(request.getByRole("button")).toHaveText(["Accept", "Decline"]);
   const friendRow = region(page, "Friends").getByRole("article");
   await expect(friendRow).toHaveCount(1);
-  await expect(friendRow.getByRole("link")).toHaveAccessibleName(
-    "Fran Friend @sectionfriend",
-  );
+  await expect(
+    friendRow.getByRole("link", {
+      name: "Fran Friend @sectionfriend",
+      exact: true,
+    }),
+  ).toBeVisible();
   await expect(friendRow.getByRole("button")).toHaveCount(0);
   await expect(friendRow.getByText("Friends", { exact: true })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Unfriend" })).toHaveCount(0);

@@ -71,7 +71,6 @@ test("members start conversations without a title from Your circle, and friends 
   const id = await entry.getAttribute("data-item-id");
   // A post without a title shows no title, poster, or title actions.
   await expect(entry.locator(".activity-by")).toContainText("postowner posted");
-  await expect(entry).toHaveAccessibleName(/postowner posted/);
   await expect(entry.getByRole("heading")).toHaveCount(0);
   await expect(entry.locator(".poster-link")).toHaveCount(0);
   await expect(

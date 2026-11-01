@@ -274,7 +274,7 @@ for (const width of [390, 1366])
     await expect(prompt).toContainText("Add Pick 11 joins at #10.");
     const choices = prompt.getByRole("button", { name: /^Remove #/ });
     await expect(choices).toHaveCount(10);
-    await expect(choices.nth(2)).toHaveAccessibleName("Remove #3 Add Pick 3");
+    await expect(choices.nth(2)).toHaveText("#3 Add Pick 3");
     await expect(prompt.getByRole("button", { name: "Cancel" })).toBeFocused();
     expect(
       await page.evaluate(() => document.documentElement.scrollWidth),
