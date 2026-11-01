@@ -22,8 +22,13 @@ MEMBER_TEXT = "Alice spoiled the finale of Severance for Bob"
 PRIVATE = (MEMBER_TEXT, "Alice Example", "alice@example.com", "screenshot.png",
            "log tail: opened title 1396")
 
+# The account that files issues in the workflow, as GraphQL names it.
+ACTIONS_BOT = {"__typename": "Bot", "login": "github-actions"}
+OWNER = {"__typename": "User", "login": "jubishop"}
+
 # Stands in for the GitHub CLI: logs each call with its standard input, lists
-# the fixture's issues as slurped GraphQL pages, and files new issues there.
+# the fixture's issues as slurped GraphQL pages, with their authors only when
+# the query asks for them, and files new issues there as the Actions bot.
 FAKE_GH = r'''#!/usr/bin/env python3
 import json, os, sys
 from pathlib import Path
@@ -34,13 +39,16 @@ with (base / "gh-calls").open("a") as log:
     log.write(json.dumps({"args": args, "stdin": stdin}) + "\n")
 issues = json.loads((base / "issues.json").read_text())
 if args[:2] == ["api", "graphql"]:
+    query = next(arg for arg in args if arg.startswith("query="))
+    if "author { __typename login }" not in query:
+        issues = [{key: value for key, value in issue.items() if key != "author"} for issue in issues]
     pages = [issues[start:start + 100] for start in range(0, max(len(issues), 1), 100)]
     print(json.dumps([{"data": {"repository": {"issues": {"nodes": page}}}} for page in pages]))
 elif args[:2] == ["issue", "create"]:
     if (base / "fail-create").exists():
         sys.exit(1)
     number = max([issue["number"] for issue in issues] + [300]) + 1
-    issues.append({"number": number, "body": stdin})
+    issues.append({"number": number, "body": stdin, "author": {"__typename": "Bot", "login": "github-actions"}})
     (base / "issues.json").write_text(json.dumps(issues))
     print(f"https://github.com/jubishop/screenr/issues/{number}")
 else:
@@ -210,12 +218,13 @@ class SentryFeedbackIssueTests(unittest.TestCase):
         link = ("https://artisanal-software.sentry.io/feedback/"
                 "?feedbackSlug=screenr-ios%3A7768800421&project=4512251383513088")
         self.issues([
-            {"number": 12, "body": None},
-            {"number": 40, "body": "<!-- sentry-feedback:screenr-ios:7768802020 -->\nClosed."},
+            {"number": 12, "body": None, "author": OWNER},
+            {"number": 40, "body": "<!-- sentry-feedback:screenr-ios:7768802020 -->\nClosed.",
+             "author": ACTIONS_BOT},
             # A maintainer removed the marker but kept the link.
-            {"number": 41, "body": f"- **Feedback:** [SCREENR-IOS-2]({link})"},
+            {"number": 41, "body": f"- **Feedback:** [SCREENR-IOS-2]({link})", "author": ACTIONS_BOT},
             # Another feedback ID that merely starts with a pending one.
-            {"number": 42, "body": "<!-- sentry-feedback:screenr-ios:77688 -->"},
+            {"number": 42, "body": "<!-- sentry-feedback:screenr-ios:77688 -->", "author": ACTIONS_BOT},
         ])
         self.feedback_pages([feedback("7768802020", "SCREENR-IOS-1"),
                              feedback("7768800421", "SCREENR-IOS-2"),
@@ -233,6 +242,35 @@ class SentryFeedbackIssueTests(unittest.TestCase):
         # One batched listing of every issue, whatever the feedback count.
         self.assertEqual([call["args"][:4] for call in self.gh_calls() if call["args"][0] == "api"],
                          [["api", "graphql", "--paginate", "--slurp"]])
+
+    def test_only_issues_from_the_filing_account_or_the_owner_count_as_filed(self):
+        # The repository is public, so anyone can open an issue with a marker or link.
+        link = ("https://artisanal-software.sentry.io/feedback/"
+                "?feedbackSlug=screenr-ios%3A{}&project=4512251383513088")
+        self.issues([
+            {"number": 50, "body": "<!-- sentry-feedback:screenr-ios:100 -->",
+             "author": {"__typename": "User", "login": "stranger"}},
+            {"number": 51, "body": f"- [SCREENR-IOS-2]({link.format(200)})",
+             "author": {"__typename": "User", "login": "stranger"}},
+            # Neither a user who takes the bot's name nor a deleted account counts.
+            {"number": 52, "body": "<!-- sentry-feedback:screenr-ios:300 -->",
+             "author": {"__typename": "User", "login": "github-actions"}},
+            {"number": 53, "body": "<!-- sentry-feedback:screenr-ios:400 -->", "author": None},
+            {"number": 54, "body": "<!-- sentry-feedback:screenr-ios:500 -->", "author": ACTIONS_BOT},
+            {"number": 55, "body": f"Moved from #54: {link.format(600)}", "author": OWNER},
+        ])
+        self.feedback_pages([feedback(issue_id, f"SCREENR-IOS-{issue_id}")
+                             for issue_id in ("100", "200", "300", "400", "500", "600")])
+        for issue_id in ("100", "200", "300", "400"):
+            self.latest_event(issue_id, event())
+
+        result = self.run_command()
+
+        self.assertEqual([call["args"][call["args"].index("--title") + 1] for call in self.created()],
+                         [f"Triage Sentry feedback SCREENR-IOS-{issue_id}"
+                          for issue_id in ("100", "200", "300", "400")])
+        self.assertIn("Already filed: SCREENR-IOS-500 in #54", result.stdout)
+        self.assertIn("Already filed: SCREENR-IOS-600 in #55", result.stdout)
 
     def test_reads_every_page_of_unresolved_feedback_and_files_oldest_first(self):
         self.feedback_pages([feedback("900", "SCREENR-IOS-9")], [feedback("100", "SCREENR-IOS-4")])

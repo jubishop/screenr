@@ -35,13 +35,16 @@ SHORT_ID = re.compile(r"[A-Z0-9-]+")
 RELEASE = re.compile(r"[A-Za-z0-9._@+-]{1,200}")
 DIST = re.compile(r"[A-Za-z0-9._-]{1,64}")
 
-# An issue tracks feedback through its hidden marker or its Sentry link.
+# An issue tracks feedback through its hidden marker or its Sentry link, but only
+# when the account that files them or the repository's owner opened it: in this
+# public repository anyone can open an issue that holds a marker or link.
 FILED = re.compile(rf"<!-- sentry-feedback:{PROJECT}:([0-9]+) -->|feedbackSlug={PROJECT}%3A([0-9]+)&")
+FILER = {"__typename": "Bot", "login": "github-actions"}  # The workflow's GITHUB_TOKEN.
 NEXT_PAGE = re.compile(r'<([^>]+)>;\s*rel="next";\s*results="true"')
 ISSUES_QUERY = """query($owner: String!, $name: String!, $endCursor: String) {
   repository(owner: $owner, name: $name) {
     issues(first: 100, after: $endCursor) {
-      nodes { number body }
+      nodes { number body author { __typename login } }
       pageInfo { hasNextPage endCursor }
     }
   }
@@ -132,14 +135,25 @@ def gh(*args, body=None):
                           check=True, stdout=subprocess.PIPE, text=True, timeout=120).stdout
 
 
+def trusted(author, owner):
+    """Report whether an issue's author is the filing account or the repository's owner."""
+    if not isinstance(author, dict):  # A deleted account has no author.
+        return False
+    kind, login = author.get("__typename"), author.get("login")
+    return ({"__typename": kind, "login": login} == FILER
+            or (kind == "User" and isinstance(login, str) and login.lower() == owner.lower()))
+
+
 def filed_feedback(repository):
-    """Map each Sentry feedback ID already in an open or closed issue to that issue."""
+    """Map each Sentry feedback ID already in a trusted open or closed issue to that issue."""
     owner, _, name = repository.partition("/")
     pages = json.loads(gh("api", "graphql", "--paginate", "--slurp", "-f", f"owner={owner}",
                           "-f", f"name={name}", "-f", f"query={ISSUES_QUERY}"))
     filed = {}
     for page in pages:
         for issue in page["data"]["repository"]["issues"]["nodes"]:
+            if not trusted(issue.get("author"), owner):
+                continue
             for match in FILED.finditer(issue.get("body") or ""):
                 filed.setdefault(match[1] or match[2], issue["number"])
     return filed
