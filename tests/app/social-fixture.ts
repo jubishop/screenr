@@ -2,12 +2,11 @@ import { before, beforeEach, after, mock } from "node:test";
 import assert from "node:assert/strict";
 import { randomBytes } from "node:crypto";
 import { format } from "node:util";
+import { testDatabaseURL } from "../../scripts/checkout";
 
 // Every application suite that uses the test database or server modules
 // imports this module first, so this setup runs before any server module loads.
-export const testDatabaseURL =
-  process.env.TEST_DATABASE_URL ??
-  "postgresql://screenr:screenr-local-only@127.0.0.1:5439/screenr_test";
+export { testDatabaseURL };
 if (!new URL(testDatabaseURL).pathname.endsWith("_test"))
   throw new Error("Tests require a dedicated database ending in _test.");
 process.env.DATABASE_URL = testDatabaseURL;

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
+import { createHash, randomBytes } from "node:crypto";
 import {
   mkdtemp,
   mkdir,
@@ -14,8 +15,22 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { test, type TestContext } from "node:test";
 import { promisify } from "node:util";
+import { Client } from "pg";
+import {
+  checkoutDatabase,
+  prepareTestDatabase,
+  testDatabaseURL,
+} from "../../scripts/checkout";
 
 const execute = promisify(execFile);
+// Fixture test commands share this checkout's test database. Their tests do
+// not use it, and a database of their own would outlive the fixture.
+const fixtureEnv = {
+  ...process.env,
+  // A nested Node test runner needs its own normal output stream.
+  NODE_TEST_CONTEXT: undefined,
+  TEST_DATABASE_URL: testDatabaseURL,
+};
 
 async function fixture(t: TestContext) {
   const root = await realpath(
@@ -32,6 +47,7 @@ async function fixture(t: TestContext) {
     "next.config.ts",
     "playwright.config.ts",
     "scripts/test-database.ts",
+    "scripts/checkout.ts",
     "scripts/browser-config.ts",
   ])
     await write(path, await readFile(path, "utf8"));
@@ -61,8 +77,7 @@ async function fixture(t: TestContext) {
       cwd: root,
       timeout: 30_000,
       maxBuffer: 4 * 1024 * 1024,
-      // A nested Node test runner needs its own normal output stream.
-      env: { ...process.env, NODE_TEST_CONTEXT: undefined },
+      env: fixtureEnv,
     });
   }
   async function files() {
@@ -175,11 +190,7 @@ test("application tests run one shard of their files when SCREENR_TEST_SHARD nam
       cwd: project.root,
       timeout: 30_000,
       maxBuffer: 4 * 1024 * 1024,
-      env: {
-        ...process.env,
-        NODE_TEST_CONTEXT: undefined,
-        SCREENR_TEST_SHARD: shard,
-      },
+      env: { ...fixtureEnv, SCREENR_TEST_SHARD: shard },
     });
     return [...new Set(stdout.match(/\w+ application test/g))].sort();
   }
@@ -229,6 +240,124 @@ test("formatting and test commands stay within their source directories", async 
     (error: Error) => {
       assert.match(error.message, /new.spec.ts/);
       return true;
+    },
+  );
+});
+
+// Loads the module every database suite imports first, from the given checkout
+// directory, and returns the database it selects.
+async function applicationTestDatabase(cwd: string, override?: string) {
+  const { stdout } = await execute(
+    process.execPath,
+    [
+      "--import",
+      resolve("node_modules/tsx/dist/loader.mjs"),
+      "--input-type=module",
+      "-e",
+      `const { testDatabaseURL } = await import(${JSON.stringify(resolve("tests/app/social-fixture.ts"))}); console.log(testDatabaseURL);`,
+    ],
+    { cwd, env: { ...process.env, TEST_DATABASE_URL: override } },
+  );
+  return stdout.trim();
+}
+
+test("each checkout selects its own application test database unless TEST_DATABASE_URL names one", async (t) => {
+  const other = await realpath(
+    await mkdtemp(join(tmpdir(), "screenr-test-database-")),
+  );
+  t.after(() => rm(other, { recursive: true, force: true }));
+  const derived = (root: string) =>
+    `/screenr_app_${createHash("sha256").update(root).digest("hex").slice(0, 12)}_test`;
+  const own = new URL(await applicationTestDatabase(process.cwd()));
+  const separate = new URL(await applicationTestDatabase(other));
+  assert.equal(own.pathname, derived(await realpath(process.cwd())));
+  assert.equal(separate.pathname, derived(other));
+  assert.notEqual(own.pathname, separate.pathname);
+  const chosen =
+    "postgresql://screenr:screenr-local-only@127.0.0.1:5439/screenr_chosen_test";
+  assert.equal(await applicationTestDatabase(other, chosen), chosen);
+});
+
+test("preparing a checkout's database records the checkout and drops the databases of removed checkouts", async (t) => {
+  const server = new URL(testDatabaseURL);
+  server.pathname = "/postgres";
+  const admin = new Client({ connectionString: server.href });
+  await admin.connect();
+  const directories: string[] = [];
+  const databases = new Set<string>();
+  let holder: Client | undefined;
+  let browserRun: Client | undefined;
+  t.after(async () => {
+    await holder?.end();
+    await browserRun?.end();
+    for (const name of databases)
+      await admin.query(`DROP DATABASE IF EXISTS "${name}"`);
+    await admin.end();
+    for (const path of directories)
+      await rm(path, { recursive: true, force: true });
+  });
+  async function checkout() {
+    const path = await realpath(
+      await mkdtemp(join(tmpdir(), "screenr-checkout-database-")),
+    );
+    directories.push(path);
+    return path;
+  }
+  async function prepare(name: string, root: string) {
+    databases.add(name);
+    await prepareTestDatabase(admin, name, root);
+  }
+  const [live, removed, busy] = [
+    await checkout(),
+    await checkout(),
+    await checkout(),
+  ];
+  const busyDatabase = checkoutDatabase("app", busy);
+  await prepare(checkoutDatabase("app", removed), removed);
+  await prepare(checkoutDatabase("browser", removed), removed);
+  await prepare(busyDatabase, busy);
+  await prepare(checkoutDatabase("browser", live), live);
+  // A database named by an override is created but not recorded.
+  const chosen = `screenr_chosen_${randomBytes(6).toString("hex")}_test`;
+  await prepare(chosen, live);
+  // An interrupted preparation leaves an unrecorded application database.
+  // Browser runs created theirs without a record before checkouts were
+  // recorded, and such a run may still be building, holding only its lock.
+  const interrupted = `screenr_app_${randomBytes(6).toString("hex")}_test`;
+  const unrecordedBrowser = `screenr_browser_${randomBytes(6).toString("hex")}_test`;
+  const building = `screenr_browser_${randomBytes(6).toString("hex")}_test`;
+  browserRun = new Client({ connectionString: server.href });
+  await browserRun.connect();
+  await browserRun.query("SELECT pg_advisory_lock(hashtextextended($1, 0))", [
+    `screenr-browser:database:${building}`,
+  ]);
+  for (const name of [interrupted, unrecordedBrowser, building]) {
+    databases.add(name);
+    await admin.query(`CREATE DATABASE "${name}"`);
+  }
+  const connection = new URL(server);
+  connection.pathname = `/${busyDatabase}`;
+  holder = new Client({ connectionString: connection.href });
+  await holder.connect();
+  await rm(removed, { recursive: true });
+  await rm(busy, { recursive: true });
+
+  await prepare(checkoutDatabase("app", live), live);
+  const { rows } = await admin.query<{ name: string; checkout: string | null }>(
+    `SELECT datname AS name, shobj_description(oid, 'pg_database') AS checkout
+    FROM pg_database WHERE datname = ANY($1) ORDER BY datname`,
+    [[...databases]],
+  );
+  assert.deepEqual(
+    Object.fromEntries(rows.map(({ name, checkout }) => [name, checkout])),
+    {
+      [checkoutDatabase("app", live)]: live,
+      [checkoutDatabase("browser", live)]: live,
+      // A removed checkout's database stays while a process is connected.
+      [busyDatabase]: busy,
+      // A browser run's lock keeps its database without a connection.
+      [building]: null,
+      [chosen]: null,
     },
   );
 });

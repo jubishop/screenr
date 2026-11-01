@@ -2,6 +2,7 @@ import { cp, mkdir, readdir, readlink, rm, writeFile } from "node:fs/promises";
 import { join, dirname, isAbsolute, relative, resolve } from "node:path";
 import { execFileSync, spawn } from "node:child_process";
 import { setTimeout as delay } from "node:timers/promises";
+import { testDatabaseURL } from "./checkout";
 import { releasePaths } from "./release-paths";
 
 if (process.platform !== "linux" || process.arch !== "x64")
@@ -52,10 +53,7 @@ async function check(directory: string): Promise<void> {
 }
 await check(output);
 
-const testDatabase =
-  process.env.TEST_DATABASE_URL ??
-  "postgresql://screenr:screenr-local-only@127.0.0.1:5439/screenr_test";
-if (!new URL(testDatabase).pathname.endsWith("_test"))
+if (!new URL(testDatabaseURL).pathname.endsWith("_test"))
   throw new Error("Release verification requires a dedicated test database.");
 const releaseEnvironment: NodeJS.ProcessEnv = {
   PATH: process.env.PATH,
@@ -64,7 +62,7 @@ const releaseEnvironment: NodeJS.ProcessEnv = {
   HOSTNAME: "127.0.0.1",
   PORT: "3057",
   TZ: "UTC",
-  DATABASE_URL: testDatabase,
+  DATABASE_URL: testDatabaseURL,
   BETTER_AUTH_URL: "http://localhost:3057",
   BETTER_AUTH_SECRET: "release-smoke-test-only-never-used-in-production",
   EMAIL_TRANSPORT: "file",

@@ -1,5 +1,6 @@
 import { Client, type Pool } from "pg";
 import { browserConfig } from "./browser-config";
+import { prepareTestDatabase } from "./checkout";
 import streamingTitles from "../tests/fixtures/streaming-titles.json" with { type: "json" };
 import { once } from "node:events";
 import { cp } from "node:fs/promises";
@@ -78,6 +79,8 @@ try {
   await admin.connect();
   // Session locks on the common admin database also protect explicit database
   // overrides and prevent two runs in one checkout from sharing capture files.
+  // Test database cleanup in scripts/checkout.ts keeps a database whose lock
+  // is held.
   for (const resource of [
     `checkout:${browserConfig.root}`,
     `database:${browserConfig.databaseName}`,
@@ -91,11 +94,7 @@ try {
         `Browser fixture ${resource} is already in use by another run.`,
       );
   }
-  try {
-    await admin.query(`CREATE DATABASE "${browserConfig.databaseName}"`);
-  } catch (error) {
-    if ((error as { code: string }).code !== "42P04") throw error;
-  }
+  await prepareTestDatabase(admin, browserConfig.databaseName);
   process.env.DATABASE_URL = browserConfig.databaseURL;
   // The local identity provider owns file email capture. Only the Next child
   // uses the selected application serving mode.
