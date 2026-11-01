@@ -580,7 +580,7 @@ together they run everything `bin/check --full` runs on Linux:
 | `static` | `bin/check`, then `bin/check-application --part static`: shell lint for `ops/`, Python tests, formatting, and typechecking. |
 | `app (I/N)` | `bin/check-application --part app --shard I/N`: one shard of the application and PostgreSQL test files, with the [pinned Caddy](#ci-caddy) and Playwright's headless Chromium for the browser harness tests. |
 | `browser (I/N)` | `bin/check-application --part browser --shard I/N`: one Playwright shard against a production build. |
-| `release` | Runs [`bin/deployment-decision`](#main-branch-delivery). When it deploys, the job builds, runs the [packaging check](deployment.md#build-and-activate-a-release), and uploads the release. |
+| `release` | Runs [`bin/deployment-decision`](#main-branch-delivery), then builds the release and runs the [packaging check](deployment.md#build-and-activate-a-release) on every run, pull requests included. It uploads the release only when the run deploys. |
 | `check` | Passes only when every job above passed. Pull requests show it, and `bin/deploy-ci` requires it. |
 | `deploy` | Waits for `check` and deploys the package from `release`. |
 
@@ -591,11 +591,12 @@ that runs `npm test` gets every file. Node splits the application test files
 by their sorted position; Playwright splits browser tests evenly. Each matrix
 job uses its `strategy.job-total` as N, so adding a `shard` entry adds a shard.
 `tests/test_check_application.py` checks that the workflow runs the foundation
-checks and every part and shard, and that `check` covers every other job.
+checks and every part and shard, that `check` covers every other job, and
+that every run packages the release while only a deploying run uploads it.
 
 Each browser shard builds its own production artifact, as the
 [browser harness](testing.md#browser-harness) requires, and the `release` job
-builds the one it ships. A build takes about 12 seconds on a runner, less than
+builds the one it packages. A build takes about 12 seconds on a runner, less than
 sharing one artifact between jobs would cost. Only `setup-node`'s npm cache is
 kept: Playwright's headless shell and FFmpeg download in about 4 seconds, so a
 browser cache would save little and add a dependency. The jobs take nothing
@@ -764,7 +765,7 @@ affects runtime behavior, dependencies, assets, migrations, configuration, or
 operations. When uncertain, deploy. This is an assessment of behavior, not a
 file-extension rule.
 
-To skip only release packaging and deployment, put these trailers at the end
+To skip only the release upload and deployment, put these trailers at the end
 of the main commit message, after a blank line:
 
 ```text

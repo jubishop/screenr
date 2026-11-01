@@ -368,6 +368,21 @@ class WorkflowTests(unittest.TestCase):
         self.assertIn("""jq -e 'all(.[]; .result == "success")'""", self.jobs["check"])
         self.assertIn("    needs: [check, release]\n", self.jobs["deploy"])
 
+    def test_every_run_packages_the_release_and_only_a_deployment_uploads_it(self):
+        # A pull request that breaks packaging fails CI instead of blocking the next deployment.
+        steps = re.split(r"^      - ", self.jobs["release"], flags=re.M)[1:]
+        step = lambda text: next(step for step in steps if text in step)
+        package = step("npm run release:package\n")
+        for text in ("uses: ./.github/actions/node-lts\n", "npm run release:package\n"):
+            with self.subTest(step=text):
+                self.assertNotRegex(step(text), r"(?m)^(        )?if:")
+        self.assertLess(package.index("npm ci\n"), package.index("npm run build\n"))
+        self.assertLess(package.index("npm run build\n"), package.index("npm run release:package\n"))
+        deploying = "steps.decision.outputs.deploy == 'true' && github.repository == 'jubishop/screenr'"
+        self.assertIn(f"        if: {deploying}\n", step("uses: actions/upload-artifact@"))
+        self.assertIn("    if: needs.release.outputs.deploy == 'true' && github.repository == 'jubishop/screenr'\n",
+                      self.jobs["deploy"])
+
     def test_check_jobs_use_the_ubuntu_mirror_only_for_missing_tools(self):
         # A slow mirror held Playwright's --with-deps past a job's timeout (#320).
         # The runner image already has Chromium's libraries and ShellCheck.

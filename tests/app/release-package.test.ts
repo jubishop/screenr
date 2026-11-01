@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { execFile } from "node:child_process";
 import {
   mkdir,
   mkdtemp,
@@ -11,8 +12,9 @@ import {
 } from "node:fs/promises";
 import { isBuiltin } from "node:module";
 import { tmpdir } from "node:os";
-import { dirname, join, relative, resolve } from "node:path";
-import { test } from "node:test";
+import { dirname, extname, join, relative, resolve } from "node:path";
+import { test, type TestContext } from "node:test";
+import { promisify } from "node:util";
 import {
   isCallExpression,
   isExportDeclaration,
@@ -242,3 +244,191 @@ import "./missing";
     "scripts/entry.ts imports ./missing, which does not exist",
   ]);
 });
+
+const execute = promisify(execFile);
+// scripts/package.ts packages only on Linux x64, where CI's app jobs run.
+const packaging =
+  process.platform === "linux" && process.arch === "x64"
+    ? {}
+    : { skip: "scripts/package.ts packages only on Linux x64" };
+
+type Entry = "server" | "migration";
+
+// Writes a checkout for scripts/package.ts with a stand-in build: a server
+// that answers the smoke test's requests and a migration that does nothing.
+// Each entry point in `loading` first loads the package `screenr-runtime`.
+// Like a development checkout after `npm ci`, the checkout's node_modules has
+// that package; the release has it only when `released` is set.
+async function packagingCheckout(
+  t: TestContext,
+  loading: readonly Entry[],
+  released: boolean,
+) {
+  const root = await realpath(
+    await mkdtemp(join(tmpdir(), "screenr-package-checkout-")),
+  );
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const load = (entry: Entry) =>
+    loading.includes(entry) ? 'require("screenr-runtime");\n' : "";
+  const files: Record<string, string> = {
+    "package.json": JSON.stringify({ name: "fixture", private: true }),
+    "package-lock.json": JSON.stringify({
+      name: "fixture",
+      lockfileVersion: 3,
+      requires: true,
+      packages: { "": { name: "fixture" } },
+    }),
+    "scripts/migrate.ts": load("migration"),
+    ".next/standalone/server.js": `${load("server")}const pages = {
+  "/api/health": '{"ok":true}',
+  "/login": "Send sign-in code",
+  "/api/auth/get-session": "null",
+};
+require("node:http")
+  .createServer((request, response) => {
+    response.statusCode = request.url in pages ? 200 : 404;
+    response.end(pages[request.url]);
+  })
+  .listen(Number(process.env.PORT), process.env.HOSTNAME);
+`,
+    // The migration command imports the release's tsx. This one loads
+    // nothing, since Node strips the stand-in migration's types itself.
+    ".next/standalone/node_modules/tsx/package.json": JSON.stringify({
+      name: "tsx",
+      exports: "./loader.mjs",
+    }),
+    ".next/standalone/node_modules/tsx/loader.mjs": "",
+    ".next/static/chunk.js": "",
+  };
+  for (const modules of [
+    "node_modules",
+    ...(released ? [".next/standalone/node_modules"] : []),
+  ]) {
+    files[`${modules}/screenr-runtime/package.json`] = JSON.stringify({
+      name: "screenr-runtime",
+    });
+    files[`${modules}/screenr-runtime/index.js`] = "";
+  }
+  for (const path of releasePaths)
+    if (
+      !Object.keys(files).some(
+        (file) => file === path || file.startsWith(`${path}/`),
+      )
+    )
+      files[extname(path) ? path : `${path}/.keep`] = "";
+  for (const [path, content] of Object.entries(files)) {
+    await mkdir(dirname(join(root, path)), { recursive: true });
+    await writeFile(join(root, path), content);
+  }
+  // scripts/package.ts names the archive after the checkout's revision.
+  const git = (...args: string[]) => execute("git", args, { cwd: root });
+  await git("init", "--quiet");
+  await git(
+    ...["-c", "core.hooksPath=/dev/null", "-c", "commit.gpgsign=false"],
+    ...["-c", "user.name=Fixture", "-c", "user.email=fixture@example.com"],
+    ...["commit", "--quiet", "--allow-empty", "--message", "Fixture"],
+  );
+  return root;
+}
+
+// Runs scripts/package.ts in the checkout with TMPDIR set to `temporary`, a
+// new directory by default, and reports the staging directories it left there
+// and the archives in the checkout's .cache.
+async function packageRelease(
+  t: TestContext,
+  root: string,
+  temporary?: string,
+) {
+  if (!temporary) {
+    const created = await mkdtemp(join(tmpdir(), "screenr-package-temporary-"));
+    t.after(() => rm(created, { recursive: true, force: true }));
+    temporary = created;
+  }
+  const outcome = await execute(
+    process.execPath,
+    [
+      "--import",
+      resolve("node_modules/tsx/dist/loader.mjs"),
+      resolve("scripts/package.ts"),
+    ],
+    { cwd: root, env: { ...process.env, TMPDIR: temporary } },
+  ).then(
+    ({ stderr }) => ({ failed: false, stderr }),
+    (error: { stderr: string }) => ({ failed: true, stderr: error.stderr }),
+  );
+  const list = (directory: string) => readdir(directory).catch(() => []);
+  return {
+    ...outcome,
+    staged: (await list(temporary)).filter((name) =>
+      name.startsWith("screenr-release-"),
+    ),
+    archives: (await list(join(root, ".cache"))).filter((name) =>
+      name.endsWith(".tar.gz"),
+    ),
+  };
+}
+
+for (const entry of ["server", "migration"] as const)
+  test(
+    `the release smoke test fails when the packaged ${entry} needs a package that only the checkout has`,
+    packaging,
+    async (t) => {
+      // A release staged inside the checkout passed: Node found the package
+      // in the checkout's node_modules by walking up from the release (#370).
+      const root = await packagingCheckout(t, [entry], false);
+      const { failed, stderr, staged, archives } = await packageRelease(
+        t,
+        root,
+      );
+      assert.ok(failed, stderr);
+      assert.match(stderr, /Cannot find module 'screenr-runtime'/);
+      assert.deepEqual(staged, []);
+      assert.deepEqual(archives, []);
+    },
+  );
+
+test(
+  "packaging archives a release that has its runtime packages, keeping only that archive",
+  packaging,
+  async (t) => {
+    const root = await packagingCheckout(t, ["server", "migration"], true);
+    await mkdir(join(root, ".cache"));
+    await writeFile(join(root, ".cache/screenr-0123abcd.tar.gz"), "");
+    const { failed, stderr, staged, archives } = await packageRelease(t, root);
+    assert.equal(failed, false, stderr);
+    const { stdout } = await execute("git", ["rev-parse", "HEAD"], {
+      cwd: root,
+    });
+    const archive = `screenr-${stdout.trim()}.tar.gz`;
+    assert.deepEqual(archives, [archive]);
+    const listing = await execute("tar", [
+      "-tzf",
+      join(root, ".cache", archive),
+    ]);
+    assert.ok(
+      listing.stdout
+        .split("\n")
+        .includes("./node_modules/screenr-runtime/index.js"),
+      listing.stdout,
+    );
+    assert.deepEqual(staged, []);
+  },
+);
+
+test(
+  "packaging refuses to stage the release below a directory with node_modules",
+  packaging,
+  async (t) => {
+    const root = await packagingCheckout(t, ["server"], false);
+    await mkdir(join(root, "tmp"));
+    const { failed, stderr, staged, archives } = await packageRelease(
+      t,
+      root,
+      join(root, "tmp"),
+    );
+    assert.ok(failed, stderr);
+    assert.ok(stderr.includes(join(root, "node_modules")), stderr);
+    assert.deepEqual(staged, []);
+    assert.deepEqual(archives, []);
+  },
+);
