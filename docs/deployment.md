@@ -900,7 +900,7 @@ journalctl -u screenr-worker --since '1 day ago' --no-pager | grep '"event":"ema
 | `route failed` | web | `route`, Next's route pattern, such as `/api/photos/[user]/[version]`; `type` (`render`, `route`, `action`, or `proxy`); and `method`, for an error no handler caught |
 | `catalog token rejected` | web | `status` 401 or 403: TMDB rejected `TMDB_READ_TOKEN`, so every catalog lookup fails until it is replaced |
 | `catalog request failed` | web | `status` for another TMDB reply other than 404, or error fields for a timeout, network failure, or malformed JSON |
-| `catalog response invalid` | web | `lookup` (`details`, `search`, `seasons`, `episodes`, `find`, `videos`, or `providers`) and error fields, for a TMDB answer without the shape Screenr reads, such as after TMDB renames or retypes a field |
+| `catalog response invalid` | web | `lookup` (`details`, `search`, `seasons`, `episodes`, `find`, `videos`, or `providers`) and error fields, for a TMDB answer without the shape Screenr reads, such as after TMDB renames or retypes a field; or `lookup` `details` and `part` `release_dates`, without error fields, for movie details stored without the release dates Screenr couldn't read |
 | `catalog cache failed` | web | `cache` (`title`, `trailer`, or `availability`) for a failed read or write of that catalog cache |
 | `auth callback failed` | web | `callback`, the Better Auth callback, such as `sendVerificationOTP` or `user.create.before` |
 | `auth endpoint failed` | web | `endpoint`, Better Auth's route pattern, such as `/sign-in/email-otp` or `/callback/:id`, when known, for an unexpected error that Better Auth's router answered with a 500, such as a database error in its adapter |
@@ -937,7 +937,10 @@ means the token was revoked, expired, or suspended: replace `TMDB_READ_TOKEN`
 in `app.env` and restart `screenr-web`. A `catalog response invalid` line
 means TMDB answered without the fields Screenr reads, for one title or, after
 a TMDB contract change, for every lookup of that kind. Its stack frames locate
-the check that rejected the answer.
+the check that rejected the answer. A line with `part` instead names the piece
+of otherwise usable details that Screenr couldn't read: the details were
+stored, but the release status keeps its last dates and the details refetch
+after five minutes.
 
 A Better Auth callback failure still gets Better Auth's own answer, such as
 success for a code request whose email was never queued. When the failure

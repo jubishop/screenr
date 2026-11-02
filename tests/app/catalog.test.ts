@@ -499,6 +499,71 @@ test("invalid TMDB answers log one failure for each request, without their value
     assert.ok(!printed.join("\n").includes(value), `Logged ${value}`);
 });
 
+test("movie details without usable release dates are stored and log one failure for each request, without their values", async () => {
+  const cookie = await cookieFor("viewer");
+  const page = async () => {
+    const response = await GET(
+      new Request(
+        `http://localhost:3000/api/screenr/screen?${new URLSearchParams({ path: "/titles/movie/42" })}`,
+        { headers: { Cookie: cookie } },
+      ),
+      { params: Promise.resolve({ action: "screen" }) },
+    );
+    assert.equal(response.status, 200);
+    return response.headers.get("Screenr-Request-Id");
+  };
+  const dates = { theatrical: ["2026-11-06"], digital: [] };
+  await db.query(
+    "UPDATE title SET release=$1, fetched_at=now()-interval '2 days' WHERE id='movie:42'",
+    [JSON.stringify(dates)],
+  );
+  const requestIds = [];
+  // A release_dates without its results list, then a US entry without its
+  // own release_dates list.
+  for (const [name, release_dates] of [
+    ["Renamed Movie", { results: "Private Release Dates" }],
+    [
+      "Renamed Again",
+      { results: [{ iso_3166_1: "US", release_dates: "Private US Dates" }] },
+    ],
+  ] as const) {
+    details.body = {
+      id: 42,
+      title: name,
+      overview: "Private Overview",
+      release_dates,
+    };
+    await db.query("UPDATE title SET retry_after=now()-interval '1 second'");
+    requestIds.push(await page());
+    // The details are stored, but the last dates stay, fetched_at doesn't
+    // move, and the refresh waits five minutes.
+    assert.deepEqual(
+      (
+        await db.query(
+          `SELECT name, release, fetched_at<now()-interval '1 day' AS stale,
+            retry_after>now() AS waiting FROM title WHERE id='movie:42'`,
+        )
+      ).rows,
+      [{ name, release: dates, stale: true, waiting: true }],
+    );
+  }
+  assert.deepEqual(
+    failureLines(),
+    requestIds.map((requestId) => ({
+      event: "catalog response invalid",
+      requestId,
+      lookup: "details",
+      part: "release_dates",
+    })),
+  );
+  for (const value of [
+    "Private Release Dates",
+    "Private US Dates",
+    "Private Overview",
+  ])
+    assert.ok(!printed.join("\n").includes(value), `Logged ${value}`);
+});
+
 for (const [cache, table, read] of [
   ["title", "title", () => getTitleReleases(["movie:42"])],
   ["trailer", "title_trailer", () => getTitleTrailer("movie:42")],
