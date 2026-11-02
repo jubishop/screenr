@@ -76,7 +76,7 @@ stopped before merging. Wait in the foreground with
 `gh pr checks <pr> --watch`. Remote CI is the Linux split workflow in
 `.github/workflows/check.yml`: `scope`, then `static`, `app`, `browser`, and
 `release`, with the `check` job as their one result. A normal run takes about
-four minutes ([CI jobs](../docs/development-workflow.md#ci-jobs)). There is
+three minutes ([CI jobs](../docs/development-workflow.md#ci-jobs)). There is
 no iOS CI
 ([decision](../docs/ios-app.md#local-ios-checks-instead-of-ios-ci--2026-10-14)).
 

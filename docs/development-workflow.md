@@ -665,6 +665,11 @@ Since [#370](https://github.com/jubishop/screenr/issues/370), `release`
 packages on every run. In a pull request run on 2026-11-01 it took 68
 seconds, 45 of them to build and package, while the slowest app shard took
 212, and the run passed `check` 3 minutes 40 seconds after it started.
+Since [#372](https://github.com/jubishop/screenr/issues/372), `scope` runs
+first. In a pull request run later that day, the check jobs started 10
+seconds after the run did, and it passed `check` 2 minutes 57 seconds after
+it started. A pull request that changed only `ios/README.md` passed `check`
+15 seconds after its run started.
 
 To bring a run back under budget, find the slowest job with
 `gh run view <run> --json jobs`, then add a shard to its matrix or move work
