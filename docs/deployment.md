@@ -1049,9 +1049,9 @@ else from the reply. The iPhone app's ID token sign-in uses no secret and
 keeps working, so it can hide this outage. A deleted client fails earlier:
 Google shows `deleted_client` on its own authorization page, which never
 returns to Screenr, so that outage logs nothing. Screenr reads the
-reply only at the callback for Google: Apple's callback, which the web never
-uses, still exchanges a code that anyone brings with a Google sign-in's
-state, and Apple's `invalid_client` for it logs nothing.
+reply only at the callback for Google. Apple's callback answers 404 before it
+exchanges anything
+([data and access](data-and-access.md#native-sign-in)).
 
 For a Resend reply, `email delivery failed` adds the HTTP `status` and the
 `provider` error name, such as `daily_quota_exceeded` or `invalid_api_key`.

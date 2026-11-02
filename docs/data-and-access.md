@@ -248,7 +248,11 @@ cookies, and the response returns the
     reply to name the same person.
   - A Hide My Email relay address is stored like any other address.
   - The web offers no Apple sign-in. A request for Apple without an ID token
-    returns 404.
+    returns 404, and so does Better Auth's OAuth callback for Apple,
+    `/api/auth/callback/apple`. Better Auth doesn't tie an OAuth state to its
+    provider, so anyone could otherwise bring a web Google sign-in's state
+    there and make Screenr send codes to Apple's token endpoint under its
+    bundle ID ([issue #457](https://github.com/jubishop/screenr/issues/457)).
 - **Google:** the app posts `{"provider": "google", "idToken": {"token",
   "nonce"}}`. It gets the ID token through `ASWebAuthenticationSession` by
   running Google's authorization code flow with PKCE for the iOS client and
