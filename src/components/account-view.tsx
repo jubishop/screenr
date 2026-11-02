@@ -1,8 +1,8 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { ScreenData } from "../server/screens";
 import type { Person } from "../shared";
-import { authClient, signOut, useInteractive } from "./client";
+import { authClient, forgetResults, signOut, useInteractive } from "./client";
 import { useActionError } from "./action-error";
 import { ActionButton } from "./action-button";
 import { AccountProfileEditor } from "./account-profile-editor";
@@ -17,6 +17,7 @@ export function AccountView({
   saveProfile,
   savePhoto,
   saveServices,
+  deleteAccount,
   refresh,
 }: {
   data: Extract<ScreenData, { kind: "account" }> | null;
@@ -25,10 +26,12 @@ export function AccountView({
   saveProfile: (name: string, username: string) => Promise<void>;
   savePhoto: (change: PhotoChange) => Promise<void>;
   saveServices: (ids: string[]) => Promise<void>;
+  deleteAccount: () => Promise<void>;
   refresh: () => Promise<void>;
 }) {
   const interactive = useInteractive();
   const [googleError, setGoogleError] = useState(initialGoogleError);
+  useEffect(() => forgetResults("error"), []);
   const [connectingGoogle, setConnectingGoogle] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
   const signOutFailure = useActionError();
@@ -124,8 +127,9 @@ export function AccountView({
             unavailable={signingOut || connectingGoogle || waiting}
             onClick={async () => {
               setSigningOut(true);
-              await signOutFailure.run(signOut);
-              setSigningOut(false);
+              // A successful sign-out stays busy while the sign-in page
+              // loads.
+              if (!(await signOutFailure.run(signOut))) setSigningOut(false);
             }}
           >
             Sign out
@@ -134,7 +138,11 @@ export function AccountView({
         </section>
       )}
       {account && (
-        <AccountDeletion email={account.email} available={!waiting} />
+        <AccountDeletion
+          email={account.email}
+          available={!waiting}
+          deleteAccount={deleteAccount}
+        />
       )}
     </>
   );

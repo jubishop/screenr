@@ -6,6 +6,11 @@ import { prepareFriendship, userId } from "./member-fixture";
 import { db } from "./database-fixture";
 import { browserConfig } from "../../scripts/browser-config";
 import { openWithoutPolling, refreshOnReturn } from "./refresh-helpers";
+import {
+  countRequests,
+  expectPendingWhileLeaving,
+  stayOnPage,
+} from "./page-loads";
 
 // Where the file transport delivers an address's sign-in code.
 const codeFile = (email: string) =>
@@ -23,7 +28,9 @@ async function post(page: Page, action: string, data: unknown) {
 test("a member confirms it's them with an email code, deletes their account, and cannot sign back in", async ({
   member,
 }) => {
-  const departing = await member("deletingmember");
+  const departing = await member("deletingmember", {
+    serviceWorkers: "block",
+  });
   const friend = await member("deletionfriend");
   await prepareFriendship(departing, friend);
   const email = "deletingmember.browser@example.test";
@@ -85,15 +92,38 @@ test("a member confirms it's them with an email code, deletes their account, and
   await expect(
     confirmation.getByRole("button", { name: "Cancel" }),
   ).toBeFocused();
-  await confirmation
-    .getByRole("button", { name: "Delete account", exact: true })
-    .click();
+  // The action stays pending until sign-in replaces the page, so a second
+  // press can't send another deletion, and the page reads nothing more: its
+  // rejected read would open sign-in without the result.
+  const deletions = countRequests(departing, "/api/screenr/delete-account");
+  const next = await stayOnPage(departing, "/login");
+  const remove = confirmation.getByRole("button", {
+    name: "Delete account",
+    exact: true,
+  });
+  await remove.click();
+  expect(await next.url).toBe(`${browserConfig.baseURL}/login?deleted=1`);
+  const reads = countRequests(departing, "/api/screenr/screen");
+  await expectPendingWhileLeaving(departing, remove);
+  await departing.evaluate(() =>
+    document.dispatchEvent(new Event("visibilitychange")),
+  );
+  await expect(remove).toHaveAttribute("aria-disabled", "true");
+  expect(reads()).toBe(0);
+  await departing.goto(await next.url);
 
   // The member ends signed out on the sign-in page.
-  await expect(departing).toHaveURL(/\/login\?deleted=1$/);
   await expect(
     departing.getByText("Your Screenr account was deleted.", { exact: true }),
   ).toBeVisible();
+  // The address drops the result once it shows, so a reload omits it.
+  await expect(departing).toHaveURL(/\/login$/);
+  await departing.reload();
+  await expect(departing.getByLabel("Email address")).toBeEditable();
+  await expect(
+    departing.getByText("Your Screenr account was deleted.", { exact: true }),
+  ).toHaveCount(0);
+  expect(deletions()).toBe(1);
   expect(
     (await db.query('SELECT 1 FROM "user" WHERE id=$1', [id])).rowCount,
   ).toBe(0);
@@ -212,7 +242,9 @@ test("a failed read keeps the deletion step, the sign-in methods, and focus, wit
   await expect(cancel).toBeFocused();
   // The confirmed code still deletes the account, with no second code.
   await confirmDelete.click();
-  await expect(departing).toHaveURL(/\/login\?deleted=1$/);
+  await expect(
+    departing.getByText("Your Screenr account was deleted.", { exact: true }),
+  ).toBeVisible();
   expect(
     (await db.query('SELECT 1 FROM "user" WHERE id=$1', [id])).rowCount,
   ).toBe(0);

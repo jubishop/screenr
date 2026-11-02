@@ -3,6 +3,7 @@ import { browserConfig } from "../../scripts/browser-config";
 import { test } from "./monitored-test";
 import { prepareFriendship } from "./member-fixture";
 import { commits, countCommits, nextPoll } from "./refresh-helpers";
+import { chooseStatus, statusButton } from "./watch-status";
 
 const isScreenRead = (response: Response) =>
   new URL(response.url()).pathname === "/api/screenr/screen";
@@ -85,4 +86,42 @@ test("unchanged refreshes send no body and render nothing, while changes and tim
     viewer.getByText("A reply after quiet refreshes", { exact: true }),
   ).toBeVisible();
   await expect(draft).toHaveValue("Keep this unsent reply");
+});
+
+test("Back and Forward read the screen at once instead of showing the copy cached before a change", async ({
+  member,
+}) => {
+  const friend = await member("historyfriend");
+  const viewer = await member("historyviewer");
+  await prepareFriendship(friend, viewer);
+  const recommended = await friend.request.post("/api/screenr/activity", {
+    headers: { Origin: browserConfig.baseURL },
+    data: { title: "movie:987654", field: "recommended", value: true },
+  });
+  expect(recommended.status()).toBe(200);
+  const entry = viewer.locator(
+    `[data-item-id="${(await recommended.json()).id}"]`,
+  );
+  const want = (label: string) =>
+    entry.getByRole("button", { name: label, exact: true });
+  const ownEntry = viewer
+    .locator(".activity-by")
+    .filter({ hasText: "historyviewer wants to watch" });
+  // Paused timers never poll, so only a read on arrival can bring the change
+  // to a screen that history navigation restores.
+  await viewer.clock.install();
+  await viewer.clock.pauseAt(Date.now() + 1000);
+  await viewer.goto("/");
+  await expect(want("+ Want to watch")).toBeVisible();
+  await entry.getByRole("heading", { level: 2 }).getByRole("link").click();
+  await expect(
+    viewer.getByRole("heading", { level: 1, name: "The Lantern Room" }),
+  ).toBeVisible();
+  await chooseStatus(viewer, "Want to watch");
+
+  await viewer.goBack();
+  await expect(want("✓ Want to watch")).toBeVisible();
+  await expect(ownEntry).toBeVisible();
+  await viewer.goForward();
+  await expect(statusButton(viewer)).toHaveText("✓ Want to watch");
 });

@@ -1,12 +1,17 @@
 import { nextAccountRefresh } from "./refresh-helpers";
-import { expect, type Page } from "@playwright/test";
+import { expect, type Locator, type Page } from "@playwright/test";
 import { createHash } from "node:crypto";
-import { readFile } from "node:fs/promises";
+import { readFile, rm } from "node:fs/promises";
 import { browserConfig } from "../../scripts/browser-config";
 import { db } from "./database-fixture";
 import { test } from "./monitored-test";
 import { join, signInWithCode } from "./journey-helpers";
 import { friend, person } from "./member-fixture";
+import {
+  countRequests,
+  expectPendingWhileLeaving,
+  stayOnPage,
+} from "./page-loads";
 const { createInvitation } = await import("../../src/server/invitations");
 const { addComment, createTitleComment } =
   await import("../../src/server/comments");
@@ -109,6 +114,74 @@ test("stalled email code requests time out and re-enable the sign-in form", asyn
   await expect(alert).toHaveText(timedOut);
   await expect(signIn).toBeEnabled();
   await expect(page).toHaveURL(/\/login$/);
+});
+
+test("email verification, setup, sign-in, and sign-out stay pending until their next page replaces them", async ({
+  member,
+}) => {
+  const page = await member("loadingjourney", {
+    complete: false,
+    serviceWorkers: "block",
+  });
+  const email = "loadingjourney.browser@example.test";
+  const mail = `.cache/mail/${createHash("sha256").update(email).digest("hex")}.json`;
+  const emailedCode = async () =>
+    JSON.parse(await readFile(mail, "utf8")).otp as string;
+  const button = (name: string) =>
+    page.getByRole("button", { name, exact: true });
+  const waiting = button("One moment…");
+  // Presses `action`, which opens `path`, and checks that `pending` stays
+  // pending until that page replaces it. Then the test opens the page.
+  const leave = async (action: Locator, pending: Locator, path: string) => {
+    const next = await stayOnPage(page, new URL(path, page.url()).pathname);
+    await action.click();
+    expect(await next.url).toBe(`${browserConfig.baseURL}${path}`);
+    await expectPendingWhileLeaving(page, pending);
+    await page.goto(path);
+  };
+  // A Google account can arrive without a verified email.
+  await db.query('UPDATE "user" SET "emailVerified"=false WHERE email=$1', [
+    email,
+  ]);
+  await page.reload();
+  await rm(mail, { force: true });
+  await button("Send verification code").click();
+  const emailCode = page.getByLabel("Email code", { exact: true });
+  await expect(emailCode).toBeEditable();
+  await emailCode.fill(await emailedCode());
+  const verifications = countRequests(page, "/api/auth/email-otp/verify-email");
+  await leave(button("Verify email"), waiting, "/setup");
+  await expect(page.getByLabel("Username", { exact: true })).toBeVisible();
+  expect(verifications()).toBe(1);
+
+  let signOuts = countRequests(page, "/api/auth/sign-out");
+  await leave(button("Sign out"), button("Sign out"), "/login");
+  await page.getByLabel("Email address").fill(email);
+  expect(signOuts()).toBe(1);
+
+  await rm(mail, { force: true });
+  await button("Send sign-in code").click();
+  const signInCode = page.getByLabel("Sign-in code", { exact: true });
+  await expect(signInCode).toBeEditable();
+  await signInCode.fill(await emailedCode());
+  const signIns = countRequests(page, "/api/auth/sign-in/email-otp");
+  await leave(button("Sign in"), waiting, "/setup");
+  await page.getByLabel("Display name").fill("Loading Journey");
+  expect(signIns()).toBe(1);
+
+  await page.getByLabel("Username", { exact: true }).fill("loadingjourney");
+  const setups = countRequests(page, "/api/screenr/setup");
+  await leave(button("Join Screenr"), waiting, "/");
+  await expect(
+    page.getByRole("heading", { name: "Your circle", exact: true }),
+  ).toBeVisible();
+  expect(setups()).toBe(1);
+
+  await page.goto("/account");
+  signOuts = countRequests(page, "/api/auth/sign-out");
+  await leave(button("Sign out"), button("Sign out"), "/login");
+  await expect(page.getByLabel("Email address")).toBeEditable();
+  expect(signOuts()).toBe(1);
 });
 
 async function useTestGoogle(page: Page) {
@@ -244,6 +317,11 @@ test("email members can recover from linking failures, connect Google, and sign 
   await expect(page.getByRole("main").locator(".error")).toHaveText(
     "Google connection was canceled. You can try again.",
   );
+  // The address drops the error once it shows, so a reload omits it.
+  await expect(page).toHaveURL(/\/account$/);
+  await page.reload();
+  await expect(connect).toBeEnabled();
+  await expect(page.getByRole("main").locator(".error")).toHaveCount(0);
 
   await connect.click();
   await approveGoogle(page, "different.browser@example.test");
@@ -505,8 +583,12 @@ test("a signed-out member returns to a linked reply after email sign-in and sess
   // A failed Google attempt keeps the return path for the next method.
   await page.getByRole("button", { name: "Continue with Google" }).click();
   await page.getByRole("button", { name: "Cancel", exact: true }).click();
-  await expect(page).toHaveURL(`${link.login}&error=access_denied`);
   await expect(page.getByRole("main").locator(".error")).toBeVisible();
+  // The address drops the error once it shows, so a reload omits it.
+  await expect(page).toHaveURL(link.login);
+  await page.reload();
+  await expect(page.getByLabel("Email address")).toBeEditable();
+  await expect(page.getByRole("main").locator(".error")).toHaveCount(0);
   await signInWithCode(page, "returnreader@example.test");
   await expectReply(page, link);
 

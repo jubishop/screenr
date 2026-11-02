@@ -1,7 +1,8 @@
 import { expect, type Response } from "@playwright/test";
 import { test } from "./monitored-test";
+import { browserConfig } from "../../scripts/browser-config";
 import { db } from "./database-fixture";
-import { userId } from "./member-fixture";
+import { prepareFriendship, userId } from "./member-fixture";
 import { commits, countCommits } from "./refresh-helpers";
 
 const { updateTitleActivity } = await import("../../src/server/title-actions");
@@ -281,4 +282,61 @@ test("a minute renders shown times again only when their text changes", async ({
   expect(await commits(page)).toBe(rendered);
   await expect(weekOld).toHaveText(`Dec 24, ${year}`);
   await expect(older).toHaveText(`Oct 5, ${year}`);
+});
+
+test("a screen reached by client navigation shows local dates and enabled controls from its first frame", async ({
+  member,
+}) => {
+  const friend = await member("framefriend");
+  const viewer = await member("frameviewer");
+  await prepareFriendship(friend, viewer);
+  const recommended = await friend.request.post("/api/screenr/activity", {
+    headers: { Origin: browserConfig.baseURL },
+    data: { title: "movie:987654", field: "recommended", value: true },
+  });
+  expect(recommended.status()).toBe(200);
+  const item = (await recommended.json()).id as string;
+  await viewer.goto("/");
+  const entry = viewer.locator(`[data-item-id="${item}"]`);
+  await expect(entry.locator(".activity-by time")).toHaveText("now");
+  // Record each control that becomes enabled and each date that changes its
+  // text or full-date title after the next screen enters the page.
+  await viewer.evaluate(() => {
+    const changes: string[] = [];
+    (window as unknown as { changes: string[] }).changes = changes;
+    new MutationObserver((records) => {
+      for (const record of records) {
+        const { target } = record;
+        const element =
+          target instanceof Element ? target : target.parentElement;
+        if (record.attributeName === "disabled") {
+          if (!element?.hasAttribute("disabled"))
+            changes.push(`enabled: ${element?.textContent}`);
+        } else if (element?.closest("time"))
+          changes.push(`date: ${record.oldValue ?? ""}`);
+      }
+    }).observe(document.body, {
+      subtree: true,
+      childList: true,
+      characterData: true,
+      characterDataOldValue: true,
+      attributes: true,
+      attributeOldValue: true,
+      attributeFilter: ["disabled", "title"],
+    });
+  });
+  await entry.getByRole("heading", { level: 2 }).getByRole("link").click();
+  const recommend = viewer.getByRole("button", {
+    name: "Recommend to friends",
+    exact: true,
+  });
+  await expect(recommend).toBeEnabled();
+  await expect(
+    viewer.locator(`[data-item-id="${item}"] .activity-by time`),
+  ).toHaveText("now");
+  expect(
+    await viewer.evaluate(
+      () => (window as unknown as { changes: string[] }).changes,
+    ),
+  ).toEqual([]);
 });

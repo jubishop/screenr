@@ -606,3 +606,64 @@ test("phones and touch-only devices reorder only through Edit", async ({
     "Phone Pick 3",
   ]);
 });
+
+test("a title page top 10 confirmation closes for good once the title leaves the top 10", async ({
+  member,
+}) => {
+  const page = await member("toptenlatch");
+  const viewer = await userId(page);
+  const ids = await titles(997701, 2, "Latch Pick");
+  for (const id of ids) await updateTopTen(viewer, id, "add");
+  await page.goto(`/titles/movie/${ids[0].slice(6)}`);
+  const header = page.locator(".title-hero .inline-actions");
+  const button = (name: string) =>
+    header.getByRole("button", { name, exact: true });
+  await button("✓ Recommended").click();
+  const withdraw = page.getByRole("group", {
+    name: /^Remove your recommendation\? Latch Pick 1 also leaves/,
+  });
+  await expect(withdraw).toBeVisible();
+  // Leaving the top 10 closes it, and adding the title back doesn't reopen
+  // it.
+  await button("✓ #1 in your top 10").click();
+  await expect(withdraw).toHaveCount(0);
+  await button("Add to top 10").click();
+  await expect(button("✓ #2 in your top 10")).toBeVisible();
+  await expect(withdraw).toHaveCount(0);
+});
+
+test("a feed entry's top 10 confirmation closes for good once the title leaves the top 10 elsewhere", async ({
+  member,
+}) => {
+  const page = await member("toptenfeedlatch");
+  const viewer = await userId(page);
+  const maya = await person("toptenfeedlatchmaya", "Maya Latch");
+  await friend(viewer, maya);
+  const ids = await titles(997711, 2, "Feed Latch Pick");
+  await updateTopTen(viewer, ids[0], "add");
+  const mayaEntry = await updateTitleActivity(
+    maya,
+    ids[0],
+    "recommended",
+    true,
+  );
+  await page.goto("/");
+  const entry = page.locator(`[data-item-id="${mayaEntry}"]`);
+  await entry
+    .getByRole("button", { name: "✓ Recommended", exact: true })
+    .click();
+  const withdraw = entry.getByRole("group", {
+    name: /^Remove your recommendation\? Feed Latch Pick 1 also leaves/,
+  });
+  await expect(withdraw).toBeVisible();
+  await updateTopTen(viewer, ids[0], "remove");
+  await expect(withdraw).toHaveCount(0);
+  // Maya's next entry shows that the page rendered the read that brought
+  // the title back.
+  await updateTopTen(viewer, ids[0], "add");
+  await updateTitleActivity(maya, ids[1], "recommended", true);
+  await expect(
+    page.getByRole("button", { name: "New activity (1)", exact: true }),
+  ).toBeVisible();
+  await expect(withdraw).toHaveCount(0);
+});

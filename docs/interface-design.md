@@ -557,8 +557,11 @@ removes the pending friend request." when either applies.
 Friends page replaces the profile, and the profile stops refreshing once the
 request starts ([issue #132](https://github.com/jubishop/screenr/issues/132)).
 `src/components/page-notice.tsx` carries the notice through that client
-navigation only, so a reload or later visit omits it. The notice sits beneath
-the Friends heading and takes focus. Dismiss moves focus to the heading.
+navigation only, so a reload or later visit omits it. Another page that opens
+first, such as when the reader leaves before Friends loads, drops it
+([issue #362](https://github.com/jubishop/screenr/issues/362)). The notice
+sits beneath the Friends heading and takes focus. Dismiss moves focus to the
+heading.
 
 ### Confirm other destructive actions — 2026-10-12
 

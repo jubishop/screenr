@@ -60,9 +60,11 @@ export function Confirmation({
 }
 
 // A confirmation that runs its action and owns the failure message. A failed
-// action stays open with the message until Cancel; success calls `onDone`.
-// `busy` adds writes the caller tracks, such as the page's shared write, and
-// `unavailable` holds the action alone, as in Confirmation.
+// action stays open with the message until Cancel. Success calls `onDone`,
+// which closes the confirmation or leaves the page, and the action stays
+// pending until then, so a second press can't repeat it while the next page
+// loads. `busy` adds writes the caller tracks, such as the page's shared
+// write, and `unavailable` holds the action alone, as in Confirmation.
 export function ConfirmAction({
   message,
   action,
@@ -84,9 +86,8 @@ export function ConfirmAction({
   const [pending, setPending] = useState(false);
   async function confirm() {
     setPending(true);
-    const done = await failure.run(run);
-    setPending(false);
-    if (done) onDone();
+    if (await failure.run(run)) onDone();
+    else setPending(false);
   }
   return (
     <Confirmation

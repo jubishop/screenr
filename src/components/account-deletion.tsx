@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { codeLimitMessage } from "../shared";
-import { api, authClient, useInteractive } from "./client";
+import { authClient, useInteractive } from "./client";
 import { ActionButton } from "./action-button";
 import { useActionError } from "./action-error";
 import { ConfirmAction, Confirmation } from "./confirmation";
@@ -14,9 +14,12 @@ import { ConfirmAction, Confirmation } from "./confirmation";
 export function AccountDeletion({
   email,
   available,
+  deleteAccount,
 }: {
   email: string;
   available: boolean;
+  // Deletes the account and opens sign-in with the result.
+  deleteAccount: () => Promise<void>;
 }) {
   const interactive = useInteractive();
   const [step, setStep] = useState<"closed" | "verify" | "code" | "confirm">(
@@ -148,8 +151,9 @@ export function AccountDeletion({
           message="Delete your Screenr account permanently? This can’t be undone."
           action="Delete account"
           unavailable={!available}
-          run={() => api("delete-account", {})}
-          onDone={() => window.location.assign("/login?deleted=1")}
+          run={deleteAccount}
+          // Sign-in replaces the page; the action stays pending until then.
+          onDone={() => {}}
           onCancel={cancel}
         />
       )}
