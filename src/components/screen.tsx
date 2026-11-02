@@ -513,7 +513,10 @@ export function Screen({
             activity={activity}
             busy={busy}
             target={data && "target" in data ? data.target : null}
-            unavailable={!!data && "target" in data && data.targetUnavailable}
+            targetUnavailable={
+              !!data && "target" in data && data.targetUnavailable
+            }
+            available={!!data}
             showEmpty={data?.kind !== "profile" || data.profile.can_read}
             compact={route.kind === "title"}
             shownEntry={route.kind === "title" ? shownEntry : null}

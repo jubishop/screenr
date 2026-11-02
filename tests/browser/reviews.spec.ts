@@ -5,6 +5,7 @@ import { test } from "./monitored-test";
 import { prepareFriendship, userId } from "./member-fixture";
 import { expectTextContrast, expectThemedPage } from "./contrast";
 import { failAction } from "./action-errors";
+import { keepThroughFailedRead, openWithoutPolling } from "./refresh-helpers";
 
 const { removeReview, saveReview } = await import("../../src/server/reviews");
 
@@ -378,4 +379,36 @@ test("Remove review's confirmation closes for good once the review is removed el
   await saveReview(id, "movie:998303", 2, "Second thoughts.", false);
   await expect(remove).toBeVisible();
   await expect(confirmation).toHaveCount(0);
+});
+
+test("a failed read keeps Remove review's confirmation open, with its action waiting for the next read", async ({
+  member,
+}) => {
+  await db.query(`INSERT INTO title(id,kind,tmdb_id,name,overview,release_date) VALUES
+    ('movie:998304','movie',998304,'Paper Lanterns','A fictional film.','2022-06-01')
+    ON CONFLICT DO NOTHING`);
+  const author = await member(`review_${randomUUID().slice(0, 8)}`);
+  await saveReview(
+    await userId(author),
+    "movie:998304",
+    4,
+    "Warm and quiet.",
+    false,
+  );
+  await openWithoutPolling(author, "/titles/movie/998304");
+  await author
+    .getByRole("button", { name: "Edit your review", exact: true })
+    .click();
+  const form = author.getByRole("form", { name: "Your review" });
+  const confirm = await keepThroughFailedRead(author, {
+    open: form.getByRole("button", { name: "Remove review", exact: true }),
+    question: "Remove your review? Its rating and text will be erased.",
+    action: "Remove",
+    content: author.getByRole("heading", { name: "Paper Lanterns", level: 1 }),
+  });
+  await confirm.click();
+  await expect(form).toHaveCount(0);
+  await expect(
+    author.getByRole("button", { name: "Rate or review", exact: true }),
+  ).toBeFocused();
 });
