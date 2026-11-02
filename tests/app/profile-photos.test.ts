@@ -298,6 +298,59 @@ test("photos are served only to signed-in members who can see that profile, with
   });
 });
 
+// A client that holds a photo's version revalidates it on each avatar it
+// shows. The answer checks access and the version, and reads the image
+// itself, up to 200 KB, only to send it.
+test("revalidating a photo answers 304 without reading the image, after checking access", async (t) => {
+  const owner = await person("owner");
+  const pal = await person("pal");
+  const blocker = await person("blocker");
+  await friend(owner, pal);
+  const ownerCookie = await cookieFor(owner);
+  const { photo } = await (await upload(ownerCookie, jpeg())).json();
+  const palCookie = await cookieFor(pal);
+  const blockerCookie = await cookieFor(blocker);
+  await changeRelationship(blocker, owner, "block");
+  const held = { "If-None-Match": `"${photo}"` };
+  // Each request, with how many database results carried image bytes.
+  async function fetched(...request: Parameters<typeof fetchPhoto>) {
+    const query = t.mock.method(db, "query");
+    try {
+      const response = await fetchPhoto(...request);
+      const results = await Promise.all(
+        query.mock.calls.map((call) =>
+          Promise.resolve(call.result).catch(() => null),
+        ),
+      );
+      const images = results.filter((result) =>
+        (result as { rows?: object[] } | null)?.rows?.some(
+          (row) => "image" in row,
+        ),
+      ).length;
+      return { response, images };
+    } finally {
+      query.mock.restore();
+    }
+  }
+
+  const unchanged = await fetched(palCookie, owner, photo, held);
+  assert.equal(unchanged.response.status, 304);
+  assert.equal(unchanged.response.headers.get("etag"), `"${photo}"`);
+  assert.equal(unchanged.images, 0);
+  const full = await fetched(palCookie, owner, photo);
+  assert.equal(full.response.status, 200);
+  assert.deepEqual(Buffer.from(await full.response.arrayBuffer()), jpeg());
+  assert.equal(full.images, 1);
+  // A held version still needs access to the profile and a current photo.
+  const hidden = await fetched(blockerCookie, owner, photo, held);
+  assert.equal(hidden.response.status, 404);
+  assert.equal(hidden.images, 0);
+  await upload(ownerCookie, jpeg(900));
+  const replaced = await fetched(palCookie, owner, photo, held);
+  assert.equal(replaced.response.status, 404);
+  assert.equal(replaced.images, 0);
+});
+
 // The iPhone app sends `Authorization: Bearer <token>` without a cookie or
 // Origin, for uploads and for photo fetches.
 test("bearer sessions upload and fetch photos, and invalid tokens get 401", async () => {

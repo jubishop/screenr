@@ -9,9 +9,12 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { ScreenData } from "../server/screens";
 import type { Person, SaveSurface, TopTenChange, WatchStatus } from "../shared";
 import {
+  initialFindFilters,
   memberPath,
   memberTitle,
   parseMemberRoute,
+  screenPath,
+  type FindFilters,
   type MemberRoute,
 } from "../member-routes";
 import {
@@ -150,6 +153,12 @@ export function Screen({
   // had none. Refreshes send it, and an unchanged screen answers 304, which
   // keeps the current data without rendering again.
   const version = useRef(initialVersion);
+  // Find a title's filters, which its reads send so the server applies them
+  // before capping each list. They start over on each visit, as the page
+  // read them, and changing one reads the screen again.
+  const [findFilters, setFindFilters] =
+    useState<FindFilters>(initialFindFilters);
+  const readPath = useRef(screenPath(path, findFilters));
   const refresh = useCallback(async () => {
     if (leaving.current) return;
     pending.current?.abort();
@@ -158,7 +167,7 @@ export function Screen({
     pending.current = controller;
     try {
       const latest = await readChanged<ScreenData & { user: Person }>(
-        `screen?path=${encodeURIComponent(path)}`,
+        `screen?path=${encodeURIComponent(readPath.current)}`,
         version.current,
         anySignal([controller.signal, timeout]),
       );
@@ -191,6 +200,13 @@ export function Screen({
       if (pending.current === controller) pending.current = null;
     }
   }, [path]);
+  // A changed filter reads at once, not at the next poll.
+  useEffect(() => {
+    const filtered = screenPath(path, findFilters);
+    if (readPath.current === filtered) return;
+    readPath.current = filtered;
+    void refresh();
+  }, [path, findFilters, refresh]);
   useEffect(() => {
     // The document's page load brings its first screen. Without one, such as
     // after a failed load or on the not-found view, the page reads it now.
@@ -447,6 +463,11 @@ export function Screen({
             recommendations={
               data?.kind === "search" ? data.recommendations : null
             }
+            hiddenFinished={
+              (data?.kind === "search" && data.finishedRecommendations) || 0
+            }
+            filters={findFilters}
+            setFilters={setFindFilters}
             serviceIds={data?.kind === "search" ? data.serviceIds : null}
             activity={activity}
             busy={busy}

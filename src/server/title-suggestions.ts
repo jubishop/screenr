@@ -1,17 +1,22 @@
 import { db } from "./db";
 import { titleObject } from "./catalog";
+import { findListLimit, myServicesFilter } from "./title-viewing";
 import type { TitleSuggestion } from "../shared";
 
 // Fewer friends of friends sharing an action could identify them, so their
 // signal is ignored entirely: no eligibility, ranking, or count.
 const minimumSecondDegreePeople = 3;
 
+// The viewer's top suggestions. With `services`, the TMDB providers of the
+// viewer's saved services, My services narrows them before the cap.
 export async function titleSuggestions(
   viewer: string,
+  services: number[] | null = null,
 ): Promise<TitleSuggestion[]> {
   // Resolve both social groups and their active signals in one snapshot.
   // Second-degree identities never leave this query; ordinary content access
   // still uses screenr_can_read and does not inherit this aggregate exception.
+  const params: unknown[] = [viewer, minimumSecondDegreePeople, findListLimit];
   const { rows } = await db.query<{ suggestion: TitleSuggestion }>(
     `WITH direct_friends AS (
       SELECT user_id FROM screenr_friends($1)
@@ -63,28 +68,41 @@ export async function titleSuggestions(
         coalesce(sum(weight*coalesce(40-rank,20)) FILTER (WHERE action='recommended'),0) AS recommendation_score,
         coalesce(sum(weight) FILTER (WHERE action='want_to_watch'),0) AS want_score,
         coalesce(sum(weight) FILTER (WHERE action='watching'),0) AS watching_score,
-        coalesce(jsonb_agg(jsonb_build_object('username',username,'display_name',display_name,'rank',rank)
-          ORDER BY rank NULLS LAST,username) FILTER (WHERE weight=3 AND action='recommended'),'[]'::jsonb) AS recommended_by,
-        coalesce(jsonb_agg(jsonb_build_object('username',username,'display_name',display_name)
-          ORDER BY username) FILTER (WHERE weight=3 AND action='want_to_watch'),'[]'::jsonb) AS wanted_by,
-        coalesce(jsonb_agg(jsonb_build_object('username',username,'display_name',display_name)
-          ORDER BY username) FILTER (WHERE weight=3 AND action='watching'),'[]'::jsonb) AS watching_by,
         count(*) FILTER (WHERE weight=1 AND action='recommended') AS second_degree_recommended,
         count(*) FILTER (WHERE weight=1 AND action='want_to_watch') AS second_degree_wanted,
         count(*) FILTER (WHERE weight=1 AND action='watching') AS second_degree_watching
       FROM qualified GROUP BY title_id
+    ), listed AS (
+      -- Ranking needs every qualified signal; names and title details are
+      -- read only for the listed titles.
+      SELECT s.*,t.* FROM totals s JOIN title t ON t.id=s.title_id
+      WHERE ${myServicesFilter("t.id", services, params)}
+      ORDER BY s.recommendation_score DESC,s.want_score DESC,s.watching_score DESC,
+        s.latest DESC,lower(t.name),t.id
+      LIMIT $3
+    ), named AS (
+      SELECT title_id,
+        coalesce(jsonb_agg(jsonb_build_object('username',username,'display_name',display_name,'rank',rank)
+          ORDER BY rank NULLS LAST,username) FILTER (WHERE action='recommended'),'[]'::jsonb) AS recommended_by,
+        coalesce(jsonb_agg(jsonb_build_object('username',username,'display_name',display_name)
+          ORDER BY username) FILTER (WHERE action='want_to_watch'),'[]'::jsonb) AS wanted_by,
+        coalesce(jsonb_agg(jsonb_build_object('username',username,'display_name',display_name)
+          ORDER BY username) FILTER (WHERE action='watching'),'[]'::jsonb) AS watching_by
+      FROM qualified WHERE weight=3 AND title_id IN (SELECT title_id FROM listed)
+      GROUP BY title_id
     )
-    SELECT jsonb_build_object(${titleObject("t")},
-      'recommended_by',s.recommended_by,'wanted_by',s.wanted_by,
-      'watching_by',s.watching_by,
-      'second_degree_recommended',s.second_degree_recommended,
-      'second_degree_wanted',s.second_degree_wanted,
-      'second_degree_watching',s.second_degree_watching
+    SELECT jsonb_build_object(${titleObject("l")},
+      'recommended_by',coalesce(n.recommended_by,'[]'::jsonb),
+      'wanted_by',coalesce(n.wanted_by,'[]'::jsonb),
+      'watching_by',coalesce(n.watching_by,'[]'::jsonb),
+      'second_degree_recommended',l.second_degree_recommended,
+      'second_degree_wanted',l.second_degree_wanted,
+      'second_degree_watching',l.second_degree_watching
     ) AS suggestion
-    FROM totals s JOIN title t ON t.id=s.title_id
-    ORDER BY s.recommendation_score DESC,s.want_score DESC,s.watching_score DESC,
-      s.latest DESC,lower(t.name),t.id`,
-    [viewer, minimumSecondDegreePeople],
+    FROM listed l LEFT JOIN named n ON n.title_id=l.id
+    ORDER BY l.recommendation_score DESC,l.want_score DESC,l.watching_score DESC,
+      l.latest DESC,lower(l.name),l.id`,
+    params,
   );
   return rows.map((row) => row.suggestion);
 }
