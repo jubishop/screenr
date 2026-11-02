@@ -104,8 +104,12 @@ test("unified feeds show separate entries and support inline replies on title, f
     await item.getByRole("button", { name: "Comment", exact: true }).click();
     await item.getByLabel("Add your reply").fill(`Reply from surface ${index}`);
     await item.getByRole("button", { name: "Post reply", exact: true }).click();
+    // A text match alone would also find the draft that stays in the
+    // composer until the save finishes.
     await expect(
-      item.getByText(`Reply from surface ${index}`, { exact: true }),
+      item
+        .locator("[data-comment-id]")
+        .filter({ hasText: `Reply from surface ${index}` }),
     ).toBeVisible();
     await expect(
       item.getByText(index === 0 ? "1 reply" : `${index + 1} replies`, {

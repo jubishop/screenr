@@ -54,7 +54,11 @@ test("standalone title comments persist and share replies across all three mobil
     await composer
       .getByRole("button", { name: "Post comment", exact: true })
       .click();
-    await expect(owner.getByText(body, { exact: true })).toBeVisible();
+    // A text match alone would also find the draft that stays in the
+    // composer until the save finishes.
+    await expect(
+      owner.locator("[data-item-id]").filter({ hasText: body }),
+    ).toBeVisible();
     await expect(
       composer.getByLabel("Your comment", { exact: true }),
     ).toHaveValue("");
@@ -338,8 +342,12 @@ test("standalone deletion preserves discussions across feeds, keeps spoilers hid
       await item(reader, id)
         .getByRole("button", { name: "Post reply", exact: true })
         .click();
+      // A text match alone would also find the draft that stays in the
+      // composer until the save finishes.
       await expect(
-        item(reader, id).getByText("Continue after deletion", { exact: true }),
+        item(reader, id)
+          .locator("[data-comment-id]")
+          .filter({ hasText: "Continue after deletion" }),
       ).toBeVisible();
       await owner.screenshot({
         path: ".cache/deleted-standalone-mobile.png",

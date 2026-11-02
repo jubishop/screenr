@@ -152,7 +152,13 @@ test("members rate, review, edit, and remove from the title page while friends r
   await entry.getByRole("button", { name: "Comment", exact: true }).click();
   await entry.getByLabel("Add your reply").fill("Was the ending happy?");
   await entry.getByRole("button", { name: "Post reply", exact: true }).click();
-  await expect(entry.getByText("Was the ending happy?")).toBeVisible();
+  // A text match alone would also find the draft that stays in the composer
+  // until the save finishes.
+  await expect(
+    entry
+      .locator("[data-comment-id]")
+      .filter({ hasText: "Was the ending happy?" }),
+  ).toBeVisible();
   const reactions = entry.getByRole("group", {
     name: "Reactions to entry",
     exact: true,
