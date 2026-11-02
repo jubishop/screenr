@@ -142,6 +142,9 @@ the `title` save surface.
   request runs names it as `requestId`. An app error report and the server
   failure behind it carry the same ID
   ([Sentry decision](ios-app.md#sentry-for-the-app-and-the-server--2026-10-13)).
+  The journal has every such line; Sentry may
+  [fold](deployment.md#failure-reports-in-sentry) repeated failures into a
+  count.
 
 The action route also reads `Screenr-Visit: 1` on `screen` reads. The app
 sends it on its first screen read after launch and after each return to the

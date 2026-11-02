@@ -35,12 +35,14 @@ export function logFailureOnce(...failure: Parameters<typeof logFailure>) {
 // and parser messages can quote the values that failed, and request or email
 // content is private. Codes, schema names, and stack frames identify the
 // failure without them. With SENTRY_DSN set, the same record also goes to
-// Sentry. Its requestId, from withRequestId or the fields, becomes the
-// report's request_id tag.
+// Sentry, folded by kind (see folded) unless `fold` is false, for a caller
+// that bounds its own repeats. Its requestId, from withRequestId or the fields,
+// becomes the report's request_id tag.
 export function logFailure(
   event: string,
   fields: Record<string, string | number | boolean | undefined>,
   error?: unknown,
+  { fold = true } = {},
 ) {
   const record = {
     event,
@@ -49,7 +51,8 @@ export function logFailure(
     ...(error === undefined ? {} : describe(error, true)),
   };
   print(record);
-  report(record);
+  const target = sentry();
+  if (target && !(fold && folded(record))) report(target, record);
 }
 
 function print(record: Record<string, unknown>) {
@@ -98,17 +101,74 @@ function frames(error: Error) {
   return lines.length ? lines : undefined;
 }
 
+// A kind of failure is its event and every field but the request ID and the
+// stack: the action, route, or other fields that say where it happened, and
+// the error class and code. Sentry gets the first failure of a kind at once,
+// which opens an hour for that kind. Later failures in the hour are folded:
+// each still prints its line, and when the hour ends, Sentry gets the latest
+// of them with `folded`, their number, and another hour opens. An hour that
+// folds nothing closes, so the kind's next failure reports at once. Polls
+// that fail the same way during a database outage therefore send one report
+// an hour however many clients poll, while a different failure still reports
+// at once. The timers never keep a process running, so a restart drops a
+// pending count; the journal still has every line.
+// docs/deployment.md#failure-reports-in-sentry
+const foldWindow = 60 * 60 * 1000;
+type Fold = { count: number; latest?: Record<string, unknown> };
+// The production build copies this module into several server bundles, such
+// as the route handlers', the pages', and instrumentation's, so the process
+// keeps one map for them all.
+const shared = globalThis as unknown as { screenrFolds?: Map<string, Fold> };
+const folds = (shared.screenrFolds ??= new Map<string, Fold>());
+
+// Folds the record into its kind's open hour and returns true, or opens an
+// hour for the kind and returns false.
+function folded(record: Record<string, unknown>) {
+  const kind = JSON.stringify({
+    ...record,
+    requestId: undefined,
+    stack: undefined,
+  });
+  const fold = folds.get(kind);
+  if (!fold) {
+    open(kind);
+    return false;
+  }
+  fold.count++;
+  fold.latest = record;
+  return true;
+}
+
+function open(kind: string) {
+  const fold: Fold = { count: 0 };
+  folds.set(kind, fold);
+  setTimeout(() => {
+    folds.delete(kind);
+    if (!fold.latest) return;
+    const target = sentry();
+    if (target) report(target, { ...fold.latest, folded: fold.count });
+    open(kind);
+  }, foldWindow).unref();
+}
+
+// The Sentry endpoint that SENTRY_DSN names, if it is set.
+function sentry() {
+  const dsn = process.env.SENTRY_DSN;
+  if (!dsn) return undefined;
+  const target = endpoint(dsn);
+  if (!target) print({ event: "sentry report failed", reason: "invalid DSN" });
+  return target;
+}
+
 // Sends the logged record to Sentry as an envelope over HTTPS, without an SDK.
 // The event holds nothing else: the record's fields as the failure context,
 // the error class as the exception type, and its stack frames. The log event
 // stands in for the exception value, which would otherwise be the message.
 // The caller never waits for the send, and a failed send only prints a line.
-function report(record: Record<string, unknown>) {
-  const dsn = process.env.SENTRY_DSN;
-  if (!dsn) return;
-  const target = endpoint(dsn);
-  if (!target)
-    return print({ event: "sentry report failed", reason: "invalid DSN" });
+function report(
+  target: { url: string; key: string },
+  record: Record<string, unknown>,
+) {
   const id = randomUUID().replaceAll("-", "");
   const envelope = [
     { event_id: id },
