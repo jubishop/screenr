@@ -625,6 +625,7 @@ test("a session read that fails in an API request logs Better Auth's caught erro
         method: "GET",
         status: 500,
         error: "APIError",
+        cause: { error: "DatabaseError", code: "42P01" },
       },
     ]);
     excludes(printed, [
@@ -744,9 +745,11 @@ test("a Google code exchange that Google rejects for Screenr's web client logs G
   }
 
   // An expired or already used code: a client causes it, so Better Auth
-  // prints only its own empty line.
+  // prints only its own line.
   let printed = await returnWithCode(google.webClient.secret);
-  assert.deepEqual(printed, ["ERROR [Better Auth]: "]);
+  assert.deepEqual(printed, [
+    "ERROR [Better Auth]: Failed to validate authorization code",
+  ]);
 
   // A rotated or deleted secret: every web Google sign-in fails until
   // GOOGLE_CLIENT_SECRET is replaced.
