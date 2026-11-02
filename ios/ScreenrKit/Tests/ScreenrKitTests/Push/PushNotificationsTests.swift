@@ -136,7 +136,13 @@ struct PushNotificationsTests {
     let api = GatedAPI(RecordingAPI(["push-device": .success(["ok": true])]), holding: [1])
     let system = RecordingPushSystem(.allowed)
     let shell = ShellModel(api: api, clock: TestClock())
-    let push = PushNotifications(api: api, shell: shell, system: system, target: target)
+    let push = PushNotifications(
+      api: api,
+      shell: shell,
+      system: system,
+      target: target,
+      session: session
+    )
     await push.memberReady()
     let registering = Task { await push.received(token: token) }
     await api.waitForRequests(1)

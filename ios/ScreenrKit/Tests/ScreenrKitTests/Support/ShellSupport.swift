@@ -133,9 +133,6 @@ final class ScriptedAPI: ScreenrAPI {
     case failure(APIError.Kind)
     // Waits until the request is cancelled.
     case hang
-    // The screen, once the test releases `hold`, even if the request was
-    // cancelled meanwhile.
-    case held(Hold, Screen)
   }
 
   private struct State {
@@ -169,10 +166,10 @@ final class ScriptedAPI: ScreenrAPI {
     for watcher in watchers { watcher.resume() }
     switch reply {
     case .screen(let screen):
-      return try Self.response(screen, requestID: requestID)
-    case .held(let hold, let screen):
-      await hold.hold()
-      return try Self.response(screen, requestID: requestID)
+      guard let response = screen as? Response else {
+        throw APIError(kind: .invalidResponse, requestID: requestID)
+      }
+      return response
     case .failure(let kind):
       throw APIError(kind: kind, requestID: requestID)
     case .hang, nil:
@@ -181,16 +178,6 @@ final class ScriptedAPI: ScreenrAPI {
       for await _ in stream {}
       throw APIError(kind: .cancelled, requestID: requestID)
     }
-  }
-
-  private static func response<Response>(
-    _ screen: Screen,
-    requestID: String
-  ) throws(APIError) -> Response {
-    guard let response = screen as? Response else {
-      throw APIError(kind: .invalidResponse, requestID: requestID)
-    }
-    return response
   }
 
   // Waits until the API has received `count` reads.

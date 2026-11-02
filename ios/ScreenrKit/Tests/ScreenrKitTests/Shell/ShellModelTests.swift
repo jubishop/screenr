@@ -240,23 +240,23 @@ struct ShellModelTests {
   // Settings as the member signs out. It reports nothing to the shell, so the
   // member does not come back.
   @Test func ignoresAScreenThatAnswersAfterTheSessionEnds() async throws {
-    let hold = Hold()
-    defer { hold.release() }
-    let api = ScriptedAPI([
-      .screen(try screen("screen/feed/default")),
-      .held(hold, try screen("screen/people/default")),
-      .screen(try screen("screen/people/default")),
-    ])
+    let api = GatedAPI(
+      RecordingAPI(sequences: [
+        "screen": [try .fixture("screen/feed/default"), try .fixture("screen/people/default")]
+      ]),
+      holding: [2]
+    )
+    defer { api.open() }
     let clock = TestClock()
     var viewers: [String] = []
     let shell = ShellModel(api: api, clock: clock) { viewers.append($0.userId) }
     await shell.checkAccount()
     let model = try #require(shell.screenModel(for: .people))
     model.appeared(appActive: true)
-    await hold.arrival()
+    await api.waitForRequests(2)
 
     shell.sessionEnded(.signedOut)
-    hold.release()
+    api.open()
     await clock.waitForSleep(until: .seconds(3))
 
     #expect(shell.viewer == nil)
@@ -266,17 +266,14 @@ struct ShellModelTests {
   }
 
   @Test func ignoresAnAccountCheckThatAnswersAfterTheSessionEnds() async throws {
-    let hold = Hold()
-    defer { hold.release() }
-    let api = ScriptedAPI([
-      .held(hold, try screen("screen/feed/default")), .screen(try screen("screen/feed/default")),
-    ])
+    let api = GatedAPI(RecordingAPI(["screen": try .fixture("screen/feed/default")]), holding: [1])
+    defer { api.open() }
     let shell = ShellModel(api: api, clock: TestClock())
     let check = Task { await shell.checkAccount() }
-    await hold.arrival()
+    await api.waitForRequests(1)
 
     shell.sessionEnded(.signedOut)
-    hold.release()
+    api.open()
     await check.value
 
     #expect(shell.account == .checking)

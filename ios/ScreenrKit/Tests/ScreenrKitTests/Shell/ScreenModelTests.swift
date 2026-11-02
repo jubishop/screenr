@@ -101,18 +101,17 @@ struct ScreenModelTests {
   // A read already answered can still arrive after its screen disappears,
   // such as as the member signs out. It applies to nothing.
   @Test func ignoresAReadThatAnswersAfterItDisappears() async throws {
-    let hold = Hold()
-    defer { hold.release() }
-    let api = ScriptedAPI([.held(hold, feed), .screen(emptyFeed)])
+    let api = GatedAPI(RecordingAPI(["screen": try .fixture("screen/feed/default")]))
+    defer { api.open() }
     let clock = TestClock()
     var loaded: [Screen] = []
     let model = ScreenModel(path: "/", api: api, clock: clock) { loaded.append($0) }
     model.appeared(appActive: true)
-    await hold.arrival()
+    await api.waitForRequests(1)
     let polling = try #require(model.pollTask)
 
     model.disappeared()
-    hold.release()
+    api.open()
     await finish(polling)
 
     #expect(model.phase == .loading)
