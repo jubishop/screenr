@@ -4,6 +4,7 @@ import { join } from "node:path";
 import type { PoolClient } from "pg";
 import { pruneCatalog } from "./catalog-retention";
 import { db, domainLock, rollback } from "./db";
+import { checkGoogleClient } from "./google-client";
 import { logFailure } from "./log";
 import {
   notificationEmail,
@@ -289,7 +290,7 @@ async function recordFailure(
 // One pass of screenr-worker's email loop: send at most one due email. The
 // first pass and every 60th also run the periodic cleanup: expired jobs and
 // sessions, old usage telemetry and read notifications, and unused catalog
-// data.
+// data. It also checks Google's web client, at most once an hour.
 export async function runWorkerPass(pass: number) {
   await deliverOne();
   if (pass % 60 === 0) {
@@ -300,5 +301,6 @@ export async function runWorkerPass(pass: number) {
     await db.query(`DELETE FROM session WHERE "expiresAt" < now()`);
     await pruneNotifications();
     await pruneCatalog();
+    await checkGoogleClient();
   }
 }

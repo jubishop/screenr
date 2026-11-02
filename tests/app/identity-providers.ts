@@ -188,12 +188,15 @@ export function fakeGoogle() {
     id: "web-client.apps.googleusercontent.com",
     secret: "web-secret",
   };
+  // The form of each request to the token endpoint.
+  const exchanges: URLSearchParams[] = [];
 
   // Google's token endpoint authenticates the web client before it reads the
   // code, with Google's replies: a wrong client ID or secret is
   // invalid_client. It issues no codes, so an exchange by the right client is
   // invalid_grant, as for an expired or already used code.
   function token(form: URLSearchParams) {
+    exchanges.push(form);
     if (
       form.get("client_id") !== webClient.id ||
       form.get("client_secret") !== webClient.secret
@@ -210,6 +213,7 @@ export function fakeGoogle() {
 
   return {
     webClient,
+    exchanges,
     idToken: (claims: Record<string, unknown>) =>
       identity.idToken({ email_verified: true, ...claims }),
     async handle(url: URL, init?: RequestInit) {

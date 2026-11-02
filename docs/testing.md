@@ -727,6 +727,12 @@ notifications more than a year old but no unread ones, and the
 [catalog rows](title-catalog.md#catalog-retention) of titles nothing
 references once they have been expired for 30 days, keeping new search
 results, recent refreshes, and every referenced title's rows.
+`tests/app/google-client-check.test.ts` runs that cleanup's
+[Google client check](deployment.md#google-client-check) against the fake
+Google token endpoint: it logs `google client rejected` with only the status
+and `invalid_client` for a rotated secret, and nothing for `invalid_grant`,
+a network failure, or missing Google settings, and it checks at most once an
+hour.
 `tests/app/email.test.ts` also runs `scripts/worker.ts` with fetch disabled. The
 worker refuses to start without the Resend settings, deletes expired jobs on its
 first pass, says once that push delivery is off without APNs settings, and
