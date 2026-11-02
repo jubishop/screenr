@@ -100,17 +100,16 @@ export async function usageReport({
       SELECT id, owner_id, created_at FROM ${feedEntries} e
       WHERE owner_id NOT IN (SELECT user_id FROM demo)
     ), comments AS (
-      -- Removed comments still count as activity when they were posted.
+      -- Removed comments still count as activity when they were posted. A
+      -- comment whose author deleted their account has no author, so it
+      -- counts nowhere, whether or not the demo circle has members.
       SELECT ${entryOf("comment")} AS entry, author_id, created_at FROM comment
-      WHERE author_id NOT IN (SELECT user_id FROM demo)
+      WHERE author_id IS NOT NULL AND author_id NOT IN (SELECT user_id FROM demo)
     ), posts AS (
       -- An entry's owner posts the entry itself; everyone else posts comments.
-      -- A comment whose author deleted their account has no author, so it is
-      -- no one's post here.
       SELECT e.id AS entry, e.owner_id AS author, e.created_at FROM entries e
       WHERE EXISTS (SELECT 1 FROM comments c WHERE c.entry = e.id)
       UNION ALL SELECT entry, author_id, created_at FROM comments
-      WHERE author_id IS NOT NULL
     ), counted AS (
       -- For each post, how many posts by other people on its entry came
       -- before its time, and how many came at or before it.

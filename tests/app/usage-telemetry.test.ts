@@ -24,6 +24,8 @@ const { updateTitleActivity, updateWatchStatus } =
 const { addComment, createTitleComment, removeComment } =
   await import("../../src/server/comments");
 const { pruneUsage, usageReport } = await import("../../src/server/usage");
+const { eraseAccounts } = await import("../../src/server/account-deletion");
+const { transaction } = await import("../../src/server/db");
 
 useDatabase();
 
@@ -326,16 +328,22 @@ async function members(...names: string[]) {
   return ids;
 }
 
-// A comment at a fixed time on a feed item or standalone comment entry.
-async function comment(entry: string, author: string, at: string) {
+// A comment at a fixed time on a feed item or standalone comment entry, or a
+// reply to the comment `root`.
+async function comment(
+  entry: string,
+  author: string,
+  at: string,
+  root?: string,
+) {
   return (
     await db.query(
-      `INSERT INTO comment(feed_item_id,title_comment_id,conversation_id,author_id,body,created_at)
-      SELECT f.id,t.id,coalesce(f.conversation_id,t.conversation_id),$2,'Fixture comment',$3
+      `INSERT INTO comment(feed_item_id,title_comment_id,conversation_id,author_id,body,created_at,root_id)
+      SELECT f.id,t.id,coalesce(f.conversation_id,t.conversation_id),$2,'Fixture comment',$3,$4::bigint
       FROM (SELECT $1::uuid AS id) e
       LEFT JOIN feed_item f ON f.id=e.id LEFT JOIN title_comment t ON t.id=e.id
       RETURNING id::text`,
-      [entry, author, at],
+      [entry, author, at, root ?? null],
     )
   ).rows[0].id as string;
 }
@@ -656,6 +664,49 @@ test("back-and-forth needs a return strictly after another person's post and cou
       ["2025-11-03", 0, 0],
     ],
   );
+});
+
+test("authorless comments count in no figure, with or without demo members", async () => {
+  const [alice, ben, dee, demo] = await members("alice", "ben", "dee", "demo");
+  await titles(1);
+  const recommendation = await updateTitleActivity(
+    alice,
+    "movie:1",
+    "recommended",
+    true,
+  );
+  await db.query(
+    "UPDATE feed_item SET created_at='2025-10-21T12:00:00Z' WHERE id=$1",
+    [recommendation],
+  );
+  await comment(recommendation, ben, "2025-10-22T12:00:00Z");
+  // Dee's comment is the only one in the week of October 27. Ben's reply the
+  // next week remains, so erasing her account, as deletion does, keeps the
+  // comment as an authorless placeholder.
+  const kept = await comment(recommendation, dee, "2025-10-28T12:00:00Z");
+  await comment(recommendation, ben, "2025-11-04T12:00:00Z", kept);
+  await transaction((client) => eraseAccounts(client, [dee]));
+  assert.deepEqual(
+    (await db.query("SELECT author_id FROM comment WHERE id=$1", [kept])).rows,
+    [{ author_id: null }],
+  );
+
+  const figures = async () =>
+    (await usageReport({ weeks: 3, through: "2025-11-09" })).map((w) => [
+      w.week,
+      w.conversations,
+      w.backAndForth,
+      w.repeatCommenters,
+    ]);
+  const expected = [
+    ["2025-10-20", 1, 0, 0],
+    ["2025-10-27", 0, 0, 0],
+    ["2025-11-03", 1, 0, 1],
+  ];
+  assert.deepEqual(await figures(), expected);
+  // A demo member who posted nothing here changes none of it.
+  await db.query("UPDATE profile SET demo=true WHERE user_id=$1", [demo]);
+  assert.deepEqual(await figures(), expected);
 });
 
 test("npm run report:usage prints weekly totals without identifying members", async () => {
