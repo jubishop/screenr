@@ -1,6 +1,6 @@
 import type { PoolClient } from "pg";
 import type { Apns } from "./apns";
-import { AppError, db } from "./db";
+import { AppError, db, settleAll } from "./db";
 import { logFailure } from "./log";
 
 // iPhone push devices and per-kind push settings
@@ -361,7 +361,7 @@ export async function deliverPushes(apns: Apns, limit = 50) {
       [limit],
     )
   ).rows;
-  await Promise.all(jobs.map((job) => deliver(apns, job)));
+  await settleAll(jobs.map((job) => deliver(apns, job)));
   return jobs.length;
 }
 

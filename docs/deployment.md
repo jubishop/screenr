@@ -332,6 +332,15 @@ pages and the route handlers each opened their own pool: under a burst of
 requests a local production server held 16 connections, and with the worker
 the pools could ask for 24, more than the role can open. It now holds 8.
 
+A request's queries end before it answers. Server code runs independent
+queries side by side with `settleAll` from `src/server/db.ts`, which waits
+for every part before it rejects. `Promise.all` rejects at the first failure
+while the other parts run on, so a failed screen read once answered while its
+unread count still ran, and a test's table reset deadlocked with that query
+([#469](https://github.com/jubishop/screenr/issues/469)).
+`tests/app/database-connections.test.ts` fails when `src/server` or
+`src/app` calls `Promise.all`.
+
 ### Host configuration drift
 
 **Decision — 2026-10-12:** During deployment, under the deploy lock and

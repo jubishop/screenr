@@ -49,13 +49,6 @@ function logged(printed: string[]) {
   return { fields, stack: stack as string[] };
 }
 
-// loadScreen rejects when its screen read fails while its unread count, a
-// single query, may still run. Let it finish before the schema is restored or
-// the next test resets tables, so their locks cannot deadlock.
-async function settled() {
-  while (db.idleCount < db.totalCount) await setTimeout(5);
-}
-
 function excludes(printed: string[], values: string[]) {
   for (const value of values)
     assert.ok(!printed.join("\n").includes(value), `Logged ${value}`);
@@ -236,7 +229,6 @@ test("an unexpected page failure logs its route kind, error class, code, and sta
     );
     excludes(printed, [query, encodeURIComponent(query), alice, "exist"]);
   } finally {
-    await settled();
     await db.query(
       "ALTER TABLE member_streaming_service_hidden RENAME TO member_streaming_service",
     );
@@ -251,7 +243,6 @@ test("expected page errors show their message and log nothing", async () => {
     error: "Choose one friend from their profile.",
     status: 400,
   });
-  await settled();
   assert.deepEqual(printed, []);
 });
 
@@ -1139,7 +1130,6 @@ test("polls that fail the same way, as in a database outage, each log a line wit
       ],
     );
   } finally {
-    await settled();
     await db.query(
       "ALTER VIEW visible_notification_hidden RENAME TO visible_notification",
     );

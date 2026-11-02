@@ -111,6 +111,22 @@ export async function rollback(client: PoolClient) {
   }
 }
 
+// Runs independent work, such as queries, side by side as Promise.all does,
+// but waits for every part to settle before it rejects, with the first failure
+// in `work`'s order. Promise.all rejects at the first failure while the other
+// parts run on, so a request could answer while its queries still ran and
+// held their locks; a test's table reset then deadlocked with one (#469).
+export async function settleAll<const T extends readonly unknown[]>(
+  work: T,
+): Promise<{ -readonly [K in keyof T]: Awaited<T[K]> }> {
+  const results = await Promise.allSettled(work);
+  for (const result of results)
+    if (result.status === "rejected") throw result.reason;
+  return results.map(
+    (result) => (result as PromiseFulfilledResult<unknown>).value,
+  ) as { -readonly [K in keyof T]: Awaited<T[K]> };
+}
+
 export class AppError extends Error {
   constructor(
     message: string,
