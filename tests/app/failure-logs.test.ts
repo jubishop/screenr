@@ -15,6 +15,7 @@ import {
 } from "./social-fixture";
 import { fakeApple, fakeGoogle, serve } from "./identity-providers";
 import { error as logNextError } from "next/dist/build/output/log";
+import { createReactServerErrorHandler } from "next/dist/server/app-render/create-error-handler";
 
 const { GET, POST } = await import("../../src/app/api/screenr/[action]/route");
 const { initialScreen } = await import("../../src/server/screens");
@@ -820,15 +821,7 @@ test("in production, the line Next prints for an error before onRequestError sho
   const unchanged = console.error;
   register();
   assert.equal(console.error, unchanged);
-  const env = process.env as Record<string, string | undefined>;
-  const mode = env.NODE_ENV;
-  env.NODE_ENV = "production";
-  try {
-    register();
-  } finally {
-    if (mode === undefined) delete env.NODE_ENV;
-    else env.NODE_ENV = mode;
-  }
+  inProduction(register);
   // What Next's production server does with an error that escapes a route
   // handler or a page render: print it with its own logger, as `⨯` and the
   // error, then call the hook.
@@ -861,6 +854,81 @@ test("in production, the line Next prints for an error before onRequestError sho
     stack,
   });
   excludes(printed, [value, "Probe rejected", "Failing row"]);
+});
+
+// Runs code as Next's production server does, with NODE_ENV production.
+function inProduction(run: () => void) {
+  const env = process.env as Record<string, string | undefined>;
+  const mode = env.NODE_ENV;
+  env.NODE_ENV = "production";
+  try {
+    run();
+  } finally {
+    if (mode === undefined) delete env.NODE_ENV;
+    else env.NODE_ENV = mode;
+  }
+}
+
+// What Next's production server does with an error that escapes a member page
+// render: its React server error handler records the error under a digest and
+// hands it to the hook. When the error crosses a React server boundary
+// carrying that digest, the handler finds the recorded error and hands it to
+// the hook again. Each request renders with its own handler.
+function failMemberPage(error: Error) {
+  const handle = createReactServerErrorHandler(false, false, new Map(), (err) =>
+    onRequestError(
+      err,
+      { path: "/", method: "GET", headers: {} },
+      {
+        routerKind: "App Router",
+        routePath: "/[[...path]]",
+        routeType: "render",
+        renderSource: "react-server-components",
+        revalidateReason: undefined,
+      },
+    ),
+  );
+  inProduction(() => {
+    const digest = handle(error);
+    handle(Object.assign(new Error(error.message), { digest }));
+  });
+}
+
+test("a member page render failure that Next hands to the hook twice logs one line and one Sentry report, while a separate failure with the same fields logs its own", (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const hour = 60 * 60 * 1000;
+  const sent = acceptReports();
+  const printed = captureFailures();
+  // Made at the same place, so the two failures log identical lines.
+  const [first, second] = Array.from({ length: 2 }, () =>
+    Object.assign(new Error("Private detail 662607"), { code: "57014" }),
+  );
+  failMemberPage(first);
+  // A repeat of a kind within the hour would reach Sentry when the hour ends,
+  // as a second report with `folded`.
+  t.mock.timers.tick(hour);
+  const { fields } = logged(printed);
+  assert.deepEqual(fields, {
+    event: "route failed",
+    route: "/[[...path]]",
+    type: "render",
+    method: "GET",
+    error: "Error",
+    code: "57014",
+  });
+  assert.equal(sent().length, 1);
+  failMemberPage(second);
+  t.mock.timers.tick(hour);
+  assert.equal(printed.length, 2, printed.join("\n"));
+  assert.equal(printed[1], printed[0]);
+  assert.deepEqual(
+    sent().map(({ contexts }) => contexts.failure),
+    [fields, fields],
+  );
+  excludes(
+    [...printed, ...sent().map((event) => JSON.stringify(event))],
+    ["Private detail"],
+  );
 });
 
 test("a failed email worker pass logs its error class, code, and stack", async () => {

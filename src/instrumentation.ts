@@ -24,11 +24,22 @@ export function register() {
 // /api/screenr route and the member page's first screen, never reach it.
 // The line names the route pattern, such as /api/photos/[user]/[version],
 // never the requested path, which can name people or search terms.
+//
+// In production, Next hands a failed page render's error to the hook twice:
+// when the render throws it, and again, as the same object, when it crosses a
+// React server boundary carrying its digest (issue #453). So each error object
+// logs once. A separate failure is another object and logs its own line, even
+// when every field matches.
+const logged = new WeakSet<object>();
 export const onRequestError: Instrumentation.onRequestError = (
   error,
   request,
   context,
 ) => {
+  if (typeof error === "object" && error !== null) {
+    if (logged.has(error)) return;
+    logged.add(error);
+  }
   logFailure(
     "route failed",
     {
