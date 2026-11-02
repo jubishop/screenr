@@ -120,9 +120,10 @@ and `screenr-worker` first.
 
 1. In one root shell kept open until the end, take the deploy lock and pause
    the backup timers. Deployments and release cleanup then fail fast instead
-   of backing up mid-restore; rerun any failed deploy job afterward. A backup
-   now could also expire the snapshot you need, because retention keeps only
-   the newest snapshot of each day.
+   of backing up mid-restore; afterward, retry any failed deployment with
+   **Re-run all jobs** in GitHub Actions. A backup now could also expire the
+   snapshot you need, because retention keeps only the newest snapshot of
+   each day.
 
    ```sh
    exec 9>/opt/screenr/deploy.lock

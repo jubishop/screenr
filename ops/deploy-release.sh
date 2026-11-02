@@ -21,15 +21,17 @@ test -f "$kit/activate.sh"
 test -f "$kit/host-config.py"
 release=/opt/screenr/releases/$revision
 cd /opt/screenr
+# bin/deploy-ci has deleted the release artifact by now, so a retry must
+# rebuild it: rerunning only the deploy job cannot download it.
 exec 9>deploy.lock
 if ! flock -n 9; then
-    echo 'Another deployment, release cleanup, or restore holds /opt/screenr/deploy.lock. Wait for it to finish, then rerun the deploy job.' >&2
+    echo 'Another deployment, release cleanup, or restore holds /opt/screenr/deploy.lock. Wait for it to finish, then use Re-run all jobs in GitHub Actions.' >&2
     exit 1
 fi
 # Kit installation takes this lock too, so the kit the receiver checked
 # cannot change from here on.
 if [ "$(python3 -I /usr/local/sbin/screenr-receive-release kit "$kit")" != "$expected_kit" ]; then
-    echo 'The deploy kit changed after the receiver checked it. From a trusted checkout, run bin/install-deploy-kit root@HOST REVISION for this revision, then rerun the deploy job.' >&2
+    echo 'The deploy kit changed after the receiver checked it. From a trusted checkout, run bin/install-deploy-kit root@HOST REVISION for this revision, then use Re-run all jobs in GitHub Actions.' >&2
     exit 1
 fi
 printf '%s  %s\n' "$checksum" "$archive" | sha256sum --check

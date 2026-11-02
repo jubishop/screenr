@@ -388,8 +388,9 @@ The failure starts with `HOST CONFIGURATION DRIFT:`, names the file and the
 differing sites or settings, and says how to apply them. For Caddy, copy the
 sites, run `caddy validate --config /etc/caddy/Caddyfile`, and reload Caddy.
 For PostgreSQL, edit the Screenr settings at the end of the file and restart
-`screenr-db`. Then rerun the deployment. Output never includes host values,
-because anyone can read the Actions logs of this public repository.
+`screenr-db`. Then retry the deployment with **Re-run all jobs**. Output
+never includes host values, because anyone can read the Actions logs of this
+public repository.
 
 Then each `ops/screenr-*.service` and `.timer` that is missing from
 `/etc/systemd/system` or differs from the host copy is written there
@@ -594,8 +595,8 @@ trailer on a later push cannot strand a refused or failed release: skipping
 requires every commit since the last successful production deployment to
 skip. The host also locks deployment so two activations cannot run together.
 A deployment that finds `/opt/screenr/deploy.lock` held fails at once with a
-message naming it; rerun the deploy job after the other deployment, release
-cleanup, or restore finishes. The steps that run under the lock have
+message naming it; after the other deployment, release cleanup, or restore
+finishes, use **Re-run all jobs**. The steps that run under the lock have
 [time limits](#run-time-limits), so a hung backup or migration fails with an
 error and releases the lock, even after GitHub cancels the job.
 
@@ -603,12 +604,14 @@ The workflow stores release artifacts with one-day retention. After downloading
 and verifying an archive, the deployment job deletes its GitHub artifact. Build
 jobs have no production secrets. To retry a failed deploy job, use
 **Re-run all jobs** in GitHub Actions, so checks and packaging produce a fresh
-artifact. The retry is refused once production runs a newer revision, which
-already contains the change. A repeat deployment of the active revision
-verifies health without extracting or restarting it. A failed extraction or
-startup removes only a new candidate after a verified rollback. Failures in
-later verification require inspection and, when necessary, manual recovery.
-Database migrations are not reversed.
+artifact; rerunning only the deploy job fails to download the deleted one.
+Every message from `bin/deploy-ci` and the deploy kit that says to retry the
+deployment says **Re-run all jobs** for that reason. The retry is refused once
+production runs a newer revision, which already contains the change. A repeat
+deployment of the active revision verifies health without extracting or
+restarting it. A failed extraction or startup removes only a new candidate
+after a verified rollback. Failures in later verification require inspection
+and, when necessary, manual recovery. Database migrations are not reversed.
 
 When activation fails and no healthy release is running, the job ends with
 `DEPLOY FAILED: Activation failed and no healthy release is running, so
@@ -738,11 +741,11 @@ bin/install-deploy-kit root@YOUR_SSH_HOST REVISION
 The script sends the kit files from `git archive` at that revision, never the
 working tree. Under the deploy lock, the host replaces the kit, removes kit
 files that the revision no longer has, and reports its digest, which must
-match. Then re-run the failed deploy job. Installing a kit changes the
-scripts that the backup and alert units run at their next start, and no
-running service: the deployment installs the kit's changed units under the
-lock, before activation. A later deployment of an older revision fails until
-its kit is installed again.
+match. Then retry the deployment with **Re-run all jobs**. Installing a kit
+changes the scripts that the backup and alert units run at their next start,
+and no running service: the deployment installs the kit's changed units under
+the lock, before activation. A later deployment of an older revision fails
+until its kit is installed again.
 
 ### Production environment setup
 

@@ -77,9 +77,12 @@ COMMANDS = {
 RESERVED = {'.deployment-pending', '.deployment-success'}
 # Activation creates .next/cache and changes its owner as root.
 NOT_LINKS = {'.', '.next', '.next/cache'}
+# bin/deploy-ci deletes the release artifact before uploading it, so a retry
+# must rebuild it: rerunning only the deploy job cannot download it.
+RETRY = 'use Re-run all jobs in GitHub Actions'
 LOCK_HELD = ('Another deployment, release cleanup, or restore holds /opt/screenr/deploy.lock. '
-             'Wait for it to finish, then rerun the deploy job.')
-UPLOAD_HELD = 'Another upload is in progress. Wait for it to finish, then rerun the deploy job.'
+             f'Wait for it to finish, then {RETRY}.')
+UPLOAD_HELD = f'Another upload is in progress. Wait for it to finish, then {RETRY}.'
 INSTALL = 'From a trusted checkout, run bin/install-deploy-kit root@HOST REVISION'
 
 
@@ -288,9 +291,9 @@ def deploy(revision, checksum, kit):
     installed = kit_digest()
     if installed != kit:
         raise ValueError(f'The installed deploy kit ({installed[:12]}) does not match ops/ at {revision} '
-                         f'({kit[:12]}). {INSTALL} with this revision, then rerun the deploy job.')
+                         f'({kit[:12]}). {INSTALL} with this revision, then {RETRY}.')
     if UPLOAD.is_symlink() or not UPLOAD.is_file():
-        raise ValueError('No uploaded release archive. Rerun the deploy job.')
+        raise ValueError(f'No uploaded release archive; {RETRY}.')
     print(f'Deploying {revision} with deploy kit {kit[:12]}.', flush=True)
     # The script rechecks the kit under the deploy lock.
     return subprocess.run(['/bin/sh', str(KIT / 'deploy-release.sh'), revision, checksum, str(UPLOAD), kit],

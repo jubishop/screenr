@@ -18,6 +18,9 @@ import sys
 
 UNIT = re.compile(r'screenr-[A-Za-z0-9@_.-]+\.(service|timer)')
 SHARED = ('Caddyfile', 'postgresql.conf')
+# bin/deploy-ci deleted the release artifact before this step, so a retry must
+# rebuild it: rerunning only the deploy job cannot download it.
+RETRY = 'Then use Re-run all jobs in GitHub Actions.'
 # A PostgreSQL setting line: name, optional '=', and a quoted or bare value.
 SETTING = re.compile(r"\s*([A-Za-z_][A-Za-z0-9_.]*)\s*=?\s*('(?:[^']|'')*'|[^\s#']+)\s*(#.*)?")
 
@@ -67,8 +70,7 @@ def drift(files, caddyfile, postgresql):
         problems.append(
             f"{caddyfile} does not match ops/Caddyfile for: {', '.join(sites)}. Deployment never changes the "
             f"shared Caddyfile. Copy these sites from ops/Caddyfile at this revision into {caddyfile}, keeping "
-            f"every other site, then run caddy validate --config {caddyfile} and systemctl reload caddy, and "
-            "rerun the deployment.")
+            f"every other site, then run caddy validate --config {caddyfile} and systemctl reload caddy. {RETRY}")
     host = postgresql_settings(postgresql.read_text(), strict=False)
     settings = sorted(name for name, value in postgresql_settings(files['postgresql.conf'], strict=True).items()
                       if host.get(name) != value)
@@ -76,8 +78,7 @@ def drift(files, caddyfile, postgresql):
         problems.append(
             f"{postgresql} does not match ops/postgresql.conf for: {', '.join(settings)}. Deployment never "
             "changes PostgreSQL settings. Update the Screenr settings at the end of that file to match "
-            "ops/postgresql.conf at this revision, apply them with systemctl restart screenr-db, and rerun "
-            "the deployment.")
+            f"ops/postgresql.conf at this revision, and apply them with systemctl restart screenr-db. {RETRY}")
     return problems
 
 
