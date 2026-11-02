@@ -898,7 +898,7 @@ test("a member page render failure that Next hands to the hook twice logs one li
   t.mock.timers.enable({ apis: ["setTimeout"] });
   const hour = 60 * 60 * 1000;
   const sent = acceptReports();
-  const printed = captureFailures();
+  const printed = captureFailures(t);
   // Made at the same place, so the two failures log identical lines.
   const [first, second] = Array.from({ length: 2 }, () =>
     Object.assign(new Error("Private detail 662607"), { code: "57014" }),
