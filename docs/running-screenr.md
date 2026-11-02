@@ -176,8 +176,10 @@ failed sends. About once a minute it also deletes expired jobs and
 [usage telemetry](usage-telemetry.md#retention-and-tests) older than 12
 months, [read notifications](notifications.md#notification-retention--2026-11-01)
 more than a year old, and
-[unused catalog data](title-catalog.md#catalog-retention). Local development
-does not need it.
+[unused catalog data](title-catalog.md#catalog-retention). At most once an
+hour, with `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` set, it also
+[checks that Google accepts the web client](deployment.md#google-client-check).
+Local development does not need it.
 With `EMAIL_TRANSPORT=file`, Next writes sign-in codes directly to
 `.cache/mail` without queueing them, and `npm run worker` refuses to start
 unless `EMAIL_TRANSPORT=resend`, `RESEND_API_KEY`, and `EMAIL_FROM` are set.

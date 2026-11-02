@@ -930,7 +930,7 @@ journalctl -u screenr-worker --since '1 day ago' --no-pager | grep '"event":"ema
 | `auth callback failed` | web | `callback`, the Better Auth callback, such as `sendVerificationOTP` or `user.create.before` |
 | `auth endpoint failed` | web | `endpoint`, Better Auth's route pattern, such as `/sign-in/email-otp` or `/callback/:id`, when known, for an unexpected error from Better Auth's handler, such as a database error in its adapter or rate limit or a schema mismatch, which Screenr answers with a bare 500 |
 | `auth failure caught` | web | `endpoint`, as for `auth endpoint failed`, when known, for an unexpected error that Better Auth caught and answered itself, such as a database error while Google or Apple sign-in creates the account or while it reads a session |
-| `google client rejected` | web | `status` and Google's `reason`, `invalid_client` or `unauthorized_client`: Google's token endpoint rejected Screenr's web client when a web Google sign-in exchanged its code, as after `GOOGLE_CLIENT_SECRET` is rotated or deleted, so every web Google sign-in fails until `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` are fixed |
+| `google client rejected` | web, worker | `status` and Google's `reason`, `invalid_client` or `unauthorized_client`: Google's token endpoint rejected Screenr's web client when a web Google sign-in exchanged its code, or in the worker's [hourly check](#google-client-check), as after `GOOGLE_CLIENT_SECRET` is rotated or deleted, so every web Google sign-in fails until `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` are fixed |
 | `code email cap reached` | web | No fields: the Screenr-wide limit of 40 [code emails a day](running-screenr.md#provider-configuration) refused a code request |
 | `apple_token_failed` | web | `status` and Apple's `reason` for an HTTP reply from Apple's token endpoint, or error fields |
 | `apple token unreadable` | web | Error fields only: account deletion skipped a Sign in with Apple token sealed under an earlier `BETTER_AUTH_SECRET` |
@@ -1046,9 +1046,11 @@ rejections come from the client, such as an expired or already used code
 rotated, or deleted `GOOGLE_CLIENT_SECRET`, and logs `google client rejected`
 with the status and that code, never Google's `error_description` or anything
 else from the reply. The iPhone app's ID token sign-in uses no secret and
-keeps working, so it can hide this outage. A deleted client fails earlier:
-Google shows `deleted_client` on its own authorization page, which never
-returns to Screenr, so that outage logs nothing. Screenr reads the
+keeps working, so it can hide this outage; the worker's
+[hourly check](#google-client-check) logs the same line without waiting for
+a sign-in. A deleted client fails earlier: Google shows `deleted_client` on
+its own authorization page, which never returns to Screenr, so the sign-in
+logs nothing. Screenr reads the
 reply only at the callback for Google. Apple's callback answers 404 before it
 exchanges anything
 ([data and access](data-and-access.md#native-sign-in)).
@@ -1120,6 +1122,61 @@ object once, so one failed render prints one `route failed` line and sends
 one Sentry report
 ([issue #453](https://github.com/jubishop/screenr/issues/453)). Another
 failure, even with the same fields, prints its own line.
+
+#### Google client check
+
+The worker checks Screenr's web Google client at most once an hour, so a
+broken `GOOGLE_CLIENT_SECRET` raises `google client rejected` before a
+member's web Google sign-in fails
+([issue #458](https://github.com/jubishop/screenr/issues/458)). Its
+periodic cleanup, which runs on its first pass after each start and about
+once a minute after that, exchanges a dummy code at Google's token endpoint
+with `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, and the registered callback,
+`BETTER_AUTH_URL` followed by `/api/auth/callback/google`. Each deploy
+restarts the worker, so the first check covers the settings it starts with.
+Google authenticates the client before it reads the code:
+
+- **`invalid_grant`:** the client works, and nothing is logged.
+- **`invalid_client` or `unauthorized_client`:** `screenr-worker` logs
+  `google client rejected` with the HTTP `status` and that code as `reason`,
+  never Google's `error_description` or anything else from the reply. Sentry
+  gets it as it gets other failure lines.
+- **Anything else:** another reply, a timeout after 10 seconds, or a network
+  failure says nothing about the client, logs nothing, and waits for the
+  next hour's check, as a failed check also does.
+
+Without `GOOGLE_CLIENT_ID` or `GOOGLE_CLIENT_SECRET`, the web has no Google
+sign-in and the worker checks nothing. On 2026-11-01 a wrong secret for
+Screenr's web client and an unknown client ID each answered
+`401 invalid_client` for a dummy code at Screenr's callback, while a redirect
+URI that breaks Google's policy, such as one on `example.test`, answered
+`400 invalid_request` before Google checked the client. Whether Google's
+token endpoint answers `invalid_client` for a deleted client is unverified.
+
+When the line appears, put the web client's current ID and secret from
+Google Cloud project `screenr-69420` in `app.env` and its
+[working copy](#encrypted-backups-and-restore-check), then restart
+`screenr-web` and `screenr-worker`. The worker's first pass checks the new
+settings. To find the line:
+
+```sh
+journalctl -u screenr-web -u screenr-worker --since '1 day ago' --no-pager | grep '"event":"google client rejected"'
+```
+
+**Decision — 2026-11-01:** check from the worker's periodic cleanup, at most
+once an hour, and not from `ops/activate.sh`. Settled by the coordinator of
+an agent issue run as routine in
+[#458](https://github.com/jubishop/screenr/issues/458); the user may
+override it.
+
+**Why:** the worker already runs periodic cleanup and restarts with each
+deploy, so it checks a newly deployed configuration at once and also catches
+a secret rotated or deleted in Google Cloud between deploys. `ops/activate.sh`
+belongs to the deploy kit, and changing it blocks deploys until the owner
+installs the kit over SSH.
+
+**Tradeoff:** a broken client is noticed up to an hour after it breaks, and
+each worker start adds a check, at one request each.
 
 #### Worker outages
 

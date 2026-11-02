@@ -18,6 +18,7 @@ import {
 import { db, transaction } from "./db";
 import { activeInvitation, invitationHash } from "./invitations";
 import { queueCode } from "./email";
+import { googleClientRejections } from "./google-client";
 import { logFailure } from "./log";
 import { copyGooglePhoto } from "./photos";
 
@@ -208,20 +209,11 @@ const clientStateError = (error: Error) => {
   );
 };
 
-// The OAuth error codes (RFC 6749 section 5.2) with which Google's token
-// endpoint rejects Screenr's own web client: a wrong client ID or secret, as
-// after GOOGLE_CLIENT_SECRET is rotated or deleted, or a client that may not
-// exchange codes. Every web Google sign-in then fails. Other codes, such as
-// invalid_grant for an expired or already used code, come from the client.
-const googleClientRejections = new Set([
-  "invalid_client",
-  "unauthorized_client",
-]);
-
 // When Google's token endpoint rejects a web Google sign-in's code, Better
 // Auth logs Google's JSON reply, with the HTTP status and status text added,
 // as a plain object, not an Error. Only the status and an error code that
-// names Screenr's own client are read from it, never Google's description.
+// names Screenr's own client (googleClientRejections) are read from it, never
+// Google's description.
 function googleClientRejection(args: unknown[]) {
   const reached = endpointReached.getStore();
   if (reached?.path !== "/callback/:id" || reached.provider !== "google")
