@@ -346,18 +346,36 @@ test("provider tokens are ES256 JWTs from the APNs key, reused for 50 minutes an
 
   // APNs rejecting the token as expired replaces it, except within 20
   // minutes of signing, when APNs refuses a new one.
-  captureFailures();
+  const printed = captureFailures();
   sandbox.reply = () => ({ status: 403, reason: "ExpiredProviderToken" });
   mock.timers.tick(19 * 60_000);
   assert.equal(await send(), second);
   mock.timers.tick(60_000);
   assert.equal(await send(), second);
+  // Both rejected pushes wait to retry, and each logs once.
+  const rejected = (
+    await db.query("SELECT id::text FROM push_job ORDER BY id")
+  ).rows.map(({ id }) => id);
+  assert.equal(rejected.length, 2);
   sandbox.reply = () => ({ status: 200 });
   const third = await send();
   assert.deepEqual(await verifiedClaims(third), {
     iss: "TEAM123456",
     iat: Math.floor(start / 1000) + 70 * 60,
   });
+  assert.deepEqual(
+    printed.map((line) => JSON.parse(line)),
+    rejected.map((job) => ({
+      event: "push delivery failed",
+      job,
+      kind: "badge",
+      environment: "sandbox",
+      attempt: 1,
+      status: 403,
+      reason: "ExpiredProviderToken",
+      final: false,
+    })),
+  );
 });
 
 test("rejected tokens delete their device, other rejections drop the push, and failures retry with backoff", async () => {

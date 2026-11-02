@@ -15,7 +15,7 @@ import { join } from "node:path";
 import { setTimeout } from "node:timers/promises";
 import { pathToFileURL } from "node:url";
 import type { PoolClient } from "pg";
-import { useDatabase, db, captureFailures } from "./social-fixture";
+import { useDatabase, db } from "./social-fixture";
 const { migrate, migrateFrom } = await import("../../scripts/migrate");
 
 useDatabase();
@@ -218,8 +218,8 @@ test("a migration run whose connection breaks fails with that error and releases
   const directory = await migrations({
     [name]: "SELECT pg_terminate_backend(pg_backend_pid());",
   });
-  // The broken connection may also be logged.
-  captureFailures();
+  // The run releases its client before the closed connection reports its
+  // end, so the broken connection logs no failure line.
   const closed = new Promise((resolve) => db.once("remove", resolve));
   try {
     const error = await migrateFrom(pathToFileURL(`${directory}/`)).then(

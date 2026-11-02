@@ -975,42 +975,44 @@ const actions: Record<Exclude<ActionName, "screen">, Record<string, Case>> = {
       "A session older than ten minutes must sign in again before deleting the account.",
       403,
     ),
-    "apple-unavailable": write(
-      "delete-account",
-      "alice",
-      async (world) => {
-        // Alice's account has Sign in with Apple, and Apple does not confirm
-        // revoking its token, so nothing is deleted.
-        await db.query(
-          `INSERT INTO account(id,"accountId","providerId","userId","refreshToken","createdAt","updatedAt")
-          VALUES('fixture-apple-account','fixture-apple-subject','apple',$1,$2,now(),now())`,
-          [
-            world.users.alice,
-            seal(
-              "screenr-apple-token",
-              JSON.stringify({
-                clientId: "com.artisanalsoftware.Screenr",
-                refreshToken: "fixture-apple-refresh-token",
-              }),
-            ),
-          ],
-        );
-        const real = globalThis.fetch;
-        mock.method(
-          globalThis,
-          "fetch",
-          (input: string | URL, init?: RequestInit) =>
-            new URL(String(input)).hostname === "appleid.apple.com"
-              ? Promise.resolve(new Response(null, { status: 503 }))
-              : real(input, init),
-        );
-        // The server logs "apple revoke failed"; the response shows it.
-        captureFailures();
-        return {};
-      },
-      "Apple did not confirm revoking Sign in with Apple, so nothing was deleted, and the member can try again later.",
-      503,
-    ),
+    "apple-unavailable": {
+      ...write(
+        "delete-account",
+        "alice",
+        async (world) => {
+          // Alice's account has Sign in with Apple, and Apple does not confirm
+          // revoking its token, so nothing is deleted.
+          await db.query(
+            `INSERT INTO account(id,"accountId","providerId","userId","refreshToken","createdAt","updatedAt")
+            VALUES('fixture-apple-account','fixture-apple-subject','apple',$1,$2,now(),now())`,
+            [
+              world.users.alice,
+              seal(
+                "screenr-apple-token",
+                JSON.stringify({
+                  clientId: "com.artisanalsoftware.Screenr",
+                  refreshToken: "fixture-apple-refresh-token",
+                }),
+              ),
+            ],
+          );
+          const real = globalThis.fetch;
+          mock.method(
+            globalThis,
+            "fetch",
+            (input: string | URL, init?: RequestInit) =>
+              new URL(String(input)).hostname === "appleid.apple.com"
+                ? Promise.resolve(new Response(null, { status: 503 }))
+                : real(input, init),
+          );
+          return {};
+        },
+        "Apple did not confirm revoking Sign in with Apple, so nothing was deleted, and the member can try again later.",
+        503,
+      ),
+      // The server logs that Apple did not confirm the revocation.
+      failures: ["apple revoke failed"],
+    },
   },
 };
 
