@@ -27,6 +27,10 @@ class CiScopeTests(unittest.TestCase):
         self.directory = Path(temporary.name)
         self.environment = {key: value for key, value in os.environ.items()
                             if key not in REPOSITORY_VARIABLES}
+        # A fixture that is not a repository must not find one above it.
+        temporary_root = Path(tempfile.gettempdir())
+        self.environment["GIT_CEILING_DIRECTORIES"] = os.pathsep.join(
+            {str(temporary_root), str(temporary_root.resolve())})
 
     def git(self, *args):
         return subprocess.run(["git", "-c", "core.hooksPath=/dev/null", *args], cwd=self.directory,
@@ -67,7 +71,7 @@ class CiScopeTests(unittest.TestCase):
         self.assertEqual(result.stdout, f"run={'true' if expected else 'false'}\n", result.stderr)
         self.assertTrue(result.stderr.strip())
 
-    def test_markdown_that_no_check_reads_skips_the_checks(self):
+    def test_markdown_that_no_test_reads_skips_the_checks(self):
         self.pull_request("ios/README.md", "ios/Screenr/Notes.md", "bin/notes.md")
         self.assertRuns(False)
 

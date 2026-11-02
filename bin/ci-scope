@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Report whether a run of the check workflow needs its check jobs.
 
-A pull request that changes only Markdown that no check reads skips them, and
+A pull request that changes only Markdown that no test reads skips them, and
 the workflow's check job still reports the result that merging requires.
 Pushes to main skip the same changes with the workflow's paths filter. Every
 other event runs the check jobs, and so does any doubt. Prints run=true or
@@ -47,7 +47,7 @@ def decide(event):
     needed = [path for path in files if needs_checks(path)]
     if needed:
         return True, f"{len(needed)} changed files need them, such as {needed[0]}"
-    return False, "the pull request changes only Markdown that no check reads: " + ", ".join(files)
+    return False, "the pull request changes only Markdown that no test reads: " + ", ".join(files)
 
 
 def main():

@@ -876,7 +876,7 @@ pushes work. GitHub still reports a pull request as blocked while `check`
 fails or runs, such as `BLOCKED` in `gh pr view --json mergeStateStatus`.
 `gh api repos/jubishop/screenr/rulesets` lists it. The
 [check workflow](#ci-jobs) runs for every pull request, and its `scope` job
-skips the other check jobs when only Markdown that no check reads changed.
+skips the other check jobs when only Markdown that no test reads changed.
 
 ## Scheduled memory audit
 
