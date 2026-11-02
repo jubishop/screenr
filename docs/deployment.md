@@ -937,6 +937,14 @@ an iPhone app error report:
 journalctl -u screenr-web --since '1 day ago' --no-pager | grep '"requestId":"REQUEST_ID"'
 ```
 
+Every failure prints its line, even when its
+[Sentry report is folded](#failure-reports-in-sentry) into a count, so the
+journal has a line for each request ID that a member reports. During an
+outage the journal gets one line per failed request, within journald's
+default size limit, while Sentry gets each kind of failure, such as
+`request failed` for one action, error class, and code, at most once an
+hour.
+
 The `catalog` events print at most once per request: one API request or
 member page load that meets the same catalog failure many times, such as a
 title page's details, trailer, and availability lookups during a TMDB outage,
@@ -1030,9 +1038,10 @@ outage, such as a PostgreSQL restart, every pass fails, so each failed pass
 in a row doubles the loop's pause, from 2 seconds up to 30. Each loop logs
 `worker failed` for the first failure of each kind in a run, by error class
 and code, and repeats a kind only once an hour while it lasts. `failures`
-counts the failed passes in a row so far. When a pass succeeds again, the
-loop prints how many failed, on standard output, and returns to its
-one-second pause:
+counts the failed passes in a row so far. Each of these lines also goes to
+Sentry, without the [folding](#failure-reports-in-sentry) that other lines
+get. When a pass succeeds again, the loop prints how many failed, on
+standard output, and returns to its one-second pause:
 
 ```sh
 journalctl -u screenr-worker --since '1 day ago' --no-pager | grep '"event":"worker'
@@ -1050,14 +1059,62 @@ emails behind it.
 
 ### Failure reports in Sentry
 
-With `SENTRY_DSN` set in `app.env`, `src/server/log.ts` also sends each
-failure line to the `screenr-server` Sentry project
-([issue #223](https://github.com/jubishop/screenr/issues/223)), under the
+With `SENTRY_DSN` set in `app.env`, `src/server/log.ts` also sends failure
+lines, folded by kind as described below, to the `screenr-server` Sentry
+project ([issue #223](https://github.com/jubishop/screenr/issues/223)), under the
 [Sentry decision](ios-app.md#sentry-for-the-app-and-the-server--2026-10-13).
 Web and worker failures both report, because both log through it. It posts a
 Sentry envelope over HTTPS and uses no Sentry package. Without a DSN, failures
 go only to the journal. Restart `screenr-web` and `screenr-worker` after
 setting or changing the DSN.
+
+Sentry gets each kind of failure at most once an hour
+([issue #399](https://github.com/jubishop/screenr/issues/399)). A kind is
+the line's `event` and every field but `requestId` and `stack`, such as its
+`action` or `route`, `error`, and `code`. The first failure of a kind reports
+at once and opens an hour for that kind. Later failures of the kind in that
+hour are folded: each still prints its line, but none is sent. When the hour
+ends, Sentry gets the latest folded failure with `folded`, the number folded
+since the kind's last report, and another hour opens. An hour that folds
+nothing closes, so the kind's next failure reports at once. A failure of
+another kind, such as another action, error class, or code, reports at once.
+
+During a database outage, then, each kind of failed poll reports when the
+outage starts, once an hour while it lasts, and with its remaining count
+within an hour after it ends, however many clients poll. Before, each open
+client sent about 20 events a minute for each of its pollers. The timers
+never keep a process running, so a restart drops a pending count; the
+journal still has every line.
+
+These lines still report every time:
+
+- `worker failed`: the worker's loops already log a kind once per run of
+  failures and then hourly ([worker outages](#worker-outages)). Folding would
+  hold back a new run's first failure of a kind that an earlier run reported
+  within the hour.
+- Lines with a field that changes each time, such as `job` and `attempt` in
+  the worker's delivery failures or `user` in `google photo copy failed`:
+  each line is its own kind. Their retries and backoff bound them.
+
+The hour comes from these numbers, checked on 2026-11-01:
+
+- **Quota:** Sentry's smallest plan, the free Developer plan, includes 5,000
+  errors a month ([pricing](https://sentry.io/pricing/)), and an
+  organization's projects share its quota: here `screenr-server`,
+  `screenr-ios`, and `podhaven`. The organization accepted 52 errors in the
+  30 days before, so nearly all of the quota is headroom for outages.
+- **Kinds in an outage:** a PostgreSQL restart fails requests with a few
+  error kinds, such as `57P01` when PostgreSQL ends connections, `57P03`
+  while it starts, and refused or timed-out connections. They multiply by
+  the two pollers' actions, `screen` and `notifications`, and by the other
+  actions and pages members open.
+- **Bound:** with 20 kinds, an outage shorter than an hour sends at most 40
+  events, each kind's first report and its folded count, and a day-long
+  outage about 500, a tenth of the quota. A 10-minute window would send
+  about 2,900 a day, and a 5-minute one about 5,800, more than the quota.
+  The issue estimated 2,000 to 3,600 events, unfolded, for three members
+  through a 30-minute outage. An hour also matches the worker's hourly
+  repeat.
 
 The event carries only the failure line:
 
@@ -1066,8 +1123,17 @@ The event carries only the failure line:
   error uses its `event` as the type.
 - **Stack trace:** the line's frames, with paths relative to the release.
 - **Tags:** `event`, and `request_id` from the line's `requestId` field.
-- **Failure context:** every field of the line except `stack`.
+- **Failure context:** every field of the line except `stack`, plus
+  `folded` in a folded report.
 - **Environment:** `NODE_ENV`, which is `production` on the host.
+
+A folded report's `request_id` names the latest folded failure, and its
+time is when the hour ended. The earlier failures it counts are in the
+journal, matched by the event and the fields of the kind:
+
+```sh
+journalctl -u screenr-web --since '2 hours ago' --no-pager | grep '"event":"request failed"' | grep '"action":"notifications"'
+```
 
 Like the journal, Sentry never receives error messages or anything else the
 [failure logs](#failure-logs) leave out. A request or worker pass never waits

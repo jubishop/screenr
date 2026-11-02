@@ -156,6 +156,23 @@ function envelope(body: string) {
   return event;
 }
 
+// Replaces fetch with a Sentry endpoint that accepts every envelope, and
+// returns a function that lists the events sent so far. A report calls fetch
+// before logFailure returns, so the list is complete at once.
+function acceptReports() {
+  process.env.SENTRY_DSN = "https://public-key@sentry.example.test/42";
+  const fetch = mock.method(
+    globalThis,
+    "fetch",
+    async () => new Response(null, { status: 200 }),
+  );
+  return () =>
+    fetch.mock.calls.map(({ arguments: [url, init] }) => {
+      assert.equal(url, "https://sentry.example.test/api/42/envelope/");
+      return envelope(String(init?.body));
+    });
+}
+
 test("an unexpected database failure in a request logs its action, error class, code, constraint, and stack without request data", async () => {
   const printed = captureFailures();
   const { response, privateValues } = await postRejectedComment();
@@ -637,5 +654,125 @@ test("a failed email worker pass is also reported to Sentry", async () => {
       (frame: Record<string, unknown>) =>
         frame.filename === "src/server/email.ts",
     ),
+  );
+});
+
+test("polls that fail the same way, as in a database outage, each log a line with their request ID, but only the first goes to Sentry, while another action's failure goes at once", async () => {
+  const alice = await person("alice");
+  const cookie = await cookieFor(alice);
+  const sent = acceptReports();
+  const printed = captureFailures();
+  async function poll(action: string) {
+    const response = await GET(
+      new Request(`http://localhost:3000/api/screenr/${action}`, {
+        headers: { Cookie: cookie },
+      }),
+      { params: Promise.resolve({ action }) },
+    );
+    assert.equal(response.status, 500);
+    return response.headers.get("Screenr-Request-Id");
+  }
+  // The notification sheet's poll and the screen's poll both read it.
+  await db.query(
+    "ALTER VIEW visible_notification RENAME TO visible_notification_hidden",
+  );
+  try {
+    const polls = [];
+    for (let count = 0; count < 20; count++)
+      polls.push(await poll("notifications"));
+    const screen = await poll("screen");
+    polls.push(await poll("notifications"));
+    const lines = printed.map((line) => JSON.parse(line));
+    assert.deepEqual(
+      lines.map(({ action, requestId, error, code }) => ({
+        action,
+        requestId,
+        error,
+        code,
+      })),
+      [...polls.slice(0, 20), screen, polls[20]].map((requestId, index) => ({
+        action: index === 20 ? "screen" : "notifications",
+        requestId,
+        error: "DatabaseError",
+        code: "42P01",
+      })),
+    );
+    assert.equal(new Set(lines.map(({ requestId }) => requestId)).size, 22);
+    assert.deepEqual(
+      sent().map(({ tags, contexts }) => ({
+        action: contexts.failure.action,
+        request_id: tags.request_id,
+        folded: contexts.failure.folded,
+      })),
+      [
+        { action: "notifications", request_id: polls[0], folded: undefined },
+        { action: "screen", request_id: screen, folded: undefined },
+      ],
+    );
+  } finally {
+    await settled();
+    await db.query(
+      "ALTER VIEW visible_notification_hidden RENAME TO visible_notification",
+    );
+  }
+});
+
+test("after a kind's first report, Sentry gets the failures folded in the next hour as one report with their number and the latest request ID, hourly while they continue, until an hour passes without one", (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const hour = 60 * 60 * 1000;
+  const sent = acceptReports();
+  const printed = captureFailures();
+  const fail = (requestId: string, code: string) =>
+    logFailure(
+      "request failed",
+      { action: "notifications", method: "GET", status: 500, requestId },
+      Object.assign(new Error("Private detail 299792"), { code }),
+    );
+  const reports = () =>
+    sent().map(({ tags, contexts }) => {
+      assert.equal(contexts.failure.requestId, tags.request_id);
+      const { requestId, folded, code } = contexts.failure;
+      return folded === undefined
+        ? { requestId, code }
+        : { requestId, code, folded };
+    });
+  fail("a1", "ECONNREFUSED");
+  fail("a2", "ECONNREFUSED");
+  fail("a3", "ECONNREFUSED");
+  // Another code is another kind.
+  fail("b1", "57P03");
+  assert.deepEqual(reports(), [
+    { requestId: "a1", code: "ECONNREFUSED" },
+    { requestId: "b1", code: "57P03" },
+  ]);
+  t.mock.timers.tick(hour - 1);
+  assert.equal(reports().length, 2);
+  t.mock.timers.tick(1);
+  // The second kind folded nothing, so its next failure reports at once.
+  fail("b2", "57P03");
+  fail("a4", "ECONNREFUSED");
+  assert.deepEqual(reports().slice(2), [
+    { requestId: "a3", code: "ECONNREFUSED", folded: 2 },
+    { requestId: "b2", code: "57P03" },
+  ]);
+  t.mock.timers.tick(hour);
+  assert.deepEqual(reports().slice(4), [
+    { requestId: "a4", code: "ECONNREFUSED", folded: 1 },
+  ]);
+  // An hour without a failure of the kind ends its fold.
+  t.mock.timers.tick(hour);
+  assert.equal(reports().length, 5);
+  fail("a5", "ECONNREFUSED");
+  assert.deepEqual(reports().slice(5), [
+    { requestId: "a5", code: "ECONNREFUSED" },
+  ]);
+  // The journal keeps a line for every failure.
+  assert.deepEqual(
+    printed.map((line) => JSON.parse(line).requestId),
+    ["a1", "a2", "a3", "b1", "b2", "a4", "a5"],
+  );
+  excludes(
+    [...printed, ...sent().map((event) => JSON.stringify(event))],
+    ["Private detail"],
   );
 });

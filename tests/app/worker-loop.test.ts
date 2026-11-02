@@ -15,6 +15,7 @@ afterEach(() => {
   mock.timers.reset();
   mock.restoreAll();
   syncBuiltinESMExports();
+  delete process.env.SENTRY_DSN;
 });
 
 // Lets the loop run until it waits on a timer again.
@@ -108,4 +109,25 @@ test("a worker loop that recovers says so, returns to a one-second pause, and lo
     '{"event":"worker recovered","failures":3}',
     '{"event":"worker recovered","failures":1}',
   ]);
+});
+
+test("each failure a worker loop logs also goes to Sentry, even a new run's first failure of a kind that the last run reported moments before", async () => {
+  process.env.SENTRY_DSN = "https://public-key@sentry.example.test/42";
+  const fetch = mock.method(
+    globalThis,
+    "fetch",
+    async () => new Response(null, { status: 200 }),
+  );
+  const loop = start((pass) =>
+    [0, 2].includes(pass) ? unreachable() : undefined,
+  );
+  await runUntil(4_000);
+  await loop.stop();
+  assert.deepEqual(loop.starts, [0, 2_000, 3_000]);
+  assert.equal(loop.failed().length, 2);
+  const reported = fetch.mock.calls.map(({ arguments: [, init] }) => {
+    const event = JSON.parse(String(init?.body).trimEnd().split("\n")[2]);
+    return event.contexts.failure;
+  });
+  assert.deepEqual(reported, loop.failed());
 });

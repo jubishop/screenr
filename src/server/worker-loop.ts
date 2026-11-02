@@ -18,7 +18,9 @@ const kindOf = (error: unknown) =>
 // failures in a row, but only the first of each kind (error class and code)
 // in a run of failures, and again once an hour while it lasts. A pass that
 // succeeds after failures prints `worker recovered` with their number and
-// returns to the one-second pause. Stopping ends a pause early.
+// returns to the one-second pause. Stopping ends a pause early. Each line it
+// logs also goes to Sentry unfolded: folding would hold back a new run's
+// first failure of a kind that an earlier run reported within the hour.
 export async function runWorkerLoop(
   pass: (pass: number) => Promise<unknown>,
   signal: AbortSignal,
@@ -38,7 +40,7 @@ export async function runWorkerLoop(
       const kind = kindOf(error);
       const last = logged.get(kind);
       if (last === undefined || Date.now() - last >= repeatAfter) {
-        logFailure("worker failed", { failures }, error);
+        logFailure("worker failed", { failures }, error, { fold: false });
         logged.set(kind, Date.now());
       }
     }

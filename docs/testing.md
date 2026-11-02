@@ -214,7 +214,8 @@ session. Specs import these helpers instead of defining their own copies.
   call TMDB, Resend, Google, Apple, or Sentry, even when a developer shell
   exports real credentials. A suite that exercises a provider sets fake values
   after the import and answers with a loopback server or a replaced `fetch`;
-  `tests/app/failure-logs.test.ts` runs a loopback Sentry endpoint, and
+  `tests/app/failure-logs.test.ts` runs a loopback Sentry endpoint or replaces
+  `fetch`, and
   [identity-providers.ts](../tests/app/identity-providers.ts) fakes Apple's
   and Google's key, token, and revoke endpoints with keys generated per run.
   `tests/app/social-fixture.test.ts` covers the clearing.
@@ -675,6 +676,13 @@ previous release's writes.
 `tests/app/failure-logs.test.ts` and `tests/app/email.test.ts` capture the
 [failure logs](deployment.md#failure-logs) of request, page, route, Better
 Auth callback and endpoint, worker, and Resend failures.
+`tests/app/failure-logs.test.ts` also fails polls the same way, as in a
+database outage, which must each log a line with its request ID while only
+the first goes to Sentry, and another action's failure must report at once.
+On a fake clock it checks
+[folded Sentry reports](deployment.md#failure-reports-in-sentry): the hourly
+report with the folded count and latest request ID, and the end of a fold
+after an hour without a failure of its kind.
 `tests/app/catalog.test.ts` captures TMDB failures, invalid TMDB answers, and
 catalog cache failures, once for each request;
 `tests/app/availability.test.ts`, `tests/app/discussion-labels.test.ts`, and
@@ -716,7 +724,7 @@ which must leave the job stale and never retried
 ([issue #359](https://github.com/jubishop/screenr/issues/359)).
 `tests/app/worker-loop.test.ts` runs a worker loop on a fake clock and checks
 its backoff, its one line per kind of failure, the hourly repeat, and its
-recovery line.
+recovery line, and that each line it logs goes to Sentry unfolded.
 `tests/app/push-delivery.test.ts` sends
 [pushes](notifications.md#push-delivery) to two fake APNs servers, one per
 environment, that speak HTTP/2 without TLS on loopback. It checks each kind's
