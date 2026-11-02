@@ -136,8 +136,8 @@ async function reserveCodeEmail(email: string) {
   }, codeLock);
 }
 
-// Failures logCallbackFailure logged. Better Auth's router meets one again
-// when it ends the request, and logEndpointFailure skips it.
+// Failures logCallbackFailure logged. Better Auth's router rethrows one when
+// it ends the request, and logEndpointFailure skips it.
 const loggedCallbackFailures = new WeakSet<object>();
 const loggedCallbackFailure = (error: unknown) =>
   typeof error === "object" &&
@@ -164,25 +164,43 @@ async function logCallbackFailure<T>(callback: string, run: () => Promise<T>) {
 
 // The Better Auth endpoint that each request through the handler reached, as
 // its route pattern, such as /callback/:id, never the requested path, which
-// can hold a token. The router's error handler gets no request to read it from.
+// can hold a token. Better Auth's before hook records it.
 const endpointReached = new AsyncLocalStorage<{ path?: string }>();
 
-// Better Auth's router calls this, in place of printing Better Auth's own line,
-// for an error that its endpoints, hooks, or adapter throw, such as a database
-// error while it checks a code, and answers 500 unless the error is an
-// APIError. An APIError is a deliberate answer unless it is a 500. Errors that
-// Better Auth catches itself never reach this, such as those that end an OAuth
+// Better Auth's router rethrows, under onAPIError.throw, an error that its
+// endpoints, hooks, or adapter throw, such as a database error while it checks
+// a code. Otherwise its router library, better-call, would print the whole
+// error, whose message and PostgreSQL detail can quote the failing row. The
+// handler logs it here, as it does an error the router never catches, such as
+// a failed rate-limit read, and answers the bare 500 that better-call would
+// have. The router still answers an APIError itself, and errors that Better
+// Auth catches itself never reach this, such as those that end an OAuth
 // callback in a redirect with ?error=.
 function logEndpointFailure(error: unknown) {
-  if (
-    isAPIError(error) ? error.statusCode !== 500 : loggedCallbackFailure(error)
-  )
-    return;
+  if (loggedCallbackFailure(error)) return;
   logFailure(
     "auth endpoint failed",
     { endpoint: endpointReached.getStore()?.path },
     error,
   );
+}
+
+// Better Auth prints its own lines, at warn level and above, through this in
+// place of the console. Each keeps only Better Auth's message, never the other
+// arguments, such as the error it caught, whose message and PostgreSQL fields
+// can quote the values that failed. A few calls pass the error itself as the
+// message; those print its class.
+function betterAuthLog(level: string, message: unknown) {
+  const text =
+    typeof message === "string"
+      ? message
+      : message instanceof Error
+        ? message.constructor.name
+        : typeof message;
+  const line = `${level.toUpperCase()} [Better Auth]: ${text}`;
+  if (level === "error") console.error(line);
+  else if (level === "warn") console.warn(line);
+  else console.log(line);
 }
 
 // The bearer plugin returns the session token in `set-auth-token` whenever a
@@ -347,7 +365,8 @@ export function createAuth(
         "/invitation": { window: 60, max: 10 },
       },
     },
-    onAPIError: { onError: logEndpointFailure },
+    onAPIError: { throw: true },
+    logger: { log: betterAuthLog },
     hooks: {
       before: createAuthMiddleware((ctx) => {
         // Better Auth runs this hook for every endpoint a request reaches.
@@ -473,9 +492,20 @@ export function createAuth(
       },
     },
   });
-  // Each request records the endpoint it reaches for logEndpointFailure.
+  // Each request records the endpoint it reaches for logEndpointFailure, which
+  // logs any error Better Auth throws before the handler answers 500.
   const handler = (request: Request) =>
-    endpointReached.run({}, () => betterAuthInstance.handler(request));
+    endpointReached.run({}, async () => {
+      try {
+        return await betterAuthInstance.handler(request);
+      } catch (error) {
+        logEndpointFailure(error);
+        return new Response(null, {
+          status: 500,
+          statusText: "Internal Server Error",
+        });
+      }
+    });
   return { ...betterAuthInstance, handler, fetch: handler };
 }
 
