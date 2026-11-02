@@ -54,6 +54,9 @@ export function useReviewEditor({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [confirming, setConfirming] = useState(false);
+  // Remove's confirmation closes for good once the review is gone, such as
+  // after a removal in another tab, so a new review doesn't reopen it.
+  if (confirming && !saved) setConfirming(false);
   const form = useRef<HTMLFormElement>(null);
   const removeButton = useRef<HTMLButtonElement>(null);
   // Opening focuses the chosen star, or the first one.
@@ -90,6 +93,9 @@ export function useReviewEditor({
   }
   const change = (update: Partial<ReviewDraft>) =>
     setDraft((current) => ({ ...current, ...update }));
+  const ignoreWhileSaving = (event: React.MouseEvent) => {
+    if (busy) event.preventDefault();
+  };
   const button = (
     <button
       type="button"
@@ -119,6 +125,9 @@ export function useReviewEditor({
       aria-label="Your review"
       onSubmit={save}
     >
+      {/* While saving, the rating and spoiler flag keep focus but ignore
+          changes, as the text is read-only, so the saved review is the one
+          shown. */}
       <fieldset className="star-rating">
         <legend>Your rating</legend>
         <div className="star-choices">
@@ -131,7 +140,9 @@ export function useReviewEditor({
                 aria-label={starLabel(rating)}
                 checked={draft.rating === rating}
                 disabled={!interactive}
-                onChange={() => change({ rating })}
+                aria-disabled={busy}
+                onClick={ignoreWhileSaving}
+                onChange={() => busy || change({ rating })}
               />
               <span>
                 {draft.rating !== null && rating <= draft.rating ? "★" : "☆"}
@@ -139,14 +150,15 @@ export function useReviewEditor({
             </label>
           ))}
           {draft.rating !== null && (
-            <button
+            <ActionButton
               type="button"
               className="text-button"
               disabled={!interactive}
+              unavailable={busy}
               onClick={() => change({ rating: null })}
             >
               Clear rating
-            </button>
+            </ActionButton>
           )}
         </div>
       </fieldset>
@@ -169,7 +181,11 @@ export function useReviewEditor({
             type="checkbox"
             checked={draft.spoiler}
             disabled={!interactive}
-            onChange={(event) => change({ spoiler: event.target.checked })}
+            aria-disabled={busy}
+            onClick={ignoreWhileSaving}
+            onChange={(event) =>
+              busy || change({ spoiler: event.target.checked })
+            }
           />
           Contains spoilers
         </label>

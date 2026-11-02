@@ -155,9 +155,11 @@ function ProfileActions({
   const row = useRef<HTMLDivElement>(null);
   const more = useRef<HTMLButtonElement>(null);
   const [choice, setChoice] = useState<Guarded | null>(null);
-  // A friendship that ended elsewhere no longer offers Unfriend.
+  // A friendship that ended elsewhere no longer offers Unfriend, and a new
+  // one doesn't reopen its confirmation.
   const confirming =
     choice === "remove" && !profile.accepted_at ? null : choice;
+  if (choice && !confirming) setChoice(null);
   const name = profile.display_name;
   // The visible actions share one message beneath their row. The open
   // confirmation keeps its own until it closes.

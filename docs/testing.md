@@ -263,6 +263,13 @@ session. Specs import these helpers instead of defining their own copies.
   A scenario that clicks Try again after a failed read also pauses polling: a
   successful poll could remove the button before the click
   ([#200](https://github.com/jubishop/screenr/issues/200)).
+- Playwright waits for a pending page load before it inspects the page, so
+  a scenario can't check the page an action leaves while the next one
+  loads. [Page load helpers](../tests/browser/page-loads.ts) cancel that
+  load instead, which keeps the current page as a slow next page would, and
+  the scenario then opens the page itself. Such
+  scenarios create their member with `serviceWorkers: "block"`, since
+  Playwright can't route page loads that the offline worker answers.
 - Scenarios that test polling intervals or request deadlines don't sleep.
   They install and pause Playwright's clock in the member's context, advance
   it explicitly, and hold the timed request in a route until the test

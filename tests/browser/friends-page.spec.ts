@@ -1,6 +1,6 @@
 import { expect, type Locator, type Page } from "@playwright/test";
 import { test } from "./monitored-test";
-import { person, friend, prepareFriendship } from "./member-fixture";
+import { person, friend, prepareFriendship, userId } from "./member-fixture";
 import { expectErrorBeside, failAction, press } from "./action-errors";
 import { openWithoutPolling, refreshOnReturn } from "./refresh-helpers";
 
@@ -585,4 +585,85 @@ test("a failed read keeps an open Unfriend or Decline confirmation open, with it
   await expect(keepRequest).toBeFocused();
   await confirmDecline.click();
   await expect(region(page, "Requests")).toHaveCount(0);
+});
+
+test("an Unfriend confirmation closes for good once the friendship ends elsewhere", async ({
+  member,
+}) => {
+  const page = await member("unfriendlatch");
+  const viewer = await userId(page);
+  const lee = await person("unfriendlatchlee", "Lee Latch");
+  await friend(viewer, lee);
+  await page.goto("/people/unfriendlatchlee");
+  await page
+    .getByRole("button", { name: "More actions for Lee Latch", exact: true })
+    .click();
+  await page.getByRole("menuitem", { name: "Unfriend", exact: true }).click();
+  const confirmUnfriend = page.getByRole("group", {
+    name: /^Unfriend Lee Latch\?/,
+  });
+  await expect(confirmUnfriend).toBeVisible();
+  await changeRelationship(lee, viewer, "remove");
+  await expect(
+    page.getByRole("button", { name: "Send friend request", exact: true }),
+  ).toBeVisible();
+  await expect(confirmUnfriend).toHaveCount(0);
+  // A new friendship doesn't reopen it.
+  await friend(viewer, lee);
+  await expect(
+    page.getByRole("link", { name: "Watch together", exact: true }),
+  ).toBeVisible();
+  await expect(confirmUnfriend).toHaveCount(0);
+});
+
+test("the Block notice is dropped when another page opens before Friends loads", async ({
+  member,
+}) => {
+  const page = await member("noticeinterrupted");
+  const viewer = await userId(page);
+  const iris = await person("noticeinterruptediris", "Iris Interrupted");
+  await friend(viewer, iris);
+  await page.goto("/people/noticeinterruptediris");
+  // Hold the Friends page that Block opens, then leave for Find instead.
+  let release = () => {};
+  const released = new Promise<void>((resolve) => (release = resolve));
+  let opening = () => {};
+  const opened = new Promise<void>((resolve) => (opening = resolve));
+  await page.route(
+    (url) => url.pathname === "/people",
+    async (route) => {
+      opening();
+      await released;
+      await route.continue();
+    },
+    { times: 1 },
+  );
+  await page
+    .getByRole("button", {
+      name: "More actions for Iris Interrupted",
+      exact: true,
+    })
+    .click();
+  await page.getByRole("menuitem", { name: "Block", exact: true }).click();
+  await page
+    .getByRole("group", { name: /^Block Iris Interrupted\?/ })
+    .getByRole("button", { name: "Block", exact: true })
+    .click();
+  await opened;
+  const nav = page.getByRole("navigation", { name: "Main navigation" });
+  await nav.getByRole("link", { name: "Find", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { level: 1, name: "Find a title" }),
+  ).toBeFocused();
+  release();
+
+  // A later visit to Friends shows the person blocked, without the notice.
+  await nav.getByRole("link", { name: "Friends", exact: true }).click();
+  await expect(
+    region(page, "Blocked people").getByRole("article"),
+  ).toContainText("Iris Interrupted");
+  await expect(
+    page.getByRole("heading", { level: 1, name: "Friends" }),
+  ).toBeFocused();
+  await expect(page.getByText(/^You blocked /)).toHaveCount(0);
 });

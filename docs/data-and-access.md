@@ -416,7 +416,11 @@ links in activity email and shared discussion links survive sign-in
 sign-in and the Google callback continue to `/setup?next=`, which sends a
 member with a profile on to the path and sends a new member there after
 signup. A failed Google attempt returns to the sign-in page with the same
-path. `returnPath` in `src/member-routes.ts` accepts only a root-relative path
+path. The sign-in page drops a one-time result, such as that failure, an
+unavailable invitation, or a deleted account, from its address once it shows
+it, keeping `next`, so a reload omits it
+([issue #362](https://github.com/jubishop/screenr/issues/362)).
+`returnPath` in `src/member-routes.ts` accepts only a root-relative path
 that names a member screen, and rewrites it in canonical form. Absolute,
 protocol-relative, backslash, control-character, and other paths, including
 `/login` and `/setup`, fall back to the friends feed. Invitation links and
@@ -604,8 +608,12 @@ the creator of the invitation actually used to finish signup. Existing accounts
 are not backfilled. Thread reads use one database snapshot. Open pages poll
 every three seconds while visible, waiting for any active refresh to finish,
 and refresh when the page becomes visible again. The page load brings the
-first screen; the page reads it again on load only after a failed load or on
-the not-found view. Successful API reads send a weak `ETag` of their exact
+document's first screen; the page reads it again on load only after a failed
+load or on the not-found view. Each later screen, reached by client
+navigation, reads at once: Back and Forward restore a copy cached before
+later changes, and an unchanged screen answers 304
+([issue #362](https://github.com/jubishop/screenr/issues/362)). Successful
+API reads send a weak `ETag` of their exact
 JSON body, including the reader's own profile. Refreshes send back the
 version they hold in `If-None-Match`, and an unchanged screen answers 304
 without a body. The page then keeps its data and doesn't render again
@@ -631,7 +639,11 @@ linking, and sign-out, share this deadline and its retry messages
 is pending, its button and the others it blocks stay focusable with
 `aria-disabled` and ignore presses, and text fields become read-only, so
 keyboard focus stays on the pressed control
-([issue #142](https://github.com/jubishop/screenr/issues/142)).
+([issue #142](https://github.com/jubishop/screenr/issues/142)). An action
+that opens another page, such as sign-in, email verification, joining,
+sign-out, or account deletion, stays pending until that page loads, so a
+second press can't resend a used code or repeat the action
+([issue #362](https://github.com/jubishop/screenr/issues/362)).
 `src/components/action-button.tsx` is the shared button; `disabled` remains
 only before hydration. Focus stays there after the write, or moves to the
 control that replaced it: Watch together after accepting on a profile, the
@@ -695,7 +707,11 @@ app uses the same action
   [login-code limits](running-screenr.md#provider-configuration). A failed
   account read keeps the step in progress with the last known address, and
   its actions wait for the next read, so a confirmed code is never lost. The
-  web ends on the sign-in page with "Your Screenr account was deleted."
+  confirmed deletion stops the page's refreshes before it is sent, since a
+  read answered after it would open sign-in without the result, and its
+  action stays pending until the sign-in page loads with "Your Screenr
+  account was deleted." That page then drops the result from its address,
+  so a reload omits it.
 - **iPhone app:** Delete account in You → Settings signs in again with an
   email code to the account's address or a sign-in method connected to the
   account, without an invitation. The app keeps the new bearer token only

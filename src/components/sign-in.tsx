@@ -1,8 +1,14 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { codeLimitMessage } from "../shared";
 import { loginPath, setupPath } from "../member-routes";
-import { authClient, api, signOut, useInteractive } from "./client";
+import {
+  authClient,
+  api,
+  forgetResults,
+  signOut,
+  useInteractive,
+} from "./client";
 import { ActionButton } from "./action-button";
 import { PhotoEditor, sendPhoto } from "./photo-editor";
 
@@ -27,6 +33,7 @@ export function SignIn({
     [sent, setSent] = useState(false),
     [busy, setBusy] = useState(false),
     [error, setError] = useState(initialError);
+  useEffect(() => forgetResults("error", "invitation", "deleted"), []);
   async function submit(event: React.SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
     setBusy(true);
@@ -45,13 +52,14 @@ export function SignIn({
             ? codeLimitMessage
             : (result.error.message ?? "Could not sign in."),
         );
-      if (sent) window.location.assign(setupPath(next));
-      else setSent(true);
+      // The form stays busy while the next page loads, so a second press
+      // can't send the used code again.
+      if (sent) return window.location.assign(setupPath(next));
+      setSent(true);
     } catch (error) {
       setError((error as Error).message);
-    } finally {
-      setBusy(false);
     }
+    setBusy(false);
   }
   return (
     <main className="auth-page">
@@ -205,17 +213,18 @@ export function Setup({
               type: "email-verification",
             });
         if (result.error) throw new Error(result.error.message);
-        if (sent) window.location.reload();
-        else setSent(true);
+        // The form stays busy while the next page loads, so a second press
+        // can't send the used code or the finished setup again.
+        if (sent) return window.location.reload();
+        setSent(true);
       } else {
         await api("setup", { name: displayName, username });
-        window.location.assign(next ?? "/");
+        return window.location.assign(next ?? "/");
       }
     } catch (error) {
       setError((error as Error).message);
-    } finally {
-      setBusy(false);
     }
+    setBusy(false);
   }
   return (
     <main className="auth-page">
@@ -312,11 +321,11 @@ export function Setup({
           onClick={async () => {
             setBusy(true);
             setError("");
+            // A successful sign-out stays busy while the sign-in page loads.
             try {
               await signOut();
             } catch (error) {
               setError((error as Error).message);
-            } finally {
               setBusy(false);
             }
           }}

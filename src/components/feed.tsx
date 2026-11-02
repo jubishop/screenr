@@ -328,6 +328,14 @@ function FeedEntry({
     (deletable || item?.item_type === "review") && !!item && !item.active;
   const canDelete =
     deletable && !!item?.active && item.owner_id === user.user_id;
+  // A confirmation closes for good once its action no longer applies, such
+  // as after the title leaves the top 10 elsewhere, so it never reopens
+  // unasked.
+  const confirmable =
+    confirming === "delete"
+      ? canDelete
+      : confirming !== null && ranked && !!title;
+  if (confirming && !confirmable) setConfirming(null);
   // Saving to Want to watch, or removing it, from a friend's entry.
   const saveWantToWatch = async () => {
     if (item && title)

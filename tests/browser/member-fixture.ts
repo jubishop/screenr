@@ -13,6 +13,8 @@ type MemberOptions = {
   complete?: boolean;
   token?: string;
   hasTouch?: boolean;
+  // Playwright can't route page loads that the offline worker answers.
+  serviceWorkers?: "block";
 };
 type SignIn = (
   page: Page,
@@ -128,6 +130,7 @@ export const test = databaseTest.extend<{ signIn: SignIn; member: Member }>({
           viewport: { width: 390, height: 844 },
           timezoneId: "America/Los_Angeles",
           hasTouch: options.hasTouch,
+          serviceWorkers: options.serviceWorkers,
         });
         contexts.push(context);
         const page = await context.newPage();

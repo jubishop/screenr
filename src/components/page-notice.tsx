@@ -3,11 +3,19 @@ import { useEffect, useRef, useState } from "react";
 
 // A result shown on the page an action opens, such as "You blocked Maya
 // Chen." on Friends after Block hides the profile. It lives in memory for the
-// next client navigation only, so a reload or a later visit omits it.
+// next screen only, so a reload omits it, and so does a later visit after
+// another page opens first, such as when the reader leaves before Friends
+// loads.
 let next: { path: string; message: string } | null = null;
 
 export function leaveNotice(path: string, message: string) {
   next = { path, message };
+}
+
+// Each new screen calls this with its path, dropping a notice left for
+// another page. A notice for this one stays until its PageNotice shows it.
+export function screenOpened(path: string) {
+  if (next?.path !== path) next = null;
 }
 
 // The notice takes focus, so keyboard users continue from the result where
