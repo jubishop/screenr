@@ -1,13 +1,23 @@
 name: Repository checks
 
+# Skip a change to Markdown alone, except the Markdown that tests read:
+# tests/test_app_sandbox.py scans these globs and checks that they match.
 on:
   push:
     branches: [main]
-    paths-ignore:
-      - '**.md'
+    paths:
+      - '**'
+      - '!**.md'
+      - 'docs/**/*.md'
+      - 'memory/**/*.md'
+      - '*.md'
   pull_request:
-    paths-ignore:
-      - '**.md'
+    paths:
+      - '**'
+      - '!**.md'
+      - 'docs/**/*.md'
+      - 'memory/**/*.md'
+      - '*.md'
   workflow_dispatch:
 
 permissions:
