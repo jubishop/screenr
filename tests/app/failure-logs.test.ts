@@ -13,7 +13,7 @@ import {
   person,
   assertAuthError,
 } from "./social-fixture";
-import { fakeGoogle, serve } from "./identity-providers";
+import { fakeApple, fakeGoogle, serve } from "./identity-providers";
 
 const { GET, POST } = await import("../../src/app/api/screenr/[action]/route");
 const { initialScreen } = await import("../../src/server/screens");
@@ -685,6 +685,93 @@ test("an OAuth callback with an unknown or used state logs no failure, while a d
   } finally {
     await db.query("ALTER TABLE verification_hidden RENAME TO verification");
   }
+});
+
+test("a Google code exchange that Google rejects for Screenr's web client logs Google's error code and status, while one rejected for the code, or at the Apple callback, logs nothing", async (t) => {
+  const google = fakeGoogle();
+  const apple = fakeApple();
+  Object.assign(process.env, apple.env(), {
+    GOOGLE_CLIENT_ID: google.webClient.id,
+  });
+  t.after(() => {
+    for (const name of [
+      ...Object.keys(apple.env()),
+      "GOOGLE_CLIENT_ID",
+      "GOOGLE_CLIENT_SECRET",
+    ])
+      delete process.env[name];
+  });
+  const origin = "http://localhost:3000";
+  // Starts a web Google sign-in with Screenr's secret, then returns to the
+  // provider's callback with a code, as the browser does. Better Auth keeps
+  // the state and exchanges the code at the fake token endpoint for real.
+  async function returnWithCode(secret: string, provider = "google") {
+    mock.restoreAll();
+    serve(google, apple);
+    process.env.GOOGLE_CLIENT_SECRET = secret;
+    const auth = createAuth({ rateLimit: false });
+    const started = await auth.handler(
+      new Request(`${origin}/api/auth/sign-in/social`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Origin: origin },
+        body: JSON.stringify({ provider: "google", callbackURL: "/" }),
+      }),
+    );
+    assert.equal(started.status, 200, await started.clone().text());
+    const state = new URL((await started.json()).url).searchParams.get(
+      "state",
+    )!;
+    const cookie = started.headers
+      .getSetCookie()
+      .map((value) => value.split(";")[0])
+      .join("; ");
+    const printed = captureOutput();
+    const response = await auth.handler(
+      new Request(
+        `${origin}/api/auth/callback/${provider}?state=${state}&code=private-code`,
+        { headers: { Cookie: cookie } },
+      ),
+    );
+    assert.equal(response.status, 302);
+    assert.equal(
+      new URL(response.headers.get("location")!).searchParams.get("error"),
+      "invalid_code",
+    );
+    excludes(printed, [
+      state,
+      "private-code",
+      secret,
+      google.webClient.secret,
+      "Unauthorized",
+      "Bad Request",
+    ]);
+    return printed;
+  }
+
+  // An expired or already used code: a client causes it, so Better Auth
+  // prints only its own empty line.
+  let printed = await returnWithCode(google.webClient.secret);
+  assert.deepEqual(printed, ["ERROR [Better Auth]: "]);
+
+  // A rotated or deleted secret: every web Google sign-in fails until
+  // GOOGLE_CLIENT_SECRET is replaced.
+  printed = await returnWithCode("rotated-secret");
+  assert.deepEqual(
+    structured(printed).map((line) => JSON.parse(line)),
+    [
+      {
+        event: "google client rejected",
+        status: 401,
+        reason: "invalid_client",
+      },
+    ],
+  );
+
+  // Anyone can bring a Google sign-in's state to the Apple callback, which
+  // the web never uses. Apple rejects the exchange, which carries no client
+  // secret, as invalid_client; that says nothing about Screenr's Google client.
+  printed = await returnWithCode(google.webClient.secret, "apple");
+  assert.deepEqual(printed, ["ERROR [Better Auth]: "]);
 });
 
 test("a request error that reaches Next logs the route pattern, its type, and the method without the path or headers", async () => {

@@ -930,6 +930,7 @@ journalctl -u screenr-worker --since '1 day ago' --no-pager | grep '"event":"ema
 | `auth callback failed` | web | `callback`, the Better Auth callback, such as `sendVerificationOTP` or `user.create.before` |
 | `auth endpoint failed` | web | `endpoint`, Better Auth's route pattern, such as `/sign-in/email-otp` or `/callback/:id`, when known, for an unexpected error from Better Auth's handler, such as a database error in its adapter or rate limit or a schema mismatch, which Screenr answers with a bare 500 |
 | `auth failure caught` | web | `endpoint`, as for `auth endpoint failed`, when known, for an unexpected error that Better Auth caught and answered itself, such as a database error while Google or Apple sign-in creates the account or while it reads a session |
+| `google client rejected` | web | `status` and Google's `reason`, `invalid_client` or `unauthorized_client`: Google's token endpoint rejected Screenr's web client when a web Google sign-in exchanged its code, as after `GOOGLE_CLIENT_SECRET` is rotated or deleted, so every web Google sign-in fails until `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` are fixed |
 | `code email cap reached` | web | No fields: the Screenr-wide limit of 40 [code emails a day](running-screenr.md#provider-configuration) refused a code request |
 | `apple_token_failed` | web | `status` and Apple's `reason` for an HTTP reply from Apple's token endpoint, or error fields |
 | `apple token unreadable` | web | Error fields only: account deletion skipped a Sign in with Apple token sealed under an earlier `BETTER_AUTH_SECRET` |
@@ -1020,9 +1021,9 @@ implementation, which settled it on 2026-11-01 from Better Auth 1.7.10's code:
 - **Client errors:** the state error is the only client-caused error that
   reaches `error` level with an error object. `State not found` passes the
   callback's `error` parameter, a rejected authorization code passes Google's
-  reply as a plain object, and Better Auth's router answers a malformed
-  callback query with 400 before `INVALID_CALLBACK_REQUEST` can log a parse
-  error.
+  reply as a plain object (see `google client rejected` below), and Better
+  Auth's router answers a malformed callback query with 400 before
+  `INVALID_CALLBACK_REQUEST` can log a parse error.
 - **Server failures:** they arrive in more classes than `DatabaseError` and
   Node system errors, such as pg's own `Error` for a lost connection or the
   five-second connection timeout, Better Auth's `BetterAuthError` for
@@ -1033,6 +1034,24 @@ implementation, which settled it on 2026-11-01 from Better Auth 1.7.10's code:
   when it rewords one. Screenr recognizes the state error by its
   `BetterAuthError` name and its code, such as `state_mismatch`, which the
   production build keeps; the build renames Better Auth's classes.
+
+A web Google sign-in returns to Better Auth's OAuth callback, which exchanges
+the code at Google's token endpoint. When Google rejects the exchange, Better
+Auth logs Google's JSON reply, with the HTTP status and status text added, as
+a plain object, then redirects with `?error=invalid_code`
+([issue #441](https://github.com/jubishop/screenr/issues/441)). Most
+rejections come from the client, such as an expired or already used code
+(`invalid_grant`), and log nothing. `invalid_client` or `unauthorized_client`
+(RFC 6749) means Google refused Screenr's own web client, as for a wrong,
+rotated, or deleted `GOOGLE_CLIENT_SECRET`, and logs `google client rejected`
+with the status and that code, never Google's `error_description` or anything
+else from the reply. The iPhone app's ID token sign-in uses no secret and
+keeps working, so it can hide this outage. A deleted client fails earlier:
+Google shows `deleted_client` on its own authorization page, which never
+returns to Screenr, so that outage logs nothing. Screenr reads the
+reply only at the callback for Google: Apple's callback, which the web never
+uses, still exchanges a code that anyone brings with a Google sign-in's
+state, and Apple's `invalid_client` for it logs nothing.
 
 For a Resend reply, `email delivery failed` adds the HTTP `status` and the
 `provider` error name, such as `daily_quota_exceeded` or `invalid_api_key`.

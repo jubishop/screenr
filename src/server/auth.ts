@@ -164,8 +164,12 @@ async function logCallbackFailure<T>(callback: string, run: () => Promise<T>) {
 
 // The Better Auth endpoint that each request through the handler reached, as
 // its route pattern, such as /callback/:id, never the requested path, which
-// can hold a token. Better Auth's before hook records it.
-const endpointReached = new AsyncLocalStorage<{ path?: string }>();
+// can hold a token, and the provider an OAuth callback names. Better Auth's
+// before hook records them.
+const endpointReached = new AsyncLocalStorage<{
+  path?: string;
+  provider?: string;
+}>();
 
 // Better Auth's router rethrows, under onAPIError.throw, an error that its
 // endpoints, hooks, or adapter throw, such as a database error while it checks
@@ -204,6 +208,38 @@ const clientStateError = (error: Error) => {
   );
 };
 
+// The OAuth error codes (RFC 6749 section 5.2) with which Google's token
+// endpoint rejects Screenr's own web client: a wrong client ID or secret, as
+// after GOOGLE_CLIENT_SECRET is rotated or deleted, or a client that may not
+// exchange codes. Every web Google sign-in then fails. Other codes, such as
+// invalid_grant for an expired or already used code, come from the client.
+const googleClientRejections = new Set([
+  "invalid_client",
+  "unauthorized_client",
+]);
+
+// When Google's token endpoint rejects a web Google sign-in's code, Better
+// Auth logs Google's JSON reply, with the HTTP status and status text added,
+// as a plain object, not an Error. Only the status and an error code that
+// names Screenr's own client are read from it, never Google's description.
+function googleClientRejection(args: unknown[]) {
+  const reached = endpointReached.getStore();
+  if (reached?.path !== "/callback/:id" || reached.provider !== "google")
+    return undefined;
+  for (const arg of args) {
+    if (typeof arg !== "object" || arg === null || arg instanceof Error)
+      continue;
+    const { error, status } = arg as { error?: unknown; status?: unknown };
+    if (
+      typeof error === "string" &&
+      googleClientRejections.has(error) &&
+      typeof status === "number"
+    )
+      return { status, reason: error };
+  }
+  return undefined;
+}
+
 // Better Auth catches some failures, answers them itself, and logs the error
 // at error level among its arguments: a database error while Google or Apple
 // sign-in finds or creates the account ends in an error redirect or answer, a
@@ -211,7 +247,14 @@ const clientStateError = (error: Error) => {
 // succeeds. Each such error is logged here, except an APIError, which is a
 // deliberate answer; a failure logCallbackFailure already logged; and a bad
 // OAuth state, which a client causes (docs/deployment.md#failure-logs).
+// Google's rejection of Screenr's own web client in a code exchange, which
+// arrives as a plain object, is logged here too.
 function logCaughtFailure(args: unknown[]) {
+  const rejection = googleClientRejection(args);
+  if (rejection) {
+    logFailure("google client rejected", rejection);
+    return;
+  }
   const error = args.find((arg) => arg instanceof Error);
   if (
     !error ||
@@ -416,7 +459,10 @@ export function createAuth(
       before: createAuthMiddleware((ctx) => {
         // Better Auth runs this hook for every endpoint a request reaches.
         const reached = endpointReached.getStore();
-        if (reached) reached.path ??= ctx.path;
+        if (reached && !reached.path) {
+          reached.path = ctx.path;
+          reached.provider = ctx.params?.id;
+        }
         return logCallbackFailure("hooks.before", async () => {
           // The web has no Sign in with Apple; its redirect sign-in would
           // otherwise fail for want of a client secret.
