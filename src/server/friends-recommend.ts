@@ -1,4 +1,5 @@
 import { db } from "./db";
+import { titleObject } from "./catalog";
 import { viewerStatus } from "./feed";
 import type { FriendsRecommendation } from "../shared";
 
@@ -14,10 +15,7 @@ export async function friendsRecommend(
 ): Promise<FriendsRecommendation[]> {
   const { rows } = await db.query<{ recommendation: FriendsRecommendation }>(
     `WITH direct_friends AS (
-      SELECT CASE WHEN low_id=$1 THEN high_id ELSE low_id END AS user_id
-      FROM friendship
-      WHERE $1 IN (low_id,high_id) AND accepted_at IS NOT NULL
-        AND NOT screenr_blocked(low_id,high_id)
+      SELECT user_id FROM screenr_friends($1)
     ), recommendations AS (
       -- feed_item holds at most one Recommend per person and title.
       SELECT f.title_id,f.activity_at,coalesce(40-e.rank,20) AS contribution,
@@ -32,9 +30,7 @@ export async function friendsRecommend(
           ORDER BY rank NULLS LAST,activity_at DESC,username) AS recommended_by
       FROM recommendations GROUP BY title_id
     )
-    SELECT jsonb_build_object(
-      'id',t.id,'kind',t.kind,'tmdb_id',t.tmdb_id,'name',t.name,
-      'overview',t.overview,'poster_path',t.poster_path,'release_date',t.release_date,
+    SELECT jsonb_build_object(${titleObject("t")},
       'recommended_by',s.recommended_by,
       'viewer_status',${viewerStatus("t.id")},
       'viewer_recommended',EXISTS (SELECT 1 FROM feed_item own WHERE own.owner_id=$1

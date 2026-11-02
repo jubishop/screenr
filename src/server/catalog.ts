@@ -180,9 +180,25 @@ export async function searchTitles(
       }));
   });
 }
+// Every Title field, in order. Queries that return titles select these, and
+// the type checker flags a field added to Title but missing here.
+const titleFields = Object.keys({
+  id: true,
+  kind: true,
+  tmdb_id: true,
+  name: true,
+  overview: true,
+  poster_path: true,
+  release_date: true,
+} satisfies Record<keyof Title, true>);
+// The Title columns of `table`, as a select list.
+export const titleColumns = (table: string) =>
+  titleFields.map((field) => `${table}.${field}`).join(",");
+// The Title columns of `table`, as jsonb_build_object arguments.
+export const titleObject = (table: string) =>
+  titleFields.map((field) => `'${field}',${table}.${field}`).join(",");
 type TitleRow = Title & StoredScore & { release: StoredRelease | null };
-const titleColumns =
-  "id,kind,tmdb_id,name,overview,poster_path,release_date,release,vote_average,vote_count";
+const storedTitleColumns = `${titleColumns("title")},release,vote_average,vote_count`;
 const currentTitle =
   "(fetched_at>now()-interval '1 day' OR retry_after>now()) IS TRUE AS current";
 function presentTitle({
@@ -287,7 +303,7 @@ export async function getTitleWithRelease(
     throw new AppError("Title not found.", 404);
   const stored = (
     await db.query<TitleRow & { current: boolean }>(
-      `SELECT ${titleColumns},${currentTitle} FROM title WHERE id=$1`,
+      `SELECT ${storedTitleColumns},${currentTitle} FROM title WHERE id=$1`,
       [id],
     )
   ).rows[0];
@@ -322,7 +338,7 @@ export async function getTitleReleases(
   try {
     const { rows } = valid.length
       ? await db.query<TitleRow & { current: boolean }>(
-          `SELECT ${titleColumns},${currentTitle} FROM title WHERE id=ANY($1::text[])`,
+          `SELECT ${storedTitleColumns},${currentTitle} FROM title WHERE id=ANY($1::text[])`,
           [valid],
         )
       : { rows: [] };

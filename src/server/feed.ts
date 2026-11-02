@@ -34,10 +34,20 @@ export const entryColumn = (itemType: string) =>
         : itemType === "post"
           ? "discussion_post_id"
           : "feed_item_id";
+// The columns of a reply or reaction that name its entry, one per entry type.
+const entryColumns = [
+  "feed_item_id",
+  "title_comment_id",
+  "watch_progress_id",
+  "review_id",
+  "discussion_post_id",
+];
 // Whether reply or reaction `row` belongs to the entry with ID `entry`.
 export const belongsTo = (row: string, entry: string) =>
-  `(${row}.feed_item_id=${entry} OR ${row}.title_comment_id=${entry} OR ${row}.watch_progress_id=${entry}
-    OR ${row}.review_id=${entry} OR ${row}.discussion_post_id=${entry})`;
+  `(${entryColumns.map((column) => `${row}.${column}=${entry}`).join(" OR ")})`;
+// The ID of the entry that reply `row` belongs to.
+export const entryOf = (row: string) =>
+  `coalesce(${entryColumns.map((column) => `${row}.${column}`).join(",")})`;
 // Deleted standalone comments and posts and removed reviews keep their
 // replies but have no content, so they show and take no reactions.
 export const erasable = (itemType: string) =>
