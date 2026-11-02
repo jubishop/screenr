@@ -6,6 +6,7 @@ import {
 } from "@playwright/test";
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
+import { db } from "./database-fixture";
 import { monitorErrors } from "./monitored-test";
 const { createInvitation } = await import("../../src/server/invitations");
 
@@ -20,6 +21,17 @@ export async function join(
     displayName?: string;
   } = {},
 ) {
+  const email = `${name}.browser@example.test`;
+  // The harness resets its database once per run. Joining again, as
+  // `--repeat-each` would, signs in to the account made earlier and would wait
+  // for setup until the test timed out.
+  const { rowCount } = await db.query('SELECT 1 FROM "user" WHERE email=$1', [
+    email,
+  ]);
+  if (rowCount)
+    throw new Error(
+      `${email} already joined in this browser run. Repeat a test by running its command again.`,
+    );
   const context = await browser.newContext({
     viewport: { width: 390, height: 844 },
     timezoneId: "America/Los_Angeles",
@@ -28,7 +40,6 @@ export async function join(
   const page = await context.newPage();
   monitorErrors(page);
   const token = options.token ?? (await createInvitation(null, 1)).token;
-  const email = `${name}.browser@example.test`;
   await page.goto(`/join/${token}`);
   await signInWithCode(page, email);
   if (options.complete === false) {

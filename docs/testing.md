@@ -445,7 +445,8 @@ there are no shared invitation-capacity files. The harness resets its locked
 database once before the suite. Tests must not reset it or change another
 test's users. Rows remain for that run, contexts close after each test, and
 database pools close when their worker finishes. Run repeated measurements as
-separate commands so each starts with a reset database.
+separate commands so each starts with a reset database. Playwright's
+`--repeat-each` reruns a test in the same run, where its users already exist.
 
 Repeated passes cannot prove the absence of every race. Future tests must
 preserve these ownership rules. Adding a shared mutable fixture or another
