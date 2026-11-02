@@ -175,7 +175,7 @@ const endpointReached = new AsyncLocalStorage<{ path?: string }>();
 // a failed rate-limit read, and answers the bare 500 that better-call would
 // have. The router still answers an APIError itself, and errors that Better
 // Auth catches itself never reach this, such as those that end an OAuth
-// callback in a redirect with ?error=.
+// callback in a redirect with ?error=; logCaughtFailure logs those.
 function logEndpointFailure(error: unknown) {
   if (loggedCallbackFailure(error)) return;
   logFailure(
@@ -185,12 +185,55 @@ function logEndpointFailure(error: unknown) {
   );
 }
 
+// The codes of the errors Better Auth logs when an OAuth callback brings a
+// state it can't use: unknown, already used, expired, or from another browser.
+// A client causes these, not a server failure. Better Auth's StateError keeps
+// the BetterAuthError name, and the production build renames its class.
+const clientStateCodes = new Set([
+  "state_not_found",
+  "state_mismatch",
+  "state_security_mismatch",
+  "state_invalid",
+]);
+const clientStateError = (error: Error) => {
+  const code = (error as { code?: unknown }).code;
+  return (
+    error.name === "BetterAuthError" &&
+    typeof code === "string" &&
+    clientStateCodes.has(code)
+  );
+};
+
+// Better Auth catches some failures, answers them itself, and logs the error
+// at error level among its arguments: a database error while Google or Apple
+// sign-in finds or creates the account ends in an error redirect or answer, a
+// failed session read in a 500 without a cause, and a failed sign-out still
+// succeeds. Each such error is logged here, except an APIError, which is a
+// deliberate answer; a failure logCallbackFailure already logged; and a bad
+// OAuth state, which a client causes (docs/deployment.md#failure-logs).
+function logCaughtFailure(args: unknown[]) {
+  const error = args.find((arg) => arg instanceof Error);
+  if (
+    !error ||
+    isAPIError(error) ||
+    loggedCallbackFailure(error) ||
+    clientStateError(error)
+  )
+    return;
+  logFailure(
+    "auth failure caught",
+    { endpoint: endpointReached.getStore()?.path },
+    error,
+  );
+}
+
 // Better Auth prints its own lines, at warn level and above, through this in
 // place of the console. Each keeps only Better Auth's message, never the other
 // arguments, such as the error it caught, whose message and PostgreSQL fields
 // can quote the values that failed. A few calls pass the error itself as the
-// message; those print its class.
-function betterAuthLog(level: string, message: unknown) {
+// message; those print its class. An error-level line's error is logged as a
+// failure too.
+function betterAuthLog(level: string, message: unknown, ...args: unknown[]) {
   const text =
     typeof message === "string"
       ? message
@@ -198,8 +241,10 @@ function betterAuthLog(level: string, message: unknown) {
         ? message.constructor.name
         : typeof message;
   const line = `${level.toUpperCase()} [Better Auth]: ${text}`;
-  if (level === "error") console.error(line);
-  else if (level === "warn") console.warn(line);
+  if (level === "error") {
+    console.error(line);
+    logCaughtFailure([message, ...args]);
+  } else if (level === "warn") console.warn(line);
   else console.log(line);
 }
 
