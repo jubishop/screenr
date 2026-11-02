@@ -2,7 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { PoolClient } from "pg";
-import { pruneCatalog } from "./catalog";
+import { pruneCatalog } from "./catalog-retention";
 import { db, domainLock, rollback } from "./db";
 import { logFailure } from "./log";
 import {
