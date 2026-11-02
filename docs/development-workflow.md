@@ -235,8 +235,8 @@ push finds a recorded pass. Never bypass the hook with `git push --no-verify`.
 - **iOS files:** `ios/` and `bin/format-swift`, which the app's build runs.
   The server's payload fixtures live in `ios/ScreenrKit/Fixtures/`, so a
   server change that regenerates them counts. The one exemption is Markdown
-  directly in `ios/`, such as `ios/README.md` and `ios/AGENTS.md`: no build
-  or check reads it, so changes only to it skip the check. Markdown in any
+  directly in `ios/`, such as `ios/README.md` and `ios/AGENTS.md`: no iOS
+  build or check reads it, so changes only to it skip the check. Markdown in any
   folder under `ios/` counts, because SwiftPM targets and Xcode's
   synchronized folders, such as `ios/ScreenrKit/Sources/ScreenrKit/` and
   `ios/Screenr/`, build every file in them, and SwiftPM warns about Markdown
@@ -626,25 +626,30 @@ passes only when they passed or `scope` skipped them, and that every run
 packages the release while only a deploying run uploads it.
 
 The workflow runs for pull requests, pushes to `main`, and manual runs. A
-change only to Markdown needs no check jobs, except Markdown in `docs/`,
-`memory/`, and the root. `tests/test_app_sandbox.py` scans those pages for
-runbooks that would run release code outside the sandbox, so a change to one
-alone still runs the checks
-([#371](https://github.com/jubishop/screenr/issues/371)).
+change only to Markdown needs no check jobs, except Markdown that a check
+reads, so that its failure can't surface first in an unrelated pull request.
+`tests/test_app_sandbox.py` scans the pages in `docs/`, `memory/`, and the
+root for runbooks that would run release code outside the sandbox
+([#371](https://github.com/jubishop/screenr/issues/371)). The `static` job's
+`bin/check` checks the links and heading anchors of every tracked Markdown
+file, which otherwise lives only in `ios/` and `bin/`
+([#439](https://github.com/jubishop/screenr/issues/439)). A change to
+Markdown in any of these folders alone runs every check job.
 
 A push to `main` skips other Markdown with a `paths` filter in the
-[engineering policy's](foundation/engineering-policy.md#hosted-ci) form, so a
-push only to `ios/README.md` starts no run. A run that started only to skip
-would join the workflow's concurrency group and could replace a pending run
-that deploys. A pull request has no filter, because a skipped workflow
-reports no status and merging requires `check`
+[engineering policy's](foundation/engineering-policy.md#hosted-ci) form. A
+run that started only to skip would join the workflow's concurrency group
+and could replace a pending run that deploys. A pull request has no filter,
+because a skipped workflow reports no status and merging requires `check`
 ([#372](https://github.com/jubishop/screenr/issues/372)). Its `scope` job
 compares GitHub's test merge commit with the base it merged into, counting a
 renamed file by both paths. When only other Markdown changed, the check jobs
 are skipped and `check` passes in under a minute. Any other event, and any
 doubt, runs every job. `tests/test_app_sandbox.py` checks that the filter
-re-includes exactly the globs it scans and that `bin/ci-scope` runs the
-checks for exactly the tracked Markdown it scans.
+re-includes exactly these folders' globs, that `bin/ci-scope` runs the checks
+for the same Markdown, and that the globs cover every tracked Markdown file.
+Markdown added in a new folder fails that test until both skips include the
+folder.
 
 Each browser shard builds its own production artifact, as the
 [browser harness](testing.md#browser-harness) requires, and the `release` job
@@ -707,6 +712,11 @@ started.
   test names use.
 - **ShellCheck:** the `static` job installs ShellCheck from APT only when the
   runner image lacks it, then prints its version.
+- **PostgreSQL client commands:** the backup round trip in
+  `tests/app/backup-restore.test.ts` runs `pg_dump`, `pg_restore`, `psql`,
+  `createdb`, and `dropdb` from the image's `/usr/lib/postgresql/18/bin`, the
+  path production uses. The Ubuntu 26.04 image installs PostgreSQL 18 with
+  its service disabled.
 
 The jobs use the image's library versions, which GitHub refreshes every week
 or two, and their browsers load only local test servers. If an image drops a
@@ -805,7 +815,10 @@ version, so a pinned digest and its update pull requests would add work
 without catching a production difference. Change the tag in each service of
 `.github/workflows/check.yml`, and the Homebrew formula in
 [local setup](running-screenr.md#local-setup), with production's major version
-([#124](https://github.com/jubishop/screenr/issues/124)).
+([#124](https://github.com/jubishop/screenr/issues/124)). The
+[backup round trip](testing.md#coverage) needs the client commands of the
+server's major release, so a new major also needs them on the runner image,
+or installed in the `app` job, before CI passes.
 
 ## Main branch delivery
 
@@ -887,7 +900,7 @@ pushes work. GitHub still reports a pull request as blocked while `check`
 fails or runs, such as `BLOCKED` in `gh pr view --json mergeStateStatus`.
 `gh api repos/jubishop/screenr/rulesets` lists it. The
 [check workflow](#ci-jobs) runs for every pull request, and its `scope` job
-skips the other check jobs when only Markdown that no test reads changed.
+skips the other check jobs when only Markdown that no check reads changed.
 
 ## Scheduled memory audit
 

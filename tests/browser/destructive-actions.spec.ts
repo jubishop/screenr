@@ -1,7 +1,11 @@
 import { expect, type Locator, type Page } from "@playwright/test";
 import { browserConfig } from "../../scripts/browser-config";
 import { test } from "./monitored-test";
-import { prepareFriendship, userId } from "./member-fixture";
+import { friend, person, prepareFriendship, userId } from "./member-fixture";
+import { keepThroughFailedRead, openWithoutPolling } from "./refresh-helpers";
+
+const { addComment } = await import("../../src/server/comments");
+const { createInvitation } = await import("../../src/server/invitations");
 
 async function post(page: Page, action: string, data: unknown) {
   const response = await page.request.post(`/api/screenr/${action}`, {
@@ -232,5 +236,90 @@ test("Decline on the Friends page and Revoke invitation ask for an in-page confi
     viewer.getByText("No active invitations.", { exact: true }),
   ).toBeVisible();
   expect(seen.writes("revoke-invite")).toBe(1);
+  expect(seen.dialogs).toEqual([]);
+});
+
+test("a failed read keeps an open Revoke, Delete, or Remove confirmation open, with its action waiting for the next read", async ({
+  member,
+}) => {
+  const viewer = await member("keepopenviewer");
+  const id = await userId(viewer);
+  const fay = await person("keepopenfay", "Fay Friend");
+  await friend(id, fay);
+  await createInvitation(id, 1);
+  const entry = await post(viewer, "activity", {
+    title: "movie:987656",
+    field: "recommended",
+    value: true,
+  });
+  const reply = await addComment(fay, entry, "A friend’s reply", false);
+  const nested = await addComment(fay, entry, "A nested reply", false, reply);
+  const standalone = await post(viewer, "title-comment", {
+    title: "movie:987657",
+    body: "A standalone comment to delete",
+    spoiler: false,
+  });
+  const seen = watch(viewer);
+
+  await openWithoutPolling(viewer, "/invites");
+  const card = viewer.locator(".invite-card");
+  let confirm = await keepThroughFailedRead(viewer, {
+    open: card.getByRole("button", { name: "Revoke", exact: true }),
+    question: "Revoke this invitation? Its link will stop working.",
+    action: "Revoke",
+    content: viewer.getByRole("heading", { name: "Invite friends" }),
+  });
+  await confirm.click();
+  await expect(card).toHaveCount(0);
+  expect(seen.writes("revoke-invite")).toBe(1);
+
+  // A feed entry's Delete, and Remove on comments in its conversation.
+  await openWithoutPolling(viewer, "/");
+  confirm = await keepThroughFailedRead(viewer, {
+    open: viewer
+      .locator(`[data-item-heading="${standalone}"]`)
+      .getByRole("button", { name: "Delete", exact: true }),
+    question: "Delete this comment? Its text will be erased.",
+    action: "Delete",
+    content: viewer.getByText("A standalone comment to delete"),
+  });
+  await confirm.click();
+  await expect(viewer.locator(`[data-item-id="${standalone}"]`)).toHaveCount(0);
+  const removeQuestion = "Remove this comment? Its text will be erased.";
+  const removeNested = viewer
+    .locator(`[data-comment-id="${nested}"]`)
+    .getByRole("button", { name: "Remove", exact: true });
+  const replies = (name: string) =>
+    viewer
+      .locator(`[data-item-id="${entry}"]`)
+      .getByRole("button", { name, exact: true });
+  // Hiding replies closes a nested reply's confirmation.
+  await replies("View 1 reply").click();
+  await removeNested.click();
+  const removeGroup = viewer.getByRole("group", { name: removeQuestion });
+  await expect(removeGroup).toBeVisible();
+  await replies("Hide 1 reply").click();
+  await replies("View 1 reply").click();
+  await expect(removeGroup).toHaveCount(0);
+  await expect(removeNested).toBeVisible();
+  confirm = await keepThroughFailedRead(viewer, {
+    open: removeNested,
+    question: removeQuestion,
+    action: "Remove",
+    content: viewer.getByText("A nested reply", { exact: true }),
+  });
+  await confirm.click();
+  await expect(removeNested).toHaveCount(0);
+  confirm = await keepThroughFailedRead(viewer, {
+    open: viewer
+      .locator(`[data-comment-id="${reply}"]`)
+      .getByRole("button", { name: "Remove", exact: true }),
+    question: removeQuestion,
+    action: "Remove",
+    content: viewer.getByText("A friend’s reply", { exact: true }),
+  });
+  await confirm.click();
+  await expect(viewer.getByText("A friend’s reply")).toHaveCount(0);
+  expect(seen.writes("remove-comment")).toBe(3);
   expect(seen.dialogs).toEqual([]);
 });

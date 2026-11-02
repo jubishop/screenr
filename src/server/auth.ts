@@ -18,6 +18,7 @@ import {
 import { db, transaction } from "./db";
 import { activeInvitation, invitationHash } from "./invitations";
 import { queueCode } from "./email";
+import { googleClientRejections } from "./google-client";
 import { logFailure } from "./log";
 import { copyGooglePhoto } from "./photos";
 
@@ -208,20 +209,11 @@ const clientStateError = (error: Error) => {
   );
 };
 
-// The OAuth error codes (RFC 6749 section 5.2) with which Google's token
-// endpoint rejects Screenr's own web client: a wrong client ID or secret, as
-// after GOOGLE_CLIENT_SECRET is rotated or deleted, or a client that may not
-// exchange codes. Every web Google sign-in then fails. Other codes, such as
-// invalid_grant for an expired or already used code, come from the client.
-const googleClientRejections = new Set([
-  "invalid_client",
-  "unauthorized_client",
-]);
-
 // When Google's token endpoint rejects a web Google sign-in's code, Better
 // Auth logs Google's JSON reply, with the HTTP status and status text added,
 // as a plain object, not an Error. Only the status and an error code that
-// names Screenr's own client are read from it, never Google's description.
+// names Screenr's own client (googleClientRejections) are read from it, never
+// Google's description.
 function googleClientRejection(args: unknown[]) {
   const reached = endpointReached.getStore();
   if (reached?.path !== "/callback/:id" || reached.provider !== "google")
@@ -243,10 +235,10 @@ function googleClientRejection(args: unknown[]) {
 // Better Auth catches some failures, answers them itself, and logs the error
 // at error level among its arguments: a database error while Google or Apple
 // sign-in finds or creates the account ends in an error redirect or answer, a
-// failed session read in a 500 without a cause, and a failed sign-out still
-// succeeds. Each such error is logged here, except an APIError, which is a
-// deliberate answer; a failure logCallbackFailure already logged; and a bad
-// OAuth state, which a client causes (docs/deployment.md#failure-logs).
+// failed session read in a 500, and a failed sign-out still succeeds. Each
+// such error is logged here, except an APIError, which is a deliberate
+// answer; a failure logCallbackFailure already logged; and a bad OAuth state,
+// which a client causes (docs/deployment.md#failure-logs).
 // Google's rejection of Screenr's own web client in a code exchange, which
 // arrives as a plain object, is logged here too.
 function logCaughtFailure(args: unknown[]) {
@@ -432,6 +424,9 @@ export function createAuth(
     rateLimit?: boolean;
     // Tests replace Google's image servers.
     fetchPhoto?: typeof fetch;
+    // Better Auth checks its tables when an instance starts and on each
+    // request. Migrations turn that off and check after they run.
+    validateSchema?: boolean;
   } = {},
 ) {
   // Tests and fixtures that disable rate limits also skip the code caps.
@@ -442,6 +437,7 @@ export function createAuth(
     baseURL: process.env.BETTER_AUTH_URL,
     secret: process.env.BETTER_AUTH_SECRET,
     database: db,
+    advanced: { database: { validateSchema: options.validateSchema ?? true } },
     telemetry: { enabled: false },
     // Screenr has no passwords. Better Auth registers these routes anyway.
     disabledPaths: [
@@ -457,6 +453,13 @@ export function createAuth(
       // Screenr never calls this one. It checks a code without consuming it,
       // and concurrent guesses evade its attempt limit.
       "/email-otp/check-verification-otp",
+      // Screenr never calls these either. The refresh route would send an
+      // Apple account's sealed refresh token to Apple's token endpoint under
+      // Screenr's bundle ID, and the other two refresh through the same code
+      // when a stored access token has expired.
+      "/refresh-token",
+      "/get-access-token",
+      "/account-info",
     ],
     socialProviders: { ...googleProvider(), ...appleProvider() },
     user: {

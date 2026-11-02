@@ -11,11 +11,10 @@ import { Client } from "pg";
 const execute = promisify(execFile);
 const loader = resolve("node_modules/tsx/dist/loader.mjs");
 const harness = resolve("scripts/browser-server.ts");
-// Each harness start usually takes under a second, but its test-database setup
-// may drop removed checkouts' databases, and each drop forces a PostgreSQL
-// checkpoint, which took up to 18 seconds in a parallel run (#427). The test
-// waits for the harness's own signals instead of a deadline, and this bound
-// only ends a run that hangs.
+// Each harness start usually takes under a second, but in a parallel run one
+// stalled for over 10 seconds while test-database setup waited for PostgreSQL
+// checkpoints (#427). The test waits for the harness's own signals instead of
+// a deadline, and this bound only ends a run that hangs.
 const patience = 180_000;
 
 test("the browser command builds current checkout sources before serving and stops on build failure", async (t) => {

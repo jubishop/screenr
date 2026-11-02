@@ -1,12 +1,14 @@
 name: Repository checks
 
-# A change only to Markdown that no test reads needs no check jobs.
-# tests/test_app_sandbox.py scans the Markdown these globs re-include and
-# checks that both skips match it. A push to main skips with this filter: a
-# run that started only to skip would join the concurrency group below and
-# could replace a pending run that deploys. Every pull request runs, and the
-# scope job skips the check jobs instead, so the check that merging requires
-# always reports.
+# A change only to Markdown that no check reads needs no check jobs. Tests
+# read the Markdown in docs/, memory/, and the root, and the document checks
+# in bin/check read every tracked Markdown file, which otherwise lives in ios/
+# and bin/. tests/test_app_sandbox.py checks that both skips re-include these
+# globs and that they cover every tracked Markdown file. A push to main skips
+# with this filter: a run that started only to skip would join the
+# concurrency group below and could replace a pending run that deploys. Every
+# pull request runs, and the scope job skips the check jobs instead, so the
+# check that merging requires always reports.
 on:
   push:
     branches: [main]
@@ -16,6 +18,8 @@ on:
       - 'docs/**/*.md'
       - 'memory/**/*.md'
       - '*.md'
+      - 'ios/**/*.md'
+      - 'bin/**/*.md'
   pull_request:
   workflow_dispatch:
 

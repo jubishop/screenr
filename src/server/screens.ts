@@ -13,7 +13,7 @@ import {
   getTitleWithRelease,
 } from "./catalog";
 import { listInvitations } from "./invitations";
-import { AppError, db } from "./db";
+import { AppError, db, settleAll } from "./db";
 import { watchTogether } from "./watch-together";
 import { wantToWatch } from "./want-to-watch";
 import { titleSuggestions } from "./title-suggestions";
@@ -31,7 +31,7 @@ import { parseMemberRoute, type MemberRoute } from "../member-routes";
 import type { Person, Title } from "../shared";
 
 export async function loadScreen(userId: string, requestedPath: string) {
-  const [content, unread] = await Promise.all([
+  const [content, unread] = await settleAll([
     loadContent(userId, parseMemberRoute(requestedPath)),
     unreadNotifications(userId),
   ]);
@@ -105,7 +105,7 @@ async function loadContent(userId: string, route: MemberRoute) {
       route.services === "mine" ? serviceProviders(serviceIds) : null;
     const hideFinished = route.finished === "hidden";
     const [suggestions, { titles: recommendations, finished }] =
-      await Promise.all([
+      await settleAll([
         titleSuggestions(userId, services),
         friendsRecommend(userId, { type: route.type, services, hideFinished }),
       ]);
@@ -192,7 +192,7 @@ async function loadContent(userId: string, route: MemberRoute) {
       watch,
       own,
       ranks,
-    ] = await Promise.all([
+    ] = await settleAll([
       stored,
       conversations(userId, { title: id }),
       getTitleTrailer(id, stored),
@@ -222,7 +222,7 @@ async function loadContent(userId: string, route: MemberRoute) {
     const profile = await profileFor(userId, route.username);
     // The top 10 is visible to every member who can see the profile; the
     // entries and discussions behind it stay friends-only.
-    const [list, entries] = await Promise.all([
+    const [list, entries] = await settleAll([
       topTen(profile.user_id),
       profile.can_read
         ? conversations(userId, { owner: profile.user_id })

@@ -93,14 +93,16 @@ takes before creating the database and keeps through the build.
 Preparations take turns under a lock on the server, so none removes a
 database another checkout is still creating. In its turn a preparation only
 claims the databases it will drop, renaming each to a name no checkout
-derives, so a checkout recreated at the same path gets a new database. It
-drops its claims after its turn, because each drop waits for a PostgreSQL
-checkpoint, which took up to 18 seconds in a parallel run
-([#447](https://github.com/jubishop/screenr/issues/447)); no other checkout's
-preparation waits for those drops. A preparation holds a lock on each claim
-until it drops it, and a later preparation drops any claim whose lock is free,
-such as one left by a run that stopped first.
-`tests/app/checkout-isolation.test.ts` covers the derived name, the
+derives, so a checkout recreated at the same path gets a new database. Each
+drop waits for a PostgreSQL checkpoint, which took up to 18 seconds in a
+parallel run, so no preparation drops a claim itself
+([#447](https://github.com/jubishop/screenr/issues/447),
+[#462](https://github.com/jubishop/screenr/issues/462)). When any claim
+exists, the preparation starts `scripts/drop-test-databases.ts` as a detached
+process and returns. That process holds a lock on each claim while it drops
+it, so concurrent drops skip each other's claims, and the next preparation
+starts another for any claim left behind, such as one whose drop stopped
+first. `tests/app/checkout-isolation.test.ts` covers the derived name, the
 override, removal, and these guarantees.
 
 ## Browser harness
@@ -233,10 +235,12 @@ session. Specs import these helpers instead of defining their own copies.
   and Google's key, token, and revoke endpoints with keys generated per run.
   `tests/app/social-fixture.test.ts` covers the clearing.
 - Suites call `useDatabase()` once at file scope to register the migration,
-  per-test user/verification reset, and final pool shutdown. A suite that
-  resets other tables imports `db` and registers its own hooks instead. Node
-  isolates files in separate processes; keep `--test-concurrency=1` when
-  running them together against one database.
+  per-test user/verification reset, and final pool shutdown. The reset first
+  waits for the pool to go idle, so a query that an earlier test left running
+  cannot deadlock with it; after 10 seconds it fails the test instead. A
+  suite that resets other tables imports `db` and registers its own hooks
+  instead. Node isolates files in separate processes; keep
+  `--test-concurrency=1` when running them together against one database.
 - The same helper contains pending/completed members, accepted friendship,
   a signed session cookie for route tests (`cookieFor`), the bearer token a
   native client receives from the same sign-in (`bearerFor`), and a small
@@ -552,9 +556,11 @@ recipients. A full run checks:
   invitation open the in-page confirmation, by keyboard and pointer at phone
   and desktop widths. Cancel keeps the item and returns focus; no browser
   dialog opens and no write is sent until the action is confirmed.
-- A failed read keeps an open Unfriend or Friends-page Decline confirmation
-  with focus on Cancel while the page hides; its action waits for the next
-  read, and Cancel still closes it. On Account, a failed read keeps the
+- A failed read keeps an open Unfriend, Friends-page Decline, Revoke, entry
+  Delete, comment Remove, title page or entry top 10, or Remove review
+  confirmation with focus on Cancel while the page hides; its action waits
+  for the next read, sending nothing when pressed, and Cancel still closes
+  it. On Account, a failed read keeps the
   deletion code step with its typed digits and focus, the final deletion
   confirmation, and Sign-in methods, whose actions wait the same way; the
   confirmed code still deletes the account without a second code.
@@ -727,6 +733,12 @@ notifications more than a year old but no unread ones, and the
 [catalog rows](title-catalog.md#catalog-retention) of titles nothing
 references once they have been expired for 30 days, keeping new search
 results, recent refreshes, and every referenced title's rows.
+`tests/app/google-client-check.test.ts` runs that cleanup's
+[Google client check](deployment.md#google-client-check) against the fake
+Google token endpoint: it logs `google client rejected` with only the status
+and `invalid_client` for a rotated secret, and nothing for `invalid_grant`,
+a network failure, or missing Google settings, and it checks at most once an
+hour.
 `tests/app/email.test.ts` also runs `scripts/worker.ts` with fetch disabled. The
 worker refuses to start without the Resend settings, deletes expired jobs on its
 first pass, says once that push delivery is off without APNs settings, and
@@ -740,7 +752,11 @@ rethrows its own error rather than its failed `ROLLBACK`'s, and that the
 broken client is released. It runs that transaction through another copy of
 `src/server/db.ts` too, as the production build's other server bundles and
 development reloads do, and checks in a production process that two copies
-share [one pool](deployment.md#database-connections).
+share [one pool](deployment.md#database-connections). It holds a screen's
+unread count behind another connection's lock while the screen read fails,
+and the screen must not answer until the count finishes. It checks that a
+test's table reset waits for a query the previous test left running, and
+fails on `Promise.all` in server code.
 `tests/app/email.test.ts` fails the database
 while Resend accepts a send, which must hold the job for a minute and then
 retry it with the same key, and `tests/app/migrations.test.ts` ends a
@@ -764,11 +780,14 @@ including badge-only updates for kinds turned off, and visibility, read
 state, expired sessions, and moved tokens at send time. It also checks that
 rejected tokens delete their device, that other rejections and retryable
 failures are logged without tokens, badge-only updates, and reconnection
-after GOAWAY or a lost connection. Each read action, friendship change,
-reply removal, and account deletion, from the web or the app, sends a
-badge-only update with the new count to each member whose count it changed,
-including people sent a reply on the changed friends' entries. Changes that
-leave every count unchanged, and failed ones, queue none.
+after GOAWAY or a lost connection. Its fake host sends GOAWAY ahead of the
+answer to a push in flight, so the test needs no fixed wait: that push
+finishes on its connection and the next one connects again. Each read
+action, friendship change, reply removal, and account deletion, from the
+web or the app, sends a badge-only update with the new count to each member
+whose count it changed, including people sent a reply on the changed
+friends' entries. Changes that leave every count unchanged, and failed ones,
+queue none.
 Operational tests check activation rollback after a stalled health request, a
 failed signed-out session request, or a web or worker service that crashes on
 startup. They also check a production-down report when the restored release
@@ -779,6 +798,23 @@ any temporary database, when restic cannot check or read the backup,
 `pg_restore` fails, the restore has no profiles, or its access query fails.
 The backup, restore check, and stale-backup check run a failed restic step
 once more after a minute, and fail only when that retry fails too.
+Those cases fake PostgreSQL, so `tests/app/backup-restore.test.ts` also runs
+a real round trip on the test server
+([#384](https://github.com/jubishop/screenr/issues/384)): `ops/backup.sh`
+dumps the test database, and `ops/restore-check.sh` restores the dump into a
+scratch database and runs its checks, each with its own PostgreSQL commands
+and flags. Only restic, the backup age check, and the host's paths and
+connection are faked. A flag or schema change that leaves backups
+unrestorable fails it, but production restores as a non-superuser role and
+the test as a superuser, so a restore that needs more privilege still shows
+only in the weekly check. The test uses the PostgreSQL client commands of the
+server's major release: from `/usr/lib/postgresql/<major>/bin` as production
+does, from Homebrew's `postgresql@<major>`, or else from `PATH`. It fails
+naming them when none has them. The restore check's `dropdb` waits for a
+checkpoint. On a busy Mac it was the slowest step, at 1 to 3 seconds, and
+the whole test once took 43 seconds during a full local run, so a shared
+server's checkpoint waits
+([#447](https://github.com/jubishop/screenr/issues/447)) can slow it.
 Release packaging runs only in Linux CI, so
 `tests/app/release-package.test.ts` checks locally that the package includes
 every module its maintenance scripts load

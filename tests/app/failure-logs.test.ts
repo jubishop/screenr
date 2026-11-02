@@ -49,13 +49,6 @@ function logged(printed: string[]) {
   return { fields, stack: stack as string[] };
 }
 
-// loadScreen rejects when its screen read fails while its unread count, a
-// single query, may still run. Let it finish before the schema is restored or
-// the next test resets tables, so their locks cannot deadlock.
-async function settled() {
-  while (db.idleCount < db.totalCount) await setTimeout(5);
-}
-
 function excludes(printed: string[], values: string[]) {
   for (const value of values)
     assert.ok(!printed.join("\n").includes(value), `Logged ${value}`);
@@ -236,7 +229,6 @@ test("an unexpected page failure logs its route kind, error class, code, and sta
     );
     excludes(printed, [query, encodeURIComponent(query), alice, "exist"]);
   } finally {
-    await settled();
     await db.query(
       "ALTER TABLE member_streaming_service_hidden RENAME TO member_streaming_service",
     );
@@ -251,7 +243,6 @@ test("expected page errors show their message and log nothing", async () => {
     error: "Choose one friend from their profile.",
     status: 400,
   });
-  await settled();
   assert.deepEqual(printed, []);
 });
 
@@ -467,12 +458,20 @@ test("a database failure in Better Auth's rate limit answers a bare 500 and logs
 // The iPhone app's Google sign-in with an ID token from a fake Google, which
 // Better Auth verifies for real. The app sends no Origin and names a new
 // member's invitation in a header.
-function googleIdTokenSignIn(t: TestContext, email: string) {
+async function googleIdTokenSignIn(t: TestContext, email: string) {
   const google = fakeGoogle();
   process.env.GOOGLE_IOS_CLIENT_ID = "ios-client.apps.googleusercontent.com";
   t.after(() => delete process.env.GOOGLE_IOS_CLIENT_ID);
   serve(google);
   const auth = createAuth({ rateLimit: false });
+  // Better Auth reads every table's schema as soon as an instance is created,
+  // and renaming any table during that read fails the check, so requests
+  // answer 500. A first request waits for the check before a test renames.
+  assert.equal(
+    (await auth.handler(new Request("http://localhost:3000/api/auth/ok")))
+      .status,
+    200,
+  );
   const token = google.idToken({
     sub: "google-probe",
     email,
@@ -500,7 +499,7 @@ const userCount = async () =>
 test("a database failure while a Google ID token signup creates the account logs it once with the endpoint, and Better Auth still answers its own error", async (t) => {
   const email = "probe.person@example.test";
   const { token: invitation } = await createInvitation(null);
-  const { token, signIn } = googleIdTokenSignIn(t, email);
+  const { token, signIn } = await googleIdTokenSignIn(t, email);
   // A probe check constraint rejects the new account row, as a column Better
   // Auth doesn't expect would (issue #181). PostgreSQL's detail repeats the
   // whole row, with the ID token.
@@ -540,7 +539,7 @@ test("a database failure while a Google ID token signup creates the account logs
 
 test("a Screenr callback failure in a Google ID token signup logs only the callback, not Better Auth's caught error as well", async (t) => {
   const { token: invitation } = await createInvitation(null);
-  const { signIn } = googleIdTokenSignIn(t, "new@example.test");
+  const { signIn } = await googleIdTokenSignIn(t, "new@example.test");
   // Creating the user checks its invitation.
   await db.query("ALTER TABLE invitation RENAME TO invitation_hidden");
   try {
@@ -625,6 +624,7 @@ test("a session read that fails in an API request logs Better Auth's caught erro
         method: "GET",
         status: 500,
         error: "APIError",
+        cause: { error: "DatabaseError", code: "42P01" },
       },
     ]);
     excludes(printed, [
@@ -744,9 +744,11 @@ test("a Google code exchange that Google rejects for Screenr's web client logs G
   }
 
   // An expired or already used code: a client causes it, so Better Auth
-  // prints only its own empty line.
+  // prints only its own line.
   let printed = await returnWithCode(google.webClient.secret);
-  assert.deepEqual(printed, ["ERROR [Better Auth]: "]);
+  assert.deepEqual(printed, [
+    "ERROR [Better Auth]: Failed to validate authorization code",
+  ]);
 
   // A rotated or deleted secret: every web Google sign-in fails until
   // GOOGLE_CLIENT_SECRET is replaced.
@@ -1139,7 +1141,6 @@ test("polls that fail the same way, as in a database outage, each log a line wit
       ],
     );
   } finally {
-    await settled();
     await db.query(
       "ALTER VIEW visible_notification_hidden RENAME TO visible_notification",
     );

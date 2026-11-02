@@ -1,4 +1,4 @@
-import { AppError, db } from "./db";
+import { AppError, db, settleAll } from "./db";
 import { logFailureOnce } from "./log";
 import { watchSections } from "./watch-sources";
 import {
@@ -348,7 +348,7 @@ export async function getTitleReleases(
       if (!row.current) due.push(row);
     }
     let next = 0;
-    await Promise.all(
+    await settleAll(
       Array.from({ length: Math.min(4, due.length) }, async () => {
         while (next < due.length && Date.now() < refreshBefore) {
           const row = due[next++];
@@ -686,7 +686,7 @@ export async function getTitleAvailabilities(
       if (!entry || entry.refresh_after.getTime() <= Date.now()) due.push(id);
     }
     let next = 0;
-    await Promise.all(
+    await settleAll(
       Array.from({ length: Math.min(4, due.length) }, async () => {
         while (next < due.length && Date.now() < refreshBefore) {
           const id = due[next++];

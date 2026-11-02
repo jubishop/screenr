@@ -52,7 +52,7 @@ class CiScopeTests(unittest.TestCase):
         self.git("init", "-q", "-b", "main")
         self.git("config", "user.name", "Fixture")
         self.git("config", "user.email", "fixture@example.com")
-        self.commit("Base", ("src/app.ts", "bin/tool", "ios/README.md", "docs/guide.md"))
+        self.commit("Base", ("src/app.ts", "bin/tool", "vendor/README.md", "docs/guide.md"))
         self.git("checkout", "-qb", "topic")
         self.commit("Change", files, removed)
         self.git("checkout", "-q", "main")
@@ -71,12 +71,13 @@ class CiScopeTests(unittest.TestCase):
         self.assertEqual(result.stdout, f"run={'true' if expected else 'false'}\n", result.stderr)
         self.assertTrue(result.stderr.strip())
 
-    def test_markdown_that_no_test_reads_skips_the_checks(self):
-        self.pull_request("ios/README.md", "ios/Screenr/Notes.md", "bin/notes.md")
+    def test_markdown_in_other_folders_skips_the_checks(self):
+        # No tracked Markdown lives there; tests/test_app_sandbox.py checks that.
+        self.pull_request("vendor/README.md", "vendor/lib/notes.md")
         self.assertRuns(False)
 
     def test_any_other_file_runs_the_checks(self):
-        for files in (("src/app.ts",), ("ios/README.md", "bin/tool"), ("ios/Screenr/App.swift",),
+        for files in (("src/app.ts",), ("vendor/README.md", "bin/tool"), ("ios/Screenr/App.swift",),
                       ("README.txt",), (".github/workflows/check.yml",)):
             with self.subTest(files=files), tempfile.TemporaryDirectory() as directory:
                 self.directory = Path(directory)
@@ -90,7 +91,17 @@ class CiScopeTests(unittest.TestCase):
                      "memory/archive/old.md", "README.md", "AGENTS.md"):
             with self.subTest(path=path), tempfile.TemporaryDirectory() as directory:
                 self.directory = Path(directory)
-                self.pull_request("ios/README.md", path)
+                self.pull_request("vendor/README.md", path)
+                self.assertRuns(True)
+
+    def test_markdown_that_the_document_checks_read_runs_the_checks(self):
+        # bin/check --documents-only checks the links in every tracked Markdown
+        # file, and outside the folders above it lives in ios/ and bin/ (#439).
+        for path in ("ios/README.md", "ios/AGENTS.md", "ios/Screenr/Notes.md",
+                     "bin/memory-audit-prompt.md", "bin/notes/guide.md"):
+            with self.subTest(path=path), tempfile.TemporaryDirectory() as directory:
+                self.directory = Path(directory)
+                self.pull_request("vendor/README.md", path)
                 self.assertRuns(True)
 
     def test_a_deleted_or_renamed_file_counts_by_its_old_path(self):
@@ -100,14 +111,14 @@ class CiScopeTests(unittest.TestCase):
             self.directory = Path(directory)
             self.pull_request()
             self.git("checkout", "-q", "topic")
-            self.git("mv", "bin/tool", "bin/tool.md")
+            self.git("mv", "bin/tool", "vendor/tool.md")
             self.git("commit", "-qm", "Rename the tool")
             self.git("checkout", "-q", "main")
             self.git("merge", "-q", "--no-ff", "-m", "Merge topic into main again", "topic")
             self.assertRuns(True)
 
     def test_changes_already_on_the_base_do_not_count(self):
-        self.pull_request("ios/README.md", base_moves=("src/app.ts",))
+        self.pull_request("vendor/README.md", base_moves=("src/app.ts",))
         self.assertRuns(False)
 
     def test_other_events_run_the_checks_without_reading_changes(self):
@@ -122,7 +133,7 @@ class CiScopeTests(unittest.TestCase):
         self.git("init", "-q", "-b", "main")
         self.git("config", "user.name", "Fixture")
         self.git("config", "user.email", "fixture@example.com")
-        self.commit("Docs", ("ios/README.md",))
+        self.commit("Docs", ("vendor/README.md",))
         self.assertRuns(True)
 
     def test_an_empty_change_runs_the_checks(self):

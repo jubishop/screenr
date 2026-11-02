@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import type { FeedItem, Person, SaveSurface } from "../shared";
 import { api, useInteractive } from "./client";
 import { Poster } from "./poster";
-import { ThreadView } from "./thread";
+import { live, removable, ThreadView } from "./thread";
 import { preservePosition } from "./position";
 import { Reactions } from "./reactions";
 import { Icon } from "./icons";
@@ -44,11 +44,14 @@ export function FeedView({
   activity,
   busy,
   target,
-  unavailable,
+  targetUnavailable,
+  available,
   showEmpty,
   compact,
   shownEntry,
 }: {
+  // Null while a failed read clears the screen, when `available` is false,
+  // or while the screen offers no feed.
   snapshot: FeedItem[] | null;
   user: Person;
   refresh: () => Promise<void>;
@@ -60,7 +63,8 @@ export function FeedView({
   ) => Promise<unknown>;
   busy: boolean;
   target: { item: string; reply?: string } | null;
-  unavailable: boolean;
+  targetUnavailable: boolean;
+  available: boolean;
   showEmpty: boolean;
   compact: boolean;
   shownEntry: { item: string } | null;
@@ -166,7 +170,7 @@ export function FeedView({
       // Focus moves to the feed when its last entry leaves.
       tabIndex={-1}
     >
-      {unavailable && <p>This activity is unavailable.</p>}
+      {targetUnavailable && <p>This activity is unavailable.</p>}
       <div className="feed-updates">
         {snapshot && incoming.length > 0 && (
           <button
@@ -182,6 +186,7 @@ export function FeedView({
           <FeedEntry
             key={id}
             item={visibleById.get(id) ?? null}
+            available={available}
             user={user}
             refresh={refresh}
             activity={activity}
@@ -203,6 +208,7 @@ export function FeedView({
 
 function FeedEntry({
   item,
+  available,
   user,
   refresh,
   activity,
@@ -212,6 +218,7 @@ function FeedEntry({
   shown,
 }: {
   item: FeedItem | null;
+  available: boolean;
   user: Person;
   refresh: () => Promise<void>;
   activity: (
@@ -227,7 +234,23 @@ function FeedEntry({
 }) {
   const interactive = useInteractive();
   const [revealed, setRevealed] = useState(false);
-  const hiddenSpoiler = !!item?.spoiler && !revealed;
+  // Delete waits for its confirmation beneath the entry's action line, and so
+  // does a title action that would take the title out of the reader's top 10.
+  // A comment's Delete or Remove waits beneath the comment.
+  const [confirming, setConfirming] = useState<
+    "delete" | "recommended" | "want_to_watch" | null
+  >(null);
+  const [confirmingComment, setConfirmingComment] = useState<string | null>(
+    null,
+  );
+  // A failed read hides the entry. While a confirmation is open, the entry
+  // keeps the item from the last read, so the confirmation stays, alone,
+  // with its action waiting for the next read.
+  const [lastItem, setLastItem] = useState(item);
+  if (available && item !== lastItem && (confirming || confirmingComment))
+    setLastItem(item);
+  const held = available ? item : lastItem;
+  const hiddenSpoiler = !!held?.spoiler && !revealed;
   const navigated = useRef("");
   useEffect(() => {
     if (!target || !item) return;
@@ -256,15 +279,10 @@ function FeedEntry({
   }, [shown, item]);
   const [copying, setCopying] = useState(false);
   const [copyMessage, setCopyMessage] = useState("");
-  // Delete waits for its confirmation beneath the entry's action line, and so
-  // does a title action that would take the title out of the reader's top 10.
-  const [confirming, setConfirming] = useState<
-    "delete" | "recommended" | "want_to_watch" | null
-  >(null);
   const deleteButton = useRef<HTMLButtonElement>(null);
   const wantButton = useRef<HTMLButtonElement>(null);
   const recommendButton = useRef<HTMLButtonElement>(null);
-  const ranked = !!item?.viewer_recommended && !!item.viewer_top_ten_rank;
+  const ranked = !!held?.viewer_recommended && !!held.viewer_top_ten_rank;
   const entry = useRef<HTMLElement>(null);
   const removal = useRemovalFocus();
   // Where focus goes when this entry's content leaves with its control: the
@@ -278,17 +296,17 @@ function FeedEntry({
   const failure = useActionError();
   // Every entry but a post without a title belongs to a movie or show.
   const title =
-    item?.title_id && item.title_name !== null && item.kind
+    held?.title_id && held.title_name !== null && held.kind
       ? {
-          id: item.title_id,
-          name: item.title_name,
-          kind: item.kind,
-          release_date: item.release_date ?? "",
+          id: held.title_id,
+          name: held.title_name,
+          kind: held.kind,
+          release_date: held.release_date ?? "",
         }
       : null;
   const titleURL = title ? memberPath({ kind: "title", id: title.id }) : "";
   // Comments and posts can be deleted, keeping their replies.
-  const deletable = item?.item_type === "comment" || item?.item_type === "post";
+  const deletable = held?.item_type === "comment" || held?.item_type === "post";
 
   async function copyDiscussion() {
     if (!item || copying) return;
@@ -325,9 +343,9 @@ function FeedEntry({
   // Deleted standalone comments and posts and removed reviews show no
   // reactions.
   const erased =
-    (deletable || item?.item_type === "review") && !!item && !item.active;
+    (deletable || held?.item_type === "review") && !!held && !held.active;
   const canDelete =
-    deletable && !!item?.active && item.owner_id === user.user_id;
+    deletable && !!held?.active && held.owner_id === user.user_id;
   // A confirmation closes for good once its action no longer applies, such
   // as after the title leaves the top 10 elsewhere, so it never reopens
   // unasked.
@@ -336,14 +354,26 @@ function FeedEntry({
       ? canDelete
       : confirming !== null && ranked && !!title;
   if (confirming && !confirmable) setConfirming(null);
+  // The same holds for a comment's confirmation once the comment is gone.
+  const thread = held && !hiddenSpoiler ? held : null;
+  const commentConfirmable =
+    !!confirmingComment &&
+    !!thread &&
+    thread.comments.some(
+      (comment) =>
+        comment.id === confirmingComment &&
+        live(comment) &&
+        removable(comment, thread, user),
+    );
+  if (confirmingComment && !commentConfirmable) setConfirmingComment(null);
   // Saving to Want to watch, or removing it, from a friend's entry.
   const saveWantToWatch = async () => {
-    if (item && title)
+    if (held && title)
       await activity(
         title.id,
         "want_to_watch",
-        !item.viewer_want_to_watch,
-        item.item_type === "recommended" && item.active
+        !held.viewer_want_to_watch,
+        held.item_type === "recommended" && held.active
           ? "friend_recommendation"
           : "friend_entry",
       );
@@ -461,7 +491,8 @@ function FeedEntry({
   return (
     <article
       ref={entry}
-      hidden={!item}
+      // While a failed read hides the entry, an open confirmation still shows.
+      hidden={!item && !confirmable && !commentConfirmable}
       className={`feed-entry${compact ? " compact" : ""}`}
       data-item-id={item?.id}
       id={item ? `item-${item.id}` : undefined}
@@ -477,83 +508,101 @@ function FeedEntry({
       }
       tabIndex={-1}
     >
-      {item && (
-        <header className="activity-card" data-item-heading={item.id}>
-          <div className="activity-summary">
-            {!compact && title && (
-              <Link className="poster-link" href={titleURL} prefetch={false}>
-                <Poster path={item.poster_path} name={title.name} />
-              </Link>
-            )}
-            <div className="activity-content">
-              {compact ? (
-                <div className="compact-byline">
-                  {byline}
-                  {copyLink}
-                </div>
-              ) : (
-                <>
-                  {byline}
-                  {title && (
+      {held && (item || confirmable) && (
+        <header className="activity-card" data-item-heading={held.id}>
+          {item && (
+            <>
+              <div className="activity-summary">
+                {!compact && title && (
+                  <Link
+                    className="poster-link"
+                    href={titleURL}
+                    prefetch={false}
+                  >
+                    <Poster path={item.poster_path} name={title.name} />
+                  </Link>
+                )}
+                <div className="activity-content">
+                  {compact ? (
+                    <div className="compact-byline">
+                      {byline}
+                      {copyLink}
+                    </div>
+                  ) : (
                     <>
-                      <h2 id={`title-${item.id}`}>
-                        <Link href={titleURL} prefetch={false}>
-                          {title.name}
-                        </Link>
-                      </h2>
-                      <p className="small muted">{titleDetails(title)}</p>
+                      {byline}
+                      {title && (
+                        <>
+                          <h2 id={`title-${item.id}`}>
+                            <Link href={titleURL} prefetch={false}>
+                              {title.name}
+                            </Link>
+                          </h2>
+                          <p className="small muted">{titleDetails(title)}</p>
+                        </>
+                      )}
                     </>
                   )}
-                </>
-              )}
-              {/* The label stays outside the spoiler cover. */}
-              {item.season !== null && (
-                <p className="discussion-label">
-                  {discussionLabel(item.season, item.episode)}
-                </p>
-              )}
-              {deletable && !item.active && (
-                <p className="muted" id={`removed-${item.id}`} tabIndex={-1}>
-                  {item.item_type === "post"
-                    ? "Post removed"
-                    : "Comment removed"}
-                </p>
-              )}
-              {/* A spoiler flag covers the text, not the rating. */}
-              {item.rating != null && <ReviewStars rating={item.rating} />}
-              {hiddenSpoiler ? (
-                <button className="spoiler" onClick={() => setRevealed(true)}>
-                  Contains spoilers · Reveal discussion
-                </button>
+                  {/* The label stays outside the spoiler cover. */}
+                  {item.season !== null && (
+                    <p className="discussion-label">
+                      {discussionLabel(item.season, item.episode)}
+                    </p>
+                  )}
+                  {deletable && !item.active && (
+                    <p
+                      className="muted"
+                      id={`removed-${item.id}`}
+                      tabIndex={-1}
+                    >
+                      {item.item_type === "post"
+                        ? "Post removed"
+                        : "Comment removed"}
+                    </p>
+                  )}
+                  {/* A spoiler flag covers the text, not the rating. */}
+                  {item.rating != null && <ReviewStars rating={item.rating} />}
+                  {hiddenSpoiler ? (
+                    <button
+                      className="spoiler"
+                      onClick={() => setRevealed(true)}
+                    >
+                      Contains spoilers · Reveal discussion
+                    </button>
+                  ) : (
+                    item.body && <p className="comment-body">{item.body}</p>
+                  )}
+                </div>
+              </div>
+              {!hiddenSpoiler && !erased ? (
+                <Reactions
+                  item={item.id}
+                  summary={item.reactions}
+                  refresh={refresh}
+                >
+                  {titleActions}
+                </Reactions>
               ) : (
-                item.body && <p className="comment-body">{item.body}</p>
+                titleActions && (
+                  <div className="item-actions">{titleActions}</div>
+                )
               )}
-            </div>
-          </div>
-          {!hiddenSpoiler && !erased ? (
-            <Reactions
-              item={item.id}
-              summary={item.reactions}
-              refresh={refresh}
-            >
-              {titleActions}
-            </Reactions>
-          ) : (
-            titleActions && <div className="item-actions">{titleActions}</div>
+              {failure.alert}
+            </>
           )}
-          {failure.alert}
           {canDelete && confirming === "delete" && (
             <ConfirmAction
-              message={`Delete this ${item.item_type === "post" ? "post" : "comment"}? Its text will be erased.`}
+              message={`Delete this ${held.item_type === "post" ? "post" : "comment"}? Its text will be erased.`}
               action="Delete"
+              unavailable={!available}
               run={async () => {
                 // An entry with replies keeps its placeholder; otherwise it
                 // leaves the feed.
                 removal.start(deleteButton.current, [
-                  `removed-${item.id}`,
+                  `removed-${held.id}`,
                   ...entryFocus(),
                 ]);
-                await api("remove-comment", { id: item.id });
+                await api("remove-comment", { id: held.id });
                 await refresh();
               }}
               onDone={() => {
@@ -576,9 +625,10 @@ function FeedEntry({
                 {...leavingTopTen(
                   confirming === "recommended" ? "withdraw" : "switch",
                   title.name,
-                  item.viewer_top_ten_rank!,
+                  held.viewer_top_ten_rank!,
                 )}
                 busy={busy}
+                unavailable={!available}
                 run={async () => {
                   if (confirming === "recommended")
                     await activity(title.id, "recommended", false);
@@ -603,11 +653,10 @@ function FeedEntry({
         </header>
       )}
       <ThreadView
-        snapshot={
-          item && !hiddenSpoiler
-            ? { conversation: item, comments: item.comments }
-            : null
-        }
+        snapshot={thread && { conversation: thread, comments: thread.comments }}
+        available={available}
+        confirming={confirmingComment}
+        setConfirming={setConfirmingComment}
         user={user}
         refresh={refresh}
         targetReply={target?.reply}

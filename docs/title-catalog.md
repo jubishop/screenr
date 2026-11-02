@@ -296,4 +296,5 @@ beside them, and a trailing year or kind, such as "Fight Club" from "Fight
 Club (1999) - IMDb" and "Stranger Things" from "Check out Stranger Things on
 Netflix!". It is at most 120 characters, the search's limit.
 `tests/app/shared-links.test.ts` covers each source against fake TMDB and
-page servers.
+page servers, along with the redirect and size limits and a dropped
+connection.

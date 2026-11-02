@@ -47,7 +47,7 @@ test("email jobs encrypt codes, deliver once under concurrent workers, and clear
 
 test("failed delivery backs off and retries with the same provider idempotency key", async () => {
   await queueCode({ email: "retry@example.test", otp: "654321" });
-  captureFailures();
+  const printed = captureFailures();
   const keys: string[] = [];
   mock.method(
     globalThis,
@@ -72,6 +72,20 @@ test("failed delivery backs off and retries with the same provider idempotency k
   await deliverOne();
   assert.equal(keys.length, 2);
   assert.equal(keys[0], keys[1]);
+  // Only the failed attempt logs.
+  assert.deepEqual(
+    printed.map((line) => JSON.parse(line)),
+    [
+      {
+        event: "email delivery failed",
+        job: job.id,
+        kind: "code",
+        attempt: 1,
+        status: 503,
+        final: false,
+      },
+    ],
+  );
 });
 
 test("expired sign-in codes are not delivered", async () => {
@@ -85,7 +99,7 @@ test("expired sign-in codes are not delivered", async () => {
 });
 
 test("requesting a new code replaces an older pending retry for the same recipient", async () => {
-  captureFailures();
+  const printed = captureFailures();
   const texts: string[] = [];
   const keys: string[] = [];
   mock.method(
@@ -100,6 +114,7 @@ test("requesting a new code replaces an older pending retry for the same recipie
     },
   );
   await queueCode({ email: "newcode@example.test", otp: "111111" });
+  const { id } = (await db.query("SELECT id FROM email_job")).rows[0];
   await deliverOne();
   await queueCode({ email: "newcode@example.test", otp: "222222" });
   await db.query("UPDATE email_job SET available_at=now()");
@@ -112,6 +127,20 @@ test("requesting a new code replaces an older pending retry for the same recipie
     keys[0],
     keys[1],
     "New content needs a new provider idempotency key",
+  );
+  // Only the older code's failed attempt logs.
+  assert.deepEqual(
+    printed.map((line) => JSON.parse(line)),
+    [
+      {
+        event: "email delivery failed",
+        job: id,
+        kind: "code",
+        attempt: 1,
+        status: 503,
+        final: false,
+      },
+    ],
   );
 });
 

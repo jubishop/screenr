@@ -4,7 +4,7 @@ import {
   getTitleReleases,
   searchTitles,
 } from "./catalog";
-import { db } from "./db";
+import { db, settleAll } from "./db";
 
 // A title list stops starting provider requests this long after it begins.
 const listRefreshMs = 3000;
@@ -52,7 +52,7 @@ export async function withViewingOptions<T extends Title>(
   // release details refresh side by side within the same deadline.
   const ids = titles.map((title) => title.id);
   const deadline = Math.min(Date.now() + listRefreshMs, refreshDeadline);
-  const [availability, statuses] = await Promise.all([
+  const [availability, statuses] = await settleAll([
     getTitleAvailabilities(ids, deadline),
     getTitleReleases(ids, deadline),
   ]);

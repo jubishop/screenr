@@ -1,4 +1,4 @@
-import { AppError, db } from "./db";
+import { AppError, db, settleAll } from "./db";
 import { titleColumns } from "./catalog";
 import type { Person, Title, ViewingAccess } from "../shared";
 import type { ListMode } from "../member-routes";
@@ -45,7 +45,7 @@ export async function wantToWatch(
       hasWantToWatch: titles.length > 0,
       titles: await inTheaters(titles),
     };
-  const [serviceIds, viewing] = await Promise.all([
+  const [serviceIds, viewing] = await settleAll([
     savedServices(viewer),
     withViewingOptions(titles),
   ]);

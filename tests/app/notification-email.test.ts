@@ -364,7 +364,7 @@ test("a block or opt-out committed before a send starts sends nothing", async ()
   await addComment(ben, conversation, "Blocked before the send", false);
   await addComment(cam, own, "Opted out before the send", false);
   await due();
-  captureFailures();
+  const printed = captureFailures();
   fail = true;
   while (await deliverOne()) {
     /* Queue both emails, whose first sends fail. */
@@ -378,6 +378,11 @@ test("a block or opt-out committed before a send starts sends nothing", async ()
     /* Drain all due jobs. */
   }
   assert.equal(sent.length, 2);
+  // Only the two failed first sends log.
+  assert.deepEqual(failureEvents(printed), [
+    "email delivery failed",
+    "email delivery failed",
+  ]);
 });
 
 for (const [change, during] of [

@@ -176,8 +176,10 @@ failed sends. About once a minute it also deletes expired jobs and
 [usage telemetry](usage-telemetry.md#retention-and-tests) older than 12
 months, [read notifications](notifications.md#notification-retention--2026-11-01)
 more than a year old, and
-[unused catalog data](title-catalog.md#catalog-retention). Local development
-does not need it.
+[unused catalog data](title-catalog.md#catalog-retention). At most once an
+hour, with `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` set, it also
+[checks that Google accepts the web client](deployment.md#google-client-check).
+Local development does not need it.
 With `EMAIL_TRANSPORT=file`, Next writes sign-in codes directly to
 `.cache/mail` without queueing them, and `npm run worker` refuses to start
 unless `EMAIL_TRANSPORT=resend`, `RESEND_API_KEY`, and `EMAIL_FROM` are set.
@@ -358,7 +360,11 @@ and Apple sign-in returns 404; activation does not require them.
 The server accepts ID tokens for both App IDs. For each code exchange and
 revocation, it signs a five-minute client secret naming the app's bundle ID,
 so no secret needs renewal. Each account's newest refresh token is stored
-encrypted for account deletion to revoke. Changing `BETTER_AUTH_SECRET` makes
+encrypted for account deletion to revoke. Better Auth's token routes,
+`/api/auth/refresh-token`, `/api/auth/get-access-token`, and
+`/api/auth/account-info`, return 404: Screenr calls none of them, and the
+refresh route would post the stored token to Apple's token endpoint without a
+client secret. Changing `BETTER_AUTH_SECRET` makes
 the stored tokens unreadable, like queued email, until each member's next
 Apple sign-in stores a new one; deleting an account meanwhile skips its
 unreadable token. Apple sign-in has no web button, return URL,

@@ -873,6 +873,17 @@ then the column, following Better Auth's 1.7 upgrade guide. Databases first
 created by 1.7.3 or later have neither, so it changes nothing there. A
 release that ships 1.7.2 can no longer run against a migrated database.
 
+Better Auth also checks its tables when an instance starts. The migration
+command turns that check off for the instance it plans with, since it would
+report the tables and columns the command is about to add, such as every
+table of a fresh database. Once every migration has run, the command runs
+Better Auth's check itself and prints a mismatch that remains, such as a
+required column Better Auth never writes, as Better Auth's
+`Database schema mismatch` error line, without failing. Better Auth 1.7.10
+also warned on every run that its own `bigint` column `rateLimit.lastRequest`
+had a different type, which 1.7.11 fixed
+([issue #459](https://github.com/jubishop/screenr/issues/459)).
+
 The same rule applies to Screenr's own schema: drop a column, constraint, or
 compatibility trigger only once no retained release depends on it, and use
 `IF EXISTS` so databases without it are unchanged. Migration
