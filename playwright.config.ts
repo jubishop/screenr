@@ -1,4 +1,5 @@
 import { defineConfig } from "@playwright/test";
+import { join } from "node:path";
 import { browserConfig } from "./scripts/browser-config";
 
 export default defineConfig({
@@ -9,7 +10,14 @@ export default defineConfig({
   workers: 2,
   timeout: 90_000,
   expect: { timeout: 10_000 },
-  reporter: process.env.CI ? "dot" : "line",
+  reporter: [
+    [process.env.CI ? "dot" : "line"],
+    // An absolute path still loads from configurations that extend this one.
+    [
+      join(import.meta.dirname, "tests/browser/failure-line-reporter.ts"),
+      { file: browserConfig.failureLines },
+    ],
+  ],
   use: { baseURL: browserConfig.baseURL, trace: "retain-on-failure" },
   webServer: {
     command: "npx tsx scripts/browser-server.ts",

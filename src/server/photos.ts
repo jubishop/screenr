@@ -330,14 +330,17 @@ export async function runPhotoBackfill(
 // The photo for an avatar URL, when the viewer may see that profile: their
 // own photo, including before setup, or the photo of a member whose profile
 // the viewer, also a member, can open. Blocking hides it in both directions.
+// Without `image`, it only checks that the viewer may see this version and
+// leaves the image bytes, up to 200 KB, unread, as a revalidation needs.
 export async function viewablePhoto(
   viewer: string,
   owner: string,
   version: string,
+  { image = true } = {},
 ) {
   if (!/^[0-9a-f]{16}$/.test(version) || owner.length > 255) return null;
-  const { rows } = await db.query<{ image: Buffer; content_type: string }>(
-    `SELECT image,content_type FROM profile_photo WHERE user_id=$2 AND version=$3
+  const { rows } = await db.query<{ image?: Buffer; content_type: string }>(
+    `SELECT ${image ? "image," : ""}content_type FROM profile_photo WHERE user_id=$2 AND version=$3
     AND ($1=$2 OR (EXISTS (SELECT 1 FROM profile WHERE user_id=$1)
       AND EXISTS (SELECT 1 FROM profile WHERE user_id=$2)
       AND NOT screenr_blocked($1,$2)))`,

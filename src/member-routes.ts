@@ -6,12 +6,23 @@ type ItemTarget = { item?: string; reply?: string };
 // Find a title's tabs. Suggestions is the default, so only Friends recommend
 // appears in the URL.
 export type SearchTab = "friends-recommend";
+// Find a title's list filters, which the server applies before capping each
+// list at 50 titles, so a filtered list still fills
+// (docs/title-suggestions.md#implementation). My services narrows both
+// lists; the title type and hiding finished titles narrow Friends recommend.
+// A read without them lists every title, which installed iPhone builds then
+// filter themselves. The web keeps them out of its address; see screenPath.
+export type FindFilters = {
+  services?: "mine";
+  type?: "movie" | "tv";
+  finished?: "hidden";
+};
 // Want to watch pages' and Watch together's lists. At home is the default, so
 // only In theaters appears in the URL, as `mode=theaters`.
 export type ListMode = "theaters";
 export type MemberRoute =
   | ({ kind: "feed" } & ItemTarget)
-  | { kind: "search"; q?: string; tab?: SearchTab }
+  | ({ kind: "search"; q?: string; tab?: SearchTab } & FindFilters)
   | { kind: "people" }
   | { kind: "invites" }
   | { kind: "account" }
@@ -37,6 +48,7 @@ export function parseMemberRoute(path: string): MemberRoute {
   const param = (key: string) => url.searchParams.get(key) || undefined;
   const target = () => ({ item: param("item"), reply: param("reply") });
   const mode = param("mode") === "theaters" ? "theaters" : undefined;
+  const type = param("type");
   let parts: string[];
   try {
     parts = url.pathname.split("/").filter(Boolean).map(decodeURIComponent);
@@ -55,6 +67,9 @@ export function parseMemberRoute(path: string): MemberRoute {
           param("tab") === "friends-recommend"
             ? "friends-recommend"
             : undefined,
+        services: param("services") === "mine" ? "mine" : undefined,
+        type: type === "movie" || type === "tv" ? type : undefined,
+        finished: param("finished") === "hidden" ? "hidden" : undefined,
       };
     if (section === "watch-together")
       return { kind: section, with: url.searchParams.getAll("with"), mode };
@@ -82,7 +97,7 @@ export function memberPath(route: MemberRoute): string {
       return withQuery(`/titles/${segments(kind, tmdbId.join(":"))}`, route);
     }
     case "search":
-      return withQuery("/search", { tab: route.tab, q: route.q });
+      return withQuery("/search", route);
     case "watch-together":
       return withQuery("/watch-together", {
         with: route.with,
@@ -103,6 +118,22 @@ export function memberPath(route: MemberRoute): string {
     default:
       return `/${route.kind}`;
   }
+}
+
+// Each visit to the web's Find a title starts with these filters: finished
+// titles hidden, as the Show finished switch starts off.
+export const initialFindFilters: FindFilters = { finished: "hidden" };
+
+/**
+ * The path the web reads for the member screen at `path`: Find a title's
+ * with `filters` in place of any in the address, and any other screen's own
+ * path.
+ */
+export function screenPath(path: string, filters: FindFilters) {
+  const route = parseMemberRoute(path);
+  return route.kind === "search"
+    ? memberPath({ kind: "search", q: route.q, tab: route.tab, ...filters })
+    : path;
 }
 
 /**
@@ -129,12 +160,16 @@ function withQuery(
     q,
     with: usernames = [],
     mode,
-  }: ItemTarget & {
-    tab?: SearchTab;
-    q?: string;
-    with?: string[];
-    mode?: ListMode;
-  },
+    services,
+    type,
+    finished,
+  }: ItemTarget &
+    FindFilters & {
+      tab?: SearchTab;
+      q?: string;
+      with?: string[];
+      mode?: ListMode;
+    },
 ) {
   const query = new URLSearchParams();
   if (item) query.set("item", item);
@@ -143,6 +178,9 @@ function withQuery(
   if (q) query.set("q", q);
   for (const username of usernames) query.append("with", username);
   if (mode) query.set("mode", mode);
+  if (services) query.set("services", services);
+  if (type) query.set("type", type);
+  if (finished) query.set("finished", finished);
   // Safari before 17, a supported browser, has no URLSearchParams size.
   const search = query.toString();
   return search ? `${path}?${search}` : path;

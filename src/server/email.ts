@@ -144,7 +144,7 @@ async function claimJob(): Promise<
         [activity],
       );
     let job = (await due(false)).rows[0];
-    if (!job) {
+    if (!job && (await activityDue(client))) {
       // Take the domain lock before locking activity jobs, matching opt-out's
       // lock order. Codes need no content-access check. Under the lock, no
       // block or opt-out commits while the email is built; one that commits
@@ -195,6 +195,25 @@ async function claimJob(): Promise<
   } finally {
     client.release(!rolledBack);
   }
+}
+
+// Whether an activity email could be due: a job waiting to be sent, or a
+// window queueNotificationEmails would queue, a pending notification at least
+// ten minutes old for a member who gets activity email. A pass checks this
+// before taking the domain lock, so an idle worker leaves the lock alone
+// instead of taking it every second. Anything that becomes due after the
+// check waits for the next pass.
+async function activityDue(client: PoolClient) {
+  return (
+    await client.query<{ due: boolean }>(
+      `SELECT EXISTS (SELECT 1 FROM email_job WHERE sent_at IS NULL
+        AND notification_recipient IS NOT NULL AND available_at<=now()
+        AND expires_at>now())
+      OR EXISTS (SELECT 1 FROM notification n JOIN profile p ON p.user_id=n.recipient_id
+        WHERE n.email_pending AND p.activity_email
+        AND n.created_at<=now()-interval '10 minutes') AS due`,
+    )
+  ).rows[0].due;
 }
 
 async function send(job: Job, mail: Mail) {

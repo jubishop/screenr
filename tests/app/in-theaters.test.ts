@@ -3,7 +3,15 @@ import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import type { ReleaseTitle } from "../../src/shared";
-import { useDatabase, db, denied, friend, setup } from "./social-fixture";
+import {
+  useDatabase,
+  db,
+  denied,
+  friend,
+  setup,
+  captureFailures,
+  failureEvents,
+} from "./social-fixture";
 const { loadScreen } = await import("../../src/server/screens");
 const { changeRelationship } = await import("../../src/server/relationships");
 const { updateTitleActivity } = await import("../../src/server/title-actions");
@@ -141,7 +149,10 @@ const listed = (screen: { titles: ReleaseTitle[] }) =>
     release.in_theaters ? "in theaters" : release.status,
   ]);
 
-test("In theaters on a Want to watch page lists the owner's Want to watch movies in US theaters, newest first, whatever services the viewer saved", async () => {
+test("In theaters on a Want to watch page lists the owner's Want to watch movies in US theaters, newest first, whatever services the viewer saved", async (t) => {
+  // Each title without details logs a failed catalog request, which this test
+  // reads.
+  const printed = captureFailures(t);
   const { alice, ben } = await setup();
   await friend(alice, ben);
   await saveServices(alice, ["service:netflix"]);
@@ -228,9 +239,16 @@ test("In theaters on a Want to watch page lists the owner's Want to watch movies
     [limited, "in theaters"],
   ]);
   assert.deepEqual(providerRequests, []);
+  assert.deepEqual(failureEvents(printed), [
+    "catalog request failed",
+    "catalog request failed",
+  ]);
 });
 
-test("In theaters on Watch together lists only movies in theaters that both people want, newest shared first", async () => {
+test("In theaters on Watch together lists only movies in theaters that both people want, newest shared first", async (t) => {
+  // The movie without details logs a failed catalog request, which this test
+  // reads.
+  const printed = captureFailures(t);
   const { alice, ben, cam } = await setup();
   await friend(alice, ben);
   await friend(alice, cam);
@@ -291,9 +309,12 @@ test("In theaters on Watch together lists only movies in theaters that both peop
   assert.deepEqual(listed(await together(alice, "ben")), [
     [unknown, "unavailable"],
   ]);
+  assert.deepEqual(failureEvents(printed), ["catalog request failed"]);
 });
 
-test("In theaters keeps empty pages and lists every movie under unknown release data when the catalog fails", async () => {
+test("In theaters keeps empty pages and lists every movie under unknown release data when the catalog fails", async (t) => {
+  // Each failed catalog request logs a failure line, which this test reads.
+  const printed = captureFailures(t);
   const { alice, ben } = await setup();
   await friend(alice, ben);
   const empty = await wantToWatch(alice, "alice");
@@ -332,6 +353,10 @@ test("In theaters keeps empty pages and lists every movie under unknown release 
   assert.deepEqual(listed(await together(alice, "ben")), [
     [movies[0], "in theaters"],
     [movies[1], "in theaters"],
+  ]);
+  assert.deepEqual(failureEvents(printed), [
+    "catalog request failed",
+    "catalog request failed",
   ]);
 });
 

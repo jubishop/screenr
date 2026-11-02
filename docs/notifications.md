@@ -171,6 +171,26 @@ a short excerpt, except for spoilers. Withdrawn requests and deleted or
 inaccessible comments disappear from lists and counts. Restoring comment
 access preserves the notification's read state.
 
+### Bounded reads
+
+Each screen read counts the member's unread notifications, and the open panel
+reads a page every three seconds. Visibility depends on current friendships,
+blocks, and comments, so it is checked on every read, and read notifications
+stay for a year ([retention](#notification-retention--2026-11-01)). Each read
+therefore checks only the notifications it shows or counts
+([issue #375](https://github.com/jubishop/screenr/issues/375)).
+`src/server/notifications.ts` walks the member's notifications newest first
+through the `notification_recipient` index and checks each one's visibility
+on its own, in a lateral subquery whose `LIMIT` keeps PostgreSQL from
+flattening the check into joins over the whole history. A page stops after
+31 visible notifications, the bulk-read boundary after the newest one, and
+the unread count reads only unread notifications through `notification_unread`
+(migration `039-notification-unread.sql`), which badge pushes use too. In a
+synthetic one-year circle with 985 notifications, a page read 945 shared
+buffers instead of 8,455 and took about 3 ms instead of 34 ms.
+`tests/app/notifications.test.ts` fails if a page, the boundary, or the unread
+count reads more notifications than it needs.
+
 ### Activity email
 
 Members enable **Email me about new activity** in Account. The setting is off
@@ -191,7 +211,12 @@ prioritizes sign-in codes. It builds each activity email under the write lock,
 so access, preference, and read changes are ordered with that check, then
 holds the job for a minute and calls Resend with no lock held
 ([decision](#activity-email-sends-without-the-write-lock--2026-11-01),
-[issue #359](https://github.com/jubishop/screenr/issues/359)). Migration
+[issue #359](https://github.com/jubishop/screenr/issues/359)). A pass
+first checks, without the lock, whether an activity email could be due: an
+unsent activity job, or a pending notification at least ten minutes old for a
+member who gets activity email. An idle worker, passing every second, then
+leaves the lock alone
+([issue #375](https://github.com/jubishop/screenr/issues/375)). Migration
 `036-email-send-generation.sql` gives each job a generation. Every block bumps
 the generation of all pending activity jobs, since a block also hides comments
 in mutual friends' conversations, and an opt-out bumps that member's. A send

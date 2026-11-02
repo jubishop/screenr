@@ -2,7 +2,12 @@ import { test, before, beforeEach, after, mock } from "node:test";
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
-import { db, bearerFor, captureFailures } from "./social-fixture";
+import {
+  db,
+  bearerFor,
+  captureFailures,
+  failureEvents,
+} from "./social-fixture";
 
 // The share extension's `resolve-title` action (docs/title-catalog.md#shared-links):
 // TMDB, IMDb, and JustWatch links name one title, and Netflix and other links
@@ -352,7 +357,9 @@ test("the search text drops site names, years, and links from page titles", () =
   assert.equal(sharedSearchText("x".repeat(400)).length, 120);
 });
 
-test("resolve-title answers the share extension with a title or a search", async () => {
+test("resolve-title answers the share extension with a title or a search", async (t) => {
+  // The unavailable catalog logs a failure line, which this test reads.
+  const printed = captureFailures(t);
   await db.query(`INSERT INTO "user"(id,name,email,"emailVerified","createdAt","updatedAt")
     VALUES('viewer','Viewer','viewer@example.test',true,now(),now())`);
   await db.query(
@@ -409,4 +416,5 @@ test("resolve-title answers the share extension with a title or a search", async
       },
     },
   );
+  assert.deepEqual(failureEvents(printed), ["catalog request failed"]);
 });

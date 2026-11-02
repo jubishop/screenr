@@ -20,6 +20,7 @@ import { titleSuggestions } from "./title-suggestions";
 import { friendsRecommend } from "./friends-recommend";
 import { savedServices, streamingServices } from "./streaming-services";
 import { withViewingOptions } from "./title-viewing";
+import { serviceProviders } from "./watch-sources";
 import { activityEmail, unreadNotifications } from "./notifications";
 import { pushSettings } from "./push";
 import { appleConfigured } from "./apple";
@@ -96,12 +97,18 @@ async function loadContent(userId: string, route: MemberRoute) {
   if (route.kind === "search") {
     // Both Find a title tabs load together, so switching tabs needs no new
     // read, and one availability and release read covers titles on either
-    // list.
-    const [suggestions, recommendations, serviceIds] = await Promise.all([
-      titleSuggestions(userId),
-      friendsRecommend(userId),
-      savedServices(userId),
-    ]);
+    // list. Each list is capped, with the read's filters applied first
+    // (docs/title-suggestions.md#implementation), and only listed titles
+    // read or refresh viewing options.
+    const serviceIds = await savedServices(userId);
+    const services =
+      route.services === "mine" ? serviceProviders(serviceIds) : null;
+    const hideFinished = route.finished === "hidden";
+    const [suggestions, { titles: recommendations, finished }] =
+      await Promise.all([
+        titleSuggestions(userId, services),
+        friendsRecommend(userId, { type: route.type, services, hideFinished }),
+      ]);
     const listed = new Map(
       (await withViewingOptions([...suggestions, ...recommendations])).map(
         ({ id, viewing, release, tmdb_score }) => [
@@ -117,6 +124,11 @@ async function loadContent(userId: string, route: MemberRoute) {
       suggestions: withViewing(suggestions),
       recommendations: withViewing(recommendations),
       serviceIds,
+      // How many Friends recommend titles the read left out because the
+      // viewer finished them. Only a read that hides them has it, so
+      // installed iPhone builds, which hide them themselves, get the same
+      // fields as before.
+      ...(hideFinished && { finishedRecommendations: finished }),
     };
   }
   if (route.kind === "people")

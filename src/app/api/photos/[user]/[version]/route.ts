@@ -6,7 +6,9 @@ import { viewablePhoto } from "../../../../../server/photos";
 // cookie or by a native client's bearer token. The URL names the photo's
 // version, so a client may keep its own copy for a day. `private` keeps
 // shared caches from storing it, and `Vary` stops another person signed in
-// to the same browser or app from reusing that copy.
+// to the same browser or app from reusing that copy. A client that already
+// holds the version gets 304 after the access check, without the image
+// being read.
 const vary = "Cookie, Authorization";
 const unavailable = (status: number) =>
   new Response(null, {
@@ -20,17 +22,19 @@ async function servePhoto(
   const { user, version } = await params;
   const session = await requestSession(request.headers);
   if (!session) return unavailable(401);
-  const photo = await viewablePhoto(session.user.id, user, version);
-  if (!photo) return unavailable(404);
   const headers = {
     "Cache-Control": "private, max-age=86400",
     Vary: vary,
     ETag: `"${version}"`,
     "Cross-Origin-Resource-Policy": "same-origin",
   };
-  if (request.headers.get("if-none-match") === headers.ETag)
-    return new Response(null, { status: 304, headers });
-  return new Response(new Uint8Array(photo.image), {
+  const held = request.headers.get("if-none-match") === headers.ETag;
+  const photo = await viewablePhoto(session.user.id, user, version, {
+    image: !held,
+  });
+  if (!photo) return unavailable(404);
+  if (held) return new Response(null, { status: 304, headers });
+  return new Response(new Uint8Array(photo.image!), {
     headers: { ...headers, "Content-Type": photo.content_type },
   });
 }
