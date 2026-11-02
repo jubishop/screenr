@@ -756,6 +756,14 @@ a digest that disagrees with its tag cannot pass. As #122 decided, CI follows
 production's release rather than Caddy's newest, and Dependabot moves the pin,
 so nobody has to remember to bump it.
 
+[`bin/ci-caddy`](../bin/ci-caddy) does the copy. Docker Hub sometimes fails a
+pull: on 2026-10-25 a blob request answered 502 Bad Gateway and failed an
+`app` job ([#379](https://github.com/jubishop/screenr/issues/379)). So it
+tries the pull four times, waiting 5, 10, and then 15 seconds between tries,
+before the job fails. The waits add at most 30 seconds, which keeps CI under
+its 10-minute limit. `tests/test_ci_caddy.py` runs the workflow's step against
+a fake Docker whose registry fails.
+
 Dependabot's `docker` entry proposes each new release on Tuesdays, after the
 same seven-day soak as production, and merging that pull request moves CI to
 the release production adopts at about the same time. The image appears a few
