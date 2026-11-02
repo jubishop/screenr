@@ -73,8 +73,8 @@ class InstallCaddyTests(unittest.TestCase):
         runner.mkdir()
         (fixture / "failures").write_text(str(failures))
         environment = {**os.environ, "PATH": self.path, "FIXTURE": str(fixture), "RUNNER_TEMP": str(runner)}
-        # GitHub runs a step's script with these bash options.
-        result = subprocess.run(["bash", "--noprofile", "--norc", "-eo", "pipefail", "-c", self.script],
+        # GitHub runs a step that sets no shell with bash -e, as the app job's log shows.
+        result = subprocess.run(["bash", "-e", "-c", self.script],
                                 cwd=ROOT, env=environment, capture_output=True, text=True, timeout=30)
         log = fixture / "log"
         return result, log.read_text().splitlines() if log.exists() else [], runner
