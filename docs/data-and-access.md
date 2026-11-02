@@ -203,6 +203,12 @@ session cookie ([decision](ios-app.md#bearer-sessions-in-the-keychain--2026-10-1
   deletes an expired row only when someone presents it, so the worker's
   periodic cleanup, about once a minute, deletes every expired row with its
   push devices. The privacy policy promises this within a day of expiry.
+- **Confirmed sign-out:** Better Auth's sign-out logs a failed session delete
+  and still answers 200. Screenr checks for the row afterward: while it
+  survives, or when the check itself fails, sign-out answers 500 with "Could
+  not sign out. Try again." and sets no cookie. The app keeps its token and
+  the browser its cookie, so neither leaves a live session, with its push
+  devices, behind a client that looks signed out.
 
 ## Native sign-in
 

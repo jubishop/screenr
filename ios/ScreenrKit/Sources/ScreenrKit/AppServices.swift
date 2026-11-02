@@ -64,6 +64,9 @@ public struct AppServices: Sendable {
     self.push = push
     imageSession = URLSession(configuration: Self.imageConfiguration(cache: imageCache))
     session.onEnd { _ in imageCache.removeAllCachedResponses() }
+    // An extension that got 401 removed the token and ran no end handler
+    // here, so a launch without a session empties the cache too.
+    if session.phase == .signedOut { imageCache.removeAllCachedResponses() }
     // A deleted account leaves nothing in the Keychain. The client removed
     // the session token, and an invitation link kept for joining goes too.
     session.onEnd { ending in
