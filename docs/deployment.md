@@ -738,6 +738,11 @@ with the owner's SSH access rather than the deploy key, run:
 bin/install-deploy-kit root@YOUR_SSH_HOST REVISION
 ```
 
+An agent working on the owner's Mac has that SSH access, so an unattended
+issue run installs the kit itself as an after-merge step instead of leaving it
+for the owner. `YOUR_SSH_HOST` is a placeholder, because this repository is
+public; the owner's home instructions say where to find the host.
+
 The script sends the kit files from `git archive` at that revision, never the
 working tree. Under the deploy lock, the host replaces the kit, removes kit
 files that the revision no longer has, and reports its digest, which must
@@ -1185,8 +1190,8 @@ override it.
 **Why:** the worker already runs periodic cleanup and restarts with each
 deploy, so it checks a newly deployed configuration at once and also catches
 a secret rotated or deleted in Google Cloud between deploys. `ops/activate.sh`
-belongs to the deploy kit, and changing it blocks deploys until the owner
-installs the kit over SSH.
+belongs to the deploy kit, and changing it blocks deploys until the kit is
+installed over SSH.
 
 **Tradeoff:** a broken client is noticed up to an hour after it breaks, and
 each worker start adds a check, at one request each.
