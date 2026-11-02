@@ -689,8 +689,9 @@ catalog cache failures, once for each request;
 episode, and find answers; and
 `tests/app/authentication.test.ts` the Screenr-wide code cap's refusals.
 They compare the logged fields exactly, check that comment text, search terms, addresses, codes, cookies, keys, and error messages stay
-out, and confirm that permanent Resend rejections are not retried. A request
-failure names the generated request ID, and
+out, and confirm that permanent Resend rejections are not retried. The Better
+Auth failure tests check everything printed, Better Auth's own lines included.
+A request failure names the generated request ID, and
 `tests/app/profile-photos.test.ts` checks that a failed Use my Google photo
 request names the client's.
 `tests/app/email.test.ts` also runs `scripts/worker.ts` with fetch disabled. The

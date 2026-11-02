@@ -138,6 +138,7 @@ final class ScriptedAPI: ScreenrAPI {
   private struct State {
     var replies: [Reply]
     var reads: [String] = []
+    var triggers: [RequestTrigger] = []
     var nextID = 0
     var watchers: [(id: Int, count: Int, continuation: CheckedContinuation<Void, Never>)] = []
   }
@@ -149,10 +150,13 @@ final class ScriptedAPI: ScreenrAPI {
   }
 
   var reads: [String] { state.withLock { $0.reads } }
+  // Why each read was sent, in order.
+  var triggers: [RequestTrigger] { state.withLock { $0.triggers } }
 
   func send<Response>(_ request: APIRequest<Response>) async throws(APIError) -> Response {
     let (reply, requestID, watchers) = state.withLock { state in
       state.reads.append(request.query["path"] ?? request.endpoint.path)
+      state.triggers.append(request.trigger)
       let reply = state.replies.count > 1 ? state.replies.removeFirst() : state.replies.first
       let count = state.reads.count
       let woken = state.watchers.filter { $0.count <= count }.map(\.continuation)

@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { setTimeout } from "node:timers/promises";
+import { format } from "node:util";
 import {
   useDatabase,
   db,
@@ -18,7 +19,8 @@ const { runWorkerPass } = await import("../../src/server/email");
 const { logFailure } = await import("../../src/server/log");
 const { runWorkerLoop } = await import("../../src/server/worker-loop");
 const { createAuth } = await import("../../src/server/auth");
-const { createInvitation } = await import("../../src/server/invitations");
+const { createInvitation, invitationHash } =
+  await import("../../src/server/invitations");
 const { onRequestError } = await import("../../src/instrumentation");
 useDatabase();
 // Fake Sentry endpoints still open after a failed test.
@@ -265,12 +267,22 @@ test("an unparseable screen path is not found and logs nothing", async () => {
   assert.deepEqual(printed, []);
 });
 
-// Better Auth and its router print their own unstructured lines beside a
-// failure; only JSON lines are failure logs.
+// Better Auth prints its own unstructured lines beside a failure; only JSON
+// lines are failure logs.
 const structured = (printed: string[]) =>
   printed.filter((line) => line.startsWith("{"));
 
-test("a sign-in code request whose email cannot be queued logs the callback and error, while Better Auth still answers success", async () => {
+// Everything printed through the console, not only failure logs.
+function captureOutput() {
+  const printed: string[] = [];
+  for (const method of ["debug", "info", "log", "warn", "error"] as const)
+    mock.method(console, method, (...args: unknown[]) => {
+      printed.push(format(...args));
+    });
+  return printed;
+}
+
+test("a sign-in code request whose email cannot be queued logs the callback and error, prints neither the message nor the address, and still answers success", async () => {
   await person("member");
   const message = "Private detail 662607";
   const auth = createAuth({
@@ -279,7 +291,7 @@ test("a sign-in code request whose email cannot be queued logs the callback and 
       throw new TypeError(message);
     },
   });
-  const printed = captureFailures();
+  const printed = captureOutput();
   const response = await auth.handler(
     new Request(
       "http://localhost:3000/api/auth/email-otp/send-verification-otp",
@@ -302,7 +314,7 @@ test("a sign-in code request whose email cannot be queued logs the callback and 
     error: "TypeError",
   });
   assert.ok(stack.some((frame) => frame.includes("failure-logs.test.ts")));
-  excludes(structured(printed), [message, "member@example.test"]);
+  excludes(printed, [message, "member@example.test"]);
 });
 
 // Requests a sign-in code for an address, as the web does, and returns the
@@ -346,7 +358,7 @@ test("a database failure inside Better Auth during an email code sign-in logs it
   // Better Auth checks the code against its verification table first.
   await db.query("ALTER TABLE verification RENAME TO verification_hidden");
   try {
-    const printed = captureFailures();
+    const printed = captureOutput();
     const response = await signIn();
     assert.equal(response.status, 500);
     const { fields, stack } = logged(structured(printed));
@@ -357,7 +369,7 @@ test("a database failure inside Better Auth during an email code sign-in logs it
       code: "42P01",
     });
     assert.ok(stack.some((frame) => frame.includes("/better-auth/")));
-    excludes(structured(printed), [code, "member@example.test", "exist"]);
+    excludes(printed, [code, "member@example.test", "exist"]);
   } finally {
     await db.query("ALTER TABLE verification_hidden RENAME TO verification");
   }
@@ -372,7 +384,7 @@ test("a Screenr callback failure that fails a sign-in logs only the callback, no
   // Creating an account for a new address checks its invitation.
   await db.query("ALTER TABLE invitation RENAME TO invitation_hidden");
   try {
-    const printed = captureFailures();
+    const printed = captureOutput();
     const response = await signIn();
     assert.equal(response.status, 500);
     const { fields } = logged(structured(printed));
@@ -382,9 +394,69 @@ test("a Screenr callback failure that fails a sign-in logs only the callback, no
       error: "DatabaseError",
       code: "42P01",
     });
-    excludes(structured(printed), [token, "new@example.test", "exist"]);
+    excludes(printed, [token, "new@example.test", "exist"]);
   } finally {
     await db.query("ALTER TABLE invitation_hidden RENAME TO invitation");
+  }
+});
+
+test("a constraint that fails an invited email code signup logs the endpoint, constraint, and table, and nothing printed quotes the failing row", async () => {
+  const email = "probe.person@example.test";
+  const { token } = await createInvitation(null);
+  const { code, signIn } = await emailSignIn(email, `screenr-invite=${token}`);
+  // A probe check constraint rejects the new user row. PostgreSQL's detail
+  // repeats the whole row, with the address and the invitation hash.
+  await db.query(
+    `ALTER TABLE "user" ADD CONSTRAINT failure_log_probe CHECK (email <> '${email}') NOT VALID`,
+  );
+  try {
+    const printed = captureOutput();
+    const response = await signIn();
+    assert.equal(response.status, 500);
+    assert.equal(await response.text(), "");
+    const { fields } = logged(structured(printed));
+    assert.deepEqual(fields, {
+      event: "auth endpoint failed",
+      endpoint: "/sign-in/email-otp",
+      error: "DatabaseError",
+      code: "23514",
+      constraint: "failure_log_probe",
+      table: "user",
+    });
+    excludes(printed, [
+      email,
+      invitationHash(token),
+      token,
+      code,
+      "violates",
+      "Failing row",
+    ]);
+  } finally {
+    await db.query('ALTER TABLE "user" DROP CONSTRAINT failure_log_probe');
+  }
+});
+
+test("a database failure in Better Auth's rate limit answers a bare 500 and logs the error instead of throwing it to Next", async () => {
+  const auth = createAuth();
+  const ok = () =>
+    auth.handler(new Request("http://localhost:3000/api/auth/ok"));
+  // The first request also settles Better Auth's schema check.
+  assert.equal((await ok()).status, 200);
+  await db.query('ALTER TABLE "rateLimit" RENAME TO rate_limit_hidden');
+  try {
+    const printed = captureOutput();
+    const response = await ok();
+    assert.equal(response.status, 500);
+    assert.equal(await response.text(), "");
+    const { fields } = logged(structured(printed));
+    assert.deepEqual(fields, {
+      event: "auth endpoint failed",
+      error: "DatabaseError",
+      code: "42P01",
+    });
+    excludes(printed, ["exist"]);
+  } finally {
+    await db.query('ALTER TABLE rate_limit_hidden RENAME TO "rateLimit"');
   }
 });
 

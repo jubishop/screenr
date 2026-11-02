@@ -903,7 +903,7 @@ journalctl -u screenr-worker --since '1 day ago' --no-pager | grep '"event":"ema
 | `catalog response invalid` | web | `lookup` (`details`, `search`, `seasons`, `episodes`, `find`, `videos`, or `providers`) and error fields, for a TMDB answer without the shape Screenr reads, such as after TMDB renames or retypes a field; or `lookup` `details` and `part` `release_dates`, without error fields, for movie details stored without the release dates Screenr couldn't read |
 | `catalog cache failed` | web | `cache` (`title`, `trailer`, or `availability`) for a failed read or write of that catalog cache |
 | `auth callback failed` | web | `callback`, the Better Auth callback, such as `sendVerificationOTP` or `user.create.before` |
-| `auth endpoint failed` | web | `endpoint`, Better Auth's route pattern, such as `/sign-in/email-otp` or `/callback/:id`, when known, for an unexpected error that Better Auth's router answered with a 500, such as a database error in its adapter |
+| `auth endpoint failed` | web | `endpoint`, Better Auth's route pattern, such as `/sign-in/email-otp` or `/callback/:id`, when known, for an unexpected error from Better Auth's handler, such as a database error in its adapter or rate limit or a schema mismatch, which Screenr answers with a bare 500 |
 | `code email cap reached` | web | No fields: the Screenr-wide limit of 40 [code emails a day](running-screenr.md#provider-configuration) refused a code request |
 | `apple_token_failed` | web | `status` and Apple's `reason` for an HTTP reply from Apple's token endpoint, or error fields |
 | `apple token unreadable` | web | Error fields only: account deletion skipped a Sign in with Apple token sealed under an earlier `BETTER_AUTH_SECRET` |
@@ -955,10 +955,15 @@ success for a code request whose email was never queued. When the failure
 ends the request, as in an email code sign-in whose account creation fails,
 it logs only `auth callback failed`, not `auth endpoint failed` as well. An
 `auth endpoint failed` line reports an error from Better Auth's own code, such
-as a database error in its adapter while it checks a sign-in code. Beside
-these lines, Better Auth prints its own unstructured line for a callback
-failure it catches, and its router prints a `# SERVER_ERROR:` line, with the
-error's message, for an unexpected error it answers with a 500.
+as a database error in its adapter while it checks a sign-in code
+([issue #415](https://github.com/jubishop/screenr/issues/415)). Better Auth's
+router rethrows it (`onAPIError.throw`), so neither its router library,
+better-call, nor Next prints the error itself, whose message and PostgreSQL
+detail can quote the failing row. Beside these lines, Better Auth prints its
+own line, such as `ERROR [Better Auth]: Failed to run background task:` for a
+callback failure it catches. Screenr's `logger.log` keeps only Better Auth's
+message and drops the error passed with it. A few messages name a value from
+the request, such as an untrusted origin or callback URL.
 
 Errors that Better Auth catches and answers itself print only its own line. A
 database error while a Google or Apple sign-in finds or creates the account

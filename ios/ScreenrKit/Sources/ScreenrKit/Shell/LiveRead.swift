@@ -134,14 +134,17 @@ public final class LiveRead<Value: Decodable & Hashable & Sendable> {
     }
   }
 
+  // Every read after the interval repeats the last one, so it is a poll.
   private func poll(_ first: FirstRead) async {
     var next = first
+    var trigger = RequestTrigger.demand
     while !Task.isCancelled {
       if next != .later {
-        await read(replacing: next == .replacing)
+        await read(replacing: next == .replacing, trigger: trigger)
         if isPermanentlyFailed || Task.isCancelled { return }
       }
       next = .joining
+      trigger = .poll
       do {
         try await clock.sleep(for: LiveReadTiming.interval)
       } catch {
@@ -152,7 +155,7 @@ public final class LiveRead<Value: Decodable & Hashable & Sendable> {
 
   // Joins the read in flight, or starts one. Replacing cancels the read in
   // flight, whose result then never applies.
-  private func read(replacing: Bool = false) async {
+  private func read(replacing: Bool = false, trigger: RequestTrigger = .demand) async {
     if let readTask {
       guard replacing else {
         await readTask.value
@@ -162,14 +165,14 @@ public final class LiveRead<Value: Decodable & Hashable & Sendable> {
     }
     readGeneration += 1
     let generation = readGeneration
-    let task = Task { await load(generation: generation) }
+    let task = Task { await load(trigger, generation: generation) }
     readTask = task
     await task.value
     if readTask == task { readTask = nil }
   }
 
-  private func load(generation: Int) async {
-    let result = await Self.fetch(request, api: api, clock: clock)
+  private func load(_ trigger: RequestTrigger, generation: Int) async {
+    let result = await Self.fetch(request.triggered(by: trigger), api: api, clock: clock)
     guard generation == readGeneration else { return }
     switch result {
     case .success(let value):
