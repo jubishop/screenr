@@ -6,6 +6,7 @@ import Testing
 // Deleting the account from Settings: confirming it's the member with a new
 // sign-in, then deleting, against canned replies and the fixture API.
 @MainActor
+@Suite(.timeLimit(.minutes(1)))
 struct AccountDeletionModelTests {
   static let alice = MemberConfirmation(
     userId: "user-alice",
@@ -283,6 +284,51 @@ struct AccountDeletionModelTests {
 
     #expect(deletion.step == .confirm)
     #expect(deletion.failure == "You’re offline. Check your connection and try again.")
+  }
+
+  // A deletion cut short, such as when Settings closes, returns to the
+  // confirmation with nothing to explain.
+  @Test func aCancelledDeletionReturnsToTheConfirmation() async throws {
+    let test = try TestClient(
+      token: "earlier-token",
+      replies: [try Self.codeSent(), try Self.signedIn(), .failure(URLError(.cancelled))]
+    )
+    let deletion = deletion(test)
+    await confirm(deletion)
+
+    await deletion.delete()
+
+    #expect(deletion.step == .confirm)
+    #expect(deletion.failure == nil)
+  }
+
+  // Only a member still signing in again moves on to the confirmation, so a
+  // sign-in that confirms them again while the deletion runs changes nothing.
+  @Test func aConfirmationDuringTheDeletionLeavesItRunning() async throws {
+    let api = GatedAPI(
+      RecordingAPI([
+        "send-verification-otp": .success(["success": true]),
+        "email-otp": .success(["token": "unsigned", "user": ["id": "user-alice"]]),
+        "delete-account": .success(["ok": true]),
+      ]),
+      holding: [3]
+    )
+    let deletion = AccountDeletionModel(api: api, member: Self.alice, providers: providers())
+    await confirm(deletion)
+    let deleting = Task { await deletion.delete() }
+    await api.waitForRequests(3)
+
+    await deletion.signIn.checkCode()
+    #expect(
+      api.requests.map(\.action) == [
+        "send-verification-otp", "email-otp", "delete-account", "email-otp",
+      ]
+    )
+    #expect(deletion.step == .deleting)
+
+    api.open()
+    await finish(deleting)
+    #expect(deletion.step == .deleted)
   }
 
   // Deleting the account leaves nothing in the Keychain: the session token,

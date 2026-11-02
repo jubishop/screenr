@@ -25,6 +25,21 @@ struct ScreenrClientTests {
     #expect(test.header("If-None-Match") == nil)
   }
 
+  // URLSession adds cookies below the transport, so its configuration keeps
+  // them out: Better Auth checks the Origin of any POST that carries one.
+  @Test func theNetworkTransportNeitherSendsNorStoresCookies() {
+    let configuration = URLSessionTransport.configuration()
+
+    #expect(configuration.httpCookieStorage == nil)
+    #expect(!configuration.httpShouldSetCookies)
+    #expect(configuration.httpCookieAcceptPolicy == .never)
+    // An ephemeral session keeps credentials in memory, not in the shared store.
+    #expect(configuration.urlCredentialStorage !== URLCredentialStorage.shared)
+    #expect(configuration.urlCache == nil)
+    #expect(configuration.timeoutIntervalForRequest == 15)
+    #expect(configuration.timeoutIntervalForResource == 15)
+  }
+
   @Test func sendsNoTokenWhenSignedOut() async throws {
     let test = try TestClient(replies: [try .json(401, ["error": "Sign in to continue."])])
 
@@ -284,6 +299,34 @@ struct ScreenrClientTests {
       return
     }
     #expect(feed.conversations.isEmpty)
+  }
+
+  // A new session forgets the screens the earlier one read, even when a
+  // sign-in confirms the same member without ending the earlier session.
+  @Test func forgetsTheCachedScreensWhenANewSessionSignsIn() async throws {
+    let etag = "W/\"version-1\""
+    let feed = try TestFixtures.body("screen/feed/default")
+    let test = try TestClient(
+      token: "earlier-token",
+      replies: [
+        .response(status: 200, headers: ["ETag": etag], body: feed),
+        try .json(
+          200,
+          ["token": "unsigned", "user": ["id": "user-alice"]],
+          headers: ["set-auth-token": "fresh-token"]
+        ),
+        .response(status: 200, headers: ["ETag": etag], body: feed),
+      ]
+    )
+
+    _ = try await test.client.send(.screen(path: "/"))
+    _ = try await test.client.send(
+      .signIn(email: "alice@example.test", code: "123456").confirming(userId: "user-alice")
+    )
+    _ = try await test.client.send(.screen(path: "/"))
+
+    #expect(test.header("Authorization", request: 2) == "Bearer fresh-token")
+    #expect(test.header("If-None-Match", request: 2) == nil)
   }
 
   @Test func requiresAnUpdateWhenTheServerAnswers426() async throws {

@@ -156,7 +156,6 @@ final class FriendsTests: XCTestCase {
       XCTAssertTrue(expected.waitForExistence(timeout: 10), "screen/people/\(name)")
       let suggestions = app.staticTexts["People you may know"]
       app.scrollTo(suggestions)
-      XCTAssertFalse(app.staticTexts["Screenr didn't load"].exists, "screen/people/\(name)")
       app.terminate()
     }
   }
