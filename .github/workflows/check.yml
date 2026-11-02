@@ -117,11 +117,9 @@ jobs:
       - run: npx playwright install --only-shell chromium
       - name: Install Caddy
         # Production's Caddy release, from the image .github/caddy/Dockerfile pins.
+        # bin/ci-caddy retries a failed pull; tests/test_ci_caddy.py runs this step.
         run: |
-          image=$(sed -n 's/^FROM //p' .github/caddy/Dockerfile)
-          container=$(docker create --quiet "$image")
-          docker cp --quiet "$container:/usr/bin/caddy" "$RUNNER_TEMP/caddy"
-          docker rm "$container"
+          bin/ci-caddy "$RUNNER_TEMP/caddy"
           sudo install -m 0755 "$RUNNER_TEMP/caddy" /usr/local/bin/caddy
           caddy version
       - name: Run application and database tests
