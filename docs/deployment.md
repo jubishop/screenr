@@ -1012,7 +1012,8 @@ error answer, such as 401 `OAUTH_LINK_ERROR`. A failed session read answers
 failed sign-out still answers success. When Screenr itself reads the session,
 as `/api/screenr` and `/api/photos` requests and member pages do, the line
 names no `endpoint`, and the request's own `request failed` or `route failed`
-line follows with a bare `APIError`. In an `/api/screenr` request, both lines
+line follows with an `APIError` whose `cause` names the same error, which
+Better Auth keeps there since 1.7.12. In an `/api/screenr` request, both lines
 carry its `requestId`. A callback failure that Better Auth catches logs only
 `auth callback failed`. A hook matcher that throws, which ends in a 500 that
 Better Auth's router answers without `auth endpoint failed`, logs `auth

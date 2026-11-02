@@ -235,10 +235,10 @@ function googleClientRejection(args: unknown[]) {
 // Better Auth catches some failures, answers them itself, and logs the error
 // at error level among its arguments: a database error while Google or Apple
 // sign-in finds or creates the account ends in an error redirect or answer, a
-// failed session read in a 500 without a cause, and a failed sign-out still
-// succeeds. Each such error is logged here, except an APIError, which is a
-// deliberate answer; a failure logCallbackFailure already logged; and a bad
-// OAuth state, which a client causes (docs/deployment.md#failure-logs).
+// failed session read in a 500, and a failed sign-out still succeeds. Each
+// such error is logged here, except an APIError, which is a deliberate
+// answer; a failure logCallbackFailure already logged; and a bad OAuth state,
+// which a client causes (docs/deployment.md#failure-logs).
 // Google's rejection of Screenr's own web client in a code exchange, which
 // arrives as a plain object, is logged here too.
 function logCaughtFailure(args: unknown[]) {
@@ -386,6 +386,9 @@ export function createAuth(
     rateLimit?: boolean;
     // Tests replace Google's image servers.
     fetchPhoto?: typeof fetch;
+    // Better Auth checks its tables when an instance starts and on each
+    // request. Migrations turn that off and check after they run.
+    validateSchema?: boolean;
   } = {},
 ) {
   // Tests and fixtures that disable rate limits also skip the code caps.
@@ -396,6 +399,7 @@ export function createAuth(
     baseURL: process.env.BETTER_AUTH_URL,
     secret: process.env.BETTER_AUTH_SECRET,
     database: db,
+    advanced: { database: { validateSchema: options.validateSchema ?? true } },
     telemetry: { enabled: false },
     // Screenr has no passwords. Better Auth registers these routes anyway.
     disabledPaths: [

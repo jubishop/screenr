@@ -58,6 +58,10 @@ export async function migrateFrom(
       };
     }),
   );
+  // Better Auth would check its tables as this instance starts, before the
+  // migrations below create or update them, and report what they are about
+  // to add. The check runs once they finish instead.
+  const auth = createAuth({ validateSchema: false });
   const client = await db.connect();
   try {
     await client.query(
@@ -88,7 +92,7 @@ export async function migrateFrom(
       throw new Error(
         `Applied migrations changed: ${changed.map(({ name }) => name).join(", ")}. Restore the applied version and put the change in a new migration. ${disposable}`,
       );
-    await (await getMigrations(createAuth().options)).runMigrations();
+    await (await getMigrations(auth.options)).runMigrations();
     await client.query("BEGIN");
     await client.query(
       "CREATE TABLE IF NOT EXISTS screenr_migration (name text PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now())",
@@ -131,6 +135,13 @@ export async function migrateFrom(
   } finally {
     client.release(true);
   }
+  // A mismatch that remains, such as a required column Better Auth never
+  // writes, prints as Better Auth's startup check prints it.
+  const context = await auth.$context;
+  await context.explicitSchemaCheck?.()?.catch((error) => {
+    if (error?.code !== "SCHEMA_MISMATCH") throw error;
+    context.logger.error(error.message);
+  });
 }
 if (process.argv[1]?.endsWith("scripts/migrate.ts")) {
   await migrate();
