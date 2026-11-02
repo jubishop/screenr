@@ -68,6 +68,12 @@ hooks of every agent's pushes.
   `TEST_DATABASE_URL` unset: one shared between agents' checkouts makes their
   test files reset each other's tables. On 2026-10-31 that caused a
   `deadlock detected` failure in `tests/app/catalog.test.ts`.
+- **Test database drops:** test-database setup drops removed checkouts'
+  databases under a machine-wide lock, and each drop forces a PostgreSQL
+  checkpoint, which took up to 18 seconds on 2026-11-01. Any test start that
+  sets up a database can wait that long or longer
+  ([process test waits](process-test-waits.md),
+  [#447](https://github.com/jubishop/screenr/issues/447)).
 
 ## Waiting on CI
 
