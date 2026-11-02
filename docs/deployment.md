@@ -1103,6 +1103,16 @@ keeps a short message until cleanup deletes the expired job, and
 `push_job.last_error` keeps the APNs status and reason or the error code
 until the push is sent or expires.
 
+Next prints its own line for an error that reaches `route failed`, just
+before that line, and its standalone server has no setting that stops it. In
+production, `register` in `src/instrumentation.ts` makes `console.error`
+print any error object as the error fields above, so Next's line reads `⨯`
+and the same fields as JSON, without the message or PostgreSQL detail
+([issue #428](https://github.com/jubishop/screenr/issues/428)). That covers
+any library that prints an error object. Text printed as a string, such as
+Better Auth's own lines, prints as it is. To read a message, reproduce the
+failure locally, where development prints whole errors.
+
 #### Worker outages
 
 The worker's email and push loops each run a pass about once a second

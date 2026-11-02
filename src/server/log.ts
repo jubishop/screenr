@@ -59,6 +59,13 @@ function print(record: Record<string, unknown>) {
   console.error(JSON.stringify(record));
 }
 
+// The fields a failure line keeps for an error, as JSON, for an error that
+// other code prints, such as Next's own line for an error that escapes a
+// route (see register in src/instrumentation.ts).
+export function errorFields(error: Error) {
+  return JSON.stringify(describe(error, true));
+}
+
 function describe(error: unknown, withStack: boolean): Record<string, unknown> {
   if (!(error instanceof Error)) return { error: typeof error };
   const type = error.constructor.name;
