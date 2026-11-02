@@ -860,6 +860,25 @@ whose behavior is ScreenrKit's `FeedbackModel`, in `Feedback/`. It follows the
   its long side and under 1 MB, without the original's metadata, such as a
   location. Send needs a message. A swipe cannot close the sheet while it
   holds a draft, and once the feedback is sent the sheet thanks the member.
+- **Length:** Sentry discards feedback whose message is over 4,096 Unicode
+  code points: ingestion rejects it, and sentry-cocoa drops it before
+  sending without telling the app. Following Sentry's
+  [client-side validation](https://develop.sentry.dev/sdk/telemetry/feedbacks/#client-side-input-validation),
+  `FeedbackModel.messageLength` counts the trimmed message that Send would
+  send in Unicode scalars, which match code points: a decomposed é counts as
+  two and an emoji as one. From 3,687, 90% of the limit, the form shows a
+  live `X / 4096` count. Over 4,096 it also shows "Shorten your message to
+  4,096 characters or fewer." and Send stays off. The form never cuts or
+  blocks what the member types or pastes, so they choose what to shorten.
+  The count and the error sit in a strip below the form, through
+  `safeAreaInset`, above the keyboard while it's up: a section footer would
+  fall below a long message, out of view. Capping the field's lines instead
+  left a tall blank row beneath it once the member edited a long message.
+  Relay also trims the feedback context to 8,192 bytes, but it measures the
+  message, the context's first field, in code points against that budget,
+  so it never trims a message within the limit. A long message of
+  multibyte characters can cost only the fields after it, for Screenr just
+  `source`.
 - **Logs:** sending attaches `LogFile.recentTails(maximumBytes:)`: up to
   256 KB of the newest complete lines of each log in the app group's log
   directory, the app's and any other process's, such as the notification
@@ -880,8 +899,14 @@ whose behavior is ScreenrKit's `FeedbackModel`, in `Feedback/`. It follows the
 - **Tests:** `FeedbackTests` read the envelope that the Release options
   produce from `SentryEnvelopeCapture`'s local transport: the feedback, its
   screenshot and log tail attachments, the user ID with no name or email,
-  and the release and dist. No test sends feedback to Sentry.
-  `SettingsTests.testSendsFeedback` sends feedback against the fixture API.
+  and the release and dist. They also cover the length limit at 4,096 and
+  4,097 scalars. No test sends feedback to Sentry.
+  `SettingsTests.testSendsFeedback` sends feedback against the fixture API,
+  and `testKeepsFeedbackOverTheLengthLimit` pastes past the limit to reach
+  the count and the error. It pastes through the field's edit menu, after
+  setting `UIPasteboard`: Command-V from `typeKey` pasted nothing, and once
+  the field held the pasted text, typing, deleting, and a long press for the
+  menu all failed to reach it on the iOS 27 Simulator.
 
 ### Account deletion
 

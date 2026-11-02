@@ -119,6 +119,28 @@ struct FeedbackSheet: View {
       }
     }
     .disabled(model.phase == .sending)
+    .safeAreaInset(edge: .bottom, spacing: 0) { length }
+  }
+
+  // The message's count once it nears Sentry's limit, and an error once it's over, below the form
+  // rather than under the field, so they stay in view however long the message grows. The
+  // message stays as the member wrote it.
+  @ViewBuilder private var length: some View {
+    let limit = FeedbackModel.maximumMessageLength
+    switch model.messageLength {
+    case .short:
+      EmptyView()
+    case .nearLimit(let count):
+      LengthBar {
+        Text(verbatim: "\(count) / \(limit)")
+      }
+    case .overLimit(let count):
+      LengthBar {
+        Text(verbatim: "\(count) / \(limit)")
+          .foregroundStyle(.danger)
+        FailureLabel("Shorten your message to 4,096 characters or fewer.")
+      }
+    }
   }
 
   @ViewBuilder private var attachButton: some View {
@@ -164,6 +186,23 @@ struct FeedbackSheet: View {
         }
       }
     }
+  }
+}
+
+// A strip below the feedback form, in the form's background, for the message's length.
+private struct LengthBar<Content: View>: View {
+  @ViewBuilder let content: Content
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 6) {
+      content
+    }
+    .font(.footnote)
+    .foregroundStyle(.muted)
+    .padding(.horizontal, 32)
+    .padding(.vertical, 10)
+    .frame(maxWidth: .infinity, alignment: .leading)
+    .background(Color(uiColor: .systemGroupedBackground))
   }
 }
 

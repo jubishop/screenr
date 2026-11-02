@@ -129,6 +129,70 @@ struct FeedbackTests {
     #expect(model.phase == .composing)
   }
 
+  // Sentry counts a message in Unicode code points, which Unicode scalars match. A film-clapper
+  // emoji is one, though UTF-16 takes two units; a decomposed é, an e and a combining accent, is
+  // two, though it's one character; and whitespace the send trims counts for none.
+  @Test func sendsAMessageAtTheLimit() async throws {
+    let sender = RecordingFeedbackSender()
+    let model = FeedbackModel(service: FeedbackService(sender: sender, logFile: nil))
+    let text = "🎬" + String(repeating: "a", count: 4093) + "e\u{301}"
+    #expect(text.count == 4095)
+    #expect(text.utf16.count == 4097)
+    model.message = " \n" + text + "\n\n"
+
+    #expect(model.messageLength == .nearLimit(count: 4096))
+    #expect(model.canSend)
+
+    await model.send()
+
+    #expect(try #require(sender.sent.only).message == text)
+    #expect(model.phase == .sent)
+  }
+
+  // With a decomposed é, this message of 4,096 characters is 4,097 scalars, over the limit. The
+  // form keeps all of it for the member to shorten.
+  @Test func keepsAMessageOverTheLimitWithoutSendingIt() async {
+    let sender = RecordingFeedbackSender()
+    let model = FeedbackModel(service: FeedbackService(sender: sender, logFile: nil))
+    let text = String(repeating: "a", count: 4095) + "e\u{301}"
+    #expect(text.count == 4096)
+    model.message = text
+
+    #expect(model.messageLength == .overLimit(count: 4097))
+    #expect(!model.canSend)
+
+    await model.send()
+
+    #expect(sender.sent.isEmpty)
+    #expect(model.phase == .composing)
+    #expect(model.message == text)
+    #expect(model.hasDraft)
+
+    model.message = String(repeating: "a", count: 4095)
+
+    #expect(model.messageLength == .nearLimit(count: 4095))
+    #expect(model.canSend)
+  }
+
+  // The count shows from 90% of the limit, 3,687 scalars, and hides again below that.
+  @Test func showsTheCountNearTheLimit() {
+    let model = FeedbackModel(
+      service: FeedbackService(sender: RecordingFeedbackSender(), logFile: nil)
+    )
+    model.message = String(repeating: "a", count: 3686) + "  "
+
+    #expect(model.messageLength == .short)
+
+    model.message = String(repeating: "a", count: 3687)
+
+    #expect(model.messageLength == .nearLimit(count: 3687))
+    #expect(model.canSend)
+
+    model.message = String(repeating: "a", count: 3686)
+
+    #expect(model.messageLength == .short)
+  }
+
   @Test func keepsTheDraftWhenSendingFails() async {
     let sender = RecordingFeedbackSender(failing: true)
     let model = FeedbackModel(service: FeedbackService(sender: sender, logFile: nil))

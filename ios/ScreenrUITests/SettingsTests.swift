@@ -1,4 +1,5 @@
 import Foundation
+import UIKit
 import XCTest
 
 // Settings, from the You tab's gear, and the invitations it opens. The
@@ -184,6 +185,41 @@ final class SettingsTests: XCTestCase {
     )
     app.buttons["Done"].tap()
     XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 10))
+  }
+
+  // Sentry discards feedback over 4,096 characters, so the form counts them
+  // and holds a longer message back, keeping all of it rather than cutting a
+  // paste short.
+  @MainActor
+  func testKeepsFeedbackOverTheLengthLimit() throws {
+    let app = openSettings(log: RequestLog.temporary())
+    let open = app.buttons["Send feedback"]
+    app.scrollTo(open)
+    open.tap()
+    XCTAssertTrue(app.navigationBars["Send feedback"].waitForExistence(timeout: 10))
+    let empty = app.textFields["Your feedback"]
+    // 4,115 characters.
+    UIPasteboard.general.string = Array(repeating: "Posters load slowly.", count: 196)
+      .joined(separator: " ")
+    empty.tap()
+    // A second tap in the empty field opens its edit menu.
+    empty.tap()
+    let paste = app.menuItems["Paste"]
+    XCTAssertTrue(paste.waitForExistence(timeout: 5))
+
+    paste.tap()
+
+    XCTAssertTrue(app.staticTexts["4115 / 4096"].waitForExistence(timeout: 10))
+    XCTAssertTrue(
+      app.staticTexts["Shorten your message to 4,096 characters or fewer."].exists
+    )
+    XCTAssertFalse(app.buttons["Send"].isEnabled)
+    // Once the field holds text, it goes by its text instead of its placeholder.
+    let message = app.textFields.element(
+      matching: NSPredicate(format: "value BEGINSWITH %@", "Posters load slowly.")
+    )
+    XCTAssertEqual((message.value as? String)?.count, 4115)
+    try app.performScreenrAudit()
   }
 
   @MainActor
