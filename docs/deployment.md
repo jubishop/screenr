@@ -1113,6 +1113,14 @@ any library that prints an error object. Text printed as a string, such as
 Better Auth's own lines, prints as it is. To read a message, reproduce the
 failure locally, where development prints whole errors.
 
+In production, Next hands a failed page render's error to `onRequestError`
+twice, once as the render throws it and again as it crosses a React server
+boundary, though it prints its own line only once. The hook logs each error
+object once, so one failed render prints one `route failed` line and sends
+one Sentry report
+([issue #453](https://github.com/jubishop/screenr/issues/453)). Another
+failure, even with the same fields, prints its own line.
+
 #### Worker outages
 
 The worker's email and push loops each run a pass about once a second
