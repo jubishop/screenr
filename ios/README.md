@@ -1567,3 +1567,5 @@ accent.
 - **`Info.plist`:** Xcode runs the C preprocessor in traditional mode over
   `Screenr/Info.plist`. Use `#if` only for variant differences that build
   settings cannot express.
+
+<!-- Scratch change for jubishop/screenr#372; never merge. -->
