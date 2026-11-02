@@ -12,18 +12,19 @@ Bound the wait only to end a hang, with a few minutes. Never poll against a
 deadline sized for an idle machine.
 
 **Why:** A process that sets up a test database can stall for many seconds in
-a parallel agent run, because of what other checkouts do. `prepareTestDatabase`
-in `scripts/checkout.ts` takes a machine-wide lock. While holding it, it drops
+a parallel agent run. `prepareTestDatabase` in `scripts/checkout.ts` drops
 removed checkouts' databases, and each `DROP DATABASE` forces a PostgreSQL
-checkpoint and waits for it. On 2026-11-01 the PostgreSQL log recorded 658
+checkpoint and waits for it. Until
+[#447](https://github.com/jubishop/screenr/issues/447) it dropped them while
+holding a machine-wide lock, so every other checkout's start waited as well.
+It now drops them after releasing the lock, so only the setup that claimed
+them waits. On 2026-11-01 the PostgreSQL log recorded 658
 forced checkpoints. Of these, 69 took over 2 seconds, and the longest took 18
 seconds. Two of them, of 16.9 and 10.5 seconds, came in the four minutes
 before the browser-build test's harness was reported silent for over 10
 seconds ([#427](https://github.com/jubishop/screenr/issues/427)). Load average
 alone did not explain the stall. At load averages from 298 to 358, the
 harness finished each of 16 runs within 1.7 seconds.
-[#447](https://github.com/jubishop/screenr/issues/447) tracks shortening the
-lock's hold.
 
 **Evidence:** Dropping an empty database at 17:10 PST waited 6.0 seconds for
 a checkpoint that synced 73,941 files. Holding each harness start for 11

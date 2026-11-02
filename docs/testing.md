@@ -88,10 +88,20 @@ database without a record, left by an interrupted preparation or created by
 a browser run before checkouts were recorded, is dropped too; its checkout's
 next run recreates and records it. A database stays while a process is
 connected to it or a browser run holds its database lock, which the harness
-takes before creating the database and keeps through the build. Preparation
-takes a lock on the server, so it never removes a database another checkout
-is creating. `tests/app/checkout-isolation.test.ts` covers the derived name,
-the override, and removal.
+takes before creating the database and keeps through the build.
+
+Preparations take turns under a lock on the server, so none removes a
+database another checkout is still creating. In its turn a preparation only
+claims the databases it will drop, renaming each to a name no checkout
+derives, so a checkout recreated at the same path gets a new database. It
+drops its claims after its turn, because each drop waits for a PostgreSQL
+checkpoint, which took up to 18 seconds in a parallel run
+([#447](https://github.com/jubishop/screenr/issues/447)); no other checkout's
+preparation waits for those drops. A preparation holds a lock on each claim
+until it drops it, and a later preparation drops any claim whose lock is free,
+such as one left by a run that stopped first.
+`tests/app/checkout-isolation.test.ts` covers the derived name, the
+override, removal, and these guarantees.
 
 ## Browser harness
 

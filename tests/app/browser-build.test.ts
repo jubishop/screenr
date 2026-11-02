@@ -12,10 +12,10 @@ const execute = promisify(execFile);
 const loader = resolve("node_modules/tsx/dist/loader.mjs");
 const harness = resolve("scripts/browser-server.ts");
 // Each harness start usually takes under a second, but its test-database setup
-// shares one machine-wide lock with every other checkout's, and each database
-// a setup drops forces a PostgreSQL checkpoint, which took up to 18 seconds in
-// a parallel run (#427). The test waits for the harness's own signals instead
-// of a deadline, and this bound only ends a run that hangs.
+// may drop removed checkouts' databases, and each drop forces a PostgreSQL
+// checkpoint, which took up to 18 seconds in a parallel run (#427). The test
+// waits for the harness's own signals instead of a deadline, and this bound
+// only ends a run that hangs.
 const patience = 180_000;
 
 test("the browser command builds current checkout sources before serving and stops on build failure", async (t) => {
