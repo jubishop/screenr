@@ -1,4 +1,5 @@
 import { AppError, db } from "./db";
+import { titleColumns } from "./catalog";
 import type { Person, Title } from "../shared";
 import type { ListMode } from "../member-routes";
 import { inTheaters, withViewingOptions } from "./title-viewing";
@@ -38,7 +39,7 @@ export async function watchTogether(
       GROUP BY f.title_id
       HAVING count(*)=(SELECT count(*) FROM participants)
     ), titles AS (
-      SELECT t.id,t.kind,t.tmdb_id,t.name,t.overview,t.poster_path,t.release_date,m.shared_at
+      SELECT ${titleColumns("t")},m.shared_at
       FROM title t JOIN matches m ON m.title_id=t.id
     )
     SELECT

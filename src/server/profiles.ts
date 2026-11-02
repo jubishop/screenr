@@ -64,11 +64,8 @@ export async function profileFor(viewer: string, username: string) {
       'user_id',friend.user_id,'username',friend.username,'display_name',friend.display_name,
       'photo',screenr_photo(friend.user_id)
     ) ORDER BY friend.username)
-      FROM friendship accepted JOIN profile friend
-        ON friend.user_id=CASE WHEN accepted.low_id=p.user_id THEN accepted.high_id ELSE accepted.low_id END
-      WHERE p.user_id IN (accepted.low_id,accepted.high_id) AND accepted.accepted_at IS NOT NULL
-        AND NOT screenr_blocked($1,friend.user_id)
-        AND NOT screenr_blocked(p.user_id,friend.user_id)), '[]'::jsonb) AS friends
+      FROM screenr_friends(p.user_id) accepted JOIN profile friend ON friend.user_id=accepted.user_id
+      WHERE NOT screenr_blocked($1,friend.user_id)), '[]'::jsonb) AS friends
     FROM profile p LEFT JOIN friendship f
     ON f.low_id=least($1,p.user_id) AND f.high_id=greatest($1,p.user_id)
     WHERE p.username=$2 AND NOT screenr_blocked($1,p.user_id)`,

@@ -1,4 +1,5 @@
 import { db } from "./db";
+import { entryOf, feedEntries } from "./feed";
 import type { SaveSurface } from "../shared";
 
 // Usage telemetry for the initial success measures. See docs/usage-telemetry.md.
@@ -94,17 +95,11 @@ export async function usageReport({
     ), saved AS (
       SELECT * FROM want_to_watch_save WHERE user_id NOT IN (SELECT user_id FROM demo)
     ), entries AS (
-      SELECT * FROM (
-        SELECT id, owner_id, created_at FROM feed_item
-        UNION ALL SELECT id, owner_id, created_at FROM title_comment
-        UNION ALL SELECT id, owner_id, created_at FROM watch_progress
-        UNION ALL SELECT id, owner_id, created_at FROM review
-        UNION ALL SELECT id, owner_id, created_at FROM discussion_post
-      ) e WHERE owner_id NOT IN (SELECT user_id FROM demo)
+      SELECT id, owner_id, created_at FROM ${feedEntries} e
+      WHERE owner_id NOT IN (SELECT user_id FROM demo)
     ), comments AS (
       -- Removed comments still count as activity when they were posted.
-      SELECT coalesce(feed_item_id, title_comment_id, watch_progress_id, review_id, discussion_post_id) AS entry,
-        author_id, created_at FROM comment
+      SELECT ${entryOf("comment")} AS entry, author_id, created_at FROM comment
       WHERE author_id NOT IN (SELECT user_id FROM demo)
     ), posts AS (
       -- An entry's owner posts the entry itself; everyone else posts comments.
