@@ -315,6 +315,23 @@ which reach the app directly, therefore run under every production security
 header. The old hostname's redirect site sets its own `Referrer-Policy`,
 because no app response passes through it.
 
+### Database connections
+
+`ops/postgresql.conf` allows 25 connections, and PostgreSQL reserves 3 of
+them for superusers, so the non-superuser `screenr` role can open 22. The web
+process and the worker each keep one pool of at most 8 (`src/server/db.ts`),
+16 in all, which leaves 6 for the rest, such as activation's migrations,
+backups, and administration.
+
+The production build copies `src/server/db.ts` into each server bundle that
+imports it, such as the pages' and the route handlers', and runs every copy
+in the one web process. The copies share one pool on `globalThis`, as they do
+across development reloads
+([#435](https://github.com/jubishop/screenr/issues/435)). Before that, the
+pages and the route handlers each opened their own pool: under a burst of
+requests a local production server held 16 connections, and with the worker
+the pools could ask for 24, more than the role can open. It now holds 8.
+
 ### Host configuration drift
 
 **Decision — 2026-10-12:** During deployment, under the deploy lock and

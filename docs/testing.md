@@ -723,7 +723,11 @@ own tests. `tests/app/database-connections.test.ts` ends an idle pooled
 connection and a transaction's connection from another one, and checks that
 each is logged once without stopping the process, that the transaction
 rethrows its own error rather than its failed `ROLLBACK`'s, and that the
-broken client is released. `tests/app/email.test.ts` fails the database
+broken client is released. It runs that transaction through another copy of
+`src/server/db.ts` too, as the production build's other server bundles and
+development reloads do, and checks in a production process that two copies
+share [one pool](deployment.md#database-connections).
+`tests/app/email.test.ts` fails the database
 while Resend accepts a send, which must hold the job for a minute and then
 retry it with the same key, and `tests/app/migrations.test.ts` ends a
 migration's connection, which must fail with that connection's error and

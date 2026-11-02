@@ -1,13 +1,26 @@
 import { Pool, types, type PoolClient } from "pg";
 import { logFailure } from "./log";
 
+// The production build copies this module into each server bundle that
+// imports it, such as the pages' and the route handlers', and runs every copy
+// in the one web process; a development reload runs it again. Every copy uses
+// one pool, kept on globalThis, so the process holds at most its `max`
+// connections (docs/deployment.md#database-connections). Only the copy that
+// opens the pool adds its listeners, and they record broken connections in a
+// set that the copies also share.
+const shared = globalThis as unknown as {
+  screenrPool?: Pool;
+  screenrBrokenConnections?: WeakSet<PoolClient>;
+};
+
 // pg emits an `error` event when PostgreSQL ends a connection outside a query,
 // as a restart or crash recovery does. The pool forwards an idle connection's
 // event; a checked-out one, such as one between a transaction's queries,
 // emits its own. Unheard, either would stop the process. Each broken
 // connection is logged once. The pool then drops it, and the next query on a
 // checked-out one fails for its caller to handle.
-const brokenConnections = new WeakSet<PoolClient>();
+const brokenConnections = (shared.screenrBrokenConnections ??=
+  new WeakSet<PoolClient>());
 function connectionFailed(error: Error, client: PoolClient) {
   if (brokenConnections.has(client)) return;
   brokenConnections.add(client);
@@ -24,11 +37,10 @@ function watch(pool: Pool) {
   pool.on("release", (_error, client) =>
     client.off("error", checkedOutConnectionFailed),
   );
+  return pool;
 }
 
-const globalDB = globalThis as unknown as { screenrPool?: Pool };
-export const db =
-  globalDB.screenrPool ??
+export const db = (shared.screenrPool ??= watch(
   new Pool({
     connectionString: process.env.DATABASE_URL,
     max: 8,
@@ -50,10 +62,8 @@ export const db =
         return types.getTypeParser(oid, format);
       },
     },
-  });
-// A development reload reuses the pool, which keeps its listeners.
-if (db !== globalDB.screenrPool) watch(db);
-if (process.env.NODE_ENV !== "production") globalDB.screenrPool = db;
+  }),
+));
 
 // All domain mutations share this lock. This small invite-only app favors a
 // clear ordering between permission changes and content writes.
