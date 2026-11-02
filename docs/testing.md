@@ -772,11 +772,14 @@ including badge-only updates for kinds turned off, and visibility, read
 state, expired sessions, and moved tokens at send time. It also checks that
 rejected tokens delete their device, that other rejections and retryable
 failures are logged without tokens, badge-only updates, and reconnection
-after GOAWAY or a lost connection. Each read action, friendship change,
-reply removal, and account deletion, from the web or the app, sends a
-badge-only update with the new count to each member whose count it changed,
-including people sent a reply on the changed friends' entries. Changes that
-leave every count unchanged, and failed ones, queue none.
+after GOAWAY or a lost connection. Its fake host sends GOAWAY ahead of the
+answer to a push in flight, so the test needs no fixed wait: that push
+finishes on its connection and the next one connects again. Each read
+action, friendship change, reply removal, and account deletion, from the
+web or the app, sends a badge-only update with the new count to each member
+whose count it changed, including people sent a reply on the changed
+friends' entries. Changes that leave every count unchanged, and failed ones,
+queue none.
 Operational tests check activation rollback after a stalled health request, a
 failed signed-out session request, or a web or worker service that crashes on
 startup. They also check a production-down report when the restored release
@@ -787,6 +790,23 @@ any temporary database, when restic cannot check or read the backup,
 `pg_restore` fails, the restore has no profiles, or its access query fails.
 The backup, restore check, and stale-backup check run a failed restic step
 once more after a minute, and fail only when that retry fails too.
+Those cases fake PostgreSQL, so `tests/app/backup-restore.test.ts` also runs
+a real round trip on the test server
+([#384](https://github.com/jubishop/screenr/issues/384)): `ops/backup.sh`
+dumps the test database, and `ops/restore-check.sh` restores the dump into a
+scratch database and runs its checks, each with its own PostgreSQL commands
+and flags. Only restic, the backup age check, and the host's paths and
+connection are faked. A flag or schema change that leaves backups
+unrestorable fails it, but production restores as a non-superuser role and
+the test as a superuser, so a restore that needs more privilege still shows
+only in the weekly check. The test uses the PostgreSQL client commands of the
+server's major release: from `/usr/lib/postgresql/<major>/bin` as production
+does, from Homebrew's `postgresql@<major>`, or else from `PATH`. It fails
+naming them when none has them. The restore check's `dropdb` waits for a
+checkpoint. On a busy Mac it was the slowest step, at 1 to 3 seconds, and
+the whole test once took 43 seconds during a full local run, so a shared
+server's checkpoint waits
+([#447](https://github.com/jubishop/screenr/issues/447)) can slow it.
 Release packaging runs only in Linux CI, so
 `tests/app/release-package.test.ts` checks locally that the package includes
 every module its maintenance scripts load

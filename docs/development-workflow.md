@@ -712,6 +712,11 @@ started.
   test names use.
 - **ShellCheck:** the `static` job installs ShellCheck from APT only when the
   runner image lacks it, then prints its version.
+- **PostgreSQL client commands:** the backup round trip in
+  `tests/app/backup-restore.test.ts` runs `pg_dump`, `pg_restore`, `psql`,
+  `createdb`, and `dropdb` from the image's `/usr/lib/postgresql/18/bin`, the
+  path production uses. The Ubuntu 26.04 image installs PostgreSQL 18 with
+  its service disabled.
 
 The jobs use the image's library versions, which GitHub refreshes every week
 or two, and their browsers load only local test servers. If an image drops a
@@ -810,7 +815,10 @@ version, so a pinned digest and its update pull requests would add work
 without catching a production difference. Change the tag in each service of
 `.github/workflows/check.yml`, and the Homebrew formula in
 [local setup](running-screenr.md#local-setup), with production's major version
-([#124](https://github.com/jubishop/screenr/issues/124)).
+([#124](https://github.com/jubishop/screenr/issues/124)). The
+[backup round trip](testing.md#coverage) needs the client commands of the
+server's major release, so a new major also needs them on the runner image,
+or installed in the `app` job, before CI passes.
 
 ## Main branch delivery
 
