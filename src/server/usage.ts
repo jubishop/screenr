@@ -85,7 +85,9 @@ export async function usageReport({
       FROM (SELECT date_trunc('week', coalesce($2::date, ${pacificToday})::timestamp)::date AS last_week,
         date_trunc('week', ${pacificToday}::timestamp)::date AS current_week) bounds,
         generate_series(0, $1 - 1) n
-    ), spans AS (
+    ), spans AS MATERIALIZED (
+      -- Each week's bounds are worked out once, not again for every row
+      -- compared with them.
       SELECT week, in_progress, week::timestamp AT TIME ZONE 'America/Los_Angeles' AS starts,
         (week + 7)::timestamp AT TIME ZONE 'America/Los_Angeles' AS ends
       FROM weeks
@@ -103,9 +105,34 @@ export async function usageReport({
       WHERE author_id NOT IN (SELECT user_id FROM demo)
     ), posts AS (
       -- An entry's owner posts the entry itself; everyone else posts comments.
+      -- A comment whose author deleted their account has no author, so it is
+      -- no one's post here.
       SELECT e.id AS entry, e.owner_id AS author, e.created_at FROM entries e
       WHERE EXISTS (SELECT 1 FROM comments c WHERE c.entry = e.id)
       UNION ALL SELECT entry, author_id, created_at FROM comments
+      WHERE author_id IS NOT NULL
+    ), counted AS (
+      -- For each post, how many posts by other people on its entry came
+      -- before its time, and how many came at or before it.
+      SELECT entry, author, created_at,
+        rank() OVER (PARTITION BY entry ORDER BY created_at)
+          - rank() OVER (PARTITION BY entry, author ORDER BY created_at) AS others_before,
+        count(*) OVER (PARTITION BY entry ORDER BY created_at)
+          - count(*) OVER (PARTITION BY entry, author ORDER BY created_at) AS others_through
+      FROM posts
+    ), back_and_forth AS MATERIALIZED (
+      -- Back-and-forth: someone posted, another person followed, and the
+      -- first person posted again. A post completes it when another person
+      -- posted after its author's first post and before it: more posts by
+      -- others came before it than at or before that first post. Each entry
+      -- keeps the time of its first such post.
+      SELECT entry, min(created_at) AS completed_at FROM (
+        SELECT entry, created_at, others_before,
+          min(others_through) OVER (PARTITION BY entry, author) AS others_through_first
+        FROM counted
+      ) authored
+      WHERE others_before > others_through_first
+      GROUP BY entry
     )
     SELECT s.week::text AS week, s.in_progress AS "inProgress",
       (SELECT count(DISTINCT a.user_id) FROM active a
@@ -153,18 +180,9 @@ export async function usageReport({
     ) saves
     CROSS JOIN LATERAL (
       -- Participants are the owner and every commenter by the week's end.
-      -- Back-and-forth: someone posted, another person followed, and the
-      -- first person posted again.
       SELECT count(*)::int AS conversations,
-        (count(*) FILTER (WHERE EXISTS (
-          SELECT 1 FROM posts again
-          JOIN posts other ON other.entry = again.entry AND other.author <> again.author
-            AND other.created_at < again.created_at
-          JOIN posts first ON first.entry = again.entry AND first.author = again.author
-            AND first.created_at < other.created_at
-          WHERE again.entry = e.id AND again.created_at < s.ends
-        )))::int AS back_and_forth
-      FROM entries e
+        (count(*) FILTER (WHERE b.completed_at < s.ends))::int AS back_and_forth
+      FROM entries e LEFT JOIN back_and_forth b ON b.entry = e.id
       WHERE EXISTS (SELECT 1 FROM comments c WHERE c.entry = e.id
           AND c.created_at >= s.starts AND c.created_at < s.ends)
         AND EXISTS (SELECT 1 FROM comments c WHERE c.entry = e.id
