@@ -350,7 +350,31 @@ leaving the page cancels the old request; only the current request can
 publish results or errors. The existing Poster component accepts responsive
 image sizes for the grid. The optional **My services** filter includes titles
 on a saved service or with a free option. It starts off and preserves the
-existing social order. Service notes use broad names, such as AMC+, without
+existing social order.
+
+Find a title lists the 50 highest-ranked titles of each list
+([superseded decision](#show-all-eligible-titles--2026-09-07),
+[issue #375](https://github.com/jubishop/screenr/issues/375)). Its filters
+apply on the server before the cap, so a filtered list still fills to 50:
+My services narrows both lists, and the Movies/TV filter and hiding finished
+titles narrow Friends recommend. The screen read names them in its path as
+`services=mine`, `type=movie` or `type=tv`, and `finished=hidden`, which
+`src/member-routes.ts` parses with the route. The web keeps them out of its
+address: `src/components/screen.tsx` holds them for the visit, starting with
+finished titles hidden, and `screenPath` adds them to each read, including
+the page load's, so changing one reads the screen again. The lists already
+shown stay filtered in the browser until that read arrives. A read without
+filters lists every title, finished ones included, as installed iPhone
+builds expect; they filter the capped lists themselves. On the server, My
+services leaves out titles whose stored viewing options, current or stale,
+list neither a subscription from one of the viewer's services nor a free
+option, as `viewingAccess` decides in the browser; titles with unknown
+options stay in, and the browser leaves them out with its notice. Both
+queries score every eligible title, then read title details, gather direct
+friends' names, and build JSON only for the listed ones. Viewing options are
+read and refreshed only for listed titles, so titles below the cap are not
+refreshed from Find. In a synthetic one-year circle, the screen went from
+1,617 suggestions and 920 recommendations in 1.4 MB to 50 of each in 60 KB. Service notes use broad names, such as AMC+, without
 plan or reseller suffixes. Failed availability remains visible with the filter
 off; when it is on, a notice explains how to see titles with unknown options.
 These additions follow the
@@ -366,8 +390,10 @@ returning from a result restores its query and results
 
 `tests/app/title-suggestions.test.ts` exercises the public screen loader
 against PostgreSQL, including weighting, top 10 weights, unique connections, current choices,
-blocking, the second-degree minimum, preserved discussions, 205 eligible
-titles, and watch statuses as sources, exclusions, and a ranking tier.
+blocking, the second-degree minimum, preserved discussions, the 50-title
+cap and My services before it, and watch statuses as sources, exclusions,
+and a ranking tier. `tests/app/friends-recommend.test.ts` covers Friends
+recommend's cap and each filter before it.
 Browser coverage in `tests/browser/title-suggestions.spec.ts` uses the real
 app and the local catalog fixture to check identity privacy in initial page
 data and API responses, Watching explanations, tile layout/navigation, search

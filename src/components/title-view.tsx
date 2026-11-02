@@ -82,9 +82,9 @@ export function TitleView({
   const rank = entries.find((entry) => entry.id === data?.title.id)?.rank;
   // One in-page prompt at a time beneath the header buttons: confirming that
   // withdrawing Recommend, or switching to Want to watch, also leaves the top
-  // 10, or choosing an entry to remove from a full list. A prompt closes on
-  // its own once its title no longer needs it, such as after a change in
-  // another tab.
+  // 10, or choosing an entry to remove from a full list. A prompt closes for
+  // good once its title no longer needs it, such as after a change in
+  // another tab, so it never reopens unasked.
   const [prompt, setPrompt] = useState<"withdraw" | "switch" | "replace">();
   const open =
     prompt === "replace"
@@ -94,6 +94,7 @@ export function TitleView({
       : prompt && rank && recommended
         ? prompt
         : undefined;
+  if (prompt && !open) setPrompt(undefined);
   const recommendButton = useRef<HTMLButtonElement>(null);
   const statusButton = useRef<HTMLButtonElement>(null);
   const topTenButton = useRef<HTMLButtonElement>(null);

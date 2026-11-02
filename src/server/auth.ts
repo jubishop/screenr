@@ -164,8 +164,12 @@ async function logCallbackFailure<T>(callback: string, run: () => Promise<T>) {
 
 // The Better Auth endpoint that each request through the handler reached, as
 // its route pattern, such as /callback/:id, never the requested path, which
-// can hold a token. Better Auth's before hook records it.
-const endpointReached = new AsyncLocalStorage<{ path?: string }>();
+// can hold a token, and the provider an OAuth callback names. Better Auth's
+// before hook records them.
+const endpointReached = new AsyncLocalStorage<{
+  path?: string;
+  provider?: string;
+}>();
 
 // Better Auth's router rethrows, under onAPIError.throw, an error that its
 // endpoints, hooks, or adapter throw, such as a database error while it checks
@@ -175,7 +179,7 @@ const endpointReached = new AsyncLocalStorage<{ path?: string }>();
 // a failed rate-limit read, and answers the bare 500 that better-call would
 // have. The router still answers an APIError itself, and errors that Better
 // Auth catches itself never reach this, such as those that end an OAuth
-// callback in a redirect with ?error=.
+// callback in a redirect with ?error=; logCaughtFailure logs those.
 function logEndpointFailure(error: unknown) {
   if (loggedCallbackFailure(error)) return;
   logFailure(
@@ -185,12 +189,94 @@ function logEndpointFailure(error: unknown) {
   );
 }
 
+// The codes of the errors Better Auth logs when an OAuth callback brings a
+// state it can't use: unknown, already used, expired, or from another browser.
+// A client causes these, not a server failure. Better Auth's StateError keeps
+// the BetterAuthError name, and the production build renames its class.
+const clientStateCodes = new Set([
+  "state_not_found",
+  "state_mismatch",
+  "state_security_mismatch",
+  "state_invalid",
+]);
+const clientStateError = (error: Error) => {
+  const code = (error as { code?: unknown }).code;
+  return (
+    error.name === "BetterAuthError" &&
+    typeof code === "string" &&
+    clientStateCodes.has(code)
+  );
+};
+
+// The OAuth error codes (RFC 6749 section 5.2) with which Google's token
+// endpoint rejects Screenr's own web client: a wrong client ID or secret, as
+// after GOOGLE_CLIENT_SECRET is rotated or deleted, or a client that may not
+// exchange codes. Every web Google sign-in then fails. Other codes, such as
+// invalid_grant for an expired or already used code, come from the client.
+const googleClientRejections = new Set([
+  "invalid_client",
+  "unauthorized_client",
+]);
+
+// When Google's token endpoint rejects a web Google sign-in's code, Better
+// Auth logs Google's JSON reply, with the HTTP status and status text added,
+// as a plain object, not an Error. Only the status and an error code that
+// names Screenr's own client are read from it, never Google's description.
+function googleClientRejection(args: unknown[]) {
+  const reached = endpointReached.getStore();
+  if (reached?.path !== "/callback/:id" || reached.provider !== "google")
+    return undefined;
+  for (const arg of args) {
+    if (typeof arg !== "object" || arg === null || arg instanceof Error)
+      continue;
+    const { error, status } = arg as { error?: unknown; status?: unknown };
+    if (
+      typeof error === "string" &&
+      googleClientRejections.has(error) &&
+      typeof status === "number"
+    )
+      return { status, reason: error };
+  }
+  return undefined;
+}
+
+// Better Auth catches some failures, answers them itself, and logs the error
+// at error level among its arguments: a database error while Google or Apple
+// sign-in finds or creates the account ends in an error redirect or answer, a
+// failed session read in a 500 without a cause, and a failed sign-out still
+// succeeds. Each such error is logged here, except an APIError, which is a
+// deliberate answer; a failure logCallbackFailure already logged; and a bad
+// OAuth state, which a client causes (docs/deployment.md#failure-logs).
+// Google's rejection of Screenr's own web client in a code exchange, which
+// arrives as a plain object, is logged here too.
+function logCaughtFailure(args: unknown[]) {
+  const rejection = googleClientRejection(args);
+  if (rejection) {
+    logFailure("google client rejected", rejection);
+    return;
+  }
+  const error = args.find((arg) => arg instanceof Error);
+  if (
+    !error ||
+    isAPIError(error) ||
+    loggedCallbackFailure(error) ||
+    clientStateError(error)
+  )
+    return;
+  logFailure(
+    "auth failure caught",
+    { endpoint: endpointReached.getStore()?.path },
+    error,
+  );
+}
+
 // Better Auth prints its own lines, at warn level and above, through this in
 // place of the console. Each keeps only Better Auth's message, never the other
 // arguments, such as the error it caught, whose message and PostgreSQL fields
 // can quote the values that failed. A few calls pass the error itself as the
-// message; those print its class.
-function betterAuthLog(level: string, message: unknown) {
+// message; those print its class. An error-level line's error is logged as a
+// failure too.
+function betterAuthLog(level: string, message: unknown, ...args: unknown[]) {
   const text =
     typeof message === "string"
       ? message
@@ -198,8 +284,10 @@ function betterAuthLog(level: string, message: unknown) {
         ? message.constructor.name
         : typeof message;
   const line = `${level.toUpperCase()} [Better Auth]: ${text}`;
-  if (level === "error") console.error(line);
-  else if (level === "warn") console.warn(line);
+  if (level === "error") {
+    console.error(line);
+    logCaughtFailure([message, ...args]);
+  } else if (level === "warn") console.warn(line);
   else console.log(line);
 }
 
@@ -409,7 +497,10 @@ export function createAuth(
       before: createAuthMiddleware((ctx) => {
         // Better Auth runs this hook for every endpoint a request reaches.
         const reached = endpointReached.getStore();
-        if (reached) reached.path ??= ctx.path;
+        if (reached && !reached.path) {
+          reached.path = ctx.path;
+          reached.provider = ctx.params?.id;
+        }
         return logCallbackFailure("hooks.before", async () => {
           // The web has no Sign in with Apple; its redirect sign-in would
           // otherwise fail for want of a client secret.

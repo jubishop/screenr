@@ -12,6 +12,8 @@ the units, apply the worker's sandbox (#306). The worker's unit is the one
 source of these settings: systemd units cannot include shared settings, so
 these tests require every copy to match it.
 """
+from importlib.machinery import SourceFileLoader
+from importlib.util import module_from_spec, spec_from_loader
 import json
 import os
 from pathlib import Path
@@ -67,8 +69,9 @@ NEEDED = ('/opt/screenr', '/opt/node', '/etc/screenr', '/usr', '/etc/ssl', '/etc
           '/var/lib/dpkg', '/etc/apt', '/var/lib/private')
 # Other applications' directories on the shared host.
 OTHER_APPLICATIONS = ('/opt/health', '/opt/kidsbank', '/opt/news', '/opt/trading', '/etc/caddy')
-# The Markdown that the runbook test scans. CI's path filter skips other
-# Markdown and re-includes these globs, which GitHub matches as pathlib does.
+# The Markdown that the runbook test scans. CI's path filter for pushes and
+# bin/ci-scope for pull requests skip other Markdown. The filter re-includes
+# these globs, which GitHub matches as pathlib does.
 RUNBOOKS = ('docs/**/*.md', 'memory/**/*.md', '*.md')
 # Records the arguments systemd-run receives and exits with FIXTURE_STATUS.
 FAKE_SYSTEMD_RUN = '''#!/usr/bin/env python3
@@ -110,6 +113,15 @@ def trigger_paths(workflow):
     events = re.findall(r'^  ([a-z_]+):\n((?:    .*\n)*)', triggers, re.M)
     return {event: re.findall(r"^      - '(.*)'$", paths[1], re.M) for event, body in events
             if (paths := re.search(r'^    paths:\n((?:      .*\n)*)', body, re.M))}
+
+
+def load_ci_scope():
+    loader = SourceFileLoader('ci_scope', str(ROOT / 'bin' / 'ci-scope'))
+    spec = spec_from_loader('ci_scope', loader)
+    assert spec
+    module = module_from_spec(spec)
+    loader.exec_module(module)
+    return module
 
 
 def run_release_script(*arguments, status=0):
@@ -283,12 +295,24 @@ class ReleaseScriptSandboxTests(unittest.TestCase):
                 self.assertIsNone(unsandboxed.search(path.read_text()))
 
     def test_ci_runs_when_only_a_scanned_runbook_changes(self):
-        # A runbook pushed alone must start CI, or its failure would surface in
-        # the next unrelated pull request (#371). The engineering policy's
-        # filter: every path, then no Markdown, then the Markdown tests read.
+        # A runbook changed alone must run the checks, or its failure would
+        # surface in the next unrelated pull request (#371). Pushes to main use
+        # the engineering policy's filter: every path, then no Markdown, then
+        # the Markdown tests read. Pull requests have no filter, so the check
+        # that merging requires always reports (#372), and bin/ci-scope skips
+        # the check jobs for the same Markdown.
         expected = ['**', '!**.md', *RUNBOOKS]
         self.assertEqual(trigger_paths(ROOT / '.github' / 'workflows' / 'check.yml'),
-                         {'push': expected, 'pull_request': expected})
+                         {'push': expected})
+        scanned = {path.relative_to(ROOT).as_posix() for runbooks in RUNBOOKS
+                   for path in ROOT.glob(runbooks)}
+        tracked = subprocess.run(['git', 'ls-files', '-z'], cwd=ROOT, check=True, capture_output=True,
+                                 text=True).stdout.split('\0')[:-1]
+        self.assertTrue(any(path.endswith('.md') and path not in scanned for path in tracked))
+        needs_checks = load_ci_scope().needs_checks
+        for path in tracked:
+            with self.subTest(path=path):
+                self.assertEqual(needs_checks(path), not path.endswith('.md') or path in scanned)
 
 
 if __name__ == '__main__':

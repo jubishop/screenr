@@ -144,20 +144,51 @@ export function StartConversation({
 
 // TMDB's seasons for `titleId`, once the composer opens, and the episodes of
 // each chosen season. Undefined while loading, null when unavailable. Lists
-// stay loaded while the composer closes and reopens.
+// stay loaded while the composer closes and reopens. A list that failed loads
+// again when the composer reopens, or for episodes, when its season is chosen
+// again.
 function useEpisodeLists(titleId: string | null, season: number | null) {
   const [seasons, setSeasons] = useState<Season[] | null>();
   const [episodes, setEpisodes] = useState<Record<number, Episode[] | null>>(
     {},
   );
-  const requested = useRef(false);
+  // What the composer last asked for, to notice it reopening or a season
+  // being chosen again.
+  const [asked, setAsked] = useState({ titleId, season });
+  if (asked.titleId !== titleId || asked.season !== season) {
+    setAsked({ titleId, season });
+    const reopened = !!titleId && !asked.titleId;
+    if (reopened && seasons === null) setSeasons(undefined);
+    const retried = Object.keys(episodes)
+      .map(Number)
+      .filter(
+        (number) =>
+          episodes[number] === null &&
+          !!titleId &&
+          (reopened || number === season),
+      );
+    if (retried.length)
+      setEpisodes(
+        Object.fromEntries(
+          Object.entries(episodes).filter(
+            ([number]) => !retried.includes(Number(number)),
+          ),
+        ),
+      );
+  }
   useEffect(() => {
-    if (!titleId || requested.current) return;
-    requested.current = true;
+    if (!titleId || seasons !== undefined) return;
+    let current = true;
     api<{ seasons: Season[] }>(`seasons?title=${encodeURIComponent(titleId)}`)
-      .then((result) => setSeasons(result.seasons))
-      .catch(() => setSeasons(null));
-  }, [titleId]);
+      .then((result) => result.seasons)
+      .catch(() => null)
+      .then((list) => {
+        if (current) setSeasons(list);
+      });
+    return () => {
+      current = false;
+    };
+  }, [titleId, seasons]);
   useEffect(() => {
     if (!titleId || season === null || season in episodes) return;
     let current = true;

@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useSyncExternalStore } from "react";
 import { createAuthClient } from "better-auth/react";
 import { emailOTPClient } from "better-auth/client/plugins";
 import { loginPath, returnPath } from "../member-routes";
@@ -168,10 +168,28 @@ function readReply<T>(response: Response, text: string): T {
   );
 }
 
+// Drops results that a redirect left in the address, such as a failed Google
+// connection's error, once the page shows them, so a reload doesn't show
+// them again. The history entry keeps its state, which the router reads on
+// Back and Forward.
+export function forgetResults(...keys: string[]) {
+  const url = new URL(window.location.href);
+  for (const key of keys) url.searchParams.delete(key);
+  if (url.href !== window.location.href)
+    window.history.replaceState(window.history.state, "", url);
+}
+
+// False while the server renders and the browser hydrates its markup, then
+// true. Hydration renders again once ready. A screen reached by client
+// navigation is interactive from its first render, so it never shows the
+// server's UTC dates or disabled controls.
+const neverChanges = () => () => {};
 export function useInteractive() {
-  const [ready, setReady] = useState(false);
-  useEffect(() => setReady(true), []);
-  return ready;
+  return useSyncExternalStore(
+    neverChanges,
+    () => true,
+    () => false,
+  );
 }
 
 export function dateLabel(

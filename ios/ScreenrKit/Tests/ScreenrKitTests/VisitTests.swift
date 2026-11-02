@@ -138,4 +138,18 @@ struct VisitTests {
     if let returned { visits.finish(returned, status: nil) }
     #expect(visits.startRead() != nil)
   }
+
+  // A read that was in flight when the app left, and that the server answers
+  // after the app returned, leaves the return's visit for the next read.
+  @Test func keepsTheReturnVisitDueWhenAnEarlierReadFinishesAfterTheReturn() {
+    let visits = VisitTracker()
+
+    let early = visits.startRead()
+    visits.sceneChanged(to: .background)
+    visits.sceneChanged(to: .active)
+    if let early { visits.finish(early, status: 200) }
+
+    #expect(early != nil)
+    #expect(visits.startRead() != nil)
+  }
 }

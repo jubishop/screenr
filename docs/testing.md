@@ -52,9 +52,12 @@ With the latest Node LTS release selected, run one suite by its filename:
 
 ```sh
 npx tsx scripts/test-database.ts
-npx tsx --test tests/app/reactions.test.ts
+npx tsx --import ./tests/app/failure-guard.ts --test tests/app/reactions.test.ts
 npm run test:browser -- tests/browser/reactions.spec.ts
 ```
+
+The `--import` loads the [failure line](#failure-lines) guard, as `npm test`
+does.
 
 `npm test` discovers all application `*.test.ts` files and keeps file
 execution serial; `npm run test:browser` discovers all browser `*.spec.ts`
@@ -85,10 +88,20 @@ database without a record, left by an interrupted preparation or created by
 a browser run before checkouts were recorded, is dropped too; its checkout's
 next run recreates and records it. A database stays while a process is
 connected to it or a browser run holds its database lock, which the harness
-takes before creating the database and keeps through the build. Preparation
-takes a lock on the server, so it never removes a database another checkout
-is creating. `tests/app/checkout-isolation.test.ts` covers the derived name,
-the override, and removal.
+takes before creating the database and keeps through the build.
+
+Preparations take turns under a lock on the server, so none removes a
+database another checkout is still creating. In its turn a preparation only
+claims the databases it will drop, renaming each to a name no checkout
+derives, so a checkout recreated at the same path gets a new database. It
+drops its claims after its turn, because each drop waits for a PostgreSQL
+checkpoint, which took up to 18 seconds in a parallel run
+([#447](https://github.com/jubishop/screenr/issues/447)); no other checkout's
+preparation waits for those drops. A preparation holds a lock on each claim
+until it drops it, and a later preparation drops any claim whose lock is free,
+such as one left by a run that stopped first.
+`tests/app/checkout-isolation.test.ts` covers the derived name, the
+override, removal, and these guarantees.
 
 ## Browser harness
 
@@ -263,6 +276,13 @@ session. Specs import these helpers instead of defining their own copies.
   A scenario that clicks Try again after a failed read also pauses polling: a
   successful poll could remove the button before the click
   ([#200](https://github.com/jubishop/screenr/issues/200)).
+- Playwright waits for a pending page load before it inspects the page, so
+  a scenario can't check the page an action leaves while the next one
+  loads. [Page load helpers](../tests/browser/page-loads.ts) cancel that
+  load instead, which keeps the current page as a slow next page would, and
+  the scenario then opens the page itself. Such
+  scenarios create their member with `serviceWorkers: "block"`, since
+  Playwright can't route page loads that the offline worker answers.
 - Scenarios that test polling intervals or request deadlines don't sleep.
   They install and pause Playwright's clock in the member's context, advance
   it explicitly, and hold the timed request in a route until the test
@@ -575,8 +595,9 @@ recipients. A full run checks:
   page; Show finished keeps its state across tabs and starts off after a
   reload. `tests/app/friends-recommend.test.ts` covers the order, top 10
   weights, the current-friend audience, which actions count, the viewer's own
-  status, the response fields, and which titles the Finished filter hides,
-  with its empty messages.
+  status, the response fields, which titles the Finished filter hides, with
+  its empty messages, and the 50-title cap with each filter applied before
+  it.
 - Invitations can be created and revoked.
 - In both the light and dark color schemes, every visible text meets 4.5:1
   and only theme colors are painted. This covers sign-in, setup, credits,
@@ -677,7 +698,10 @@ rules, label validation and TMDB season lists, and migration 024 with the
 previous release's writes.
 `tests/app/failure-logs.test.ts` and `tests/app/email.test.ts` capture the
 [failure logs](deployment.md#failure-logs) of request, page, route, Better
-Auth callback and endpoint, worker, and Resend failures.
+Auth callback and endpoint, worker, and Resend failures, and of failures
+Better Auth catches itself: a Google ID token signup whose account insert
+fails, a failed session read, and a failed OAuth state read, beside an unknown
+OAuth state that logs nothing.
 `tests/app/failure-logs.test.ts` also fails polls the same way, as in a
 database outage, which must each log a line with its request ID while only
 the first goes to Sentry, and another action's failure must report at once.
@@ -713,7 +737,11 @@ own tests. `tests/app/database-connections.test.ts` ends an idle pooled
 connection and a transaction's connection from another one, and checks that
 each is logged once without stopping the process, that the transaction
 rethrows its own error rather than its failed `ROLLBACK`'s, and that the
-broken client is released. `tests/app/email.test.ts` fails the database
+broken client is released. It runs that transaction through another copy of
+`src/server/db.ts` too, as the production build's other server bundles and
+development reloads do, and checks in a production process that two copies
+share [one pool](deployment.md#database-connections).
+`tests/app/email.test.ts` fails the database
 while Resend accepts a send, which must hold the job for a minute and then
 retry it with the same key, and `tests/app/migrations.test.ts` ends a
 migration's connection, which must fail with that connection's error and
@@ -883,3 +911,44 @@ the recorder if the failure returns.
 
 **Rejected alternatives:** Keeping the full recorder as insurance, and
 removing the guard as well.
+
+## Failure lines
+
+A test run fails on any structured failure line that no test expects: the
+JSON line with an `"event"` field that `logFailure` prints
+([failure logs](deployment.md#failure-logs)).
+
+- **Application tests:** `npm test` and `npm run test:coverage` load
+  `tests/app/failure-guard.ts` into every test file's process. It fails a
+  test that prints a failure line it didn't capture, and fails the file for
+  a line printed outside any test. A test that fails something on purpose
+  reads its lines with `captureFailures()` from `tests/app/social-fixture.ts`,
+  passing its test context for a capture that ends with the test, and
+  asserts them, for example with `failureEvents()`. An iPhone fixture case
+  lists its lines in `failures`.
+- **Browser runs:** `scripts/browser-server.ts` writes the application's
+  failure lines, with when each printed, to
+  `.cache/browser-failure-lines.jsonl`, which each run starts over, instead
+  of passing them to Playwright's `[WebServer]` output. Once the run ends,
+  `tests/browser/failure-line-reporter.ts` fails it on any line that
+  `tests/browser/expected-failure-lines.ts` doesn't expect, naming its event
+  and the specs that ran when it printed. An entry there names the specs that
+  cause a line on purpose, the fields the line carries, and why. A deliberate
+  failure in the fake catalog belongs on a title that only the specs testing
+  it open, so other specs never print its line.
+
+`tests/app/failure-line-checks.test.ts` covers both.
+
+**Decision — 2026-11-01:** fail test runs on failure lines that no test
+expects, as above. Settled by the agent as routine in
+[#434](https://github.com/jubishop/screenr/issues/434); the user may override
+it.
+
+**Why:** failure lines that print on every run teach readers to ignore them,
+which buries a real failure. The guard keeps any kind from returning
+unnoticed, as invalid TMDB answers did before
+[#425](https://github.com/jubishop/screenr/issues/425).
+
+**Tradeoff:** a browser line's spec comes from timing, since two workers
+share one server, so another spec's identical line passes when it prints
+while the expecting spec runs.

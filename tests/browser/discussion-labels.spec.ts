@@ -143,3 +143,64 @@ test("TV discussion posts take a season or episode label from TMDB pickers that 
   await expect(unlabeled).toBeVisible();
   await expect(unlabeled.locator(".discussion-label")).toHaveCount(0);
 });
+
+test("a season or episode list that fails to load loads again when asked for again", async ({
+  member,
+}) => {
+  const owner = await member("labelretry");
+  const fail = (list: "seasons" | "episodes") =>
+    owner.route(
+      `**/api/screenr/${list}?**`,
+      (route) =>
+        route.fulfill({ status: 503, json: { error: "TMDB is unavailable." } }),
+      { times: 1 },
+    );
+  await owner.goto("/titles/tv/998020");
+  const start = owner.getByRole("button", {
+    name: "Start a conversation",
+    exact: true,
+  });
+  const composer = owner.getByRole("form", { name: "New title comment" });
+  const cancel = composer.getByRole("button", { name: "Cancel", exact: true });
+  const season = composer.getByLabel("Season", { exact: true });
+  const episode = composer.getByLabel("Episode", { exact: true });
+  const seasonsUnavailable = composer.getByText(
+    "Seasons are unavailable right now, so this comment will have no season label.",
+    { exact: true },
+  );
+  const episodeNames = [
+    "Whole season",
+    "Episode 1 · Departure",
+    "Episode 2 · Fog Bank",
+    "Episode 3 · Night Crossing",
+  ];
+
+  // Reopening the composer loads a failed season list again.
+  await fail("seasons");
+  await start.click();
+  await expect(seasonsUnavailable).toBeVisible();
+  await cancel.click();
+  await start.click();
+  await expect(season).toBeEnabled();
+  await expect(seasonsUnavailable).toHaveCount(0);
+
+  // So does a failed episode list, which choosing its season again also
+  // loads.
+  await fail("episodes");
+  await season.selectOption({ label: "Season 1" });
+  await expect(episode.locator("option")).toHaveText(["Episodes unavailable"]);
+  await cancel.click();
+  await start.click();
+  await expect(episode).toBeEnabled();
+  expect(await options(episode)).toEqual(episodeNames);
+  await fail("episodes");
+  await season.selectOption({ label: "Season 2" });
+  await expect(episode.locator("option")).toHaveText(["Episodes unavailable"]);
+  await season.selectOption({ label: "Season 1" });
+  await season.selectOption({ label: "Season 2" });
+  await expect(episode).toBeEnabled();
+  expect(await options(episode)).toEqual([
+    ...episodeNames,
+    "Episode 4 · Landfall",
+  ]);
+});

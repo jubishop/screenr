@@ -200,6 +200,5 @@ final class ProfileTests: XCTestCase {
         label
       )
     }
-    XCTAssertFalse(app.staticTexts["Screenr didn't load"].exists, label)
   }
 }

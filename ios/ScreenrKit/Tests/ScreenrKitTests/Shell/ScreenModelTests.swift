@@ -207,6 +207,49 @@ struct ScreenModelTests {
     #expect(model.phase == .loaded(emptyFeed))
   }
 
+  // The server may still answer a read that a refresh replaced, after the
+  // newer read; the newer read's content stays.
+  @Test func aReplacedReadThatAnswersLateKeepsTheNewerContent() async throws {
+    let feedReply = try RecordingAPI.Reply.fixture("screen/feed/default")
+    let emptyReply = try RecordingAPI.Reply.fixture("screen/feed/empty")
+    let api = GatedAPI(
+      RecordingAPI(sequences: ["screen": [feedReply, feedReply, emptyReply]]),
+      holding: [2]
+    )
+    let clock = TestClock()
+    let model = ScreenModel(path: "/", api: api, clock: clock)
+    model.appeared(appActive: true)
+    await clock.waitForSleep(until: .seconds(3))
+    clock.advance(by: .seconds(3))
+    await api.waitForRequests(2)
+
+    await model.refresh()
+    #expect(model.phase == .loaded(emptyFeed))
+
+    api.open()
+    // The poll that waited for the replaced read sleeps again once it ends.
+    await clock.waitForSleep(until: .seconds(6))
+    #expect(model.phase == .loaded(emptyFeed))
+  }
+
+  // Leaving the foreground cuts off the read in flight, which keeps the
+  // content for the return.
+  @Test func aReadCutOffByTheBackgroundKeepsTheContent() async throws {
+    let api = ScriptedAPI([.screen(feed), .hang])
+    let clock = TestClock()
+    let model = ScreenModel(path: "/", api: api, clock: clock)
+    model.appeared(appActive: true)
+    await clock.waitForSleep(until: .seconds(3))
+    clock.advance(by: .seconds(3))
+    await api.waitForReads(2)
+    let polling = try #require(model.pollTask)
+
+    model.appActivityChanged(false)
+    await finish(polling)
+
+    #expect(model.phase == .loaded(feed))
+  }
+
   @Test func keepsItsDataWhenTheScreenIsUnchanged() async throws {
     let api = ScriptedAPI([.screen(feed)])
     let clock = TestClock()

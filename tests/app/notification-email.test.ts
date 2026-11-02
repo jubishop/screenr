@@ -1,11 +1,13 @@
 import { test, beforeEach, afterEach, mock } from "node:test";
 import assert from "node:assert/strict";
+import { setTimeout as sleep } from "node:timers/promises";
 import {
   useDatabase,
   setup,
   friend,
   db,
   captureFailures,
+  failureEvents,
 } from "./social-fixture";
 import { changeRelationship } from "../../src/server/relationships";
 import { addComment, removeComment } from "../../src/server/comments";
@@ -17,6 +19,7 @@ import {
 import { setReaction } from "../../src/server/reactions";
 import { updateTitleActivity } from "../../src/server/title-actions";
 import { deliverOne, queueCode } from "../../src/server/email";
+import { domainLock } from "../../src/server/db";
 
 useDatabase();
 process.env.EMAIL_TRANSPORT = "resend";
@@ -103,6 +106,8 @@ test("email is opt-in without a backlog, waits ten minutes, groups unread events
 });
 
 test("pending emails recheck removal, blocking, friendship, and read state before retry", async () => {
+  // Each failed send logs a failure line, which this test reads.
+  const printed = captureFailures();
   const { alice, ben, cam, conversation } = await setup();
   await friend(alice, ben);
   await friend(alice, cam);
@@ -136,9 +141,15 @@ test("pending emails recheck removal, blocking, friendship, and read state befor
   await due();
   await deliverOne();
   assert.equal(sent.length, 2);
+  assert.deepEqual(failureEvents(printed), [
+    "email delivery failed",
+    "email delivery failed",
+  ]);
 });
 
 test("retries reuse their key and fixed batch, while sign-in codes retain delivery priority", async () => {
+  // Each failed send logs a failure line, which this test reads.
+  const printed = captureFailures();
   const { alice, ben, conversation } = await setup();
   await friend(alice, ben);
   await saveActivityEmail(alice, true);
@@ -161,9 +172,12 @@ test("retries reuse their key and fixed batch, while sign-in codes retain delive
   await deliverOne();
   assert.equal(sent.length, 4);
   assert.notEqual(sent[3].key, sent[2].key);
+  assert.deepEqual(failureEvents(printed), ["email delivery failed"]);
 });
 
 test("opt-out cancels queued retries and pending windows, even if the member opts back in", async () => {
+  // Each failed send logs a failure line, which this test reads.
+  const printed = captureFailures();
   const { alice, ben, conversation } = await setup();
   await friend(alice, ben);
   await saveActivityEmail(alice, true);
@@ -178,6 +192,7 @@ test("opt-out cancels queued retries and pending windows, even if the member opt
   await due();
   assert.equal(await deliverOne(), false);
   assert.equal(sent.length, 1);
+  assert.deepEqual(failureEvents(printed), ["email delivery failed"]);
 });
 
 test("a database error while building an activity email still records the attempt and its backoff", async () => {
@@ -224,6 +239,8 @@ test("a database error while building an activity email still records the attemp
 });
 
 test("a changed retry omits read events and uses a key for its current content", async () => {
+  // Each failed send logs a failure line, which this test reads.
+  const printed = captureFailures();
   const { alice, ben, conversation } = await setup();
   await friend(alice, ben);
   await saveActivityEmail(alice, true);
@@ -239,6 +256,7 @@ test("a changed retry omits read events and uses a key for its current content",
   assert.equal(sent[1].subject, "1 unread notification on Screenr");
   assert.ok(!sent[1].text.includes(`reply=${omit}`));
   assert.notEqual(sent[0].key, sent[1].key);
+  assert.deepEqual(failureEvents(printed), ["email delivery failed"]);
 });
 
 test("a slow sign-in email does not delay an unrelated friendship request", async () => {
@@ -304,6 +322,36 @@ test("member writes go ahead while Resend hangs on an activity email", async () 
   }
   assert.equal(sent.length, 1);
   assert.equal(await deliverOne(), false);
+});
+
+// The worker passes every second. When no activity email is due, a pass
+// leaves the write lock that member writes share alone, so it never waits
+// behind them or makes them wait.
+test("a worker pass with no email due doesn't take the write lock", async () => {
+  const { alice, ben, conversation } = await setup();
+  await friend(alice, ben);
+  await saveActivityEmail(alice, true);
+  await addComment(ben, conversation, "Not due for ten minutes", false);
+  const writer = await db.connect();
+  let pass: Promise<boolean> | undefined;
+  try {
+    await writer.query("BEGIN");
+    await writer.query("SELECT pg_advisory_xact_lock($1)", [domainLock]);
+    pass = deliverOne();
+    assert.equal(
+      await Promise.race([pass, sleep(1000, "waited for the lock")]),
+      false,
+    );
+  } finally {
+    await writer.query("COMMIT");
+    writer.release();
+    await pass;
+  }
+  assert.equal(sent.length, 0);
+  // Once the window is due, a pass queues and sends it under the lock.
+  await due();
+  assert.equal(await deliverOne(), true);
+  assert.equal(sent.length, 1);
 });
 
 test("a block or opt-out committed before a send starts sends nothing", async () => {

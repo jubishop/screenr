@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { existsSync, realpathSync } from "node:fs";
 import { isAbsolute } from "node:path";
 import type { Client } from "pg";
@@ -24,6 +24,18 @@ export const testDatabaseURL =
 
 const lock = "screenr-test-databases";
 
+async function advisory(
+  admin: Client,
+  call: "pg_advisory_lock" | "pg_try_advisory_lock" | "pg_advisory_unlock",
+  key: string,
+) {
+  const { rows } = await admin.query<{ result: boolean }>(
+    `SELECT ${call}(hashtextextended($1, 0)) AS result`,
+    [key],
+  );
+  return rows[0].result;
+}
+
 // Creates a test database if it is missing. A checkout's own database also
 // records the checkout in its comment, and preparing one drops unused checkout
 // databases of removed checkouts or without a record, so they cannot
@@ -35,8 +47,11 @@ export async function prepareTestDatabase(
   root = checkoutRoot,
 ) {
   // Preparations take turns, so none sees another's database before its
-  // checkout is recorded.
-  await admin.query("SELECT pg_advisory_lock(hashtextextended($1, 0))", [lock]);
+  // checkout is recorded. In its turn a preparation only claims the databases
+  // it will drop, and it drops them after its turn: each drop waits for a
+  // PostgreSQL checkpoint, which took up to 18 seconds in a parallel run.
+  let claims: string[] = [];
+  await advisory(admin, "pg_advisory_lock", lock);
   try {
     try {
       await admin.query(`CREATE DATABASE "${name}"`);
@@ -51,15 +66,19 @@ export async function prepareTestDatabase(
     await admin.query(
       `COMMENT ON DATABASE "${name}" IS ${admin.escapeLiteral(root)}`,
     );
-    await dropRemovedCheckoutDatabases(admin);
+    claims = await claimRemovedCheckoutDatabases(admin);
   } finally {
-    await admin.query("SELECT pg_advisory_unlock(hashtextextended($1, 0))", [
-      lock,
-    ]);
+    await advisory(admin, "pg_advisory_unlock", lock);
   }
+  await dropClaimedDatabases(admin, claims);
 }
 
-async function dropRemovedCheckoutDatabases(admin: Client) {
+// A claimed database has a name no checkout derives, so a checkout recreated
+// at its path gets a new database, and its claim lock is held until it is
+// dropped.
+const claimLock = (name: string) => `${lock}:${name}`;
+
+async function claimRemovedCheckoutDatabases(admin: Client) {
   // A browser run holds its database's advisory lock, which
   // scripts/browser-server.ts takes, from before it creates the database until
   // it stops, including while no connection is open, such as during the build.
@@ -78,19 +97,51 @@ async function dropRemovedCheckoutDatabases(admin: Client) {
       ) AS used
     FROM pg_database WHERE datname ~ '^screenr_(app|browser)_[0-9a-f]{12}_test$'`,
   );
+  const claims: string[] = [];
   for (const { name, checkout, used } of rows) {
     // Test databases are disposable; a checkout's next run recreates its own.
     // A recorded database is stale once its checkout is gone. An unrecorded
     // one was left by an interrupted preparation or made by a browser run
     // before checkouts were recorded, so it is stale once nothing uses it.
     const live = checkout && (!isAbsolute(checkout) || existsSync(checkout));
-    // Dropping a connected database would also wait several seconds.
+    // Renaming a connected database would also wait several seconds.
     if (used || live) continue;
+    const claim = `screenr_dropping_${randomBytes(6).toString("hex")}`;
+    await advisory(admin, "pg_advisory_lock", claimLock(claim));
+    try {
+      await admin.query(`ALTER DATABASE "${name}" RENAME TO "${claim}"`);
+      claims.push(claim);
+    } catch (error) {
+      await advisory(admin, "pg_advisory_unlock", claimLock(claim));
+      // A process connected after the check, so a later preparation retries,
+      // or a test already dropped its own database.
+      const code = (error as { code?: string }).code;
+      if (code !== "55006" && code !== "3D000") throw error;
+    }
+  }
+  return claims;
+}
+
+async function dropClaimedDatabases(admin: Client, claims: string[]) {
+  // A claim left by a preparation that stopped before dropping it no longer
+  // holds its lock, so this preparation drops it too.
+  const { rows } = await admin.query<{ name: string }>(
+    `SELECT datname AS name FROM pg_database
+    WHERE datname ~ '^screenr_dropping_[0-9a-f]{12}$' AND datname <> ALL($1)`,
+    [claims],
+  );
+  const held = [...claims];
+  for (const { name } of rows)
+    if (await advisory(admin, "pg_try_advisory_lock", claimLock(name)))
+      held.push(name);
+  for (const name of held) {
     try {
       await admin.query(`DROP DATABASE IF EXISTS "${name}"`);
     } catch (error) {
-      // A process connected after the check; a later preparation retries.
+      // A process connected to the claim; a later preparation retries.
       if ((error as { code?: string }).code !== "55006") throw error;
+    } finally {
+      await advisory(admin, "pg_advisory_unlock", claimLock(name));
     }
   }
 }

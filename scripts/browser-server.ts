@@ -3,12 +3,16 @@ import { browserConfig } from "./browser-config";
 import { prepareTestDatabase } from "./checkout";
 import streamingTitles from "../tests/fixtures/streaming-titles.json" with { type: "json" };
 import { once } from "node:events";
-import { cp } from "node:fs/promises";
+import { appendFileSync } from "node:fs";
+import { cp, mkdir, writeFile } from "node:fs/promises";
+import { dirname } from "node:path";
+import { createInterface } from "node:readline";
 import { createServer, type Server as HTTPServer } from "node:http";
 import { createBrowserProxy } from "./browser-proxy";
 import { releaseTitles } from "../tests/browser/release-titles";
 import { createServer as reservePort, type Server } from "node:net";
 import { spawn, type ChildProcess } from "node:child_process";
+import { failureRecord } from "./failure-lines";
 
 const reservations = new Map<number, Server>();
 const adminURL = new URL(browserConfig.databaseURL);
@@ -95,6 +99,9 @@ try {
       );
   }
   await prepareTestDatabase(admin, browserConfig.databaseName);
+  // Each run starts the checkout's failure line capture over.
+  await mkdir(dirname(browserConfig.failureLines), { recursive: true });
+  await writeFile(browserConfig.failureLines, "");
   process.env.DATABASE_URL = browserConfig.databaseURL;
   // The local identity provider owns file email capture. Only the Next child
   // uses the selected application serving mode.
@@ -251,7 +258,9 @@ try {
       return;
     }
     if (request.url?.endsWith("/videos")) {
-      if (request.url === "/movie/987655/videos") {
+      // An unavailable trailer, on a title that only title-media.spec.ts
+      // opens, so no other spec prints its failure line.
+      if (request.url === "/movie/987663/videos") {
         response.writeHead(503).end();
         return;
       }
@@ -400,7 +409,7 @@ try {
         ],
     {
       cwd: browserConfig.root,
-      stdio: "inherit",
+      stdio: ["inherit", "inherit", "pipe"],
       env: {
         ...nextEnv,
         HOSTNAME: "127.0.0.1",
@@ -408,6 +417,18 @@ try {
       },
     },
   );
+  // The application's failure lines go to the capture file, with when each
+  // printed, for tests/browser/failure-line-reporter.ts to check against the
+  // lines specs expect once the run ends. Its other error output passes
+  // through.
+  createInterface({ input: app.stderr! }).on("line", (line) => {
+    if (failureRecord(line))
+      appendFileSync(
+        browserConfig.failureLines,
+        `${JSON.stringify({ at: Date.now(), line })}\n`,
+      );
+    else process.stderr.write(`${line}\n`);
+  });
   app.on("error", (error) => {
     console.error(error);
     void stop(1);

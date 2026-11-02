@@ -14,6 +14,7 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { test, type TestContext } from "node:test";
+import { setTimeout } from "node:timers/promises";
 import { promisify } from "node:util";
 import { Client } from "pg";
 import {
@@ -49,6 +50,10 @@ async function fixture(t: TestContext) {
     "scripts/test-database.ts",
     "scripts/checkout.ts",
     "scripts/browser-config.ts",
+    "scripts/failure-lines.ts",
+    "tests/app/failure-guard.ts",
+    "tests/browser/failure-line-reporter.ts",
+    "tests/browser/expected-failure-lines.ts",
   ])
     await write(path, await readFile(path, "utf8"));
   // Dependencies are read-only shared inputs. The fixture owns its config,
@@ -278,35 +283,64 @@ test("each checkout selects its own application test database unless TEST_DATABA
   assert.equal(await applicationTestDatabase(other, chosen), chosen);
 });
 
-test("preparing a checkout's database records the checkout and drops the databases of removed checkouts", async (t) => {
+// An admin connection to the local test server, with temporary checkouts and
+// databases that are removed when the test ends.
+async function databaseServer(t: TestContext) {
   const server = new URL(testDatabaseURL);
   server.pathname = "/postgres";
-  const admin = new Client({ connectionString: server.href });
-  await admin.connect();
+  const clients: Client[] = [];
   const directories: string[] = [];
   const databases = new Set<string>();
-  let holder: Client | undefined;
-  let browserRun: Client | undefined;
+  async function connect(database = "postgres") {
+    const url = new URL(server);
+    url.pathname = `/${database}`;
+    const client = new Client({ connectionString: url.href });
+    clients.push(client);
+    await client.connect();
+    return client;
+  }
+  const admin = await connect();
   t.after(async () => {
-    await holder?.end();
-    await browserRun?.end();
+    for (const client of clients.slice(1)) await client.end();
     for (const name of databases)
       await admin.query(`DROP DATABASE IF EXISTS "${name}"`);
     await admin.end();
     for (const path of directories)
       await rm(path, { recursive: true, force: true });
   });
-  async function checkout() {
-    const path = await realpath(
-      await mkdtemp(join(tmpdir(), "screenr-checkout-database-")),
-    );
-    directories.push(path);
-    return path;
-  }
-  async function prepare(name: string, root: string) {
-    databases.add(name);
-    await prepareTestDatabase(admin, name, root);
-  }
+  return {
+    admin,
+    connect,
+    databases,
+    async checkout() {
+      const path = await realpath(
+        await mkdtemp(join(tmpdir(), "screenr-checkout-database-")),
+      );
+      directories.push(path);
+      return path;
+    },
+    async prepare(name: string, root: string, client = admin) {
+      databases.add(name);
+      await prepareTestDatabase(client, name, root);
+    },
+    async record(name: string) {
+      const { rows } = await admin.query<{ oid: number; checkout: string }>(
+        `SELECT oid, shobj_description(oid, 'pg_database') AS checkout
+        FROM pg_database WHERE datname = $1`,
+        [name],
+      );
+      return rows[0];
+    },
+  };
+}
+
+const backend = async (client: Client) =>
+  (await client.query<{ pid: number }>("SELECT pg_backend_pid() AS pid"))
+    .rows[0].pid;
+
+test("preparing a checkout's database records the checkout and drops the databases of removed checkouts", async (t) => {
+  const { admin, connect, databases, checkout, prepare } =
+    await databaseServer(t);
   const [live, removed, busy] = [
     await checkout(),
     await checkout(),
@@ -326,19 +360,29 @@ test("preparing a checkout's database records the checkout and drops the databas
   const interrupted = `screenr_app_${randomBytes(6).toString("hex")}_test`;
   const unrecordedBrowser = `screenr_browser_${randomBytes(6).toString("hex")}_test`;
   const building = `screenr_browser_${randomBytes(6).toString("hex")}_test`;
-  browserRun = new Client({ connectionString: server.href });
-  await browserRun.connect();
+  const browserRun = await connect();
   await browserRun.query("SELECT pg_advisory_lock(hashtextextended($1, 0))", [
     `screenr-browser:database:${building}`,
   ]);
-  for (const name of [interrupted, unrecordedBrowser, building]) {
+  // A preparation that stopped before dropping a database it claimed left the
+  // claim unlocked. Another preparation's claim stays until it drops it.
+  const abandoned = `screenr_dropping_${randomBytes(6).toString("hex")}`;
+  const claimed = `screenr_dropping_${randomBytes(6).toString("hex")}`;
+  const claimant = await connect();
+  await claimant.query("SELECT pg_advisory_lock(hashtextextended($1, 0))", [
+    `screenr-test-databases:${claimed}`,
+  ]);
+  for (const name of [
+    interrupted,
+    unrecordedBrowser,
+    building,
+    abandoned,
+    claimed,
+  ]) {
     databases.add(name);
     await admin.query(`CREATE DATABASE "${name}"`);
   }
-  const connection = new URL(server);
-  connection.pathname = `/${busyDatabase}`;
-  holder = new Client({ connectionString: connection.href });
-  await holder.connect();
+  await connect(busyDatabase);
   await rm(removed, { recursive: true });
   await rm(busy, { recursive: true });
 
@@ -358,6 +402,112 @@ test("preparing a checkout's database records the checkout and drops the databas
       // A browser run's lock keeps its database without a connection.
       [building]: null,
       [chosen]: null,
+      [claimed]: null,
     },
   );
+});
+
+test("a preparation keeps a database that another checkout is still creating", async (t) => {
+  const { admin, connect, databases, checkout, prepare, record } =
+    await databaseServer(t);
+  const [live, creating] = [await checkout(), await checkout()];
+  const database = checkoutDatabase("app", creating);
+  databases.add(database);
+  // The other checkout's preparation has its turn and has created its
+  // database, but has not yet recorded it.
+  const other = await connect();
+  const [pid, otherPid] = [await backend(admin), await backend(other)];
+  await other.query("SELECT pg_advisory_lock(hashtextextended($1, 0))", [
+    "screenr-test-databases",
+  ]);
+  await other.query(`CREATE DATABASE "${database}"`);
+  let done = false;
+  const preparing = prepare(checkoutDatabase("app", live), live).finally(
+    () => (done = true),
+  );
+  while (!done) {
+    const { rows } = await other.query<{ blocked: boolean }>(
+      "SELECT $1 = ANY(pg_blocking_pids($2)) AS blocked",
+      [otherPid, pid],
+    );
+    if (rows[0].blocked) break;
+    await setTimeout(20);
+  }
+  await other.query(
+    `COMMENT ON DATABASE "${database}" IS ${other.escapeLiteral(creating)}`,
+  );
+  await other.query("SELECT pg_advisory_unlock(hashtextextended($1, 0))", [
+    "screenr-test-databases",
+  ]);
+  await preparing;
+  assert.equal((await record(database))?.checkout, creating);
+});
+
+test("a preparation drops stale databases without holding up other checkouts' preparations, and a checkout recreated at a removed path keeps its new database", async (t) => {
+  const { admin, connect, checkout, prepare, record } = await databaseServer(t);
+  const [live, recreated] = [await checkout(), await checkout()];
+  const database = checkoutDatabase("app", recreated);
+  await prepare(database, recreated);
+  const old = await record(database);
+  const [first, second] = [await connect(), await connect()];
+  const [firstPid, secondPid] = [await backend(first), await backend(second)];
+  // The first preparation finds the checkout removed during its own turn, so
+  // no other preparation on the machine drops its database first. It then
+  // stops before its first drop until the second preparation has finished.
+  let reached!: () => void;
+  const dropping = new Promise<void>((resolve) => (reached = resolve));
+  let release!: () => void;
+  const released = new Promise<void>((resolve) => (release = resolve));
+  const paused = Object.create(first) as Client;
+  paused.query = (async (text: string, values?: unknown[]) => {
+    if (text.startsWith("COMMENT ON DATABASE"))
+      await rm(recreated, { recursive: true });
+    if (text.startsWith("DROP DATABASE")) {
+      reached();
+      await released;
+    }
+    return first.query(text, values);
+  }) as Client["query"];
+  const preparing = prepare(checkoutDatabase("app", live), live, paused);
+  let recreating: Promise<void> | undefined;
+  try {
+    assert.equal(
+      await Promise.race([
+        dropping.then(() => "dropping"),
+        preparing.then(() => "finished"),
+      ]),
+      "dropping",
+      "The preparation dropped nothing.",
+    );
+    await mkdir(recreated);
+    let done = false;
+    recreating = prepare(database, recreated, second).finally(
+      () => (done = true),
+    );
+    while (!done) {
+      const { rows } = await admin.query<{ blocked: boolean }>(
+        "SELECT $1 = ANY(pg_blocking_pids($2)) AS blocked",
+        [firstPid, secondPid],
+      );
+      assert.equal(
+        rows[0].blocked,
+        false,
+        "A preparation waited for another's drops.",
+      );
+      await setTimeout(20);
+    }
+    await recreating;
+  } finally {
+    release();
+    await Promise.allSettled([preparing, recreating]);
+  }
+  await preparing;
+  const current = await record(database);
+  assert.equal(current?.checkout, recreated);
+  assert.notEqual(current.oid, old.oid);
+  const { rows } = await admin.query(
+    "SELECT datname FROM pg_database WHERE oid = $1",
+    [old.oid],
+  );
+  assert.deepEqual(rows, [], "The removed checkout's database remains.");
 });

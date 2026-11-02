@@ -3,7 +3,14 @@ import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { format } from "node:util";
-import { useDatabase, db, person, friend } from "./social-fixture";
+import {
+  useDatabase,
+  db,
+  person,
+  friend,
+  captureFailures,
+  failureEvents,
+} from "./social-fixture";
 import type { TitleRelease } from "../../src/shared";
 const { loadScreen } = await import("../../src/server/screens");
 const { findTitles } = await import("../../src/server/title-viewing");
@@ -400,7 +407,9 @@ test("shows give a premiere with its network and a next-season premiere, never w
   assert.deepEqual(await release("tv:531"), none);
 });
 
-test("release dates follow the title cache: reused for a day, then refreshed, and kept through a failed refresh", async () => {
+test("release dates follow the title cache: reused for a day, then refreshed, and kept through a failed refresh", async (t) => {
+  // The failed refresh logs a failure line, which this test reads.
+  const printed = captureFailures(t);
   catalog = { "/movie/541": movie(541, [[3, "2026-11-06"]]) };
   const upcoming = (date: string, label: string) => ({
     status: "ok",
@@ -434,6 +443,7 @@ test("release dates follow the title cache: reused for a day, then refreshed, an
     upcoming("2026-11-13", "In theaters Nov 13"),
   );
   assert.equal(detailRequests.length, 3);
+  assert.deepEqual(failureEvents(printed), ["catalog request failed"]);
 });
 
 test("details without usable release dates keep the title and its last dates, and retry after the failure delay", async (t) => {
@@ -483,7 +493,9 @@ test("details without usable release dates keep the title and its last dates, an
   );
 });
 
-test("failed release data leaves title details, Where to watch, conversations, and every listed title", async () => {
+test("failed release data leaves title details, Where to watch, conversations, and every listed title", async (t) => {
+  // Each failed details request logs a failure line, which this test reads.
+  const printed = captureFailures(t);
   const other = await person("other");
   await friend(viewer, other);
   const entries: string[] = [];
@@ -532,6 +544,10 @@ test("failed release data leaves title details, Where to watch, conversations, a
       ["Searched 565", "unavailable"],
       ["Searched 566", "unavailable"],
     ],
+  );
+  assert.deepEqual(
+    failureEvents(printed),
+    Array(6).fill("catalog request failed"),
   );
 });
 
@@ -632,7 +648,10 @@ test("title lists read stored release data in one query and refresh only missing
     assert.deepEqual(await release(title.id), title.release, title.id);
 });
 
-test("Find a title bounds release requests and keeps its search deadline during a catalog outage", async () => {
+test("Find a title bounds release requests and keeps its search deadline during a catalog outage", async (t) => {
+  // Each timed-out details request logs a failure line, which this test
+  // reads.
+  const printed = captureFailures(t);
   results = Array.from({ length: 12 }, (_, i) => ({
     id: 580 + i,
     media_type: "movie",
@@ -652,6 +671,10 @@ test("Find a title bounds release requests and keeps its search deadline during 
   assert.ok(
     Date.now() - start < 6000,
     "An outage must not hold the list for every per-title timeout",
+  );
+  assert.deepEqual(
+    new Set(failureEvents(printed)),
+    new Set(["catalog request failed"]),
   );
 });
 

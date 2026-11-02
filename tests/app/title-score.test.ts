@@ -2,7 +2,14 @@ import { test, before, beforeEach, after, mock } from "node:test";
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
-import { useDatabase, db, person, friend } from "./social-fixture";
+import {
+  useDatabase,
+  db,
+  person,
+  friend,
+  captureFailures,
+  failureEvents,
+} from "./social-fixture";
 const { loadScreen } = await import("../../src/server/screens");
 const { findTitles } = await import("../../src/server/title-viewing");
 const { updateTitleActivity } = await import("../../src/server/title-actions");
@@ -176,7 +183,9 @@ test("missing, non-numeric, or out-of-range TMDB votes show no score and keep th
   assert.equal(rows[0].stored, 0, "invalid votes are stored as unknown");
 });
 
-test("the score follows the title cache: reused for a day, then refreshed, and kept through a failed refresh", async () => {
+test("the score follows the title cache: reused for a day, then refreshed, and kept through a failed refresh", async (t) => {
+  // The failed refresh logs a failure line, which this test reads.
+  const printed = captureFailures(t);
   catalog = { "/movie/631": movie(631, votes(7.3, 120)) };
   assert.equal(await score("movie:631"), 73);
   catalog["/movie/631"] = movie(631, votes(8.1, 150));
@@ -198,9 +207,12 @@ test("the score follows the title cache: reused for a day, then refreshed, and k
   await db.query("UPDATE title SET fetched_at=now()-interval '2 days'");
   catalog["/movie/631"] = movie(631, {});
   assert.equal(await score("movie:631"), null);
+  assert.deepEqual(failureEvents(printed), ["catalog request failed"]);
 });
 
-test("title lists and search results carry the stored score, and search summaries store it for new titles", async () => {
+test("title lists and search results carry the stored score, and search summaries store it for new titles", async (t) => {
+  // Each failed details request logs a failure line, which this test reads.
+  const printed = captureFailures(t);
   const other = await person("other");
   await friend(viewer, other);
   // Stored, current titles: one rated, one with too few votes, one unrated,
@@ -297,4 +309,8 @@ test("title lists and search results carry the stored score, and search summarie
   failing = false;
   catalog["/movie/644"] = movie(644, votes(5.84, 90), "Searched 644");
   assert.equal(await score("movie:644"), 58);
+  assert.deepEqual(failureEvents(printed), [
+    "catalog request failed",
+    "catalog request failed",
+  ]);
 });

@@ -437,7 +437,7 @@ test("real members cannot see the demo circle, and the reviewer cannot see them"
     (await titleSuggestions(alice)).map((title) => title.id),
     [],
   );
-  assert.deepEqual(await friendsRecommend(alice), []);
+  assert.deepEqual((await friendsRecommend(alice)).titles, []);
 
   // The owner's usage report counts only real members.
   const [week] = await usageReport({ weeks: 1 });

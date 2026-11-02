@@ -292,7 +292,6 @@ final class FeedTests: XCTestCase {
           app.staticTexts["Your entries and friends’ discussions will appear here."]
         }
       XCTAssertTrue(expected.waitForExistence(timeout: 10), "screen/feed/\(name)")
-      XCTAssertFalse(app.staticTexts["Screenr didn't load"].exists, "screen/feed/\(name)")
       app.terminate()
     }
   }

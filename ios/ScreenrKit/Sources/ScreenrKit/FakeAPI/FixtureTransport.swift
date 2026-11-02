@@ -46,6 +46,11 @@ public struct FixtureScenario: Hashable, Sendable {
   // creates the file when it wants the app's next read to bring new activity.
   public var updates: [String]
   public var updateSignal: URL?
+  // While the file at `outageSignal` exists, every `/api/screenr` request
+  // gets a 502 without a body, as from the proxy during a deploy. A UI test
+  // creates the file to fail the app's next reads, such as a poll, and
+  // removes it to end the outage.
+  public var outageSignal: URL?
   // The posters the app shows; see `ImageSource.solidPosters`.
   public var posters: Posters
 
@@ -66,6 +71,7 @@ public struct FixtureScenario: Hashable, Sendable {
     push: Push = .undecided,
     updates: [String] = [],
     updateSignal: URL? = nil,
+    outageSignal: URL? = nil,
     posters: Posters = .placeholders
   ) {
     self.viewer = viewer
@@ -77,6 +83,7 @@ public struct FixtureScenario: Hashable, Sendable {
     self.push = push
     self.updates = updates
     self.updateSignal = updateSignal
+    self.outageSignal = outageSignal
     self.posters = posters
   }
 }
@@ -147,6 +154,8 @@ final class FixtureSetup: Sendable {
 // An in-process Screenr server that answers from the checked-in fixtures, so
 // the app runs its real client against recorded responses.
 //
+// - While the scenario's outage signal exists, `/api/screenr` requests get
+//   a 502 without a body.
 // - `/api/screenr` requests without a bearer token, or with
 //   `FixtureTransport.expiredToken`, get `errors/signed-out`.
 // - Once the scenario's update signal exists, its updates answer first.
@@ -225,6 +234,7 @@ public struct FixtureTransport: HTTPTransport {
       return try reply(url: url, status: 404, body: ["error": "Not found."])
     }
     try log?.record(request, path: path, body: Incoming.json(request))
+    if inOutage() { return try reply(url: url, status: 502) }
     let requestID = request.value(forHTTPHeaderField: "Screenr-Request-Id")
     if let failure = fixture(named: scenario.failure) {
       return try reply(url: url, fixture: failure, requestID: requestID)
@@ -330,6 +340,12 @@ public struct FixtureTransport: HTTPTransport {
   // Whether the scenario's update signal exists yet.
   private func updated() -> Bool {
     guard let signal = scenario.updateSignal else { return false }
+    return FileManager.default.fileExists(atPath: signal.path())
+  }
+
+  // Whether the scenario's outage signal exists.
+  private func inOutage() -> Bool {
+    guard let signal = scenario.outageSignal else { return false }
     return FileManager.default.fileExists(atPath: signal.path())
   }
 

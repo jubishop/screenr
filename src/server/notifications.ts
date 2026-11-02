@@ -57,10 +57,25 @@ function identifier(value: unknown): string {
   return value;
 }
 
+// The visible notifications among the viewer's ($1), each row selecting
+// `select` from visible_notification as v, after `filter` narrows the
+// viewer's notifications, n, by their own columns. Each notification's
+// visibility is checked on its own: the subquery's LIMIT keeps PostgreSQL
+// from flattening the check into joins over the viewer's whole history, so
+// a read that orders by n.id and stops early, after a page or the newest
+// notification, reads only the rows it needs through notification_recipient,
+// and the unread count only unread ones through notification_unread
+// (docs/notifications.md#bounded-reads, issue #375).
+const visible = (select: string, filter = "") =>
+  `notification n CROSS JOIN LATERAL (
+    SELECT ${select} FROM visible_notification
+    WHERE visible_notification.id=n.id LIMIT 1) v
+  WHERE n.recipient_id=$1 ${filter}`;
+
 export async function unreadNotifications(viewer: string) {
   return (
     await db.query<{ count: number }>(
-      "SELECT count(*)::int AS count FROM visible_notification WHERE recipient_id=$1 AND read_at IS NULL",
+      `SELECT count(*)::int AS count FROM ${visible("1", "AND n.read_at IS NULL")}`,
       [viewer],
     )
   ).rows[0].count;
@@ -83,16 +98,18 @@ export async function notifications(
       through: string | null;
       unread: number;
     }>(
-      `WITH visible AS (SELECT * FROM visible_notification WHERE recipient_id=$1)
-       SELECT coalesce($4::bigint,(SELECT max(id) FROM visible))::text AS through,
-       (SELECT count(*)::int FROM visible WHERE read_at IS NULL) AS unread,
+      `SELECT coalesce($3::bigint,
+         (SELECT n.id FROM ${visible("1")} ORDER BY n.id DESC LIMIT 1))::text AS through,
+       (SELECT count(*)::int FROM ${visible("1", "AND n.read_at IS NULL")}) AS unread,
        coalesce((SELECT jsonb_agg(page ORDER BY id::bigint DESC) FROM (
-         SELECT ${columns} FROM visible
-         WHERE ($2::bigint IS NULL OR id<$2) AND (NOT $3::boolean OR read_at IS NULL)
-         AND ($4::bigint IS NULL OR id<=$4)
-         ORDER BY visible.id DESC LIMIT 31
+         SELECT v.* FROM ${visible(
+           columns,
+           `AND ($2::bigint IS NULL OR n.id<$2) AND ($3::bigint IS NULL OR n.id<=$3)
+           ${unread ? "AND n.read_at IS NULL" : ""}`,
+         )}
+         ORDER BY n.id DESC LIMIT 31
        ) page),'[]') AS items`,
-      [viewer, cursor, unread, boundary],
+      [viewer, cursor, boundary],
     )
   ).rows[0];
   const hasMore = result.items.length > 30;

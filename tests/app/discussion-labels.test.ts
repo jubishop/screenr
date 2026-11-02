@@ -10,6 +10,7 @@ import {
   setup,
   assertRouteError,
   captureFailures,
+  failureEvents,
 } from "./social-fixture";
 const { loadScreen } = await import("../../src/server/screens");
 const { thread } = await import("../../src/server/feed");
@@ -173,7 +174,9 @@ test("TV comments take an optional season or episode label shown in every feed",
   assert.deepEqual([routed.season, routed.episode], [1, 3]);
 });
 
-test("season and episode pickers read TMDB's lists for TV titles", async () => {
+test("season and episode pickers read TMDB's lists for TV titles", async (t) => {
+  // Show 9's failed season list logs a failure line, which this test reads.
+  const printed = captureFailures(t);
   const { alice } = await setup();
   await show();
   assert.deepEqual(await titleSeasons("tv:8"), [
@@ -230,6 +233,7 @@ test("season and episode pickers read TMDB's lists for TV titles", async () => {
     ),
     { status: 401, message: "Sign in to continue." },
   );
+  assert.deepEqual(failureEvents(printed), ["catalog request failed"]);
 });
 
 test("malformed TMDB season and episode lists fail and log their lookup", async () => {

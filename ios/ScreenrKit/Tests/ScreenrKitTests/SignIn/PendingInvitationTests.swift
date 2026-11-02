@@ -6,6 +6,7 @@ import Testing
 // The invitation link a new member opened, which the app keeps and checks
 // until setup succeeds.
 @MainActor
+@Suite(.timeLimit(.minutes(1)))
 struct PendingInvitationTests {
   private static let token = "8FdwRYhlFy9tcqxOibjISU88FZTgsFeusFjHMbgJ1As"
 
@@ -72,6 +73,42 @@ struct PendingInvitationTests {
     // Sign-in still sends the token, and the server decides.
     #expect(invitation.status == .unconfirmed)
     #expect(invitation.token == Self.token)
+  }
+
+  // A check cut short, such as when its view goes away, leaves the link
+  // waiting for the next check.
+  @Test func aCancelledCheckLeavesTheLinkWaitingForTheNext() async throws {
+    let test = try TestClient(
+      replies: [.failure(URLError(.cancelled)), try Self.availability(true)]
+    )
+    let invitation = PendingInvitation(storage: InMemoryKeychain())
+    invitation.open(Self.token)
+
+    await invitation.check(using: test.client)
+    #expect(invitation.status == .checking)
+    await invitation.check(using: test.client)
+
+    #expect(invitation.status == .available)
+    #expect(test.transport.requests.count == 2)
+  }
+
+  // The server's answer about a link that another link replaced meanwhile
+  // leaves the new link waiting for its own check.
+  @Test func anAnswerForAReplacedLinkLeavesTheNewLink() async throws {
+    let api = GatedAPI(RecordingAPI(["invitation": .success(["available": false])]))
+    let storage = InMemoryKeychain()
+    let invitation = PendingInvitation(storage: storage)
+    invitation.open("earlier-link")
+    let checking = Task { await invitation.check(using: api) }
+    await api.waitForRequests(1)
+
+    invitation.open(Self.token)
+    api.open()
+    await finish(checking)
+
+    #expect(invitation.token == Self.token)
+    #expect(invitation.status == .checking)
+    #expect(try storage.read() == Self.token)
   }
 
   @Test func checksOnlyALinkWaitingForACheck() async throws {

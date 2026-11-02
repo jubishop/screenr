@@ -193,6 +193,9 @@ The search screen loads both lists, and one availability read covers them,
 so `src/components/title-search.tsx` switches tabs by changing the URL in
 place, as it does for a query. Each tab adds a history entry, and the My
 services, Movies/TV, and Show finished filters keep their state across tabs.
+The server applies the filters before capping each list at 50 titles, so
+changing one reads the screen again
+([implementation](title-suggestions.md#implementation)).
 Show finished, a toggle button beside the Movies/TV group
 ([#172](https://github.com/jubishop/screenr/issues/172)), starts off on each
 visit, so titles the viewer marked Finished stay hidden until they turn it on.
@@ -557,8 +560,11 @@ removes the pending friend request." when either applies.
 Friends page replaces the profile, and the profile stops refreshing once the
 request starts ([issue #132](https://github.com/jubishop/screenr/issues/132)).
 `src/components/page-notice.tsx` carries the notice through that client
-navigation only, so a reload or later visit omits it. The notice sits beneath
-the Friends heading and takes focus. Dismiss moves focus to the heading.
+navigation only, so a reload or later visit omits it. Another page that opens
+first, such as when the reader leaves before Friends loads, drops it
+([issue #362](https://github.com/jubishop/screenr/issues/362)). The notice
+sits beneath the Friends heading and takes focus. Dismiss moves focus to the
+heading.
 
 ### Confirm other destructive actions — 2026-10-12
 

@@ -253,7 +253,9 @@ deployed environment. Automated tests replace Google's external identity
 response while retaining the real auth library, hooks, sessions and database.
 Account shows **Google connected** after signup or linking. A connected account
 can also sign in with an email code. Connection failures and canceled consent
-show a message that remains visible while the account page refreshes.
+show a message that remains visible while the account page refreshes. The
+page then drops the `?error=` that reported it from the address, so a reload
+omits it ([issue #362](https://github.com/jubishop/screenr/issues/362)).
 
 For production email, use `EMAIL_TRANSPORT=resend`, the existing sending-only
 `RESEND_API_KEY`, and an `EMAIL_FROM` address under a verified Resend domain.

@@ -1,5 +1,4 @@
 import Foundation
-import Synchronization
 import Testing
 
 @testable import ScreenrKit
@@ -186,13 +185,13 @@ struct TopTenEditorModelTests {
     let model = TopTenEditorModel(entries: entries, api: api) {}
 
     let save = try #require(model.drop(Self.harborFirst))
-    await api.waitForRequest()
+    await api.waitForRequests(1)
     #expect(model.remove(entries[0]) == nil)
     #expect(model.move(entries[0], toRank: 3) == nil)
     api.open()
     await finish(save)
 
-    #expect(api.answers.requests.count == 1)
+    #expect(api.requests.count == 1)
     #expect(
       Self.listed(model.entries) == ["#1 Harbor Lights", "#2 Night Crossing", "#3 Paper Lanterns"]
     )
@@ -229,45 +228,12 @@ struct TopTenEditorModelTests {
       let api = GatedAPI(RecordingAPI(["top-ten": reply]))
       let model = TopTenEditorModel(entries: entries, api: api) {}
       let save = try #require(model.remove(entries[1]))
-      await api.waitForRequest()
+      await api.waitForRequests(1)
       model.reconcile(with: elsewhere)
       #expect(Self.listed(model.entries) == ["#1 Night Crossing", "#2 Harbor Lights"])
       api.open()
       await finish(save)
       #expect(Self.listed(model.entries) == ["#1 Harbor Lights", "#2 Night Crossing"])
     }
-  }
-}
-
-// Holds each request until the test opens the gate, then answers it from
-// `answers`.
-private final class GatedAPI: ScreenrAPI {
-  let answers: RecordingAPI
-  private let arrivals = AsyncStream<Void>.makeStream()
-  private let waiting = Mutex<CheckedContinuation<Void, Never>?>(nil)
-
-  init(_ answers: RecordingAPI) {
-    self.answers = answers
-  }
-
-  func send<Response>(_ request: APIRequest<Response>) async throws(APIError) -> Response {
-    await withCheckedContinuation { continuation in
-      waiting.withLock { $0 = continuation }
-      arrivals.continuation.yield()
-    }
-    return try await answers.send(request)
-  }
-
-  func waitForRequest() async {
-    var iterator = arrivals.stream.makeAsyncIterator()
-    _ = await iterator.next()
-  }
-
-  func open() {
-    let continuation = waiting.withLock { waiting in
-      defer { waiting = nil }
-      return waiting
-    }
-    continuation?.resume()
   }
 }

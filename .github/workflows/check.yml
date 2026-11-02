@@ -1,7 +1,12 @@
 name: Repository checks
 
-# Skip a change to Markdown alone, except the Markdown that tests read:
-# tests/test_app_sandbox.py scans these globs and checks that they match.
+# A change only to Markdown that no test reads needs no check jobs.
+# tests/test_app_sandbox.py scans the Markdown these globs re-include and
+# checks that both skips match it. A push to main skips with this filter: a
+# run that started only to skip would join the concurrency group below and
+# could replace a pending run that deploys. Every pull request runs, and the
+# scope job skips the check jobs instead, so the check that merging requires
+# always reports.
 on:
   push:
     branches: [main]
@@ -12,12 +17,6 @@ on:
       - 'memory/**/*.md'
       - '*.md'
   pull_request:
-    paths:
-      - '**'
-      - '!**.md'
-      - 'docs/**/*.md'
-      - 'memory/**/*.md'
-      - '*.md'
   workflow_dispatch:
 
 permissions:
@@ -34,7 +33,26 @@ env:
 # Parallel jobs run what bin/check --full runs locally, so checks and
 # deployment stay under 10 minutes. See docs/development-workflow.md#ci-jobs.
 jobs:
+  scope:
+    # Decides whether the jobs below run. See bin/ci-scope.
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    outputs:
+      run: ${{ steps.scope.outputs.run }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          fetch-depth: 2 # A pull request's test merge commit and the base it merged into.
+      - name: Decide whether the changes need the check jobs
+        id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: bin/ci-scope "$EVENT_NAME" >> "$GITHUB_OUTPUT"
+
   static:
+    needs: scope
+    if: needs.scope.outputs.run == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:
@@ -64,6 +82,8 @@ jobs:
 
   app:
     name: app (${{ matrix.shard }}/${{ strategy.job-total }})
+    needs: scope
+    if: needs.scope.outputs.run == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 8
     strategy:
@@ -97,11 +117,9 @@ jobs:
       - run: npx playwright install --only-shell chromium
       - name: Install Caddy
         # Production's Caddy release, from the image .github/caddy/Dockerfile pins.
+        # bin/ci-caddy retries a failed pull; tests/test_ci_caddy.py runs this step.
         run: |
-          image=$(sed -n 's/^FROM //p' .github/caddy/Dockerfile)
-          container=$(docker create --quiet "$image")
-          docker cp --quiet "$container:/usr/bin/caddy" "$RUNNER_TEMP/caddy"
-          docker rm "$container"
+          bin/ci-caddy "$RUNNER_TEMP/caddy"
           sudo install -m 0755 "$RUNNER_TEMP/caddy" /usr/local/bin/caddy
           caddy version
       - name: Run application and database tests
@@ -109,6 +127,8 @@ jobs:
 
   browser:
     name: browser (${{ matrix.shard }}/${{ strategy.job-total }})
+    needs: scope
+    if: needs.scope.outputs.run == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 8
     strategy:
@@ -149,6 +169,8 @@ jobs:
           if-no-files-found: ignore
 
   release:
+    needs: scope
+    if: needs.scope.outputs.run == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 8
     permissions:
@@ -204,9 +226,11 @@ jobs:
           if-no-files-found: error
 
   check:
-    # The one result pull requests show and bin/deploy-ci requires: every job
-    # above passed. It runs after a failure so that it reports the failure.
-    needs: [static, app, browser, release]
+    # The one result that merging a pull request and bin/deploy-ci require:
+    # every job above passed, or scope found nothing to check and the others
+    # were skipped. It runs after a failure so that it reports the failure.
+    # See docs/development-workflow.md#required-check-on-main--2026-11-01.
+    needs: [scope, static, app, browser, release]
     if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     timeout-minutes: 2
@@ -216,7 +240,9 @@ jobs:
           NEEDS: ${{ toJSON(needs) }}
         run: |
           jq -r 'to_entries[] | "\(.key): \(.value.result)"' <<<"$NEEDS"
-          jq -e 'all(.[]; .result == "success")' <<<"$NEEDS" >/dev/null
+          jq -e '(.scope.outputs.run == "false") as $skipped
+            | all(to_entries[]; .value.result == "success"
+                or ($skipped and .key != "scope" and .value.result == "skipped"))' <<<"$NEEDS" >/dev/null
 
   deploy:
     needs: [check, release]

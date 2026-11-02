@@ -121,6 +121,41 @@ struct FixtureTransportTests {
     #expect(people.user.username == "alice")
   }
 
+  // A UI test fails reads at a moment it chooses: while the outage signal
+  // file exists, every request gets a 502 without a body, as from the proxy
+  // during a deploy, and removing the file ends the outage.
+  @Test func failsEveryRequestWhileTheOutageSignalExists() async throws {
+    let directory = FileManager.default.temporaryDirectory
+      .appending(path: UUID().uuidString, directoryHint: .isDirectory)
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    defer {
+      do {
+        try FileManager.default.removeItem(at: directory)
+      } catch {
+        Issue.record("Could not remove \(directory.path()): \(error)")
+      }
+    }
+    let signal = directory.appending(path: "outage")
+    let services = try services("-ScreenrFixtureOutageSignal", signal.path())
+
+    let before = try await services.api.send(.screen(path: "/titles/movie/101"))
+    #expect(FileManager.default.createFile(atPath: signal.path(), contents: Data()))
+    for request in [APIRequest.screen(path: "/titles/movie/101"), .screen(path: "/people")] {
+      let error = await #expect(throws: APIError.self) { try await services.api.send(request) }
+      #expect(error?.kind == .server(status: 502))
+      #expect(error?.message == nil)
+    }
+    try FileManager.default.removeItem(at: signal)
+    let after = try await services.api.send(.screen(path: "/titles/movie/101"))
+
+    guard case .title(let page) = after.content else {
+      Issue.record("\(after.content) is not a title page")
+      return
+    }
+    #expect(page.title.name == "Night Crossing")
+    #expect(after == before)
+  }
+
   @Test func needsASignalForUpdates() {
     #expect(throws: FixtureError.self) {
       try FixtureTransport(
@@ -446,6 +481,7 @@ struct APISourceTests {
         "-ScreenrOpenURL", "screenr-dev://people", "-ScreenrFixtureProfile", "pending",
         "-ScreenrFixturePush", "denied", "-ScreenrFixtureUpdate", "screen/feed/incoming",
         "-ScreenrFixtureUpdateSignal", "/tmp/update", "-ScreenrFixturePosters", "solid",
+        "-ScreenrFixtureOutageSignal", "/tmp/outage",
       ],
       variant: .dev
     )
@@ -464,6 +500,7 @@ struct APISourceTests {
             push: .denied,
             updates: ["screen/feed/incoming"],
             updateSignal: URL(filePath: "/tmp/update"),
+            outageSignal: URL(filePath: "/tmp/outage"),
             posters: .solid
           )
         )

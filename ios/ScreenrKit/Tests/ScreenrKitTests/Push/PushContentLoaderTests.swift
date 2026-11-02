@@ -121,10 +121,31 @@ struct PushContentLoaderTests {
     loader.timeWillExpire()
     #expect(deliveries.alerts == [.generic(.timedOut)])
 
-    // The read that iOS's time cut short delivers nothing more.
+    // The read that iOS's time cut short ends cancelled and delivers nothing
+    // more.
     load.cancel()
     await finish(load)
     #expect(deliveries.alerts == [.generic(.timedOut)])
+  }
+
+  // A read that still succeeds after iOS's time ran out neither loads the
+  // photo nor delivers a second alert.
+  @Test func aReadThatFinishesAfterTimeRanOutDeliversNothingMore() async throws {
+    let api = GatedAPI(RecordingAPI(["notification": try .fixture("actions/notification/comment")]))
+    let photos = PhotoRequests(answer: .success(photo))
+    let deliveries = Deliveries()
+    let loader = PushContentLoader(deliver: deliveries.record)
+    let load = Task {
+      await loader.load(PushTap(notificationID: "18"), api: api, avatars: photos.avatars)
+    }
+    await api.waitForRequests(1)
+
+    loader.timeWillExpire()
+    api.open()
+    await finish(load)
+
+    #expect(deliveries.alerts == [.generic(.timedOut)])
+    #expect(photos.requested.isEmpty)
   }
 
   @Test func timeRunningOutDuringThePhotoShowsTheAlertWithoutIt() async throws {

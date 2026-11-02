@@ -209,6 +209,7 @@ public struct AppServices: Sendable {
 //   -ScreenrFixtureLog <file for a line per API request>
 //   -ScreenrFixtureUpdate <fixture name>      (repeatable)
 //   -ScreenrFixtureUpdateSignal <file whose creation brings the updates>
+//   -ScreenrFixtureOutageSignal <file whose existence fails every request>
 //   -ScreenrFixturePush undecided|allowed|denied|system (default undecided)
 //   -ScreenrFixturePosters placeholders|solid (default placeholders)
 //
@@ -238,6 +239,7 @@ public enum APISource: Hashable, Sendable {
       case "-ScreenrFixtureLog": scenario.requestLog = URL(filePath: value)
       case "-ScreenrFixtureUpdate": scenario.updates.append(value)
       case "-ScreenrFixtureUpdateSignal": scenario.updateSignal = URL(filePath: value)
+      case "-ScreenrFixtureOutageSignal": scenario.outageSignal = URL(filePath: value)
       case "-ScreenrFixturePush":
         guard let push = FixtureScenario.Push(rawValue: value) else {
           throw ArgumentError(

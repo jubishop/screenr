@@ -319,6 +319,29 @@ struct TitlePageModelTests {
     #expect(model.review.state == .failed("The review failed."))
   }
 
+  // The draft lasts until the form closes, as the web's lasts until Cancel,
+  // so opening Review again before then keeps it. The sheets show the page's
+  // last header, which a failed read leaves in place.
+  @Test func keepsTheDraftUntilTheFormCloses() async throws {
+    let model = model(RecordingAPI(), refresh: RefreshCounter())
+    let finished = try Self.header("finished-review")
+    model.reconcile(with: finished)
+    let typed = ReviewDraft(rating: 5, body: "Better the second time.", spoiler: false)
+
+    model.openReview(finished)
+    model.review.rate(5)
+    model.review.setBody("Better the second time.")
+    model.openReview(finished)
+
+    #expect(model.sheet == .review)
+    #expect(model.review.draft == typed)
+    #expect(model.header == finished)
+
+    model.sheet = nil
+    model.openReview(finished)
+    #expect(model.review.draft == finished.review)
+  }
+
   @Test func removesTheReviewAfterConfirming() async throws {
     let api = RecordingAPI(["remove-review": .success(["ok": true])])
     let refresh = RefreshCounter()
