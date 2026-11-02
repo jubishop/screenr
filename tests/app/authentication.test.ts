@@ -344,8 +344,22 @@ test("a signed-out session request fails while Better Auth cannot use the databa
   await db.query(`ALTER TABLE account ADD COLUMN schema_probe text NOT NULL DEFAULT '';
     ALTER TABLE account ALTER COLUMN schema_probe DROP DEFAULT`);
   try {
-    // The route handler answers HTTP 500 when Better Auth throws.
-    await assert.rejects(session(), { code: "SCHEMA_MISMATCH" });
+    // The handler logs what Better Auth throws and answers HTTP 500.
+    const printed = captureFailures();
+    const failed = await session();
+    assert.equal(failed.status, 500);
+    assert.equal(await failed.text(), "");
+    const logged = printed.filter((line) => line.startsWith("{"));
+    assert.equal(logged.length, 1, printed.join("\n"));
+    const { event, error, code } = JSON.parse(logged[0]);
+    assert.deepEqual(
+      { event, error, code },
+      {
+        event: "auth endpoint failed",
+        error: "SchemaMismatchError",
+        code: "SCHEMA_MISMATCH",
+      },
+    );
   } finally {
     await db.query("ALTER TABLE account DROP COLUMN schema_probe");
   }
