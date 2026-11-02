@@ -141,6 +141,9 @@ struct ScreenModelTests {
     #expect(model.phase == .loaded(feed))
     await clock.waitForSleep(until: .seconds(36))
     #expect(api.reads.count == 3)
+    clock.advance(by: .seconds(3))
+    await clock.waitForSleep(until: .seconds(39))
+    #expect(api.triggers == [.demand, .poll, .demand, .poll])
   }
 
   @Test func givesUpOnARefreshAfterTenSeconds() async throws {
@@ -236,6 +239,32 @@ struct ScreenModelTests {
     #expect(model.phase == .loaded(emptyFeed))
   }
 
+  // Telemetry records polls quietly, so only a read that repeats the last one on schedule is a
+  // poll: never the first read, a refresh, a push's read, or the read on returning to the app.
+  @Test func marksOnlyTheScheduledRepeatsAsPolls() async throws {
+    let api = ScriptedAPI([.screen(feed)])
+    let clock = TestClock()
+    let model = ScreenModel(path: "/", api: api, clock: clock)
+    model.appeared(appActive: true)
+    await clock.waitForSleep(until: .seconds(3))
+    clock.advance(by: .seconds(3))
+    await clock.waitForSleep(until: .seconds(6))
+
+    await model.refresh()
+    model.refreshIfLive()
+    await api.waitForReads(4)
+    await clock.waitForSleep(until: .seconds(6))
+    model.appActivityChanged(false)
+    model.appActivityChanged(true)
+    await api.waitForReads(5)
+    await clock.waitForSleep(until: .seconds(6))
+    clock.advance(by: .seconds(3))
+    await clock.waitForSleep(until: .seconds(9))
+
+    #expect(api.triggers == [.demand, .poll, .demand, .demand, .demand, .poll])
+    model.disappeared()
+  }
+
   @Test func ignoresAPushWhileHidden() async throws {
     let api = ScriptedAPI([.screen(feed)])
     let clock = TestClock()
@@ -290,6 +319,7 @@ struct ScreenModelTests {
       observer.records.map(\.route) == ["/api/screenr/notifications", "/api/screenr/notifications"]
     )
     #expect(observer.records.map(\.status) == [200, 304])
+    #expect(observer.records.map(\.trigger) == [.demand, .poll])
     model.disappeared()
   }
 

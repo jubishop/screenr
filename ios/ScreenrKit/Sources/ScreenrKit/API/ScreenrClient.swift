@@ -73,7 +73,8 @@ public final class ScreenrClient: ScreenrAPI {
       requestID: requestID,
       status: status,
       duration: start.duration(to: .now),
-      error: error
+      error: error,
+      trigger: request.trigger
     )
     observer?.requestFinished(record)
     return try result.get()

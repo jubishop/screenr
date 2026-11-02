@@ -92,8 +92,9 @@ public final class Telemetry: APIRequestObserver {
   }
 
   // Logs a finished API call and adds it to Sentry as a breadcrumb and, in traced sessions, a
-  // transaction, each tagged with its request ID. The API client reports every call here. Its
-  // route is already a pattern; reducing it again keeps a raw path from reaching Sentry.
+  // transaction, each tagged with its request ID, unless it is a successful poll. The API client
+  // reports every call here. Its route is already a pattern; reducing it again keeps a raw path
+  // from reaching Sentry.
   public func requestFinished(_ record: APIRequestRecord) {
     let route = RoutePattern(path: record.route)
     var fields: [LogField] = [
@@ -122,6 +123,14 @@ public final class Telemetry: APIRequestObserver {
       spanStatus = .unavailable
     }
     fields.append(.duration("duration_ms", record.duration))
+    // An open screen polls every few seconds, usually getting an unchanged 304. A successful poll
+    // logs only at debug level, which the log file leaves out, and skips Sentry, so polling cannot
+    // crowd out the log tail that feedback attaches or the breadcrumbs before a crash, or spend
+    // traces. Writes, failures, and first reads are recorded in full.
+    if record.trigger == .poll, record.error == nil {
+      api.write(.debug, "Request finished", fields)
+      return
+    }
     api.write(level, "Request finished", fields)
 
     guard let reporter else { return }
