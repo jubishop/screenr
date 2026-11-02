@@ -19,7 +19,7 @@ let package = Package(
     .library(name: "ScreenrKit", targets: ["ScreenrKit"])
   ],
   dependencies: [
-    .package(url: "https://github.com/getsentry/sentry-cocoa.git", exact: "9.30.1")
+    .package(url: "https://github.com/getsentry/sentry-cocoa.git", exact: "9.32.0")
   ],
   targets: [
     .target(
