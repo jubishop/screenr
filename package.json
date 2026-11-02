@@ -34,7 +34,7 @@
   },
   "dependencies": {
     "better-auth": "1.7.15",
-    "next": "16.4.2",
+    "next": "16.4.3",
     "pg": "8.23.1",
     "react": "19.3.1",
     "react-dom": "19.3.1",
@@ -42,7 +42,7 @@
   },
   "devDependencies": {
     "@playwright/test": "1.64.1",
-    "@types/node": "26.6.5",
+    "@types/node": "26.6.6",
     "@types/pg": "8.23.1",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
