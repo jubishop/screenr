@@ -1,6 +1,6 @@
 ---
 name: process-test-waits
-description: Tests that start a process wait for its own ready line or exit, with a bound only a hang reaches, because test-database setup can stall a start for many seconds in a parallel run.
+description: Tests that start a process wait for its own ready line or exit, with a bound only a hang reaches, because test-database setup stalled starts for many seconds in parallel runs.
 type: reference
 ---
 
@@ -11,14 +11,15 @@ from the process: a line on its output that says it is ready, or its exit.
 Bound the wait only to end a hang, with a few minutes. Never poll against a
 deadline sized for an idle machine.
 
-**Why:** A process that sets up a test database can stall for many seconds in
-a parallel agent run. `prepareTestDatabase` in `scripts/checkout.ts` drops
+**Why:** A process that set up a test database stalled for many seconds in
+parallel agent runs. `prepareTestDatabase` in `scripts/checkout.ts` dropped
 removed checkouts' databases, and each `DROP DATABASE` forces a PostgreSQL
 checkpoint and waits for it. Until
 [#447](https://github.com/jubishop/screenr/issues/447) it dropped them while
 holding a machine-wide lock, so every other checkout's start waited as well.
-It now drops them after releasing the lock, so only the setup that claimed
-them waits. On 2026-11-01 the PostgreSQL log recorded 658
+After it, the setup that claimed them still waited for them, until
+[#462](https://github.com/jubishop/screenr/issues/462) left the drops to a
+detached process. On 2026-11-01 the PostgreSQL log recorded 658
 forced checkpoints. Of these, 69 took over 2 seconds, and the longest took 18
 seconds. Two of them, of 16.9 and 10.5 seconds, came in the four minutes
 before the browser-build test's harness was reported silent for over 10

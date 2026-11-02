@@ -93,14 +93,16 @@ takes before creating the database and keeps through the build.
 Preparations take turns under a lock on the server, so none removes a
 database another checkout is still creating. In its turn a preparation only
 claims the databases it will drop, renaming each to a name no checkout
-derives, so a checkout recreated at the same path gets a new database. It
-drops its claims after its turn, because each drop waits for a PostgreSQL
-checkpoint, which took up to 18 seconds in a parallel run
-([#447](https://github.com/jubishop/screenr/issues/447)); no other checkout's
-preparation waits for those drops. A preparation holds a lock on each claim
-until it drops it, and a later preparation drops any claim whose lock is free,
-such as one left by a run that stopped first.
-`tests/app/checkout-isolation.test.ts` covers the derived name, the
+derives, so a checkout recreated at the same path gets a new database. Each
+drop waits for a PostgreSQL checkpoint, which took up to 18 seconds in a
+parallel run, so no preparation drops a claim itself
+([#447](https://github.com/jubishop/screenr/issues/447),
+[#462](https://github.com/jubishop/screenr/issues/462)). When any claim
+exists, the preparation starts `scripts/drop-test-databases.ts` as a detached
+process and returns. That process holds a lock on each claim while it drops
+it, so concurrent drops skip each other's claims, and the next preparation
+starts another for any claim left behind, such as one whose drop stopped
+first. `tests/app/checkout-isolation.test.ts` covers the derived name, the
 override, removal, and these guarantees.
 
 ## Browser harness

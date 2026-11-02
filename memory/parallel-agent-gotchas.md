@@ -70,12 +70,12 @@ hooks of every agent's pushes.
   `deadlock detected` failure in `tests/app/catalog.test.ts`.
 - **Test database drops:** each `DROP DATABASE` forces a PostgreSQL
   checkpoint, which took up to 18 seconds on 2026-11-01. Test-database setup
-  claims removed checkouts' databases under a machine-wide lock and drops them
-  after releasing it, so other checkouts' starts no longer wait for those
-  drops, but the setup that claimed them does
-  ([checkout test databases](../docs/testing.md#checkout-test-databases),
+  claims removed checkouts' databases under a machine-wide lock and leaves
+  their drops to a detached process, so no checkout's test start waits for
+  one ([checkout test databases](../docs/testing.md#checkout-test-databases),
   [process test waits](process-test-waits.md),
-  [#447](https://github.com/jubishop/screenr/issues/447)).
+  [#447](https://github.com/jubishop/screenr/issues/447),
+  [#462](https://github.com/jubishop/screenr/issues/462)).
 
 ## Waiting on CI
 
