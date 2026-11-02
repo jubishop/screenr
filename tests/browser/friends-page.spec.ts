@@ -2,7 +2,7 @@ import { expect, type Locator, type Page } from "@playwright/test";
 import { test } from "./monitored-test";
 import { person, friend, prepareFriendship, userId } from "./member-fixture";
 import { expectErrorBeside, failAction, press } from "./action-errors";
-import { openWithoutPolling, refreshOnReturn } from "./refresh-helpers";
+import { failOneRead, openWithoutPolling, readAgain } from "./refresh-helpers";
 
 const { changeRelationship } = await import("../../src/server/relationships");
 
@@ -506,22 +506,6 @@ test("a failed read keeps an open Unfriend or Decline confirmation open, with it
   const rae = await person("keepconfirmrae", "Rae Requester");
   await friend(viewer, opal);
   await changeRelationship(rae, viewer, "request");
-  const failure = page.getByRole("main").locator(".error").first();
-  // Each read is one the test starts, so a failure lasts until it reads
-  // again. Returning to the page reads it once.
-  async function failOneRead() {
-    await page.route(
-      "**/api/screenr/screen?**",
-      (route) => route.abort("failed"),
-      { times: 1 },
-    );
-    await refreshOnReturn(page);
-    await expect(failure).toContainText("Could not reach Screenr.");
-  }
-  async function readAgain() {
-    await refreshOnReturn(page);
-    await expect(failure).toHaveCount(0);
-  }
 
   // The profile hides while the read fails, but the open confirmation stays
   // with focus on Cancel.
@@ -537,14 +521,14 @@ test("a failed read keeps an open Unfriend or Decline confirmation open, with it
   });
   const keepFriend = unfriendGroup.getByRole("button", { name: "Cancel" });
   await expect(keepFriend).toBeFocused();
-  await failOneRead();
+  await failOneRead(page);
   await expect(page.getByRole("heading", { name: "Opal Other" })).toHaveCount(
     0,
   );
   await expect(keepFriend).toBeFocused();
   await expect(unfriend).toHaveAttribute("aria-disabled", "true");
   await expect(keepFriend).toHaveAttribute("aria-disabled", "false");
-  await readAgain();
+  await readAgain(page);
   await expect(page.getByRole("heading", { name: "Opal Other" })).toBeVisible();
   await expect(keepFriend).toBeFocused();
   await unfriend.click();
@@ -569,18 +553,18 @@ test("a failed read keeps an open Unfriend or Decline confirmation open, with it
   const keepRequest = declineGroup.getByRole("button", { name: "Cancel" });
   await decline.click();
   await expect(keepRequest).toBeFocused();
-  await failOneRead();
+  await failOneRead(page);
   await expect(region(page, "People you may know")).toHaveCount(0);
   await expect(keepRequest).toBeFocused();
   await expect(confirmDecline).toHaveAttribute("aria-disabled", "true");
   await keepRequest.click();
   await expect(declineGroup).toHaveCount(0);
-  await readAgain();
+  await readAgain(page);
   await expect(declineGroup).toHaveCount(0);
   await decline.click();
-  await failOneRead();
+  await failOneRead(page);
   await expect(keepRequest).toBeFocused();
-  await readAgain();
+  await readAgain(page);
   await expect(confirmDecline).toHaveAttribute("aria-disabled", "false");
   await expect(keepRequest).toBeFocused();
   await confirmDecline.click();

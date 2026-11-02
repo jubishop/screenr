@@ -5,7 +5,7 @@ import { test } from "./monitored-test";
 import { prepareFriendship, userId } from "./member-fixture";
 import { db } from "./database-fixture";
 import { browserConfig } from "../../scripts/browser-config";
-import { openWithoutPolling, refreshOnReturn } from "./refresh-helpers";
+import { failOneRead, openWithoutPolling, readAgain } from "./refresh-helpers";
 import {
   countRequests,
   expectPendingWhileLeaving,
@@ -167,21 +167,6 @@ test("a failed read keeps the deletion step, the sign-in methods, and focus, wit
   // Each read is one the test starts, so the failure lasts until it reads
   // again.
   await openWithoutPolling(departing, "/account");
-  const failure = departing.getByRole("main").locator(".error").first();
-  // Returning to the page reads it once; this read fails.
-  async function failOneRead() {
-    await departing.route(
-      "**/api/screenr/screen?**",
-      (route) => route.abort("failed"),
-      { times: 1 },
-    );
-    await refreshOnReturn(departing);
-    await expect(failure).toContainText("Could not reach Screenr.");
-  }
-  async function readAgain() {
-    await refreshOnReturn(departing);
-    await expect(failure).toHaveCount(0);
-  }
   let signIns = 0;
   departing.on("request", (request) => {
     if (new URL(request.url()).pathname === "/api/auth/sign-in/email-otp")
@@ -208,7 +193,7 @@ test("a failed read keeps the deletion step, the sign-in methods, and focus, wit
 
   // The member switches to Mail, and the read on their return fails. The
   // code step keeps the typed digits and focus, and Confirm code waits.
-  await failOneRead();
+  await failOneRead(departing);
   await expect(code).toBeFocused();
   await expect(code).toHaveValue(otp.slice(0, 3));
   await expect(confirmCode).toHaveAttribute("aria-disabled", "true");
@@ -216,7 +201,7 @@ test("a failed read keeps the deletion step, the sign-in methods, and focus, wit
   await expect(signOut).toHaveAttribute("aria-disabled", "true");
   await code.pressSequentially(otp.slice(3));
   await code.press("Enter");
-  await readAgain();
+  await readAgain(departing);
   expect(signIns).toBe(0);
   await expect(confirmCode).toHaveAttribute("aria-disabled", "false");
   await expect(signOut).toHaveAttribute("aria-disabled", "false");
@@ -234,11 +219,11 @@ test("a failed read keeps the deletion step, the sign-in methods, and focus, wit
     exact: true,
   });
   await expect(cancel).toBeFocused();
-  await failOneRead();
+  await failOneRead(departing);
   await expect(cancel).toBeFocused();
   await expect(confirmDelete).toHaveAttribute("aria-disabled", "true");
   await expect(cancel).toHaveAttribute("aria-disabled", "false");
-  await readAgain();
+  await readAgain(departing);
   await expect(cancel).toBeFocused();
   // The confirmed code still deletes the account, with no second code.
   await confirmDelete.click();

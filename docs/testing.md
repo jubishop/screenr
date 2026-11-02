@@ -542,9 +542,11 @@ recipients. A full run checks:
   invitation open the in-page confirmation, by keyboard and pointer at phone
   and desktop widths. Cancel keeps the item and returns focus; no browser
   dialog opens and no write is sent until the action is confirmed.
-- A failed read keeps an open Unfriend or Friends-page Decline confirmation
-  with focus on Cancel while the page hides; its action waits for the next
-  read, and Cancel still closes it. On Account, a failed read keeps the
+- A failed read keeps an open Unfriend, Friends-page Decline, Revoke, entry
+  Delete, comment Remove, title page or entry top 10, or Remove review
+  confirmation with focus on Cancel while the page hides; its action waits
+  for the next read, sending nothing when pressed, and Cancel still closes
+  it. On Account, a failed read keeps the
   deletion code step with its typed digits and focus, the final deletion
   confirmation, and Sign-in methods, whose actions wait the same way; the
   confirmed code still deletes the account without a second code.

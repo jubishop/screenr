@@ -473,11 +473,13 @@ export function TopTenSection({
 // The in-page prompt when the title page adds to a full list: it lists the
 // current 10 and asks which one to remove. The entries below it move up, the
 // new title joins at #10, and the removed title stays recommended. Cancel
-// takes focus, as in other confirmations, and changes nothing.
+// takes focus, as in other confirmations, and changes nothing. While it is
+// `unavailable`, the choices ignore presses and Cancel still closes it.
 export function TopTenReplace({
   name,
   entries,
   busy,
+  unavailable = false,
   run,
   onDone,
   onCancel,
@@ -485,6 +487,7 @@ export function TopTenReplace({
   name: string;
   entries: TopTenEntry[];
   busy: boolean;
+  unavailable?: boolean;
   run: (replace: string) => Promise<unknown>;
   onDone: () => void;
   onCancel: () => void;
@@ -519,7 +522,7 @@ export function TopTenReplace({
               type="button"
               className="secondary"
               aria-label={`Remove #${entry.rank} ${entry.name}`}
-              unavailable={busy || pending}
+              unavailable={busy || pending || unavailable}
               onClick={() => void choose(entry.id)}
             >
               <span className="top-ten-choice-rank">#{entry.rank}</span>{" "}

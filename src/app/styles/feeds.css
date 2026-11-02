@@ -354,6 +354,15 @@
   border: 0;
   padding-top: 0;
 }
+/* An entry card with no conversation beneath it, such as behind a spoiler,
+   keeps the entry's rounded corners. While a failed read hides an entry, its
+   card can hold only an open confirmation. */
+.feed-entry > .activity-card:last-child {
+  border-radius: 12px;
+}
+.activity-card > .confirmation:first-child {
+  margin-top: 0;
+}
 .replies {
   border-left: 2px solid var(--line);
   padding-left: 16px;
