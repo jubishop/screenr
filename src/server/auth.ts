@@ -465,11 +465,15 @@ export function createAuth(
         }
         return logCallbackFailure("hooks.before", async () => {
           // The web has no Sign in with Apple; its redirect sign-in would
-          // otherwise fail for want of a client secret.
+          // otherwise fail for want of a client secret. Its OAuth callback is
+          // refused too: Better Auth doesn't tie a state to its provider, so
+          // anyone could bring a Google sign-in's state there and make Screenr
+          // send codes to Apple's token endpoint under its bundle ID.
           if (
-            (ctx.path === "/sign-in/social" || ctx.path === "/link-social") &&
-            ctx.body?.provider === "apple" &&
-            !ctx.body?.idToken
+            ((ctx.path === "/sign-in/social" || ctx.path === "/link-social") &&
+              ctx.body?.provider === "apple" &&
+              !ctx.body?.idToken) ||
+            (ctx.path === "/callback/:id" && ctx.params?.id === "apple")
           )
             throw new APIError("NOT_FOUND", { message: appleOnlyInApp });
           // Runs before Better Auth replaces the address's current code, so a
