@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { setTimeout } from "node:timers/promises";
-import { format } from "node:util";
+import { format, stripVTControlCharacters } from "node:util";
 import {
   useDatabase,
   db,
@@ -14,6 +14,7 @@ import {
   assertAuthError,
 } from "./social-fixture";
 import { fakeGoogle, serve } from "./identity-providers";
+import { error as logNextError } from "next/dist/build/output/log";
 
 const { GET, POST } = await import("../../src/app/api/screenr/[action]/route");
 const { initialScreen } = await import("../../src/server/screens");
@@ -23,7 +24,7 @@ const { runWorkerLoop } = await import("../../src/server/worker-loop");
 const { createAuth } = await import("../../src/server/auth");
 const { createInvitation, invitationHash } =
   await import("../../src/server/invitations");
-const { onRequestError } = await import("../../src/instrumentation");
+const { onRequestError, register } = await import("../../src/instrumentation");
 useDatabase();
 // Fake Sentry endpoints still open after a failed test.
 const endpoints = new Set<Server>();
@@ -714,6 +715,65 @@ test("a request error that reaches Next logs the route pattern, its type, and th
     error: "TypeError",
   });
   excludes(printed, [message, "alice", "private"]);
+});
+
+test("in production, the line Next prints for an error before onRequestError shows only its class, code, and stack, without the message or PostgreSQL detail", async () => {
+  const printed = captureFailures();
+  const value = "Private value 271828";
+  const error = await db
+    .query(
+      `DO $$ BEGIN RAISE EXCEPTION 'Probe rejected %', '${value}'
+        USING DETAIL = 'Failing row contains (${value}).', ERRCODE = '23514';
+      END $$`,
+    )
+    .catch((error: unknown) => error);
+  assert.ok(error instanceof Error && error.message.includes(value));
+  // Next calls register once at startup. Outside production, whole errors
+  // still print, for debugging.
+  const unchanged = console.error;
+  register();
+  assert.equal(console.error, unchanged);
+  const env = process.env as Record<string, string | undefined>;
+  const mode = env.NODE_ENV;
+  env.NODE_ENV = "production";
+  try {
+    register();
+  } finally {
+    if (mode === undefined) delete env.NODE_ENV;
+    else env.NODE_ENV = mode;
+  }
+  // What Next's production server does with an error that escapes a route
+  // handler or a page render: print it with its own logger, as `⨯` and the
+  // error, then call the hook.
+  logNextError(error);
+  await onRequestError(
+    error,
+    { path: "/api/photos/alice/0123456789abcdef", method: "GET", headers: {} },
+    {
+      routerKind: "App Router",
+      routePath: "/api/photos/[user]/[version]",
+      routeType: "route",
+      revalidateReason: undefined,
+    },
+  );
+  assert.equal(printed.length, 2, printed.join("\n"));
+  const next = stripVTControlCharacters(printed[0]);
+  assert.ok(next.startsWith("⨯ {"), next);
+  const { fields, stack } = logged(printed.slice(1));
+  assert.deepEqual(fields, {
+    event: "route failed",
+    route: "/api/photos/[user]/[version]",
+    type: "route",
+    method: "GET",
+    error: "DatabaseError",
+    code: "23514",
+  });
+  assert.deepEqual(JSON.parse(next.slice(2)), {
+    error: "DatabaseError",
+    code: "23514",
+    stack,
+  });
+  excludes(printed, [value, "Probe rejected", "Failing row"]);
 });
 
 test("a failed email worker pass logs its error class, code, and stack", async () => {
