@@ -379,17 +379,17 @@ test("a sign-out whose session delete fails keeps the session and says so", asyn
     message: "Could not sign out. Try again.",
   });
   await showSessions();
+  // Each refused sign-out is logged, beside the failure Better Auth caught.
   assert.deepEqual(
     failures
       .filter((line) => line.startsWith("{"))
-      .map((line) => {
-        const { event, error, code } = JSON.parse(line);
-        return [event, error, code];
-      }),
+      .map((line) => JSON.parse(line))
+      .filter(({ event }) => event === "sign out failed")
+      .map(({ error, code }) => [error, code]),
     [
-      ["sign out failed", undefined, undefined],
-      ["sign out failed", undefined, undefined],
-      ["sign out failed", "DatabaseError", "42P01"],
+      [undefined, undefined],
+      [undefined, undefined],
+      ["DatabaseError", "42P01"],
     ],
   );
 
