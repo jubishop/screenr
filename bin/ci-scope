@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Report whether a run of the check workflow needs its check jobs.
 
-A pull request that changes only Markdown that no test reads skips them, and
+A pull request that changes only Markdown that no check reads skips them, and
 the workflow's check job still reports the result that merging requires.
 Pushes to main skip the same changes with the workflow's paths filter. Every
 other event runs the check jobs, and so does any doubt. Prints run=true or
@@ -15,9 +15,12 @@ import sys
 
 def needs_checks(path):
     """Whether a change to path needs the check jobs: any file but Markdown, and
-    the Markdown in docs/, memory/, and the root, which tests read (#371).
-    tests/test_app_sandbox.py checks that this matches the Markdown it scans."""
-    return not path.endswith(".md") or "/" not in path or path.startswith(("docs/", "memory/"))
+    the Markdown that a check reads. Tests read the Markdown in docs/, memory/,
+    and the root (#371). The document checks in bin/check read every tracked
+    Markdown file, which otherwise lives in ios/ and bin/ (#439).
+    tests/test_app_sandbox.py checks that this matches the workflow's paths
+    filter and covers every tracked Markdown file."""
+    return not path.endswith(".md") or "/" not in path or path.startswith(("docs/", "memory/", "ios/", "bin/"))
 
 
 def git(*args):
@@ -47,7 +50,7 @@ def decide(event):
     needed = [path for path in files if needs_checks(path)]
     if needed:
         return True, f"{len(needed)} changed files need them, such as {needed[0]}"
-    return False, "the pull request changes only Markdown that no test reads: " + ", ".join(files)
+    return False, "the pull request changes only Markdown that no check reads: " + ", ".join(files)
 
 
 def main():
