@@ -134,7 +134,8 @@ def main():
         if not manifest.isfile() or release.extractfile(manifest).read().decode().strip() != revision:
             raise ValueError('Archive revision does not match checked revision.')
     # Once this deletes the artifact, rerunning only this job cannot download
-    # it, so every recovery message here and in ops/ says Re-run all jobs.
+    # it, so every message here and in ops/ that says to retry the deployment
+    # says Re-run all jobs.
     artifacts = json.loads(run('gh', 'api', f'repos/{REPO}/actions/runs/{run_id}/artifacts', capture=True))
     for artifact in artifacts['artifacts']:
         if artifact['name'] == artifact_name:

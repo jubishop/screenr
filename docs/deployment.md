@@ -605,13 +605,13 @@ and verifying an archive, the deployment job deletes its GitHub artifact. Build
 jobs have no production secrets. To retry a failed deploy job, use
 **Re-run all jobs** in GitHub Actions, so checks and packaging produce a fresh
 artifact; rerunning only the deploy job fails to download the deleted one.
-Every recovery message from `bin/deploy-ci` and the deploy kit says
-**Re-run all jobs** for that reason. The retry is refused once production runs
-a newer revision, which already contains the change. A repeat deployment of
-the active revision verifies health without extracting or restarting it. A
-failed extraction or startup removes only a new candidate after a verified
-rollback. Failures in later verification require inspection and, when
-necessary, manual recovery. Database migrations are not reversed.
+Every message from `bin/deploy-ci` and the deploy kit that says to retry the
+deployment says **Re-run all jobs** for that reason. The retry is refused once
+production runs a newer revision, which already contains the change. A repeat
+deployment of the active revision verifies health without extracting or
+restarting it. A failed extraction or startup removes only a new candidate
+after a verified rollback. Failures in later verification require inspection
+and, when necessary, manual recovery. Database migrations are not reversed.
 
 When activation fails and no healthy release is running, the job ends with
 `DEPLOY FAILED: Activation failed and no healthy release is running, so
