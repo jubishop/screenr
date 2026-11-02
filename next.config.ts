@@ -70,6 +70,10 @@ const config: NextConfig = {
     );
   },
   images: {
+    // Optimized posters live in the release's .next/cache, and Next evicts the
+    // least recently used past this size instead of half the free disk on the
+    // shared host: docs/deployment.md#service-sandbox
+    maximumDiskCacheSize: 512 * 1024 * 1024,
     remotePatterns: [
       { protocol: "https", hostname: "image.tmdb.org", pathname: "/t/p/**" },
     ],

@@ -275,6 +275,15 @@ export async function saveActivityEmail(viewer: string, enabled: unknown) {
   return { activityEmail: enabled };
 }
 
+// The worker's periodic cleanup deletes a notification once it is read and
+// more than a year old. Unread ones stay until read
+// (docs/notifications.md#notification-retention--2026-11-01).
+export async function pruneNotifications() {
+  await db.query(
+    "DELETE FROM notification WHERE read_at IS NOT NULL AND created_at < now()-interval '1 year'",
+  );
+}
+
 // Called only by the existing worker. Notifications themselves are the durable
 // pending queue; each due window becomes one retryable job with fixed membership.
 export async function queueNotificationEmails(client: PoolClient) {

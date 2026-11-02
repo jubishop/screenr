@@ -687,6 +687,12 @@ Auth failure tests check everything printed, Better Auth's own lines included.
 A request failure names the generated request ID, and
 `tests/app/profile-photos.test.ts` checks that a failed Use my Google photo
 request names the client's.
+`tests/app/retention.test.ts` runs the worker's periodic cleanup, which must
+delete expired sessions with their push devices and pending pushes, read
+notifications more than a year old but no unread ones, and the
+[catalog rows](title-catalog.md#catalog-retention) of titles nothing
+references once they have been expired for 30 days, keeping new search
+results, recent refreshes, and every referenced title's rows.
 `tests/app/email.test.ts` also runs `scripts/worker.ts` with fetch disabled. The
 worker refuses to start without the Resend settings, deletes expired jobs on its
 first pass, says once that push delivery is off without APNs settings, and
