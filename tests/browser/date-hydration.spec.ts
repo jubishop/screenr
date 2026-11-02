@@ -287,8 +287,8 @@ test("a minute renders shown times again only when their text changes", async ({
 test("a screen reached by client navigation shows local dates and enabled controls from its first frame", async ({
   member,
 }) => {
-  const friend = await member("framefriend");
-  const viewer = await member("frameviewer");
+  const friend = await member("firstframefriend");
+  const viewer = await member("firstframeviewer");
   await prepareFriendship(friend, viewer);
   const recommended = await friend.request.post("/api/screenr/activity", {
     headers: { Origin: browserConfig.baseURL },
