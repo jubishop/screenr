@@ -52,9 +52,12 @@ With the latest Node LTS release selected, run one suite by its filename:
 
 ```sh
 npx tsx scripts/test-database.ts
-npx tsx --test tests/app/reactions.test.ts
+npx tsx --import ./tests/app/failure-guard.ts --test tests/app/reactions.test.ts
 npm run test:browser -- tests/browser/reactions.spec.ts
 ```
+
+The `--import` loads the [failure line](#failure-lines) guard, as `npm test`
+does.
 
 `npm test` discovers all application `*.test.ts` files and keeps file
 execution serial; `npm run test:browser` discovers all browser `*.spec.ts`
@@ -898,3 +901,44 @@ the recorder if the failure returns.
 
 **Rejected alternatives:** Keeping the full recorder as insurance, and
 removing the guard as well.
+
+## Failure lines
+
+A test run fails on any structured failure line that no test expects: the
+JSON line with an `"event"` field that `logFailure` prints
+([failure logs](deployment.md#failure-logs)).
+
+- **Application tests:** `npm test` and `npm run test:coverage` load
+  `tests/app/failure-guard.ts` into every test file's process. It fails a
+  test that prints a failure line it didn't capture, and fails the file for
+  a line printed outside any test. A test that fails something on purpose
+  reads its lines with `captureFailures()` from `tests/app/social-fixture.ts`,
+  passing its test context for a capture that ends with the test, and
+  asserts them, for example with `failureEvents()`. An iPhone fixture case
+  lists its lines in `failures`.
+- **Browser runs:** `scripts/browser-server.ts` writes the application's
+  failure lines, with when each printed, to
+  `.cache/browser-failure-lines.jsonl`, which each run starts over, instead
+  of passing them to Playwright's `[WebServer]` output. Once the run ends,
+  `tests/browser/failure-line-reporter.ts` fails it on any line that
+  `tests/browser/expected-failure-lines.ts` doesn't expect, naming its event
+  and the specs that ran when it printed. An entry there names the specs that
+  cause a line on purpose, the fields the line carries, and why. A deliberate
+  failure in the fake catalog belongs on a title that only the specs testing
+  it open, so other specs never print its line.
+
+`tests/app/failure-line-checks.test.ts` covers both.
+
+**Decision — 2026-11-01:** fail test runs on failure lines that no test
+expects, as above. Settled by the agent as routine in
+[#434](https://github.com/jubishop/screenr/issues/434); the user may override
+it.
+
+**Why:** failure lines that print on every run teach readers to ignore them,
+which buries a real failure. The guard keeps any kind from returning
+unnoticed, as invalid TMDB answers did before
+[#425](https://github.com/jubishop/screenr/issues/425).
+
+**Tradeoff:** a browser line's spec comes from timing, since two workers
+share one server, so another spec's identical line passes when it prints
+while the expecting spec runs.

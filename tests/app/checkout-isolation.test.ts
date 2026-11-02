@@ -49,6 +49,10 @@ async function fixture(t: TestContext) {
     "scripts/test-database.ts",
     "scripts/checkout.ts",
     "scripts/browser-config.ts",
+    "scripts/failure-lines.ts",
+    "tests/app/failure-guard.ts",
+    "tests/browser/failure-line-reporter.ts",
+    "tests/browser/expected-failure-lines.ts",
   ])
     await write(path, await readFile(path, "utf8"));
   // Dependencies are read-only shared inputs. The fixture owns its config,

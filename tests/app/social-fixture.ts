@@ -1,8 +1,9 @@
-import { before, beforeEach, after, mock } from "node:test";
+import { before, beforeEach, after, mock, type TestContext } from "node:test";
 import assert from "node:assert/strict";
 import { randomBytes } from "node:crypto";
 import { format } from "node:util";
 import { testDatabaseURL } from "../../scripts/checkout";
+import { failureRecord } from "../../scripts/failure-lines";
 
 // Every application suite that uses the test database or server modules
 // imports this module first, so this setup runs before any server module loads.
@@ -58,14 +59,21 @@ export function useDatabase() {
   });
 }
 
-// Replaces console.error until mock.restoreAll() and returns what each call
-// would have printed, so tests can read failure logs.
-export function captureFailures() {
+// Replaces console.error until mock.restoreAll(), or until the test ends when
+// given its context, and returns what each call would have printed, so tests
+// can read failure logs. failure-guard.ts fails a test that prints a failure
+// line it doesn't capture.
+export function captureFailures(t?: TestContext) {
   const printed: string[] = [];
-  mock.method(console, "error", (...args: unknown[]) => {
+  (t?.mock ?? mock).method(console, "error", (...args: unknown[]) => {
     printed.push(format(...args));
   });
   return printed;
+}
+
+// The events of the failure lines that captureFailures collected.
+export function failureEvents(printed: string[]) {
+  return printed.flatMap((line) => failureRecord(line)?.event ?? []);
 }
 
 export async function pending(name: string, token: string, verified = true) {

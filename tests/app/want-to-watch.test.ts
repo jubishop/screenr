@@ -9,6 +9,8 @@ import {
   friend,
   person,
   setup,
+  captureFailures,
+  failureEvents,
 } from "./social-fixture";
 const { loadScreen } = await import("../../src/server/screens");
 const { changeRelationship } = await import("../../src/server/relationships");
@@ -96,7 +98,9 @@ async function page(viewer: string, username: string) {
 const listed = (screen: Awaited<ReturnType<typeof page>>) =>
   screen.titles.map((t) => [t.id, t.access]);
 
-test("a friend's Want to watch page lists titles on the viewer's services or free, newest first, and never reveals the owner's services", async () => {
+test("a friend's Want to watch page lists titles on the viewer's services or free, newest first, and never reveals the owner's services", async (t) => {
+  // Each failed provider request logs a failure line, which this test reads.
+  const printed = captureFailures(t);
   const { alice, ben } = await setup();
   await friend(alice, ben);
   await saveServices(alice, ["service:netflix"]);
@@ -177,6 +181,10 @@ test("a friend's Want to watch page lists titles on the viewer's services or fre
     [free, "available"],
     [unknown, "unknown"],
     [stale, "available"],
+  ]);
+  assert.deepEqual(failureEvents(printed), [
+    "catalog request failed",
+    "catalog request failed",
   ]);
 });
 

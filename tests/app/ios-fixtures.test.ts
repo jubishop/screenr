@@ -1,6 +1,6 @@
 import { test, before, after, afterEach, mock } from "node:test";
 import assert from "node:assert/strict";
-import { captureFailures, db } from "./social-fixture";
+import { captureFailures, db, failureEvents } from "./social-fixture";
 import {
   labelToken,
   saveDatabase,
@@ -54,6 +54,9 @@ type Case = {
   // A read whose request changes the world, so it starts from the saved
   // world like a write.
   changesWorld?: true;
+  // The failure events that answering the request logs, which the case
+  // captures and checks.
+  failures?: string[];
 };
 type Maybe<T> = T | ((world: World) => T | Promise<T>);
 const resolve = <T>(value: Maybe<T>, world: World) =>
@@ -243,11 +246,15 @@ const screens: Record<MemberRoute["kind"], Record<string, Case>> = {
       "Find a title: suggestions and Friends recommend, with viewing options and saved services.",
     ),
     empty: screen("nora", "/search", "Find a title with no friends' activity."),
-    "viewer-statuses": screen(
-      "cam",
-      "/search",
-      "Cam's Find a title: his own Want to watch and Caught up on friends' recommendations, free options, unknown availability, a title without a poster, and no saved services.",
-    ),
+    "viewer-statuses": {
+      ...screen(
+        "cam",
+        "/search",
+        "Cam's Find a title: his own Want to watch and Caught up on friends' recommendations, free options, unknown availability, a title without a poster, and no saved services.",
+      ),
+      // The unknown availability's provider request fails.
+      failures: ["catalog request failed"],
+    },
   },
   people: {
     default: screen(
@@ -1269,12 +1276,14 @@ const cases: [string, Case][] = [
 
 async function record(file: string, item: Case, world: World) {
   const request = await item.request(world);
+  const printed = item.failures && captureFailures();
   const result = await send(world, item.viewer, request, item.method);
   assert.equal(
     result.status,
     item.status,
     `${file} responded ${JSON.stringify(result.body)}`,
   );
+  if (printed) assert.deepEqual(failureEvents(printed), item.failures);
   const fixture: Fixture = world.placeholders.scrub({
     description: item.description,
     viewer: item.viewer,
