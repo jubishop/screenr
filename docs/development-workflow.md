@@ -185,6 +185,9 @@ every install script regardless.
 ## Checks
 
 Follow the [check schedule](foundation/engineering-policy.md#checks).
+The foundation checks in `bin/check` run ShellCheck on `.envrc` and on each
+script in `bin/` and `bin/hooks/` whose shebang names `sh`, `bash`, `dash`,
+or `ksh`.
 `bin/check-application`, which `bin/check --full` runs after the foundation
 checks, verifies the Node runtime and the installed packages, lints the POSIX
 shell scripts in `ops/`, runs the Python tests, and then runs formatting,
@@ -604,7 +607,7 @@ together, and together they run everything `bin/check --full` runs on Linux:
 | Job | Work |
 | --- | --- |
 | `scope` | Runs [`bin/ci-scope`](../bin/ci-scope), which decides whether the jobs below run. |
-| `static` | `bin/check`, then `bin/check-application --part static`: shell lint for `ops/`, Python tests, formatting, and typechecking. |
+| `static` | `bin/check`, with its shell lint for `.envrc`, `bin/`, and `bin/hooks/`, then `bin/check-application --part static`: shell lint for `ops/`, Python tests, formatting, and typechecking. |
 | `app (I/N)` | `bin/check-application --part app --shard I/N`: one shard of the application and PostgreSQL test files, with the [pinned Caddy](#ci-caddy) and Playwright's headless Chromium for the browser harness tests. |
 | `browser (I/N)` | `bin/check-application --part browser --shard I/N`: one Playwright shard against a production build. |
 | `release` | Runs [`bin/deployment-decision`](#main-branch-delivery), then builds the release and runs the [packaging check](deployment.md#build-and-activate-a-release) on every run, pull requests included. It uploads the release only when the run deploys. |
