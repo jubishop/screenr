@@ -64,7 +64,7 @@ expired:
 - the title's details once neither remains, 30 days after they expired.
   Details expire a day after they are fetched, at a failed refresh's retry
   time, or, for a search result whose details never loaded, when search
-  stored it. Migration `037-title-stored-at.sql` adds `title.stored_at` for
+  stored it. Migration `038-title-stored-at.sql` adds `title.stored_at` for
   that last case, which the previous release ignores; titles stored before
   it count from the migration.
 
