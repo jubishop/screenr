@@ -233,10 +233,12 @@ session. Specs import these helpers instead of defining their own copies.
   and Google's key, token, and revoke endpoints with keys generated per run.
   `tests/app/social-fixture.test.ts` covers the clearing.
 - Suites call `useDatabase()` once at file scope to register the migration,
-  per-test user/verification reset, and final pool shutdown. A suite that
-  resets other tables imports `db` and registers its own hooks instead. Node
-  isolates files in separate processes; keep `--test-concurrency=1` when
-  running them together against one database.
+  per-test user/verification reset, and final pool shutdown. The reset first
+  waits for the pool to go idle, so a query that an earlier test left running
+  cannot deadlock with it; after 10 seconds it fails the test instead. A
+  suite that resets other tables imports `db` and registers its own hooks
+  instead. Node isolates files in separate processes; keep
+  `--test-concurrency=1` when running them together against one database.
 - The same helper contains pending/completed members, accepted friendship,
   a signed session cookie for route tests (`cookieFor`), the bearer token a
   native client receives from the same sign-in (`bearerFor`), and a small
@@ -748,7 +750,11 @@ rethrows its own error rather than its failed `ROLLBACK`'s, and that the
 broken client is released. It runs that transaction through another copy of
 `src/server/db.ts` too, as the production build's other server bundles and
 development reloads do, and checks in a production process that two copies
-share [one pool](deployment.md#database-connections).
+share [one pool](deployment.md#database-connections). It holds a screen's
+unread count behind another connection's lock while the screen read fails,
+and the screen must not answer until the count finishes. It checks that a
+test's table reset waits for a query the previous test left running, and
+fails on `Promise.all` in server code.
 `tests/app/email.test.ts` fails the database
 while Resend accepts a send, which must hold the job for a minute and then
 retry it with the same key, and `tests/app/migrations.test.ts` ends a
