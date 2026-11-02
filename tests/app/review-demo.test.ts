@@ -48,6 +48,8 @@ const catalog = createServer((request, response) => {
     JSON.stringify({
       id: Number(id),
       [kind === "movie" ? "title" : "name"]: `Catalog ${kind} ${id}`,
+      // TMDB sends a movie without release dates an empty list.
+      ...(kind === "movie" && { release_dates: { results: [] } }),
     }),
   );
 });

@@ -2,6 +2,7 @@ import { test, before, beforeEach, after, mock } from "node:test";
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
+import { format } from "node:util";
 import { useDatabase, db, person, friend } from "./social-fixture";
 import type { TitleRelease } from "../../src/shared";
 const { loadScreen } = await import("../../src/server/screens");
@@ -435,7 +436,13 @@ test("release dates follow the title cache: reused for a day, then refreshed, an
   assert.equal(detailRequests.length, 3);
 });
 
-test("details without usable release dates keep the title and its last dates, and retry after the failure delay", async () => {
+test("details without usable release dates keep the title and its last dates, and retry after the failure delay", async (t) => {
+  // Each such answer logs a failure line, which this test reads instead of
+  // printing.
+  const printed: string[] = [];
+  t.mock.method(console, "error", (...args: unknown[]) => {
+    printed.push(format(...args));
+  });
   catalog = {
     "/movie/551": { ...movie(551, []), release_dates: "unavailable" },
     "/movie/552": movie(552, [[3, "2026-11-06"]]),
@@ -464,6 +471,16 @@ test("details without usable release dates keep the title and its last dates, an
   const requests = detailRequests.length;
   await release("movie:552");
   assert.equal(detailRequests.length, requests);
+  // One line for each answer, movie 551's and then movie 552's.
+  const invalid = {
+    event: "catalog response invalid",
+    lookup: "details",
+    part: "release_dates",
+  };
+  assert.deepEqual(
+    printed.map((line) => JSON.parse(line)),
+    [invalid, invalid],
+  );
 });
 
 test("failed release data leaves title details, Where to watch, conversations, and every listed title", async () => {

@@ -514,7 +514,9 @@ recipients. A full run checks:
 - The fictional catalog's `tv:998020` lists seasons and episodes, so its
   composer offers Season and Episode pickers. Labels stay visible above the
   spoiler cover in all three feeds. Other TV fixtures list no seasons, so
-  their comments post without a label.
+  their comments post without a label. So do comments on `tv:998021`, whose
+  details lack a season list, after the composer says seasons are
+  unavailable.
 - A nonfriend cannot read or write through direct API calls or the page.
 - Unfriending removes open-page access and hides historical comments for
   remaining readers; refriending restores them.

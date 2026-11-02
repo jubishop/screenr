@@ -31,7 +31,12 @@ const catalog = createServer((request, response) => {
   response.setHeader("Content-Type", "application/json");
   if (url.pathname.endsWith("/watch/providers")) {
     providerRequests.push(url.pathname);
-    response.end(JSON.stringify({ id: 0, results: { US: { free: [] } } }));
+    response.end(
+      JSON.stringify({
+        id: Number(url.pathname.split("/")[2]),
+        results: { US: { free: [] } },
+      }),
+    );
     return;
   }
   const body = details[url.pathname];

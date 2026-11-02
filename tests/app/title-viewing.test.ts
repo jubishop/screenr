@@ -56,14 +56,17 @@ const catalog = createServer((request, response) => {
     );
   } else {
     details++;
+    const [, kind, id] = new URL(request.url!, "http://catalog").pathname.split(
+      "/",
+    );
     response.end(
       JSON.stringify({
-        id: Number(
-          new URL(request.url!, "http://catalog").pathname.split("/")[2],
-        ),
+        id: Number(id),
         title: "Detailed title",
         name: "Detailed title",
         overview: "Full overview",
+        // TMDB sends a movie without release dates an empty list.
+        ...(kind === "movie" && { release_dates: { results: [] } }),
       }),
     );
   }

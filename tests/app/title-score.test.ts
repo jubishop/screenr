@@ -66,7 +66,12 @@ const server = createServer((request, response) => {
     return;
   }
   if (url.pathname.endsWith("/watch/providers")) {
-    response.end(JSON.stringify({ id: 0, results: { US: { free: [] } } }));
+    response.end(
+      JSON.stringify({
+        id: Number(url.pathname.split("/")[2]),
+        results: { US: { free: [] } },
+      }),
+    );
     return;
   }
   if (url.pathname.endsWith("/videos")) {

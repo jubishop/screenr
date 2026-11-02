@@ -41,12 +41,19 @@ const catalog = createServer((request, response) => {
       ...(findResults[find[1]] as object),
     });
   const details = /^\/(movie|tv)\/(\d+)$/.exec(url.pathname);
+  // A movie's details carry its release dates, which TMDB sends as an empty
+  // list when the movie has none.
   if (details && detailsStatus === 200)
-    return send(200, {
-      id: Number(details[2]),
-      [details[1] === "movie" ? "title" : "name"]:
-        details[1] === "movie" ? "Shared Movie" : "Shared Show",
-    });
+    return send(
+      200,
+      details[1] === "movie"
+        ? {
+            id: Number(details[2]),
+            title: "Shared Movie",
+            release_dates: { results: [] },
+          }
+        : { id: Number(details[2]), name: "Shared Show" },
+    );
   send(details ? detailsStatus : 404, {});
 });
 

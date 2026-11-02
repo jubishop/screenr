@@ -109,7 +109,8 @@ test("TV discussion posts take a season or episode label from TMDB pickers that 
   await reader.goto("/");
   await reader.screenshot({ path: ".cache/label-feed-1366.png" });
 
-  // Movies have no pickers, and a show without TMDB seasons posts unlabeled.
+  // Movies have no pickers, and a show whose TMDB season list can't be read
+  // posts unlabeled.
   await owner.setViewportSize({ width: 390, height: 844 });
   await owner.goto("/titles/movie/987654");
   await owner
@@ -119,7 +120,7 @@ test("TV discussion posts take a season or episode label from TMDB pickers that 
     composer.getByLabel("Your comment", { exact: true }),
   ).toBeFocused();
   await expect(season).toHaveCount(0);
-  await owner.goto("/titles/tv/987657");
+  await owner.goto("/titles/tv/998021");
   await owner
     .getByRole("button", { name: "Start a conversation", exact: true })
     .click();

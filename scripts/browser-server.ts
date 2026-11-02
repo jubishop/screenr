@@ -134,6 +134,15 @@ try {
     release_date: "2026-06-12",
     poster_path: null,
   };
+  // What TMDB's details always carry, empty here: a movie's release dates,
+  // which Screenr asks for with `append_to_response=release_dates`, and a
+  // show's season list.
+  const emptyDetails = (kind: string) =>
+    kind === "movie"
+      ? { release_dates: { results: [] } }
+      : kind === "tv"
+        ? { seasons: [] }
+        : {};
   let availabilityFailure = false;
   catalog = createServer((request, response) => {
     response.setHeader("Content-Type", "application/json");
@@ -161,7 +170,9 @@ try {
         response.end(JSON.stringify({ results: [] }));
       else {
         const { providers: _providers, ...title } = streamingTitle;
-        response.end(JSON.stringify(title));
+        response.end(
+          JSON.stringify({ ...emptyDetails(title.media_type), ...title }),
+        );
       }
       return;
     }
@@ -273,7 +284,8 @@ try {
       return;
     }
     // TMDB's season and episode lists for discussion labels. Other TV
-    // fixtures list no seasons, so their pickers are unavailable.
+    // fixtures list no seasons, so they offer no pickers, except that
+    // tv:998021's details lack a season list, so its pickers are unavailable.
     const season = request.url?.match(/^\/tv\/998020\/season\/(\d+)$/);
     if (season) {
       const names = ["Departure", "Fog Bank", "Night Crossing", "Landfall"];
@@ -316,6 +328,10 @@ try {
           : {
               ...fixture,
               id: Number(path.split("/")[2]) || fixture.id,
+              ...emptyDetails(path.split("/")[1]),
+              // An answer without the season list, which Screenr logs as an
+              // invalid answer, for the composer's unavailable pickers.
+              ...(path === "/tv/998021" ? { seasons: undefined } : {}),
               ...(path === "/tv/998001"
                 ? { name: "The Harbor Signal", first_air_date: "2025-09-01" }
                 : {}),
