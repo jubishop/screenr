@@ -1,8 +1,13 @@
-import { test, before, beforeEach, after } from "node:test";
+import { test, before, beforeEach, after, mock } from "node:test";
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
-import { db, bearerFor } from "./social-fixture";
+import {
+  db,
+  bearerFor,
+  captureFailures,
+  failureEvents,
+} from "./social-fixture";
 
 // The share extension's `resolve-title` action (docs/title-catalog.md#shared-links):
 // TMDB, IMDb, and JustWatch links name one title, and Netflix and other links
@@ -13,7 +18,8 @@ const { GET } = await import("../../src/app/api/screenr/[action]/route");
 const { resolveSharedTitle, sharedSearchText } =
   await import("../../src/server/shared-links");
 
-type Reply = { status: number; body: string; location?: string };
+// `drop` ends the connection without an answer, as a network failure does.
+type Reply = { status: number; body: string; location?: string; drop?: true };
 let catalogRequests: string[] = [];
 let pageRequests: string[] = [];
 let detailsStatus = 200;
@@ -28,6 +34,9 @@ const catalog = createServer((request, response) => {
     response.end(JSON.stringify(body));
   };
   const find = /^\/find\/(tt\d+)$/.exec(url.pathname);
+  // A list stands in for an answer that is not an object.
+  if (find && Array.isArray(findResults[find[1]]))
+    return send(200, findResults[find[1]]);
   if (find && url.searchParams.get("external_source") === "imdb_id")
     return send(200, {
       movie_results: [],
@@ -38,12 +47,19 @@ const catalog = createServer((request, response) => {
       ...(findResults[find[1]] as object),
     });
   const details = /^\/(movie|tv)\/(\d+)$/.exec(url.pathname);
+  // A movie's details carry its release dates, which TMDB sends as an empty
+  // list when the movie has none.
   if (details && detailsStatus === 200)
-    return send(200, {
-      id: Number(details[2]),
-      [details[1] === "movie" ? "title" : "name"]:
-        details[1] === "movie" ? "Shared Movie" : "Shared Show",
-    });
+    return send(
+      200,
+      details[1] === "movie"
+        ? {
+            id: Number(details[2]),
+            title: "Shared Movie",
+            release_dates: { results: [] },
+          }
+        : { id: Number(details[2]), name: "Shared Show" },
+    );
   send(details ? detailsStatus : 404, {});
 });
 
@@ -51,6 +67,7 @@ const catalog = createServer((request, response) => {
 const sitePages = createServer((request, response) => {
   pageRequests.push(request.url!);
   const page = pages[request.url!] ?? { status: 404, body: "" };
+  if (page.drop) return request.socket.destroy();
   response.writeHead(page.status, {
     "Content-Type": "text/html",
     ...(page.location && { Location: page.location }),
@@ -139,6 +156,27 @@ test("IMDb links resolve through TMDB's find by IMDb ID", async () => {
   );
 });
 
+test("an invalid TMDB find answer fails and logs its lookup", async () => {
+  findResults.tt0000045 = [{ id: 45, title: "Private Find Result" }];
+  const printed = captureFailures();
+  try {
+    await assert.rejects(
+      resolveSharedTitle("https://www.imdb.com/title/tt0000045/", ""),
+      { status: 502, message: "The catalog returned an invalid title." },
+    );
+  } finally {
+    mock.restoreAll();
+  }
+  assert.equal(printed.length, 1, printed.join("\n"));
+  const { stack, ...fields } = JSON.parse(printed[0]);
+  assert.deepEqual(fields, {
+    event: "catalog response invalid",
+    lookup: "find",
+    error: "AppError",
+  });
+  assert.ok(!printed[0].includes("Private Find Result"));
+});
+
 test("a link TMDB does not know leaves a search of the shared text", async () => {
   detailsStatus = 404;
   assert.deepEqual(
@@ -211,6 +249,70 @@ test("a JustWatch page without one IMDb ID leaves a search of the link's name", 
       "",
     ),
     { title: null, query: "elsewhere" },
+  );
+  pages["/us/movie/unreachable"] = { status: 200, body: "", drop: true };
+  assert.deepEqual(
+    await resolveSharedTitle(
+      "https://www.justwatch.com/us/movie/unreachable",
+      "",
+    ),
+    { title: null, query: "unreachable" },
+  );
+  assert.equal(catalogRequests.length, 0);
+});
+
+test("a JustWatch page follows at most three redirects", async () => {
+  // Three redirects within the site reach the title page.
+  pages["/us/movie/moved"] = {
+    status: 301,
+    body: "",
+    location: "/us/movie/moved/1",
+  };
+  pages["/us/movie/moved/1"] = {
+    status: 302,
+    body: "",
+    location: "/us/movie/moved/2",
+  };
+  pages["/us/movie/moved/2"] = {
+    status: 307,
+    body: "",
+    location: "/us/movie/moved/3",
+  };
+  pages["/us/movie/moved/3"] = justWatchPage("tt0000042");
+  assert.equal(
+    await resolved("https://www.justwatch.com/us/movie/moved"),
+    "movie:42",
+  );
+  // A redirect loop stops at the fourth redirect and leaves the search.
+  pages["/us/movie/loop"] = {
+    status: 301,
+    body: "",
+    location: "/us/movie/loop",
+  };
+  pageRequests = [];
+  assert.deepEqual(
+    await resolveSharedTitle("https://www.justwatch.com/us/movie/loop", ""),
+    { title: null, query: "loop" },
+  );
+  assert.deepEqual(pageRequests, Array(4).fill("/us/movie/loop"));
+});
+
+test("a JustWatch page over 5 MB leaves a search of the link's name", async () => {
+  // Both pages name an IMDb ID, so only the size limit separates them.
+  const page = justWatchPage("tt0000042").body;
+  pages["/us/movie/largest"] = { status: 200, body: page.padEnd(5_000_000) };
+  pages["/us/movie/too-large"] = { status: 200, body: page.padEnd(5_000_001) };
+  assert.equal(
+    await resolved("https://www.justwatch.com/us/movie/largest"),
+    "movie:42",
+  );
+  catalogRequests = [];
+  assert.deepEqual(
+    await resolveSharedTitle(
+      "https://www.justwatch.com/us/movie/too-large",
+      "",
+    ),
+    { title: null, query: "too large" },
   );
   assert.equal(catalogRequests.length, 0);
 });
@@ -321,7 +423,9 @@ test("the search text drops site names, years, and links from page titles", () =
   assert.equal(sharedSearchText("x".repeat(400)).length, 120);
 });
 
-test("resolve-title answers the share extension with a title or a search", async () => {
+test("resolve-title answers the share extension with a title or a search", async (t) => {
+  // The unavailable catalog logs a failure line, which this test reads.
+  const printed = captureFailures(t);
   await db.query(`INSERT INTO "user"(id,name,email,"emailVerified","createdAt","updatedAt")
     VALUES('viewer','Viewer','viewer@example.test',true,now(),now())`);
   await db.query(
@@ -378,4 +482,5 @@ test("resolve-title answers the share extension with a title or a search", async
       },
     },
   );
+  assert.deepEqual(failureEvents(printed), ["catalog request failed"]);
 });

@@ -22,7 +22,11 @@ release. Shared reads and writes live in `src/server/` by area: `profiles.ts`,
 `reviews.ts` ([ratings and reviews](title-feed.md#reviews)), `comments.ts`,
 and `reactions.ts`. PostgreSQL functions
 `screenr_can_read` and `screenr_blocked` apply the same current relationship
-rules to threads, cards, and comments. `screenr_blocked` also keeps the
+rules to threads, cards, and comments. `screenr_friends` lists a person's
+friends, each an accepted friendship where neither person has blocked the
+other, for profiles, People suggestions, Friends recommend, and Find a title
+suggestions; each caller adds its own checks between the viewer and those
+friends. `screenr_blocked` also keeps the
 [demo circle for Apple review](running-screenr.md#demo-circle-for-apple-review)
 and real members apart. The title page friend line comes
 from the viewer's title feed read, so it names only friends whose entries
@@ -138,6 +142,9 @@ the `title` save surface.
   request runs names it as `requestId`. An app error report and the server
   failure behind it carry the same ID
   ([Sentry decision](ios-app.md#sentry-for-the-app-and-the-server--2026-10-13)).
+  The journal has every such line; Sentry may
+  [fold](deployment.md#failure-reports-in-sentry) repeated failures into a
+  count.
 
 The action route also reads `Screenr-Visit: 1` on `screen` reads. The app
 sends it on its first screen read after launch and after each return to the
@@ -192,7 +199,16 @@ session cookie ([decision](ios-app.md#bearer-sessions-in-the-keychain--2026-10-1
   The API and photo routes use it.
 - **Session rows:** a token names the same Postgres `session` row as a
   cookie, with the same 30-day lifetime. `POST /api/auth/sign-out` with the
-  bearer header deletes that row and ends only that session.
+  bearer header deletes that row and ends only that session. Better Auth
+  deletes an expired row only when someone presents it, so the worker's
+  periodic cleanup, about once a minute, deletes every expired row with its
+  push devices. The privacy policy promises this within a day of expiry.
+- **Confirmed sign-out:** Better Auth's sign-out logs a failed session delete
+  and still answers 200. Screenr checks for the row afterward: while it
+  survives, or when the check itself fails, sign-out answers 500 with "Could
+  not sign out. Try again." and sets no cookie. The app keeps its token and
+  the browser its cookie, so neither leaves a live session, with its push
+  devices, behind a client that looks signed out.
 
 ## Native sign-in
 
@@ -232,7 +248,11 @@ cookies, and the response returns the
     reply to name the same person.
   - A Hide My Email relay address is stored like any other address.
   - The web offers no Apple sign-in. A request for Apple without an ID token
-    returns 404.
+    returns 404, and so does Better Auth's OAuth callback for Apple,
+    `/api/auth/callback/apple`. Better Auth doesn't tie an OAuth state to its
+    provider, so anyone could otherwise bring a web Google sign-in's state
+    there and make Screenr send codes to Apple's token endpoint under its
+    bundle ID ([issue #457](https://github.com/jubishop/screenr/issues/457)).
 - **Google:** the app posts `{"provider": "google", "idToken": {"token",
   "nonce"}}`. It gets the ID token through `ASWebAuthenticationSession` by
   running Google's authorization code flow with PKCE for the iOS client and
@@ -245,7 +265,10 @@ cookies, and the response returns the
   AES-256-GCM under a key derived from `BETTER_AUTH_SECRET`. Account deletion
   calls `revokeAppleTokens(userId)` in `src/server/apple.ts` before deleting
   the user. It revokes each token with Apple and clears it; when Apple does
-  not confirm, it throws and keeps the token for a retry. A token sealed
+  not confirm, it throws and keeps the token for a retry, and without the
+  Apple settings it throws `AppleSettingsMissing`. In the erase transaction,
+  `appleTokenStored` finds any token a sign-in stored meanwhile
+  ([account deletion](#account-deletion)). A token sealed
   under an earlier `BETTER_AUTH_SECRET` can never be read or revoked, so it
   logs `apple token unreadable` and skips it. An uninvited
   person's code is never redeemed, so Screenr keeps no token for them.
@@ -403,7 +426,11 @@ links in activity email and shared discussion links survive sign-in
 sign-in and the Google callback continue to `/setup?next=`, which sends a
 member with a profile on to the path and sends a new member there after
 signup. A failed Google attempt returns to the sign-in page with the same
-path. `returnPath` in `src/member-routes.ts` accepts only a root-relative path
+path. The sign-in page drops a one-time result, such as that failure, an
+unavailable invitation, or a deleted account, from its address once it shows
+it, keeping `next`, so a reload omits it
+([issue #362](https://github.com/jubishop/screenr/issues/362)).
+`returnPath` in `src/member-routes.ts` accepts only a root-relative path
 that names a member screen, and rewrites it in canonical form. Absolute,
 protocol-relative, backslash, control-character, and other paths, including
 `/login` and `/setup`, fall back to the friends feed. Invitation links and
@@ -486,8 +513,11 @@ A photo response is `Cache-Control: private, max-age=86400` with
 `Cross-Origin-Resource-Policy: same-origin`. `private` keeps shared caches
 from storing it, `Vary` keeps a browser or the app from reusing it for
 another signed-in person, and a changed photo has a new URL, so the old one
-returns 404. URLs are same-origin, so the policy's `img-src 'self'` covers
-them.
+returns 404. A request whose `If-None-Match` names the version gets 304
+after the same access check, which reads the photo's row without its image
+([issue #375](https://github.com/jubishop/screenr/issues/375)); only a 200
+reads the image. URLs are same-origin, so the policy's `img-src 'self'`
+covers them.
 
 **Google pictures.** Screenr fetches a Google picture only from
 `lh3.googleusercontent.com` through `lh6`, over HTTPS, requests the
@@ -547,7 +577,8 @@ grant access to private activity or change anonymous title suggestions.
 
 `src/server/friends-recommend.ts` reads the
 [Friends recommend](interface-design.md#friends-recommend-as-a-find-a-title-tab--2026-10-12)
-tab in one query. It counts active Recommends from the viewer's current
+tab in one query, the top 50 titles that pass the read's
+[filters](title-suggestions.md#implementation). It counts active Recommends from the viewer's current
 direct friends: an accepted friendship with no block in either direction,
 which also excludes a block left beside a retained friendship. Pending
 requests, friends of friends, withdrawn Recommends, Want to watch, watch
@@ -561,11 +592,14 @@ the [integer twentieths](profile-top-ten.md#ranking): a Recommend adds 20, or
 friends' usernames, display names, and top 10 ranks, top 10 recommenders
 first by rank and then the most recent Recommend first, with the viewer's
 current status and whether the viewer recommends it. The
-response holds no scores, feed item IDs, or account IDs. The viewer's
-statuses do not remove titles from the response. The view hides titles the
-viewer marked Finished from that status, so its Show finished switch
-([#172](https://github.com/jubishop/screenr/issues/172)) needs no second
-read.
+response holds no scores, feed item IDs, or account IDs. Without filters, as
+installed iPhone builds read it, the viewer's statuses do not remove titles,
+and the app hides titles the viewer marked Finished from that status for its
+Show finished switch ([#172](https://github.com/jubishop/screenr/issues/172)).
+The web reads with `finished=hidden` while the switch is off, so finished
+titles leave the list before the cap, and the screen adds
+`finishedRecommendations`, how many it left out, for the empty message.
+Turning the switch on reads again.
 
 ## Write lock and refresh behavior
 
@@ -576,10 +610,11 @@ write waits at most two seconds for this lock or any other lock it needs. It
 then changes nothing and returns HTTP 503 with "Screenr is busy. Please try
 again." Waiting requests therefore release database connections before the
 pool's five-second connection timeout, which session lookups share. The email
-worker holds the lock during each activity email send, so a write during a slow
-send may need a retry; the accepted
-[send without the lock](notifications.md#activity-email-sends-without-the-write-lock--2026-11-01)
-replaces this once it ships. Page loads, refreshes, and
+worker holds the lock only while it chooses an activity email and builds it
+from current data, and takes it only when one could be due. It calls Resend
+with no lock held, so a slow send never delays a write
+([send without the lock](notifications.md#activity-email-sends-without-the-write-lock--2026-11-01)).
+Page loads, refreshes, and
 [usage telemetry](usage-telemetry.md#active-days) don't take the lock. Listing
 invitations takes it only to store a missing share link, for an old invitation
 or after a secret rotation
@@ -590,8 +625,12 @@ the creator of the invitation actually used to finish signup. Existing accounts
 are not backfilled. Thread reads use one database snapshot. Open pages poll
 every three seconds while visible, waiting for any active refresh to finish,
 and refresh when the page becomes visible again. The page load brings the
-first screen; the page reads it again on load only after a failed load or on
-the not-found view. Successful API reads send a weak `ETag` of their exact
+document's first screen; the page reads it again on load only after a failed
+load or on the not-found view. Each later screen, reached by client
+navigation, reads at once: Back and Forward restore a copy cached before
+later changes, and an unchanged screen answers 304
+([issue #362](https://github.com/jubishop/screenr/issues/362)). Successful
+API reads send a weak `ETag` of their exact
 JSON body, including the reader's own profile. Refreshes send back the
 version they hold in `If-None-Match`, and an unchanged screen answers 304
 without a body. The page then keeps its data and doesn't render again
@@ -617,7 +656,11 @@ linking, and sign-out, share this deadline and its retry messages
 is pending, its button and the others it blocks stay focusable with
 `aria-disabled` and ignore presses, and text fields become read-only, so
 keyboard focus stays on the pressed control
-([issue #142](https://github.com/jubishop/screenr/issues/142)).
+([issue #142](https://github.com/jubishop/screenr/issues/142)). An action
+that opens another page, such as sign-in, email verification, joining,
+sign-out, or account deletion, stays pending until that page loads, so a
+second press can't resend a used code or repeat the action
+([issue #362](https://github.com/jubishop/screenr/issues/362)).
 `src/components/action-button.tsx` is the shared button; `disabled` remains
 only before hydration. Focus stays there after the write, or moves to the
 control that replaced it: Watch together after accepting on a profile, the
@@ -678,8 +721,14 @@ app uses the same action
   again, which starts the fresh session; an
   [in-page confirmation](interface-design.md#confirm-other-destructive-actions--2026-10-12)
   then asks before deleting. Code requests count toward the usual
-  [login-code limits](running-screenr.md#provider-configuration). The web
-  ends on the sign-in page with "Your Screenr account was deleted."
+  [login-code limits](running-screenr.md#provider-configuration). A failed
+  account read keeps the step in progress with the last known address, and
+  its actions wait for the next read, so a confirmed code is never lost. The
+  confirmed deletion stops the page's refreshes before it is sent, since a
+  read answered after it would open sign-in without the result, and its
+  action stays pending until the sign-in page loads with "Your Screenr
+  account was deleted." That page then drops the result from its address,
+  so a reload omits it.
 - **iPhone app:** Delete account in You → Settings signs in again with an
   email code to the account's address or a sign-in method connected to the
   account, without an invitation. The app keeps the new bearer token only
@@ -697,6 +746,17 @@ app uses the same action
   deletion logs `apple revoke failed`, erases nothing, and responds 503 with
   "Sign in with Apple could not be disconnected, so your account was not
   deleted. Please try again later." A retry revokes the kept token.
+- **Missing Apple settings:** without the
+  [Sign in with Apple settings](running-screenr.md#iphone-app-accounts-and-keys),
+  no token can be revoked, so deleting an account with a readable Apple token
+  logs `apple settings missing`, erases nothing, and responds 503 with "Sign
+  in with Apple is unavailable right now, so your account was not deleted.
+  Please try again later." Accounts without one are deleted as usual.
+- **Apple sign-in during deletion:** a sign-in while revocation runs can store
+  a newer token. The erase transaction first locks the user row and the Apple
+  account rows; if a readable token remains, it erases nothing and deletion
+  revokes again. After three rounds deletion logs `apple token replaced` and
+  responds with the same 503 as when Apple does not confirm.
 
 One transaction under the [write lock](#write-lock-and-refresh-behavior)
 then erases the person with `eraseAccounts`:
@@ -711,9 +771,12 @@ then erases the person with `eraseAccounts`:
 - **Connections:** friendships and requests, blocks in both directions, and
   their invitations go. So do the signup records of people who joined through
   those invitations; those members keep their accounts.
-- **Sign-in data:** pending codes and sign-in states in Better Auth's
-  `verification` table, and queued code emails, which name the address only
-  by a hash.
+- **Sign-in data:** in Better Auth's `verification` table, pending sign-in,
+  email verification, and password reset codes, matched by their exact
+  identifiers, `<type>-otp-<address>`, so a code for another address that
+  contains theirs stays; and sign-in states whose value names their user ID,
+  such as a Google link in progress. Also queued code emails, which name the
+  address only by a hash.
 - **The account:** deleting the `user` row cascades to the profile with its
   settings, push settings, and demo flag, and to the photo, sessions, push
   devices, sign-in accounts, saved services, notifications, reactions, usage
@@ -809,6 +872,17 @@ shipped 1.7.2, migration `016-drop-account-issuer.sql` dropped the index and
 then the column, following Better Auth's 1.7 upgrade guide. Databases first
 created by 1.7.3 or later have neither, so it changes nothing there. A
 release that ships 1.7.2 can no longer run against a migrated database.
+
+Better Auth also checks its tables when an instance starts. The migration
+command turns that check off for the instance it plans with, since it would
+report the tables and columns the command is about to add, such as every
+table of a fresh database. Once every migration has run, the command runs
+Better Auth's check itself and prints a mismatch that remains, such as a
+required column Better Auth never writes, as Better Auth's
+`Database schema mismatch` error line, without failing. Better Auth 1.7.10
+also warned on every run that its own `bigint` column `rateLimit.lastRequest`
+had a different type, which 1.7.11 fixed
+([issue #459](https://github.com/jubishop/screenr/issues/459)).
 
 The same rule applies to Screenr's own schema: drop a column, constraint, or
 compatibility trigger only once no retained release depends on it, and use

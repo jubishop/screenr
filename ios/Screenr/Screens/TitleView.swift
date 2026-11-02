@@ -27,8 +27,9 @@ struct TitleView: View {
   }
 }
 
-// The models and the trailer's player live here, outside the screen's
-// content, so drafts, the reader's place, and an open player survive reads.
+// The models, the trailer's player, and the sheets live here, outside the
+// screen's content, so drafts, the reader's place, an open player, and an
+// open sheet survive reads, including failed ones.
 private struct TitleScreen: View {
   let model: ScreenModel
   @State private var page: TitlePageModel
@@ -76,14 +77,17 @@ private struct TitleScreen: View {
           .padding()
         }
         .onChange(of: header, initial: true) { _, header in page.reconcile(with: header) }
-        .sheet(item: $page.sheet) { sheet in
-          TitleSheet(sheet: sheet, header: header, model: page)
-        }
         .toolbar {
           ToolbarItem(placement: .topBarTrailing) {
             ShareButton(destination: .title(id: title.title.id), subject: title.title.name)
           }
         }
+      }
+    }
+    // A failed read replaces the content, so the sheets show the last header.
+    .sheet(item: $page.sheet) { sheet in
+      if let header = page.header {
+        TitleSheet(sheet: sheet, header: header, model: page)
       }
     }
     // The header names the title, so the bar's title stays small.

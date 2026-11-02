@@ -4,7 +4,6 @@ import { once } from "node:events";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { setTimeout as delay } from "node:timers/promises";
 import { promisify } from "node:util";
 import { test } from "node:test";
 import { Client } from "pg";
@@ -12,6 +11,11 @@ import { Client } from "pg";
 const execute = promisify(execFile);
 const loader = resolve("node_modules/tsx/dist/loader.mjs");
 const harness = resolve("scripts/browser-server.ts");
+// Each harness start usually takes under a second, but in a parallel run one
+// stalled for over 10 seconds while test-database setup waited for PostgreSQL
+// checkpoints (#427). The test waits for the harness's own signals instead of
+// a deadline, and this bound only ends a run that hangs.
+const patience = 180_000;
 
 test("the browser command builds current checkout sources before serving and stops on build failure", async (t) => {
   const root = await mkdtemp(join(tmpdir(), "screenr-browser-build-"));
@@ -58,7 +62,7 @@ const mode = 'start';
 const source = fs.readFileSync('.next/standalone/.next/static/source','utf8');
 require('node:assert/strict').equal(fs.readFileSync('.next/standalone/public/source','utf8'), source);
 ${record}
-require('node:http').createServer((req,res) => res.end(source)).listen(Number(process.env.PORT), process.env.HOSTNAME);
+require('node:http').createServer((req,res) => res.end(source)).listen(Number(process.env.PORT), process.env.HOSTNAME, () => console.log('Fake Next ready'));
 `;
   // Next is the external process boundary. All project resource ownership,
   // fixture setup, environment preparation, and lifecycle logic stays real.
@@ -78,7 +82,7 @@ if (mode === 'build') {
   fs.writeFileSync('.next/standalone/server.js', ${JSON.stringify(standalone)});
 } else if (mode === 'dev') {
   const port = Number(process.argv[process.argv.indexOf('--port')+1]);
-  require('node:http').createServer((req,res) => res.end(fs.readFileSync('.next/BUILD_ID','utf8'))).listen(port,'127.0.0.1');
+  require('node:http').createServer((req,res) => res.end(fs.readFileSync('.next/BUILD_ID','utf8'))).listen(port,'127.0.0.1', () => console.log('Fake Next ready'));
 } else { throw new Error('Standalone output requires its generated server'); }
 `,
   );
@@ -102,32 +106,51 @@ if (mode === 'build') {
     child.stderr.on("data", (chunk) => {
       logs += chunk;
     });
-    const closed = once(child, "exit");
+    // "close" follows the exit once every output stream has ended, so the
+    // logs are complete.
+    const closed = once(child, "close");
+    // Settles true once the output matches every pattern, or false once the
+    // harness has exited without that.
+    const signaled = (...patterns: RegExp[]) =>
+      new Promise<boolean>((settle, reject) => {
+        const timer = setTimeout(
+          () =>
+            reject(
+              new Error(`Browser fixture hung for ${patience} ms: ${logs}`),
+            ),
+          patience,
+        );
+        const finish = (matched: boolean) => {
+          clearTimeout(timer);
+          settle(matched);
+        };
+        const check = () => {
+          if (patterns.every((pattern) => pattern.test(logs))) finish(true);
+        };
+        child.stdout.on("data", check);
+        child.stderr.on("data", check);
+        closed.then(() => finish(false), reject);
+        check();
+      });
+    // The harness announces its fixture once its proxy listens.
+    const announced = /^Browser fixture: /m;
     try {
       if (source === "fail") {
-        const [code] = await Promise.race([
-          closed,
-          delay(5000, undefined, { ref: false }).then(() => {
-            throw new Error("Failed build kept serving");
-          }),
-        ]);
+        if (await signaled(announced))
+          throw new Error(`Failed build kept serving: ${logs}`);
+        const [code] = await closed;
         assert.equal(code, 1, logs);
         assert.match(logs, /production build failed/i);
         return;
       }
-      const deadline = Date.now() + 10000;
-      while (Date.now() < deadline && child.exitCode === null) {
-        try {
-          const response = await fetch(config.baseURL + "/login", {
-            signal: AbortSignal.timeout(300),
-          });
-          if (response.ok) return await response.text();
-        } catch {
-          /* Reservations reject requests until the app is ready. */
-        }
-        await delay(50);
-      }
-      throw new Error(`Browser fixture did not become ready: ${logs}`);
+      // With the proxy and the fake Next both listening, /login answers.
+      if (!(await signaled(announced, /^Fake Next ready$/m)))
+        throw new Error(`Browser fixture stopped before it was ready: ${logs}`);
+      const response = await fetch(config.baseURL + "/login", {
+        signal: AbortSignal.timeout(patience),
+      });
+      assert.ok(response.ok, `/login answered ${response.status}: ${logs}`);
+      return await response.text();
     } finally {
       if (child.exitCode === null && child.signalCode === null)
         child.kill("SIGTERM");

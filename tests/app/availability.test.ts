@@ -1,8 +1,8 @@
-import { test, before, beforeEach, after } from "node:test";
+import { test, before, beforeEach, after, afterEach, mock } from "node:test";
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
-import { db } from "./social-fixture";
+import { db, captureFailures } from "./social-fixture";
 
 const { migrate } = await import("../../scripts/migrate");
 const { loadScreen } = await import("../../src/server/screens");
@@ -64,7 +64,11 @@ before(async () => {
   process.env.SCREENR_TEST_TMDB_URL = `http://127.0.0.1:${(catalog.address() as AddressInfo).port}`;
   process.env.TMDB_READ_TOKEN = "availability-test-token";
 });
+// What each test's failures print.
+let printed: string[] = [];
+afterEach(() => mock.restoreAll());
 beforeEach(async () => {
+  printed = captureFailures();
   payload = options();
   status = 200;
   slow = false;
@@ -256,7 +260,7 @@ for (const invalid of [
     results: { US: { link: "javascript:alert(1)", rent: [provider] } },
   },
 ]) {
-  test(`malformed availability does not become a successful empty result: ${JSON.stringify(invalid)}`, async () => {
+  test(`malformed availability does not become a successful empty result and logs once: ${JSON.stringify(invalid)}`, async () => {
     payload = invalid;
     const unavailable = await screen();
     assert.equal(unavailable.status, "unavailable");
@@ -266,6 +270,18 @@ for (const invalid of [
     payload = options();
     assert.deepEqual(await screen(), unavailable);
     assert.equal(requests.length, 1);
+    // The line names the lookup, never the answer's values.
+    assert.equal(printed.length, 1, printed.join("\n"));
+    const { stack, ...fields } = JSON.parse(printed[0]);
+    assert.deepEqual(fields, {
+      event: "catalog response invalid",
+      lookup: "providers",
+      error: "Error",
+    });
+    assert.ok(Array.isArray(stack) && stack.length > 0, printed[0]);
+    for (const frame of stack) assert.match(frame, /^at /);
+    for (const value of ["Harbor Stream", "harbor.jpg", "javascript"])
+      assert.ok(!printed[0].includes(value), `Logged ${value}`);
   });
 }
 

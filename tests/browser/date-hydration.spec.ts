@@ -1,6 +1,9 @@
-import { expect } from "@playwright/test";
+import { expect, type Response } from "@playwright/test";
 import { test } from "./monitored-test";
+import { browserConfig } from "../../scripts/browser-config";
 import { db } from "./database-fixture";
+import { prepareFriendship, userId } from "./member-fixture";
+import { commits, countCommits } from "./refresh-helpers";
 
 const { updateTitleActivity } = await import("../../src/server/title-actions");
 const { addComment } = await import("../../src/server/comments");
@@ -17,14 +20,18 @@ for (const [index, timezoneId] of ["UTC", "America/Los_Angeles"].entries()) {
       // Safari uses "at" where Node uses a comma. Change only the external
       // runtime formatter; the real server HTML and React hydration still run.
       await page.addInitScript(() => {
-        const format = Date.prototype.toLocaleDateString;
-        Date.prototype.toLocaleDateString = function (
-          locales?: Intl.LocalesArgument,
-          options?: Intl.DateTimeFormatOptions,
-        ) {
-          const label = format.call(this, locales, options);
-          return options?.hour ? label.replace(/(\d{4}), /, "$1 at ") : label;
-        };
+        const prototype = Intl.DateTimeFormat.prototype;
+        const format = Object.getOwnPropertyDescriptor(prototype, "format")!;
+        Object.defineProperty(prototype, "format", {
+          get(this: Intl.DateTimeFormat) {
+            const original = format.get!.call(this);
+            const { hour } = this.resolvedOptions();
+            return (date?: Date | number) => {
+              const label = original(date);
+              return hour ? label.replace(/(\d{4}), /, "$1 at ") : label;
+            };
+          },
+        });
       });
       const owner = await signIn(page, `dateviewer${index}`);
       const year = new Date().getUTCFullYear() + 1;
@@ -213,3 +220,123 @@ for (const [index, timezoneId] of ["UTC", "America/Los_Angeles"].entries()) {
     });
   });
 }
+
+test("a minute renders shown times again only when their text changes", async ({
+  member,
+}) => {
+  const page = await member("minuteviewer");
+  const owner = await userId(page);
+  const week = 7 * 24 * 60 * 60_000;
+  const year = new Date().getUTCFullYear() + 1;
+  // One minute before midnight on New Year's Eve in Los Angeles, the
+  // member's time zone, which is 08:00 UTC on January 1.
+  const start = Date.parse(`${year + 1}-01-01T07:59:00.000Z`);
+  // One entry turns a week old at midnight, and one is older.
+  const entries: string[] = [];
+  for (const [index, activity] of [
+    start - week + 30_000,
+    Date.parse(`${year}-10-05T19:00:00.000Z`),
+  ].entries()) {
+    const title = `movie:${998870 + index}`;
+    await db.query(
+      `INSERT INTO title(id,kind,tmdb_id,name) VALUES($1,'movie',$2,'Minute boundary')`,
+      [title, 998870 + index],
+    );
+    const item = await updateTitleActivity(owner, title, "recommended", true);
+    await db.query("UPDATE feed_item SET activity_at=$1 WHERE id=$2", [
+      new Date(activity).toISOString(),
+      item,
+    ]);
+    entries.push(item);
+  }
+  const [weekOld, older] = entries.map((item) =>
+    page.locator(`[data-item-id="${item}"] .activity-by time`),
+  );
+  await countCommits(page);
+  // Paused timers run only when the test advances the clock. Each advance
+  // waits for the screen read it starts, so no read is pending at the next.
+  await page.clock.install({ time: start - 1000 });
+  await page.clock.pauseAt(start);
+  const isScreenRead = (response: Response) =>
+    new URL(response.url()).pathname === "/api/screenr/screen";
+  const advance = async () => {
+    const read = page
+      .waitForResponse(isScreenRead, { timeout: 5000 })
+      .catch(() => null);
+    await page.clock.fastForward(60_000);
+    await (await read)?.finished();
+  };
+  await page.goto("/");
+  await expect(weekOld).toHaveText("6d");
+  await expect(older).toHaveText("Oct 5");
+
+  // At midnight the week-old time becomes a date, and both dates gain the
+  // year that just ended.
+  await advance();
+  await expect(weekOld).toHaveText(`Dec 24, ${year}`);
+  await expect(older).toHaveText(`Oct 5, ${year}`);
+
+  // A minute later neither text changes, so nothing renders.
+  const rendered = await commits(page);
+  await advance();
+  expect(await commits(page)).toBe(rendered);
+  await expect(weekOld).toHaveText(`Dec 24, ${year}`);
+  await expect(older).toHaveText(`Oct 5, ${year}`);
+});
+
+test("a screen reached by client navigation shows local dates and enabled controls from its first frame", async ({
+  member,
+}) => {
+  const friend = await member("firstframefriend");
+  const viewer = await member("firstframeviewer");
+  await prepareFriendship(friend, viewer);
+  const recommended = await friend.request.post("/api/screenr/activity", {
+    headers: { Origin: browserConfig.baseURL },
+    data: { title: "movie:987654", field: "recommended", value: true },
+  });
+  expect(recommended.status()).toBe(200);
+  const item = (await recommended.json()).id as string;
+  await viewer.goto("/");
+  const entry = viewer.locator(`[data-item-id="${item}"]`);
+  await expect(entry.locator(".activity-by time")).toHaveText("now");
+  // Record each control that becomes enabled and each date that changes its
+  // text or full-date title after the next screen enters the page.
+  await viewer.evaluate(() => {
+    const changes: string[] = [];
+    (window as unknown as { changes: string[] }).changes = changes;
+    new MutationObserver((records) => {
+      for (const record of records) {
+        const { target } = record;
+        const element =
+          target instanceof Element ? target : target.parentElement;
+        if (record.attributeName === "disabled") {
+          if (!element?.hasAttribute("disabled"))
+            changes.push(`enabled: ${element?.textContent}`);
+        } else if (element?.closest("time"))
+          changes.push(`date: ${record.oldValue ?? ""}`);
+      }
+    }).observe(document.body, {
+      subtree: true,
+      childList: true,
+      characterData: true,
+      characterDataOldValue: true,
+      attributes: true,
+      attributeOldValue: true,
+      attributeFilter: ["disabled", "title"],
+    });
+  });
+  await entry.getByRole("heading", { level: 2 }).getByRole("link").click();
+  const recommend = viewer.getByRole("button", {
+    name: "Recommend to friends",
+    exact: true,
+  });
+  await expect(recommend).toBeEnabled();
+  await expect(
+    viewer.locator(`[data-item-id="${item}"] .activity-by time`),
+  ).toHaveText("now");
+  expect(
+    await viewer.evaluate(
+      () => (window as unknown as { changes: string[] }).changes,
+    ),
+  ).toEqual([]);
+});

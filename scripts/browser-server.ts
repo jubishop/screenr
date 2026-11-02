@@ -3,12 +3,16 @@ import { browserConfig } from "./browser-config";
 import { prepareTestDatabase } from "./checkout";
 import streamingTitles from "../tests/fixtures/streaming-titles.json" with { type: "json" };
 import { once } from "node:events";
-import { cp } from "node:fs/promises";
+import { appendFileSync } from "node:fs";
+import { cp, mkdir, writeFile } from "node:fs/promises";
+import { dirname } from "node:path";
+import { createInterface } from "node:readline";
 import { createServer, type Server as HTTPServer } from "node:http";
 import { createBrowserProxy } from "./browser-proxy";
 import { releaseTitles } from "../tests/browser/release-titles";
 import { createServer as reservePort, type Server } from "node:net";
 import { spawn, type ChildProcess } from "node:child_process";
+import { failureRecord } from "./failure-lines";
 
 const reservations = new Map<number, Server>();
 const adminURL = new URL(browserConfig.databaseURL);
@@ -95,6 +99,9 @@ try {
       );
   }
   await prepareTestDatabase(admin, browserConfig.databaseName);
+  // Each run starts the checkout's failure line capture over.
+  await mkdir(dirname(browserConfig.failureLines), { recursive: true });
+  await writeFile(browserConfig.failureLines, "");
   process.env.DATABASE_URL = browserConfig.databaseURL;
   // The local identity provider owns file email capture. Only the Next child
   // uses the selected application serving mode.
@@ -134,6 +141,15 @@ try {
     release_date: "2026-06-12",
     poster_path: null,
   };
+  // What TMDB's details always carry, empty here: a movie's release dates,
+  // which Screenr asks for with `append_to_response=release_dates`, and a
+  // show's season list.
+  const emptyDetails = (kind: string) =>
+    kind === "movie"
+      ? { release_dates: { results: [] } }
+      : kind === "tv"
+        ? { seasons: [] }
+        : {};
   let availabilityFailure = false;
   catalog = createServer((request, response) => {
     response.setHeader("Content-Type", "application/json");
@@ -161,7 +177,9 @@ try {
         response.end(JSON.stringify({ results: [] }));
       else {
         const { providers: _providers, ...title } = streamingTitle;
-        response.end(JSON.stringify(title));
+        response.end(
+          JSON.stringify({ ...emptyDetails(title.media_type), ...title }),
+        );
       }
       return;
     }
@@ -240,7 +258,9 @@ try {
       return;
     }
     if (request.url?.endsWith("/videos")) {
-      if (request.url === "/movie/987655/videos") {
+      // An unavailable trailer, on a title that only title-media.spec.ts
+      // opens, so no other spec prints its failure line.
+      if (request.url === "/movie/987663/videos") {
         response.writeHead(503).end();
         return;
       }
@@ -273,7 +293,8 @@ try {
       return;
     }
     // TMDB's season and episode lists for discussion labels. Other TV
-    // fixtures list no seasons, so their pickers are unavailable.
+    // fixtures list no seasons, so they offer no pickers, except that
+    // tv:998021's details lack a season list, so its pickers are unavailable.
     const season = request.url?.match(/^\/tv\/998020\/season\/(\d+)$/);
     if (season) {
       const names = ["Departure", "Fog Bank", "Night Crossing", "Landfall"];
@@ -316,6 +337,10 @@ try {
           : {
               ...fixture,
               id: Number(path.split("/")[2]) || fixture.id,
+              ...emptyDetails(path.split("/")[1]),
+              // An answer without the season list, which Screenr logs as an
+              // invalid answer, for the composer's unavailable pickers.
+              ...(path === "/tv/998021" ? { seasons: undefined } : {}),
               ...(path === "/tv/998001"
                 ? { name: "The Harbor Signal", first_air_date: "2025-09-01" }
                 : {}),
@@ -384,7 +409,7 @@ try {
         ],
     {
       cwd: browserConfig.root,
-      stdio: "inherit",
+      stdio: ["inherit", "inherit", "pipe"],
       env: {
         ...nextEnv,
         HOSTNAME: "127.0.0.1",
@@ -392,6 +417,18 @@ try {
       },
     },
   );
+  // The application's failure lines go to the capture file, with when each
+  // printed, for tests/browser/failure-line-reporter.ts to check against the
+  // lines specs expect once the run ends. Its other error output passes
+  // through.
+  createInterface({ input: app.stderr! }).on("line", (line) => {
+    if (failureRecord(line))
+      appendFileSync(
+        browserConfig.failureLines,
+        `${JSON.stringify({ at: Date.now(), line })}\n`,
+      );
+    else process.stderr.write(`${line}\n`);
+  });
   app.on("error", (error) => {
     console.error(error);
     void stop(1);

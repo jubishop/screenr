@@ -24,10 +24,7 @@ export async function people(viewer: string) {
     await db.query<Person & { mutual_friends: Person[] }>(
       `WITH direct AS (
         SELECT p.user_id,p.username,p.display_name
-        FROM friendship f JOIN profile p
-          ON p.user_id=CASE WHEN f.low_id=$1 THEN f.high_id ELSE f.low_id END
-        WHERE $1 IN (f.low_id,f.high_id) AND f.accepted_at IS NOT NULL
-          AND NOT screenr_blocked($1,p.user_id)
+        FROM screenr_friends($1) friend JOIN profile p ON p.user_id=friend.user_id
       )
       SELECT candidate.user_id,candidate.username,candidate.display_name,
         screenr_photo(candidate.user_id) AS photo,
@@ -35,13 +32,10 @@ export async function people(viewer: string) {
           'user_id',mutual.user_id,'username',mutual.username,'display_name',mutual.display_name,
           'photo',screenr_photo(mutual.user_id)
         ) ORDER BY mutual.username) AS mutual_friends
-      FROM direct mutual JOIN friendship f
-        ON mutual.user_id IN (f.low_id,f.high_id) AND f.accepted_at IS NOT NULL
-      JOIN profile candidate
-        ON candidate.user_id=CASE WHEN f.low_id=mutual.user_id THEN f.high_id ELSE f.low_id END
+      FROM direct mutual CROSS JOIN screenr_friends(mutual.user_id) friend
+      JOIN profile candidate ON candidate.user_id=friend.user_id
       WHERE candidate.user_id<>$1
         AND NOT screenr_blocked($1,candidate.user_id)
-        AND NOT screenr_blocked(mutual.user_id,candidate.user_id)
         AND NOT EXISTS (
           SELECT 1 FROM friendship existing
           WHERE existing.low_id=least($1,candidate.user_id)
@@ -83,6 +77,13 @@ export async function changeRelationship(
       await client.query(
         "DELETE FROM friendship WHERE low_id=least($1,$2) AND high_id=greatest($1,$2)",
         pair,
+      );
+      // A block can hide notifications from any member's activity email, such
+      // as comments in mutual friends' conversations, so an email being sent
+      // now becomes stale: if its send fails, it is never retried
+      // (docs/notifications.md#activity-email-sends-without-the-write-lock--2026-11-01).
+      await client.query(
+        "UPDATE email_job SET generation=generation+1 WHERE notification_recipient IS NOT NULL AND sent_at IS NULL",
       );
     } else if (action === "unblock") {
       await client.query(

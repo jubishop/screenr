@@ -27,19 +27,22 @@ struct TelemetryTests {
   // case a caller passes a raw path.
   private static func screenRequest(
     status: Int?,
-    error: APIError.Kind? = nil
+    error: APIError.Kind? = nil,
+    trigger: RequestTrigger = .demand,
+    requestID: String = "3f2a9c"
   ) -> APIRequestRecord {
     var failure: APIError?
     if let error {
-      failure = APIError(kind: error, requestID: "3f2a9c")
+      failure = APIError(kind: error, requestID: requestID)
     }
     return APIRequestRecord(
       method: "GET",
       route: "/api/screenr/screen?path=%2Fpeople%2Falice&q=dune",
-      requestID: "3f2a9c",
+      requestID: requestID,
       status: status,
       duration: .milliseconds(120),
-      error: failure
+      error: failure,
+      trigger: trigger
     )
   }
 
@@ -195,6 +198,89 @@ struct TelemetryTests {
     )
   }
 
+  // A live read's successful poll, changed or not, logs only at debug level, which the log file
+  // leaves out, and adds nothing to Sentry. A poll that fails is recorded in full.
+  @Test func recordsAPollInFullOnlyWhenItFails() async throws {
+    defer { capture.close() }
+    let sink = CapturingSink()
+    router.add(sink)
+    let telemetry = telemetry(.release, roll: 0)
+
+    for (status, error, requestID) in [
+      (304, nil, "unchanged"), (200, nil, "changed"), (503, .server(status: 503), "server"),
+      (nil, .offline, "offline"),
+    ] as [(Int?, APIError.Kind?, String)] {
+      telemetry.requestFinished(
+        Self.screenRequest(status: status, error: error, trigger: .poll, requestID: requestID)
+      )
+    }
+    telemetry.capture(Failure.noResults(query: "dune"), requestID: "after-polling")
+
+    let lines = sink.entries.filter { $0.category == .api }
+    #expect(lines.map(\.level) == [.debug, .debug, .warning, .warning])
+    let items = try await capture.items { items in
+      items.contains { $0.type == "event" } && items.count { $0.type == "transaction" } >= 2
+    }
+    let event = try #require(items.filter { $0.type == "event" }.only)
+    let crumbs = try #require(try event.json["breadcrumbs"] as? [[String: Any]])
+    let crumbRequests = crumbs.filter { $0["category"] as? String == "http" }
+      .compactMap { ($0["data"] as? [String: Any])?["request_id"] as? String }
+    #expect(crumbRequests == ["server", "offline"])
+    let tracedRequests = try capture.items(ofType: "transaction")
+      .compactMap { item in (try item.json["tags"] as? [String: String])?["request_id"] }
+    #expect(tracedRequests.sorted() == ["offline", "server"])
+  }
+
+  // An open screen polls every three seconds, and an unchanged one gets a 304 each time. Once its
+  // first read is recorded, a minute of polls adds no line to the log file and nothing to Sentry.
+  @MainActor
+  @Test(.timeLimit(.minutes(2)))
+  func recordsAnUnchangedScreenOnlyOnItsFirstRead() async throws {
+    defer { capture.close() }
+    let directory = TemporaryDirectory()
+    defer { directory.remove() }
+    let file = LogFile(directory: directory.url, name: "app")
+    let sink = CapturingSink()
+    router.add(file)
+    router.add(sink)
+    let telemetry = telemetry(.release, roll: 0)
+    let client = ScreenrClient(
+      serverURL: try #require(URL(string: "http://localhost:3000")),
+      clientHeader: "ios/1.0/7",
+      session: try SessionStore(keychain: InMemoryKeychain(token: FixtureTransport.token)),
+      transport: try FixtureTransport(directory: TestFixtures.directory),
+      observer: telemetry
+    )
+    let clock = TestClock()
+    let model = ScreenModel(path: "/", api: client, clock: clock)
+    model.appeared(appActive: true)
+    await clock.waitForSleep(until: .seconds(3))
+    #expect(try await capture.items(ofType: "transaction", count: 1).count == 1)
+    await file.flush()
+    let firstReadLines = try Self.lineCount(of: file)
+
+    for poll in 1...20 {
+      clock.advance(by: .seconds(3))
+      await clock.waitForSleep(until: .seconds(3 * (poll + 1)))
+    }
+    model.disappeared()
+    telemetry.capture(Failure.noResults(query: "dune"), requestID: "after-polling")
+    await file.flush()
+
+    let statuses = sink.entries.filter { $0.category == .api }
+      .map { entry in entry.fields.first { $0.name == "status" }?.value }
+    #expect(statuses == [.int(200)] + Array(repeating: .int(304), count: 20))
+    let pollingLines = try Self.lineCount(of: file)
+    #expect(firstReadLines == 1)
+    #expect(pollingLines == firstReadLines)
+    let items = try await capture.items { items in items.contains { $0.type == "event" } }
+    let event = try #require(items.filter { $0.type == "event" }.only)
+    let crumbs = try #require(try event.json["breadcrumbs"] as? [[String: Any]])
+    #expect(crumbs.count { $0["category"] as? String == "http" } == 1)
+    let transactions = try capture.items(ofType: "transaction")
+    #expect(transactions.count == 1)
+  }
+
   // The share extension's telemetry logs its calls and reports nothing.
   @Test func localOnlyTelemetryLogsCallsWithoutSentry() {
     let sink = CapturingSink()
@@ -287,6 +373,10 @@ struct TelemetryTests {
     #expect(options.sessionReplay.sessionSampleRate == 0)
     #expect(options.sessionReplay.onErrorSampleRate == 0)
     #endif
+  }
+
+  private static func lineCount(of file: LogFile) throws -> Int {
+    try Data(contentsOf: file.currentURL).split(separator: 0x0A).count
   }
 
   // The log entries in every log item, in the order Sentry sent them.

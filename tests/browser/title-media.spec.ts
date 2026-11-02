@@ -337,7 +337,7 @@ test("title trailers load YouTube only after Play trailer, fit desktop and mobil
   // Background refresh must keep the player open without reloading playback.
   await expect(player).toBeVisible();
   expect(embeds).toHaveLength(1);
-  for (const path of ["/movie/987655", "/movie/987656", "/tv/987657"]) {
+  for (const path of ["/movie/987663", "/movie/987656", "/tv/987657"]) {
     await page.goto(`/titles${path}`);
     await expect(
       page.getByRole("heading", { name: "The Lantern Room", exact: true }),

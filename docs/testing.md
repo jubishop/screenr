@@ -52,9 +52,12 @@ With the latest Node LTS release selected, run one suite by its filename:
 
 ```sh
 npx tsx scripts/test-database.ts
-npx tsx --test tests/app/reactions.test.ts
+npx tsx --import ./tests/app/failure-guard.ts --test tests/app/reactions.test.ts
 npm run test:browser -- tests/browser/reactions.spec.ts
 ```
+
+The `--import` loads the [failure line](#failure-lines) guard, as `npm test`
+does.
 
 `npm test` discovers all application `*.test.ts` files and keeps file
 execution serial; `npm run test:browser` discovers all browser `*.spec.ts`
@@ -85,10 +88,22 @@ database without a record, left by an interrupted preparation or created by
 a browser run before checkouts were recorded, is dropped too; its checkout's
 next run recreates and records it. A database stays while a process is
 connected to it or a browser run holds its database lock, which the harness
-takes before creating the database and keeps through the build. Preparation
-takes a lock on the server, so it never removes a database another checkout
-is creating. `tests/app/checkout-isolation.test.ts` covers the derived name,
-the override, and removal.
+takes before creating the database and keeps through the build.
+
+Preparations take turns under a lock on the server, so none removes a
+database another checkout is still creating. In its turn a preparation only
+claims the databases it will drop, renaming each to a name no checkout
+derives, so a checkout recreated at the same path gets a new database. Each
+drop waits for a PostgreSQL checkpoint, which took up to 18 seconds in a
+parallel run, so no preparation drops a claim itself
+([#447](https://github.com/jubishop/screenr/issues/447),
+[#462](https://github.com/jubishop/screenr/issues/462)). When any claim
+exists, the preparation starts `scripts/drop-test-databases.ts` as a detached
+process and returns. That process holds a lock on each claim while it drops
+it, so concurrent drops skip each other's claims, and the next preparation
+starts another for any claim left behind, such as one whose drop stopped
+first. `tests/app/checkout-isolation.test.ts` covers the derived name, the
+override, removal, and these guarantees.
 
 ## Browser harness
 
@@ -214,15 +229,18 @@ session. Specs import these helpers instead of defining their own copies.
   call TMDB, Resend, Google, Apple, or Sentry, even when a developer shell
   exports real credentials. A suite that exercises a provider sets fake values
   after the import and answers with a loopback server or a replaced `fetch`;
-  `tests/app/failure-logs.test.ts` runs a loopback Sentry endpoint, and
+  `tests/app/failure-logs.test.ts` runs a loopback Sentry endpoint or replaces
+  `fetch`, and
   [identity-providers.ts](../tests/app/identity-providers.ts) fakes Apple's
   and Google's key, token, and revoke endpoints with keys generated per run.
   `tests/app/social-fixture.test.ts` covers the clearing.
 - Suites call `useDatabase()` once at file scope to register the migration,
-  per-test user/verification reset, and final pool shutdown. A suite that
-  resets other tables imports `db` and registers its own hooks instead. Node
-  isolates files in separate processes; keep `--test-concurrency=1` when
-  running them together against one database.
+  per-test user/verification reset, and final pool shutdown. The reset first
+  waits for the pool to go idle, so a query that an earlier test left running
+  cannot deadlock with it; after 10 seconds it fails the test instead. A
+  suite that resets other tables imports `db` and registers its own hooks
+  instead. Node isolates files in separate processes; keep
+  `--test-concurrency=1` when running them together against one database.
 - The same helper contains pending/completed members, accepted friendship,
   a signed session cookie for route tests (`cookieFor`), the bearer token a
   native client receives from the same sign-in (`bearerFor`), and a small
@@ -262,6 +280,13 @@ session. Specs import these helpers instead of defining their own copies.
   A scenario that clicks Try again after a failed read also pauses polling: a
   successful poll could remove the button before the click
   ([#200](https://github.com/jubishop/screenr/issues/200)).
+- Playwright waits for a pending page load before it inspects the page, so
+  a scenario can't check the page an action leaves while the next one
+  loads. [Page load helpers](../tests/browser/page-loads.ts) cancel that
+  load instead, which keeps the current page as a slow next page would, and
+  the scenario then opens the page itself. Such
+  scenarios create their member with `serviceWorkers: "block"`, since
+  Playwright can't route page loads that the offline worker answers.
 - Scenarios that test polling intervals or request deadlines don't sleep.
   They install and pause Playwright's clock in the member's context, advance
   it explicitly, and hold the timed request in a route until the test
@@ -445,7 +470,8 @@ there are no shared invitation-capacity files. The harness resets its locked
 database once before the suite. Tests must not reset it or change another
 test's users. Rows remain for that run, contexts close after each test, and
 database pools close when their worker finishes. Run repeated measurements as
-separate commands so each starts with a reset database.
+separate commands so each starts with a reset database. Playwright's
+`--repeat-each` reruns a test in the same run, where its users already exist.
 
 Repeated passes cannot prove the absence of every race. Future tests must
 preserve these ownership rules. Adding a shared mutable fixture or another
@@ -512,7 +538,9 @@ recipients. A full run checks:
 - The fictional catalog's `tv:998020` lists seasons and episodes, so its
   composer offers Season and Episode pickers. Labels stay visible above the
   spoiler cover in all three feeds. Other TV fixtures list no seasons, so
-  their comments post without a label.
+  their comments post without a label. So do comments on `tv:998021`, whose
+  details lack a season list, after the composer says seasons are
+  unavailable.
 - A nonfriend cannot read or write through direct API calls or the page.
 - Unfriending removes open-page access and hides historical comments for
   remaining readers; refriending restores them.
@@ -528,13 +556,24 @@ recipients. A full run checks:
   invitation open the in-page confirmation, by keyboard and pointer at phone
   and desktop widths. Cancel keeps the item and returns focus; no browser
   dialog opens and no write is sent until the action is confirmed.
+- A failed read keeps an open Unfriend, Friends-page Decline, Revoke, entry
+  Delete, comment Remove, title page or entry top 10, or Remove review
+  confirmation with focus on Cancel while the page hides; its action waits
+  for the next read, sending nothing when pressed, and Cancel still closes
+  it. On Account, a failed read keeps the
+  deletion code step with its typed digits and focus, the final deletion
+  confirmation, and Sign-in methods, whose actions wait the same way; the
+  confirmed code still deletes the account without a second code.
 - The Friends page orders its relationship sections and keeps row actions on
   the person's line at phone and desktop widths. Avatars keep their color
   after a rename and show a whole emoji initial.
 - Feed, comment, and notification times use the relative format with the
   full local date and time on hover. They hydrate with Safari's date
   punctuation in UTC and Los Angeles. Feed entries show the release year, or
-  only the kind without a release date.
+  only the kind without a release date. Each minute renders only the times
+  whose text changes: at the reader's midnight on New Year's Eve, a time
+  turning a week old becomes a date and older dates gain the ended year,
+  and the next minute renders nothing.
 - Title pages show compact entries with the copy link ending the author
   line, and Start a conversation on the "Around this title" heading row at
   phone and desktop widths. The friend line follows the header buttons, names
@@ -562,8 +601,9 @@ recipients. A full run checks:
   page; Show finished keeps its state across tabs and starts off after a
   reload. `tests/app/friends-recommend.test.ts` covers the order, top 10
   weights, the current-friend audience, which actions count, the viewer's own
-  status, the response fields, and which titles the Finished filter hides,
-  with its empty messages.
+  status, the response fields, which titles the Finished filter hides, with
+  its empty messages, and the 50-title cap with each filter applied before
+  it.
 - Invitations can be created and revoked.
 - In both the light and dark color schemes, every visible text meets 4.5:1
   and only theme colors are painted. This covers sign-in, setup, credits,
@@ -611,6 +651,10 @@ recipients. A full run checks:
   advance each minute. `tests/app/screen-refresh.test.ts` covers every
   screen kind, the page's first version, each visible change, and versions
   sent by other members or for unreadable screens.
+- A failed notification Accept, Decline, selection, or Mark all as read
+  keeps the panel's list and focus and shows its message beside that
+  control. A notifications read past its deadline says "Refresh timed out.
+  Please try again." and Try again recovers.
 - The open notification panel reads once when the page becomes visible and
   not on focus. Its unchanged polls answer 304 without a body and commit no
   render; arrivals still appear, and Mark all as read sends the shown page's
@@ -660,14 +704,41 @@ rules, label validation and TMDB season lists, and migration 024 with the
 previous release's writes.
 `tests/app/failure-logs.test.ts` and `tests/app/email.test.ts` capture the
 [failure logs](deployment.md#failure-logs) of request, page, route, Better
-Auth callback, worker, and Resend failures. `tests/app/catalog.test.ts`
-captures TMDB and catalog cache failures, once for each request, and
+Auth callback and endpoint, worker, and Resend failures, and of failures
+Better Auth catches itself: a Google ID token signup whose account insert
+fails, a failed session read, and a failed OAuth state read, beside an unknown
+OAuth state that logs nothing.
+`tests/app/failure-logs.test.ts` also fails polls the same way, as in a
+database outage, which must each log a line with its request ID while only
+the first goes to Sentry, and another action's failure must report at once.
+On a fake clock it checks
+[folded Sentry reports](deployment.md#failure-reports-in-sentry): the hourly
+report with the folded count and latest request ID, and the end of a fold
+after an hour without a failure of its kind.
+`tests/app/catalog.test.ts` captures TMDB failures, invalid TMDB answers, and
+catalog cache failures, once for each request;
+`tests/app/availability.test.ts`, `tests/app/discussion-labels.test.ts`, and
+`tests/app/shared-links.test.ts` capture invalid watch-provider, season,
+episode, and find answers; and
 `tests/app/authentication.test.ts` the Screenr-wide code cap's refusals.
 They compare the logged fields exactly, check that comment text, search terms, addresses, codes, cookies, keys, and error messages stay
-out, and confirm that permanent Resend rejections are not retried. A request
-failure names the generated request ID, and
+out, and confirm that permanent Resend rejections are not retried. The Better
+Auth failure tests check everything printed, Better Auth's own lines included.
+A request failure names the generated request ID, and
 `tests/app/profile-photos.test.ts` checks that a failed Use my Google photo
 request names the client's.
+`tests/app/retention.test.ts` runs the worker's periodic cleanup, which must
+delete expired sessions with their push devices and pending pushes, read
+notifications more than a year old but no unread ones, and the
+[catalog rows](title-catalog.md#catalog-retention) of titles nothing
+references once they have been expired for 30 days, keeping new search
+results, recent refreshes, and every referenced title's rows.
+`tests/app/google-client-check.test.ts` runs that cleanup's
+[Google client check](deployment.md#google-client-check) against the fake
+Google token endpoint: it logs `google client rejected` with only the status
+and `invalid_client` for a rotated secret, and nothing for `invalid_grant`,
+a network failure, or missing Google settings, and it checks at most once an
+hour.
 `tests/app/email.test.ts` also runs `scripts/worker.ts` with fetch disabled. The
 worker refuses to start without the Resend settings, deletes expired jobs on its
 first pass, says once that push delivery is off without APNs settings, and
@@ -678,15 +749,28 @@ own tests. `tests/app/database-connections.test.ts` ends an idle pooled
 connection and a transaction's connection from another one, and checks that
 each is logged once without stopping the process, that the transaction
 rethrows its own error rather than its failed `ROLLBACK`'s, and that the
-broken client is released. `tests/app/email.test.ts` ends the worker's
-connection during a Resend request, and `tests/app/migrations.test.ts` ends a
-migration's, which must fail with that connection's error and release the
-client; a migration run stopped by the migration lock must cause no
-PostgreSQL warnings. `tests/app/notification-email.test.ts` fails an activity
-email's database read, which must still record the attempt and its backoff.
+broken client is released. It runs that transaction through another copy of
+`src/server/db.ts` too, as the production build's other server bundles and
+development reloads do, and checks in a production process that two copies
+share [one pool](deployment.md#database-connections). It holds a screen's
+unread count behind another connection's lock while the screen read fails,
+and the screen must not answer until the count finishes. It checks that a
+test's table reset waits for a query the previous test left running, and
+fails on `Promise.all` in server code.
+`tests/app/email.test.ts` fails the database
+while Resend accepts a send, which must hold the job for a minute and then
+retry it with the same key, and `tests/app/migrations.test.ts` ends a
+migration's connection, which must fail with that connection's error and
+release the client; a migration run stopped by the migration lock must cause
+no PostgreSQL warnings. `tests/app/notification-email.test.ts` fails an
+activity email's database read, which must still record the attempt and its
+backoff. It also hangs Resend during an activity email, while member writes
+must still succeed, and commits a block or opt-out during a failed send,
+which must leave the job stale and never retried
+([issue #359](https://github.com/jubishop/screenr/issues/359)).
 `tests/app/worker-loop.test.ts` runs a worker loop on a fake clock and checks
 its backoff, its one line per kind of failure, the hourly repeat, and its
-recovery line.
+recovery line, and that each line it logs goes to Sentry unfolded.
 `tests/app/push-delivery.test.ts` sends
 [pushes](notifications.md#push-delivery) to two fake APNs servers, one per
 environment, that speak HTTP/2 without TLS on loopback. It checks each kind's
@@ -696,11 +780,14 @@ including badge-only updates for kinds turned off, and visibility, read
 state, expired sessions, and moved tokens at send time. It also checks that
 rejected tokens delete their device, that other rejections and retryable
 failures are logged without tokens, badge-only updates, and reconnection
-after GOAWAY or a lost connection. Each read action, friendship change,
-reply removal, and account deletion, from the web or the app, sends a
-badge-only update with the new count to each member whose count it changed,
-including people sent a reply on the changed friends' entries. Changes that
-leave every count unchanged, and failed ones, queue none.
+after GOAWAY or a lost connection. Its fake host sends GOAWAY ahead of the
+answer to a push in flight, so the test needs no fixed wait: that push
+finishes on its connection and the next one connects again. Each read
+action, friendship change, reply removal, and account deletion, from the
+web or the app, sends a badge-only update with the new count to each member
+whose count it changed, including people sent a reply on the changed
+friends' entries. Changes that leave every count unchanged, and failed ones,
+queue none.
 Operational tests check activation rollback after a stalled health request, a
 failed signed-out session request, or a web or worker service that crashes on
 startup. They also check a production-down report when the restored release
@@ -711,6 +798,23 @@ any temporary database, when restic cannot check or read the backup,
 `pg_restore` fails, the restore has no profiles, or its access query fails.
 The backup, restore check, and stale-backup check run a failed restic step
 once more after a minute, and fail only when that retry fails too.
+Those cases fake PostgreSQL, so `tests/app/backup-restore.test.ts` also runs
+a real round trip on the test server
+([#384](https://github.com/jubishop/screenr/issues/384)): `ops/backup.sh`
+dumps the test database, and `ops/restore-check.sh` restores the dump into a
+scratch database and runs its checks, each with its own PostgreSQL commands
+and flags. Only restic, the backup age check, and the host's paths and
+connection are faked. A flag or schema change that leaves backups
+unrestorable fails it, but production restores as a non-superuser role and
+the test as a superuser, so a restore that needs more privilege still shows
+only in the weekly check. The test uses the PostgreSQL client commands of the
+server's major release: from `/usr/lib/postgresql/<major>/bin` as production
+does, from Homebrew's `postgresql@<major>`, or else from `PATH`. It fails
+naming them when none has them. The restore check's `dropdb` waits for a
+checkpoint. On a busy Mac it was the slowest step, at 1 to 3 seconds, and
+the whole test once took 43 seconds during a full local run, so a shared
+server's checkpoint waits
+([#447](https://github.com/jubishop/screenr/issues/447)) can slow it.
 Release packaging runs only in Linux CI, so
 `tests/app/release-package.test.ts` checks locally that the package includes
 every module its maintenance scripts load
@@ -724,6 +828,12 @@ outside the paths in `scripts/release-paths.ts`, which `scripts/package.ts`
 copies. It also fails on an unresolved import, a computed `import()`, a
 package outside the production dependencies, or a script that `ops/` runs
 but the test does not list.
+On Linux x64, the same file runs `scripts/package.ts` in a stand-in checkout
+whose `node_modules` has a package that its release lacks. The packaging
+check must fail when the packaged server or migration loads that package,
+pass once the release has it, and refuse to stage the release below a
+directory with `node_modules`
+([#370](https://github.com/jubishop/screenr/issues/370)).
 An authentication test confirms that a Better Auth schema mismatch fails that
 session request.
 The proxy test runs the production Caddy routes on loopback with a temporary
@@ -837,3 +947,44 @@ the recorder if the failure returns.
 
 **Rejected alternatives:** Keeping the full recorder as insurance, and
 removing the guard as well.
+
+## Failure lines
+
+A test run fails on any structured failure line that no test expects: the
+JSON line with an `"event"` field that `logFailure` prints
+([failure logs](deployment.md#failure-logs)).
+
+- **Application tests:** `npm test` and `npm run test:coverage` load
+  `tests/app/failure-guard.ts` into every test file's process. It fails a
+  test that prints a failure line it didn't capture, and fails the file for
+  a line printed outside any test. A test that fails something on purpose
+  reads its lines with `captureFailures()` from `tests/app/social-fixture.ts`,
+  passing its test context for a capture that ends with the test, and
+  asserts them, for example with `failureEvents()`. An iPhone fixture case
+  lists its lines in `failures`.
+- **Browser runs:** `scripts/browser-server.ts` writes the application's
+  failure lines, with when each printed, to
+  `.cache/browser-failure-lines.jsonl`, which each run starts over, instead
+  of passing them to Playwright's `[WebServer]` output. Once the run ends,
+  `tests/browser/failure-line-reporter.ts` fails it on any line that
+  `tests/browser/expected-failure-lines.ts` doesn't expect, naming its event
+  and the specs that ran when it printed. An entry there names the specs that
+  cause a line on purpose, the fields the line carries, and why. A deliberate
+  failure in the fake catalog belongs on a title that only the specs testing
+  it open, so other specs never print its line.
+
+`tests/app/failure-line-checks.test.ts` covers both.
+
+**Decision — 2026-11-01:** fail test runs on failure lines that no test
+expects, as above. Settled by the agent as routine in
+[#434](https://github.com/jubishop/screenr/issues/434); the user may override
+it.
+
+**Why:** failure lines that print on every run teach readers to ignore them,
+which buries a real failure. The guard keeps any kind from returning
+unnoticed, as invalid TMDB answers did before
+[#425](https://github.com/jubishop/screenr/issues/425).
+
+**Tradeoff:** a browser line's spec comes from timing, since two workers
+share one server, so another spec's identical line passes when it prints
+while the expecting spec runs.

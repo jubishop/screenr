@@ -22,12 +22,25 @@ public final class FeedbackModel {
     case unavailable
   }
 
+  // How the message's length compares with Sentry's limit, counted as `messageLength` does.
+  public enum MessageLength: Hashable, Sendable {
+    // Short of the count's threshold, so the form shows no count.
+    case short
+    // From the threshold to the limit: the form shows the count.
+    case nearLimit(count: Int)
+    // Over the limit: the form shows the count and an error, and Send stays off.
+    case overLimit(count: Int)
+  }
+
   public struct Screenshot: Identifiable, Hashable, Sendable {
     public let id: UUID
     public let jpeg: Data
   }
 
   public static let maximumScreenshots = 3
+  public static let maximumMessageLength = 4096
+  // The form shows the count from 90% of the limit, rounded up, as Sentry asks of feedback forms.
+  static let messageCountThreshold = 3687
   // Each log's tail is at most this size, the size at which a log file rotates.
   static let logTailBytes = 256 * 1024
 
@@ -51,8 +64,24 @@ public final class FeedbackModel {
     Self.maximumScreenshots - screenshots.count
   }
 
+  // Sentry discards feedback whose message is over its limit, counted in Unicode code points, so
+  // this counts the trimmed message that a send would send in Unicode scalars, which match them.
+  // The form never shortens the message: the member chooses what to cut.
+  public var messageLength: MessageLength {
+    let count = trimmedMessage.unicodeScalars.count
+    if count > Self.maximumMessageLength { return .overLimit(count: count) }
+    if count >= Self.messageCountThreshold { return .nearLimit(count: count) }
+    return .short
+  }
+
   public var canSend: Bool {
-    availability == .available && phase == .composing && !trimmedMessage.isEmpty
+    guard availability == .available, phase == .composing, !trimmedMessage.isEmpty else {
+      return false
+    }
+    switch messageLength {
+    case .short, .nearLimit: return true
+    case .overLimit: return false
+    }
   }
 
   // Whether closing the form would lose a draft or a send in progress.

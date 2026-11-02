@@ -26,7 +26,8 @@ type Action = {
 // The username may wrap beneath the name; actions stay on the same line.
 // Notes, a failed action's message, then an open confirmation take the
 // lines beneath. Blocked people show only the name, since blocking hides the
-// profile. Pending actions keep focus but ignore presses.
+// profile. Pending actions keep focus but ignore presses. While the page is
+// not `available`, the row shows only an open confirmation.
 function PersonRow({
   person,
   note,
@@ -34,6 +35,7 @@ function PersonRow({
   actions = [],
   disabled = false,
   busy = false,
+  available = true,
   blocked = false,
   removal,
 }: {
@@ -43,6 +45,7 @@ function PersonRow({
   actions?: Action[];
   disabled?: boolean;
   busy?: boolean;
+  available?: boolean;
   blocked?: boolean;
   removal?: RemovalFocus;
 }) {
@@ -76,6 +79,7 @@ function PersonRow({
       </span>
     </>
   );
+  if (!available && !open) return null;
   return (
     <article
       ref={row}
@@ -84,7 +88,7 @@ function PersonRow({
       aria-labelledby={`${id}-name`}
       tabIndex={-1}
     >
-      {blocked ? (
+      {!available ? null : blocked ? (
         <span className="person">{name}</span>
       ) : (
         <Link
@@ -95,7 +99,7 @@ function PersonRow({
           {name}
         </Link>
       )}
-      {actions.length > 0 && (
+      {available && actions.length > 0 && (
         <div className="person-actions">
           {status && <span className="small muted">{status}</span>}
           {actions.map((action) => (
@@ -120,14 +124,15 @@ function PersonRow({
           ))}
         </div>
       )}
-      {note}
-      {failure.alert}
+      {available && note}
+      {available && failure.alert}
       {open?.confirm && (
         <ConfirmAction
           key={open.label}
           message={open.confirm}
           action={open.label}
           busy={busy}
+          unavailable={!available}
           run={() => {
             leave(trigger.current, open);
             return open.run();
@@ -149,17 +154,21 @@ function PersonRow({
 function PeopleSection({
   id,
   heading,
+  available = true,
   children,
 }: {
   id: string;
   heading: string;
+  available?: boolean;
   children: ReactNode;
 }) {
   return (
     <section className="people-list" aria-labelledby={id}>
-      <h2 id={id} tabIndex={-1}>
-        {heading}
-      </h2>
+      {available && (
+        <h2 id={id} tabIndex={-1}>
+          {heading}
+        </h2>
+      )}
       {children}
     </section>
   );
@@ -180,59 +189,74 @@ export function PeopleView({
   const [query, setQuery] = useState("");
   const heading = useRef<HTMLHeadingElement>(null);
   const removal = useRemovalFocus();
-  // Retain the draft while failed reads hide the protected snapshot.
-  if (!data) return null;
+  // Failed reads hide the protected snapshot but retain the draft. Request
+  // rows keep the last snapshot, so an open Decline confirmation stays,
+  // alone, until the next read.
+  const [last, setLast] = useState(data);
+  if (data && data !== last) setLast(data);
+  if (!last) return null;
   const act = (person: Person, action: string) => () =>
     relationship(person.user_id, action);
-  const requests = data.connections.filter(
+  const requests = last.connections.filter(
     (p) => !p.accepted_at && p.requested_by !== user.user_id,
   );
-  const friends = data.connections.filter((p) => p.accepted_at);
-  const sent = data.connections.filter(
+  const friends = last.connections.filter((p) => p.accepted_at);
+  const sent = last.connections.filter(
     (p) => !p.accepted_at && p.requested_by === user.user_id,
   );
   return (
     <>
-      <div className="page-heading heading-row">
-        <h1 className="page-title" ref={heading} tabIndex={-1}>
-          Friends
-        </h1>
-        <Link className="primary button" href="/invites" prefetch={false}>
-          Invite friends
-        </Link>
-      </div>
-      {/* Block opens this page with its result. */}
-      <PageNotice path="/people" onDismiss={() => heading.current?.focus()} />
-      <form
-        className="search-form"
-        onSubmit={(e) => {
-          e.preventDefault();
-          window.location.assign(
-            `/people/${encodeURIComponent(query.trim().toLowerCase())}`,
-          );
-        }}
-      >
-        <input
-          disabled={!interactive}
-          aria-label="Exact username"
-          placeholder="Find an exact username"
-          autoCapitalize="none"
-          spellCheck={false}
-          value={query}
-          required
-          pattern="[a-zA-Z0-9_]{3,24}"
-          onChange={(e) => setQuery(e.target.value)}
-        />
-        <button className="primary">Find</button>
-      </form>
-      {!data.connections.length && (
-        <p className="empty">
-          Start with someone you know. Find their username or send an
-          invitation.
-        </p>
+      {data && (
+        <>
+          <div className="page-heading heading-row">
+            <h1 className="page-title" ref={heading} tabIndex={-1}>
+              Friends
+            </h1>
+            <Link className="primary button" href="/invites" prefetch={false}>
+              Invite friends
+            </Link>
+          </div>
+          {/* Block opens this page with its result. */}
+          <PageNotice
+            path="/people"
+            onDismiss={() => heading.current?.focus()}
+          />
+          <form
+            className="search-form"
+            onSubmit={(e) => {
+              e.preventDefault();
+              window.location.assign(
+                `/people/${encodeURIComponent(query.trim().toLowerCase())}`,
+              );
+            }}
+          >
+            <input
+              disabled={!interactive}
+              aria-label="Exact username"
+              placeholder="Find an exact username"
+              autoCapitalize="none"
+              spellCheck={false}
+              value={query}
+              required
+              pattern="[a-zA-Z0-9_]{3,24}"
+              onChange={(e) => setQuery(e.target.value)}
+            />
+            <button className="primary">Find</button>
+          </form>
+          {!data.connections.length && (
+            <p className="empty">
+              Start with someone you know. Find their username or send an
+              invitation.
+            </p>
+          )}
+        </>
       )}
       {requests.length > 0 && (
-        <PeopleSection id="people-requests-heading" heading="Requests">
+        <PeopleSection
+          id="people-requests-heading"
+          heading="Requests"
+          available={!!data}
+        >
           {requests.map((person) => (
             <PersonRow
               key={person.user_id}
@@ -252,97 +276,105 @@ export function PeopleView({
               ]}
               disabled={!interactive}
               busy={busy}
+              available={!!data}
               removal={removal}
             />
           ))}
         </PeopleSection>
       )}
-      {friends.length > 0 && (
-        <PeopleSection id="people-friends-heading" heading="Friends">
-          {friends.map((person) => (
-            <PersonRow key={person.user_id} person={person} />
-          ))}
-        </PeopleSection>
-      )}
-      {sent.length > 0 && (
-        <PeopleSection id="people-sent-heading" heading="Sent requests">
-          {sent.map((person) => (
-            <PersonRow
-              key={person.user_id}
-              person={person}
-              status="Request sent"
-              actions={[{ label: "Cancel", run: act(person, "remove") }]}
-              disabled={!interactive}
-              busy={busy}
-              removal={removal}
-            />
-          ))}
-        </PeopleSection>
-      )}
-      <section
-        className="people-suggestions people-list"
-        aria-labelledby="people-suggestions-heading"
-      >
-        <h2 id="people-suggestions-heading" tabIndex={-1}>
-          People you may know
-        </h2>
-        <p className="muted">Meet people through your mutual friends.</p>
-        {data.suggestions.map((person) => (
-          <PersonRow
-            key={person.user_id}
-            person={person}
-            note={
-              <p className="person-note small muted">
-                {person.mutual_friends.length === 1
-                  ? "Mutual friend: "
-                  : "Mutual friends: "}
-                {person.mutual_friends.map((mutual, index) => (
-                  <span key={mutual.user_id}>
-                    {index > 0 && ", "}
-                    <Link href={`/people/${mutual.username}`} prefetch={false}>
-                      {mutual.display_name} (@{mutual.username})
-                    </Link>
-                  </span>
-                ))}
-              </p>
-            }
-            actions={[
-              {
-                label: "Send friend request",
-                run: act(person, "request"),
-                primary: true,
-                follows: true,
-              },
-            ]}
-            disabled={!interactive}
-            busy={busy}
-            removal={removal}
-          />
-        ))}
-        {!data.suggestions.length && (
-          <p className="empty">No friend suggestions yet.</p>
-        )}
-      </section>
-      {data.blocked.length > 0 && (
-        <section
-          className="people-list"
-          aria-labelledby="people-blocked-heading"
-        >
-          <h2 id="people-blocked-heading" tabIndex={-1}>
-            Blocked people
-          </h2>
-          {data.blocked.map((person) => (
-            <PersonRow
-              key={person.user_id}
-              person={person}
-              blocked
-              actions={[{ label: "Unblock", run: act(person, "unblock") }]}
-              disabled={!interactive}
-              busy={busy}
-              removal={removal}
-            />
-          ))}
-        </section>
+      {data && (
+        <>
+          {friends.length > 0 && (
+            <PeopleSection id="people-friends-heading" heading="Friends">
+              {friends.map((person) => (
+                <PersonRow key={person.user_id} person={person} />
+              ))}
+            </PeopleSection>
+          )}
+          {sent.length > 0 && (
+            <PeopleSection id="people-sent-heading" heading="Sent requests">
+              {sent.map((person) => (
+                <PersonRow
+                  key={person.user_id}
+                  person={person}
+                  status="Request sent"
+                  actions={[{ label: "Cancel", run: act(person, "remove") }]}
+                  disabled={!interactive}
+                  busy={busy}
+                  removal={removal}
+                />
+              ))}
+            </PeopleSection>
+          )}
+          <section
+            className="people-suggestions people-list"
+            aria-labelledby="people-suggestions-heading"
+          >
+            <h2 id="people-suggestions-heading" tabIndex={-1}>
+              People you may know
+            </h2>
+            <p className="muted">Meet people through your mutual friends.</p>
+            {data.suggestions.map((person) => (
+              <PersonRow
+                key={person.user_id}
+                person={person}
+                note={
+                  <p className="person-note small muted">
+                    {person.mutual_friends.length === 1
+                      ? "Mutual friend: "
+                      : "Mutual friends: "}
+                    {person.mutual_friends.map((mutual, index) => (
+                      <span key={mutual.user_id}>
+                        {index > 0 && ", "}
+                        <Link
+                          href={`/people/${mutual.username}`}
+                          prefetch={false}
+                        >
+                          {mutual.display_name} (@{mutual.username})
+                        </Link>
+                      </span>
+                    ))}
+                  </p>
+                }
+                actions={[
+                  {
+                    label: "Send friend request",
+                    run: act(person, "request"),
+                    primary: true,
+                    follows: true,
+                  },
+                ]}
+                disabled={!interactive}
+                busy={busy}
+                removal={removal}
+              />
+            ))}
+            {!data.suggestions.length && (
+              <p className="empty">No friend suggestions yet.</p>
+            )}
+          </section>
+          {data.blocked.length > 0 && (
+            <section
+              className="people-list"
+              aria-labelledby="people-blocked-heading"
+            >
+              <h2 id="people-blocked-heading" tabIndex={-1}>
+                Blocked people
+              </h2>
+              {data.blocked.map((person) => (
+                <PersonRow
+                  key={person.user_id}
+                  person={person}
+                  blocked
+                  actions={[{ label: "Unblock", run: act(person, "unblock") }]}
+                  disabled={!interactive}
+                  busy={busy}
+                  removal={removal}
+                />
+              ))}
+            </section>
+          )}
+        </>
       )}
     </>
   );

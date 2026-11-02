@@ -1,4 +1,4 @@
-import { AppError, db } from "./db";
+import { AppError, db, settleAll } from "./db";
 import { logFailureOnce } from "./log";
 import { watchSections } from "./watch-sources";
 import {
@@ -57,11 +57,11 @@ const catalogUnavailable = () =>
     "The movie catalog is temporarily unavailable. Please try again.",
     502,
   );
-// Every failure but a 404 is logged here, once for each request, so callers
-// that recover from it log nothing more. TMDB rejects a revoked, expired, or
-// suspended TMDB_READ_TOKEN with 401 or 403, which every lookup would meet
-// until the token is replaced; other failures may pass.
-async function fetchCatalog(path: string, timeout = 8000) {
+// Every failure but a 404 is logged here, once for each member request, so
+// callers that recover from it log nothing more. TMDB rejects a revoked,
+// expired, or suspended TMDB_READ_TOKEN with 401 or 403, which every lookup
+// would meet until the token is replaced; other failures may pass.
+async function requestCatalog(path: string, timeout: number) {
   const { base, token } = catalogConfig();
   try {
     const response = await fetch(`${base}${path}`, {
@@ -84,6 +84,34 @@ async function fetchCatalog(path: string, timeout = 8000) {
     if (error instanceof AppError) throw error;
     logFailureOnce("catalog request failed", {}, error);
     throw catalogUnavailable();
+  }
+}
+// What each TMDB request looks up, as its failure logs name it.
+type CatalogLookup =
+  | "details"
+  | "search"
+  | "seasons"
+  | "episodes"
+  | "find"
+  | "videos"
+  | "providers";
+// Requests a TMDB path and reads the answer with `parse`, which throws when
+// the answer lacks the shape Screenr reads, such as after TMDB renames or
+// retypes a field. That failure is logged too, once for each member request,
+// naming the lookup and never the answer's values, and reaches the caller
+// unchanged.
+async function fetchCatalog<T>(
+  lookup: CatalogLookup,
+  path: string,
+  timeout: number,
+  parse: (data: unknown) => T,
+) {
+  const data = await requestCatalog(path, timeout);
+  try {
+    return parse(data);
+  } catch (error) {
+    logFailureOnce("catalog response invalid", { lookup }, error);
+    throw error;
   }
 }
 // Whether a title that cache rows reference was stored. A failure to store
@@ -137,24 +165,40 @@ export async function searchTitles(
 ): Promise<(Title & StoredScore)[]> {
   if (query.trim().length < 2) return [];
   if (query.length > 120) throw new AppError("Use a shorter search.");
-  const data = await fetchCatalog(
-    `/search/multi?query=${encodeURIComponent(query)}&include_adult=false`,
-  );
-  if (!isRecord(data) || !Array.isArray(data.results))
-    throw new AppError("The catalog returned invalid search results.", 502);
-  return data.results
-    .filter(
-      (r): r is Record<string, unknown> =>
-        isRecord(r) && (r.media_type === "movie" || r.media_type === "tv"),
-    )
-    .map((r) => ({
-      ...parseTitle(r, r.media_type as "movie" | "tv"),
-      ...parseScore(r),
-    }));
+  const path = `/search/multi?query=${encodeURIComponent(query)}&include_adult=false`;
+  return fetchCatalog("search", path, 8000, (data) => {
+    if (!isRecord(data) || !Array.isArray(data.results))
+      throw new AppError("The catalog returned invalid search results.", 502);
+    return data.results
+      .filter(
+        (r): r is Record<string, unknown> =>
+          isRecord(r) && (r.media_type === "movie" || r.media_type === "tv"),
+      )
+      .map((r) => ({
+        ...parseTitle(r, r.media_type as "movie" | "tv"),
+        ...parseScore(r),
+      }));
+  });
 }
+// Every Title field, in order. Queries that return titles select these, and
+// the type checker flags a field added to Title but missing here.
+const titleFields = Object.keys({
+  id: true,
+  kind: true,
+  tmdb_id: true,
+  name: true,
+  overview: true,
+  poster_path: true,
+  release_date: true,
+} satisfies Record<keyof Title, true>);
+// The Title columns of `table`, as a select list.
+export const titleColumns = (table: string) =>
+  titleFields.map((field) => `${table}.${field}`).join(",");
+// The Title columns of `table`, as jsonb_build_object arguments.
+export const titleObject = (table: string) =>
+  titleFields.map((field) => `'${field}',${table}.${field}`).join(",");
 type TitleRow = Title & StoredScore & { release: StoredRelease | null };
-const titleColumns =
-  "id,kind,tmdb_id,name,overview,poster_path,release_date,release,vote_average,vote_count";
+const storedTitleColumns = `${titleColumns("title")},release,vote_average,vote_count`;
 const currentTitle =
   "(fetched_at>now()-interval '1 day' OR retry_after>now()) IS TRUE AS current";
 function presentTitle({
@@ -177,20 +221,24 @@ function presentTitle({
 // stored row is served and the refresh waits five minutes; only a title that
 // was never stored throws. Details without usable release dates are stored,
 // votes included, but count as a failed refresh: the last release data stays
-// and the refresh waits five minutes.
+// and the refresh waits five minutes. They are logged as an invalid answer,
+// naming the release dates but none of their values.
 async function refreshTitle(id: string, stored?: TitleRow): Promise<TitleRow> {
   const [kind, tmdbId] = id.split(":") as ["movie" | "tv", string];
   let title: Title;
   let release: StoredRelease | null;
   let score: StoredScore;
   try {
-    const raw = await fetchCatalog(
+    ({ title, release, score } = await fetchCatalog(
+      "details",
       `/${kind}/${tmdbId}${kind === "movie" ? "?append_to_response=release_dates" : ""}`,
       stored ? 2000 : 8000,
-    );
-    title = parseTitle(raw, kind, Number(tmdbId));
-    release = parseRelease(raw as Record<string, unknown>, kind);
-    score = parseScore(raw as Record<string, unknown>);
+      (raw) => ({
+        title: parseTitle(raw, kind, Number(tmdbId)),
+        release: parseRelease(raw as Record<string, unknown>, kind),
+        score: parseScore(raw as Record<string, unknown>),
+      }),
+    ));
   } catch (error) {
     if (!stored) throw error;
     await db.query(
@@ -199,6 +247,11 @@ async function refreshTitle(id: string, stored?: TitleRow): Promise<TitleRow> {
     );
     return stored;
   }
+  if (!release)
+    logFailureOnce("catalog response invalid", {
+      lookup: "details",
+      part: "release_dates",
+    });
   const save = () =>
     db.query<{ release: StoredRelease | null }>(
       `INSERT INTO title(id,kind,tmdb_id,name,overview,poster_path,release_date,release,vote_average,vote_count,fetched_at,retry_after)
@@ -250,7 +303,7 @@ export async function getTitleWithRelease(
     throw new AppError("Title not found.", 404);
   const stored = (
     await db.query<TitleRow & { current: boolean }>(
-      `SELECT ${titleColumns},${currentTitle} FROM title WHERE id=$1`,
+      `SELECT ${storedTitleColumns},${currentTitle} FROM title WHERE id=$1`,
       [id],
     )
   ).rows[0];
@@ -285,7 +338,7 @@ export async function getTitleReleases(
   try {
     const { rows } = valid.length
       ? await db.query<TitleRow & { current: boolean }>(
-          `SELECT ${titleColumns},${currentTitle} FROM title WHERE id=ANY($1::text[])`,
+          `SELECT ${storedTitleColumns},${currentTitle} FROM title WHERE id=ANY($1::text[])`,
           [valid],
         )
       : { rows: [] };
@@ -295,7 +348,7 @@ export async function getTitleReleases(
       if (!row.current) due.push(row);
     }
     let next = 0;
-    await Promise.all(
+    await settleAll(
       Array.from({ length: Math.min(4, due.length) }, async () => {
         while (next < due.length && Date.now() < refreshBefore) {
           const row = due[next++];
@@ -326,13 +379,19 @@ export async function getTitleReleases(
 // none.
 export async function findImdbTitle(imdbId: string): Promise<string | null> {
   if (!/^tt\d{7,9}$/.test(imdbId)) return null;
-  let data: unknown;
   try {
-    data = await fetchCatalog(`/find/${imdbId}?external_source=imdb_id`, 5000);
+    return await fetchCatalog(
+      "find",
+      `/find/${imdbId}?external_source=imdb_id`,
+      5000,
+      foundTitle,
+    );
   } catch (error) {
     if (error instanceof AppError && error.status === 404) return null;
     throw error;
   }
+}
+function foundTitle(data: unknown) {
   if (!isRecord(data))
     throw new AppError("The catalog returned an invalid title.", 502);
   const first = (key: string, field = "id") => {
@@ -377,17 +436,18 @@ function invalidCatalog(): never {
 }
 
 export async function titleSeasons(id: string): Promise<Season[]> {
-  const data = await fetchCatalog(showPath(id), 5000);
-  if (!isRecord(data) || !Array.isArray(data.seasons)) invalidCatalog();
-  return data.seasons
-    .filter((season) => isRecord(season) && positive(season.season_number))
-    .map((season) => ({
-      number: Number(season.season_number),
-      name:
-        typeof season.name === "string" && season.name.trim()
-          ? season.name.trim()
-          : `Season ${season.season_number}`,
-    }));
+  return fetchCatalog("seasons", showPath(id), 5000, (data) => {
+    if (!isRecord(data) || !Array.isArray(data.seasons)) invalidCatalog();
+    return data.seasons
+      .filter((season) => isRecord(season) && positive(season.season_number))
+      .map((season) => ({
+        number: Number(season.season_number),
+        name:
+          typeof season.name === "string" && season.name.trim()
+            ? season.name.trim()
+            : `Season ${season.season_number}`,
+      }));
+  });
 }
 
 export async function seasonEpisodes(
@@ -396,14 +456,17 @@ export async function seasonEpisodes(
 ): Promise<Episode[]> {
   const path = showPath(id);
   if (!positive(season)) throw new AppError("Invalid season.");
-  const data = await fetchCatalog(`${path}/season/${season}`, 5000);
-  if (!isRecord(data) || !Array.isArray(data.episodes)) invalidCatalog();
-  return data.episodes
-    .filter((episode) => isRecord(episode) && positive(episode.episode_number))
-    .map((episode) => ({
-      number: Number(episode.episode_number),
-      name: typeof episode.name === "string" ? episode.name.trim() : "",
-    }));
+  return fetchCatalog("episodes", `${path}/season/${season}`, 5000, (data) => {
+    if (!isRecord(data) || !Array.isArray(data.episodes)) invalidCatalog();
+    return data.episodes
+      .filter(
+        (episode) => isRecord(episode) && positive(episode.episode_number),
+      )
+      .map((episode) => ({
+        number: Number(episode.episode_number),
+        name: typeof episode.name === "string" ? episode.name.trim() : "",
+      }));
+  });
 }
 
 function selectTrailer(data: unknown): Trailer | null {
@@ -449,8 +512,11 @@ export async function getTitleTrailer(
     let trailer: Trailer | null = null;
     let lifetime = 86400;
     try {
-      trailer = selectTrailer(
-        await fetchCatalog(`/${id.replace(":", "/")}/videos`, 2000),
+      trailer = await fetchCatalog(
+        "videos",
+        `/${id.replace(":", "/")}/videos`,
+        2000,
+        selectTrailer,
       );
     } catch {
       lifetime = 300;
@@ -559,9 +625,11 @@ async function refreshAvailability(
   try {
     let availability: AvailabilityData;
     try {
-      availability = parseAvailability(
-        await fetchCatalog(`/${id.replace(":", "/")}/watch/providers`, 2000),
-        id,
+      availability = await fetchCatalog(
+        "providers",
+        `/${id.replace(":", "/")}/watch/providers`,
+        2000,
+        (data) => parseAvailability(data, id),
       );
     } catch {
       if (!(await stored(titleStored))) return availabilityResult(cached);
@@ -618,7 +686,7 @@ export async function getTitleAvailabilities(
       if (!entry || entry.refresh_after.getTime() <= Date.now()) due.push(id);
     }
     let next = 0;
-    await Promise.all(
+    await settleAll(
       Array.from({ length: Math.min(4, due.length) }, async () => {
         while (next < due.length && Date.now() < refreshBefore) {
           const id = due[next++];

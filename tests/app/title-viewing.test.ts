@@ -2,7 +2,14 @@ import { test, before, beforeEach, after } from "node:test";
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
-import { useDatabase, db, person, friend } from "./social-fixture";
+import {
+  useDatabase,
+  db,
+  person,
+  friend,
+  captureFailures,
+  failureEvents,
+} from "./social-fixture";
 import type { TitleViewing } from "../../src/shared";
 const { findTitles } = await import("../../src/server/title-viewing");
 const { getTitle, getTitleAvailability } =
@@ -56,14 +63,17 @@ const catalog = createServer((request, response) => {
     );
   } else {
     details++;
+    const [, kind, id] = new URL(request.url!, "http://catalog").pathname.split(
+      "/",
+    );
     response.end(
       JSON.stringify({
-        id: Number(
-          new URL(request.url!, "http://catalog").pathname.split("/")[2],
-        ),
+        id: Number(id),
         title: "Detailed title",
         name: "Detailed title",
         overview: "Full overview",
+        // TMDB sends a movie without release dates an empty list.
+        ...(kind === "movie" && { release_dates: { results: [] } }),
       }),
     );
   }
@@ -117,7 +127,9 @@ test("search enriches movie and TV summaries and caches availability without rep
   assert.equal(providers.length, 2);
 });
 
-test("failed list refresh retains older options and an initial failure stays unknown with retry backoff", async () => {
+test("failed list refresh retains older options and an initial failure stays unknown with retry backoff", async (t) => {
+  // Each failed provider request logs a failure line, which this test reads.
+  const printed = captureFailures(t);
   await findTitles("streaming");
   await db.query(
     "UPDATE title_availability SET fetched_at=now()-interval '2 days',refresh_after=now()-interval '1 second'",
@@ -138,9 +150,16 @@ test("failed list refresh retains older options and an initial failure stays unk
   const requests = providers.length;
   await findTitles("streaming");
   assert.equal(providers.length, requests);
+  assert.deepEqual(
+    failureEvents(printed),
+    Array(3).fill("catalog request failed"),
+  );
 });
 
-test("a cold list bounds concurrent provider requests and returns every title during a slow outage", async () => {
+test("a cold list bounds concurrent provider requests and returns every title during a slow outage", async (t) => {
+  // Each timed-out provider request logs a failure line, which this test
+  // reads.
+  const printed = captureFailures(t);
   items = Array.from({ length: 30 }, (_, i) => ({
     id: 94000 + i,
     title: `Title ${i}`,
@@ -161,9 +180,16 @@ test("a cold list bounds concurrent provider requests and returns every title du
     Date.now() - start < 6000,
     "A provider outage must not hold the list for every per-title timeout",
   );
+  assert.deepEqual(
+    new Set(failureEvents(printed)),
+    new Set(["catalog request failed"]),
+  );
 });
 
-test("slow catalog search leaves time to return titles within the browser search deadline", async () => {
+test("slow catalog search leaves time to return titles within the browser search deadline", async (t) => {
+  // Each timed-out provider request logs a failure line, which this test
+  // reads.
+  const printed = captureFailures(t);
   items = Array.from({ length: 12 }, (_, i) => ({
     id: 95000 + i,
     title: `Delayed title ${i}`,
@@ -179,6 +205,10 @@ test("slow catalog search leaves time to return titles within the browser search
   assert.ok(
     Date.now() - start < 9500,
     "Optional providers must not exhaust the ten-second browser deadline",
+  );
+  assert.deepEqual(
+    new Set(failureEvents(printed)),
+    new Set(["catalog request failed"]),
   );
 });
 

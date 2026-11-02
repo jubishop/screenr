@@ -189,7 +189,8 @@ struct DestinationTests {
   @Test(
     arguments: [
       "https://example.com/titles/tv/201", "http://screenr.club/people/ben",
-      "https://screenr.club.example.com/people", "mailto:ben@example.com", "screenr://people",
+      "https://screenr.club.example.com/people", "https://screenr.club:8443/people/ben",
+      "mailto:ben@example.com", "screenr://people",
     ]
   )
   func ignoresOtherLinks(link: String) throws {

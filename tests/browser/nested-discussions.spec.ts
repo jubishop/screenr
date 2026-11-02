@@ -84,8 +84,12 @@ test("own nested replies keep their parent when another tab has not accepted new
   await composer
     .getByRole("button", { name: "Post reply", exact: true })
     .click();
+  // A text match alone would also find the draft that stays in the composer
+  // until the save finishes.
   await expect(
-    otherTab.getByText("My reply from another tab", { exact: true }),
+    otherTab
+      .locator("[data-comment-id]")
+      .filter({ hasText: "My reply from another tab" }),
   ).toBeVisible();
   await reader.bringToFront();
   await expect(item.getByText("Pending parent", { exact: true })).toBeVisible();

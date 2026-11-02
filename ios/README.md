@@ -209,14 +209,20 @@ try await api.send(.comment(conversation: item.id, body: text, spoiler: false))
   the next sign-in, and `onEnd(_:)` handlers receive it. A sign-in made
   `.confirming(userId:)` keeps its new token only when the response names
   that user; see [account deletion](#account-deletion). A 401 to a request
-  that carried a token removes that token, unless a newer one replaced it. Linking a sign-in method is the
-  exception: its request's `unauthorized` is `.rejectsCredential`, so a 401
-  for the provider's token, such as `INVALID_TOKEN`, is
+  that carried a token removes that token, unless a newer one replaced it.
+  Linking a sign-in method and confirming the member are the exceptions:
+  their requests' `unauthorized` is `.rejectsCredential`, so a 401 for the
+  provider's token, such as `INVALID_TOKEN` or `OAUTH_LINK_ERROR`, is
   `.rejected(status: 401)` and keeps the session. Only Better Auth's
   `UNAUTHORIZED` code ends it.
 - **Caching:** each GET's response is kept in memory with its ETag. Reading
   the same path again sends `If-None-Match`, and a 304 returns the cached
   value. Signing in or out clears the cache.
+- **Late responses:** a successful or unchanged response to a request that
+  carried a token, arriving after that session ended or another replaced it,
+  belongs to the earlier member. The client neither caches nor returns it
+  and fails the request as `.cancelled`, which callers ignore. Requests that
+  change the session, such as `.signOut`, still apply.
 - **Errors:** 401, 403, 404, 408, 426, 429, other 4xx, and 5xx each have a
   kind, as do no response, a timeout, cancellation, and an unreadable body.
   A 426 also moves `SessionStore.phase` to `.updateRequired`. A signed-in
@@ -254,6 +260,7 @@ uses it when launched with these arguments; Release builds ignore them:
 | `-ScreenrFixtureUpdate` | A fixture that answers before any other, overrides included, once the `-ScreenrFixtureUpdateSignal` file exists, such as `screen/feed/incoming`, so the app's next read, such as a poll, brings new activity. Repeatable. |
 | `-ScreenrFixtureUpdateSignal` | The file whose creation sends the `-ScreenrFixtureUpdate` fixtures. |
 | `-ScreenrFixtureFailure` | A fixture that answers every `/api/screenr` request, such as `errors/update-required`. |
+| `-ScreenrFixtureOutageSignal` | A file whose existence fails every `/api/screenr` request with a 502 and no body, as from the proxy during a deploy, so the app's next reads, such as a poll, fail until the file is removed. |
 | `-ScreenrFixtureLog` | A file that gets a line per `/api/screenr` request, such as `GET /api/screenr/screen?path=%2F`, with ` visit` after the app's [visit](#visits) and a write's JSON body, keys sorted, after the write: `POST /api/screenr/read-notification {"id":"18"}`. An upload has its type and size instead: `POST /api/screenr/photo image/jpeg 41250 bytes`. Sent [feedback](#feedback) adds a `FEEDBACK` line. A [trailer](#trailers)'s player adds `WEB <url>` for each page it asks for. |
 | `-ScreenrFixturePush` | The notification permission the app finds: `undecided` (default), `allowed`, or `denied`; or `system` for iOS's own permission and APNs registration. See [push notifications](#push-notifications). |
 | `-ScreenrOpenURL` | A link the app opens at launch, as if the system delivered it, such as `screenr-dev://titles/tv/201`. |
@@ -268,8 +275,10 @@ with the directory found from the test's source path; `requestLog`, `link`,
 `-ScreenrFixtureLog`, `-ScreenrOpenURL`, `-ScreenrAppearance`,
 `-ScreenrPushTap`, `-ScreenrFixturePosters`, and `-ScreenrAuditProbe`; and
 `update: FixtureUpdate("screen/feed/incoming")` passes the update arguments,
-whose fixtures answer once the test calls `update.send()`. The fixture API
-keeps the session in memory.
+whose fixtures answer once the test calls `update.send()`; and
+`outage: FixtureOutage()` passes the outage signal, which `outage.begin()`
+creates and `outage.end()` removes. The fixture API keeps the session in
+memory.
 A request gets the fixture with the same action and
 query or body, then falls back to the screen's path or to a successful
 fixture for the action. A matching ETag gets 304. Apart from setup, writes
@@ -308,7 +317,11 @@ redirects to `com.googleusercontent.apps.<client>:/oauthredirect`.
 When the session ends, by signing out or because the server ended it, the
 client clears its screen cache and `SessionStore.onEnd` handlers run.
 `AppServices` empties the image cache there, and error reporting clears its
-user there. Posters and profile photos load through `AppServices.imageSession`,
+user there. A read that the ended session started reports nothing to
+`ShellModel` when it answers. A session that an extension ended runs no
+handler in the app, so a launch without a session also empties the image
+cache, clears the badge and Notification Center, and removes the Spotlight
+titles. Posters and profile photos load through `AppServices.imageSession`,
 which `.screenrServices(_:)` sets as the `AsyncImage` session, with requests
 from `AppServices.images`, an `ImageSource`; see [Conversations](#conversations).
 
@@ -420,11 +433,15 @@ screen appears and every three seconds after, sending the cached ETag. It
 stops in the background or when the screen disappears, and reads again when
 either returns, on pull-to-refresh, and when `ShellModel.pushArrived()` or
 `refreshLiveReads()` runs. Each of these, except a return, replaces a read
-already in flight, which may have started before a write or the push. Each
-read gives up after ten seconds. A failed read replaces the content with the
+already in flight, which may have started before a write or the push. A
+read that answers after its screen stopped never applies. Each read gives up
+after ten seconds. A failed read replaces the content with the
 error; passing failures keep polling, and a permanent error stops it until a
 read succeeds. An unchanged screen keeps its `phase`, so nothing renders
-again. `ScreenModelTests` cover the timing with a `TestClock`.
+again. Each read after the three-second wait is a poll, sent as
+`RequestTrigger.poll`, which [Telemetry](#sentry) records quietly when it
+succeeds; every other read is `.demand`. `ScreenModelTests` cover the timing
+with a `TestClock`.
 
 ### Visits
 
@@ -554,8 +571,8 @@ before launch finishes, and puts it in the environment.
   the member turns notifications off in iOS Settings after this launch
   registered, the next return removes the device. Signing out ends the
   session, and the server deletes the session's devices with it; the app
-  clears Notification Center and the badge, and the next member registers
-  the device again.
+  clears Notification Center and the badge, as it does on a launch without
+  a session, and the next member registers the device again.
 - **Environment:** `SCREENR_APS_ENVIRONMENT` in `Dev.xcconfig` and
   `Release.xcconfig` sets both the `aps-environment` entitlement and the
   `ScreenrAPSEnvironment` Info.plist key, so a token always names the APNs
@@ -843,6 +860,25 @@ whose behavior is ScreenrKit's `FeedbackModel`, in `Feedback/`. It follows the
   its long side and under 1 MB, without the original's metadata, such as a
   location. Send needs a message. A swipe cannot close the sheet while it
   holds a draft, and once the feedback is sent the sheet thanks the member.
+- **Length:** Sentry discards feedback whose message is over 4,096 Unicode
+  code points: ingestion rejects it, and sentry-cocoa drops it before
+  sending without telling the app. Following Sentry's
+  [client-side validation](https://develop.sentry.dev/sdk/telemetry/feedbacks/#client-side-input-validation),
+  `FeedbackModel.messageLength` counts the trimmed message that Send would
+  send in Unicode scalars, which match code points: a decomposed é counts as
+  two and an emoji as one. From 3,687, 90% of the limit, the form shows a
+  live `X / 4096` count. Over 4,096 it also shows "Shorten your message to
+  4,096 characters or fewer." and Send stays off. The form never cuts or
+  blocks what the member types or pastes, so they choose what to shorten.
+  The count and the error sit in a strip below the form, through
+  `safeAreaInset`, above the keyboard while it's up: a section footer would
+  fall below a long message, out of view. Capping the field's lines instead
+  left a tall blank row beneath it once the member edited a long message.
+  Relay also trims the feedback context to 8,192 bytes, but it measures the
+  message, the context's first field, in code points against that budget,
+  so it never trims a message within the limit. A long message of
+  multibyte characters can cost only the fields after it, for Screenr just
+  `source`.
 - **Logs:** sending attaches `LogFile.recentTails(maximumBytes:)`: up to
   256 KB of the newest complete lines of each log in the app group's log
   directory, the app's and any other process's, such as the notification
@@ -863,8 +899,14 @@ whose behavior is ScreenrKit's `FeedbackModel`, in `Feedback/`. It follows the
 - **Tests:** `FeedbackTests` read the envelope that the Release options
   produce from `SentryEnvelopeCapture`'s local transport: the feedback, its
   screenshot and log tail attachments, the user ID with no name or email,
-  and the release and dist. No test sends feedback to Sentry.
-  `SettingsTests.testSendsFeedback` sends feedback against the fixture API.
+  and the release and dist. They also cover the length limit at 4,096 and
+  4,097 scalars. No test sends feedback to Sentry.
+  `SettingsTests.testSendsFeedback` sends feedback against the fixture API,
+  and `testKeepsFeedbackOverTheLengthLimit` pastes past the limit to reach
+  the count and the error. It pastes through the field's edit menu, after
+  setting `UIPasteboard`: Command-V from `typeKey` pasted nothing, and once
+  the field held the pasted text, typing, deleting, and a long press for the
+  menu all failed to reach it on the iOS 27 Simulator.
 
 ### Account deletion
 
@@ -883,7 +925,9 @@ three steps, which `AccountDeletionModel` (ScreenrKit `Settings/`) tracks:
    when Better Auth's response names the signed-in member. A sign-in that
    reaches another account, which Sign in with Apple or Google can, fails
    with `APIError.Kind.otherAccount`, keeps the member's session, and signs
-   the other account's new session out.
+   the other account's new session out. A rejected Apple or Google
+   sign-in, such as an account that isn't connected or an ID token that
+   fails verification, also keeps the session.
 2. **Confirm the deletion:** Delete my account opens a confirmation dialog,
    which iOS 27 shows as a popover.
 3. **Delete:** `.deleteAccount` ends the session with `ending`
@@ -1080,8 +1124,8 @@ ScreenrKit's `TitlePage/`:
 | Piece | Where | What it does |
 | --- | --- | --- |
 | `TitleHeader` | ScreenrKit | The viewer's place, read from the page: Recommend, the title's rank in their top 10, the status and last-finished date, and the review, with the header's labels, the status choices, and `topTenLimit`. |
-| `TitlePageModel` | ScreenrKit | `@Observable`: one write at a time, each followed by a read. Recommend (no surface), Add to top 10 and its removal, the status sheet's choices (Finished sends today; Want to watch sends `surface`), the finished date, the review, and the prompts: `leaving`, the confirmation before a ranked Recommend leaves the top 10, and `sheet` (`.status`, `.review`, or `.replace`). `reconcile(with:)` closes a prompt the page no longer needs. A failure shows beneath its control. |
-| `ReviewEditor` | ScreenrKit | The review form's draft, which starts from the saved review each time it opens, its save and removal, and the removal's confirmation. |
+| `TitlePageModel` | ScreenrKit | `@Observable`: one write at a time, each followed by a read. Recommend (no surface), Add to top 10 and its removal, the status sheet's choices (Finished sends today; Want to watch sends `surface`), the finished date, the review, and the prompts: `leaving`, the confirmation before a ranked Recommend leaves the top 10, and `sheet` (`.status`, `.review`, or `.replace`). `reconcile(with:)` keeps the page's latest `header`, which the sheets show, and closes a prompt the page no longer needs. A failure shows beneath its control. |
+| `ReviewEditor` | ScreenrKit | The review form's draft, which starts from the saved review when the form opens and lasts until it closes, its save and removal, and the removal's confirmation. |
 | `FriendActivity.lineParts`, `lineGroups`, `sentence` | ScreenrKit | The friend line in the web's words, such as "Recommended by Ben Ortiz (#1) · Cam Rivera wants to watch", as pieces that wrap between words. On a phone, each group starts its own line in place of " · ". |
 | `WatchAvailability.notice`, `emptyMessage`, `checkedLabel()` | ScreenrKit | Where to watch's messages, in the web's words. |
 | `CalendarDay` | ScreenrKit | `YYYY-MM-DD` days, such as today for Finished: Gregorian days in the reader's time zone, whatever calendar the phone uses. |
@@ -1099,6 +1143,10 @@ ScreenrKit's `TitlePage/`:
   top 10 themselves; `TitleHeader.topTenLimit` is the list's size.
 - **Friend line:** each name is a button that shows that friend's entry
   through `FeedList`'s `entryRequest`.
+- **Sheets:** the status, review, and replacement sheets sit outside the
+  screen's content, as the profile's top 10 editor does, so a failed read
+  beneath leaves them open with the page's last header and the review's
+  draft.
 - **Credits:** Where to watch links TMDB's viewing options page and credits
   JustWatch and TMDB, with TMDB's notice that it does not endorse Screenr.
 
@@ -1127,8 +1175,9 @@ page reads again. Nothing loads before Play trailer.
   after Play trailer, without the network.
 
 `TitleTests` also covers the watch status and finished date, Recommend and
-its confirmation, the friend line, adding to a full top 10, the review, the
-largest text size, and every `screen/title` fixture. The status and
+its confirmation, the friend line, adding to a full top 10, the review and a
+failed read beneath it, which `FixtureOutage` causes, the largest text size,
+and every `screen/title` fixture. The status and
 replacement sheets are system lists, so their audit is
 `performSettingsAudit()`, and the largest text size test reaches each of
 their controls instead.
@@ -1484,7 +1533,11 @@ Sentry organization `artisanal-software`, under these
   `GET /api/screenr/screen?path=/people/:username`. Both carry a `request_id`
   tag, the tag the server's failure reports use, as does an error captured
   with its request ID. A failed call logs a warning, and a cancelled one logs
-  at info.
+  at info. A successful [poll](#polling), usually an unchanged 304 every
+  three seconds, logs only at debug level, which the log file leaves out,
+  and adds no breadcrumb or transaction, so polling cannot crowd the log
+  tail that feedback attaches or the breadcrumbs before a crash. Writes,
+  failures, and first reads are recorded in full.
 - **Scrubbing:** `SentryPrivacy` runs as Sentry's `beforeSend`,
   `beforeBreadcrumb`, `beforeSendSpan`, and `beforeSendLog`. It keeps only the
   user ID, and reduces every URL to its `RoutePattern`, such as

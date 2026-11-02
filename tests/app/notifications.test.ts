@@ -1,6 +1,8 @@
-import { test } from "node:test";
+import { test, type TestContext } from "node:test";
 import assert from "node:assert/strict";
+import { Pool } from "pg";
 import {
+  testDatabaseURL,
   useDatabase,
   setup,
   friend,
@@ -26,6 +28,7 @@ import { loadScreen } from "../../src/server/screens";
 import {
   notification,
   notifications,
+  unreadNotifications,
   type NotificationPage,
   readNotification,
   readAllNotifications,
@@ -123,6 +126,94 @@ test("pagination orders numeric IDs and reaches all older notifications without 
     [...ids].sort((a, b) => Number(BigInt(b) - BigInt(a))),
   );
   assert.equal(await unread(alice), 35);
+});
+
+// How many notification rows each statement that `read` sends reads, from
+// EXPLAIN ANALYZE with only plain index scans enabled: on test tables,
+// reading every row is often the cheapest plan even where an index would
+// read only the rows needed, as it does at a year's size.
+async function notificationRowsRead(
+  t: TestContext,
+  read: () => Promise<unknown>,
+) {
+  const query = t.mock.method(db, "query");
+  await read();
+  const statements = query.mock.calls
+    .map((call) => call.arguments as unknown as [string, unknown[]?])
+    .filter(([sql]) => typeof sql === "string" && sql.includes("notification"));
+  query.mock.restore();
+  const pool = new Pool({ connectionString: testDatabaseURL, max: 1 });
+  const client = await pool.connect();
+  type Plan = {
+    "Relation Name"?: string;
+    "Actual Rows": number;
+    "Actual Loops": number;
+    "Rows Removed by Filter"?: number;
+    "Rows Removed by Index Recheck"?: number;
+    Plans?: Plan[];
+  };
+  const rows = (plan: Plan): number =>
+    (plan["Relation Name"] === "notification"
+      ? (plan["Actual Rows"] +
+          (plan["Rows Removed by Filter"] ?? 0) +
+          (plan["Rows Removed by Index Recheck"] ?? 0)) *
+        plan["Actual Loops"]
+      : 0) + (plan.Plans ?? []).reduce((sum, child) => sum + rows(child), 0);
+  try {
+    await client.query("SET enable_seqscan = off");
+    await client.query("SET enable_bitmapscan = off");
+    const counts: number[] = [];
+    for (const [sql, params] of statements) {
+      const { rows: plan } = await client.query(
+        `EXPLAIN (ANALYZE, FORMAT JSON) ${sql}`,
+        params,
+      );
+      counts.push(rows(plan[0]["QUERY PLAN"][0].Plan));
+    }
+    return counts;
+  } finally {
+    client.release();
+    await pool.end();
+  }
+}
+
+// The notification sheet polls every three seconds while it is open, and
+// every screen read counts unread notifications. Notifications are never
+// pruned, so each read checks visibility only for the notifications it
+// shows or counts, not the whole history.
+test("the notification sheet and badge read only the notifications they show or count", async (t) => {
+  const { alice, ben, conversation } = await setup();
+  await friend(alice, ben);
+  // A long history of comments, each notifying Alice, all but the three
+  // newest read, after the cleanup autovacuum does.
+  await db.query(
+    `INSERT INTO comment(feed_item_id,conversation_id,author_id,body)
+    SELECT id,conversation_id,$2,'Comment '||n FROM feed_item, generate_series(1,600) n
+    WHERE id=$1 ORDER BY n`,
+    [conversation, ben],
+  );
+  await db.query(
+    `UPDATE notification SET read_at=now() WHERE recipient_id=$1
+    AND id NOT IN (SELECT id FROM notification WHERE recipient_id=$1 ORDER BY id DESC LIMIT 3)`,
+    [alice],
+  );
+  await db.query("VACUUM ANALYZE notification");
+  const first = await notifications(alice);
+  assert.equal(first.unread, 3);
+  // Each page checks its 31 rows, the newest notification sets the
+  // bulk-read boundary, and the unread count checks the three unread ones,
+  // each by its index entry and its row.
+  for (const read of [
+    () => notifications(alice),
+    () => notifications(alice, first.next),
+    () => notifications(alice, null, true),
+    () => unreadNotifications(alice),
+  ]) {
+    const counts = await notificationRowsRead(t, read);
+    assert.ok(counts.length > 0);
+    for (const count of counts)
+      assert.ok(count <= 2 * 31 + 2 * 3 + 2, `${count} rows`);
+  }
 });
 
 test("older-page snapshots leave newer unseen notifications unread until returning to latest", async () => {

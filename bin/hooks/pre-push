@@ -8,22 +8,84 @@ left origin/main. For those files, the hook accepts a recorded pass with the
 same Xcode, or runs bin/check-ios in this checkout and refuses the push when
 it fails. Tag pushes, branch deletions, and hosts without xcodebuild, such
 as Linux and CI, skip it. See docs/development-workflow.md#ios-checks-before-a-push.
+
+core.hooksPath can name another checkout's hooks, so first this hook hands
+the push to the pushing checkout's own copy, unless that copy lacks this
+checkout's latest change to the gate; see dispatch().
 """
 
+import os
 from pathlib import Path
 import shutil
 import subprocess
 import sys
 
 sys.dont_write_bytecode = True
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+HOOK = Path(__file__).resolve()
+sys.path.insert(0, str(HOOK.parents[1]))
 import _ios_check_records as records  # noqa: E402
 
 ADVICE = "Never bypass this check with git push --no-verify."
+# The files that decide what the hook enforces. bin/check-ios always comes from the
+# pushing checkout, since it tests that checkout's files.
+GATE = ("bin/hooks/pre-push", "bin/_ios_check_records.py")
 
 
 def say(message):
     print(f"pre-push: {message}", file=sys.stderr, flush=True)
+
+
+def same_file_content(first, second):
+    try:
+        return first.read_bytes() == second.read_bytes()
+    except OSError:
+        return False
+
+
+def gate_change(checkout):
+    """The last commit at HEAD that changed the gate's files, or None."""
+    try:
+        return records.git(checkout, "log", "-1", "--format=%H", "HEAD", "--", *GATE).strip() or None
+    except (OSError, subprocess.CalledProcessError):
+        return None
+
+
+def dispatch(root):
+    """Run the pushing checkout's own copy of this hook in place of this process, when it should.
+
+    On the owner's Mac, core.hooksPath names the primary checkout's bin/hooks, so
+    Git runs that copy for every worktree. The pushing checkout's copy replaces
+    it only when that checkout's HEAD has the last change to the gate here, so an
+    older copy never weakens a newer gate. Otherwise this file checks the push
+    itself and says why, and a copy whose gate files differ from these says so
+    before it runs.
+    """
+    own = root / "bin/hooks/pre-push"
+    try:
+        if own.samefile(HOOK):
+            return
+    except OSError:
+        say(f"this checkout has no bin/hooks/pre-push, so {HOOK} runs.")
+        return
+    if not os.access(own, os.X_OK):
+        say(f"this checkout's bin/hooks/pre-push is not executable, so {HOOK} runs.")
+        return
+    configured = HOOK.parents[2]
+    change = gate_change(configured)
+    if not change:
+        say(f"no commit in {configured} changed the gate, so {HOOK} runs instead of this checkout's copy.")
+        return
+    if subprocess.run(["git", "merge-base", "--is-ancestor", change, "HEAD"], cwd=root,
+                      env=records.outside_git(), capture_output=True).returncode:
+        say(f"this checkout lacks {change[:12]}, the last change to the gate in {configured}, "
+            f"so {HOOK} runs instead of this checkout's copy.")
+        return
+    changed = [name for name in GATE if not same_file_content(root / name, configured / name)]
+    if changed:
+        say(f"running this checkout's bin/hooks/pre-push; its {' and '.join(changed)} "
+            f"{'differ' if len(changed) > 1 else 'differs'} from {configured}'s.")
+    # Git's arguments, standard input, and environment pass through unchanged.
+    os.execv(own, [str(own), *sys.argv[1:]])
 
 
 def absent(commit):
@@ -63,6 +125,12 @@ def changed_files(root, lines):
 
 
 def main():
+    try:
+        checkout = Path(records.git(Path.cwd(), "rev-parse", "--show-toplevel").strip())
+    except (OSError, subprocess.CalledProcessError):
+        checkout = None  # A bare repository has no checkout, so this file checks the push.
+    if checkout:
+        dispatch(checkout)
     lines = sys.stdin.read().splitlines()
     if not shutil.which("xcodebuild"):
         return 0

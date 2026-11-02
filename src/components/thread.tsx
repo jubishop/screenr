@@ -15,16 +15,36 @@ import {
 } from "./comment-composer";
 
 const emptyDraft: Draft = { body: "", spoiler: false };
-const live = (comment: Comment) => !comment.removed && !comment.unavailable;
+export const live = (comment: Comment) =>
+  !comment.removed && !comment.unavailable;
+// A reader can Delete their own comment and Remove any comment under their
+// entry.
+export const removable = (
+  comment: Comment,
+  conversation: Thread["conversation"],
+  user: Person,
+) =>
+  comment.author_id === user.user_id || conversation.owner_id === user.user_id;
 
+// While a failed read hides the conversation, `available` is false and the
+// thread shows only an open Delete or Remove confirmation, from the last
+// snapshot, whose action waits for the next read. The entry owns which
+// comment is `confirming`, so it can show that confirmation alone.
 export function ThreadView({
   snapshot,
+  available,
+  confirming,
+  setConfirming,
   user,
   refresh,
   targetReply,
   entryFocus,
 }: {
   snapshot: Thread | null;
+  available: boolean;
+  // The comment whose Delete or Remove waits for confirmation.
+  confirming: string | null;
+  setConfirming: (comment: string | null) => void;
   user: Person;
   refresh: () => Promise<void>;
   targetReply?: string;
@@ -43,8 +63,6 @@ export function ThreadView({
   const [replyTo, setReplyTo] = useState<string | null>(null);
   const [busy, setBusy] = useState(new Set<string>());
   const [errors, setErrors] = useState<Record<string, string>>({});
-  // The comment whose Delete or Remove waits for confirmation.
-  const [confirming, setConfirming] = useState<string | null>(null);
   const thread = useRef<HTMLElement>(null);
   const removalFocus = useRemovalFocus();
   const area = useRef<HTMLTextAreaElement>(null);
@@ -59,7 +77,7 @@ export function ThreadView({
   }, [directOpen]);
   // Keep local composition state through failed refreshes. Only the current
   // authorized snapshot supplies rendered conversation content.
-  if (!snapshot) return null;
+  if (!snapshot || (!available && !confirming)) return null;
   const currentSnapshot = snapshot;
   const comments = currentSnapshot.comments;
   const children = new Map<string, Comment[]>();
@@ -134,6 +152,7 @@ export function ThreadView({
     }
   }
   function composer(destination: string) {
+    if (!available) return null;
     const nested = destination !== "direct";
     const draft = drafts[destination] ?? emptyDraft;
     const label = nested
@@ -178,9 +197,8 @@ export function ThreadView({
       </CommentComposer>
     );
   }
-  const removable = (comment: Comment) =>
-    comment.author_id === user.user_id ||
-    currentSnapshot.conversation.owner_id === user.user_id;
+  const canRemove = (comment: Comment) =>
+    removable(comment, currentSnapshot.conversation, user);
   const removal = (comment: Comment) =>
     comment.author_id === user.user_id ? "Delete" : "Remove";
   function commentActions(comment: Comment) {
@@ -199,7 +217,7 @@ export function ThreadView({
         >
           Reply
         </button>
-        {removable(comment) && (
+        {canRemove(comment) && (
           <button
             className="text-button muted"
             id={`remove-action-${comment.id}`}
@@ -213,6 +231,7 @@ export function ThreadView({
     );
   }
   function renderComment(comment: Comment) {
+    if (!available && comment.id !== confirming) return null;
     // Comments without an available author show a neutral placeholder. A
     // removed comment whose author deleted their account has no author but
     // is not unavailable; its heading alone says it was removed.
@@ -230,68 +249,75 @@ export function ThreadView({
         className="comment"
         data-comment-id={comment.id}
         id={`comment-${comment.id}`}
-        aria-labelledby={`author-${comment.id}`}
+        aria-labelledby={available ? `author-${comment.id}` : undefined}
         // A removal can move focus to the nearest comment.
         tabIndex={-1}
       >
-        <div className="comment-heading">
-          <span className="comment-author" id={`author-${comment.id}`}>
-            <Avatar person={author} />
-            {author ? (
-              <Link href={`/people/${comment.username}`} prefetch={false}>
-                <strong>{comment.display_name}</strong>{" "}
-                <span className="muted">@{comment.username}</span>
-              </Link>
-            ) : (
-              <span className="muted">
-                {deletedAuthor ? "Comment removed" : "Comment unavailable"}
+        {available && (
+          <>
+            <div className="comment-heading">
+              <span className="comment-author" id={`author-${comment.id}`}>
+                <Avatar person={author} />
+                {author ? (
+                  <Link href={`/people/${comment.username}`} prefetch={false}>
+                    <strong>{comment.display_name}</strong>{" "}
+                    <span className="muted">@{comment.username}</span>
+                  </Link>
+                ) : (
+                  <span className="muted">
+                    {deletedAuthor ? "Comment removed" : "Comment unavailable"}
+                  </span>
+                )}
               </span>
+              {!comment.unavailable && (
+                <ActivityTime
+                  className="small muted"
+                  value={comment.created_at}
+                  interactive={interactive}
+                />
+              )}
+            </div>
+            {!comment.unavailable && comment.addressed_username && (
+              <p className="small muted">
+                Replying to @{comment.addressed_username}
+              </p>
             )}
-          </span>
-          {!comment.unavailable && (
-            <ActivityTime
-              className="small muted"
-              value={comment.created_at}
-              interactive={interactive}
-            />
-          )}
-        </div>
-        {!comment.unavailable && comment.addressed_username && (
-          <p className="small muted">
-            Replying to @{comment.addressed_username}
-          </p>
+            {comment.unavailable || deletedAuthor ? null : comment.removed ? (
+              <p className="muted" id={`removed-${comment.id}`} tabIndex={-1}>
+                Comment removed
+              </p>
+            ) : comment.spoiler && !revealed.has(comment.id) ? (
+              <button
+                className="spoiler"
+                onClick={() =>
+                  setRevealed((ids) => new Set([...ids, comment.id]))
+                }
+              >
+                Contains spoilers · Reveal comment
+              </button>
+            ) : (
+              <p className="comment-body">{comment.body}</p>
+            )}
+            {live(comment) &&
+              (!comment.spoiler || revealed.has(comment.id) ? (
+                <Reactions
+                  item={currentSnapshot.conversation.id}
+                  reply={comment.id}
+                  summary={comment.reactions}
+                  refresh={refresh}
+                >
+                  {commentActions(comment)}
+                </Reactions>
+              ) : (
+                <div className="item-actions">{commentActions(comment)}</div>
+              ))}
+          </>
         )}
-        {comment.unavailable || deletedAuthor ? null : comment.removed ? (
-          <p className="muted" id={`removed-${comment.id}`} tabIndex={-1}>
-            Comment removed
-          </p>
-        ) : comment.spoiler && !revealed.has(comment.id) ? (
-          <button
-            className="spoiler"
-            onClick={() => setRevealed((ids) => new Set([...ids, comment.id]))}
-          >
-            Contains spoilers · Reveal comment
-          </button>
-        ) : (
-          <p className="comment-body">{comment.body}</p>
-        )}
-        {live(comment) &&
-          (!comment.spoiler || revealed.has(comment.id) ? (
-            <Reactions
-              item={currentSnapshot.conversation.id}
-              reply={comment.id}
-              summary={comment.reactions}
-              refresh={refresh}
-            >
-              {commentActions(comment)}
-            </Reactions>
-          ) : (
-            <div className="item-actions">{commentActions(comment)}</div>
-          ))}
-        {live(comment) && removable(comment) && confirming === comment.id && (
+        {live(comment) && canRemove(comment) && confirming === comment.id && (
           <ConfirmAction
             message={`${removal(comment)} this comment? Its text will be erased.`}
             action={removal(comment)}
+            unavailable={!available}
             run={async () => {
               // A comment with replies keeps its placeholder; otherwise the
               // nearest comment, in reading order, takes focus.
@@ -327,10 +353,12 @@ export function ThreadView({
     <section aria-label="Conversation" className="thread" ref={thread}>
       {comments.length > 0 && (
         <>
-          <p className="reply-count small muted">
-            {replyCount} {replyCount === 1 ? "reply" : "replies"}
-          </p>
-          {start > 0 && (
+          {available && (
+            <p className="reply-count small muted">
+              {replyCount} {replyCount === 1 ? "reply" : "replies"}
+            </p>
+          )}
+          {available && start > 0 && (
             <button
               className="text-button"
               onClick={() => preservePosition(() => setExpanded(true))}
@@ -347,32 +375,42 @@ export function ThreadView({
               const open =
                 (groups.get(parent.id) ?? targetRoot === parent.id) ||
                 replies.some((c) => c.id === replyTo);
+              const holds = (c: Comment) => available || c.id === confirming;
+              if (!holds(parent) && !(open && replies.some(holds))) return null;
               return (
                 <div className="comment-group" key={parent.id}>
                   {renderComment(parent)}
                   {replyTo === parent.id && composer(parent.id)}
                   {replies.length > 0 && (
                     <>
-                      <button
-                        className="text-button reply-expansion"
-                        aria-expanded={open}
-                        aria-controls={`replies-${parent.id}`}
-                        onClick={() =>
-                          preservePosition(() => {
-                            setGroups((current) =>
-                              new Map(current).set(parent.id, !open),
-                            );
-                            if (open && replies.some((c) => c.id === replyTo))
-                              setReplyTo(null);
-                          })
-                        }
-                      >
-                        {open ? "Hide" : "View"} {replies.length}{" "}
-                        {replies.length === 1 ? "reply" : "replies"}
-                      </button>
+                      {available && (
+                        <button
+                          className="text-button reply-expansion"
+                          aria-expanded={open}
+                          aria-controls={`replies-${parent.id}`}
+                          onClick={() =>
+                            preservePosition(() => {
+                              setGroups((current) =>
+                                new Map(current).set(parent.id, !open),
+                              );
+                              // Hiding replies closes what they had open.
+                              if (open && replies.some((c) => c.id === replyTo))
+                                setReplyTo(null);
+                              if (
+                                open &&
+                                replies.some((c) => c.id === confirming)
+                              )
+                                setConfirming(null);
+                            })
+                          }
+                        >
+                          {open ? "Hide" : "View"} {replies.length}{" "}
+                          {replies.length === 1 ? "reply" : "replies"}
+                        </button>
+                      )}
                       <div id={`replies-${parent.id}`} className="nested">
                         {open &&
-                          replies.map((reply) => (
+                          replies.filter(holds).map((reply) => (
                             <div key={reply.id}>
                               {renderComment(reply)}
                               {replyTo === reply.id && composer(reply.id)}
@@ -394,20 +432,22 @@ export function ThreadView({
             children.get(c.id)?.some((r) => r.id === replyTo),
         ) &&
         composer(replyTo)}
-      <button
-        type="button"
-        id={`comment-action-${currentSnapshot.conversation.id}`}
-        className="text-button comment-action"
-        disabled={!interactive}
-        aria-expanded={directOpen}
-        aria-controls={`reply-${currentSnapshot.conversation.id}-direct-form`}
-        onClick={() => {
-          setDirectOpen(true);
-          if (directOpen) directArea.current?.focus();
-        }}
-      >
-        Comment
-      </button>
+      {available && (
+        <button
+          type="button"
+          id={`comment-action-${currentSnapshot.conversation.id}`}
+          className="text-button comment-action"
+          disabled={!interactive}
+          aria-expanded={directOpen}
+          aria-controls={`reply-${currentSnapshot.conversation.id}-direct-form`}
+          onClick={() => {
+            setDirectOpen(true);
+            if (directOpen) directArea.current?.focus();
+          }}
+        >
+          Comment
+        </button>
+      )}
       {directOpen && composer("direct")}
     </section>
   );

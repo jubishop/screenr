@@ -54,4 +54,7 @@ export const browserConfig = {
   appURL: `http://localhost:${port + 3}`,
   databaseName,
   databaseURL: database.href,
+  // The application's failure lines during a run, which browser-server writes
+  // and the failure line reporter checks once the run ends.
+  failureLines: `${checkoutRoot}/.cache/browser-failure-lines.jsonl`,
 } as const;

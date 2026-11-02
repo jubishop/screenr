@@ -63,6 +63,7 @@ export function fakeApple() {
     const [header, payload, signature] = (
       form.get("client_secret") ?? ""
     ).split(".");
+    if (!header || !payload) return false;
     const claims = decode(payload);
     const now = Date.now() / 1000;
     return (
@@ -183,12 +184,46 @@ export function fakeApple() {
 
 export function fakeGoogle() {
   const identity = issuer("https://accounts.google.com", "google-test-key");
+  const webClient = {
+    id: "web-client.apps.googleusercontent.com",
+    secret: "web-secret",
+  };
+  // The form of each request to the token endpoint.
+  const exchanges: URLSearchParams[] = [];
+
+  // Google's token endpoint authenticates the web client before it reads the
+  // code, with Google's replies: a wrong client ID or secret is
+  // invalid_client. It issues no codes, so an exchange by the right client is
+  // invalid_grant, as for an expired or already used code.
+  function token(form: URLSearchParams) {
+    exchanges.push(form);
+    if (
+      form.get("client_id") !== webClient.id ||
+      form.get("client_secret") !== webClient.secret
+    )
+      return json(
+        { error: "invalid_client", error_description: "Unauthorized" },
+        401,
+      );
+    return json(
+      { error: "invalid_grant", error_description: "Bad Request" },
+      400,
+    );
+  }
+
   return {
+    webClient,
+    exchanges,
     idToken: (claims: Record<string, unknown>) =>
       identity.idToken({ email_verified: true, ...claims }),
-    async handle(url: URL) {
+    async handle(url: URL, init?: RequestInit) {
       if (url.href === "https://www.googleapis.com/oauth2/v3/certs")
         return json(identity.jwks);
+      if (
+        init?.method === "POST" &&
+        url.href === "https://oauth2.googleapis.com/token"
+      )
+        return token(new URLSearchParams(String(init.body ?? "")));
     },
   };
 }

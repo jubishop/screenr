@@ -73,7 +73,8 @@ public final class ScreenrClient: ScreenrAPI {
       requestID: requestID,
       status: status,
       duration: start.duration(to: .now),
-      error: error
+      error: error,
+      trigger: request.trigger
     )
     observer?.requestFinished(record)
     return try result.get()
@@ -177,12 +178,14 @@ public final class ScreenrClient: ScreenrAPI {
     switch response.statusCode {
     case 200..<300:
       let value = try Self.decode(request, from: data, requestID: context.requestID)
+      try await requireSession(of: context, for: request)
       if let cacheKey = context.cacheKey, let etag = response.value(forHTTPHeaderField: "ETag") {
         cache.withLock { $0[cacheKey] = CachedRead(etag: etag, value: value) }
       }
       try await apply(request.sessionChange, response: response, data: data, context: context)
       return value
     case 304:
+      try await requireSession(of: context, for: request)
       guard let value = context.cached?.value as? Response else {
         throw APIError(kind: .invalidResponse, requestID: context.requestID)
       }
@@ -216,6 +219,21 @@ public final class ScreenrClient: ScreenrAPI {
         break
       }
       throw error
+    }
+  }
+
+  // A response can arrive after the session that sent it ended or another
+  // replaced it, such as a poll in flight as the member signs out. Its value
+  // belongs to the earlier member, so it is neither kept nor returned, and
+  // the caller sees the request as cancelled. A request that changes the
+  // session, or carried no token, belongs to no earlier member.
+  private func requireSession<Response>(
+    of context: Context,
+    for request: APIRequest<Response>
+  ) async throws(APIError) {
+    guard request.sessionChange == .none, let sent = context.token else { return }
+    guard await session.token == sent else {
+      throw APIError(kind: .cancelled, requestID: context.requestID)
     }
   }
 

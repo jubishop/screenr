@@ -670,7 +670,10 @@ form has five star radio buttons with **Clear rating**, an optional text field,
 **Contains spoilers**, **Cancel**, and **Save review**. Opening focuses the
 chosen star or the first one. The form starts from the saved review, and
 Cancel discards changes. Save stays unavailable without a rating or text, and
-a failed save keeps the form and its draft with the error.
+a failed save keeps the form and its draft with the error. While a save is
+pending, the text is read-only and the stars, Clear rating, and Contains
+spoilers keep focus but ignore changes, so the saved review is the one the
+form showed ([issue #362](https://github.com/jubishop/screenr/issues/362)).
 
 `saveReview` in `src/server/reviews.ts` creates the entry or updates it in
 place. Changing the rating, text, or spoiler flag moves the entry up with a
@@ -739,7 +742,10 @@ Episode picker appears once a season is chosen, lists "Episode 4 · Name", and
 offers **Whole season** for a season label. Cancel keeps the choices with the
 draft, and posting clears them. When the season list cannot load, the composer
 says so and the comment posts without a label. When an episode list cannot
-load, the comment can still name the season.
+load, the comment can still name the season. A list that failed loads again
+when the composer reopens, and an episode list also when its season is
+chosen again
+([issue #362](https://github.com/jubishop/screenr/issues/362)).
 
 `createTitleComment` accepts an optional season and episode, each a whole
 number from 1 to 100,000. An episode needs its season, and labels need a TV

@@ -1,4 +1,4 @@
-import { test, afterEach, mock } from "node:test";
+import { test, afterEach, mock, type TestContext } from "node:test";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import {
@@ -14,8 +14,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { setTimeout } from "node:timers/promises";
 import { pathToFileURL } from "node:url";
+import { format } from "node:util";
 import type { PoolClient } from "pg";
-import { useDatabase, db, captureFailures } from "./social-fixture";
+import { useDatabase, db } from "./social-fixture";
 const { migrate, migrateFrom } = await import("../../scripts/migrate");
 
 useDatabase();
@@ -218,8 +219,8 @@ test("a migration run whose connection breaks fails with that error and releases
   const directory = await migrations({
     [name]: "SELECT pg_terminate_backend(pg_backend_pid());",
   });
-  // The broken connection may also be logged.
-  captureFailures();
+  // The run releases its client before the closed connection reports its
+  // end, so the broken connection logs no failure line.
   const closed = new Promise((resolve) => db.once("remove", resolve));
   try {
     const error = await migrateFrom(pathToFileURL(`${directory}/`)).then(
@@ -268,5 +269,46 @@ test("migration runs bound lock waits and statements by default, and leave no po
     await db.query("DELETE FROM screenr_migration WHERE name=$1", [name]);
     await db.query("DROP TABLE IF EXISTS migration_limit_probe");
     await rm(directory, { recursive: true, force: true });
+  }
+});
+
+// What a migration run prints through the console.
+async function printedDuring(t: TestContext, run: () => Promise<unknown>) {
+  const printed: string[] = [];
+  for (const method of ["log", "warn", "error"] as const)
+    t.mock.method(console, method, (...args: unknown[]) => {
+      printed.push(format(...args));
+    });
+  await run();
+  return printed.join("\n");
+}
+
+test("a migration run prints no Better Auth schema line for a database it already migrated", async (t) => {
+  assert.doesNotMatch(await printedDuring(t, migrate), /\[Better Auth\]/);
+});
+
+test("a migration run that creates Better Auth's missing tables prints no schema mismatch", async (t) => {
+  // A fresh database, such as the browser harness's, has none of them.
+  await db.query('DROP TABLE "rateLimit"');
+  assert.doesNotMatch(await printedDuring(t, migrate), /\[Better Auth\]/);
+  assert.equal(
+    (await db.query(`SELECT to_regclass('"rateLimit"') AS name`)).rows[0].name,
+    '"rateLimit"',
+  );
+});
+
+test("a migration run reports a Better Auth schema mismatch that remains after it", async (t) => {
+  // Better Auth never writes this column, so every verification insert fails.
+  await db.query(
+    "ALTER TABLE verification ADD COLUMN migration_probe text NOT NULL",
+  );
+  try {
+    const printed = await printedDuring(t, migrate);
+    assert.match(printed, /ERROR \[Better Auth\]: Database schema mismatch/);
+    assert.match(printed, /verification\.migration_probe/);
+  } finally {
+    await db.query(
+      "ALTER TABLE verification DROP COLUMN IF EXISTS migration_probe",
+    );
   }
 });

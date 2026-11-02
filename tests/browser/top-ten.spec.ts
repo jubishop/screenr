@@ -5,6 +5,7 @@ import { test } from "./monitored-test";
 import { friend, person, userId } from "./member-fixture";
 import { statusButton } from "./watch-status";
 import { expectErrorBeside, failAction } from "./action-errors";
+import { keepThroughFailedRead, openWithoutPolling } from "./refresh-helpers";
 
 const { updateTitleActivity, updateTopTen } =
   await import("../../src/server/title-actions");
@@ -605,4 +606,124 @@ test("phones and touch-only devices reorder only through Edit", async ({
     "Phone Pick 1",
     "Phone Pick 3",
   ]);
+});
+
+test("a title page top 10 confirmation closes for good once the title leaves the top 10", async ({
+  member,
+}) => {
+  const page = await member("toptenlatch");
+  const viewer = await userId(page);
+  const ids = await titles(997701, 2, "Latch Pick");
+  for (const id of ids) await updateTopTen(viewer, id, "add");
+  await page.goto(`/titles/movie/${ids[0].slice(6)}`);
+  const header = page.locator(".title-hero .inline-actions");
+  const button = (name: string) =>
+    header.getByRole("button", { name, exact: true });
+  await button("✓ Recommended").click();
+  const withdraw = page.getByRole("group", {
+    name: /^Remove your recommendation\? Latch Pick 1 also leaves/,
+  });
+  await expect(withdraw).toBeVisible();
+  // Leaving the top 10 closes it, and adding the title back doesn't reopen
+  // it.
+  await button("✓ #1 in your top 10").click();
+  await expect(withdraw).toHaveCount(0);
+  await button("Add to top 10").click();
+  await expect(button("✓ #2 in your top 10")).toBeVisible();
+  await expect(withdraw).toHaveCount(0);
+});
+
+test("a feed entry's top 10 confirmation closes for good once the title leaves the top 10 elsewhere", async ({
+  member,
+}) => {
+  const page = await member("toptenfeedlatch");
+  const viewer = await userId(page);
+  const maya = await person("toptenfeedlatchmaya", "Maya Latch");
+  await friend(viewer, maya);
+  const ids = await titles(997711, 2, "Feed Latch Pick");
+  await updateTopTen(viewer, ids[0], "add");
+  const mayaEntry = await updateTitleActivity(
+    maya,
+    ids[0],
+    "recommended",
+    true,
+  );
+  await page.goto("/");
+  const entry = page.locator(`[data-item-id="${mayaEntry}"]`);
+  await entry
+    .getByRole("button", { name: "✓ Recommended", exact: true })
+    .click();
+  const withdraw = entry.getByRole("group", {
+    name: /^Remove your recommendation\? Feed Latch Pick 1 also leaves/,
+  });
+  await expect(withdraw).toBeVisible();
+  await updateTopTen(viewer, ids[0], "remove");
+  await expect(withdraw).toHaveCount(0);
+  // Maya's next entry shows that the page rendered the read that brought
+  // the title back.
+  await updateTopTen(viewer, ids[0], "add");
+  await updateTitleActivity(maya, ids[1], "recommended", true);
+  await expect(
+    page.getByRole("button", { name: "New activity (1)", exact: true }),
+  ).toBeVisible();
+  await expect(withdraw).toHaveCount(0);
+});
+
+test("a failed read keeps an open top 10 confirmation open on the title page and in the feed, with its action waiting for the next read", async ({
+  member,
+}) => {
+  const page = await member("toptenkeepopen");
+  const viewer = await userId(page);
+  const maya = await person("toptenkeepopenmaya", "Maya Keep");
+  await friend(viewer, maya);
+  const ids = await titles(997721, 11, "Keep Pick");
+  for (const id of ids.slice(0, 10)) await updateTopTen(viewer, id, "add");
+  const mayaEntry = await updateTitleActivity(
+    maya,
+    ids[1],
+    "recommended",
+    true,
+  );
+  const header = page.locator(".title-hero .inline-actions");
+  const button = (name: string) =>
+    header.getByRole("button", { name, exact: true });
+
+  // The full list's replace prompt.
+  await openWithoutPolling(page, `/titles/movie/${ids[10].slice(6)}`);
+  let confirm = await keepThroughFailedRead(page, {
+    open: button("Add to top 10"),
+    question:
+      "Your top 10 is full. Choose a title to remove; Keep Pick 11 joins at #10. The title you remove stays recommended.",
+    action: "Remove #10 Keep Pick 10",
+    content: page.getByRole("heading", { name: "Keep Pick 11", level: 1 }),
+  });
+  await confirm.click();
+  await expect(button("✓ #10 in your top 10")).toBeVisible();
+
+  // Withdrawing a listed title's Recommend.
+  await openWithoutPolling(page, `/titles/movie/${ids[0].slice(6)}`);
+  confirm = await keepThroughFailedRead(page, {
+    open: button("✓ Recommended"),
+    question:
+      "Remove your recommendation? Keep Pick 1 also leaves your top 10 at #1.",
+    action: "Remove recommendation",
+    content: page.getByRole("heading", { name: "Keep Pick 1", level: 1 }),
+  });
+  await confirm.click();
+  await expect(button("Recommend to friends")).toBeVisible();
+
+  // The same from a friend's entry in the feed.
+  await openWithoutPolling(page, "/");
+  const entry = page.locator(`[data-item-id="${mayaEntry}"]`);
+  confirm = await keepThroughFailedRead(page, {
+    open: entry.getByRole("button", { name: "✓ Recommended", exact: true }),
+    question:
+      "Remove your recommendation? Keep Pick 2 also leaves your top 10 at #1.",
+    action: "Remove recommendation",
+    content: entry.getByRole("heading", { name: "Keep Pick 2" }),
+  });
+  await confirm.click();
+  await expect(
+    entry.getByRole("button", { name: "+ Recommend", exact: true }),
+  ).toBeVisible();
 });

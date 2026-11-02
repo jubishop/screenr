@@ -112,9 +112,12 @@ function Action({
 // The Friends recommend tab on Find a title: titles that direct friends
 // recommend, in the server's order, with a Movies/TV filter and a switch that
 // shows titles the viewer finished. The page-wide My services filter arrives
-// as `included`.
+// as `included`. The server applies the same filters before capping the list,
+// and `hiddenFinished` counts the finished titles it left out; filtering here
+// too keeps the list right while a read with changed filters is under way.
 export function FriendsRecommend({
   recommendations,
+  hiddenFinished,
   kind,
   setKind,
   showFinished,
@@ -126,6 +129,7 @@ export function FriendsRecommend({
   busy,
 }: {
   recommendations: ViewingTitle<FriendsRecommendation>[];
+  hiddenFinished: number;
   kind: TitleKind;
   setKind: (kind: TitleKind) => void;
   showFinished: boolean;
@@ -137,16 +141,19 @@ export function FriendsRecommend({
   busy: boolean;
 }) {
   const interactive = useInteractive();
-  if (!recommendations.length)
+  const matching = recommendations.filter(ofKind(kind)).filter(included);
+  const visible = matching.filter(withFinished(showFinished));
+  const finished =
+    matching.length - visible.length + (showFinished ? 0 : hiddenFinished);
+  // Only an unnarrowed empty list means friends recommend nothing; a
+  // narrowed one keeps its filters on screen.
+  if (!visible.length && !finished && kind === "all" && !myServices)
     return (
       <div className="empty-card">
         <h2>No recommendations yet.</h2>
         <p>When friends recommend a movie or show, it will appear here.</p>
       </div>
     );
-  const matching = recommendations.filter(ofKind(kind)).filter(included);
-  const visible = matching.filter(withFinished(showFinished));
-  const finished = matching.length - visible.length;
   const noun = `${{ all: "", movie: "movie ", tv: "TV " }[kind]}recommendation`;
   const what = `${noun}s`;
   const where = myServices ? " on your services or free" : "";

@@ -1,6 +1,6 @@
 import { test, before, after, afterEach, mock } from "node:test";
 import assert from "node:assert/strict";
-import { captureFailures, db } from "./social-fixture";
+import { captureFailures, db, failureEvents } from "./social-fixture";
 import {
   labelToken,
   saveDatabase,
@@ -54,6 +54,9 @@ type Case = {
   // A read whose request changes the world, so it starts from the saved
   // world like a write.
   changesWorld?: true;
+  // The failure events that answering the request logs, which the case
+  // captures and checks.
+  failures?: string[];
 };
 type Maybe<T> = T | ((world: World) => T | Promise<T>);
 const resolve = <T>(value: Maybe<T>, world: World) =>
@@ -243,11 +246,15 @@ const screens: Record<MemberRoute["kind"], Record<string, Case>> = {
       "Find a title: suggestions and Friends recommend, with viewing options and saved services.",
     ),
     empty: screen("nora", "/search", "Find a title with no friends' activity."),
-    "viewer-statuses": screen(
-      "cam",
-      "/search",
-      "Cam's Find a title: his own Want to watch and Caught up on friends' recommendations, free options, unknown availability, a title without a poster, and no saved services.",
-    ),
+    "viewer-statuses": {
+      ...screen(
+        "cam",
+        "/search",
+        "Cam's Find a title: his own Want to watch and Caught up on friends' recommendations, free options, unknown availability, a title without a poster, and no saved services.",
+      ),
+      // The unknown availability's provider request fails.
+      failures: ["catalog request failed"],
+    },
   },
   people: {
     default: screen(
@@ -968,42 +975,44 @@ const actions: Record<Exclude<ActionName, "screen">, Record<string, Case>> = {
       "A session older than ten minutes must sign in again before deleting the account.",
       403,
     ),
-    "apple-unavailable": write(
-      "delete-account",
-      "alice",
-      async (world) => {
-        // Alice's account has Sign in with Apple, and Apple does not confirm
-        // revoking its token, so nothing is deleted.
-        await db.query(
-          `INSERT INTO account(id,"accountId","providerId","userId","refreshToken","createdAt","updatedAt")
-          VALUES('fixture-apple-account','fixture-apple-subject','apple',$1,$2,now(),now())`,
-          [
-            world.users.alice,
-            seal(
-              "screenr-apple-token",
-              JSON.stringify({
-                clientId: "com.artisanalsoftware.Screenr",
-                refreshToken: "fixture-apple-refresh-token",
-              }),
-            ),
-          ],
-        );
-        const real = globalThis.fetch;
-        mock.method(
-          globalThis,
-          "fetch",
-          (input: string | URL, init?: RequestInit) =>
-            new URL(String(input)).hostname === "appleid.apple.com"
-              ? Promise.resolve(new Response(null, { status: 503 }))
-              : real(input, init),
-        );
-        // The server logs "apple revoke failed"; the response shows it.
-        captureFailures();
-        return {};
-      },
-      "Apple did not confirm revoking Sign in with Apple, so nothing was deleted, and the member can try again later.",
-      503,
-    ),
+    "apple-unavailable": {
+      ...write(
+        "delete-account",
+        "alice",
+        async (world) => {
+          // Alice's account has Sign in with Apple, and Apple does not confirm
+          // revoking its token, so nothing is deleted.
+          await db.query(
+            `INSERT INTO account(id,"accountId","providerId","userId","refreshToken","createdAt","updatedAt")
+            VALUES('fixture-apple-account','fixture-apple-subject','apple',$1,$2,now(),now())`,
+            [
+              world.users.alice,
+              seal(
+                "screenr-apple-token",
+                JSON.stringify({
+                  clientId: "com.artisanalsoftware.Screenr",
+                  refreshToken: "fixture-apple-refresh-token",
+                }),
+              ),
+            ],
+          );
+          const real = globalThis.fetch;
+          mock.method(
+            globalThis,
+            "fetch",
+            (input: string | URL, init?: RequestInit) =>
+              new URL(String(input)).hostname === "appleid.apple.com"
+                ? Promise.resolve(new Response(null, { status: 503 }))
+                : real(input, init),
+          );
+          return {};
+        },
+        "Apple did not confirm revoking Sign in with Apple, so nothing was deleted, and the member can try again later.",
+        503,
+      ),
+      // The server logs that Apple did not confirm the revocation.
+      failures: ["apple revoke failed"],
+    },
   },
 };
 
@@ -1269,12 +1278,14 @@ const cases: [string, Case][] = [
 
 async function record(file: string, item: Case, world: World) {
   const request = await item.request(world);
+  const printed = item.failures && captureFailures();
   const result = await send(world, item.viewer, request, item.method);
   assert.equal(
     result.status,
     item.status,
     `${file} responded ${JSON.stringify(result.body)}`,
   );
+  if (printed) assert.deepEqual(failureEvents(printed), item.failures);
   const fixture: Fixture = world.placeholders.scrub({
     description: item.description,
     viewer: item.viewer,

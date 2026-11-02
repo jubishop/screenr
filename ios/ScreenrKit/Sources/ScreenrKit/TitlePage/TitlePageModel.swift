@@ -45,12 +45,18 @@ public final class TitlePageModel {
   public let review: ReviewEditor
   public private(set) var write = Write.idle
   public private(set) var failure: Failure?
-  public var sheet: Sheet?
+  // Closing the review form, however it closes, ends its draft.
+  public var sheet: Sheet? {
+    didSet { if oldValue == .review, sheet != .review { review.close() } }
+  }
   // Withdrawing a ranked Recommend, or switching it to Want to watch, waiting
   // for the member's confirmation.
   public var leaving: TopTenLeaving?
   // A failed replacement, shown with the choices until they close.
   public private(set) var replaceFailure: String?
+  // The page's latest header, which the sheets show, so they stay open
+  // through a failed read.
+  public private(set) var header: TitleHeader?
 
   // `refresh` reads the page again, such as `ScreenModel.refresh()`.
   public init(
@@ -69,10 +75,12 @@ public final class TitlePageModel {
     return failure.message
   }
 
-  // A prompt closes once the page no longer needs it, such as after a change
-  // in another app or on the web: the replacement once the title is listed,
-  // and a confirmation once the title has no ranked Recommend to lose.
+  // Takes each header the page reads. A prompt closes once the page no
+  // longer needs it, such as after a change in another app or on the web:
+  // the replacement once the title is listed, and a confirmation once the
+  // title has no ranked Recommend to lose.
   public func reconcile(with header: TitleHeader) {
+    self.header = header
     if sheet == .replace, header.rank != nil { sheet = nil }
     if leaving != nil, !header.recommended || header.rank == nil { leaving = nil }
   }
@@ -176,9 +184,10 @@ public final class TitlePageModel {
 
   // MARK: - Review
 
-  // Opens the review form from the saved review, or empty.
+  // Opens the review form from the saved review, or empty, unless it still
+  // holds a draft.
   public func openReview(_ header: TitleHeader) {
-    review.start(from: header.review)
+    review.open(from: header.review)
     sheet = .review
   }
 
@@ -210,8 +219,9 @@ public final class TitlePageModel {
 }
 
 // The review form's draft and its save and removal. The draft starts from
-// the saved review each time the form opens, and closing the form discards
-// changes, as on the web. A failure keeps the form and its draft.
+// the saved review when the form opens and lasts until the form closes, so
+// closing it discards changes, as on the web, and opening it again before
+// then keeps them. A failure keeps the form and its draft.
 @MainActor
 @Observable
 public final class ReviewEditor {
@@ -221,8 +231,14 @@ public final class ReviewEditor {
     case confirmingRemoval
   }
 
+  private enum Form {
+    case closed
+    case open
+  }
+
   @ObservationIgnored private let api: any ScreenrAPI
   @ObservationIgnored private let refresh: @MainActor () async -> Void
+  @ObservationIgnored private var form = Form.closed
 
   public private(set) var draft = ReviewDraft()
   public private(set) var state = WriteState.idle
@@ -235,10 +251,18 @@ public final class ReviewEditor {
 
   public var canSave: Bool { !draft.isEmpty && state != .saving }
 
-  public func start(from saved: ReviewDraft?) {
+  // Starts the draft from `saved` unless the form is already open.
+  func open(from saved: ReviewDraft?) {
+    guard form == .closed else { return }
+    form = .open
     draft = saved ?? ReviewDraft()
     state = .idle
     step = .editing
+  }
+
+  // The form closed, so the next one starts from the saved review.
+  func close() {
+    form = .closed
   }
 
   // Chooses a rating from 1 to 5 stars, or clears it with nil.

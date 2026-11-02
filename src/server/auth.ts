@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from "node:async_hooks";
 import { createHash } from "node:crypto";
 import { betterAuth, type BetterAuthPlugin } from "better-auth";
 import {
@@ -17,6 +18,7 @@ import {
 import { db, transaction } from "./db";
 import { activeInvitation, invitationHash } from "./invitations";
 import { queueCode } from "./email";
+import { googleClientRejections } from "./google-client";
 import { logFailure } from "./log";
 import { copyGooglePhoto } from "./photos";
 
@@ -135,6 +137,14 @@ async function reserveCodeEmail(email: string) {
   }, codeLock);
 }
 
+// Failures logCallbackFailure logged. Better Auth's router rethrows one when
+// it ends the request, and logEndpointFailure skips it.
+const loggedCallbackFailures = new WeakSet<object>();
+const loggedCallbackFailure = (error: unknown) =>
+  typeof error === "object" &&
+  error !== null &&
+  loggedCallbackFailures.has(error);
+
 // Better Auth catches what Screenr's callbacks throw and prints only its own
 // unstructured line: a code request whose email fails still answers success,
 // and a failed sign-in step answers a generic error. Each callback runs
@@ -144,10 +154,133 @@ async function logCallbackFailure<T>(callback: string, run: () => Promise<T>) {
   try {
     return await run();
   } catch (error) {
-    if (!isAPIError(error))
+    if (!isAPIError(error)) {
       logFailure("auth callback failed", { callback }, error);
+      if (typeof error === "object" && error !== null)
+        loggedCallbackFailures.add(error);
+    }
     throw error;
   }
+}
+
+// The Better Auth endpoint that each request through the handler reached, as
+// its route pattern, such as /callback/:id, never the requested path, which
+// can hold a token, and the provider an OAuth callback names. Better Auth's
+// before hook records them.
+const endpointReached = new AsyncLocalStorage<{
+  path?: string;
+  provider?: string;
+}>();
+
+// Better Auth's router rethrows, under onAPIError.throw, an error that its
+// endpoints, hooks, or adapter throw, such as a database error while it checks
+// a code. Otherwise its router library, better-call, would print the whole
+// error, whose message and PostgreSQL detail can quote the failing row. The
+// handler logs it here, as it does an error the router never catches, such as
+// a failed rate-limit read, and answers the bare 500 that better-call would
+// have. The router still answers an APIError itself, and errors that Better
+// Auth catches itself never reach this, such as those that end an OAuth
+// callback in a redirect with ?error=; logCaughtFailure logs those.
+function logEndpointFailure(error: unknown) {
+  if (loggedCallbackFailure(error)) return;
+  logFailure(
+    "auth endpoint failed",
+    { endpoint: endpointReached.getStore()?.path },
+    error,
+  );
+}
+
+// The codes of the errors Better Auth logs when an OAuth callback brings a
+// state it can't use: unknown, already used, expired, or from another browser.
+// A client causes these, not a server failure. Better Auth's StateError keeps
+// the BetterAuthError name, and the production build renames its class.
+const clientStateCodes = new Set([
+  "state_not_found",
+  "state_mismatch",
+  "state_security_mismatch",
+  "state_invalid",
+]);
+const clientStateError = (error: Error) => {
+  const code = (error as { code?: unknown }).code;
+  return (
+    error.name === "BetterAuthError" &&
+    typeof code === "string" &&
+    clientStateCodes.has(code)
+  );
+};
+
+// When Google's token endpoint rejects a web Google sign-in's code, Better
+// Auth logs Google's JSON reply, with the HTTP status and status text added,
+// as a plain object, not an Error. Only the status and an error code that
+// names Screenr's own client (googleClientRejections) are read from it, never
+// Google's description.
+function googleClientRejection(args: unknown[]) {
+  const reached = endpointReached.getStore();
+  if (reached?.path !== "/callback/:id" || reached.provider !== "google")
+    return undefined;
+  for (const arg of args) {
+    if (typeof arg !== "object" || arg === null || arg instanceof Error)
+      continue;
+    const { error, status } = arg as { error?: unknown; status?: unknown };
+    if (
+      typeof error === "string" &&
+      googleClientRejections.has(error) &&
+      typeof status === "number"
+    )
+      return { status, reason: error };
+  }
+  return undefined;
+}
+
+// Better Auth catches some failures, answers them itself, and logs the error
+// at error level among its arguments: a database error while Google or Apple
+// sign-in finds or creates the account ends in an error redirect or answer, a
+// failed session read in a 500, and a failed sign-out still succeeds. Each
+// such error is logged here, except an APIError, which is a deliberate
+// answer; a failure logCallbackFailure already logged; and a bad OAuth state,
+// which a client causes (docs/deployment.md#failure-logs).
+// Google's rejection of Screenr's own web client in a code exchange, which
+// arrives as a plain object, is logged here too.
+function logCaughtFailure(args: unknown[]) {
+  const rejection = googleClientRejection(args);
+  if (rejection) {
+    logFailure("google client rejected", rejection);
+    return;
+  }
+  const error = args.find((arg) => arg instanceof Error);
+  if (
+    !error ||
+    isAPIError(error) ||
+    loggedCallbackFailure(error) ||
+    clientStateError(error)
+  )
+    return;
+  logFailure(
+    "auth failure caught",
+    { endpoint: endpointReached.getStore()?.path },
+    error,
+  );
+}
+
+// Better Auth prints its own lines, at warn level and above, through this in
+// place of the console. Each keeps only Better Auth's message, never the other
+// arguments, such as the error it caught, whose message and PostgreSQL fields
+// can quote the values that failed. A few calls pass the error itself as the
+// message; those print its class. An error-level line's error is logged as a
+// failure too.
+function betterAuthLog(level: string, message: unknown, ...args: unknown[]) {
+  const text =
+    typeof message === "string"
+      ? message
+      : message instanceof Error
+        ? message.constructor.name
+        : typeof message;
+  const line = `${level.toUpperCase()} [Better Auth]: ${text}`;
+  if (level === "error") {
+    console.error(line);
+    logCaughtFailure([message, ...args]);
+  } else if (level === "warn") console.warn(line);
+  else console.log(line);
 }
 
 // The bearer plugin returns the session token in `set-auth-token` whenever a
@@ -167,6 +300,44 @@ const nativeTokenOnly = {
           ),
         handler: createAuthMiddleware(async (ctx) => {
           ctx.context.responseHeaders?.delete("set-auth-token");
+        }),
+      },
+    ],
+  },
+} satisfies BetterAuthPlugin;
+
+// Better Auth's sign-out logs a failed session delete and still answers
+// success. The client would then drop a session that stays live, and an
+// iPhone's push devices with it would keep receiving alerts. While the
+// session row survives, or the check cannot tell, sign-out fails instead and
+// keeps the browser's cookie, so either client keeps its session and can try
+// again (docs/data-and-access.md#native-client-sessions).
+const confirmedSignOut = {
+  id: "confirmed-sign-out",
+  hooks: {
+    after: [
+      {
+        matcher: (context) => context.path === "/sign-out",
+        handler: createAuthMiddleware(async (ctx) => {
+          const token = await ctx.getSignedCookie(
+            ctx.context.authCookies.sessionToken.name,
+            ctx.context.secret,
+          );
+          if (!token) return;
+          try {
+            const { rowCount } = await db.query(
+              "SELECT 1 FROM session WHERE token=$1",
+              [token],
+            );
+            if (!rowCount) return;
+            logFailure("sign out failed", {});
+          } catch (error) {
+            logFailure("sign out failed", {}, error);
+          }
+          ctx.context.responseHeaders?.delete("set-cookie");
+          throw new APIError("INTERNAL_SERVER_ERROR", {
+            message: "Could not sign out. Try again.",
+          });
         }),
       },
     ],
@@ -253,16 +424,20 @@ export function createAuth(
     rateLimit?: boolean;
     // Tests replace Google's image servers.
     fetchPhoto?: typeof fetch;
+    // Better Auth checks its tables when an instance starts and on each
+    // request. Migrations turn that off and check after they run.
+    validateSchema?: boolean;
   } = {},
 ) {
   // Tests and fixtures that disable rate limits also skip the code caps.
   const limited = options.rateLimit ?? true;
   const reviewCode = reviewSignInCode();
-  return betterAuth({
+  const betterAuthInstance = betterAuth({
     appName: "Screenr",
     baseURL: process.env.BETTER_AUTH_URL,
     secret: process.env.BETTER_AUTH_SECRET,
     database: db,
+    advanced: { database: { validateSchema: options.validateSchema ?? true } },
     telemetry: { enabled: false },
     // Screenr has no passwords. Better Auth registers these routes anyway.
     disabledPaths: [
@@ -278,6 +453,13 @@ export function createAuth(
       // Screenr never calls this one. It checks a code without consuming it,
       // and concurrent guesses evade its attempt limit.
       "/email-otp/check-verification-otp",
+      // Screenr never calls these either. The refresh route would send an
+      // Apple account's sealed refresh token to Apple's token endpoint under
+      // Screenr's bundle ID, and the other two refresh through the same code
+      // when a stored access token has expired.
+      "/refresh-token",
+      "/get-access-token",
+      "/account-info",
     ],
     socialProviders: { ...googleProvider(), ...appleProvider() },
     user: {
@@ -312,15 +494,27 @@ export function createAuth(
         "/invitation": { window: 60, max: 10 },
       },
     },
+    onAPIError: { throw: true },
+    logger: { log: betterAuthLog },
     hooks: {
-      before: createAuthMiddleware((ctx) =>
-        logCallbackFailure("hooks.before", async () => {
+      before: createAuthMiddleware((ctx) => {
+        // Better Auth runs this hook for every endpoint a request reaches.
+        const reached = endpointReached.getStore();
+        if (reached && !reached.path) {
+          reached.path = ctx.path;
+          reached.provider = ctx.params?.id;
+        }
+        return logCallbackFailure("hooks.before", async () => {
           // The web has no Sign in with Apple; its redirect sign-in would
-          // otherwise fail for want of a client secret.
+          // otherwise fail for want of a client secret. Its OAuth callback is
+          // refused too: Better Auth doesn't tie a state to its provider, so
+          // anyone could bring a Google sign-in's state there and make Screenr
+          // send codes to Apple's token endpoint under its bundle ID.
           if (
-            (ctx.path === "/sign-in/social" || ctx.path === "/link-social") &&
-            ctx.body?.provider === "apple" &&
-            !ctx.body?.idToken
+            ((ctx.path === "/sign-in/social" || ctx.path === "/link-social") &&
+              ctx.body?.provider === "apple" &&
+              !ctx.body?.idToken) ||
+            (ctx.path === "/callback/:id" && ctx.params?.id === "apple")
           )
             throw new APIError("NOT_FOUND", { message: appleOnlyInApp });
           // Runs before Better Auth replaces the address's current code, so a
@@ -335,8 +529,8 @@ export function createAuth(
             throw new APIError("TOO_MANY_REQUESTS", {
               message: codeLimitMessage,
             });
-        }),
-      ),
+        });
+      }),
     },
     plugins: [
       // Native clients: docs/data-and-access.md#native-client-sessions. Like
@@ -344,6 +538,7 @@ export function createAuth(
       // session row's stored token alone never signs anyone in.
       bearer({ requireSignature: true }),
       nativeTokenOnly,
+      confirmedSignOut,
       invitationCheck,
       emailOTP({
         expiresIn: 600,
@@ -434,6 +629,21 @@ export function createAuth(
       },
     },
   });
+  // Each request records the endpoint it reaches for logEndpointFailure, which
+  // logs any error Better Auth throws before the handler answers 500.
+  const handler = (request: Request) =>
+    endpointReached.run({}, async () => {
+      try {
+        return await betterAuthInstance.handler(request);
+      } catch (error) {
+        logEndpointFailure(error);
+        return new Response(null, {
+          status: 500,
+          statusText: "Internal Server Error",
+        });
+      }
+    });
+  return { ...betterAuthInstance, handler, fetch: handler };
 }
 
 let instance: ReturnType<typeof createAuth> | undefined;

@@ -1,13 +1,26 @@
 import { Pool, types, type PoolClient } from "pg";
 import { logFailure } from "./log";
 
+// The production build copies this module into each server bundle that
+// imports it, such as the pages' and the route handlers', and runs every copy
+// in the one web process; a development reload runs it again. Every copy uses
+// one pool, kept on globalThis, so the process holds at most its `max`
+// connections (docs/deployment.md#database-connections). Only the copy that
+// opens the pool adds its listeners, and they record broken connections in a
+// set that the copies also share.
+const shared = globalThis as unknown as {
+  screenrPool?: Pool;
+  screenrBrokenConnections?: WeakSet<PoolClient>;
+};
+
 // pg emits an `error` event when PostgreSQL ends a connection outside a query,
 // as a restart or crash recovery does. The pool forwards an idle connection's
-// event; a checked-out one, such as the worker's during a Resend request,
+// event; a checked-out one, such as one between a transaction's queries,
 // emits its own. Unheard, either would stop the process. Each broken
 // connection is logged once. The pool then drops it, and the next query on a
 // checked-out one fails for its caller to handle.
-const brokenConnections = new WeakSet<PoolClient>();
+const brokenConnections = (shared.screenrBrokenConnections ??=
+  new WeakSet<PoolClient>());
 function connectionFailed(error: Error, client: PoolClient) {
   if (brokenConnections.has(client)) return;
   brokenConnections.add(client);
@@ -24,11 +37,10 @@ function watch(pool: Pool) {
   pool.on("release", (_error, client) =>
     client.off("error", checkedOutConnectionFailed),
   );
+  return pool;
 }
 
-const globalDB = globalThis as unknown as { screenrPool?: Pool };
-export const db =
-  globalDB.screenrPool ??
+export const db = (shared.screenrPool ??= watch(
   new Pool({
     connectionString: process.env.DATABASE_URL,
     max: 8,
@@ -50,10 +62,8 @@ export const db =
         return types.getTypeParser(oid, format);
       },
     },
-  });
-// A development reload reuses the pool, which keeps its listeners.
-if (db !== globalDB.screenrPool) watch(db);
-if (process.env.NODE_ENV !== "production") globalDB.screenrPool = db;
+  }),
+));
 
 // All domain mutations share this lock. This small invite-only app favors a
 // clear ordering between permission changes and content writes.
@@ -66,9 +76,10 @@ export async function transaction<T>(
   const client = await db.connect();
   let rolledBack = true;
   try {
-    // Bound every lock wait, including the shared lock held during activity
-    // email sends, so queued writes return their pool connections well before
-    // the five-second connection timeout that session lookups also use.
+    // Bound every lock wait, including the shared lock the email worker holds
+    // while it builds an activity email, so queued writes return their pool
+    // connections well before the five-second connection timeout that session
+    // lookups also use.
     await client.query("BEGIN; SET LOCAL lock_timeout = '2s'");
     await client.query("SELECT pg_advisory_xact_lock($1)", [lock]);
     const result = await work(client);
@@ -98,6 +109,22 @@ export async function rollback(client: PoolClient) {
       logFailure("database rollback failed", {}, error);
     return false;
   }
+}
+
+// Runs independent work, such as queries, side by side as Promise.all does,
+// but waits for every part to settle before it rejects, with the first failure
+// in `work`'s order. Promise.all rejects at the first failure while the other
+// parts run on, so a request could answer while its queries still ran and
+// held their locks; a test's table reset then deadlocked with one (#469).
+export async function settleAll<const T extends readonly unknown[]>(
+  work: T,
+): Promise<{ -readonly [K in keyof T]: Awaited<T[K]> }> {
+  const results = await Promise.allSettled(work);
+  for (const result of results)
+    if (result.status === "rejected") throw result.reason;
+  return results.map(
+    (result) => (result as PromiseFulfilledResult<unknown>).value,
+  ) as { -readonly [K in keyof T]: Awaited<T[K]> };
 }
 
 export class AppError extends Error {

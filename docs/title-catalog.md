@@ -38,13 +38,42 @@ Each failed TMDB request other than a 404 is
 [logged](deployment.md#failure-logs) once for each member request, with
 TMDB's status: `catalog token rejected` for a 401 or 403, which means
 `TMDB_READ_TOKEN` no longer works, and `catalog request failed` for anything
-else. A failed read or write of the title, trailer, or availability cache is
+else. A TMDB answer the catalog rejects as invalid, such as details without a
+name, is logged the same way as `catalog response invalid`, naming the lookup
+it answered but none of its values; the lookup still fails or serves what it
+has. A failed read or write of the title, trailer, or availability cache is
 logged as `catalog cache failed`; the page serves what it has, as for a TMDB
 failure.
 
 `public/tmdb.svg` is the unmodified approved short logo from the
 [TMDB logo page](https://www.themoviedb.org/about/logos-attribution).
 The Credits page supplies the required attribution notice.
+
+## Catalog retention
+
+A title's cached catalog rows stay while anything other than those caches
+references the title: a conversation, which every member action and post on
+it has, a top 10 entry, or a Want to watch save in
+[usage telemetry](usage-telemetry.md). For any other title, the worker's
+periodic cleanup, about once a minute, deletes each row 30 days after it
+expired:
+
+- an availability row 30 days after its refresh came due, which is a day
+  after its last fetch or five minutes after a failed attempt;
+- a trailer 30 days after it expired, likewise;
+- the title's details once neither remains, 30 days after they expired.
+  Details expire a day after they are fetched, at a failed refresh's retry
+  time, or, for a search result whose details never loaded, when search
+  stored it. Migration `038-title-stored-at.sql` adds `title.stored_at` for
+  that last case, which the previous release ignores; titles stored before
+  it count from the migration.
+
+Search results are the title rows that search stores, so they go the same
+way. A page, list, or search that shows a title refreshes what it needs, so
+only titles that no one has looked at for about a month lose their rows, and
+a later visit fetches the title as one never stored.
+[Issue #377](https://github.com/jubishop/screenr/issues/377) settled these
+periods as routine; `tests/app/retention.test.ts` covers them.
 
 ## TMDB user score — 2026-10-30
 
@@ -267,4 +296,5 @@ beside them, and a trailing year or kind, such as "Fight Club" from "Fight
 Club (1999) - IMDb" and "Stranger Things" from "Check out Stranger Things on
 Netflix!". It is at most 120 characters, the search's limit.
 `tests/app/shared-links.test.ts` covers each source against fake TMDB and
-page servers.
+page servers, along with the redirect and size limits and a dropped
+connection.

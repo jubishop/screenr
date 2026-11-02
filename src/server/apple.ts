@@ -1,4 +1,5 @@
 import { APIError } from "better-auth/api";
+import type { PoolClient } from "pg";
 import { applePrivateKey, signAppleJWT } from "./apple-jwt";
 import { db } from "./db";
 import { logFailure } from "./log";
@@ -33,10 +34,18 @@ function settings() {
 // Sign in with Apple.
 export const appleConfigured = () => settings() !== null;
 
+// Thrown for a request to Apple without the settings, which no retry fixes
+// until they are restored.
+export class AppleSettingsMissing extends Error {
+  constructor() {
+    super("Sign in with Apple is not configured.");
+  }
+}
+
 // Apple's client secret is a short-lived JWT naming the app as its subject.
 function clientSecret(clientId: string) {
   const configured = settings();
-  if (!configured) throw new Error("Sign in with Apple is not configured.");
+  if (!configured) throw new AppleSettingsMissing();
   const now = Math.floor(Date.now() / 1000);
   return signAppleJWT(
     applePrivateKey(configured.privateKey),
@@ -76,6 +85,9 @@ const claims = (jwt: unknown): { sub?: unknown; aud?: unknown } => {
 
 const sealPurpose = "screenr-apple-token";
 type StoredToken = { clientId: string; refreshToken: string };
+// Throws for a token sealed under an earlier BETTER_AUTH_SECRET.
+const unsealToken = (sealed: string): StoredToken =>
+  JSON.parse(unseal(sealPurpose, sealed));
 
 const notConfirmed = () =>
   new APIError("UNAUTHORIZED", {
@@ -140,9 +152,10 @@ export async function sealAppleRefreshToken(idToken: unknown, code: unknown) {
 // Revokes the person's Sign in with Apple tokens, which ends Screenr's
 // authorization in their Apple ID settings. Account deletion calls this
 // before deleting the user, whose account rows hold the tokens. It throws if
-// Apple does not confirm, and keeps that token so a retry can revoke it. A
-// token sealed under an earlier BETTER_AUTH_SECRET can never be read or
-// revoked, so it is logged and skipped rather than blocking deletion.
+// Apple does not confirm, and keeps that token so a retry can revoke it.
+// Without the settings, it throws AppleSettingsMissing. A token sealed under
+// an earlier BETTER_AUTH_SECRET can never be read or revoked, so it is logged
+// and skipped rather than blocking deletion.
 export async function revokeAppleTokens(userId: string) {
   const { rows } = await db.query<{ id: string; refreshToken: string }>(
     `SELECT id, "refreshToken" FROM account
@@ -152,7 +165,7 @@ export async function revokeAppleTokens(userId: string) {
   for (const row of rows) {
     let stored: StoredToken;
     try {
-      stored = JSON.parse(unseal(sealPurpose, row.refreshToken));
+      stored = unsealToken(row.refreshToken);
     } catch (error) {
       logFailure("apple token unreadable", {}, error);
       continue;
@@ -166,10 +179,34 @@ export async function revokeAppleTokens(userId: string) {
       throw new Error(
         `Apple did not revoke the Sign in with Apple token (HTTP ${response.status}).`,
       );
-    // A sign-in during revocation may have stored a newer token; keep it.
+    // A sign-in during revocation may have stored a newer token; keep it
+    // for appleTokenStored to find.
     await db.query(
       `UPDATE account SET "refreshToken"=NULL WHERE id=$1 AND "refreshToken"=$2`,
       [row.id, row.refreshToken],
     );
   }
+}
+
+// Whether the person still has an Apple token that revokeAppleTokens could
+// read, such as one a sign-in stored after revocation began. Account deletion
+// asks in its erase transaction. Until that transaction ends, the user row's
+// lock holds back a new account row's foreign key check, and the Apple rows'
+// locks hold back a sign-in storing a newer token, so none is stored unseen.
+export async function appleTokenStored(client: PoolClient, userId: string) {
+  await client.query('SELECT 1 FROM "user" WHERE id=$1 FOR UPDATE', [userId]);
+  const { rows } = await client.query<{ refreshToken: string }>(
+    `SELECT "refreshToken" FROM account
+    WHERE "userId"=$1 AND "providerId"='apple' AND "refreshToken" IS NOT NULL
+    FOR UPDATE`,
+    [userId],
+  );
+  return rows.some(({ refreshToken }) => {
+    try {
+      unsealToken(refreshToken);
+      return true;
+    } catch {
+      return false;
+    }
+  });
 }

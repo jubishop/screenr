@@ -10,6 +10,8 @@ const result = spawnSync(
   [
     "--import",
     "tsx",
+    "--import",
+    "./tests/app/failure-guard.ts",
     "--enable-source-maps",
     "--test",
     "--test-concurrency=1",

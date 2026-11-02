@@ -61,12 +61,18 @@ export function TitleView({
   const from = useSearchParams().get("from") as SaveSurface | null;
   const surface = from && origins.includes(from) ? from : "title";
   const failure = useActionError();
-  const own = (data?.conversations ?? []).filter(
+  // A failed read clears `data` and hides the title. Its prompts and the
+  // review's Remove confirmation keep the last title, so an open one stays,
+  // alone, with its action waiting for the next read.
+  const [last, setLast] = useState(data);
+  if (data && data !== last) setLast(data);
+  const shown = data ?? last;
+  const own = (shown?.conversations ?? []).filter(
     (c) => c.owner_id === user.user_id,
   );
   const ownReview = own.find((c) => c.item_type === "review" && c.active);
   const review = useReviewEditor({
-    titleId: data?.title.id ?? null,
+    titleId: shown?.title.id ?? null,
     saved: ownReview
       ? {
           rating: ownReview.rating,
@@ -74,17 +80,18 @@ export function TitleView({
           spoiler: ownReview.spoiler,
         }
       : null,
+    available: !!data,
     refresh,
   });
   const recommended = own.some((c) => c.recommended);
   // The viewer's own top 10 and this title's rank in it.
-  const entries = data?.topTen ?? [];
-  const rank = entries.find((entry) => entry.id === data?.title.id)?.rank;
+  const entries = shown?.topTen ?? [];
+  const rank = entries.find((entry) => entry.id === shown?.title.id)?.rank;
   // One in-page prompt at a time beneath the header buttons: confirming that
   // withdrawing Recommend, or switching to Want to watch, also leaves the top
-  // 10, or choosing an entry to remove from a full list. A prompt closes on
-  // its own once its title no longer needs it, such as after a change in
-  // another tab.
+  // 10, or choosing an entry to remove from a full list. A prompt closes for
+  // good once its title no longer needs it, such as after a change in
+  // another tab, so it never reopens unasked.
   const [prompt, setPrompt] = useState<"withdraw" | "switch" | "replace">();
   const open =
     prompt === "replace"
@@ -94,6 +101,7 @@ export function TitleView({
       : prompt && rank && recommended
         ? prompt
         : undefined;
+  if (prompt && !open) setPrompt(undefined);
   const recommendButton = useRef<HTMLButtonElement>(null);
   const statusButton = useRef<HTMLButtonElement>(null);
   const topTenButton = useRef<HTMLButtonElement>(null);
@@ -108,93 +116,109 @@ export function TitleView({
   }
   return (
     <>
-      {data && (
+      {shown && (
         <>
           <div className="title-hero">
-            <Poster
-              path={data.title.poster_path}
-              name={data.title.name}
-              large
-            />
+            {data && (
+              <Poster
+                path={data.title.poster_path}
+                name={data.title.name}
+                large
+              />
+            )}
             <div>
-              <p className="eyebrow">
-                {data.title.kind === "movie" ? "MOVIE" : "TV SHOW"} ·{" "}
-                {data.title.release_date.slice(0, 4) || "DATE UNAVAILABLE"}
-              </p>
-              <h1>{data.title.name}</h1>
-              <p className="overview">
-                {data.title.overview || "No synopsis available."}
-              </p>
-              <div className="inline-actions">
-                <ActionButton
-                  ref={recommendButton}
-                  className="primary"
-                  disabled={!interactive}
-                  unavailable={busy}
-                  onClick={() => {
-                    if (recommended && rank) ask("withdraw");
-                    else
-                      void failure.run(() =>
-                        activity(data.title.id, "recommended", !recommended),
-                      );
-                  }}
-                >
-                  {recommended ? "✓ Recommended" : "Recommend to friends"}
-                </ActionButton>
-                {/* Adding recommends the title; the listed state removes it
+              {data && (
+                <>
+                  <p className="eyebrow">
+                    {data.title.kind === "movie" ? "MOVIE" : "TV SHOW"} ·{" "}
+                    {data.title.release_date.slice(0, 4) || "DATE UNAVAILABLE"}
+                  </p>
+                  <h1>{data.title.name}</h1>
+                  <p className="overview">
+                    {data.title.overview || "No synopsis available."}
+                  </p>
+                  <div className="inline-actions">
+                    <ActionButton
+                      ref={recommendButton}
+                      className="primary"
+                      disabled={!interactive}
+                      unavailable={busy}
+                      onClick={() => {
+                        if (recommended && rank) ask("withdraw");
+                        else
+                          void failure.run(() =>
+                            activity(
+                              data.title.id,
+                              "recommended",
+                              !recommended,
+                            ),
+                          );
+                      }}
+                    >
+                      {recommended ? "✓ Recommended" : "Recommend to friends"}
+                    </ActionButton>
+                    {/* Adding recommends the title; the listed state removes it
                     from the top 10 and keeps the Recommend. */}
-                <ActionButton
-                  ref={topTenButton}
-                  className="secondary"
-                  disabled={!interactive}
-                  unavailable={busy}
-                  onClick={() => {
-                    if (rank)
-                      void failure.run(() => topTen(data.title.id, "remove"));
-                    else if (entries.length >= topTenLimit) ask("replace");
-                    else void failure.run(() => topTen(data.title.id, "add"));
-                  }}
-                >
-                  {rank ? `✓ #${rank} in your top 10` : "Add to top 10"}
-                </ActionButton>
-                <WatchStatusMenu
-                  kind={data.title.kind}
-                  status={data.watch.status}
-                  finishedOn={data.watch.finished_on}
-                  disabled={!interactive}
-                  unavailable={busy}
-                  buttonRef={statusButton}
-                  onStatus={(status) => {
-                    if (status === "want_to_watch" && recommended && rank)
-                      ask("switch");
-                    else
-                      void failure.run(() =>
-                        watchStatus(
-                          data.title.id,
-                          status,
-                          status === "finished" ? localToday() : undefined,
-                          status === "want_to_watch" ? surface : undefined,
-                        ),
-                      );
-                  }}
-                  onDate={(date) =>
-                    void failure.run(() => finishedDate(data.title.id, date))
-                  }
-                />
-                {review.button}
-              </div>
-              {failure.alert}
+                    <ActionButton
+                      ref={topTenButton}
+                      className="secondary"
+                      disabled={!interactive}
+                      unavailable={busy}
+                      onClick={() => {
+                        if (rank)
+                          void failure.run(() =>
+                            topTen(data.title.id, "remove"),
+                          );
+                        else if (entries.length >= topTenLimit) ask("replace");
+                        else
+                          void failure.run(() => topTen(data.title.id, "add"));
+                      }}
+                    >
+                      {rank ? `✓ #${rank} in your top 10` : "Add to top 10"}
+                    </ActionButton>
+                    <WatchStatusMenu
+                      kind={data.title.kind}
+                      status={data.watch.status}
+                      finishedOn={data.watch.finished_on}
+                      disabled={!interactive}
+                      unavailable={busy}
+                      buttonRef={statusButton}
+                      onStatus={(status) => {
+                        if (status === "want_to_watch" && recommended && rank)
+                          ask("switch");
+                        else
+                          void failure.run(() =>
+                            watchStatus(
+                              data.title.id,
+                              status,
+                              status === "finished" ? localToday() : undefined,
+                              status === "want_to_watch" ? surface : undefined,
+                            ),
+                          );
+                      }}
+                      onDate={(date) =>
+                        void failure.run(() =>
+                          finishedDate(data.title.id, date),
+                        )
+                      }
+                    />
+                    {review.button}
+                  </div>
+                  {failure.alert}
+                </>
+              )}
               {review.panel}
               {(open === "withdraw" || open === "switch") && rank && (
                 <ConfirmAction
                   key={open}
-                  {...leavingTopTen(open, data.title.name, rank)}
+                  {...leavingTopTen(open, shown.title.name, rank)}
                   busy={busy}
+                  unavailable={!data}
                   run={() =>
                     open === "withdraw"
-                      ? activity(data.title.id, "recommended", false)
+                      ? activity(shown.title.id, "recommended", false)
                       : watchStatus(
-                          data.title.id,
+                          shown.title.id,
                           "want_to_watch",
                           undefined,
                           surface,
@@ -210,24 +234,29 @@ export function TitleView({
               )}
               {open === "replace" && (
                 <TopTenReplace
-                  name={data.title.name}
+                  name={shown.title.name}
                   entries={entries}
                   busy={busy}
-                  run={(replace) => topTen(data.title.id, "add", { replace })}
+                  unavailable={!data}
+                  run={(replace) => topTen(shown.title.id, "add", { replace })}
                   onDone={() => close(topTenButton)}
                   onCancel={() => close(topTenButton)}
                 />
               )}
-              <TitleFriends friends={data.friends} showEntry={showEntry} />
+              {data && (
+                <TitleFriends friends={data.friends} showEntry={showEntry} />
+              )}
             </div>
           </div>
-          <TitleAvailability
-            availability={data.availability}
-            release={data.release}
-            score={data.tmdb_score}
-            kind={data.title.kind}
-          />
-          {data.trailer && (
+          {data && (
+            <TitleAvailability
+              availability={data.availability}
+              release={data.release}
+              score={data.tmdb_score}
+              kind={data.title.kind}
+            />
+          )}
+          {data?.trailer && (
             <TitleTrailer
               key={`${data.title.id}/${data.trailer.key}`}
               name={data.title.name}

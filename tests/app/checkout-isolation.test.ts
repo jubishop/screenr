@@ -14,6 +14,7 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { test, type TestContext } from "node:test";
+import { setTimeout } from "node:timers/promises";
 import { promisify } from "node:util";
 import { Client } from "pg";
 import {
@@ -49,6 +50,10 @@ async function fixture(t: TestContext) {
     "scripts/test-database.ts",
     "scripts/checkout.ts",
     "scripts/browser-config.ts",
+    "scripts/failure-lines.ts",
+    "tests/app/failure-guard.ts",
+    "tests/browser/failure-line-reporter.ts",
+    "tests/browser/expected-failure-lines.ts",
   ])
     await write(path, await readFile(path, "utf8"));
   // Dependencies are read-only shared inputs. The fixture owns its config,
@@ -278,35 +283,82 @@ test("each checkout selects its own application test database unless TEST_DATABA
   assert.equal(await applicationTestDatabase(other, chosen), chosen);
 });
 
-test("preparing a checkout's database records the checkout and drops the databases of removed checkouts", async (t) => {
+// An admin connection to the local test server, with temporary checkouts and
+// databases that are removed when the test ends.
+async function databaseServer(t: TestContext) {
   const server = new URL(testDatabaseURL);
   server.pathname = "/postgres";
-  const admin = new Client({ connectionString: server.href });
-  await admin.connect();
+  const clients: Client[] = [];
   const directories: string[] = [];
   const databases = new Set<string>();
-  let holder: Client | undefined;
-  let browserRun: Client | undefined;
+  async function connect(database = "postgres") {
+    const url = new URL(server);
+    url.pathname = `/${database}`;
+    const client = new Client({ connectionString: url.href });
+    clients.push(client);
+    await client.connect();
+    return client;
+  }
+  const admin = await connect();
   t.after(async () => {
-    await holder?.end();
-    await browserRun?.end();
+    for (const client of clients.slice(1)) await client.end();
     for (const name of databases)
       await admin.query(`DROP DATABASE IF EXISTS "${name}"`);
     await admin.end();
     for (const path of directories)
       await rm(path, { recursive: true, force: true });
   });
-  async function checkout() {
-    const path = await realpath(
-      await mkdtemp(join(tmpdir(), "screenr-checkout-database-")),
-    );
-    directories.push(path);
-    return path;
-  }
-  async function prepare(name: string, root: string) {
-    databases.add(name);
-    await prepareTestDatabase(admin, name, root);
-  }
+  return {
+    admin,
+    connect,
+    databases,
+    async checkout() {
+      const path = await realpath(
+        await mkdtemp(join(tmpdir(), "screenr-checkout-database-")),
+      );
+      directories.push(path);
+      return path;
+    },
+    async prepare(name: string, root: string, client = admin) {
+      databases.add(name);
+      await prepareTestDatabase(client, name, root);
+    },
+    async record(name: string) {
+      const { rows } = await admin.query<{ oid: number; checkout: string }>(
+        `SELECT oid, shobj_description(oid, 'pg_database') AS checkout
+        FROM pg_database WHERE datname = $1`,
+        [name],
+      );
+      return rows[0];
+    },
+    // Waits until the databases with these oids are gone. Their drops run in
+    // the background, and each waits for a PostgreSQL checkpoint, which took
+    // up to 18 seconds in a parallel run, so the bound only ends a hang.
+    async dropped(oids: number[]) {
+      const start = Date.now();
+      for (;;) {
+        const { rows } = await admin.query<{ oid: number }>(
+          "SELECT oid FROM pg_database WHERE oid = ANY($1)",
+          [oids],
+        );
+        if (rows.length === 0) return;
+        assert.ok(
+          Date.now() - start < 180_000,
+          `Databases ${rows.map(({ oid }) => oid).join(", ")} were never dropped.`,
+        );
+        await setTimeout(100);
+      }
+    },
+  };
+}
+
+const backend = async (client: Client) =>
+  (await client.query<{ pid: number }>("SELECT pg_backend_pid() AS pid"))
+    .rows[0].pid;
+
+test("preparing a checkout's database records the checkout and drops the databases of removed checkouts", async (t) => {
+  const { admin, connect, databases, checkout, prepare, dropped } =
+    await databaseServer(t);
   const [live, removed, busy] = [
     await checkout(),
     await checkout(),
@@ -326,23 +378,49 @@ test("preparing a checkout's database records the checkout and drops the databas
   const interrupted = `screenr_app_${randomBytes(6).toString("hex")}_test`;
   const unrecordedBrowser = `screenr_browser_${randomBytes(6).toString("hex")}_test`;
   const building = `screenr_browser_${randomBytes(6).toString("hex")}_test`;
-  browserRun = new Client({ connectionString: server.href });
-  await browserRun.connect();
+  const browserRun = await connect();
   await browserRun.query("SELECT pg_advisory_lock(hashtextextended($1, 0))", [
     `screenr-browser:database:${building}`,
   ]);
-  for (const name of [interrupted, unrecordedBrowser, building]) {
+  // A drop that stopped before it finished left its claim unlocked. A claim
+  // that another process is dropping stays until that process drops it.
+  const abandoned = `screenr_dropping_${randomBytes(6).toString("hex")}`;
+  const claimed = `screenr_dropping_${randomBytes(6).toString("hex")}`;
+  const claimant = await connect();
+  await claimant.query("SELECT pg_advisory_lock(hashtextextended($1, 0))", [
+    `screenr-test-databases:${claimed}`,
+  ]);
+  for (const name of [
+    interrupted,
+    unrecordedBrowser,
+    building,
+    abandoned,
+    claimed,
+  ]) {
     databases.add(name);
     await admin.query(`CREATE DATABASE "${name}"`);
   }
-  const connection = new URL(server);
-  connection.pathname = `/${busyDatabase}`;
-  holder = new Client({ connectionString: connection.href });
-  await holder.connect();
+  await connect(busyDatabase);
+  // Another checkout's preparation may already have claimed an unrecorded
+  // database, but none claims the removed checkout's before it is removed.
+  const stale = await admin.query<{ oid: number }>(
+    "SELECT oid FROM pg_database WHERE datname = ANY($1)",
+    [
+      [
+        checkoutDatabase("app", removed),
+        checkoutDatabase("browser", removed),
+        interrupted,
+        unrecordedBrowser,
+        abandoned,
+      ],
+    ],
+  );
+  assert.ok(stale.rows.length >= 2);
   await rm(removed, { recursive: true });
   await rm(busy, { recursive: true });
 
   await prepare(checkoutDatabase("app", live), live);
+  await dropped(stale.rows.map(({ oid }) => oid));
   const { rows } = await admin.query<{ name: string; checkout: string | null }>(
     `SELECT datname AS name, shobj_description(oid, 'pg_database') AS checkout
     FROM pg_database WHERE datname = ANY($1) ORDER BY datname`,
@@ -358,6 +436,106 @@ test("preparing a checkout's database records the checkout and drops the databas
       // A browser run's lock keeps its database without a connection.
       [building]: null,
       [chosen]: null,
+      [claimed]: null,
     },
   );
+});
+
+test("a preparation keeps a database that another checkout is still creating", async (t) => {
+  const { admin, connect, databases, checkout, prepare, record } =
+    await databaseServer(t);
+  const [live, creating] = [await checkout(), await checkout()];
+  const database = checkoutDatabase("app", creating);
+  databases.add(database);
+  // The other checkout's preparation has its turn and has created its
+  // database, but has not yet recorded it.
+  const other = await connect();
+  const [pid, otherPid] = [await backend(admin), await backend(other)];
+  await other.query("SELECT pg_advisory_lock(hashtextextended($1, 0))", [
+    "screenr-test-databases",
+  ]);
+  await other.query(`CREATE DATABASE "${database}"`);
+  let done = false;
+  const preparing = prepare(checkoutDatabase("app", live), live).finally(
+    () => (done = true),
+  );
+  while (!done) {
+    const { rows } = await other.query<{ blocked: boolean }>(
+      "SELECT $1 = ANY(pg_blocking_pids($2)) AS blocked",
+      [otherPid, pid],
+    );
+    if (rows[0].blocked) break;
+    await setTimeout(20);
+  }
+  await other.query(
+    `COMMENT ON DATABASE "${database}" IS ${other.escapeLiteral(creating)}`,
+  );
+  await other.query("SELECT pg_advisory_unlock(hashtextextended($1, 0))", [
+    "screenr-test-databases",
+  ]);
+  await preparing;
+  assert.equal((await record(database))?.checkout, creating);
+});
+
+test("preparations leave the drops of the databases they claim to the background, and a checkout recreated at a removed path keeps its new database", async (t) => {
+  const { connect, checkout, prepare, record, dropped } =
+    await databaseServer(t);
+  const [live, recreated] = [await checkout(), await checkout()];
+  const database = checkoutDatabase("app", recreated);
+  await prepare(database, recreated);
+  const old = await record(database);
+  // Each drop waits for a PostgreSQL checkpoint, so a test start that ran one
+  // on its own connection would wait for it.
+  function watched(
+    client: Client,
+    before: (text: string) => Promise<void> = async () => {},
+  ) {
+    const proxy = Object.create(client) as Client;
+    proxy.query = (async (text: string, values?: unknown[]) => {
+      assert.ok(
+        !text.startsWith("DROP DATABASE"),
+        "A preparation waited for a drop.",
+      );
+      await before(text);
+      return client.query(text, values);
+    }) as Client["query"];
+    return proxy;
+  }
+  // The first preparation finds the checkout removed during its own turn, so
+  // no other preparation on the machine claims its database first. A drop in
+  // progress holds the claim's lock, as this connection does until the
+  // checkout has been recreated, so the claim is dropped afterward.
+  const dropper = await connect();
+  const claimLock = (call: string, name: string) =>
+    dropper.query(`SELECT ${call}(hashtextextended($1, 0))`, [
+      `screenr-test-databases:${name}`,
+    ]);
+  let claim: string | undefined;
+  await prepare(
+    checkoutDatabase("app", live),
+    live,
+    watched(await connect(), async (text) => {
+      if (text.startsWith("COMMENT ON DATABASE"))
+        await rm(recreated, { recursive: true });
+      const renamed = text.match(
+        new RegExp(`^ALTER DATABASE "${database}" RENAME TO "(\\w+)"$`),
+      )?.[1];
+      if (!renamed) return;
+      claim = renamed;
+      await claimLock("pg_try_advisory_lock", claim);
+    }),
+  );
+  assert.ok(claim, "The preparation claimed nothing.");
+  await mkdir(recreated);
+  await prepare(database, recreated, watched(await connect()));
+  const current = await record(database);
+  assert.equal(current?.checkout, recreated);
+  assert.notEqual(current.oid, old.oid);
+
+  // A later preparation starts another drop of a claim whose drop stopped
+  // before it finished.
+  await claimLock("pg_advisory_unlock", claim);
+  await prepare(checkoutDatabase("app", live), live, watched(await connect()));
+  await dropped([old.oid]);
+  assert.deepEqual(await record(database), current);
 });

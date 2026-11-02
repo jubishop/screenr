@@ -126,6 +126,19 @@ Actions. Without configured labels, including with an empty list, Dependabot
 creates and applies its own default labels. A third, `docker` entry updates
 the Caddy image that CI copies; see [CI Caddy](#ci-caddy).
 
+A fourth, `swift` entry, added on 2026-11-01
+([#380](https://github.com/jubishop/screenr/issues/380)), updates the iPhone
+app's Swift packages in `ios/ScreenrKit`. Its `Package.swift` pins each one
+exactly; the only one is `sentry-cocoa`. Like the others, it groups minor and
+patch updates, and labels them `improvement` and `area: ios`. A Swift update
+changes `ios/`, which no hosted CI checks, so run `bin/check-ios` on its
+branch before merging it ([iOS checks](#ios-checks-before-a-push)).
+Dependabot reads the manifest with `swift package show-dependencies` from its
+own toolchain, which its `swift/Dockerfile` set to Swift 6.3.1 on
+2026-11-01, and SwiftPM refuses a manifest that needs newer tools, as
+`Package.swift`'s 6.4 does. So its Swift jobs fail until Dependabot moves to
+Swift 6.4 or later, and then work without a change here.
+
 Dependabot pull requests run [the check workflow](../.github/workflows/check.yml),
 including every check `bin/check --full` runs, like any other pull request.
 GitHub gives them a read-only token and no Actions secrets, and the check jobs
@@ -180,6 +193,9 @@ every install script regardless.
 ## Checks
 
 Follow the [check schedule](foundation/engineering-policy.md#checks).
+The foundation checks in `bin/check` run ShellCheck on `.envrc` and on each
+script in `bin/` and `bin/hooks/` whose shebang names `sh`, `bash`, `dash`,
+or `ksh`.
 `bin/check-application`, which `bin/check --full` runs after the foundation
 checks, verifies the Node runtime and the installed packages, lints the POSIX
 shell scripts in `ops/`, runs the Python tests, and then runs formatting,
@@ -227,8 +243,8 @@ push finds a recorded pass. Never bypass the hook with `git push --no-verify`.
 - **iOS files:** `ios/` and `bin/format-swift`, which the app's build runs.
   The server's payload fixtures live in `ios/ScreenrKit/Fixtures/`, so a
   server change that regenerates them counts. The one exemption is Markdown
-  directly in `ios/`, such as `ios/README.md` and `ios/AGENTS.md`: no build
-  or check reads it, so changes only to it skip the check. Markdown in any
+  directly in `ios/`, such as `ios/README.md` and `ios/AGENTS.md`: no iOS
+  build or check reads it, so changes only to it skip the check. Markdown in any
   folder under `ios/` counts, because SwiftPM targets and Xcode's
   synchronized folders, such as `ios/ScreenrKit/Sources/ScreenrKit/` and
   `ios/Screenr/`, build every file in them, and SwiftPM warns about Markdown
@@ -285,12 +301,25 @@ push finds a recorded pass. Never bypass the hook with `git push --no-verify`.
   ([iPhone app guide](../ios/README.md#add-a-feature-screen)).
 - **Hook location:** Git runs the hooks in `core.hooksPath`. `bin/setup`
   sets it to the relative `bin/hooks`, so each checkout runs its own copy.
-  On the user's Mac it is the primary checkout's absolute `bin/hooks`, so
-  every worktree runs the primary checkout's hooks. Keep that checkout on
-  current `main`, or new and changed hooks do not apply. `pre-push` belongs
-  to this project; Project Starter manages only the four knowledge hooks.
+  On the user's Mac it is the primary checkout's absolute `bin/hooks`, so Git
+  runs the primary checkout's hook files for every worktree. Each one then
+  runs the pushing or committing checkout's own code
+  ([#380](https://github.com/jubishop/screenr/issues/380)). The four
+  knowledge hooks call that checkout's `bin/knowledge-hook`. `pre-push` hands
+  the push to that checkout's `bin/hooks/pre-push`, but only when the
+  checkout's `HEAD` has the last commit that changed the gate,
+  `bin/hooks/pre-push` or `bin/_ios_check_records.py`, in the checkout that
+  `core.hooksPath` names. So a branch's older copy never replaces a newer
+  gate. Without that commit, or without an executable copy, the configured
+  copy checks the push itself and says why; rebase onto `origin/main` to run
+  the branch's own copy. A copy whose gate files differ from the configured
+  ones names them before it runs, so a branch's changes to the gate run
+  visibly, as its own `bin/check-ios` always has. A new kind of hook still applies only once the
+  checkout that `core.hooksPath` names has it. `pre-push` belongs to this
+  project; Project Starter manages only the four knowledge hooks.
 - **Tests:** `tests/test_pre_push.py` pushes to a local remote, from the
-  checkout and from a linked worktree, with a simulated `bin/check-ios`, and
+  checkout and from linked worktrees, with a simulated `bin/check-ios`,
+  including the hand-off to a worktree's copy and its fallbacks, and
   `tests/test_check_ios.py` covers the records and the check's environment.
 
 ### iOS release gate
@@ -580,16 +609,17 @@ an issue at once ([#292](https://github.com/jubishop/screenr/issues/292)).
 down. One `check` job ran `bin/check --full` in sequence, and its runs on
 `main` had grown to 10 to 13 minutes, one of them 20.
 
-The check workflow runs these jobs. The first four start together, and
-together they run everything `bin/check --full` runs on Linux:
+The check workflow runs these jobs. After `scope`, the next four start
+together, and together they run everything `bin/check --full` runs on Linux:
 
 | Job | Work |
 | --- | --- |
-| `static` | `bin/check`, then `bin/check-application --part static`: shell lint for `ops/`, Python tests, formatting, and typechecking. |
+| `scope` | Runs [`bin/ci-scope`](../bin/ci-scope), which decides whether the jobs below run. |
+| `static` | `bin/check`, with its shell lint for `.envrc`, `bin/`, and `bin/hooks/`, then `bin/check-application --part static`: shell lint for `ops/`, Python tests, formatting, and typechecking. |
 | `app (I/N)` | `bin/check-application --part app --shard I/N`: one shard of the application and PostgreSQL test files, with the [pinned Caddy](#ci-caddy) and Playwright's headless Chromium for the browser harness tests. |
 | `browser (I/N)` | `bin/check-application --part browser --shard I/N`: one Playwright shard against a production build. |
-| `release` | Runs [`bin/deployment-decision`](#main-branch-delivery). When it deploys, the job builds, runs the [packaging check](deployment.md#build-and-activate-a-release), and uploads the release. |
-| `check` | Passes only when every job above passed. Pull requests show it, and `bin/deploy-ci` requires it. |
+| `release` | Runs [`bin/deployment-decision`](#main-branch-delivery), then builds the release and runs the [packaging check](deployment.md#build-and-activate-a-release) on every run, pull requests included. It uploads the release only when the run deploys. |
+| `check` | Passes only when every job above passed, or when `scope` skipped them. Merging a pull request [requires it](#required-check-on-main--2026-11-01), and so does `bin/deploy-ci`. |
 | `deploy` | Waits for `check` and deploys the package from `release`. |
 
 `bin/check-application --shard I/N` passes Playwright's `--shard` to the
@@ -599,11 +629,39 @@ that runs `npm test` gets every file. Node splits the application test files
 by their sorted position; Playwright splits browser tests evenly. Each matrix
 job uses its `strategy.job-total` as N, so adding a `shard` entry adds a shard.
 `tests/test_check_application.py` checks that the workflow runs the foundation
-checks and every part and shard, and that `check` covers every other job.
+checks and every part and shard, that `check` covers every other job and
+passes only when they passed or `scope` skipped them, and that every run
+packages the release while only a deploying run uploads it.
+
+The workflow runs for pull requests, pushes to `main`, and manual runs. A
+change only to Markdown needs no check jobs, except Markdown that a check
+reads, so that its failure can't surface first in an unrelated pull request.
+`tests/test_app_sandbox.py` scans the pages in `docs/`, `memory/`, and the
+root for runbooks that would run release code outside the sandbox
+([#371](https://github.com/jubishop/screenr/issues/371)). The `static` job's
+`bin/check` checks the links and heading anchors of every tracked Markdown
+file, which otherwise lives only in `ios/` and `bin/`
+([#439](https://github.com/jubishop/screenr/issues/439)). A change to
+Markdown in any of these folders alone runs every check job.
+
+A push to `main` skips other Markdown with a `paths` filter in the
+[engineering policy's](foundation/engineering-policy.md#hosted-ci) form. A
+run that started only to skip would join the workflow's concurrency group
+and could replace a pending run that deploys. A pull request has no filter,
+because a skipped workflow reports no status and merging requires `check`
+([#372](https://github.com/jubishop/screenr/issues/372)). Its `scope` job
+compares GitHub's test merge commit with the base it merged into, counting a
+renamed file by both paths. When only other Markdown changed, the check jobs
+are skipped and `check` passes in under a minute. Any other event, and any
+doubt, runs every job. `tests/test_app_sandbox.py` checks that the filter
+re-includes exactly these folders' globs, that `bin/ci-scope` runs the checks
+for the same Markdown, and that the globs cover every tracked Markdown file.
+Markdown added in a new folder fails that test until both skips include the
+folder.
 
 Each browser shard builds its own production artifact, as the
 [browser harness](testing.md#browser-harness) requires, and the `release` job
-builds the one it ships. A build takes about 12 seconds on a runner, less than
+builds the one it packages. A build takes about 12 seconds on a runner, less than
 sharing one artifact between jobs would cost. Only `setup-node`'s npm cache is
 kept: Playwright's headless shell and FFmpeg download in about 4 seconds, so a
 browser cache would save little and add a dependency. The jobs take nothing
@@ -619,6 +677,15 @@ In the split workflow, a pull request run passed `check` 3 minutes 5 seconds
 after it started. Every job started within 4 seconds; `static` took 89
 seconds, the app shards 134 and 149, the browser shards 164 to 176, and
 `release` 22 without packaging. On `main`, deployment follows `check`.
+Since [#370](https://github.com/jubishop/screenr/issues/370), `release`
+packages on every run. In a pull request run on 2026-11-01 it took 68
+seconds, 45 of them to build and package, while the slowest app shard took
+212, and the run passed `check` 3 minutes 40 seconds after it started.
+Since [#372](https://github.com/jubishop/screenr/issues/372), `scope` runs
+first. In a pull request run later that day, the check jobs started 10
+seconds after the run did, and it passed `check` 2 minutes 57 seconds after
+it started. A pull request that changed only `ios/README.md` passed `check`
+15 seconds after its run started.
 
 To bring a run back under budget, find the slowest job with
 `gh run view <run> --json jobs`, then add a shard to its matrix or move work
@@ -653,6 +720,11 @@ started.
   test names use.
 - **ShellCheck:** the `static` job installs ShellCheck from APT only when the
   runner image lacks it, then prints its version.
+- **PostgreSQL client commands:** the backup round trip in
+  `tests/app/backup-restore.test.ts` runs `pg_dump`, `pg_restore`, `psql`,
+  `createdb`, and `dropdb` from the image's `/usr/lib/postgresql/18/bin`, the
+  path production uses. The Ubuntu 26.04 image installs PostgreSQL 18 with
+  its service disabled.
 
 The jobs use the image's library versions, which GitHub refreshes every week
 or two, and their browsers load only local test servers. If an image drops a
@@ -705,6 +777,14 @@ a digest that disagrees with its tag cannot pass. As #122 decided, CI follows
 production's release rather than Caddy's newest, and Dependabot moves the pin,
 so nobody has to remember to bump it.
 
+[`bin/ci-caddy`](../bin/ci-caddy) does the copy. Docker Hub sometimes fails a
+pull: on 2026-10-25 a blob request answered 502 Bad Gateway and failed an
+`app` job ([#379](https://github.com/jubishop/screenr/issues/379)). So it
+tries the pull four times, waiting 5, 10, and then 15 seconds between tries,
+before the job fails. The waits add at most 30 seconds, which keeps CI under
+its 10-minute limit. `tests/test_ci_caddy.py` runs the workflow's step against
+a fake Docker whose registry fails.
+
 Dependabot's `docker` entry proposes each new release on Tuesdays, after the
 same seven-day soak as production, and merging that pull request moves CI to
 the release production adopts at about the same time. The image appears a few
@@ -743,7 +823,10 @@ version, so a pinned digest and its update pull requests would add work
 without catching a production difference. Change the tag in each service of
 `.github/workflows/check.yml`, and the Homebrew formula in
 [local setup](running-screenr.md#local-setup), with production's major version
-([#124](https://github.com/jubishop/screenr/issues/124)).
+([#124](https://github.com/jubishop/screenr/issues/124)). The
+[backup round trip](testing.md#coverage) needs the client commands of the
+server's major release, so a new major also needs them on the runner image,
+or installed in the `app` job, before CI passes.
 
 ## Main branch delivery
 
@@ -772,7 +855,7 @@ affects runtime behavior, dependencies, assets, migrations, configuration, or
 operations. When uncertain, deploy. This is an assessment of behavior, not a
 file-extension rule.
 
-To skip only release packaging and deployment, put these trailers at the end
+To skip only the release upload and deployment, put these trailers at the end
 of the main commit message, after a blank line:
 
 ```text
@@ -818,6 +901,15 @@ quota shortfall can't hold merges behind the ruleset.
 request update and rerun CI after each merge and still wouldn't test combined
 iOS code, since CI has no iOS job; and keeping the gate agent-enforced.
 
+The ruleset, `Require check on main`, targets `refs/heads/main` and requires
+the `check` status from GitHub Actions. Its bypass actor is the repository
+admin role, which only the owner's account holds, in `always` mode so direct
+pushes work. GitHub still reports a pull request as blocked while `check`
+fails or runs, such as `BLOCKED` in `gh pr view --json mergeStateStatus`.
+`gh api repos/jubishop/screenr/rulesets` lists it. The
+[check workflow](#ci-jobs) runs for every pull request, and its `scope` job
+skips the other check jobs when only Markdown that no check reads changed.
+
 ## Scheduled memory audit
 
 A weekly local job checks every active [memory](../memory/README.md) note
@@ -834,8 +926,8 @@ validation, and failure handling. Screenr's `memoryAudit` settings in
   feature's shared lock.
 - **Deployment:** each audit commit carries `Screenr-Deploy: skip` trailers,
   so a memory-only commit never forces a
-  [deployment](#main-branch-delivery). CI ignores Markdown-only pushes, so the
-  commit starts no checks itself.
+  [deployment](#main-branch-delivery). CI still runs its checks on each audit
+  push, because tests read memory notes ([CI jobs](#ci-jobs)).
 - **Failure issue:** a new `Memory audit failing` issue gets the `bug` and
   `area: tooling` labels.
 - **Index:** archiving a note removes its entry from the README's

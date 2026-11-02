@@ -350,7 +350,10 @@ reads "✓ #3 in your top 10", and choosing it removes the title from the list.
 `src/components/feed.tsx` confirm with `ConfirmAction` before a top 10 title
 loses its Recommend. Cancel or a confirmed change returns focus to the
 control that opened the prompt, and a prompt closes when a change elsewhere
-makes it unnecessary.
+makes it unnecessary. A failed read keeps an open prompt, its action waiting
+for the next read, as other
+[in-page confirmations](interface-design.md#confirm-other-destructive-actions--2026-10-12)
+do.
 
 ### Tests
 

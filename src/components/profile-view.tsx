@@ -35,6 +35,11 @@ export function ProfileView({
   saveDisplayName: (name: string) => Promise<void>;
   topTen: ChangeTopTen;
 }) {
+  // A failed read clears `data` and hides the profile. Another member's
+  // actions keep the last profile and show only an open Unfriend or Block
+  // confirmation, whose action waits for the next read.
+  const [profile, setProfile] = useState(data?.profile ?? null);
+  if (data && data.profile !== profile) setProfile(data.profile);
   return (
     <>
       {ownProfile && (
@@ -47,19 +52,22 @@ export function ProfileView({
           </div>
         </div>
       )}
-      {data?.kind === "profile" && !ownProfile && (
+      {profile && !ownProfile && (
         <div className="page-heading">
-          <div className="profile-heading">
-            <Avatar person={data.profile} />
-            <div className="profile-identity">
-              <h1>{data.profile.display_name}</h1>
-              <p className="profile-username">@{data.profile.username}</p>
+          {data && (
+            <div className="profile-heading">
+              <Avatar person={data.profile} />
+              <div className="profile-identity">
+                <h1>{data.profile.display_name}</h1>
+                <p className="profile-username">@{data.profile.username}</p>
+              </div>
             </div>
-          </div>
-          {data.profile.user_id !== user.user_id && (
+          )}
+          {profile.user_id !== user.user_id && (
             <ProfileActions
-              profile={data.profile}
+              profile={profile}
               user={user}
+              available={!!data}
               busy={busy}
               relationship={relationship}
               block={block}
@@ -126,16 +134,19 @@ export function ProfileView({
 
 // Watch together and friend-request actions stay visible. Unfriend and Block
 // sit in More actions, and each needs an in-page confirmation. A confirmed
-// Block opens the Friends page.
+// Block opens the Friends page. While the profile is not `available`, only an
+// open confirmation shows.
 function ProfileActions({
   profile,
   user,
+  available,
   busy,
   relationship,
   block,
 }: {
   profile: Profile;
   user: Person;
+  available: boolean;
   busy: boolean;
   relationship: (target: string, action: string) => Promise<void>;
   block: (person: Person) => Promise<void>;
@@ -144,9 +155,11 @@ function ProfileActions({
   const row = useRef<HTMLDivElement>(null);
   const more = useRef<HTMLButtonElement>(null);
   const [choice, setChoice] = useState<Guarded | null>(null);
-  // A friendship that ended elsewhere no longer offers Unfriend.
+  // A friendship that ended elsewhere no longer offers Unfriend, and a new
+  // one doesn't reopen its confirmation.
   const confirming =
     choice === "remove" && !profile.accepted_at ? null : choice;
+  if (choice && !confirming) setChoice(null);
   const name = profile.display_name;
   // The visible actions share one message beneath their row. The open
   // confirmation keeps its own until it closes.
@@ -183,49 +196,52 @@ function ProfileActions({
       : "";
   return (
     <>
-      <div className="inline-actions profile-actions" ref={row}>
-        {profile.accepted_at ? (
-          <Link
-            className="primary button"
-            href={`/watch-together?with=${encodeURIComponent(profile.username)}`}
-            prefetch={false}
-          >
-            Watch together
-          </Link>
-        ) : profile.requested_by === user.user_id ? (
-          <ActionButton className="secondary" {...act("remove")}>
-            Cancel friend request
-          </ActionButton>
-        ) : profile.requested_by ? (
-          <ActionButton className="primary" {...act("accept")}>
-            Accept friend request
-          </ActionButton>
-        ) : (
-          <ActionButton className="primary" {...act("request")}>
-            Send friend request
-          </ActionButton>
-        )}
-        <MoreActions
-          label={`More actions for ${name}`}
-          buttonRef={more}
-          disabled={!interactive}
-          unavailable={busy}
-          items={[
-            ...(profile.accepted_at
-              ? [{ label: "Unfriend", value: "remove" as const }]
-              : []),
-            { label: "Block", value: "block" as const },
-          ]}
-          onSelect={setChoice}
-        />
-      </div>
-      {failure.alert}
+      {available && (
+        <div className="inline-actions profile-actions" ref={row}>
+          {profile.accepted_at ? (
+            <Link
+              className="primary button"
+              href={`/watch-together?with=${encodeURIComponent(profile.username)}`}
+              prefetch={false}
+            >
+              Watch together
+            </Link>
+          ) : profile.requested_by === user.user_id ? (
+            <ActionButton className="secondary" {...act("remove")}>
+              Cancel friend request
+            </ActionButton>
+          ) : profile.requested_by ? (
+            <ActionButton className="primary" {...act("accept")}>
+              Accept friend request
+            </ActionButton>
+          ) : (
+            <ActionButton className="primary" {...act("request")}>
+              Send friend request
+            </ActionButton>
+          )}
+          <MoreActions
+            label={`More actions for ${name}`}
+            buttonRef={more}
+            disabled={!interactive}
+            unavailable={busy}
+            items={[
+              ...(profile.accepted_at
+                ? [{ label: "Unfriend", value: "remove" as const }]
+                : []),
+              { label: "Block", value: "block" as const },
+            ]}
+            onSelect={setChoice}
+          />
+        </div>
+      )}
+      {available && failure.alert}
       {confirming === "remove" && (
         <ConfirmAction
           key="remove"
           message={`Unfriend ${name}? You’ll both lose access to each other’s posts and discussions.`}
           action="Unfriend"
           busy={busy}
+          unavailable={!available}
           run={() => relationship(profile.user_id, "remove")}
           onDone={close}
           onCancel={close}
@@ -238,6 +254,7 @@ function ProfileActions({
           message={`Block ${name}? ${blockEffect}You won’t see each other’s profiles, posts, or comments, and neither of you can send a friend request until you unblock them.`}
           action="Block"
           busy={busy}
+          unavailable={!available}
           run={() => block(profile)}
           onDone={() => {}}
           onCancel={close}

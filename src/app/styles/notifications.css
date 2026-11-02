@@ -113,8 +113,14 @@
 }
 .notification-actions,
 .notification-item .confirmation,
+.notification-item > .action-error,
 .notification-result {
   margin: -4px 12px 12px 64px;
+}
+/* A failed Mark all as read's message takes its own line beneath. */
+.notification-controls > .action-error {
+  flex-basis: 100%;
+  margin: 0;
 }
 .notification-actions {
   display: flex;

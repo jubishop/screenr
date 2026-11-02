@@ -9,12 +9,22 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { ScreenData } from "../server/screens";
 import type { Person, SaveSurface, TopTenChange, WatchStatus } from "../shared";
 import {
+  initialFindFilters,
   memberPath,
   memberTitle,
   parseMemberRoute,
+  screenPath,
+  type FindFilters,
   type MemberRoute,
 } from "../member-routes";
-import { anySignal, api, ApiError, isPermanent, readChanged } from "./client";
+import {
+  anySignal,
+  api,
+  ApiError,
+  isPermanent,
+  readChanged,
+  refreshTimedOut,
+} from "./client";
 import { Avatar } from "./avatar";
 import { Icon, type IconName } from "./icons";
 import { FeedView } from "./feed";
@@ -29,7 +39,7 @@ import { ProfileView } from "./profile-view";
 import { TitleView } from "./title-view";
 import { StartConversation } from "./start-conversation";
 import { Notifications } from "./notifications";
-import { leaveNotice } from "./page-notice";
+import { leaveNotice, screenOpened } from "./page-notice";
 
 // The phone bottom bar shows the short labels; the sidebar shows full names.
 const sections: {
@@ -133,6 +143,7 @@ export function Screen({
   const screenNumber = useRef(0);
   useEffect(() => {
     screenNumber.current ||= ++screensShown;
+    screenOpened(path);
     if (screenNumber.current === 1 || !main.current) return;
     focusOnce(main.current.querySelector("h1") ?? main.current, {
       preventScroll: true,
@@ -142,6 +153,12 @@ export function Screen({
   // had none. Refreshes send it, and an unchanged screen answers 304, which
   // keeps the current data without rendering again.
   const version = useRef(initialVersion);
+  // Find a title's filters, which its reads send so the server applies them
+  // before capping each list. They start over on each visit, as the page
+  // read them, and changing one reads the screen again.
+  const [findFilters, setFindFilters] =
+    useState<FindFilters>(initialFindFilters);
+  const readPath = useRef(screenPath(path, findFilters));
   const refresh = useCallback(async () => {
     if (leaving.current) return;
     pending.current?.abort();
@@ -150,7 +167,7 @@ export function Screen({
     pending.current = controller;
     try {
       const latest = await readChanged<ScreenData & { user: Person }>(
-        `screen?path=${encodeURIComponent(path)}`,
+        `screen?path=${encodeURIComponent(readPath.current)}`,
         version.current,
         anySignal([controller.signal, timeout]),
       );
@@ -176,19 +193,30 @@ export function Screen({
           setPageTitle(memberTitle({ kind: "not-found", path }, null));
         setData(null);
         setLoadError(
-          timeout.aborted
-            ? "Refresh timed out. Please try again."
-            : (error as Error).message,
+          timeout.aborted ? refreshTimedOut : (error as Error).message,
         );
       }
     } finally {
       if (pending.current === controller) pending.current = null;
     }
   }, [path]);
+  // A changed filter reads at once, not at the next poll.
   useEffect(() => {
-    // The page load brings the first screen. Without one, such as after a
-    // failed load or on the not-found view, the page reads it now.
-    if (version.current === null && !stopped.current) void refresh();
+    const filtered = screenPath(path, findFilters);
+    if (readPath.current === filtered) return;
+    readPath.current = filtered;
+    void refresh();
+  }, [path, findFilters, refresh]);
+  useEffect(() => {
+    // The document's page load brings its first screen. Without one, such as
+    // after a failed load or on the not-found view, the page reads it now.
+    // Later screens read at once too: Back and Forward restore a copy cached
+    // before later changes, and an unchanged screen answers 304.
+    if (
+      (version.current === null || screenNumber.current !== 1) &&
+      !stopped.current
+    )
+      void refresh();
     const timer = setInterval(() => {
       // A slow request must finish before the next poll starts. Explicit
       // refreshes still supersede old reads after mutations or a return.
@@ -240,6 +268,20 @@ export function Screen({
     }
     leaveNotice("/people", `You blocked ${person.display_name}.`);
     router.push("/people");
+  }
+  // Deleting the account makes every page unreadable, so the deletion stops
+  // refreshing first: a read answered after it would open sign-in without
+  // the result. The confirmation stays pending until sign-in loads.
+  async function deleteAccount() {
+    leaving.current = true;
+    pending.current?.abort();
+    try {
+      await api("delete-account", {});
+    } catch (error) {
+      leaving.current = false;
+      throw error;
+    }
+    window.location.assign("/login?deleted=1");
   }
   async function saveDisplayName(name: string) {
     pending.current?.abort();
@@ -421,6 +463,11 @@ export function Screen({
             recommendations={
               data?.kind === "search" ? data.recommendations : null
             }
+            hiddenFinished={
+              (data?.kind === "search" && data.finishedRecommendations) || 0
+            }
+            filters={findFilters}
+            setFilters={setFindFilters}
             serviceIds={data?.kind === "search" ? data.serviceIds : null}
             activity={activity}
             busy={busy}
@@ -466,7 +513,10 @@ export function Screen({
             activity={activity}
             busy={busy}
             target={data && "target" in data ? data.target : null}
-            unavailable={!!data && "target" in data && data.targetUnavailable}
+            targetUnavailable={
+              !!data && "target" in data && data.targetUnavailable
+            }
+            available={!!data}
             showEmpty={data?.kind !== "profile" || data.profile.can_read}
             compact={route.kind === "title"}
             shownEntry={route.kind === "title" ? shownEntry : null}
@@ -487,6 +537,7 @@ export function Screen({
             saveProfile={saveProfile}
             savePhoto={savePhoto}
             saveServices={saveServices}
+            deleteAccount={deleteAccount}
             refresh={refresh}
           />
         )}

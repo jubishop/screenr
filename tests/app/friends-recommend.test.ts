@@ -4,6 +4,8 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { useDatabase, db, friend, person } from "./social-fixture";
 import type { TitleKind } from "../../src/components/friends-recommend";
+import { screenPath, type FindFilters } from "../../src/member-routes";
+import { viewingAccess } from "../../src/viewing";
 const { loadScreen } = await import("../../src/server/screens");
 const { FriendsRecommend } =
   await import("../../src/components/friends-recommend");
@@ -43,11 +45,18 @@ async function recommend(owner: string, title: string, at?: string) {
     ]);
   return item;
 }
-// The viewer's Friends recommend tab on Find a title.
-async function recommendations(viewer: string) {
-  const screen = await loadScreen(viewer, "/search?tab=friends-recommend");
-  assert.ok(screen.kind === "search");
-  return screen.recommendations;
+// The viewer's Friends recommend tab on Find a title, read with `filters`
+// as the web reads it, or with none, as installed iPhone builds do.
+async function screen(viewer: string, filters: FindFilters = {}) {
+  const read = await loadScreen(
+    viewer,
+    screenPath("/search?tab=friends-recommend", filters),
+  );
+  assert.ok(read.kind === "search");
+  return read;
+}
+async function recommendations(viewer: string, filters?: FindFilters) {
+  return (await screen(viewer, filters)).recommendations;
 }
 // Each listed title with its recommending friends' display names.
 async function listed(viewer: string) {
@@ -332,32 +341,39 @@ test("each title carries the viewer's own status and Recommend, and none hides i
   );
 });
 
-// The viewer's Friends recommend view, rendered with the Finished switch off,
-// its default, or on: the listed title IDs and any empty-list message.
+// The viewer's Friends recommend view as the web shows it with the Finished
+// switch off, its default, or on, after reading the screen with the same
+// filters: the listed title IDs and any empty-list message.
 async function view(
   viewer: string,
   {
     showFinished = false,
     kind = "all",
     myServices = false,
-    included = () => true,
   }: {
     showFinished?: boolean;
     kind?: TitleKind;
     myServices?: boolean;
-    included?: (title: { id: string }) => boolean;
   } = {},
 ) {
+  const read = await screen(viewer, {
+    services: myServices ? "mine" : undefined,
+    type: kind === "all" ? undefined : kind,
+    finished: showFinished ? undefined : "hidden",
+  });
   const markup = renderToStaticMarkup(
     createElement(FriendsRecommend, {
-      recommendations: await recommendations(viewer),
+      recommendations: read.recommendations,
+      hiddenFinished: read.finishedRecommendations ?? 0,
       kind,
       setKind: () => {},
       showFinished,
       setShowFinished: () => {},
-      included,
+      included: (title) =>
+        !myServices ||
+        viewingAccess(title.viewing, read.serviceIds) === "available",
       myServices,
-      serviceIds: [],
+      serviceIds: read.serviceIds,
       activity: async () => {},
       busy: false,
     }),
@@ -367,7 +383,24 @@ async function view(
       ...markup.matchAll(/class="search-result" href="\/titles\/(\w+)\/(\d+)/g),
     ].map(([, kind, id]) => `${kind}:${id}`),
     empty: /<p class="empty">([^<]*)<\/p>/.exec(markup)?.[1],
+    card: /<h2>(No recommendations yet\.)<\/h2>/.exec(markup)?.[1],
   };
+}
+// Stores current viewing options for `title`: free, a Netflix subscription,
+// or neither.
+async function viewing(title: string, offer: "free" | "netflix" | "none") {
+  const providers = {
+    free: { free: [{ provider_id: 73, provider_name: "Tubi TV" }] },
+    netflix: { flatrate: [{ provider_id: 8, provider_name: "Netflix" }] },
+    none: {},
+  }[offer];
+  await db.query(
+    `INSERT INTO title_availability(title_id,country,availability,fetched_at,refresh_after)
+    VALUES($1,'US',$2,now(),now()+interval '1 day')
+    ON CONFLICT(title_id,country) DO UPDATE SET availability=excluded.availability,
+      fetched_at=excluded.fetched_at,refresh_after=excluded.refresh_after`,
+    [title, { link: null, providers }],
+  );
 }
 
 test("the view hides titles the viewer marked Finished until its switch shows them", async () => {
@@ -390,10 +423,14 @@ test("the view hides titles the viewer marked Finished until its switch shows th
   // friend's Finished status doesn't hide one.
   await recommend(viewer, "movie:3");
   await updateWatchStatus(sam, "tv:3", "finished");
+  // Only movie:2 is free; the others have no option the viewer can use.
+  for (const [title] of statuses)
+    await viewing(title, title === "movie:2" ? "free" : "none");
 
   assert.deepEqual(await view(viewer), {
     ids: ["tv:1", "movie:2", "tv:2", "tv:3"],
     empty: undefined,
+    card: undefined,
   });
   assert.deepEqual((await view(viewer, { showFinished: true })).ids, [
     "movie:1",
@@ -411,27 +448,117 @@ test("the view hides titles the viewer marked Finished until its switch shows th
     ids: [],
     empty:
       "You finished all 3 movie recommendations. Turn on Show finished to see them.",
+    card: undefined,
   });
-  assert.deepEqual(
-    await view(viewer, {
-      kind: "movie",
-      myServices: true,
-      included: (title) => title.id === "movie:2",
-    }),
-    {
-      ids: [],
-      empty:
-        "You finished the only movie recommendation on your services or free. Turn on Show finished to see it.",
-    },
-  );
+  assert.deepEqual(await view(viewer, { kind: "movie", myServices: true }), {
+    ids: [],
+    empty:
+      "You finished the only movie recommendation on your services or free. Turn on Show finished to see it.",
+    card: undefined,
+  });
   assert.deepEqual(
     (await view(viewer, { kind: "movie", showFinished: true })).ids,
     ["movie:1", "movie:2", "movie:3"],
   );
+  // A filter that leaves nothing keeps the filters on screen.
+  await updateWatchStatus(viewer, "movie:2", null);
+  assert.deepEqual(await view(viewer, { kind: "tv", myServices: true }), {
+    ids: [],
+    empty:
+      "No TV recommendations on your services or free. Turn off My services to see all TV recommendations.",
+    card: undefined,
+  });
 
   // Clearing Finished lists the title again.
   await updateWatchStatus(viewer, "movie:1", null);
-  assert.deepEqual((await view(viewer, { kind: "movie" })).ids, ["movie:1"]);
+  assert.deepEqual((await view(viewer, { kind: "movie" })).ids, [
+    "movie:1",
+    "movie:2",
+  ]);
+  // Without any recommendations, the view says so instead.
+  for (const [title] of statuses)
+    await updateTitleActivity(maya, title, "recommended", false);
+  assert.deepEqual(await view(viewer), {
+    ids: [],
+    empty: undefined,
+    card: "No recommendations yet.",
+  });
+});
+
+// Find a title lists the top 50 of each list, filtered first
+// (docs/title-suggestions.md#show-all-eligible-titles--2026-09-07).
+test("Friends recommend lists the 50 highest-ranked titles that pass its filters", async () => {
+  await titles(60);
+  const [viewer, maya] = await people("viewer", "maya");
+  await friend(viewer, maya);
+  // Movies and shows alternate from newest to oldest: movie:1, tv:1, movie:2…
+  for (let n = 1; n <= 60; n++)
+    for (const [kind, offset] of [
+      ["movie", 0],
+      ["tv", 1],
+    ] as const)
+      await recommend(
+        maya,
+        `${kind}:${n}`,
+        new Date(
+          Date.UTC(2026, 0, 1) - (2 * n + offset) * 60_000,
+        ).toISOString(),
+      );
+  // The viewer finished the first ten movies, and only even-numbered titles
+  // are on Netflix, the viewer's one service.
+  for (let n = 1; n <= 10; n++)
+    await updateWatchStatus(viewer, `movie:${n}`, "finished");
+  for (let n = 1; n <= 60; n++)
+    for (const kind of ["movie", "tv"])
+      await viewing(`${kind}:${n}`, n % 2 ? "none" : "netflix");
+  await db.query(
+    "INSERT INTO member_streaming_service(user_id,service_id) VALUES($1,'service:netflix')",
+    [viewer],
+  );
+  const ids = (list: { id: string }[]) => list.map((title) => title.id);
+  const titlesFrom = (kinds: string[], numbers: number[]) =>
+    numbers.flatMap((n) => kinds.map((kind) => `${kind}:${n}`));
+  const range = (from: number, to: number, step = 1) =>
+    Array.from(
+      { length: Math.floor((to - from) / step) + 1 },
+      (_, n) => from + n * step,
+    );
+
+  // Installed iPhone builds read without filters: the top 50, finished
+  // titles included, and no finished count.
+  const unfiltered = await screen(viewer);
+  assert.deepEqual(
+    ids(unfiltered.recommendations),
+    titlesFrom(["movie", "tv"], range(1, 25)),
+  );
+  assert.equal("finishedRecommendations" in unfiltered, false);
+
+  // Each filter applies before the cap, so the list still fills to 50.
+  assert.deepEqual(
+    ids(await recommendations(viewer, { type: "tv" })),
+    titlesFrom(["tv"], range(1, 50)),
+  );
+  const unfinished = await screen(viewer, { finished: "hidden" });
+  assert.deepEqual(ids(unfinished.recommendations), [
+    ...titlesFrom(["tv"], range(1, 10)),
+    ...titlesFrom(["movie", "tv"], range(11, 30)),
+  ]);
+  assert.equal(unfinished.finishedRecommendations, 10);
+  const movies = await screen(viewer, {
+    type: "movie",
+    services: "mine",
+    finished: "hidden",
+  });
+  assert.deepEqual(
+    ids(movies.recommendations),
+    titlesFrom(["movie"], range(12, 60, 2)),
+  );
+  // Five of the finished movies are on Netflix.
+  assert.equal(movies.finishedRecommendations, 5);
+  assert.deepEqual(
+    ids(await recommendations(viewer, { services: "mine" })),
+    titlesFrom(["movie", "tv"], range(2, 50, 2)),
+  );
 });
 
 test("Friends recommend data names friends without entry or account IDs", async () => {

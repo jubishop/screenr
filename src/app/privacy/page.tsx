@@ -15,7 +15,7 @@ export default function Privacy() {
       <article className="auth-card policy">
         <h1>Privacy policy</h1>
         <p className="muted">
-          Effective <time dateTime="2026-10-14">October 14, 2026</time>
+          Effective <time dateTime="2026-11-01">November 1, 2026</time>
         </p>
         <p>
           Screenr is a private, invite-only social app for TV and movies. Justin
@@ -50,7 +50,9 @@ export default function Privacy() {
           <li>
             <strong>Notifications:</strong> your notifications and which ones
             you have read, your activity email setting, and in the iPhone app,
-            your push notification settings and devices.
+            your push notification settings and devices. Screenr deletes a
+            notification once you have read it and it is more than a year old;
+            unread notifications stay until you read them.
           </li>
           <li>
             <strong>Usage records:</strong> described under Usage measurement
@@ -190,7 +192,11 @@ export default function Privacy() {
           that index stays on the iPhone and is removed when you sign out or
           delete your account. Screenr&rsquo;s sign-in records the IP address
           and browser of each session, and uses IP addresses to limit repeated
-          sign-in requests. Screenr uses no advertising or tracking cookies.
+          sign-in requests. Signing out deletes that session&rsquo;s record. A
+          session you stop using expires about 30 days after you last used it,
+          and Screenr deletes its record, with any push notification device
+          registered through it, within a day after it expires. Screenr uses no
+          advertising or tracking cookies.
         </p>
 
         <h2>No ads or selling</h2>

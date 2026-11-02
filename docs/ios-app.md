@@ -1035,7 +1035,10 @@ in PodHaven, it skips feedback that is resolved or that Sentry marked as
 spam; Sentry flagged the #249 test feedback as spam until it was marked not
 spam. It files each item as `investigation` and `area: ios`, with a hidden
 `sentry-feedback:screenr-ios:<id>` marker. It skips any feedback whose marker
-or link already appears in an open or closed issue. The issue copies a
+or link already appears in an open or closed issue that the workflow's
+`github-actions` bot or the repository owner opened. Anyone can open an issue
+in this public repository, so an issue from anyone else could otherwise stop
+feedback from being filed. The issue copies a
 Sentry value only when it matches a strict pattern for an ID or a build, so
 member text cannot reach it. `tests/test_sentry_feedback_issues.py` covers
 the body, deduplication, and failures. Run the script with `--dry-run` to

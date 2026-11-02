@@ -207,8 +207,10 @@ test("posting a comment or reply keeps keyboard focus on Post while pending and 
     "comment",
     { screenshot: "pending-reply" },
   );
+  // A text match alone would also find the draft that stays in the composer
+  // until the save finishes.
   await expect(
-    entry.getByText("A pending reply", { exact: true }),
+    entry.locator("[data-comment-id]").filter({ hasText: "A pending reply" }),
   ).toBeVisible();
   await expect(reply.getByRole("textbox")).toHaveValue("");
   await expect(pending.pressed).toBeFocused();

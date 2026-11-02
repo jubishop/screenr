@@ -261,6 +261,25 @@ struct SessionTests {
     #expect(try keychain.read() == "new-token")
   }
 
+  // Only updating the app clears the required update, so a sign-in that
+  // finishes after the server required one keeps it.
+  @Test func keepsTheRequiredUpdateThroughASignIn() async throws {
+    let test = try TestClient(
+      replies: [
+        try .json(426, ["error": "Update Screenr to continue.", "minimumBuild": 42]),
+        try .json(200, ["token": "unsigned"], headers: ["set-auth-token": "signed-token"]),
+      ]
+    )
+
+    await #expect(throws: APIError.self) {
+      try await test.client.send(.sendCode(email: "pat@example.com"))
+    }
+    _ = try await test.client.send(.signIn(email: "pat@example.com", code: "123456"))
+
+    #expect(try test.keychain.read() == "signed-token")
+    #expect(test.session.phase == .updateRequired(minimumBuild: 42))
+  }
+
   @Test func ignoresAnUnauthorizedSignInAttempt() async throws {
     let test = try TestClient(
       replies: [try .json(401, ["code": "UNAUTHORIZED", "message": "Invalid token"])]

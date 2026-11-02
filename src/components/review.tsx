@@ -38,14 +38,19 @@ export function ReviewStars({ rating }: { rating: number }) {
 // The title page's review editor: the header button and the form it opens
 // beneath the header. The form starts from the saved review, Cancel discards
 // changes, and the draft survives refresh failures because the title view
-// stays mounted. `saved` is the viewer's current review, if any.
+// stays mounted. `saved` is the viewer's current review, if any. While the
+// page is not `available`, such as while a failed read hides it, the form
+// shows only an open Remove confirmation, whose action waits for the next
+// read.
 export function useReviewEditor({
   titleId,
   saved,
+  available,
   refresh,
 }: {
   titleId: string | null;
   saved: ReviewDraft | null;
+  available: boolean;
   refresh: () => Promise<void>;
 }) {
   const interactive = useInteractive();
@@ -54,6 +59,9 @@ export function useReviewEditor({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [confirming, setConfirming] = useState(false);
+  // Remove's confirmation closes for good once the review is gone, such as
+  // after a removal in another tab, so a new review doesn't reopen it.
+  if (confirming && !saved) setConfirming(false);
   const form = useRef<HTMLFormElement>(null);
   const removeButton = useRef<HTMLButtonElement>(null);
   // Opening focuses the chosen star, or the first one.
@@ -90,6 +98,9 @@ export function useReviewEditor({
   }
   const change = (update: Partial<ReviewDraft>) =>
     setDraft((current) => ({ ...current, ...update }));
+  const ignoreWhileSaving = (event: React.MouseEvent) => {
+    if (busy) event.preventDefault();
+  };
   const button = (
     <button
       type="button"
@@ -111,7 +122,8 @@ export function useReviewEditor({
       {saved ? "Edit your review" : "Rate or review"}
     </button>
   );
-  const panel = open && titleId && (
+  const confirmingRemove = !!saved && confirming;
+  const panel = open && titleId && (available || confirmingRemove) && (
     <form
       ref={form}
       id="review-form"
@@ -119,95 +131,112 @@ export function useReviewEditor({
       aria-label="Your review"
       onSubmit={save}
     >
-      <fieldset className="star-rating">
-        <legend>Your rating</legend>
-        <div className="star-choices">
-          {stars.map((rating) => (
-            <label key={rating} title={starLabel(rating)}>
-              <input
-                type="radio"
-                name="review-rating"
-                value={rating}
-                aria-label={starLabel(rating)}
-                checked={draft.rating === rating}
-                disabled={!interactive}
-                onChange={() => change({ rating })}
-              />
-              <span>
-                {draft.rating !== null && rating <= draft.rating ? "★" : "☆"}
-              </span>
-            </label>
-          ))}
-          {draft.rating !== null && (
-            <button
-              type="button"
-              className="text-button"
-              disabled={!interactive}
-              onClick={() => change({ rating: null })}
-            >
-              Clear rating
-            </button>
-          )}
-        </div>
-      </fieldset>
-      <label htmlFor="review-body">
-        Your review <span className="muted">(optional)</span>
-      </label>
-      <textarea
-        id="review-body"
-        rows={4}
-        maxLength={2000}
-        readOnly={busy}
-        disabled={!interactive}
-        value={draft.body}
-        placeholder="What did you think?"
-        onChange={(event) => change({ body: event.target.value })}
-      />
-      <div className="composer-footer">
-        <label className="checkbox">
-          <input
-            type="checkbox"
-            checked={draft.spoiler}
+      {/* While saving, the rating and spoiler flag keep focus but ignore
+          changes, as the text is read-only, so the saved review is the one
+          shown. */}
+      {available && (
+        <>
+          <fieldset className="star-rating">
+            <legend>Your rating</legend>
+            <div className="star-choices">
+              {stars.map((rating) => (
+                <label key={rating} title={starLabel(rating)}>
+                  <input
+                    type="radio"
+                    name="review-rating"
+                    value={rating}
+                    aria-label={starLabel(rating)}
+                    checked={draft.rating === rating}
+                    disabled={!interactive}
+                    aria-disabled={busy}
+                    onClick={ignoreWhileSaving}
+                    onChange={() => busy || change({ rating })}
+                  />
+                  <span>
+                    {draft.rating !== null && rating <= draft.rating
+                      ? "★"
+                      : "☆"}
+                  </span>
+                </label>
+              ))}
+              {draft.rating !== null && (
+                <ActionButton
+                  type="button"
+                  className="text-button"
+                  disabled={!interactive}
+                  unavailable={busy}
+                  onClick={() => change({ rating: null })}
+                >
+                  Clear rating
+                </ActionButton>
+              )}
+            </div>
+          </fieldset>
+          <label htmlFor="review-body">
+            Your review <span className="muted">(optional)</span>
+          </label>
+          <textarea
+            id="review-body"
+            rows={4}
+            maxLength={2000}
+            readOnly={busy}
             disabled={!interactive}
-            onChange={(event) => change({ spoiler: event.target.checked })}
+            value={draft.body}
+            placeholder="What did you think?"
+            onChange={(event) => change({ body: event.target.value })}
           />
-          Contains spoilers
-        </label>
-        <div className="composer-actions">
-          {saved && (
-            <button
-              type="button"
-              ref={removeButton}
-              className="text-button muted"
-              disabled={!interactive}
-              onClick={() => setConfirming(true)}
-            >
-              Remove review
-            </button>
-          )}
-          <button
-            type="button"
-            className="text-button"
-            disabled={!interactive}
-            onClick={close}
-          >
-            Cancel
-          </button>
-          <ActionButton
-            className="primary"
-            disabled={!interactive}
-            unavailable={busy || empty}
-          >
-            {busy ? "Saving…" : "Save review"}
-          </ActionButton>
-        </div>
-      </div>
-      {error && <p className="error">{error}</p>}
-      {saved && confirming && (
+          <div className="composer-footer">
+            <label className="checkbox">
+              <input
+                type="checkbox"
+                checked={draft.spoiler}
+                disabled={!interactive}
+                aria-disabled={busy}
+                onClick={ignoreWhileSaving}
+                onChange={(event) =>
+                  busy || change({ spoiler: event.target.checked })
+                }
+              />
+              Contains spoilers
+            </label>
+            <div className="composer-actions">
+              {saved && (
+                <button
+                  type="button"
+                  ref={removeButton}
+                  className="text-button muted"
+                  disabled={!interactive}
+                  onClick={() => setConfirming(true)}
+                >
+                  Remove review
+                </button>
+              )}
+              <button
+                type="button"
+                className="text-button"
+                disabled={!interactive}
+                onClick={close}
+              >
+                Cancel
+              </button>
+              <ActionButton
+                className="primary"
+                disabled={!interactive}
+                unavailable={busy || empty}
+              >
+                {busy ? "Saving…" : "Save review"}
+              </ActionButton>
+            </div>
+          </div>
+          {error && <p className="error">{error}</p>}
+        </>
+      )}
+      {confirmingRemove && (
         <ConfirmAction
           message="Remove your review? Its rating and text will be erased."
           action="Remove"
           busy={busy}
+          unavailable={!available}
           run={async () => {
             await api("remove-review", { title: titleId });
             await refresh();

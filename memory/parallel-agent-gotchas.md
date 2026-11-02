@@ -33,13 +33,25 @@ none of 10 runs alone. UI tests now audit one check at a time through
 `performScreenrAudit()`, which passed 80 of 80 Find runs, 20 of them with
 three Simulators at once.
 
-## Hooks come from the primary checkout
+## Hooks start in the primary checkout
 
-`core.hooksPath` points at the primary checkout's `bin/hooks`, so every
-worktree runs the hooks in that checkout's working tree. When a change adds or
-edits a hook, such as the iOS `pre-push` gate from
-[#291](https://github.com/jubishop/screenr/issues/291), fast-forward the
-primary checkout to `main` before relying on it.
+`core.hooksPath` points at the primary checkout's `bin/hooks`, so Git runs
+that checkout's hook files for every worktree. Each hook then runs the
+worktree's own code
+([#380](https://github.com/jubishop/screenr/issues/380)): the knowledge hooks
+call the worktree's `bin/knowledge-hook`, and the iOS `pre-push` gate hands
+the push to the worktree's `bin/hooks/pre-push` when the worktree's `HEAD`
+has the primary checkout's last change to the gate. A worktree that lacks
+that change, or has no copy, gets the primary checkout's gate, and the hook
+says so; rebase onto `origin/main` to run the branch's own copy. See
+[hook location](../docs/development-workflow.md#ios-checks-before-a-push).
+
+Fast-forward the primary checkout to `main` before relying on a new kind of
+hook, which Git looks for only in `core.hooksPath`. To try a hook change,
+push from a scratch repository with its own `core.hooksPath`, as
+`tests/test_pre_push.py` does. Never repoint `core.hooksPath` from a
+worktree: worktrees share the clone's configuration, so it would change the
+hooks of every agent's pushes.
 
 ## Shared processes and files
 
@@ -56,17 +68,34 @@ primary checkout to `main` before relying on it.
   `TEST_DATABASE_URL` unset: one shared between agents' checkouts makes their
   test files reset each other's tables. On 2026-10-31 that caused a
   `deadlock detected` failure in `tests/app/catalog.test.ts`.
+- **Test database drops:** each `DROP DATABASE` forces a PostgreSQL
+  checkpoint, which took up to 18 seconds on 2026-11-01. Test-database setup
+  claims removed checkouts' databases under a machine-wide lock and leaves
+  their drops to a detached process, so no checkout's test start waits for
+  one ([checkout test databases](../docs/testing.md#checkout-test-databases),
+  [process test waits](process-test-waits.md),
+  [#447](https://github.com/jubishop/screenr/issues/447),
+  [#462](https://github.com/jubishop/screenr/issues/462)).
 
 ## Waiting on CI
 
 Agents that left CI waiting to background monitors and ended their turn often
 stopped before merging. Wait in the foreground with
 `gh pr checks <pr> --watch`. Remote CI is the Linux split workflow in
-`.github/workflows/check.yml`: `static`, `app`, `browser`, and `release`, with
-the `check` job as the one result that pull requests require. A normal run
-takes about three minutes ([CI jobs](../docs/development-workflow.md#ci-jobs)).
-There is no iOS CI
+`.github/workflows/check.yml`: `scope`, then `static`, `app`, `browser`, and
+`release`, with the `check` job as their one result. A normal run takes about
+three minutes ([CI jobs](../docs/development-workflow.md#ci-jobs)). There is
+no iOS CI
 ([decision](../docs/ios-app.md#local-ios-checks-instead-of-ios-ci--2026-10-14)).
+
+A repository ruleset on `main` blocks merging a pull request until `check`
+passes; the branch need not be up to date
+([ruleset](../docs/development-workflow.md#required-check-on-main--2026-11-01)).
+`check` reports for every pull request, a Markdown-only one included. The
+owner's account bypasses the ruleset so that text and checked development
+code can still be pushed directly. Never merge past it with
+`gh pr merge --admin` or the web page's bypass option: wait for `check`, or
+fix what failed.
 
 ## Registering new extension App IDs
 

@@ -19,13 +19,27 @@ struct PushNotificationsTests {
   private let token = Data([0x5c, 0xe7, 0xe1, 0xd2, 0x00, 0x0f, 0xa0, 0xff])
   private let hex = "5ce7e1d2000fa0ff"
   private let entry = "e22cb5a7-a2dd-4582-8f62-db3e31f2761b"
+  // The session the app launched with, unless a test chooses another.
+  private let session: SessionStore
+
+  init() throws {
+    session = try SessionStore(keychain: InMemoryKeychain(token: "signed-token"))
+  }
 
   private func push(
     _ system: RecordingPushSystem,
-    api: RecordingAPI = RecordingAPI(["push-device": .success(["ok": true])])
+    api: RecordingAPI = RecordingAPI(["push-device": .success(["ok": true])]),
+    session: SessionStore? = nil
   ) -> (PushNotifications, ShellModel) {
     let shell = ShellModel(api: api, clock: TestClock())
-    return (PushNotifications(api: api, shell: shell, system: system, target: target), shell)
+    let push = PushNotifications(
+      api: api,
+      shell: shell,
+      system: system,
+      target: target,
+      session: session ?? self.session
+    )
+    return (push, shell)
   }
 
   private func register(_ token: String) -> RecordingAPI.Sent {
@@ -116,6 +130,32 @@ struct PushNotificationsTests {
     #expect(api.requests == [register(hex), register(hex)])
   }
 
+  // A registration that finishes after the session ended went with that
+  // session, so the next member's return registers the device again.
+  @Test func aRegistrationThatFinishesAfterTheSessionEndedDoesNotCountForTheNext() async {
+    let api = GatedAPI(RecordingAPI(["push-device": .success(["ok": true])]), holding: [1])
+    let system = RecordingPushSystem(.allowed)
+    let shell = ShellModel(api: api, clock: TestClock())
+    let push = PushNotifications(
+      api: api,
+      shell: shell,
+      system: system,
+      target: target,
+      session: session
+    )
+    await push.memberReady()
+    let registering = Task { await push.received(token: token) }
+    await api.waitForRequests(1)
+
+    shell.sessionEnded(.signedOut)
+    push.sessionEnded()
+    api.open()
+    await finish(registering)
+    await push.memberReady()
+
+    #expect(api.requests == [register(hex), register(hex)])
+  }
+
   @Test func triesAFailedRegistrationAgainOnTheNextReturn() async {
     let system = RecordingPushSystem(.allowed)
     let api = RecordingAPI(
@@ -165,6 +205,27 @@ struct PushNotificationsTests {
     await push.memberReady()
     await push.received(token: token)
     #expect(api.requests == [register(hex), remove(hex), register(hex)])
+  }
+
+  // A removal that fails leaves the device registered on the server, so the
+  // next return tries again.
+  @Test func triesAFailedRemovalAgainOnTheNextReturn() async {
+    let system = RecordingPushSystem(.allowed)
+    let api = RecordingAPI(
+      sequences: [
+        "push-device": [.success(["ok": true]), .failure(.offline), .success(["ok": true])]
+      ]
+    )
+    let (push, _) = push(system, api: api)
+    await push.memberReady()
+    await push.received(token: token)
+    system.current = .denied
+
+    await push.memberReady()
+    await push.memberReady()
+    await push.memberReady()
+
+    #expect(api.requests == [register(hex), remove(hex), remove(hex)])
   }
 
   // MARK: Permission
@@ -258,6 +319,29 @@ struct PushNotificationsTests {
     #expect(system.badges == [0])
   }
 
+  // A session that an extension ended leaves no token, and no end handler
+  // runs at the next launch. So a launch without a session clears the last
+  // member's badge and the notifications that show their friends' words.
+  @Test func clearsTheBadgeAndNotificationsOnALaunchWithoutASession() async throws {
+    let system = RecordingPushSystem(.allowed)
+    let (push, _) = push(system, session: try SessionStore(keychain: InMemoryKeychain()))
+
+    await push.badgeUpdate?.value
+
+    #expect(system.badges == [0])
+    #expect(system.clearedDeliveries == 1)
+  }
+
+  @Test func keepsTheBadgeAndNotificationsOnALaunchWithASession() async {
+    let system = RecordingPushSystem(.allowed)
+    let (push, _) = push(system)
+
+    await push.badgeUpdate?.value
+
+    #expect(system.badges.isEmpty)
+    #expect(system.clearedDeliveries == 0)
+  }
+
   // MARK: Taps
 
   @Test func openingANotificationOpensItsItemAndMarksItRead() async throws {
@@ -329,8 +413,11 @@ struct PushNotificationsTests {
     #expect(api.requests.map(\.action) == ["notification"])
   }
 
-  @Test func openingANotificationWhileSignedOutDoesNothing() async {
-    let api = RecordingAPI(["notification": .failure(.signedOut)])
+  // While signed out or needing an update, the session's phase shows sign-in
+  // or the update instead. A read cut short opens nothing either.
+  @Test(arguments: [APIError.Kind.signedOut, .updateRequired(minimumBuild: 9), .cancelled])
+  func openingANotificationThatCannotLoadNowDoesNothing(_ failure: APIError.Kind) async {
+    let api = RecordingAPI(["notification": .failure(failure)])
     let (push, shell) = push(RecordingPushSystem(.allowed), api: api)
 
     await push.open(PushTap(notificationID: "18"))

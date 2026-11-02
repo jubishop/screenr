@@ -2,9 +2,12 @@ import { expect, type Locator, type Page } from "@playwright/test";
 import { randomUUID } from "node:crypto";
 import { db } from "./database-fixture";
 import { test } from "./monitored-test";
-import { prepareFriendship } from "./member-fixture";
+import { prepareFriendship, userId } from "./member-fixture";
 import { expectTextContrast, expectThemedPage } from "./contrast";
 import { failAction } from "./action-errors";
+import { keepThroughFailedRead, openWithoutPolling } from "./refresh-helpers";
+
+const { removeReview, saveReview } = await import("../../src/server/reviews");
 
 async function box(locator: Locator) {
   const bounds = await locator.boundingBox();
@@ -150,7 +153,13 @@ test("members rate, review, edit, and remove from the title page while friends r
   await entry.getByRole("button", { name: "Comment", exact: true }).click();
   await entry.getByLabel("Add your reply").fill("Was the ending happy?");
   await entry.getByRole("button", { name: "Post reply", exact: true }).click();
-  await expect(entry.getByText("Was the ending happy?")).toBeVisible();
+  // A text match alone would also find the draft that stays in the composer
+  // until the save finishes.
+  await expect(
+    entry
+      .locator("[data-comment-id]")
+      .filter({ hasText: "Was the ending happy?" }),
+  ).toBeVisible();
   const reactions = entry.getByRole("group", {
     name: "Reactions to entry",
     exact: true,
@@ -276,4 +285,130 @@ test("members rate, review, edit, and remove from the title page while friends r
   await expect(own).toHaveAttribute("data-item-id", id);
   await expect(byline(own)).toHaveText("rated");
   await expect(own.getByText("Was the ending happy?")).toBeVisible();
+});
+
+test("the review form's rating and spoiler flag keep focus but ignore changes while it saves", async ({
+  member,
+}) => {
+  await db.query(`INSERT INTO title(id,kind,tmdb_id,name,overview,release_date) VALUES
+    ('movie:998302','movie',998302,'Paper Boats','A fictional film.','2022-05-01')
+    ON CONFLICT DO NOTHING`);
+  const author = await member(`review_${randomUUID().slice(0, 8)}`);
+  await author.goto("/titles/movie/998302");
+  const form = author.getByRole("form", { name: "Your review" });
+  const star = (count: number) =>
+    form.getByRole("radio", {
+      name: `${count} star${count === 1 ? "" : "s"}`,
+      exact: true,
+    });
+  const spoiler = form.getByLabel("Contains spoilers");
+  const clear = form.getByRole("button", { name: "Clear rating", exact: true });
+  await author
+    .getByRole("button", { name: "Rate or review", exact: true })
+    .click();
+  await star(3).check();
+  let release = () => {};
+  const released = new Promise<void>((resolve) => (release = resolve));
+  let saving = () => {};
+  const saved = new Promise<void>((resolve) => (saving = resolve));
+  await author.route(
+    "**/api/screenr/review",
+    async (route) => {
+      saving();
+      await released;
+      await route.continue();
+    },
+    { times: 1 },
+  );
+  await form.getByRole("button", { name: "Save review", exact: true }).click();
+  await saved;
+  await star(3).focus();
+  await author.keyboard.press("ArrowRight");
+  await spoiler.focus();
+  await author.keyboard.press("Space");
+  await expect(spoiler).toBeFocused();
+  await clear.focus();
+  await author.keyboard.press("Enter");
+  await expect(clear).toBeFocused();
+  await expect(star(3)).toBeChecked();
+  await expect(spoiler).not.toBeChecked();
+  for (const control of [star(3), spoiler, clear])
+    await expect(control).toHaveAttribute("aria-disabled", "true");
+  release();
+
+  // The saved review matches what the form showed.
+  await expect(form).toHaveCount(0);
+  const edit = author.getByRole("button", {
+    name: "Edit your review",
+    exact: true,
+  });
+  await expect(edit).toBeFocused();
+  await edit.click();
+  await expect(star(3)).toBeChecked();
+  await expect(spoiler).not.toBeChecked();
+});
+
+test("Remove review's confirmation closes for good once the review is removed elsewhere", async ({
+  member,
+}) => {
+  await db.query(`INSERT INTO title(id,kind,tmdb_id,name,overview,release_date) VALUES
+    ('movie:998303','movie',998303,'Paper Kites','A fictional film.','2022-06-01')
+    ON CONFLICT DO NOTHING`);
+  const author = await member(`review_${randomUUID().slice(0, 8)}`);
+  const id = await userId(author);
+  await saveReview(id, "movie:998303", 4, "Bright and breezy.", false);
+  await author.goto("/titles/movie/998303");
+  await author
+    .getByRole("button", { name: "Edit your review", exact: true })
+    .click();
+  const form = author.getByRole("form", { name: "Your review" });
+  const remove = form.getByRole("button", {
+    name: "Remove review",
+    exact: true,
+  });
+  await remove.click();
+  const confirmation = form.getByRole("group", {
+    name: "Remove your review? Its rating and text will be erased.",
+  });
+  await expect(confirmation).toBeVisible();
+  // As if in another tab: the removal closes it, and a new review doesn't
+  // reopen it.
+  await removeReview(id, "movie:998303");
+  await expect(remove).toHaveCount(0);
+  await expect(confirmation).toHaveCount(0);
+  await saveReview(id, "movie:998303", 2, "Second thoughts.", false);
+  await expect(remove).toBeVisible();
+  await expect(confirmation).toHaveCount(0);
+});
+
+test("a failed read keeps Remove review's confirmation open, with its action waiting for the next read", async ({
+  member,
+}) => {
+  await db.query(`INSERT INTO title(id,kind,tmdb_id,name,overview,release_date) VALUES
+    ('movie:998304','movie',998304,'Paper Lanterns','A fictional film.','2022-06-01')
+    ON CONFLICT DO NOTHING`);
+  const author = await member(`review_${randomUUID().slice(0, 8)}`);
+  await saveReview(
+    await userId(author),
+    "movie:998304",
+    4,
+    "Warm and quiet.",
+    false,
+  );
+  await openWithoutPolling(author, "/titles/movie/998304");
+  await author
+    .getByRole("button", { name: "Edit your review", exact: true })
+    .click();
+  const form = author.getByRole("form", { name: "Your review" });
+  const confirm = await keepThroughFailedRead(author, {
+    open: form.getByRole("button", { name: "Remove review", exact: true }),
+    question: "Remove your review? Its rating and text will be erased.",
+    action: "Remove",
+    content: author.getByRole("heading", { name: "Paper Lanterns", level: 1 }),
+  });
+  await confirm.click();
+  await expect(form).toHaveCount(0);
+  await expect(
+    author.getByRole("button", { name: "Rate or review", exact: true }),
+  ).toBeFocused();
 });

@@ -1,0 +1,65 @@
+#!/usr/bin/env python3
+"""Report whether a run of the check workflow needs its check jobs.
+
+A pull request that changes only Markdown that no check reads skips them, and
+the workflow's check job still reports the result that merging requires.
+Pushes to main skip the same changes with the workflow's paths filter. Every
+other event runs the check jobs, and so does any doubt. Prints run=true or
+run=false for $GITHUB_OUTPUT, and the reason on stderr. See
+docs/development-workflow.md#ci-jobs.
+"""
+
+import subprocess
+import sys
+
+
+def needs_checks(path):
+    """Whether a change to path needs the check jobs: any file but Markdown, and
+    the Markdown that a check reads. Tests read the Markdown in docs/, memory/,
+    and the root (#371). The document checks in bin/check read every tracked
+    Markdown file, which otherwise lives in ios/ and bin/ (#439).
+    tests/test_app_sandbox.py checks that this matches the workflow's paths
+    filter and covers every tracked Markdown file."""
+    return not path.endswith(".md") or "/" not in path or path.startswith(("docs/", "memory/", "ios/", "bin/"))
+
+
+def git(*args):
+    return subprocess.run(["git", *args], check=True, capture_output=True, text=True).stdout
+
+
+def pull_request_files():
+    """List what a pull request changes: GitHub's test merge commit against the
+    base it merged into, its first parent. A rename lists both paths."""
+    if len(git("rev-list", "--parents", "-n", "1", "HEAD").split()) != 3:
+        raise ValueError("HEAD is not a pull request's test merge commit")
+    return [path for path in git("diff", "--name-only", "--no-renames", "-z", "HEAD^1", "HEAD").split("\0")
+            if path]
+
+
+def decide(event):
+    """Return whether the check jobs must run, and why."""
+    if event != "pull_request":
+        return True, f"a {event} run checks everything"
+    try:
+        files = pull_request_files()
+    except (OSError, ValueError, subprocess.CalledProcessError) as error:
+        detail = getattr(error, "stderr", None) or error
+        return True, f"the pull request's changes could not be listed ({str(detail).strip()})"
+    if not files:
+        return True, "the pull request changes no files"
+    needed = [path for path in files if needs_checks(path)]
+    if needed:
+        return True, f"{len(needed)} changed files need them, such as {needed[0]}"
+    return False, "the pull request changes only Markdown that no check reads: " + ", ".join(files)
+
+
+def main():
+    if len(sys.argv) != 2:
+        sys.exit("usage: bin/ci-scope <github.event_name>")
+    run, reason = decide(sys.argv[1])
+    print(f"run={str(run).lower()}")
+    print(("Running" if run else "Skipping") + f" the check jobs: {reason}.", file=sys.stderr)
+
+
+if __name__ == "__main__":
+    main()

@@ -1,4 +1,5 @@
-import { AppError, db } from "./db";
+import { AppError, db, settleAll } from "./db";
+import { titleColumns } from "./catalog";
 import type { Person, Title, ViewingAccess } from "../shared";
 import type { ListMode } from "../member-routes";
 import { savedServices } from "./streaming-services";
@@ -23,8 +24,7 @@ export async function wantToWatch(
       SELECT user_id,username,display_name,screenr_photo(user_id) AS photo
       FROM profile WHERE username=$2 AND screenr_can_read($1,user_id)
     ), titles AS (
-      SELECT t.id,t.kind,t.tmdb_id,t.name,t.overview,t.poster_path,t.release_date,
-        f.activity_at
+      SELECT ${titleColumns("t")},f.activity_at
       FROM owner o JOIN feed_item f ON f.owner_id=o.user_id
       JOIN title t ON t.id=f.title_id
       WHERE f.item_type='want_to_watch' AND f.active
@@ -45,7 +45,7 @@ export async function wantToWatch(
       hasWantToWatch: titles.length > 0,
       titles: await inTheaters(titles),
     };
-  const [serviceIds, viewing] = await Promise.all([
+  const [serviceIds, viewing] = await settleAll([
     savedServices(viewer),
     withViewingOptions(titles),
   ]);

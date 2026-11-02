@@ -193,6 +193,9 @@ The search screen loads both lists, and one availability read covers them,
 so `src/components/title-search.tsx` switches tabs by changing the URL in
 place, as it does for a query. Each tab adds a history entry, and the My
 services, Movies/TV, and Show finished filters keep their state across tabs.
+The server applies the filters before capping each list at 50 titles, so
+changing one reads the screen again
+([implementation](title-suggestions.md#implementation)).
 Show finished, a toggle button beside the Movies/TV group
 ([#172](https://github.com/jubishop/screenr/issues/172)), starts off on each
 visit, so titles the viewer marked Finished stay hidden until they turn it on.
@@ -282,8 +285,12 @@ as "now". Like other dates since
 [issue #86](https://github.com/jubishop/screenr/issues/86), the server and
 hydration render the UTC date and a UTC hover time, then localize once the
 page is interactive. Unchanged screen refreshes don't render again, so a
-shared timer renders the shown times again each minute
-([issue #138](https://github.com/jubishop/screenr/issues/138)).
+shared timer renders shown times again
+([issue #138](https://github.com/jubishop/screenr/issues/138)): times under a
+week old each minute, and older dates only when the reader's time zone or
+current year changes. Dates with the same options share one formatter, rebuilt
+when the reader's time zone changes, so a large feed's times stay cheap
+([issue #376](https://github.com/jubishop/screenr/issues/376)).
 
 ### Compact entries on title pages — 2026-10-12
 
@@ -553,8 +560,11 @@ removes the pending friend request." when either applies.
 Friends page replaces the profile, and the profile stops refreshing once the
 request starts ([issue #132](https://github.com/jubishop/screenr/issues/132)).
 `src/components/page-notice.tsx` carries the notice through that client
-navigation only, so a reload or later visit omits it. The notice sits beneath
-the Friends heading and takes focus. Dismiss moves focus to the heading.
+navigation only, so a reload or later visit omits it. Another page that opens
+first, such as when the reader leaves before Friends loads, drops it
+([issue #362](https://github.com/jubishop/screenr/issues/362)). The notice
+sits beneath the Friends heading and takes focus. Dismiss moves focus to the
+heading.
 
 ### Confirm other destructive actions — 2026-10-12
 
@@ -584,9 +594,20 @@ runs the confirmed action and keeps a failure's message in the confirmation
 ([issue #132](https://github.com/jubishop/screenr/issues/132)). Each
 confirmation opens beneath its action's line, in the comment, entry, Friends
 row, or invitation card, while the action stays in place. Cancel returns
-focus to that action. Remove asks "Remove this comment? Its text will be
-erased.", Decline uses the notification's question, and Revoke asks "Revoke
-this invitation? Its link will stop working."
+focus to that action. A failed read that hides the page keeps an open
+confirmation, alone and with its focus, from the last snapshot: Unfriend,
+Block, or Decline on a profile or the Friends page
+([issue #361](https://github.com/jubishop/screenr/issues/361)), and Revoke,
+Delete or Remove on an entry or comment, a top 10 prompt on the title page
+or an entry, or Remove review
+([issue #403](https://github.com/jubishop/screenr/issues/403)). Its action
+waits for the next read, and Cancel still closes it. Account keeps Sign-in
+methods and the deletion step the same way. A successful read that shows
+the action no longer applies, such as after a removal in another tab, closes
+the confirmation for good, and so does hiding the replies that hold it, as
+hiding them closes a reply form there. Remove asks "Remove this comment? Its
+text will be erased.", Decline uses the notification's question, and Revoke
+asks "Revoke this invitation? Its link will stop working."
 
 **Implementation note:** When a successful action removes the control that
 had focus, focus moves to what takes its place

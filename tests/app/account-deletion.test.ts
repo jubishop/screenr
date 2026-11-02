@@ -66,30 +66,41 @@ const bearer = async (userId: string) => ({
 const sessionOf = (token: string) =>
   decodeURIComponent(token.replace(/^Bearer /, "")).split(".")[0];
 
-// Sets Apple's provider settings for one test.
-function configureApple(t: TestContext, apple: ReturnType<typeof fakeApple>) {
+type FakeApple = ReturnType<typeof fakeApple>;
+type Server = Parameters<typeof serve>[0];
+
+// Sets Apple's provider settings for one test. `server` answers Apple's
+// requests, by default the fake Apple itself.
+function configureApple(
+  t: TestContext,
+  apple: FakeApple,
+  server: Server = apple,
+) {
   const settings = apple.env();
   Object.assign(process.env, settings);
-  serve(apple);
+  serve(server);
   t.after(() => {
     for (const name of Object.keys(settings)) delete process.env[name];
     mock.restoreAll();
   });
 }
 
-// Links Sign in with Apple to the member's account, as the iPhone app does.
-async function linkApple(apple: ReturnType<typeof fakeApple>, userId: string) {
+// Posts a Sign in with Apple authorization for the member's Apple ID, as the
+// iPhone app does.
+async function postApple(
+  apple: FakeApple,
+  userId: string,
+  path: "link-social" | "sign-in/social",
+  headers: Record<string, string> = {},
+) {
   const { email } = (
     await db.query('SELECT email FROM "user" WHERE id=$1', [userId])
   ).rows[0];
   const { token, code } = apple.authorize({ sub: `apple-${userId}`, email });
   const response = await createAuth({ rateLimit: false }).handler(
-    new Request(`${origin}/api/auth/link-social`, {
+    new Request(`${origin}/api/auth/${path}`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...(await bearer(userId)),
-      },
+      headers: { "Content-Type": "application/json", ...headers },
       body: JSON.stringify({
         provider: "apple",
         idToken: { token },
@@ -99,6 +110,36 @@ async function linkApple(apple: ReturnType<typeof fakeApple>, userId: string) {
   );
   assert.equal(response.status, 200, await response.clone().text());
 }
+
+// Links Sign in with Apple to the member's account.
+const linkApple = async (apple: FakeApple, userId: string) =>
+  postApple(apple, userId, "link-social", await bearer(userId));
+
+// A later Sign in with Apple, which stores a newer refresh token.
+const signInWithApple = (apple: FakeApple, userId: string) =>
+  postApple(apple, userId, "sign-in/social");
+
+// How many Apple refresh tokens the member's account rows still hold.
+const appleTokenCount = async (userId: string) =>
+  (
+    await db.query(
+      `SELECT "refreshToken" FROM account
+      WHERE "userId"=$1 AND "providerId"='apple' AND "refreshToken" IS NOT NULL`,
+      [userId],
+    )
+  ).rows.length;
+
+// The events of the JSON failure lines that captureFailures collected.
+const failureEvents = (failures: string[]) =>
+  failures
+    .filter((line) => line.startsWith("{"))
+    .map((line) => JSON.parse(line).event);
+
+const appleNotDisconnected = {
+  status: 503,
+  message:
+    "Sign in with Apple could not be disconnected, so your account was not deleted. Please try again later.",
+};
 
 // Every column whose foreign keys lead, directly or through other keys, to a
 // person: the auth user or the profile. Read from the schema, so tables
@@ -328,18 +369,19 @@ async function departingMember(t: TestContext) {
   t.after(() => delete process.env.EMAIL_TRANSPORT);
   await queueCode({ email, otp: "123456" });
   await queueCode({ email, otp: "654321", type: "email-verification" });
-  // An unused sign-in code waiting in Better Auth's verification table.
-  const sent = await createAuth({
-    rateLimit: false,
-    sendCode: async () => {},
-  }).handler(
-    new Request(`${origin}/api/auth/email-otp/send-verification-otp`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Origin: origin },
-      body: JSON.stringify({ email, type: "sign-in" }),
-    }),
-  );
-  assert.equal(sent.status, 200);
+  // Unused codes waiting in Better Auth's verification table, one of each
+  // type a request can store, though Screenr sends no password reset code.
+  const auth = createAuth({ rateLimit: false, sendCode: async () => {} });
+  for (const type of ["sign-in", "email-verification", "forget-password"]) {
+    const sent = await auth.handler(
+      new Request(`${origin}/api/auth/email-otp/send-verification-otp`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Origin: origin },
+        body: JSON.stringify({ email, type }),
+      }),
+    );
+    assert.equal(sent.status, 200);
+  }
 
   return {
     alice,
@@ -462,6 +504,96 @@ test("deleting an account erases every row that refers to the member, keeping re
   );
   assert.equal(sent.status, 200);
   assert.equal(codes, 0);
+});
+
+test("deletion leaves another member's pending code and sign-in state, even when their address contains the member's", async (t) => {
+  // A Google link started on the web keeps a sign-in state that names the
+  // member's ID and address until Google returns.
+  Object.assign(process.env, {
+    GOOGLE_CLIENT_ID: "test-google-client",
+    GOOGLE_CLIENT_SECRET: "test-google-secret",
+  });
+  t.after(() => {
+    delete process.env.GOOGLE_CLIENT_ID;
+    delete process.env.GOOGLE_CLIENT_SECRET;
+  });
+  const departing = await person("bob");
+  const other = await person("abob");
+  const otherEmail = "abob@example.test";
+  const codes = new Map<string, string>();
+  const auth = createAuth({
+    rateLimit: false,
+    sendCode: async ({ email, otp }) => {
+      codes.set(email, otp);
+    },
+  });
+  const post = (path: string, body: unknown, headers = {}) =>
+    auth.handler(
+      new Request(`${origin}/api/auth/${path}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Origin: origin,
+          ...headers,
+        },
+        body: JSON.stringify(body),
+      }),
+    );
+  const cookies: Record<string, string> = {};
+  for (const [id, email] of [
+    [departing, "bob@example.test"],
+    [other, otherEmail],
+  ]) {
+    cookies[id] = await cookieFor(id);
+    const linking = await post(
+      "link-social",
+      { provider: "google", callbackURL: "/account" },
+      { Cookie: cookies[id] },
+    );
+    assert.equal(linking.status, 200, await linking.clone().text());
+    const sent = await post("email-otp/send-verification-otp", {
+      email,
+      type: "sign-in",
+    });
+    assert.equal(sent.status, 200);
+  }
+  const verifications = async () =>
+    (
+      await db.query<{ identifier: string; value: string }>(
+        "SELECT identifier,value FROM verification",
+      )
+    ).rows
+      .map(({ identifier, value }) =>
+        identifier === `sign-in-otp-${otherEmail}`
+          ? "other's code"
+          : value.includes(other)
+            ? "other's state"
+            : identifier === "sign-in-otp-bob@example.test"
+              ? "member's code"
+              : value.includes(departing)
+                ? "member's state"
+                : identifier,
+      )
+      .sort();
+  assert.deepEqual(await verifications(), [
+    "member's code",
+    "member's state",
+    "other's code",
+    "other's state",
+  ]);
+
+  const response = await deleteAccount({
+    Cookie: cookies[departing],
+    Origin: origin,
+  });
+  assert.equal(response.status, 200, await response.clone().text());
+  assert.deepEqual(await verifications(), ["other's code", "other's state"]);
+  // The other member's code still signs them in.
+  const signedIn = await post("sign-in/email-otp", {
+    email: otherEmail,
+    otp: codes.get(otherEmail),
+  });
+  assert.equal(signedIn.status, 200, await signedIn.clone().text());
 });
 
 test("friends' feeds, title pages, profiles, and notifications still render after a member deletes their account", async (t) => {
@@ -674,25 +806,10 @@ test("when Apple does not confirm revocation, nothing is erased and a retry dele
   // Apple rejects Screenr's key until it is fixed.
   apple.rotateKey();
   const failures = captureFailures();
-  await assertRouteError(await deleteAccount(headers), {
-    status: 503,
-    message:
-      "Sign in with Apple could not be disconnected, so your account was not deleted. Please try again later.",
-  });
-  assert.deepEqual(
-    failures
-      .filter((line) => line.startsWith("{"))
-      .map((line) => JSON.parse(line).event),
-    ["apple revoke failed"],
-  );
+  await assertRouteError(await deleteAccount(headers), appleNotDisconnected);
+  assert.deepEqual(failureEvents(failures), ["apple revoke failed"]);
   assert.equal(
-    (
-      await db.query(
-        `SELECT count(*)::int AS n FROM account
-        WHERE "userId"=$1 AND "providerId"='apple' AND "refreshToken" IS NOT NULL`,
-        [departing],
-      )
-    ).rows[0].n,
+    await appleTokenCount(departing),
     1,
     "The token stays for the retry",
   );
@@ -719,14 +836,87 @@ test("a token no secret can open no longer blocks deletion", async (t) => {
   const failures = captureFailures();
   const response = await deleteAccount(await bearer(departing));
   assert.equal(response.status, 200, await response.clone().text());
-  assert.deepEqual(
-    failures
-      .filter((line) => line.startsWith("{"))
-      .map((line) => JSON.parse(line).event),
-    ["apple token unreadable"],
-  );
+  assert.deepEqual(failureEvents(failures), ["apple token unreadable"]);
   assert.equal(apple.revoked.length, 0);
   assert.deepEqual(await references(departing), []);
+});
+
+// Answers Apple's requests, signing the member in with Apple again as Apple
+// receives each of the first `times` revocations, as the iPhone app might
+// while deletion runs.
+function signInDuringRevocation(
+  apple: FakeApple,
+  userId: string,
+  times: number,
+) {
+  let signIns = 0;
+  return {
+    async handle(url: URL, init?: RequestInit) {
+      if (url.pathname === "/auth/revoke" && signIns < times) {
+        signIns++;
+        await signInWithApple(apple, userId);
+      }
+      return apple.handle(url, init);
+    },
+  };
+}
+
+test("a Sign in with Apple token stored between revocation and erasure is revoked before the account is erased", async (t) => {
+  const apple = fakeApple();
+  const departing = await person("departing");
+  configureApple(t, apple, signInDuringRevocation(apple, departing, 1));
+  await linkApple(apple, departing);
+  const response = await deleteAccount(await bearer(departing));
+  assert.equal(response.status, 200, await response.clone().text());
+  // Both the linked token and the one the later sign-in stored were revoked.
+  assert.equal(apple.exchanged.length, 2);
+  assert.deepEqual(
+    apple.revoked.map(({ token }) => token),
+    apple.exchanged.map(({ refreshToken }) => refreshToken),
+  );
+  assert.deepEqual(await references(departing), []);
+});
+
+test("when Sign in with Apple keeps storing new tokens, deletion stops without erasing anything", async (t) => {
+  const apple = fakeApple();
+  const departing = await person("departing");
+  configureApple(t, apple, signInDuringRevocation(apple, departing, Infinity));
+  await linkApple(apple, departing);
+  const headers = await bearer(departing);
+  const failures = captureFailures();
+  await assertRouteError(await deleteAccount(headers), appleNotDisconnected);
+  assert.deepEqual(failureEvents(failures), ["apple token replaced"]);
+  // Each of the three rounds revoked the token it found; the newest stays
+  // for a retry.
+  assert.equal(apple.revoked.length, 3);
+  assert.equal(apple.exchanged.length, 4);
+  assert.equal(await appleTokenCount(departing), 1);
+  assert.notDeepEqual(await references(departing), []);
+});
+
+test("without Sign in with Apple settings, a member with an Apple token cannot delete their account", async (t) => {
+  const apple = fakeApple();
+  configureApple(t, apple);
+  const departing = await person("departing");
+  await linkApple(apple, departing);
+  const withoutApple = await person("without_apple");
+  // The settings are later removed from app.env.
+  for (const name of Object.keys(apple.env())) delete process.env[name];
+
+  const failures = captureFailures();
+  await assertRouteError(await deleteAccount(await bearer(departing)), {
+    status: 503,
+    message:
+      "Sign in with Apple is unavailable right now, so your account was not deleted. Please try again later.",
+  });
+  assert.deepEqual(failureEvents(failures), ["apple settings missing"]);
+  assert.equal(apple.revoked.length, 0);
+  assert.equal(await appleTokenCount(departing), 1);
+  assert.notDeepEqual(await references(departing), []);
+  // A member without an Apple token can still delete their account.
+  const response = await deleteAccount(await bearer(withoutApple));
+  assert.equal(response.status, 200, await response.clone().text());
+  assert.deepEqual(await references(withoutApple), []);
 });
 
 test("a person who never finished setup can delete their account", async () => {

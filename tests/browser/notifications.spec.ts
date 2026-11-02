@@ -3,6 +3,7 @@ import {
   type Page,
   type Request,
   type Response,
+  type Route,
 } from "@playwright/test";
 import { test } from "./monitored-test";
 import { prepareFriendship } from "./member-fixture";
@@ -448,4 +449,155 @@ test("pending friend-request notifications accept or confirm Decline in the pane
   // Reopened, the panel lists neither answered request.
   await bell(owner).click();
   await expect(panel.getByText("No notifications yet.")).toBeVisible();
+});
+
+test("a failed notification action keeps the list and focus, with its message beside the control", async ({
+  member,
+}) => {
+  const owner = await member("failedanswerowner");
+  const maya = await member("failedanswermaya", { displayName: "Maya Chen" });
+  const sam = await member("failedanswersam", { displayName: "Sam Okafor" });
+  const ownerId = (
+    await (await owner.request.get("/api/auth/get-session")).json()
+  ).user.id;
+  for (const requester of [maya, sam])
+    await post(requester, "relationship", {
+      target: ownerId,
+      action: "request",
+    });
+  await owner.goto("/account");
+  await bell(owner).click();
+  const panel = owner.getByRole("dialog", { name: "Notifications" });
+  const items = panel.locator(".notification-item");
+  const mayaItem = items.filter({
+    hasText: "Maya Chen sent you a friend request.",
+  });
+  const samItem = items.filter({
+    hasText: "Sam Okafor sent you a friend request.",
+  });
+  await expect(items).toHaveCount(2);
+  const fail = (action: string, error: string) =>
+    owner.route(
+      `**/api/screenr/${action}`,
+      (route) => route.fulfill({ status: 503, json: { error } }),
+      { times: 1 },
+    );
+  const message = "Requests are temporarily unavailable.";
+
+  // A failed Accept keeps the list, focus, and buttons, with its message
+  // beneath them.
+  await fail("respond-friend-request", message);
+  const accept = mayaItem.getByRole("button", { name: "Accept", exact: true });
+  await accept.focus();
+  await owner.keyboard.press("Enter");
+  await expect(mayaItem.locator(".error")).toHaveText(message);
+  await expect(items).toHaveCount(2);
+  await expect(panel.locator(".error")).toHaveCount(1);
+  await expect(accept).toBeFocused();
+  await expect(accept).toHaveAttribute("aria-disabled", "false");
+  for (const width of [390, 1440]) {
+    await owner.setViewportSize({ width, height: 844 });
+    const actions = await mayaItem
+      .locator(".notification-actions")
+      .boundingBox();
+    const alert = await mayaItem.locator(".error").boundingBox();
+    expect(alert!.y).toBeGreaterThanOrEqual(actions!.y + actions!.height - 1);
+    expect(alert!.x + alert!.width).toBeLessThanOrEqual(width);
+    expect(
+      await owner.evaluate(() => document.documentElement.scrollWidth),
+    ).toBe(width);
+    await owner.screenshot({
+      path: `.cache/notification-action-error-${width}.png`,
+    });
+  }
+
+  // A failed Decline keeps its confirmation open with the message, and the
+  // earlier message gives way to it.
+  await samItem.getByRole("button", { name: "Decline", exact: true }).click();
+  const confirm = samItem.getByRole("group", {
+    name: "Decline Sam Okafor’s friend request? The request will be removed.",
+    exact: true,
+  });
+  const confirmDecline = confirm.getByRole("button", {
+    name: "Decline",
+    exact: true,
+  });
+  await fail("respond-friend-request", message);
+  await confirmDecline.focus();
+  await owner.keyboard.press("Enter");
+  await expect(confirm.locator(".error")).toHaveText(message);
+  await expect(panel.locator(".error")).toHaveCount(1);
+  await expect(confirmDecline).toBeFocused();
+  await expect(items).toHaveCount(2);
+  // Cancel closes it with its message.
+  await confirm.getByRole("button", { name: "Cancel" }).click();
+  await expect(panel.locator(".error")).toHaveCount(0);
+
+  // A failed Mark all as read shows its message beneath the panel controls.
+  const markAll = panel.getByRole("button", { name: "Mark all as read" });
+  await fail(
+    "read-notifications",
+    "Notifications are temporarily unavailable.",
+  );
+  await markAll.focus();
+  await owner.keyboard.press("Enter");
+  await expect(panel.locator(".notification-controls .error")).toHaveText(
+    "Notifications are temporarily unavailable.",
+  );
+  await expect(panel.locator(".error")).toHaveCount(1);
+  await expect(markAll).toBeFocused();
+  await expect(items).toHaveCount(2);
+  await expect(
+    panel.getByRole("img", { name: "Unread", exact: true }),
+  ).toHaveCount(2);
+
+  // A failed selection stays in the panel with its message on the
+  // notification.
+  await fail("read-notification", message);
+  const select = mayaItem.getByRole("button", {
+    name: /Maya Chen sent you a friend request/,
+  });
+  await select.click();
+  await expect(mayaItem.locator(".error")).toHaveText(message);
+  await expect(panel.locator(".error")).toHaveCount(1);
+  await expect(select).toBeFocused();
+  await expect(owner).toHaveURL(/\/account$/);
+
+  // A retry succeeds and its result replaces the message.
+  await accept.click();
+  await expect(
+    mayaItem.getByText("Friend request accepted.", { exact: true }),
+  ).toBeFocused();
+  await expect(panel.locator(".error")).toHaveCount(0);
+});
+
+test("a timed-out notifications read says so and recovers with Try again", async ({
+  member,
+}) => {
+  const owner = await member("slowpanelowner");
+  const reader = await member("slowpanelreader");
+  await prepareFriendship(owner, reader);
+  // Paused timers let the read pass its ten-second deadline without real
+  // waiting, while the route holds it.
+  await owner.clock.install();
+  await owner.clock.pauseAt(Date.now() + 1000);
+  await owner.goto("/account");
+  const held: Route[] = [];
+  await owner.route("**/api/screenr/notifications?**", (route) => {
+    held.push(route);
+  });
+  await bell(owner).click();
+  await expect.poll(() => held.length).toBe(1);
+  const panel = owner.getByRole("dialog", { name: "Notifications" });
+  await owner.clock.runFor(10_000);
+  await expect(panel.locator(".error")).toContainText(
+    "Refresh timed out. Please try again.",
+  );
+  await owner.unroute("**/api/screenr/notifications?**");
+  await held[0].continue().catch(() => {});
+  await panel.getByRole("button", { name: "Try again" }).click();
+  await expect(
+    panel.getByText("slowpanelreader became your friend."),
+  ).toBeVisible();
+  await expect(panel.locator(".error")).toHaveCount(0);
 });

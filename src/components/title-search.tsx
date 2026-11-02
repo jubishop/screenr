@@ -8,7 +8,12 @@ import type {
   TitleSuggestion,
   ViewingTitle,
 } from "../shared";
-import { memberPath, parseMemberRoute, type SearchTab } from "../member-routes";
+import {
+  memberPath,
+  parseMemberRoute,
+  type FindFilters,
+  type SearchTab,
+} from "../member-routes";
 import { viewingAccess } from "../viewing";
 import { TitleServices, ViewingAttribution } from "./title-services";
 import { anySignal, api, useInteractive } from "./client";
@@ -114,12 +119,20 @@ function TabLink({
 export function TitleSearch({
   suggestions,
   recommendations,
+  hiddenFinished,
+  filters,
+  setFilters,
   serviceIds,
   activity,
   busy,
 }: {
   suggestions: ViewingTitle<TitleSuggestion>[] | null;
   recommendations: ViewingTitle<FriendsRecommendation>[] | null;
+  // Friends recommend titles the server left out as finished.
+  hiddenFinished: number;
+  // The screen's filters, which its reads send to the server.
+  filters: FindFilters;
+  setFilters: (change: (filters: FindFilters) => FindFilters) => void;
   serviceIds: string[] | null;
   activity: (
     title: string,
@@ -136,15 +149,32 @@ export function TitleSearch({
   const route = parseMemberRoute(`${usePathname()}?${useSearchParams()}`);
   const submitted = (route.kind === "search" && route.q) || "";
   const tab = route.kind === "search" ? route.tab : undefined;
-  // Friends recommend's own filters keep their state across tabs. Finished
-  // titles start hidden on each visit.
-  const [kind, setKind] = useState<TitleKind>("all");
-  const [showFinished, setShowFinished] = useState(false);
+  // The filters keep their state across tabs. Friends recommend's own start
+  // with finished titles hidden on each visit. The lists arrive filtered and
+  // capped; filtering them here too also covers search results and the lists
+  // read before a filter changed, until the screen reads them again.
+  const kind: TitleKind = filters.type ?? "all";
+  const setKind = (kind: TitleKind) =>
+    setFilters((filters) => ({
+      ...filters,
+      type: kind === "all" ? undefined : kind,
+    }));
+  const showFinished = filters.finished !== "hidden";
+  const setShowFinished = (show: boolean) =>
+    setFilters((filters) => ({
+      ...filters,
+      finished: show ? undefined : "hidden",
+    }));
+  const myServices = filters.services === "mine";
+  const setMyServices = (on: boolean) =>
+    setFilters((filters) => ({
+      ...filters,
+      services: on ? "mine" : undefined,
+    }));
   const [query, setQuery] = useState(submitted);
   const [results, setResults] = useState<ViewingTitle[] | null>(
     submitted.length < 2 ? null : [],
   );
-  const [myServices, setMyServices] = useState(false);
   const [searching, setSearching] = useState(submitted.length >= 2);
   const [error, setError] = useState("");
   const pending = useRef<AbortController | null>(null);
@@ -340,6 +370,7 @@ export function TitleSearch({
       {results === null && tab && recommendations !== null && (
         <FriendsRecommend
           recommendations={recommendations}
+          hiddenFinished={hiddenFinished}
           kind={kind}
           setKind={setKind}
           showFinished={showFinished}
@@ -352,7 +383,9 @@ export function TitleSearch({
         />
       )}
       {results !== null || tab ? null : suggestions !== null ? (
-        suggestions.length ? (
+        // With My services on, the server lists only matching suggestions,
+        // so an empty list explains the filter.
+        suggestions.length || myServices ? (
           <>
             <div className="section-heading">
               <h2>From your circle</h2>

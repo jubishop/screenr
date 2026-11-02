@@ -2,7 +2,11 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { dateLabel, relativeTime } from "../../src/components/client";
+import {
+  dateLabel,
+  readerCalendar,
+  relativeTime,
+} from "../../src/components/client";
 import { ActivityTime } from "../../src/components/activity-time";
 
 const minute = 60_000,
@@ -119,4 +123,72 @@ test("activity times render the same UTC fields in every time zone until the pag
     "2026-01-01",
   );
   assert.equal(dateLabel("not a date", false, "relative"), "Invalid Date");
+});
+
+test("interactive dates read as the runtime's own toLocaleDateString", () => {
+  const formats: Intl.DateTimeFormatOptions[] = [
+    // The hover time on activity times, and the availability check time.
+    {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    },
+    {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+      timeZoneName: "short",
+    },
+    // Invitation expiry, and options that name no part of the date.
+    {},
+    { hour: "numeric", minute: "2-digit" },
+  ];
+  for (const value of [
+    "2026-01-01T07:59:00.123456+00:00",
+    "2025-07-04T23:30:00Z",
+  ])
+    for (const timeZone of [undefined, "UTC", "America/Los_Angeles"])
+      for (const format of formats) {
+        const options = { ...format, timeZone };
+        const expected = new Date(value).toLocaleDateString("en-US", options);
+        // Repeated dates read the same.
+        assert.equal(dateLabel(value, true, options), expected);
+        assert.equal(dateLabel(value, true, options), expected);
+      }
+  assert.equal(dateLabel("not a date", true, {}), "Invalid Date");
+  assert.equal(dateLabel("not a date", true, "relative"), "Invalid Date");
+});
+
+test("interactive dates follow a change to the reader's time zone within a minute", (t) => {
+  const original = process.env.TZ;
+  t.mock.timers.enable({ apis: ["Date"], now });
+  try {
+    // 20:00 UTC on December 31 is already January 1 in Tokyo.
+    const lastOf2025 = "2025-12-31T20:00:00Z";
+    process.env.TZ = "America/Los_Angeles";
+    assert.equal(readerCalendar(), "America/Los_Angeles 2026");
+    assert.equal(dateLabel(lastOf2025, true, "relative"), "Dec 31, 2025");
+    assert.equal(
+      dateLabel(lastOf2025, true, { hour: "numeric" }),
+      "12/31/2025, 12 PM",
+    );
+    process.env.TZ = "Asia/Tokyo";
+    t.mock.timers.tick(minute);
+    assert.equal(dateLabel(lastOf2025, true, "relative"), "Jan 1");
+    assert.equal(
+      dateLabel(lastOf2025, true, { hour: "numeric" }),
+      "1/1/2026, 5 AM",
+    );
+    // The minute timer's calendar check sees a change at once.
+    process.env.TZ = "America/Los_Angeles";
+    assert.equal(readerCalendar(), "America/Los_Angeles 2026");
+    assert.equal(dateLabel(lastOf2025, true, "relative"), "Dec 31, 2025");
+  } finally {
+    if (original === undefined) delete process.env.TZ;
+    else process.env.TZ = original;
+  }
 });

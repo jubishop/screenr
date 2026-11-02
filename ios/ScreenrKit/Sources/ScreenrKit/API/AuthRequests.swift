@@ -122,7 +122,9 @@ extension APIRequest where Response == Acknowledgement {
 extension APIRequest where Response == Acknowledgement {
   // This sign-in, made to confirm it's the signed-in member again, such as
   // before deleting the account: it sends no invitation, since confirming
-  // never joins, and keeps the new session only when it is `userId`'s.
+  // never joins, and keeps the new session only when it is `userId`'s. A
+  // credential the server rejects, such as a Google account not connected to
+  // this one, leaves the member signed in.
   public func confirming(userId: String) -> Self {
     APIRequest(
       method: method,
@@ -131,7 +133,7 @@ extension APIRequest where Response == Acknowledgement {
       body: body,
       sessionChange: .confirmSignIn(userId: userId),
       visit: visit,
-      unauthorized: unauthorized,
+      unauthorized: .rejectsCredential,
       route: route
     )
   }

@@ -64,6 +64,9 @@ public struct AppServices: Sendable {
     self.push = push
     imageSession = URLSession(configuration: Self.imageConfiguration(cache: imageCache))
     session.onEnd { _ in imageCache.removeAllCachedResponses() }
+    // An extension that got 401 removed the token and ran no end handler
+    // here, so a launch without a session empties the cache too.
+    if session.phase == .signedOut { imageCache.removeAllCachedResponses() }
     // A deleted account leaves nothing in the Keychain. The client removed
     // the session token, and an invitation link kept for joining goes too.
     session.onEnd { ending in
@@ -206,6 +209,7 @@ public struct AppServices: Sendable {
 //   -ScreenrFixtureLog <file for a line per API request>
 //   -ScreenrFixtureUpdate <fixture name>      (repeatable)
 //   -ScreenrFixtureUpdateSignal <file whose creation brings the updates>
+//   -ScreenrFixtureOutageSignal <file whose existence fails every request>
 //   -ScreenrFixturePush undecided|allowed|denied|system (default undecided)
 //   -ScreenrFixturePosters placeholders|solid (default placeholders)
 //
@@ -235,6 +239,7 @@ public enum APISource: Hashable, Sendable {
       case "-ScreenrFixtureLog": scenario.requestLog = URL(filePath: value)
       case "-ScreenrFixtureUpdate": scenario.updates.append(value)
       case "-ScreenrFixtureUpdateSignal": scenario.updateSignal = URL(filePath: value)
+      case "-ScreenrFixtureOutageSignal": scenario.outageSignal = URL(filePath: value)
       case "-ScreenrFixturePush":
         guard let push = FixtureScenario.Push(rawValue: value) else {
           throw ArgumentError(

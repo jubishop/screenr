@@ -98,6 +98,26 @@ struct ScreenModelTests {
     #expect(api.reads.count == 2)
   }
 
+  // A read already answered can still arrive after its screen disappears,
+  // such as as the member signs out. It applies to nothing.
+  @Test func ignoresAReadThatAnswersAfterItDisappears() async throws {
+    let api = GatedAPI(RecordingAPI(["screen": try .fixture("screen/feed/default")]))
+    defer { api.open() }
+    let clock = TestClock()
+    var loaded: [Screen] = []
+    let model = ScreenModel(path: "/", api: api, clock: clock) { loaded.append($0) }
+    model.appeared(appActive: true)
+    await api.waitForRequests(1)
+    let polling = try #require(model.pollTask)
+
+    model.disappeared()
+    api.open()
+    await finish(polling)
+
+    #expect(model.phase == .loading)
+    #expect(loaded.isEmpty)
+  }
+
   @Test func keepsPollingThroughPassingFailuresWithoutTheOldContent() async throws {
     let api = ScriptedAPI([.screen(feed), .failure(.offline), .screen(feed)])
     let clock = TestClock()
@@ -141,6 +161,9 @@ struct ScreenModelTests {
     #expect(model.phase == .loaded(feed))
     await clock.waitForSleep(until: .seconds(36))
     #expect(api.reads.count == 3)
+    clock.advance(by: .seconds(3))
+    await clock.waitForSleep(until: .seconds(39))
+    #expect(api.triggers == [.demand, .poll, .demand, .poll])
   }
 
   @Test func givesUpOnARefreshAfterTenSeconds() async throws {
@@ -181,6 +204,49 @@ struct ScreenModelTests {
 
     #expect(api.reads.count == 3)
     #expect(model.phase == .loaded(emptyFeed))
+  }
+
+  // The server may still answer a read that a refresh replaced, after the
+  // newer read; the newer read's content stays.
+  @Test func aReplacedReadThatAnswersLateKeepsTheNewerContent() async throws {
+    let feedReply = try RecordingAPI.Reply.fixture("screen/feed/default")
+    let emptyReply = try RecordingAPI.Reply.fixture("screen/feed/empty")
+    let api = GatedAPI(
+      RecordingAPI(sequences: ["screen": [feedReply, feedReply, emptyReply]]),
+      holding: [2]
+    )
+    let clock = TestClock()
+    let model = ScreenModel(path: "/", api: api, clock: clock)
+    model.appeared(appActive: true)
+    await clock.waitForSleep(until: .seconds(3))
+    clock.advance(by: .seconds(3))
+    await api.waitForRequests(2)
+
+    await model.refresh()
+    #expect(model.phase == .loaded(emptyFeed))
+
+    api.open()
+    // The poll that waited for the replaced read sleeps again once it ends.
+    await clock.waitForSleep(until: .seconds(6))
+    #expect(model.phase == .loaded(emptyFeed))
+  }
+
+  // Leaving the foreground cuts off the read in flight, which keeps the
+  // content for the return.
+  @Test func aReadCutOffByTheBackgroundKeepsTheContent() async throws {
+    let api = ScriptedAPI([.screen(feed), .hang])
+    let clock = TestClock()
+    let model = ScreenModel(path: "/", api: api, clock: clock)
+    model.appeared(appActive: true)
+    await clock.waitForSleep(until: .seconds(3))
+    clock.advance(by: .seconds(3))
+    await api.waitForReads(2)
+    let polling = try #require(model.pollTask)
+
+    model.appActivityChanged(false)
+    await finish(polling)
+
+    #expect(model.phase == .loaded(feed))
   }
 
   @Test func keepsItsDataWhenTheScreenIsUnchanged() async throws {
@@ -234,6 +300,32 @@ struct ScreenModelTests {
 
     #expect(api.reads.count == 3)
     #expect(model.phase == .loaded(emptyFeed))
+  }
+
+  // Telemetry records polls quietly, so only a read that repeats the last one on schedule is a
+  // poll: never the first read, a refresh, a push's read, or the read on returning to the app.
+  @Test func marksOnlyTheScheduledRepeatsAsPolls() async throws {
+    let api = ScriptedAPI([.screen(feed)])
+    let clock = TestClock()
+    let model = ScreenModel(path: "/", api: api, clock: clock)
+    model.appeared(appActive: true)
+    await clock.waitForSleep(until: .seconds(3))
+    clock.advance(by: .seconds(3))
+    await clock.waitForSleep(until: .seconds(6))
+
+    await model.refresh()
+    model.refreshIfLive()
+    await api.waitForReads(4)
+    await clock.waitForSleep(until: .seconds(6))
+    model.appActivityChanged(false)
+    model.appActivityChanged(true)
+    await api.waitForReads(5)
+    await clock.waitForSleep(until: .seconds(6))
+    clock.advance(by: .seconds(3))
+    await clock.waitForSleep(until: .seconds(9))
+
+    #expect(api.triggers == [.demand, .poll, .demand, .demand, .demand, .poll])
+    model.disappeared()
   }
 
   @Test func ignoresAPushWhileHidden() async throws {
@@ -290,6 +382,7 @@ struct ScreenModelTests {
       observer.records.map(\.route) == ["/api/screenr/notifications", "/api/screenr/notifications"]
     )
     #expect(observer.records.map(\.status) == [200, 304])
+    #expect(observer.records.map(\.trigger) == [.demand, .poll])
     model.disappeared()
   }
 

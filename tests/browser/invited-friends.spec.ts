@@ -57,8 +57,12 @@ test("invited friends discover, save, and share inline discussions with live acc
   await item(ben)
     .getByRole("button", { name: "Post reply", exact: true })
     .click();
+  // A text match alone would also find the draft that stays in the composer
+  // until the save finishes.
   await expect(
-    item(ben).getByText("This looks like our kind of movie.", { exact: true }),
+    item(ben)
+      .locator("[data-comment-id]")
+      .filter({ hasText: "This looks like our kind of movie." }),
   ).toBeVisible();
   await expect(
     alice.getByRole("button", { name: /New activity/ }),
@@ -140,6 +144,14 @@ test("invited friends discover, save, and share inline discussions with live acc
   await item(cam)
     .getByRole("button", { name: "Post reply", exact: true })
     .click();
+  // Wait for the saved comment, not the draft still in the composer. Pages
+  // that load before the save hold it behind New activity, and Alice's
+  // lookup below has no timeout of its own.
+  await expect(
+    item(cam)
+      .locator("[data-comment-id]")
+      .filter({ hasText: "Cam’s view of the film." }),
+  ).toBeVisible();
   await ben.goto(conversationURL);
   await expect(
     item(ben).getByText("Cam’s view of the film.", { exact: true }),

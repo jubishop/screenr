@@ -12,6 +12,8 @@ the units, apply the worker's sandbox (#306). The worker's unit is the one
 source of these settings: systemd units cannot include shared settings, so
 these tests require every copy to match it.
 """
+from importlib.machinery import SourceFileLoader
+from importlib.util import module_from_spec, spec_from_loader
 import json
 import os
 from pathlib import Path
@@ -67,6 +69,14 @@ NEEDED = ('/opt/screenr', '/opt/node', '/etc/screenr', '/usr', '/etc/ssl', '/etc
           '/var/lib/dpkg', '/etc/apt', '/var/lib/private')
 # Other applications' directories on the shared host.
 OTHER_APPLICATIONS = ('/opt/health', '/opt/kidsbank', '/opt/news', '/opt/trading', '/etc/caddy')
+# The Markdown that the runbook test scans. CI's path filter for pushes and
+# bin/ci-scope for pull requests skip Markdown that no check reads, so the
+# filter re-includes these globs, which GitHub matches as pathlib does.
+RUNBOOKS = ('docs/**/*.md', 'memory/**/*.md', '*.md')
+# The other folders that hold tracked Markdown. bin/check --documents-only
+# checks the links in every tracked Markdown file, so the filter re-includes
+# these too (#439).
+DOCUMENTS = ('ios/**/*.md', 'bin/**/*.md')
 # Records the arguments systemd-run receives and exits with FIXTURE_STATUS.
 FAKE_SYSTEMD_RUN = '''#!/usr/bin/env python3
 import json, os, sys
@@ -97,6 +107,25 @@ def words(settings, key):
 
 def sandbox(settings):
     return {key: settings.get(key) for key in SANDBOX}
+
+
+def trigger_paths(workflow):
+    """Map each event in a workflow's triggers that has a paths filter to its
+    patterns, without comment lines."""
+    text = re.sub(r'^ *#.*\n', '', workflow.read_text(), flags=re.M)
+    triggers = text.split('\non:\n', 1)[1].split('\n\n', 1)[0] + '\n'
+    events = re.findall(r'^  ([a-z_]+):\n((?:    .*\n)*)', triggers, re.M)
+    return {event: re.findall(r"^      - '(.*)'$", paths[1], re.M) for event, body in events
+            if (paths := re.search(r'^    paths:\n((?:      .*\n)*)', body, re.M))}
+
+
+def load_ci_scope():
+    loader = SourceFileLoader('ci_scope', str(ROOT / 'bin' / 'ci-scope'))
+    spec = spec_from_loader('ci_scope', loader)
+    assert spec
+    module = module_from_spec(spec)
+    loader.exec_module(module)
+    return module
 
 
 def run_release_script(*arguments, status=0):
@@ -262,12 +291,42 @@ class ReleaseScriptSandboxTests(unittest.TestCase):
         # A documented systemd-run as screenr would run release code outside
         # the sandbox. screenr-db runs only system programs and kit scripts.
         unsandboxed = re.compile(r'(--uid=|User=|-u )screenr(?![\w-])')
-        sources = [*ROOT.glob('docs/**/*.md'), *ROOT.glob('memory/**/*.md'), *ROOT.glob('*.md'),
+        sources = [*(path for runbooks in RUNBOOKS for path in ROOT.glob(runbooks)),
                    *(path for path in (ROOT / 'ops').iterdir()
                      if path.is_file() and path.name not in APPS + (RUNNER.name,))]
         for path in sources:
             with self.subTest(path=str(path.relative_to(ROOT))):
                 self.assertIsNone(unsandboxed.search(path.read_text()))
+
+    def test_ci_runs_when_only_checked_markdown_changes(self):
+        # Markdown that a check reads, changed alone, must run the checks, or
+        # its failure would surface in the next unrelated pull request: tests
+        # read the runbooks (#371), and the document checks read every tracked
+        # Markdown file (#439). Pushes to main use the engineering policy's
+        # filter: every path, then no Markdown, then the Markdown checks read.
+        # Pull requests have no filter, so the check that merging requires
+        # always reports (#372), and bin/ci-scope skips the check jobs for the
+        # same Markdown.
+        globs = (*RUNBOOKS, *DOCUMENTS)
+        self.assertEqual(trigger_paths(ROOT / '.github' / 'workflows' / 'check.yml'),
+                         {'push': ['**', '!**.md', *globs]})
+        tracked = set(subprocess.run(['git', 'ls-files', '-z'], cwd=ROOT, check=True, capture_output=True,
+                                     text=True).stdout.split('\0')[:-1])
+        # Markdown in a folder that holds none yet, which both skips leave out.
+        paths = sorted(tracked | {'vendor/README.md', 'vendor/lib/notes.md'})
+        with tempfile.TemporaryDirectory() as directory:
+            tree = Path(directory)
+            for path in paths:
+                (tree / path).parent.mkdir(parents=True, exist_ok=True)
+                (tree / path).touch()
+            reincluded = {path.relative_to(tree).as_posix() for pattern in globs for path in tree.glob(pattern)}
+        needs_checks = load_ci_scope().needs_checks
+        for path in paths:
+            with self.subTest(path=path):
+                self.assertEqual(needs_checks(path), not path.endswith('.md') or path in reincluded)
+                if path in tracked and path.endswith('.md'):
+                    self.assertTrue(path in reincluded, 'the document checks read every tracked Markdown file, '
+                                    'so re-include its folder in check.yml, bin/ci-scope, and DOCUMENTS')
 
 
 if __name__ == '__main__':

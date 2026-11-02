@@ -9,6 +9,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import textwrap
 import unittest
 
 SOURCE = Path(__file__).resolve().parents[1]
@@ -362,11 +363,60 @@ class WorkflowTests(unittest.TestCase):
 
     def test_check_reports_every_check_job_and_gates_deployment(self):
         checks = [name for name in self.jobs if name not in ("check", "deploy")]
-        self.assertEqual(sorted(checks), ["app", "browser", "release", "static"])
+        self.assertEqual(sorted(checks), ["app", "browser", "release", "scope", "static"])
         self.assertIn(f"    needs: [{', '.join(checks)}]\n", self.jobs["check"])
         self.assertIn("    if: ${{ !cancelled() }}\n", self.jobs["check"])
-        self.assertIn("""jq -e 'all(.[]; .result == "success")'""", self.jobs["check"])
         self.assertIn("    needs: [check, release]\n", self.jobs["deploy"])
+
+    def test_scope_decides_whether_the_check_jobs_run(self):
+        # bin/ci-scope compares a pull request's test merge commit with its
+        # first parent, so the checkout needs both.
+        scope = self.jobs["scope"]
+        self.assertIn("          fetch-depth: 2", scope)
+        self.assertIn("    outputs:\n      run: ${{ steps.scope.outputs.run }}\n", scope)
+        self.assertIn("        id: scope\n", scope)
+        self.assertIn("          EVENT_NAME: ${{ github.event_name }}\n", scope)
+        self.assertIn('        run: bin/ci-scope "$EVENT_NAME" >> "$GITHUB_OUTPUT"\n', scope)
+        for name in ("static", "app", "browser", "release"):
+            with self.subTest(job=name):
+                self.assertIn("    needs: scope\n    if: needs.scope.outputs.run == 'true'\n", self.jobs[name])
+
+    def test_check_passes_only_when_every_job_passed_or_scope_skipped_them(self):
+        script = textwrap.dedent(self.jobs["check"].split("        run: |\n", 1)[1])
+
+        def check(scope, run, **results):
+            needs = {"scope": {"result": scope, "outputs": {"run": run} if run else {}}}
+            for name in ("static", "app", "browser", "release"):
+                needs[name] = {"result": results.get(name, "success"), "outputs": {}}
+            # GitHub runs a step's script with these bash options.
+            return subprocess.run(["bash", "--noprofile", "--norc", "-eo", "pipefail", "-c", script],
+                                  env={**os.environ, "NEEDS": json.dumps(needs)},
+                                  capture_output=True, text=True).returncode == 0
+
+        skipped = dict.fromkeys(("static", "app", "browser", "release"), "skipped")
+        self.assertTrue(check("success", "true"))
+        self.assertTrue(check("success", "false", **skipped))
+        self.assertFalse(check("success", "true", release="failure"))
+        self.assertFalse(check("success", "true", app="cancelled"))
+        self.assertFalse(check("success", "true", browser="skipped"))
+        self.assertFalse(check("success", "false", **{**skipped, "static": "failure"}))
+        self.assertFalse(check("failure", "", **skipped))
+        self.assertFalse(check("skipped", "false", **skipped))
+
+    def test_every_run_packages_the_release_and_only_a_deployment_uploads_it(self):
+        # A pull request that breaks packaging fails CI instead of blocking the next deployment.
+        steps = re.split(r"^      - ", self.jobs["release"], flags=re.M)[1:]
+        find = lambda text: next(step for step in steps if text in step)
+        package = find("npm run release:package\n")
+        for text in ("uses: ./.github/actions/node-lts\n", "npm run release:package\n"):
+            with self.subTest(step=text):
+                self.assertNotRegex(find(text), r"(?m)^(        )?if:")
+        self.assertLess(package.index("npm ci\n"), package.index("npm run build\n"))
+        self.assertLess(package.index("npm run build\n"), package.index("npm run release:package\n"))
+        deploying = "steps.decision.outputs.deploy == 'true' && github.repository == 'jubishop/screenr'"
+        self.assertIn(f"        if: {deploying}\n", find("uses: actions/upload-artifact@"))
+        self.assertIn("    if: needs.release.outputs.deploy == 'true' && github.repository == 'jubishop/screenr'\n",
+                      self.jobs["deploy"])
 
     def test_check_jobs_use_the_ubuntu_mirror_only_for_missing_tools(self):
         # A slow mirror held Playwright's --with-deps past a job's timeout (#320).

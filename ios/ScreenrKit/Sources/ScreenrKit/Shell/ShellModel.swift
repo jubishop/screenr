@@ -39,6 +39,9 @@ public final class ShellModel {
   @ObservationIgnored private let onViewer: @MainActor (Person) -> Void
   @ObservationIgnored private let onScreen: @MainActor (Screen) -> Void
   @ObservationIgnored private var unreadHandlers: [@MainActor (Int) -> Void] = []
+  // Counts the sessions that ended, so a read that an ended session started
+  // reports nothing when it answers.
+  @ObservationIgnored private var endedSessions = 0
 
   // `onViewer` learns who is signed in each time a new member's first screen
   // loads, such as to name the opaque user ID in error reports. `onScreen`
@@ -60,10 +63,14 @@ public final class ShellModel {
   // Reads the friends feed. A member without a profile gets 403 from every
   // screen, which sends them to setup. Setup calls this again when it is done.
   public func checkAccount() async {
+    let session = endedSessions
     do throws(APIError) {
-      screenLoaded(try await api.send(.screen(path: "/")))
+      let screen = try await api.send(.screen(path: "/"))
+      guard session == endedSessions else { return }
+      screenLoaded(screen)
       account = .ready
     } catch {
+      guard session == endedSessions else { return }
       switch error.kind {
       case .forbidden: account = .needsSetup
       // The session's phase shows sign-in or the required update.
@@ -78,6 +85,7 @@ public final class ShellModel {
   // server ended the session before the link showed. The app calls this from
   // `SessionStore.onEnd(_:)`.
   public func sessionEnded(_ ending: SessionStore.Ending) {
+    endedSessions += 1
     account = .checking
     viewer = nil
     setUnreadNotifications(0)
@@ -93,12 +101,15 @@ public final class ShellModel {
   }
 
   // A model for a member screen that reports what it loads to the shell and
-  // the router, or nil for a destination without a screen.
+  // the router while its session lasts, or nil for a destination without a
+  // screen.
   public func screenModel(for destination: Destination) -> ScreenModel? {
     guard let path = destination.screenPath else { return nil }
+    let session = endedSessions
     return ScreenModel(path: path, api: api, clock: clock) { [weak self] screen in
-      self?.screenLoaded(screen)
-      self?.router.screenLoaded(destination)
+      guard let self, session == endedSessions else { return }
+      screenLoaded(screen)
+      router.screenLoaded(destination)
     }
   }
 

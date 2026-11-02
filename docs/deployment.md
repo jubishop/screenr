@@ -19,6 +19,7 @@ The old hostname now only [redirects](#old-hostname-redirect) to the new one.
 | Active release | `/opt/screenr/current` symlink |
 | Node runtime | `/opt/screenr/node/bin/node`, through a link to the host's shared `/opt/node/current` |
 | Web process | `screenr-web.service`, loopback port 3060, 384 MB memory limit |
+| Optimized poster cache | Each release's `.next/cache/images`, 512 MiB limit |
 | Email and push worker | `screenr-worker.service`, 128 MB memory limit |
 | PostgreSQL 18 | `screenr-db.service`, loopback port 5439, 256 MB memory limit |
 | Database files | `/var/lib/screenr/postgres`, owned by `screenr-db` |
@@ -65,7 +66,14 @@ with no capabilities and have:
   SGID files, or change their execution domain.
 
 Only the web writes files: Next keeps optimized TMDB posters in the active
-release's `.next/cache`. `MemoryDenyWriteExecute` stays off because V8's JIT
+release's `.next/cache`. `images.maximumDiskCacheSize` in `next.config.ts`
+bounds them at 512 MiB, past which Next deletes the least recently used;
+without it, Next would allow half the shared host's free disk. With the
+[retained releases](#build-and-activate-a-release), poster caches use at most
+about 1.5 GiB. Each release starts with an empty cache, so the first visits
+after a deploy optimize posters again
+([issue #423](https://github.com/jubishop/screenr/issues/423)).
+`MemoryDenyWriteExecute` stays off because V8's JIT
 writes executable memory. In the sandbox, `os.cpus()` returns an empty list
 and `os.networkInterfaces()` fails. Next calls the latter at startup when
 `HOSTNAME` is unset, so the web unit needs `HOSTNAME=127.0.0.1`.
@@ -307,6 +315,32 @@ which reach the app directly, therefore run under every production security
 header. The old hostname's redirect site sets its own `Referrer-Policy`,
 because no app response passes through it.
 
+### Database connections
+
+`ops/postgresql.conf` allows 25 connections, and PostgreSQL reserves 3 of
+them for superusers, so the non-superuser `screenr` role can open 22. The web
+process and the worker each keep one pool of at most 8 (`src/server/db.ts`),
+16 in all, which leaves 6 for the rest, such as activation's migrations,
+backups, and administration.
+
+The production build copies `src/server/db.ts` into each server bundle that
+imports it, such as the pages' and the route handlers', and runs every copy
+in the one web process. The copies share one pool on `globalThis`, as they do
+across development reloads
+([#435](https://github.com/jubishop/screenr/issues/435)). Before that, the
+pages and the route handlers each opened their own pool: under a burst of
+requests a local production server held 16 connections, and with the worker
+the pools could ask for 24, more than the role can open. It now holds 8.
+
+A request's queries end before it answers. Server code runs independent
+queries side by side with `settleAll` from `src/server/db.ts`, which waits
+for every part before it rejects. `Promise.all` rejects at the first failure
+while the other parts run on, so a failed screen read once answered while its
+unread count still ran, and a test's table reset deadlocked with that query
+([#469](https://github.com/jubishop/screenr/issues/469)).
+`tests/app/database-connections.test.ts` fails when `src/server` or
+`src/app` calls `Promise.all`.
+
 ### Host configuration drift
 
 **Decision — 2026-10-12:** During deployment, under the deploy lock and
@@ -492,12 +526,15 @@ entries.
 ## Build and activate a release
 
 Follow the [main branch workflow](development-workflow.md#main-branch-delivery).
-Pushes to `main` run full checks and, by default, package a Linux x64
-release in the `release` job alongside them. A separate `deploy` job starts
-only after every [check job](development-workflow.md#ci-jobs) passes. Nonfunctional
-changes can skip packaging and deployment with the documented commit trailers;
-checks still run. PR workflows only run checks. **Run workflow** on `main`
-forces a checked deployment when needed. There is no local deployment command.
+Every run of the check workflow, pull requests included, packages and
+verifies a Linux x64 release in the `release` job alongside the other
+[check jobs](development-workflow.md#ci-jobs), so a change that breaks
+packaging fails before it merges. Pushes to `main` also upload that release by
+default, and a separate `deploy` job starts only after every check job passes.
+Nonfunctional changes can skip the upload and deployment with the documented
+commit trailers; checks, including packaging, still run. Pull request runs
+never upload or deploy their release. **Run workflow** on `main` forces a
+checked deployment when needed. There is no local deployment command.
 
 The deployment job downloads the archive from its own run, checks its revision
 and paths, and verifies the transfer checksum. It takes a backup unless the
@@ -772,7 +809,15 @@ Packaging copies the repository paths in `scripts/release-paths.ts` for the
 maintenance scripts, and an
 [application test](testing.md#coverage) checks that they cover every module
 those scripts load.
-Packaging excludes local environment files and generated caches. It then
+Packaging excludes local environment files and generated caches. It stages
+the release in a new directory under the system temporary directory and
+removes it afterward. Node finds a package by walking up from the file that
+imports it, so a release staged inside the checkout would load any runtime
+package missing from its own install from the checkout's development
+`node_modules`, and the check below would pass a release that fails on the
+server ([#370](https://github.com/jubishop/screenr/issues/370)). Packaging
+therefore stops when any directory above the staging directory has a
+`node_modules`; set `TMPDIR` to a directory outside any checkout. It then
 verifies the package against a disposable database, which it creates if
 needed: the checkout's own
 [application test database](testing.md#checkout-test-databases), or
@@ -783,7 +828,9 @@ the sign-in route. A signed-out `GET /api/auth/get-session` must return HTTP 200
 with `null`. The login page renders without the auth handler, and browser tests
 send auth requests to a separate fixture, so only this request runs the built
 sign-in route. This check also verifies that Next's generated dependency aliases
-are present.
+are present. Packaging then writes the archive to
+`.cache/screenr-REVISION.tar.gz` in the checkout, where CI uploads it, and
+removes earlier archives there.
 Inspect the archive manifest before transferring it. Extract into a new revision directory as root and
 keep application source and runtime packages read-only to the service users.
 Install the [deploy kit](#deploy-kit) of the same revision, so the activation
@@ -890,14 +937,20 @@ journalctl -u screenr-worker --since '1 day ago' --no-pager | grep '"event":"ema
 | `route failed` | web | `route`, Next's route pattern, such as `/api/photos/[user]/[version]`; `type` (`render`, `route`, `action`, or `proxy`); and `method`, for an error no handler caught |
 | `catalog token rejected` | web | `status` 401 or 403: TMDB rejected `TMDB_READ_TOKEN`, so every catalog lookup fails until it is replaced |
 | `catalog request failed` | web | `status` for another TMDB reply other than 404, or error fields for a timeout, network failure, or malformed JSON |
+| `catalog response invalid` | web | `lookup` (`details`, `search`, `seasons`, `episodes`, `find`, `videos`, or `providers`) and error fields, for a TMDB answer without the shape Screenr reads, such as after TMDB renames or retypes a field; or `lookup` `details` and `part` `release_dates`, without error fields, for movie details stored without the release dates Screenr couldn't read |
 | `catalog cache failed` | web | `cache` (`title`, `trailer`, or `availability`) for a failed read or write of that catalog cache |
 | `auth callback failed` | web | `callback`, the Better Auth callback, such as `sendVerificationOTP` or `user.create.before` |
+| `auth endpoint failed` | web | `endpoint`, Better Auth's route pattern, such as `/sign-in/email-otp` or `/callback/:id`, when known, for an unexpected error from Better Auth's handler, such as a database error in its adapter or rate limit or a schema mismatch, which Screenr answers with a bare 500 |
+| `auth failure caught` | web | `endpoint`, as for `auth endpoint failed`, when known, for an unexpected error that Better Auth caught and answered itself, such as a database error while Google or Apple sign-in creates the account or while it reads a session |
+| `google client rejected` | web, worker | `status` and Google's `reason`, `invalid_client` or `unauthorized_client`: Google's token endpoint rejected Screenr's web client when a web Google sign-in exchanged its code, or in the worker's [hourly check](#google-client-check), as after `GOOGLE_CLIENT_SECRET` is rotated or deleted, so every web Google sign-in fails until `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` are fixed |
 | `code email cap reached` | web | No fields: the Screenr-wide limit of 40 [code emails a day](running-screenr.md#provider-configuration) refused a code request |
 | `apple_token_failed` | web | `status` and Apple's `reason` for an HTTP reply from Apple's token endpoint, or error fields |
 | `apple token unreadable` | web | Error fields only: account deletion skipped a Sign in with Apple token sealed under an earlier `BETTER_AUTH_SECRET` |
 | `apple revoke failed` | web | Error fields only: Apple did not confirm revoking a token, so the account was not deleted |
+| `apple settings missing` | web | No fields: account deletion found a Sign in with Apple token but the [Apple settings](running-screenr.md#iphone-app-accounts-and-keys) are missing, so the account was not deleted |
+| `apple token replaced` | web | No fields: Apple sign-ins kept storing new tokens through three rounds of revocation, so the account was not deleted |
 | `worker failed` | worker | `failures`, the loop's failed passes in a row; see [worker outages](#worker-outages) |
-| `email delivery failed` | worker | `job` ID, `kind` (`code` or `activity`), `attempt`, and `final` |
+| `email delivery failed` | worker | `job` ID, `kind` (`code` or `activity`), `attempt`, `final`, and `stale` when a block or opt-out committed during the send ([stale sends](notifications.md#activity-email)) |
 | `push delivery failed` | worker | `job` ID, `kind` (`alert` or `badge`), `environment` (`sandbox` or `production`), `attempt`, `final`, and `status` and `reason` for an APNs reply |
 | `push delivery off` | worker | `missing` setting names, or `reason` `invalid key` with error fields; see [push settings](#provisioning) |
 | `google photo copy failed` | web, worker | `user` ID, `trigger` (`account`, `choice`, or `backfill`), `reason`, and `status` for an HTTP reply |
@@ -915,15 +968,105 @@ an iPhone app error report:
 journalctl -u screenr-web --since '1 day ago' --no-pager | grep '"requestId":"REQUEST_ID"'
 ```
 
+Every failure prints its line, even when its
+[Sentry report is folded](#failure-reports-in-sentry) into a count, so the
+journal has a line for each request ID that a member reports. During an
+outage the journal gets one line per failed request, within journald's
+default size limit, while Sentry gets each kind of failure, such as
+`request failed` for one action, error class, and code, at most once an
+hour.
+
 The `catalog` events print at most once per request: one API request or
 member page load that meets the same catalog failure many times, such as a
 title page's details, trailer, and availability lookups during a TMDB outage,
 prints one line. TMDB 404s are not failures. A `catalog token rejected` line
 means the token was revoked, expired, or suspended: replace `TMDB_READ_TOKEN`
-in `app.env` and restart `screenr-web`. A Better Auth callback failure still
-gets Better Auth's own answer, such as success for a code request whose email
-was never queued, and Better Auth prints its own unstructured line beside
-this one.
+in `app.env` and restart `screenr-web`. A `catalog response invalid` line
+means TMDB answered without the fields Screenr reads, for one title or, after
+a TMDB contract change, for every lookup of that kind. Its stack frames locate
+the check that rejected the answer. A line with `part` instead names the piece
+of otherwise usable details that Screenr couldn't read: the details were
+stored, but the release status keeps its last dates and the details refetch
+after five minutes.
+
+A Better Auth callback failure still gets Better Auth's own answer, such as
+success for a code request whose email was never queued. When the failure
+ends the request, as in an email code sign-in whose account creation fails,
+it logs only `auth callback failed`, not `auth endpoint failed` as well. An
+`auth endpoint failed` line reports an error from Better Auth's own code, such
+as a database error in its adapter while it checks a sign-in code
+([issue #415](https://github.com/jubishop/screenr/issues/415)). Better Auth's
+router rethrows it (`onAPIError.throw`), so neither its router library,
+better-call, nor Next prints the error itself, whose message and PostgreSQL
+detail can quote the failing row. Beside these lines, Better Auth prints its
+own line, such as `ERROR [Better Auth]: Failed to run background task:` for a
+callback failure it catches. Screenr's `logger.log` prints only Better Auth's
+message, never the error passed with it. A few messages name a value from
+the request, such as an untrusted origin or callback URL.
+
+An error that Better Auth catches and answers itself logs `auth failure
+caught` ([issue #414](https://github.com/jubishop/screenr/issues/414)).
+Better Auth passes the error to `logger.log` at `error` level, beside its
+message, and Screenr logs the error's fields as for any failure. A database
+error while a Google or Apple sign-in finds or creates the account ends an
+OAuth callback in a redirect with `?error=` and an ID token sign-in in an
+error answer, such as 401 `OAUTH_LINK_ERROR`. A failed session read answers
+500 `FAILED_TO_GET_SESSION`, or 401 in `/link-social`'s session check, and a
+failed sign-out still answers success. When Screenr itself reads the session,
+as `/api/screenr` and `/api/photos` requests and member pages do, the line
+names no `endpoint`, and the request's own `request failed` or `route failed`
+line follows with an `APIError` whose `cause` names the same error, which
+Better Auth keeps there since 1.7.12. In an `/api/screenr` request, both lines
+carry its `requestId`. A callback failure that Better Auth catches logs only
+`auth callback failed`. A hook matcher that throws, which ends in a 500 that
+Better Auth's router answers without `auth endpoint failed`, logs `auth
+failure caught` with the matcher's error.
+
+`auth failure caught` covers every error Better Auth logs at `error` level
+except three: an `APIError`, which is Better Auth's deliberate answer; a
+callback failure already logged; and the error Better Auth raises when an
+OAuth callback brings a state it can't use, because it is unknown, already
+used, expired, or from another browser. A client causes that one, as a
+repeated callback or a bot does, so it prints only Better Auth's
+`Failed to parse state` line. Issue #414 left this choice to its
+implementation, which settled it on 2026-11-01 from Better Auth 1.7.10's code:
+
+- **Client errors:** the state error is the only client-caused error that
+  reaches `error` level with an error object. `State not found` passes the
+  callback's `error` parameter, a rejected authorization code passes Google's
+  reply as a plain object (see `google client rejected` below), and Better
+  Auth's router answers a malformed callback query with 400 before
+  `INVALID_CALLBACK_REQUEST` can log a parse error.
+- **Server failures:** they arrive in more classes than `DatabaseError` and
+  Node system errors, such as pg's own `Error` for a lost connection or the
+  five-second connection timeout, Better Auth's `BetterAuthError` for
+  duplicate account identities, and a `TypeError` for a failed fetch to
+  Google's token endpoint.
+- **Rejected alternatives:** logging only `DatabaseError` and Node system
+  errors would miss those, and matching Better Auth's messages would break
+  when it rewords one. Screenr recognizes the state error by its
+  `BetterAuthError` name and its code, such as `state_mismatch`, which the
+  production build keeps; the build renames Better Auth's classes.
+
+A web Google sign-in returns to Better Auth's OAuth callback, which exchanges
+the code at Google's token endpoint. When Google rejects the exchange, Better
+Auth logs Google's JSON reply, with the HTTP status and status text added, as
+a plain object, then redirects with `?error=invalid_code`
+([issue #441](https://github.com/jubishop/screenr/issues/441)). Most
+rejections come from the client, such as an expired or already used code
+(`invalid_grant`), and log nothing. `invalid_client` or `unauthorized_client`
+(RFC 6749) means Google refused Screenr's own web client, as for a wrong,
+rotated, or deleted `GOOGLE_CLIENT_SECRET`, and logs `google client rejected`
+with the status and that code, never Google's `error_description` or anything
+else from the reply. The iPhone app's ID token sign-in uses no secret and
+keeps working, so it can hide this outage; the worker's
+[hourly check](#google-client-check) logs the same line without waiting for
+a sign-in. A deleted client fails earlier: Google shows `deleted_client` on
+its own authorization page, which never returns to Screenr, so the sign-in
+logs nothing. Screenr reads the
+reply only at the callback for Google. Apple's callback answers 404 before it
+exchanges anything
+([data and access](data-and-access.md#native-sign-in)).
 
 For a Resend reply, `email delivery failed` adds the HTTP `status` and the
 `provider` error name, such as `daily_quota_exceeded` or `invalid_api_key`.
@@ -975,6 +1118,79 @@ keeps a short message until cleanup deletes the expired job, and
 `push_job.last_error` keeps the APNs status and reason or the error code
 until the push is sent or expires.
 
+Next prints its own line for an error that reaches `route failed`, just
+before that line, and its standalone server has no setting that stops it. In
+production, `register` in `src/instrumentation.ts` makes `console.error`
+print any error object as the error fields above, so Next's line reads `⨯`
+and the same fields as JSON, without the message or PostgreSQL detail
+([issue #428](https://github.com/jubishop/screenr/issues/428)). That covers
+any library that prints an error object. Text printed as a string, such as
+Better Auth's own lines, prints as it is. To read a message, reproduce the
+failure locally, where development prints whole errors.
+
+In production, Next hands a failed page render's error to `onRequestError`
+twice, once as the render throws it and again as it crosses a React server
+boundary, though it prints its own line only once. The hook logs each error
+object once, so one failed render prints one `route failed` line and sends
+one Sentry report
+([issue #453](https://github.com/jubishop/screenr/issues/453)). Another
+failure, even with the same fields, prints its own line.
+
+#### Google client check
+
+The worker checks Screenr's web Google client at most once an hour, so a
+broken `GOOGLE_CLIENT_SECRET` raises `google client rejected` before a
+member's web Google sign-in fails
+([issue #458](https://github.com/jubishop/screenr/issues/458)). Its
+periodic cleanup, which runs on its first pass after each start and about
+once a minute after that, exchanges a dummy code at Google's token endpoint
+with `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, and the registered callback,
+`BETTER_AUTH_URL` followed by `/api/auth/callback/google`. Each deploy
+restarts the worker, so the first check covers the settings it starts with.
+Google authenticates the client before it reads the code:
+
+- **`invalid_grant`:** the client works, and nothing is logged.
+- **`invalid_client` or `unauthorized_client`:** `screenr-worker` logs
+  `google client rejected` with the HTTP `status` and that code as `reason`,
+  never Google's `error_description` or anything else from the reply. Sentry
+  gets it as it gets other failure lines.
+- **Anything else:** another reply, a timeout after 10 seconds, or a network
+  failure says nothing about the client, logs nothing, and waits for the
+  next hour's check, as a failed check also does.
+
+Without `GOOGLE_CLIENT_ID` or `GOOGLE_CLIENT_SECRET`, the web has no Google
+sign-in and the worker checks nothing. On 2026-11-01 a wrong secret for
+Screenr's web client and an unknown client ID each answered
+`401 invalid_client` for a dummy code at Screenr's callback, while a redirect
+URI that breaks Google's policy, such as one on `example.test`, answered
+`400 invalid_request` before Google checked the client. Whether Google's
+token endpoint answers `invalid_client` for a deleted client is unverified.
+
+When the line appears, put the web client's current ID and secret from
+Google Cloud project `screenr-69420` in `app.env` and its
+[working copy](#encrypted-backups-and-restore-check), then restart
+`screenr-web` and `screenr-worker`. The worker's first pass checks the new
+settings. To find the line:
+
+```sh
+journalctl -u screenr-web -u screenr-worker --since '1 day ago' --no-pager | grep '"event":"google client rejected"'
+```
+
+**Decision — 2026-11-01:** check from the worker's periodic cleanup, at most
+once an hour, and not from `ops/activate.sh`. Settled by the coordinator of
+an agent issue run as routine in
+[#458](https://github.com/jubishop/screenr/issues/458); the user may
+override it.
+
+**Why:** the worker already runs periodic cleanup and restarts with each
+deploy, so it checks a newly deployed configuration at once and also catches
+a secret rotated or deleted in Google Cloud between deploys. `ops/activate.sh`
+belongs to the deploy kit, and changing it blocks deploys until the owner
+installs the kit over SSH.
+
+**Tradeoff:** a broken client is noticed up to an hour after it breaks, and
+each worker start adds a check, at one request each.
+
 #### Worker outages
 
 The worker's email and push loops each run a pass about once a second
@@ -983,9 +1199,10 @@ outage, such as a PostgreSQL restart, every pass fails, so each failed pass
 in a row doubles the loop's pause, from 2 seconds up to 30. Each loop logs
 `worker failed` for the first failure of each kind in a run, by error class
 and code, and repeats a kind only once an hour while it lasts. `failures`
-counts the failed passes in a row so far. When a pass succeeds again, the
-loop prints how many failed, on standard output, and returns to its
-one-second pause:
+counts the failed passes in a row so far. Each of these lines also goes to
+Sentry, without the [folding](#failure-reports-in-sentry) that other lines
+get. When a pass succeeds again, the loop prints how many failed, on
+standard output, and returns to its one-second pause:
 
 ```sh
 journalctl -u screenr-worker --since '1 day ago' --no-pager | grep '"event":"worker'
@@ -1003,14 +1220,62 @@ emails behind it.
 
 ### Failure reports in Sentry
 
-With `SENTRY_DSN` set in `app.env`, `src/server/log.ts` also sends each
-failure line to the `screenr-server` Sentry project
-([issue #223](https://github.com/jubishop/screenr/issues/223)), under the
+With `SENTRY_DSN` set in `app.env`, `src/server/log.ts` also sends failure
+lines, folded by kind as described below, to the `screenr-server` Sentry
+project ([issue #223](https://github.com/jubishop/screenr/issues/223)), under the
 [Sentry decision](ios-app.md#sentry-for-the-app-and-the-server--2026-10-13).
 Web and worker failures both report, because both log through it. It posts a
 Sentry envelope over HTTPS and uses no Sentry package. Without a DSN, failures
 go only to the journal. Restart `screenr-web` and `screenr-worker` after
 setting or changing the DSN.
+
+Sentry gets each kind of failure at most once an hour
+([issue #399](https://github.com/jubishop/screenr/issues/399)). A kind is
+the line's `event` and every field but `requestId` and `stack`, such as its
+`action` or `route`, `error`, and `code`. The first failure of a kind reports
+at once and opens an hour for that kind. Later failures of the kind in that
+hour are folded: each still prints its line, but none is sent. When the hour
+ends, Sentry gets the latest folded failure with `folded`, the number folded
+since the kind's last report, and another hour opens. An hour that folds
+nothing closes, so the kind's next failure reports at once. A failure of
+another kind, such as another action, error class, or code, reports at once.
+
+During a database outage, then, each kind of failed poll reports when the
+outage starts, once an hour while it lasts, and with its remaining count
+within an hour after it ends, however many clients poll. Before, each open
+client sent about 20 events a minute for each of its pollers. The timers
+never keep a process running, so a restart drops a pending count; the
+journal still has every line.
+
+These lines still report every time:
+
+- `worker failed`: the worker's loops already log a kind once per run of
+  failures and then hourly ([worker outages](#worker-outages)). Folding would
+  hold back a new run's first failure of a kind that an earlier run reported
+  within the hour.
+- Lines with a field that changes each time, such as `job` and `attempt` in
+  the worker's delivery failures or `user` in `google photo copy failed`:
+  each line is its own kind. Their retries and backoff bound them.
+
+The hour comes from these numbers, checked on 2026-11-01:
+
+- **Quota:** Sentry's smallest plan, the free Developer plan, includes 5,000
+  errors a month ([pricing](https://sentry.io/pricing/)), and an
+  organization's projects share its quota: here `screenr-server`,
+  `screenr-ios`, and `podhaven`. The organization accepted 52 errors in the
+  30 days before, so nearly all of the quota is headroom for outages.
+- **Kinds in an outage:** a PostgreSQL restart fails requests with a few
+  error kinds, such as `57P01` when PostgreSQL ends connections, `57P03`
+  while it starts, and refused or timed-out connections. They multiply by
+  the two pollers' actions, `screen` and `notifications`, and by the other
+  actions and pages members open.
+- **Bound:** with 20 kinds, an outage shorter than an hour sends at most 40
+  events, each kind's first report and its folded count, and a day-long
+  outage about 500, a tenth of the quota. A 10-minute window would send
+  about 2,900 a day, and a 5-minute one about 5,800, more than the quota.
+  The issue estimated 2,000 to 3,600 events, unfolded, for three members
+  through a 30-minute outage. An hour also matches the worker's hourly
+  repeat.
 
 The event carries only the failure line:
 
@@ -1019,8 +1284,17 @@ The event carries only the failure line:
   error uses its `event` as the type.
 - **Stack trace:** the line's frames, with paths relative to the release.
 - **Tags:** `event`, and `request_id` from the line's `requestId` field.
-- **Failure context:** every field of the line except `stack`.
+- **Failure context:** every field of the line except `stack`, plus
+  `folded` in a folded report.
 - **Environment:** `NODE_ENV`, which is `production` on the host.
+
+A folded report's `request_id` names the latest folded failure, and its
+time is when the hour ended. The earlier failures it counts are in the
+journal, matched by the event and the fields of the kind:
+
+```sh
+journalctl -u screenr-web --since '2 hours ago' --no-pager | grep '"event":"request failed"' | grep '"action":"notifications"'
+```
 
 Like the journal, Sentry never receives error messages or anything else the
 [failure logs](#failure-logs) leave out. A request or worker pass never waits

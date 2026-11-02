@@ -97,6 +97,12 @@ to ordinary memory pages. Create these records only when a review needs them.
   preference to reduce third-party dependencies.
 - [Feed order in tests](feed-order-tests.md): give entries saved back to back
   distinct times before asserting their feed or friend line order.
+- [Browser test waits](browser-test-waits.md): wait for a write's saved
+  element, not its text or draft, before another page that must show it
+  loads.
+- [Process test waits](process-test-waits.md): wait for a started process's
+  ready line or exit, with a bound only a hang reaches, since test-database
+  drops stalled starts for many seconds.
 - [Parallel agent gotchas](parallel-agent-gotchas.md): cap concurrent iOS
   checks, keep hooks current in the primary checkout, avoid broad process
   kills, and register new extension App IDs through the Xcode account.

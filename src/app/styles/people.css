@@ -249,6 +249,10 @@ a.person:hover strong {
 .invite-card > .confirmation {
   margin: 0 0 18px;
 }
+/* While a failed read hides the card, an open confirmation shows alone. */
+.invite-card > .confirmation:last-child {
+  margin-bottom: 0;
+}
 .invite-card .invitation-created {
   border: 0;
   padding: 0;

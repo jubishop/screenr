@@ -10,11 +10,18 @@ import {
 } from "react";
 import { useRouter } from "next/navigation";
 import type { NotificationPage } from "../server/notifications";
-import { anySignal, api, readChanged, useInteractive } from "./client";
+import {
+  anySignal,
+  api,
+  readChanged,
+  refreshTimedOut,
+  useInteractive,
+} from "./client";
 import { ActivityTime } from "./activity-time";
 import { Avatar } from "./avatar";
 import { Confirmation } from "./confirmation";
 import { ActionButton } from "./action-button";
+import { useActionError } from "./action-error";
 import { useReportNavigation } from "./pending-navigation";
 
 type Item = NotificationPage["items"][number];
@@ -50,7 +57,14 @@ export function Notifications({
     version.current = null;
     setPage(null);
   }, []);
+  // A failed read replaces the list with its message and Try again.
   const [error, setError] = useState("");
+  // A failed action keeps the list and shows its message beside the control
+  // that started it: on its notification, or beneath Mark all as read for
+  // "all". The panel's next action or view replaces it.
+  const failure = useActionError();
+  const [failedAt, setFailedAt] = useState<string | null>(null);
+  const failureAt = (at: string) => failedAt === at && failure.alert;
   const [busy, setBusy] = useState(false);
   const [position, setPosition] = useState({ top: 0, left: 0 });
   // Answered requests leave the server's list, so the panel keeps each one
@@ -64,6 +78,7 @@ export function Notifications({
   const refresh = useCallback(async () => {
     pending.current?.abort();
     const controller = new AbortController();
+    const timeout = AbortSignal.timeout(10_000);
     pending.current = controller;
     const query = new URLSearchParams({ unread: String(unreadOnly) });
     if (cursor) {
@@ -74,7 +89,7 @@ export function Notifications({
       const result = await readChanged<NotificationPage>(
         `notifications?${query}`,
         version.current,
-        anySignal([controller.signal, AbortSignal.timeout(10_000)]),
+        anySignal([controller.signal, timeout]),
       );
       if (!controller.signal.aborted && result) {
         version.current = result.version;
@@ -84,7 +99,9 @@ export function Notifications({
     } catch (failure) {
       if (!controller.signal.aborted) {
         clearPage();
-        setError((failure as Error).message);
+        setError(
+          timeout.aborted ? refreshTimedOut : (failure as Error).message,
+        );
       }
     } finally {
       if (pending.current === controller) pending.current = null;
@@ -135,6 +152,7 @@ export function Notifications({
     clearPage();
     setAnswered(new Map());
     setDeclining(null);
+    failure.clear();
   }
 
   function show() {
@@ -160,25 +178,23 @@ export function Notifications({
     if (answered.has(item.id)) return visit(item.href);
     pending.current?.abort();
     setBusy(true);
-    try {
+    setFailedAt(item.id);
+    await failure.run(async () => {
       const result = await api<{ href: string }>("read-notification", {
         id: item.id,
       });
       void refreshScreen();
       visit(result.href);
-    } catch (failure) {
-      clearPage();
-      setError((failure as Error).message);
-    } finally {
-      setBusy(false);
-    }
+    });
+    setBusy(false);
   }
 
   async function respond(item: Item, action: "accept" | "decline") {
     if (busy) return;
     pending.current?.abort();
     setBusy(true);
-    try {
+    setFailedAt(item.id);
+    await failure.run(async () => {
       await api("respond-friend-request", { id: item.id, action });
       focusTarget.current = `result-${item.id}`;
       setDeclining(null);
@@ -192,12 +208,8 @@ export function Notifications({
         }),
       );
       await Promise.all([refresh(), refreshScreen()]);
-    } catch (failure) {
-      clearPage();
-      setError((failure as Error).message);
-    } finally {
-      setBusy(false);
-    }
+    });
+    setBusy(false);
   }
 
   // Focus follows the reader to the result or back to Decline after Cancel.
@@ -235,8 +247,11 @@ export function Notifications({
           onCancel={() => {
             focusTarget.current = `decline-${item.id}`;
             setDeclining(null);
+            failure.clear();
           }}
-        />
+        >
+          {failureAt(item.id)}
+        </Confirmation>
       );
     return (
       <div className="notification-actions">
@@ -251,7 +266,10 @@ export function Notifications({
           className="secondary"
           unavailable={busy}
           ref={focusWhen(`decline-${item.id}`)}
-          onClick={() => setDeclining(item.id)}
+          onClick={() => {
+            failure.clear();
+            setDeclining(item.id);
+          }}
         >
           Decline
         </ActionButton>
@@ -261,17 +279,15 @@ export function Notifications({
 
   async function markAll() {
     if (busy || !page?.through) return;
+    const { through } = page;
     pending.current?.abort();
     setBusy(true);
-    try {
-      await api("read-notifications", { through: page.through });
+    setFailedAt("all");
+    await failure.run(async () => {
+      await api("read-notifications", { through });
       await Promise.all([refresh(), refreshScreen()]);
-    } catch (failure) {
-      clearPage();
-      setError((failure as Error).message);
-    } finally {
-      setBusy(false);
-    }
+    });
+    setBusy(false);
   }
 
   const unread = open ? (page?.unread ?? count) : count;
@@ -372,6 +388,7 @@ export function Notifications({
           >
             Mark all as read
           </ActionButton>
+          {failureAt("all")}
         </div>
         <div className="notification-content">
           {error ? (
@@ -420,6 +437,7 @@ export function Notifications({
                         )}
                       </ActionButton>
                       {requestControls(item)}
+                      {declining !== item.id && failureAt(item.id)}
                     </li>
                   ))}
                 </ul>

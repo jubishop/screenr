@@ -276,7 +276,12 @@ adoption, with one row per week and an asterisk on the week in progress:
   comment, and title-less post entries. Posting a
   standalone comment or post starts a conversation and does not count as
   commenting.
-  Removed comments count when they were posted.
+  Removed comments count when they were posted. A comment whose author
+  deleted their account has no author, so it counts toward none of these
+  figures, whether or not the demo circle has members: the report cannot
+  tell whose post it was. Account deletion keeps such a comment only as a
+  placeholder for the replies beneath it and deletes the member's other
+  comments.
 
 ### Retention and tests
 
@@ -293,8 +298,10 @@ or own Recommends. It covers follow-through recorded by the status write,
 including statuses chosen before the save, other members' statuses, Stopped
 watching, and Watching then Stopped watching, and migration 021's marking of
 earlier saves. It covers each report figure at Monday boundaries, including
-a week that ends after daylight saving time ends and the client split, the
-printed command output without member identities, and 12-month cleanup.
+a week that ends after daylight saving time ends and the client split,
+back-and-forth among posts made at the same instant, an authorless comment
+with and without demo members, the printed command output without member
+identities, and 12-month cleanup.
 `tests/browser/usage-telemetry.spec.ts` checks that page loads record a
 website day, that client navigation records a day while background refreshes
 do not, and the feed and title page surfaces.

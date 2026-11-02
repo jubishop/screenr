@@ -170,10 +170,16 @@ codes in its own `.cache/mail`; run `npm run dev:code` in that checkout.
 ### Email worker
 
 Production runs `scripts/worker.ts` as `screenr-worker.service`. It sends
-queued sign-in codes and grouped activity emails through Resend, retries
-failed sends, and deletes expired jobs and
+queued sign-in codes and grouped activity emails through Resend and retries
+failed sends. About once a minute it also deletes expired jobs and
+[sessions](data-and-access.md#native-client-sessions),
 [usage telemetry](usage-telemetry.md#retention-and-tests) older than 12
-months. Local development does not need it.
+months, [read notifications](notifications.md#notification-retention--2026-11-01)
+more than a year old, and
+[unused catalog data](title-catalog.md#catalog-retention). At most once an
+hour, with `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` set, it also
+[checks that Google accepts the web client](deployment.md#google-client-check).
+Local development does not need it.
 With `EMAIL_TRANSPORT=file`, Next writes sign-in codes directly to
 `.cache/mail` without queueing them, and `npm run worker` refuses to start
 unless `EMAIL_TRANSPORT=resend`, `RESEND_API_KEY`, and `EMAIL_FROM` are set.
@@ -249,7 +255,9 @@ deployed environment. Automated tests replace Google's external identity
 response while retaining the real auth library, hooks, sessions and database.
 Account shows **Google connected** after signup or linking. A connected account
 can also sign in with an email code. Connection failures and canceled consent
-show a message that remains visible while the account page refreshes.
+show a message that remains visible while the account page refreshes. The
+page then drops the `?error=` that reported it from the address, so a reload
+omits it ([issue #362](https://github.com/jubishop/screenr/issues/362)).
 
 For production email, use `EMAIL_TRANSPORT=resend`, the existing sending-only
 `RESEND_API_KEY`, and an `EMAIL_FROM` address under a verified Resend domain.
@@ -263,6 +271,9 @@ No paid-plan upgrade is part of this deployment.
 
 The email worker stores encrypted, expiring jobs in PostgreSQL. Failed sends
 retry with backoff and the same Resend idempotency key until the job expires.
+Each send holds its job for a minute and runs with no database connection or
+lock held; a send whose result could not be recorded, as when the worker stops
+abruptly, is retried once that minute ends.
 Resend 4xx replies other than 408, 409, and 429 expire the job at once, since
 a retry cannot fix invalid input, a missing or revoked key, or an unverified
 sender. The worker [logs](deployment.md#failure-logs) every failed send.
@@ -349,11 +360,25 @@ and Apple sign-in returns 404; activation does not require them.
 The server accepts ID tokens for both App IDs. For each code exchange and
 revocation, it signs a five-minute client secret naming the app's bundle ID,
 so no secret needs renewal. Each account's newest refresh token is stored
-encrypted for account deletion to revoke. Changing `BETTER_AUTH_SECRET` makes
+encrypted for account deletion to revoke. Better Auth's token routes,
+`/api/auth/refresh-token`, `/api/auth/get-access-token`, and
+`/api/auth/account-info`, return 404: Screenr calls none of them, and the
+refresh route would post the stored token to Apple's token endpoint without a
+client secret. Changing `BETTER_AUTH_SECRET` makes
 the stored tokens unreadable, like queued email, until each member's next
 Apple sign-in stores a new one; deleting an account meanwhile skips its
 unreadable token. Apple sign-in has no web button, return URL,
 or domain to register.
+
+Never remove these settings while any account holds an Apple token. Account
+deletion needs them to revoke the token, as Apple requires, so without them
+it refuses to delete those accounts and logs `apple settings missing`
+([account deletion](data-and-access.md#account-deletion)). This counts the
+accounts that hold one:
+
+```sh
+runuser -u screenr-db -- psql -h /run/screenr-db -p 5439 -d screenr -c "SELECT count(*) FROM account WHERE \"providerId\"='apple' AND \"refreshToken\" IS NOT NULL"
+```
 
 ### Apple key files
 

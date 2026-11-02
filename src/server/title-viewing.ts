@@ -4,10 +4,40 @@ import {
   getTitleReleases,
   searchTitles,
 } from "./catalog";
-import { db } from "./db";
+import { db, settleAll } from "./db";
 
 // A title list stops starting provider requests this long after it begins.
 const listRefreshMs = 3000;
+
+// Find a title lists at most this many titles in each list, so its reads,
+// response, and viewing-option refreshes stay bounded however much the
+// circle has saved (docs/title-suggestions.md#implementation).
+export const findListLimit = 50;
+
+// The My services condition of a title list query, for the title whose ID
+// is `title`: true without `services`, or, given the TMDB providers of the
+// viewer's saved services, which it adds to `params`, false when the title's
+// stored viewing options, current or stale, list neither a subscription from
+// one of them nor any free option. That leaves out the titles viewingAccess
+// in src/viewing.ts finds unmatched from the same options. A title whose
+// options are unknown stays in: the list's refresh may confirm them, and the
+// browser leaves it out until then.
+export function myServicesFilter(
+  title: string,
+  services: number[] | null,
+  params: unknown[],
+) {
+  if (!services) return "TRUE";
+  const providers = `$${params.push(services)}::bigint[]`;
+  return `NOT EXISTS (
+    SELECT 1 FROM title_availability a WHERE a.title_id=${title} AND a.country='US'
+      AND a.fetched_at IS NOT NULL
+      AND NOT EXISTS (SELECT 1 FROM jsonb_array_elements(
+        coalesce(a.availability->'providers'->'flatrate','[]')) p
+        WHERE (p->>'provider_id')::bigint=ANY(${providers}))
+      AND coalesce(jsonb_array_length(a.availability->'providers'->'free'),0)=0
+      AND coalesce(jsonb_array_length(a.availability->'providers'->'ads'),0)=0)`;
+}
 
 // Adds each title's viewing options, release status, and TMDB user score, as
 // every title list shows them.
@@ -22,7 +52,7 @@ export async function withViewingOptions<T extends Title>(
   // release details refresh side by side within the same deadline.
   const ids = titles.map((title) => title.id);
   const deadline = Math.min(Date.now() + listRefreshMs, refreshDeadline);
-  const [availability, statuses] = await Promise.all([
+  const [availability, statuses] = await settleAll([
     getTitleAvailabilities(ids, deadline),
     getTitleReleases(ids, deadline),
   ]);

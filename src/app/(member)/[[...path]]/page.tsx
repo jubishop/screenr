@@ -7,7 +7,12 @@ import {
   screenResponse,
 } from "../../../server/screens";
 import { Screen } from "../../../components/screen";
-import { memberPath, parseMemberRoute } from "../../../member-routes";
+import {
+  initialFindFilters,
+  memberPath,
+  parseMemberRoute,
+  screenPath,
+} from "../../../member-routes";
 export const dynamic = "force-dynamic";
 // The screen renders each member page's title, so client navigation and
 // refreshes change it in the same render as the page. Drop the layout's title.
@@ -37,7 +42,12 @@ export default async function Page({
         : query.error === "email_does_not_match"
           ? "Choose the Google account with the same email address as your Screenr account."
           : "Google could not be connected. Please try again.";
-  const screen = await initialScreen(user.user_id, requestedPath);
+  // The first screen is read as the browser's screen reads it, with Find a
+  // title's filters as each visit starts them.
+  const screen = await initialScreen(
+    user.user_id,
+    screenPath(requestedPath, initialFindFilters),
+  );
   // A missing title, person, or page responds 404 through not-found.tsx.
   if (screen.status === 404) notFound();
   const initialData = screen.data && JSON.parse(JSON.stringify(screen.data));

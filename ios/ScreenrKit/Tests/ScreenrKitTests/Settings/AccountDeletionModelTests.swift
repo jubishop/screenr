@@ -6,6 +6,7 @@ import Testing
 // Deleting the account from Settings: confirming it's the member with a new
 // sign-in, then deleting, against canned replies and the fixture API.
 @MainActor
+@Suite(.timeLimit(.minutes(1)))
 struct AccountDeletionModelTests {
   static let alice = MemberConfirmation(
     userId: "user-alice",
@@ -126,6 +127,72 @@ struct AccountDeletionModelTests {
     )
   }
 
+  // Better Auth rejects a Google account that matches the member's address
+  // but isn't connected, and an ID token it cannot verify, with 401. The
+  // member's session is still good, so they stay signed in and can confirm
+  // another way.
+  @Test(arguments: [
+    (
+      "OAUTH_LINK_ERROR",
+      "That Google account isn’t connected to this Screenr account. Use an email code instead."
+    ),
+    ("INVALID_TOKEN", "Screenr could not confirm your Google sign-in. Try again."),
+  ])
+  func staysSignedInWhenGoogleIsRejected(code: String, message: String) async throws {
+    let test = try TestClient(
+      token: "earlier-token",
+      replies: [
+        try .json(401, ["code": .string(code), "message": "Rejected"]),
+        try Self.codeSent(), try Self.signedIn(),
+      ]
+    )
+    var endings: [SessionStore.Ending] = []
+    test.session.onEnd { endings.append($0) }
+    let google = RecordingTransport([try .json(200, ["id_token": "google-id-token"])])
+    let deletion = AccountDeletionModel(
+      api: test.client,
+      member: Self.alice,
+      providers: providers(google: google)
+    )
+
+    await deletion.signIn.signInWithGoogle(using: RedirectingAuthenticator())
+
+    #expect(deletion.step == .verify)
+    #expect(deletion.signIn.failure == message)
+    #expect(try test.keychain.read() == "earlier-token")
+    #expect(test.session.phase == .signedIn)
+    #expect(endings.isEmpty)
+    await confirm(deletion)
+    #expect(deletion.step == .confirm)
+    #expect(try test.keychain.read() == "fresh-token")
+  }
+
+  // Screenr answers 401 when Apple won't redeem the sign-in's authorization
+  // code, which leaves the member signed in too.
+  @Test func staysSignedInWhenAppleIsRejected() async throws {
+    let rejected = "Apple did not confirm this sign-in. Try again."
+    let test = try TestClient(
+      token: "earlier-token",
+      replies: [try .json(401, ["message": .string(rejected)])]
+    )
+    let member = MemberConfirmation(
+      userId: "user-alice",
+      email: "alice@example.test",
+      methods: [.apple, .emailCode]
+    )
+    let deletion = AccountDeletionModel(api: test.client, member: member, providers: providers())
+
+    _ = deletion.signIn.startApple()
+    await deletion.signIn.signInWithApple(
+      AppleCredential(identityToken: "identity", authorizationCode: "code", name: nil)
+    )
+
+    #expect(deletion.step == .verify)
+    #expect(deletion.signIn.failure == rejected)
+    #expect(try test.keychain.read() == "earlier-token")
+    #expect(test.session.phase == .signedIn)
+  }
+
   @Test func deletesTheAccountOnceConfirmed() async throws {
     let test = try TestClient(
       token: "earlier-token",
@@ -217,6 +284,51 @@ struct AccountDeletionModelTests {
 
     #expect(deletion.step == .confirm)
     #expect(deletion.failure == "You’re offline. Check your connection and try again.")
+  }
+
+  // A deletion cut short, such as when Settings closes, returns to the
+  // confirmation with nothing to explain.
+  @Test func aCancelledDeletionReturnsToTheConfirmation() async throws {
+    let test = try TestClient(
+      token: "earlier-token",
+      replies: [try Self.codeSent(), try Self.signedIn(), .failure(URLError(.cancelled))]
+    )
+    let deletion = deletion(test)
+    await confirm(deletion)
+
+    await deletion.delete()
+
+    #expect(deletion.step == .confirm)
+    #expect(deletion.failure == nil)
+  }
+
+  // Only a member still signing in again moves on to the confirmation, so a
+  // sign-in that confirms them again while the deletion runs changes nothing.
+  @Test func aConfirmationDuringTheDeletionLeavesItRunning() async throws {
+    let api = GatedAPI(
+      RecordingAPI([
+        "send-verification-otp": .success(["success": true]),
+        "email-otp": .success(["token": "unsigned", "user": ["id": "user-alice"]]),
+        "delete-account": .success(["ok": true]),
+      ]),
+      holding: [3]
+    )
+    let deletion = AccountDeletionModel(api: api, member: Self.alice, providers: providers())
+    await confirm(deletion)
+    let deleting = Task { await deletion.delete() }
+    await api.waitForRequests(3)
+
+    await deletion.signIn.checkCode()
+    #expect(
+      api.requests.map(\.action) == [
+        "send-verification-otp", "email-otp", "delete-account", "email-otp",
+      ]
+    )
+    #expect(deletion.step == .deleting)
+
+    api.open()
+    await finish(deleting)
+    #expect(deletion.step == .deleted)
   }
 
   // Deleting the account leaves nothing in the Keychain: the session token,

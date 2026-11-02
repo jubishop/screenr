@@ -319,6 +319,134 @@ test("Sign in with Apple rejects other apps, expired tokens, wrong nonces, and c
   );
 });
 
+test("Better Auth's OAuth callback for Apple answers not found and reaches no Apple endpoint, even with a valid state and code", async (t) => {
+  const apple = fakeApple();
+  const google = fakeGoogle();
+  configure(t, {
+    ...apple.env(),
+    GOOGLE_CLIENT_ID: google.webClient.id,
+    GOOGLE_CLIENT_SECRET: google.webClient.secret,
+  });
+  // Records each request for Apple's servers before the fake answers it.
+  const appleRequests: string[] = [];
+  serve(
+    {
+      async handle(url) {
+        if (url.origin === "https://appleid.apple.com")
+          appleRequests.push(url.pathname);
+        return undefined;
+      },
+    },
+    apple,
+    google,
+  );
+  const auth = createAuth({ rateLimit: false });
+
+  // Better Auth doesn't tie an OAuth state to its provider, so a web Google
+  // sign-in's state and cookie would pass the Apple callback's checks.
+  const started = await auth.handler(
+    new Request(`${origin}/api/auth/sign-in/social`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Origin: origin },
+      body: JSON.stringify({ provider: "google", callbackURL: "/" }),
+    }),
+  );
+  assert.equal(started.status, 200);
+  const state = new URL((await started.json()).url).searchParams.get("state")!;
+  const cookie = started.headers
+    .getSetCookie()
+    .map((value) => value.split(";")[0])
+    .join("; ");
+  const callback = (provider: string) =>
+    auth.handler(
+      new Request(
+        `${origin}/api/auth/callback/${provider}?state=${state}&code=c.any`,
+        { headers: { Cookie: cookie } },
+      ),
+    );
+
+  // Apple returns to a web sign-in with a form post, which Better Auth
+  // redirects to the same callback by GET.
+  const failures = captureFailures();
+  const applePost = await auth.handler(
+    new Request(`${origin}/api/auth/callback/apple`, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ state, code: "c.any" }),
+    }),
+  );
+  for (const response of [await callback("apple"), applePost])
+    await assertAuthError(response, 404, {
+      message: "Sign in with Apple is available only in the iPhone app.",
+    });
+  assert.deepEqual(appleRequests, []);
+  assert.deepEqual(failures, []);
+
+  // The refusal leaves the state unused: Google's callback still takes it and
+  // exchanges the code with Google, which issued no such code.
+  const response = await callback("google");
+  assert.equal(response.status, 302);
+  assert.equal(
+    new URL(response.headers.get("location")!).searchParams.get("error"),
+    "invalid_code",
+  );
+});
+
+test("Better Auth's token routes answer not found for a signed-in Apple member and reach no Apple endpoint", async (t) => {
+  const apple = fakeApple();
+  configure(t, apple.env());
+  // Records each request for Apple's servers before the fake answers it.
+  const appleRequests: string[] = [];
+  serve(
+    {
+      async handle(url) {
+        if (url.origin === "https://appleid.apple.com")
+          appleRequests.push(url.pathname);
+        return undefined;
+      },
+    },
+    apple,
+  );
+  const auth = createAuth({ rateLimit: false });
+  const post = client(auth);
+  const get = (path: string, headers: Record<string, string>) =>
+    auth.handler(new Request(`${origin}/api/auth/${path}`, { headers }));
+  const member = await person("member");
+  const session = { Authorization: `Bearer ${await bearerFor(member)}` };
+  const linked = await post(
+    "link-social",
+    appleSignIn(
+      apple.authorize({ sub: "apple-member", email: "member@example.test" }),
+    ),
+    session,
+  );
+  assert.equal(linked.status, 200, await linked.clone().text());
+  const stored = await storedAppleToken(member);
+  assert.ok(stored);
+  // A member finds the Apple account's ID in their own account list.
+  const accounts: { id: string; providerId: string }[] = await (
+    await get("list-accounts", session)
+  ).json();
+  const accountId = accounts.find(
+    ({ providerId }) => providerId === "apple",
+  )?.id;
+  assert.ok(accountId);
+
+  // Screenr calls none of these. The refresh route would post the stored
+  // sealed token to Apple's token endpoint without a client secret.
+  appleRequests.length = 0;
+  const failures = captureFailures();
+  for (const path of ["refresh-token", "get-access-token"])
+    assert.equal((await post(path, { accountId }, session)).status, 404, path);
+  assert.equal(
+    (await get(`account-info?accountId=${accountId}`, session)).status,
+    404,
+  );
+  assert.deepEqual(appleRequests, []);
+  assert.deepEqual(failures, []);
+  assert.equal(await storedAppleToken(member), stored);
+});
+
 test("Without Apple settings, Apple sign-in is unavailable and revocation has nothing to do", async (t) => {
   const apple = fakeApple();
   configure(t, {});

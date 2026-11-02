@@ -15,6 +15,16 @@ const members = new Map(
   ),
 );
 
+// The TMDB providers that count as the given saved services, each a
+// `service:<key>`, such as Netflix's own provider and its other listings.
+// A subscription from one of them puts a title on the viewer's services, as
+// matchingServices in src/viewing.ts decides from these sections.
+export function serviceProviders(serviceIds: string[]): number[] {
+  return registry
+    .filter((service) => serviceIds.includes(`service:${service.key}`))
+    .flatMap((service) => service.members.map((member) => member.id));
+}
+
 // Used for every cache result, including old rows. Registry metadata never
 // creates an offer: only members reported in this section affect availability.
 export function watchSections(

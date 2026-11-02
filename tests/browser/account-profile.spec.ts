@@ -236,6 +236,11 @@ test("profile display name editing preserves drafts, saves, and updates existing
     .getByLabel("Add your reply", { exact: true })
     .fill("An earlier reply");
   await owner.getByRole("button", { name: "Post reply", exact: true }).click();
+  // The profile's conversation below must show this reply, so wait for its
+  // save before leaving the page.
+  await expect(
+    owner.locator("[data-comment-id]").filter({ hasText: "An earlier reply" }),
+  ).toBeVisible();
   await owner.goto("/account");
   await owner
     .getByRole("link", { name: "View your profile", exact: true })
