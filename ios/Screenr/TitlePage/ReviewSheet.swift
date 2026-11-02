@@ -4,7 +4,8 @@ import SwiftUI
 // Rate or review: five stars with Clear rating, optional text, Contains
 // spoilers, and Save review, which needs a rating or text. It starts from the
 // saved review, and closing it discards changes. Remove review erases the
-// rating and text after a confirmation. A failure keeps the form and draft.
+// rating and text after a confirmation. A failure, or a failed read beneath,
+// keeps the form and draft.
 struct ReviewSheet: View {
   let header: TitleHeader
   let model: TitlePageModel
@@ -26,6 +27,7 @@ struct ReviewSheet: View {
               axis: .vertical
             )
             .lineLimit(4...12)
+            .accessibilityIdentifier("review-text")
             .padding(8)
             .background(
               Color(uiColor: .secondarySystemBackground),

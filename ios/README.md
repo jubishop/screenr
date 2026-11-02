@@ -255,6 +255,7 @@ uses it when launched with these arguments; Release builds ignore them:
 | `-ScreenrFixtureUpdate` | A fixture that answers before any other, overrides included, once the `-ScreenrFixtureUpdateSignal` file exists, such as `screen/feed/incoming`, so the app's next read, such as a poll, brings new activity. Repeatable. |
 | `-ScreenrFixtureUpdateSignal` | The file whose creation sends the `-ScreenrFixtureUpdate` fixtures. |
 | `-ScreenrFixtureFailure` | A fixture that answers every `/api/screenr` request, such as `errors/update-required`. |
+| `-ScreenrFixtureOutageSignal` | A file whose existence fails every `/api/screenr` request with a 502 and no body, as from the proxy during a deploy, so the app's next reads, such as a poll, fail until the file is removed. |
 | `-ScreenrFixtureLog` | A file that gets a line per `/api/screenr` request, such as `GET /api/screenr/screen?path=%2F`, with ` visit` after the app's [visit](#visits) and a write's JSON body, keys sorted, after the write: `POST /api/screenr/read-notification {"id":"18"}`. An upload has its type and size instead: `POST /api/screenr/photo image/jpeg 41250 bytes`. Sent [feedback](#feedback) adds a `FEEDBACK` line. A [trailer](#trailers)'s player adds `WEB <url>` for each page it asks for. |
 | `-ScreenrFixturePush` | The notification permission the app finds: `undecided` (default), `allowed`, or `denied`; or `system` for iOS's own permission and APNs registration. See [push notifications](#push-notifications). |
 | `-ScreenrOpenURL` | A link the app opens at launch, as if the system delivered it, such as `screenr-dev://titles/tv/201`. |
@@ -269,8 +270,10 @@ with the directory found from the test's source path; `requestLog`, `link`,
 `-ScreenrFixtureLog`, `-ScreenrOpenURL`, `-ScreenrAppearance`,
 `-ScreenrPushTap`, `-ScreenrFixturePosters`, and `-ScreenrAuditProbe`; and
 `update: FixtureUpdate("screen/feed/incoming")` passes the update arguments,
-whose fixtures answer once the test calls `update.send()`. The fixture API
-keeps the session in memory.
+whose fixtures answer once the test calls `update.send()`; and
+`outage: FixtureOutage()` passes the outage signal, which `outage.begin()`
+creates and `outage.end()` removes. The fixture API keeps the session in
+memory.
 A request gets the fixture with the same action and
 query or body, then falls back to the screen's path or to a successful
 fixture for the action. A matching ETag gets 304. Apart from setup, writes
@@ -1086,8 +1089,8 @@ ScreenrKit's `TitlePage/`:
 | Piece | Where | What it does |
 | --- | --- | --- |
 | `TitleHeader` | ScreenrKit | The viewer's place, read from the page: Recommend, the title's rank in their top 10, the status and last-finished date, and the review, with the header's labels, the status choices, and `topTenLimit`. |
-| `TitlePageModel` | ScreenrKit | `@Observable`: one write at a time, each followed by a read. Recommend (no surface), Add to top 10 and its removal, the status sheet's choices (Finished sends today; Want to watch sends `surface`), the finished date, the review, and the prompts: `leaving`, the confirmation before a ranked Recommend leaves the top 10, and `sheet` (`.status`, `.review`, or `.replace`). `reconcile(with:)` closes a prompt the page no longer needs. A failure shows beneath its control. |
-| `ReviewEditor` | ScreenrKit | The review form's draft, which starts from the saved review each time it opens, its save and removal, and the removal's confirmation. |
+| `TitlePageModel` | ScreenrKit | `@Observable`: one write at a time, each followed by a read. Recommend (no surface), Add to top 10 and its removal, the status sheet's choices (Finished sends today; Want to watch sends `surface`), the finished date, the review, and the prompts: `leaving`, the confirmation before a ranked Recommend leaves the top 10, and `sheet` (`.status`, `.review`, or `.replace`). `reconcile(with:)` keeps the page's latest `header`, which the sheets show, and closes a prompt the page no longer needs. A failure shows beneath its control. |
+| `ReviewEditor` | ScreenrKit | The review form's draft, which starts from the saved review when the form opens and lasts until it closes, its save and removal, and the removal's confirmation. |
 | `FriendActivity.lineParts`, `lineGroups`, `sentence` | ScreenrKit | The friend line in the web's words, such as "Recommended by Ben Ortiz (#1) · Cam Rivera wants to watch", as pieces that wrap between words. On a phone, each group starts its own line in place of " · ". |
 | `WatchAvailability.notice`, `emptyMessage`, `checkedLabel()` | ScreenrKit | Where to watch's messages, in the web's words. |
 | `CalendarDay` | ScreenrKit | `YYYY-MM-DD` days, such as today for Finished: Gregorian days in the reader's time zone, whatever calendar the phone uses. |
@@ -1105,6 +1108,10 @@ ScreenrKit's `TitlePage/`:
   top 10 themselves; `TitleHeader.topTenLimit` is the list's size.
 - **Friend line:** each name is a button that shows that friend's entry
   through `FeedList`'s `entryRequest`.
+- **Sheets:** the status, review, and replacement sheets sit outside the
+  screen's content, as the profile's top 10 editor does, so a failed read
+  beneath leaves them open with the page's last header and the review's
+  draft.
 - **Credits:** Where to watch links TMDB's viewing options page and credits
   JustWatch and TMDB, with TMDB's notice that it does not endorse Screenr.
 
@@ -1133,8 +1140,9 @@ page reads again. Nothing loads before Play trailer.
   after Play trailer, without the network.
 
 `TitleTests` also covers the watch status and finished date, Recommend and
-its confirmation, the friend line, adding to a full top 10, the review, the
-largest text size, and every `screen/title` fixture. The status and
+its confirmation, the friend line, adding to a full top 10, the review and a
+failed read beneath it, which `FixtureOutage` causes, the largest text size,
+and every `screen/title` fixture. The status and
 replacement sheets are system lists, so their audit is
 `performSettingsAudit()`, and the largest text size test reaches each of
 their controls instead.

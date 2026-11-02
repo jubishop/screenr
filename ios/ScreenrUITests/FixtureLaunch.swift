@@ -60,6 +60,8 @@ struct FixtureLaunch {
   var pushTap: String?
   // Fixtures that answer the app's reads once the test sends them.
   var update: FixtureUpdate?
+  // An outage that fails the app's requests while the test holds it.
+  var outage: FixtureOutage?
   var posters = Posters.placeholders
   // Text over every screen that the audit must fail.
   var auditProbe: AuditProbe?
@@ -87,6 +89,7 @@ struct FixtureLaunch {
       for name in update.fixtures { arguments += ["-ScreenrFixtureUpdate", name] }
       arguments += ["-ScreenrFixtureUpdateSignal", update.signal.path()]
     }
+    if let outage { arguments += ["-ScreenrFixtureOutageSignal", outage.signal.path()] }
     return arguments
   }
 }
@@ -112,6 +115,31 @@ struct FixtureUpdate {
       file: file,
       line: line
     )
+  }
+}
+
+// An outage the test begins and ends, such as to fail a poll beneath a
+// sheet: meanwhile every API request gets a 502, as during a deploy.
+struct FixtureOutage {
+  // The file whose existence fails the requests.
+  let signal = FileManager.default.temporaryDirectory
+    .appending(path: "outage-\(UUID().uuidString)")
+
+  func begin(file: StaticString = #filePath, line: UInt = #line) {
+    XCTAssertTrue(
+      FileManager.default.createFile(atPath: signal.path(), contents: Data()),
+      "Could not create \(signal.path())",
+      file: file,
+      line: line
+    )
+  }
+
+  func end(file: StaticString = #filePath, line: UInt = #line) {
+    do {
+      try FileManager.default.removeItem(at: signal)
+    } catch {
+      XCTFail("Could not remove \(signal.path()): \(error)", file: file, line: line)
+    }
   }
 }
 
