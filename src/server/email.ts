@@ -2,9 +2,14 @@ import { createHash, randomUUID } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { PoolClient } from "pg";
+import { pruneCatalog } from "./catalog";
 import { db, domainLock, rollback } from "./db";
 import { logFailure } from "./log";
-import { notificationEmail, queueNotificationEmails } from "./notifications";
+import {
+  notificationEmail,
+  pruneNotifications,
+  queueNotificationEmails,
+} from "./notifications";
 import { seal, unseal } from "./sealing";
 import { pruneUsage } from "./usage";
 
@@ -263,11 +268,18 @@ async function recordFailure(
 }
 
 // One pass of screenr-worker's email loop: send at most one due email. The
-// first pass and every 60th also delete expired jobs and old usage telemetry.
+// first pass and every 60th also run the periodic cleanup: expired jobs and
+// sessions, old usage telemetry and read notifications, and unused catalog
+// data.
 export async function runWorkerPass(pass: number) {
   await deliverOne();
   if (pass % 60 === 0) {
     await db.query("DELETE FROM email_job WHERE expires_at < now()");
     await pruneUsage();
+    // Better Auth deletes an expired session only when someone presents it.
+    // The push devices it registered, and their pending pushes, cascade.
+    await db.query(`DELETE FROM session WHERE "expiresAt" < now()`);
+    await pruneNotifications();
+    await pruneCatalog();
   }
 }

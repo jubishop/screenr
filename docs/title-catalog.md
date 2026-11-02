@@ -49,6 +49,32 @@ failure.
 [TMDB logo page](https://www.themoviedb.org/about/logos-attribution).
 The Credits page supplies the required attribution notice.
 
+## Catalog retention
+
+A title's cached catalog rows stay while anything other than those caches
+references the title: a conversation, which every member action and post on
+it has, a top 10 entry, or a Want to watch save in
+[usage telemetry](usage-telemetry.md). For any other title, the worker's
+periodic cleanup, about once a minute, deletes each row 30 days after it
+expired:
+
+- an availability row 30 days after its refresh came due, which is a day
+  after its last fetch or five minutes after a failed attempt;
+- a trailer 30 days after it expired, likewise;
+- the title's details once neither remains, 30 days after they expired.
+  Details expire a day after they are fetched, at a failed refresh's retry
+  time, or, for a search result whose details never loaded, when search
+  stored it. Migration `037-title-stored-at.sql` adds `title.stored_at` for
+  that last case, which the previous release ignores; titles stored before
+  it count from the migration.
+
+Search results are the title rows that search stores, so they go the same
+way. A page, list, or search that shows a title refreshes what it needs, so
+only titles that no one has looked at for about a month lose their rows, and
+a later visit fetches the title as one never stored.
+[Issue #377](https://github.com/jubishop/screenr/issues/377) settled these
+periods as routine; `tests/app/retention.test.ts` covers them.
+
 ## TMDB user score — 2026-10-30
 
 **Decision:** Show TMDB's user score, the average rating TMDB members give a

@@ -192,7 +192,10 @@ session cookie ([decision](ios-app.md#bearer-sessions-in-the-keychain--2026-10-1
   The API and photo routes use it.
 - **Session rows:** a token names the same Postgres `session` row as a
   cookie, with the same 30-day lifetime. `POST /api/auth/sign-out` with the
-  bearer header deletes that row and ends only that session.
+  bearer header deletes that row and ends only that session. Better Auth
+  deletes an expired row only when someone presents it, so the worker's
+  periodic cleanup, about once a minute, deletes every expired row with its
+  push devices. The privacy policy promises this within a day of expiry.
 
 ## Native sign-in
 

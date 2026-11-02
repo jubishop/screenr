@@ -19,6 +19,7 @@ The old hostname now only [redirects](#old-hostname-redirect) to the new one.
 | Active release | `/opt/screenr/current` symlink |
 | Node runtime | `/opt/screenr/node/bin/node`, through a link to the host's shared `/opt/node/current` |
 | Web process | `screenr-web.service`, loopback port 3060, 384 MB memory limit |
+| Optimized poster cache | Each release's `.next/cache/images`, 512 MiB limit |
 | Email and push worker | `screenr-worker.service`, 128 MB memory limit |
 | PostgreSQL 18 | `screenr-db.service`, loopback port 5439, 256 MB memory limit |
 | Database files | `/var/lib/screenr/postgres`, owned by `screenr-db` |
@@ -65,7 +66,14 @@ with no capabilities and have:
   SGID files, or change their execution domain.
 
 Only the web writes files: Next keeps optimized TMDB posters in the active
-release's `.next/cache`. `MemoryDenyWriteExecute` stays off because V8's JIT
+release's `.next/cache`. `images.maximumDiskCacheSize` in `next.config.ts`
+bounds them at 512 MiB, past which Next deletes the least recently used;
+without it, Next would allow half the shared host's free disk. With the
+[retained releases](#build-and-activate-a-release), poster caches use at most
+about 1.5 GiB. Each release starts with an empty cache, so the first visits
+after a deploy optimize posters again
+([issue #423](https://github.com/jubishop/screenr/issues/423)).
+`MemoryDenyWriteExecute` stays off because V8's JIT
 writes executable memory. In the sandbox, `os.cpus()` returns an empty list
 and `os.networkInterfaces()` fails. Next calls the latter at startup when
 `HOSTNAME` is unset, so the web unit needs `HOSTNAME=127.0.0.1`.
