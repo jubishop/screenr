@@ -18,7 +18,8 @@ const { GET } = await import("../../src/app/api/screenr/[action]/route");
 const { resolveSharedTitle, sharedSearchText } =
   await import("../../src/server/shared-links");
 
-type Reply = { status: number; body: string; location?: string };
+// `drop` ends the connection without an answer, as a network failure does.
+type Reply = { status: number; body: string; location?: string; drop?: true };
 let catalogRequests: string[] = [];
 let pageRequests: string[] = [];
 let detailsStatus = 200;
@@ -66,6 +67,7 @@ const catalog = createServer((request, response) => {
 const sitePages = createServer((request, response) => {
   pageRequests.push(request.url!);
   const page = pages[request.url!] ?? { status: 404, body: "" };
+  if (page.drop) return request.socket.destroy();
   response.writeHead(page.status, {
     "Content-Type": "text/html",
     ...(page.location && { Location: page.location }),
@@ -247,6 +249,70 @@ test("a JustWatch page without one IMDb ID leaves a search of the link's name", 
       "",
     ),
     { title: null, query: "elsewhere" },
+  );
+  pages["/us/movie/unreachable"] = { status: 200, body: "", drop: true };
+  assert.deepEqual(
+    await resolveSharedTitle(
+      "https://www.justwatch.com/us/movie/unreachable",
+      "",
+    ),
+    { title: null, query: "unreachable" },
+  );
+  assert.equal(catalogRequests.length, 0);
+});
+
+test("a JustWatch page follows at most three redirects", async () => {
+  // Three redirects within the site reach the title page.
+  pages["/us/movie/moved"] = {
+    status: 301,
+    body: "",
+    location: "/us/movie/moved/1",
+  };
+  pages["/us/movie/moved/1"] = {
+    status: 302,
+    body: "",
+    location: "/us/movie/moved/2",
+  };
+  pages["/us/movie/moved/2"] = {
+    status: 307,
+    body: "",
+    location: "/us/movie/moved/3",
+  };
+  pages["/us/movie/moved/3"] = justWatchPage("tt0000042");
+  assert.equal(
+    await resolved("https://www.justwatch.com/us/movie/moved"),
+    "movie:42",
+  );
+  // A redirect loop stops at the fourth redirect and leaves the search.
+  pages["/us/movie/loop"] = {
+    status: 301,
+    body: "",
+    location: "/us/movie/loop",
+  };
+  pageRequests = [];
+  assert.deepEqual(
+    await resolveSharedTitle("https://www.justwatch.com/us/movie/loop", ""),
+    { title: null, query: "loop" },
+  );
+  assert.deepEqual(pageRequests, Array(4).fill("/us/movie/loop"));
+});
+
+test("a JustWatch page over 5 MB leaves a search of the link's name", async () => {
+  // Both pages name an IMDb ID, so only the size limit separates them.
+  const page = justWatchPage("tt0000042").body;
+  pages["/us/movie/largest"] = { status: 200, body: page.padEnd(5_000_000) };
+  pages["/us/movie/too-large"] = { status: 200, body: page.padEnd(5_000_001) };
+  assert.equal(
+    await resolved("https://www.justwatch.com/us/movie/largest"),
+    "movie:42",
+  );
+  catalogRequests = [];
+  assert.deepEqual(
+    await resolveSharedTitle(
+      "https://www.justwatch.com/us/movie/too-large",
+      "",
+    ),
+    { title: null, query: "too large" },
   );
   assert.equal(catalogRequests.length, 0);
 });
