@@ -893,7 +893,8 @@ test("posting preserves later typing and background refresh preserves action err
   await page.getByRole("button", { name: "Search", exact: true }).click();
   const alert = page.getByRole("main").locator(".error");
   await expect(alert).toContainText("Catalog temporarily unavailable.");
-  await nextAccountRefreshForPath(page, "/search");
+  // Find a title reads with its filters, finished titles hidden at first.
+  await nextAccountRefreshForPath(page, "/search?finished=hidden");
   await expect(alert).toContainText("Catalog temporarily unavailable.");
   await page.unroute("**/api/screenr/search?**");
   await page.getByRole("button", { name: "Search", exact: true }).click();

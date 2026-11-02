@@ -743,7 +743,8 @@ test("blocking either edge suppresses a path even with a retained accepted frien
   }
 });
 
-test("suggestions include every eligible title without a fixed limit", async () => {
+// Find a title lists the top 50 suggestions (docs/title-suggestions.md#show-all-eligible-titles--2026-09-07).
+test("suggestions list the 50 highest-ranked eligible titles", async () => {
   await person("alice");
   await person("ben");
   await friend("alice", "ben");
@@ -751,10 +752,89 @@ test("suggestions include every eligible title without a fixed limit", async () 
     SELECT 'movie:'||n,'movie',n,'Title '||n FROM generate_series(1,205) AS n`);
   for (let n = 1; n <= 205; n++)
     await updateTitleActivity("ben", `movie:${n}`, "want_to_watch", true);
+  // Equal scores rank the newest Want to watch first.
+  await db.query(
+    "UPDATE feed_item SET activity_at=now()-split_part(title_id,':',2)::int*interval '1 minute'",
+  );
   const result = await suggestions();
-  assert.equal(result.length, 205);
-  assert.equal(new Set(result.map((entry) => entry.id)).size, 205);
+  assert.deepEqual(
+    result.map((entry) => entry.id),
+    Array.from({ length: 50 }, (_, n) => `movie:${n + 1}`),
+  );
   assert.equal(typeof result[0].tmdb_id, "number");
+  // Saving a listed title makes room for the next one.
+  await updateTitleActivity("alice", "movie:1", "want_to_watch", true);
+  assert.deepEqual((await suggestions()).map((entry) => entry.id).slice(-2), [
+    "movie:50",
+    "movie:51",
+  ]);
   await changeRelationship("alice", "ben", "remove");
   assert.deepEqual(await suggestions(), []);
+});
+
+// My services narrows suggestions on the server before the cap, keeping the
+// titles src/viewing.ts would show and those whose options are unknown,
+// which the list's refresh may confirm.
+test("My services keeps suggestions on the viewer's services, free, or unknown, then lists the top 50", async () => {
+  await person("alice");
+  await person("ben");
+  await friend("alice", "ben");
+  await db.query(
+    "INSERT INTO member_streaming_service(user_id,service_id) VALUES('alice','service:netflix')",
+  );
+  const offers = [
+    ["netflix", { flatrate: [{ provider_id: 8 }] }],
+    // Another of Netflix's TMDB providers.
+    ["netflix-other", { flatrate: [{ provider_id: 1796 }] }],
+    ["free", { free: [{ provider_id: 73 }] }],
+    ["ads", { ads: [{ provider_id: 300 }] }],
+    // Options checked days ago still count, as they do in the browser.
+    ["stale-netflix", { flatrate: [{ provider_id: 8 }] }, "3 days"],
+    ["unknown", null],
+    ["hulu", { flatrate: [{ provider_id: 15 }] }],
+    ["rent-only", { rent: [{ provider_id: 2 }] }],
+    ["nothing", {}],
+  ] as const;
+  const kept = new Set([
+    "netflix",
+    "netflix-other",
+    "free",
+    "ads",
+    "stale-netflix",
+    "unknown",
+  ]);
+  await db.query(`INSERT INTO title(id,kind,tmdb_id,name)
+    SELECT 'movie:'||n,'movie',n,'Title '||n FROM generate_series(1,90) AS n`);
+  const expected: string[] = [];
+  for (let n = 1; n <= 90; n++) {
+    const id = `movie:${n}`;
+    const [offer, providers, age] = offers[n % offers.length] as readonly [
+      string,
+      object | null,
+      string?,
+    ];
+    await db.query(
+      `INSERT INTO title_availability(title_id,country,availability,fetched_at,refresh_after)
+      VALUES($1,'US',$2,CASE WHEN $2::jsonb IS NULL THEN NULL ELSE now()-$3::interval END,
+        now()+interval '1 day')`,
+      [id, providers && { link: null, providers }, age ?? "0 seconds"],
+    );
+    await updateTitleActivity("ben", id, "want_to_watch", true);
+    if (kept.has(offer)) expected.push(id);
+  }
+  await db.query(
+    "UPDATE feed_item SET activity_at=now()-split_part(title_id,':',2)::int*interval '1 minute'",
+  );
+  const screen = await loadScreen("alice", "/search?services=mine");
+  assert.ok(screen.kind === "search");
+  assert.ok(expected.length > 50);
+  assert.deepEqual(
+    screen.suggestions.map((title) => title.id),
+    expected.slice(0, 50),
+  );
+  // Without the filter, every eligible title can be listed.
+  assert.deepEqual(
+    (await suggestions()).map((title) => title.id),
+    Array.from({ length: 50 }, (_, n) => `movie:${n + 1}`),
+  );
 });

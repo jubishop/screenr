@@ -6,6 +6,7 @@ import {
   memberTitle,
   parseMemberRoute,
   returnPath,
+  screenPath,
   setupPath,
 } from "../../src/member-routes";
 
@@ -33,6 +34,11 @@ test("member routes name each screen and its parameters", () => {
       "/search?q=Lost&tab=friends-recommend",
       { kind: "search", q: "Lost", tab: "friends-recommend" },
     ],
+    [
+      "/search?services=mine&type=tv&finished=hidden",
+      { kind: "search", services: "mine", type: "tv", finished: "hidden" },
+    ],
+    ["/search?type=movie", { kind: "search", type: "movie" }],
     ["/people", { kind: "people" }],
     ["/invites", { kind: "invites" }],
     ["/account?error=access_denied", { kind: "account" }],
@@ -75,6 +81,22 @@ test("member routes name each screen and its parameters", () => {
   // Suggestions is the default tab, so only Friends recommend is named.
   for (const tab of ["", "suggestions", "Friends-Recommend", "other"])
     assert.deepEqual(parse(`/search?tab=${tab}`), { kind: "search" }, tab);
+  // Find a title's filters name only what they narrow to.
+  for (const [key, value] of [
+    ["services", ""],
+    ["services", "all"],
+    ["services", "Mine"],
+    ["type", "all"],
+    ["type", "TV"],
+    ["type", "person"],
+    ["finished", "shown"],
+    ["finished", "Hidden"],
+  ])
+    assert.deepEqual(
+      parse(`/search?${key}=${value}`),
+      { kind: "search" },
+      `${key}=${value}`,
+    );
   // At home is the default mode, so only In theaters is named.
   for (const mode of ["", "home", "Theaters", "other"]) {
     assert.deepEqual(
@@ -126,7 +148,13 @@ const canonicalPaths = [
     "/search?tab=friends-recommend&q=Lost",
   ],
   ["/search?tab=other&q=Lost", "/search?q=Lost"],
+  [
+    "/search?finished=hidden&type=movie&q=Lost&services=mine",
+    "/search?q=Lost&services=mine&type=movie&finished=hidden",
+  ],
+  ["/search?type=all&finished=shown", "/search"],
   ["/?tab=friends-recommend", "/"],
+  ["/?services=mine&type=tv&finished=hidden", "/"],
   ["/?q=Lost", "/"],
   ["/account?error=access_denied", "/account"],
   ["/people/alice?item=post", "/people/alice"],
@@ -181,6 +209,30 @@ test("member paths keep their parameters without URLSearchParams size", (t) => {
   t.after(() => Object.defineProperty(URLSearchParams.prototype, "size", size));
   assert.equal("size" in URLSearchParams.prototype, false);
   assertCanonicalPaths();
+});
+
+// The web keeps Find a title's filters out of its address and adds them to
+// the path its screen reads, so the server applies them before capping each
+// list (docs/title-suggestions.md#implementation).
+test("Find a title reads with its current filters, and other screens read their own path", () => {
+  for (const [path, filters, read] of [
+    ["/search", {}, "/search"],
+    ["/search", { finished: "hidden" }, "/search?finished=hidden"],
+    [
+      "/search?q=Lost&tab=friends-recommend",
+      { services: "mine", type: "tv", finished: "hidden" },
+      "/search?tab=friends-recommend&q=Lost&services=mine&type=tv&finished=hidden",
+    ],
+    // The current filters replace any in the address.
+    ["/search?type=tv&services=mine", { type: "movie" }, "/search?type=movie"],
+    ["/people", { finished: "hidden" }, "/people"],
+    [
+      "/titles/movie/42?item=post",
+      { type: "tv" },
+      "/titles/movie/42?item=post",
+    ],
+  ] as const)
+    assert.equal(screenPath(path, filters), read, `${path} ${read}`);
 });
 
 test("return paths keep same-origin member pages in canonical form", () => {

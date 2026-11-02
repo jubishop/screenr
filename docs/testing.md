@@ -582,8 +582,9 @@ recipients. A full run checks:
   page; Show finished keeps its state across tabs and starts off after a
   reload. `tests/app/friends-recommend.test.ts` covers the order, top 10
   weights, the current-friend audience, which actions count, the viewer's own
-  status, the response fields, and which titles the Finished filter hides,
-  with its empty messages.
+  status, the response fields, which titles the Finished filter hides, with
+  its empty messages, and the 50-title cap with each filter applied before
+  it.
 - Invitations can be created and revoked.
 - In both the light and dark color schemes, every visible text meets 4.5:1
   and only theme colors are painted. This covers sign-in, setup, credits,

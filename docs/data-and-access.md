@@ -503,8 +503,11 @@ A photo response is `Cache-Control: private, max-age=86400` with
 `Cross-Origin-Resource-Policy: same-origin`. `private` keeps shared caches
 from storing it, `Vary` keeps a browser or the app from reusing it for
 another signed-in person, and a changed photo has a new URL, so the old one
-returns 404. URLs are same-origin, so the policy's `img-src 'self'` covers
-them.
+returns 404. A request whose `If-None-Match` names the version gets 304
+after the same access check, which reads the photo's row without its image
+([issue #375](https://github.com/jubishop/screenr/issues/375)); only a 200
+reads the image. URLs are same-origin, so the policy's `img-src 'self'`
+covers them.
 
 **Google pictures.** Screenr fetches a Google picture only from
 `lh3.googleusercontent.com` through `lh6`, over HTTPS, requests the
@@ -564,7 +567,8 @@ grant access to private activity or change anonymous title suggestions.
 
 `src/server/friends-recommend.ts` reads the
 [Friends recommend](interface-design.md#friends-recommend-as-a-find-a-title-tab--2026-10-12)
-tab in one query. It counts active Recommends from the viewer's current
+tab in one query, the top 50 titles that pass the read's
+[filters](title-suggestions.md#implementation). It counts active Recommends from the viewer's current
 direct friends: an accepted friendship with no block in either direction,
 which also excludes a block left beside a retained friendship. Pending
 requests, friends of friends, withdrawn Recommends, Want to watch, watch
@@ -578,11 +582,14 @@ the [integer twentieths](profile-top-ten.md#ranking): a Recommend adds 20, or
 friends' usernames, display names, and top 10 ranks, top 10 recommenders
 first by rank and then the most recent Recommend first, with the viewer's
 current status and whether the viewer recommends it. The
-response holds no scores, feed item IDs, or account IDs. The viewer's
-statuses do not remove titles from the response. The view hides titles the
-viewer marked Finished from that status, so its Show finished switch
-([#172](https://github.com/jubishop/screenr/issues/172)) needs no second
-read.
+response holds no scores, feed item IDs, or account IDs. Without filters, as
+installed iPhone builds read it, the viewer's statuses do not remove titles,
+and the app hides titles the viewer marked Finished from that status for its
+Show finished switch ([#172](https://github.com/jubishop/screenr/issues/172)).
+The web reads with `finished=hidden` while the switch is off, so finished
+titles leave the list before the cap, and the screen adds
+`finishedRecommendations`, how many it left out, for the empty message.
+Turning the switch on reads again.
 
 ## Write lock and refresh behavior
 
@@ -594,8 +601,8 @@ then changes nothing and returns HTTP 503 with "Screenr is busy. Please try
 again." Waiting requests therefore release database connections before the
 pool's five-second connection timeout, which session lookups share. The email
 worker holds the lock only while it chooses an activity email and builds it
-from current data. It calls Resend with no lock held, so a slow send never
-delays a write
+from current data, and takes it only when one could be due. It calls Resend
+with no lock held, so a slow send never delays a write
 ([send without the lock](notifications.md#activity-email-sends-without-the-write-lock--2026-11-01)).
 Page loads, refreshes, and
 [usage telemetry](usage-telemetry.md#active-days) don't take the lock. Listing

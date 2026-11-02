@@ -1,5 +1,6 @@
 import { test, beforeEach, afterEach, mock } from "node:test";
 import assert from "node:assert/strict";
+import { setTimeout as sleep } from "node:timers/promises";
 import {
   useDatabase,
   setup,
@@ -17,6 +18,7 @@ import {
 import { setReaction } from "../../src/server/reactions";
 import { updateTitleActivity } from "../../src/server/title-actions";
 import { deliverOne, queueCode } from "../../src/server/email";
+import { domainLock } from "../../src/server/db";
 
 useDatabase();
 process.env.EMAIL_TRANSPORT = "resend";
@@ -304,6 +306,36 @@ test("member writes go ahead while Resend hangs on an activity email", async () 
   }
   assert.equal(sent.length, 1);
   assert.equal(await deliverOne(), false);
+});
+
+// The worker passes every second. When no activity email is due, a pass
+// leaves the write lock that member writes share alone, so it never waits
+// behind them or makes them wait.
+test("a worker pass with no email due doesn't take the write lock", async () => {
+  const { alice, ben, conversation } = await setup();
+  await friend(alice, ben);
+  await saveActivityEmail(alice, true);
+  await addComment(ben, conversation, "Not due for ten minutes", false);
+  const writer = await db.connect();
+  let pass: Promise<boolean> | undefined;
+  try {
+    await writer.query("BEGIN");
+    await writer.query("SELECT pg_advisory_xact_lock($1)", [domainLock]);
+    pass = deliverOne();
+    assert.equal(
+      await Promise.race([pass, sleep(1000, "waited for the lock")]),
+      false,
+    );
+  } finally {
+    await writer.query("COMMIT");
+    writer.release();
+    await pass;
+  }
+  assert.equal(sent.length, 0);
+  // Once the window is due, a pass queues and sends it under the lock.
+  await due();
+  assert.equal(await deliverOne(), true);
+  assert.equal(sent.length, 1);
 });
 
 test("a block or opt-out committed before a send starts sends nothing", async () => {
