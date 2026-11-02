@@ -1,4 +1,4 @@
-import { test, afterEach, mock } from "node:test";
+import { test, afterEach, mock, type TestContext } from "node:test";
 import assert from "node:assert/strict";
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
@@ -11,7 +11,9 @@ import {
   cookieFor,
   captureFailures,
   person,
+  assertAuthError,
 } from "./social-fixture";
+import { fakeGoogle, serve } from "./identity-providers";
 
 const { GET, POST } = await import("../../src/app/api/screenr/[action]/route");
 const { initialScreen } = await import("../../src/server/screens");
@@ -457,6 +459,231 @@ test("a database failure in Better Auth's rate limit answers a bare 500 and logs
     excludes(printed, ["exist"]);
   } finally {
     await db.query('ALTER TABLE rate_limit_hidden RENAME TO "rateLimit"');
+  }
+});
+
+// The iPhone app's Google sign-in with an ID token from a fake Google, which
+// Better Auth verifies for real. The app sends no Origin and names a new
+// member's invitation in a header.
+function googleIdTokenSignIn(t: TestContext, email: string) {
+  const google = fakeGoogle();
+  process.env.GOOGLE_IOS_CLIENT_ID = "ios-client.apps.googleusercontent.com";
+  t.after(() => delete process.env.GOOGLE_IOS_CLIENT_ID);
+  serve(google);
+  const auth = createAuth({ rateLimit: false });
+  const token = google.idToken({
+    sub: "google-probe",
+    email,
+    aud: process.env.GOOGLE_IOS_CLIENT_ID,
+  });
+  return {
+    token,
+    signIn: (invitation: string) =>
+      auth.handler(
+        new Request("http://localhost:3000/api/auth/sign-in/social", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Screenr-Invitation": invitation,
+          },
+          body: JSON.stringify({ provider: "google", idToken: { token } }),
+        }),
+      ),
+  };
+}
+
+const userCount = async () =>
+  (await db.query('SELECT count(*)::int AS n FROM "user"')).rows[0].n;
+
+test("a database failure while a Google ID token signup creates the account logs it once with the endpoint, and Better Auth still answers its own error", async (t) => {
+  const email = "probe.person@example.test";
+  const { token: invitation } = await createInvitation(null);
+  const { token, signIn } = googleIdTokenSignIn(t, email);
+  // A probe check constraint rejects the new account row, as a column Better
+  // Auth doesn't expect would (issue #181). PostgreSQL's detail repeats the
+  // whole row, with the ID token.
+  await db.query(
+    `ALTER TABLE account ADD CONSTRAINT failure_log_probe CHECK ("accountId" <> 'google-probe') NOT VALID`,
+  );
+  try {
+    const printed = captureOutput();
+    const response = await signIn(invitation);
+    await assertAuthError(response, 401, { code: "OAUTH_LINK_ERROR" });
+    const { fields, stack } = logged(structured(printed));
+    assert.deepEqual(fields, {
+      event: "auth failure caught",
+      endpoint: "/sign-in/social",
+      error: "DatabaseError",
+      code: "23514",
+      constraint: "failure_log_probe",
+      table: "account",
+    });
+    assert.ok(
+      stack.some((frame) => frame.includes("/@better-auth/kysely-adapter/")),
+    );
+    excludes(printed, [
+      email,
+      token,
+      invitation,
+      invitationHash(invitation),
+      "violates",
+      "Failing row",
+    ]);
+    // Better Auth rolls back the new user with the account.
+    assert.equal(await userCount(), 0);
+  } finally {
+    await db.query("ALTER TABLE account DROP CONSTRAINT failure_log_probe");
+  }
+});
+
+test("a Screenr callback failure in a Google ID token signup logs only the callback, not Better Auth's caught error as well", async (t) => {
+  const { token: invitation } = await createInvitation(null);
+  const { signIn } = googleIdTokenSignIn(t, "new@example.test");
+  // Creating the user checks its invitation.
+  await db.query("ALTER TABLE invitation RENAME TO invitation_hidden");
+  try {
+    const printed = captureOutput();
+    const response = await signIn(invitation);
+    await assertAuthError(response, 401, { code: "OAUTH_LINK_ERROR" });
+    const { fields } = logged(structured(printed));
+    assert.deepEqual(fields, {
+      event: "auth callback failed",
+      callback: "user.create.before",
+      error: "DatabaseError",
+      code: "42P01",
+    });
+    excludes(printed, [invitation, "new@example.test", "exist"]);
+  } finally {
+    await db.query("ALTER TABLE invitation_hidden RENAME TO invitation");
+  }
+});
+
+test("a database failure while Better Auth reads a session logs it once with the endpoint, and Better Auth still answers 500", async () => {
+  const cookie = await cookieFor(await person("member"));
+  const auth = createAuth({ rateLimit: false });
+  const session = () =>
+    auth.handler(
+      new Request("http://localhost:3000/api/auth/get-session", {
+        headers: { Cookie: cookie },
+      }),
+    );
+  // The first request also settles Better Auth's schema check.
+  assert.equal((await session()).status, 200);
+  await db.query("ALTER TABLE session RENAME TO session_hidden");
+  try {
+    const printed = captureOutput();
+    const response = await session();
+    await assertAuthError(response, 500, { code: "FAILED_TO_GET_SESSION" });
+    const { fields } = logged(structured(printed));
+    assert.deepEqual(fields, {
+      event: "auth failure caught",
+      endpoint: "/get-session",
+      error: "DatabaseError",
+      code: "42P01",
+    });
+    excludes(printed, [
+      ...cookie.split("; ").map((pair) => pair.split("=")[1]),
+      "member@example.test",
+      "exist",
+    ]);
+  } finally {
+    await db.query("ALTER TABLE session_hidden RENAME TO session");
+  }
+});
+
+test("a session read that fails in an API request logs Better Auth's caught error beside the request's failure, under the same request ID", async () => {
+  const cookie = await cookieFor(await person("member"));
+  const request = () =>
+    GET(
+      new Request("http://localhost:3000/api/screenr/screen?path=/", {
+        headers: { Cookie: cookie, "Screenr-Request-Id": "session-probe" },
+      }),
+      { params: Promise.resolve({ action: "screen" }) },
+    );
+  assert.equal((await request()).status, 200);
+  await db.query("ALTER TABLE session RENAME TO session_hidden");
+  try {
+    const printed = captureOutput();
+    assert.equal((await request()).status, 500);
+    const lines = structured(printed).map((line) => {
+      const { stack: _stack, ...fields } = JSON.parse(line);
+      return fields;
+    });
+    assert.deepEqual(lines, [
+      {
+        event: "auth failure caught",
+        requestId: "session-probe",
+        error: "DatabaseError",
+        code: "42P01",
+      },
+      {
+        event: "request failed",
+        requestId: "session-probe",
+        action: "screen",
+        method: "GET",
+        status: 500,
+        error: "APIError",
+      },
+    ]);
+    excludes(printed, [
+      ...cookie.split("; ").map((pair) => pair.split("=")[1]),
+      "member@example.test",
+      "exist",
+    ]);
+  } finally {
+    await db.query("ALTER TABLE session_hidden RENAME TO session");
+  }
+});
+
+test("an OAuth callback with an unknown or used state logs no failure, while a database failure reading the state does", async (t) => {
+  Object.assign(process.env, {
+    GOOGLE_CLIENT_ID: "web-client.apps.googleusercontent.com",
+    GOOGLE_CLIENT_SECRET: "web-secret",
+  });
+  t.after(() => {
+    delete process.env.GOOGLE_CLIENT_ID;
+    delete process.env.GOOGLE_CLIENT_SECRET;
+  });
+  const auth = createAuth({ rateLimit: false });
+  const state = "unknown-state-6626070";
+  const callback = () =>
+    auth.handler(
+      new Request(
+        `http://localhost:3000/api/auth/callback/google?state=${state}&code=private-code`,
+      ),
+    );
+  // A client causes this one: the state is unknown, as a forged or already
+  // used state is. Better Auth prints its line and redirects with ?error=.
+  let printed = captureOutput();
+  let response = await callback();
+  assert.equal(response.status, 302);
+  assert.equal(
+    new URL(response.headers.get("location")!).searchParams.get("error"),
+    "state_mismatch",
+  );
+  assert.deepEqual(structured(printed), []);
+  assert.deepEqual(printed, ["ERROR [Better Auth]: Failed to parse state"]);
+
+  mock.restoreAll();
+  await db.query("ALTER TABLE verification RENAME TO verification_hidden");
+  try {
+    printed = captureOutput();
+    response = await callback();
+    assert.equal(response.status, 302);
+    assert.equal(
+      new URL(response.headers.get("location")!).searchParams.get("error"),
+      "internal_server_error",
+    );
+    const { fields } = logged(structured(printed));
+    assert.deepEqual(fields, {
+      event: "auth failure caught",
+      endpoint: "/callback/:id",
+      error: "DatabaseError",
+      code: "42P01",
+    });
+    excludes(printed, [state, "private-code", "exist"]);
+  } finally {
+    await db.query("ALTER TABLE verification_hidden RENAME TO verification");
   }
 });
 

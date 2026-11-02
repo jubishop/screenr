@@ -912,6 +912,7 @@ journalctl -u screenr-worker --since '1 day ago' --no-pager | grep '"event":"ema
 | `catalog cache failed` | web | `cache` (`title`, `trailer`, or `availability`) for a failed read or write of that catalog cache |
 | `auth callback failed` | web | `callback`, the Better Auth callback, such as `sendVerificationOTP` or `user.create.before` |
 | `auth endpoint failed` | web | `endpoint`, Better Auth's route pattern, such as `/sign-in/email-otp` or `/callback/:id`, when known, for an unexpected error from Better Auth's handler, such as a database error in its adapter or rate limit or a schema mismatch, which Screenr answers with a bare 500 |
+| `auth failure caught` | web | `endpoint`, as for `auth endpoint failed`, when known, for an unexpected error that Better Auth caught and answered itself, such as a database error while Google or Apple sign-in creates the account or while it reads a session |
 | `code email cap reached` | web | No fields: the Screenr-wide limit of 40 [code emails a day](running-screenr.md#provider-configuration) refused a code request |
 | `apple_token_failed` | web | `status` and Apple's `reason` for an HTTP reply from Apple's token endpoint, or error fields |
 | `apple token unreadable` | web | Error fields only: account deletion skipped a Sign in with Apple token sealed under an earlier `BETTER_AUTH_SECRET` |
@@ -969,16 +970,52 @@ router rethrows it (`onAPIError.throw`), so neither its router library,
 better-call, nor Next prints the error itself, whose message and PostgreSQL
 detail can quote the failing row. Beside these lines, Better Auth prints its
 own line, such as `ERROR [Better Auth]: Failed to run background task:` for a
-callback failure it catches. Screenr's `logger.log` keeps only Better Auth's
-message and drops the error passed with it. A few messages name a value from
+callback failure it catches. Screenr's `logger.log` prints only Better Auth's
+message, never the error passed with it. A few messages name a value from
 the request, such as an untrusted origin or callback URL.
 
-Errors that Better Auth catches and answers itself print only its own line. A
-database error while a Google or Apple sign-in finds or creates the account
-logs no event: it ends an OAuth callback in a redirect with `?error=` and an
-ID token sign-in in an error answer. A failed session read reaches Screenr's
-handler as a bare `APIError`, so that handler's line lacks the database
-error's fields.
+An error that Better Auth catches and answers itself logs `auth failure
+caught` ([issue #414](https://github.com/jubishop/screenr/issues/414)).
+Better Auth passes the error to `logger.log` at `error` level, beside its
+message, and Screenr logs the error's fields as for any failure. A database
+error while a Google or Apple sign-in finds or creates the account ends an
+OAuth callback in a redirect with `?error=` and an ID token sign-in in an
+error answer, such as 401 `OAUTH_LINK_ERROR`. A failed session read answers
+500 `FAILED_TO_GET_SESSION`, or 401 in `/link-social`'s session check, and a
+failed sign-out still answers success. When Screenr itself reads the session,
+as `/api/screenr` and `/api/photos` requests and member pages do, the line
+names no `endpoint`, and the request's own `request failed` or `route failed`
+line follows with a bare `APIError`. In an `/api/screenr` request, both lines
+carry its `requestId`. A callback failure that Better Auth catches logs only
+`auth callback failed`. A hook matcher that throws, which ends in a 500 that
+Better Auth's router answers without `auth endpoint failed`, logs `auth
+failure caught` with the matcher's error.
+
+`auth failure caught` covers every error Better Auth logs at `error` level
+except three: an `APIError`, which is Better Auth's deliberate answer; a
+callback failure already logged; and the error Better Auth raises when an
+OAuth callback brings a state it can't use, because it is unknown, already
+used, expired, or from another browser. A client causes that one, as a
+repeated callback or a bot does, so it prints only Better Auth's
+`Failed to parse state` line. Issue #414 left this choice to its
+implementation, which settled it on 2026-11-01 from Better Auth 1.7.10's code:
+
+- **Client errors:** the state error is the only client-caused error that
+  reaches `error` level with an error object. `State not found` passes the
+  callback's `error` parameter, a rejected authorization code passes Google's
+  reply as a plain object, and Better Auth's router answers a malformed
+  callback query with 400 before `INVALID_CALLBACK_REQUEST` can log a parse
+  error.
+- **Server failures:** they arrive in more classes than `DatabaseError` and
+  Node system errors, such as pg's own `Error` for a lost connection or the
+  five-second connection timeout, Better Auth's `BetterAuthError` for
+  duplicate account identities, and a `TypeError` for a failed fetch to
+  Google's token endpoint.
+- **Rejected alternatives:** logging only `DatabaseError` and Node system
+  errors would miss those, and matching Better Auth's messages would break
+  when it rewords one. Screenr recognizes the state error by its
+  `BetterAuthError` name and its code, such as `state_mismatch`, which the
+  production build keeps; the build renames Better Auth's classes.
 
 For a Resend reply, `email delivery failed` adds the HTTP `status` and the
 `provider` error name, such as `daily_quota_exceeded` or `invalid_api_key`.

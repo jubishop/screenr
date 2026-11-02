@@ -677,7 +677,10 @@ rules, label validation and TMDB season lists, and migration 024 with the
 previous release's writes.
 `tests/app/failure-logs.test.ts` and `tests/app/email.test.ts` capture the
 [failure logs](deployment.md#failure-logs) of request, page, route, Better
-Auth callback and endpoint, worker, and Resend failures.
+Auth callback and endpoint, worker, and Resend failures, and of failures
+Better Auth catches itself: a Google ID token signup whose account insert
+fails, a failed session read, and a failed OAuth state read, beside an unknown
+OAuth state that logs nothing.
 `tests/app/failure-logs.test.ts` also fails polls the same way, as in a
 database outage, which must each log a line with its request ID while only
 the first goes to Sentry, and another action's failure must report at once.
