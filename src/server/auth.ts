@@ -419,6 +419,13 @@ export function createAuth(
       // Screenr never calls this one. It checks a code without consuming it,
       // and concurrent guesses evade its attempt limit.
       "/email-otp/check-verification-otp",
+      // Screenr never calls these either. The refresh route would send an
+      // Apple account's sealed refresh token to Apple's token endpoint under
+      // Screenr's bundle ID, and the other two refresh through the same code
+      // when a stored access token has expired.
+      "/refresh-token",
+      "/get-access-token",
+      "/account-info",
     ],
     socialProviders: { ...googleProvider(), ...appleProvider() },
     user: {

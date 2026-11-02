@@ -358,7 +358,11 @@ and Apple sign-in returns 404; activation does not require them.
 The server accepts ID tokens for both App IDs. For each code exchange and
 revocation, it signs a five-minute client secret naming the app's bundle ID,
 so no secret needs renewal. Each account's newest refresh token is stored
-encrypted for account deletion to revoke. Changing `BETTER_AUTH_SECRET` makes
+encrypted for account deletion to revoke. Better Auth's token routes,
+`/api/auth/refresh-token`, `/api/auth/get-access-token`, and
+`/api/auth/account-info`, return 404: Screenr calls none of them, and the
+refresh route would post the stored token to Apple's token endpoint without a
+client secret. Changing `BETTER_AUTH_SECRET` makes
 the stored tokens unreadable, like queued email, until each member's next
 Apple sign-in stores a new one; deleting an account meanwhile skips its
 unreadable token. Apple sign-in has no web button, return URL,

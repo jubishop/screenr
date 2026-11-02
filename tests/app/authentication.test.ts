@@ -265,7 +265,7 @@ test("the Screenr-wide cap allows 40 login-code emails a day across addresses an
   assert.equal(sent.length, 41);
 });
 
-test("Better Auth password and code-check routes are disabled", async () => {
+test("Better Auth password, code-check, and token routes are disabled", async () => {
   const sent: string[] = [];
   const auth = createAuth({
     rateLimit: false,
@@ -306,6 +306,8 @@ test("Better Auth password and code-check routes are disabled", async () => {
     "/change-password",
     "/verify-password",
     "/email-otp/check-verification-otp",
+    "/refresh-token",
+    "/get-access-token",
   ])
     assert.equal((await post(path)).status, 404, path);
   assert.equal(

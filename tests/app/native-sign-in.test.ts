@@ -392,6 +392,61 @@ test("Better Auth's OAuth callback for Apple answers not found and reaches no Ap
   );
 });
 
+test("Better Auth's token routes answer not found for a signed-in Apple member and reach no Apple endpoint", async (t) => {
+  const apple = fakeApple();
+  configure(t, apple.env());
+  // Records each request for Apple's servers before the fake answers it.
+  const appleRequests: string[] = [];
+  serve(
+    {
+      async handle(url) {
+        if (url.origin === "https://appleid.apple.com")
+          appleRequests.push(url.pathname);
+        return undefined;
+      },
+    },
+    apple,
+  );
+  const auth = createAuth({ rateLimit: false });
+  const post = client(auth);
+  const get = (path: string, headers: Record<string, string>) =>
+    auth.handler(new Request(`${origin}/api/auth/${path}`, { headers }));
+  const member = await person("member");
+  const session = { Authorization: `Bearer ${await bearerFor(member)}` };
+  const linked = await post(
+    "link-social",
+    appleSignIn(
+      apple.authorize({ sub: "apple-member", email: "member@example.test" }),
+    ),
+    session,
+  );
+  assert.equal(linked.status, 200, await linked.clone().text());
+  const stored = await storedAppleToken(member);
+  assert.ok(stored);
+  // A member finds the Apple account's ID in their own account list.
+  const accounts: { id: string; providerId: string }[] = await (
+    await get("list-accounts", session)
+  ).json();
+  const accountId = accounts.find(
+    ({ providerId }) => providerId === "apple",
+  )?.id;
+  assert.ok(accountId);
+
+  // Screenr calls none of these. The refresh route would post the stored
+  // sealed token to Apple's token endpoint without a client secret.
+  appleRequests.length = 0;
+  const failures = captureFailures();
+  for (const path of ["refresh-token", "get-access-token"])
+    assert.equal((await post(path, { accountId }, session)).status, 404, path);
+  assert.equal(
+    (await get(`account-info?accountId=${accountId}`, session)).status,
+    404,
+  );
+  assert.deepEqual(appleRequests, []);
+  assert.deepEqual(failures, []);
+  assert.equal(await storedAppleToken(member), stored);
+});
+
 test("Without Apple settings, Apple sign-in is unavailable and revocation has nothing to do", async (t) => {
   const apple = fakeApple();
   configure(t, {});
