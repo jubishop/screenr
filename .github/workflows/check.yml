@@ -227,14 +227,28 @@ jobs:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
-      # The server answers SSH only on its tailnet address. See docs/deployment.md#production-environment-setup.
+      # The server answers SSH only on its tailnet address. This public file
+      # takes it from the deploy host secret and masks it, since the log masks
+      # only the whole secret; tests/test_deploy_tailnet.py runs this step.
+      # See docs/deployment.md#production-environment-setup.
+      - name: Find the server's tailnet address
+        id: server
+        env:
+          SCREENR_DEPLOY_HOST: ${{ secrets.SCREENR_DEPLOY_HOST }}
+        run: |
+          if [[ ! $SCREENR_DEPLOY_HOST =~ ^root@([A-Za-z0-9][A-Za-z0-9.-]*)$ ]]; then
+            echo "::error::Set SCREENR_DEPLOY_HOST to root@ and the server's tailnet address."
+            exit 1
+          fi
+          echo "::add-mask::${BASH_REMATCH[1]}"
+          echo "address=${BASH_REMATCH[1]}" >> "$GITHUB_OUTPUT"
       - name: Join the tailnet
         uses: tailscale/github-action@064b10558093f38325e838ddea35486bdc6b1d5c # Pinned: third-party action in a job holding deploy credentials (v4.2.0)
         with:
           oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
           audience: ${{ secrets.TS_AUDIENCE }}
           tags: tag:ci
-          ping: 100.91.85.40
+          ping: ${{ steps.server.outputs.address }}
       - name: Configure deployment SSH
         env:
           DEPLOY_KEY: ${{ secrets.SCREENR_DEPLOY_KEY }}

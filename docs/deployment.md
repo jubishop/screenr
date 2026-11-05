@@ -837,8 +837,13 @@ production deployment.
 
 The shared VPS answers SSH only on its tailnet address, so the deploy job
 first joins the tailnet as an ephemeral `tag:ci` node with
-`tailscale/github-action` and pings the server. It authenticates through a
-Tailscale federated identity limited to the subject
+`tailscale/github-action` and pings the server. A step before it takes the
+address from `SCREENR_DEPLOY_HOST` and masks it, since the log masks only the
+whole secret, so neither this public repository nor its Actions logs name the
+server ([#493](https://github.com/jubishop/screenr/issues/493)).
+`tests/test_deploy_tailnet.py` runs that step and fails if any tracked file
+names a tailnet address. The join authenticates through a Tailscale federated
+identity limited to the subject
 `repo:jubishop@13165/screenr@1357742977:environment:production`, GitHub's
 immutable form with the owner and repository IDs, which needs the job's
 `id-token: write` permission; no Tailscale secret is stored in GitHub. The
@@ -848,7 +853,7 @@ Add these environment secrets:
 
 | Secret | Value |
 | --- | --- |
-| `SCREENR_DEPLOY_HOST` | `root@` and the VPS's tailnet address |
+| `SCREENR_DEPLOY_HOST` | `root@` and the VPS's tailnet address, which the deploy job also pings |
 | `SCREENR_DEPLOY_KEY` | A dedicated Ed25519 private key for this repository's deployments |
 | `SCREENR_DEPLOY_KNOWN_HOSTS` | The verified SSH host-key entry for that exact host |
 | `TS_OAUTH_CLIENT_ID` | The federated identity's client ID |
