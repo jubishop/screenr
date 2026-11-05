@@ -31,10 +31,12 @@ test("the friends feed and profiles show older entries with Show older, and a li
     await expect(post(11)).toBeVisible();
     await expect(post(10)).toHaveCount(0);
     await older.click();
-    // The older page shows at once, not as new activity.
+    // The older page shows at once, not as new activity, and focus moves
+    // from Show older, which leaves with the last page, to its first entry.
     await expect(entries).toHaveCount(60);
     await expect(post(1)).toBeVisible();
     await expect(older).toHaveCount(0);
+    await expect(reader.locator(`#item-${posts[9]}`)).toBeFocused();
     await expect(
       reader.getByRole("button", { name: /^New activity/ }),
     ).toHaveCount(0);

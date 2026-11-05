@@ -584,7 +584,9 @@ web and in the iPhone app
   the window extended by the next page. The entries it adds show at once,
   without **New activity**: they are no newer than the old window's start,
   and every newer entry was already in that window. Other people's new
-  activity still waits for **New activity**.
+  activity still waits for **New activity**. On the web, Show older keeps
+  keyboard focus while older entries remain; when it leaves with the last
+  of them, focus moves to the first entry it added.
 - **Links:** a link to an entry, `/?item=<id>` for a post without a title,
   sends that entry after the page's own entries even when it is older, so
   permalinks and notifications open their target. The window stays the

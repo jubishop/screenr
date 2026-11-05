@@ -116,7 +116,8 @@ async function loadContent(userId: string, route: MemberRoute) {
     // Links to posts without a title open them here, even when the entry is
     // older than the page.
     const window = historyWindow(route);
-    const page = window && (await feedPage(userId, window, route));
+    const page =
+      window && (await feedPage(userId, window, { item: route.item }));
     const threads = page?.conversations ?? (await conversations(userId));
     return {
       kind: "feed" as const,

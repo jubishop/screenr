@@ -84,6 +84,8 @@ export function FeedView({
     snapshot ? capture(snapshot) : null,
   );
   const [loadingOlder, setLoadingOlder] = useState(false);
+  // The last entry shown when Show older last read, until that read ends.
+  const [olderAfter, setOlderAfter] = useState<{ last?: string } | null>(null);
   const interactive = useInteractive();
   // Keep only identities when access is unavailable. The current authorized
   // snapshot is always the source of rendered server content.
@@ -172,6 +174,17 @@ export function FeedView({
     ...visible.map((c) => c.id),
     ...slots.filter((id) => !visibleById.has(id)),
   ];
+  // Show older keeps focus while older entries remain. When it leaves with
+  // the last of them, focus moves to the first entry it added, so keyboard
+  // users continue from there.
+  const firstAdded =
+    olderAfter && order[order.indexOf(olderAfter.last ?? "") + 1];
+  useEffect(() => {
+    if (!olderAfter || loadingOlder) return;
+    setOlderAfter(null);
+    if (older || document.activeElement !== document.body) return;
+    if (firstAdded) document.getElementById(`item-${firstAdded}`)?.focus();
+  }, [olderAfter, loadingOlder, older, firstAdded]);
   // A friend line name can name an entry still waiting behind New activity.
   // Showing it accepts the pending activity, as New activity would.
   const [handledEntry, setHandledEntry] = useState(shownEntry);
@@ -231,6 +244,7 @@ export function FeedView({
           unavailable={loadingOlder}
           onClick={() => {
             setLoadingOlder(true);
+            setOlderAfter({ last: visible.at(-1)?.id });
             void showOlder().finally(() => setLoadingOlder(false));
           }}
         >

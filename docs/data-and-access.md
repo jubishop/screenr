@@ -643,7 +643,8 @@ without a body. The page then keeps its data and doesn't render again
 stay `Cache-Control: private, no-store` with `Vary: Cookie, Authorization`,
 so a version
 never answers for another member and no shared cache keeps a screen. Every
-refresh still reads the database and checks access.
+refresh still reads the database and checks access, or for an unchanged feed
+or profile, the change mark that every access change moves.
 
 An unchanged poll of the friends feed or a profile answers 304 without
 building the screen
