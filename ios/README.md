@@ -214,10 +214,6 @@ to `ios/build/DerivedData`, but it doesn't check what `swift test` checks:
   With a build in place and no change, `swift test` took 10 to 11 seconds
   and xcodebuild 17; after a one-file change, 12 to 13 and 19.
 
-[#505](https://github.com/jubishop/screenr/issues/505) evaluates making the
-frameworks in this copy and in SourceKit-LSP's index build, below, APFS
-clones of the cache's files.
-
 SourceKit-LSP, the Swift language server that editors and agents' language
 tools start when they open a Swift file, keeps one more copy of the packages
 in each checkout where it has opened a ScreenrKit file: its index build, in
@@ -244,6 +240,66 @@ the file's scratch path. Turning background indexing off would save only
 about 0.7 GB: SourceKit-LSP still resolved the packages into
 `ios/ScreenrKit/.build`, and a test file then reported "No such module
 'ScreenrKit'".
+
+Both copies' frameworks are the cache's files, byte for byte, with the same
+modification times, which SwiftPM takes from the archives. So `bin/check-ios`,
+after its package tests, and `bin/ios-packages`, after its command, make them
+APFS clones of the cache's files: `share_artifacts()` in
+`bin/_ios_packages.py` ([#505](https://github.com/jubishop/screenr/issues/505)).
+It covers `ios/build/ScreenrKit`, the index build, and `ios/ScreenrKit/.build`,
+where a `swift` command run without `--scratch-path` builds, and says how much
+it shared. A clone shares its data with the cache's file, so it takes no space
+until either changes, yet stays a file of its own: SwiftPM replacing it, or the
+size bound deleting the cache, leaves the other intact, which a symbolic link
+into the cache would not. Once the cache is resolved again, the next command
+clones the new files.
+
+- **Saving:** in two runs on 2026-11-05, a pass freed 3,329 MiB of the volume's
+  free space, as `df` reports it, for one copy's frameworks, which take
+  3,331 MiB on disk; a third, while two other checks were building, measured
+  2,686 MiB. `du` counts a clone in full, so it shows no change. APFS's count
+  of the bytes a file shares with no other (`ATTR_CMNEXT_PRIVATESIZE` from
+  `getattrlist`) was none for each shared copy, and 3,289 to 3,331 MiB for
+  each copy in four other checkouts, 26 GB in all. A checkout with both copies
+  saves about 6.5 GB.
+- **No race with SwiftPM:** SwiftPM replaces an artifact only when the checksum
+  its `workspace-state.json` records for it differs from the one the package
+  calls for, and records the new checksum only after extracting the files
+  (`Sources/Workspace/Workspace+BinaryArtifacts.swift` in Swift 6.4.2). The
+  pass touches only artifacts recorded with the cache's checksum for the
+  checkout's `Package.resolved`, and in them only files with the cache file's
+  size, mode, and modification time. It makes each clone beside the scratch
+  path and renames it over the file, so a reader finds the old file or the
+  clone, never neither. While SwiftPM resolved one scratch path three times,
+  extracting the frameworks again each time, 267 to 284 passes ran during each
+  resolution, and only the one after SwiftPM recorded the frameworks changed
+  anything. Every resolution succeeded, with files identical to the cache's.
+  Only a `Package.resolved` change during a pass, which takes a second or
+  two, could let it rename a clone into a directory SwiftPM is removing,
+  which would fail that resolution once.
+- **Builds:** a clone keeps the file's modification time, so Clang's modules
+  built against the headers stay valid. After a pass, the index build's
+  preparation, the `swift build --experimental-prepare-for-indexing` that
+  SourceKit-LSP runs, rebuilt nothing, and `swift test` compiled nothing but
+  planned its build again and relinked its test bundle once, a few seconds,
+  since its build system tracks the files themselves. So a pass skips files
+  that already share the cache's data, by APFS's clone ID, and took about
+  0.3 seconds for both copies when all did. A first pass took 1.1 to
+  1.8 seconds per copy.
+- **Reach:** SourceKit-LSP creates its index build outside any command, so the
+  pass shares it at the checkout's next check or `bin/ios-packages` command. A
+  checkout that runs neither keeps its copy until the worktree goes; a
+  scheduled job could reach it, but at the cost of another job for a copy
+  that lasts only as long as its worktree.
+- **Otherwise:** the clones carry the cache files' `com.apple.provenance`
+  attribute, as do the files the check's xcodebuild builds use, and
+  `swift test` passed with it. On a system other than macOS the pass does
+  nothing, so CI's Linux runners skip its tests in `tests/test_ios_packages.py`
+  and `tests/test_check_ios.py`.
+- **Choice:** about 6.5 GB for each checkout with both copies, 26 GB across
+  the four on the Mac on 2026-11-05, is worth a pass of about 100 lines that
+  runs within commands checkouts already run, needs no new job or dependency,
+  and leaves every file's contents and modification time as they were.
 
 ## Run one test
 

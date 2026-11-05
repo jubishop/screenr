@@ -13,6 +13,8 @@ import tempfile
 import time
 import unittest
 
+from test_ios_packages import EXTRACT, data_id, package_artifacts
+
 SOURCE = Path(__file__).resolve().parents[1]
 APP_INTENTS_NOTICE = ("2026-10-13 16:01:06.345 appintentsmetadataprocessor[47552:59012224] warning: "
                       "Metadata extraction skipped, no AppIntents.framework dependency found")
@@ -46,11 +48,13 @@ def finish(step):
     print(os.environ.get('FAKE_OUTPUT_' + step, ''))
     sys.exit(int(os.environ.get('FAKE_STATUS_' + step, '0')))
 def build_into(option):
-    # Leave build output in the directory the option names, as the real tool does.
+    # Leave build output in the directory the option names, as the real tool does,
+    # with the package artifacts SwiftPM extracts there.
     output = Path(sys.argv[sys.argv.index(option) + 1])
     output.mkdir(parents=True, exist_ok=True)
     (output / 'built').touch()
-"""
+    extract(output)
+""" + EXTRACT
 XCODEBUILD = RECORD + """
 if sys.argv[1:] == ['-version']:
     print(os.environ.get('FAKE_XCODE_VERSION', 'Xcode 27.0\\nBuild version 27A266a'))
@@ -354,6 +358,17 @@ class CheckIOSTests(unittest.TestCase):
                 self.assertEqual(own_copy.exists(), kept)
                 self.assertEqual("Removing ios/build/ScreenrKit and ios/build/DerivedData" in result.stdout,
                                  not kept)
+
+    @unittest.skipUnless(sys.platform == "darwin", "APFS clones need macOS")
+    def test_its_package_tests_copy_of_the_package_artifacts_shares_the_caches_files(self):
+        template = package_artifacts(self.events.parent / "download")
+        result = self.check(FAKE_ARTIFACTS=str(template))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("of SwiftPM's package artifacts in this checkout now share", result.stdout)
+        events = self.recorded()
+        sources = Path(events[0][events[0].index("-clonedSourcePackagesDirPath") + 1])
+        name = "artifacts/sentry-cocoa/Sentry/Sentry.xcframework/Info.plist"
+        self.assertEqual(data_id(self.repo / "ios/build/ScreenrKit" / name), data_id(sources / name))
 
     def test_holds_the_shared_package_cache_in_use_until_it_exits(self):
         pids = self.events.parent / "hung.pids"
