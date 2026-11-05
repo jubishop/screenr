@@ -2,16 +2,18 @@ import ScreenrKit
 import SwiftUI
 
 extension View {
-  // Ends text editing as `path`, a navigation stack's path, grows, before
-  // the push starts, whether a link or the router pushed. Otherwise UIKit
-  // ends it inside a Core Animation commit as the push starts, and brings the
-  // keyboard back as the pop animates; for a field inside a SwiftUI scroll
-  // view, such as a feed's composer, that can deadlock the app, as a closing
-  // sheet's keyboard can (see `keyboardSafeSheet(item:content:)`). The draft
-  // stays, and the keyboard returns when the reader taps the field.
+  // Ends text editing whenever `path`, a navigation stack's path, shows a
+  // new screen, before the transition starts, whether a link or the router
+  // changed it. Otherwise UIKit ends it inside a Core Animation commit as a
+  // push starts, and brings the keyboard back as the pop animates; for a
+  // field inside a SwiftUI scroll view, such as a feed's composer, that can
+  // deadlock the app, as a closing sheet's keyboard can (see
+  // `keyboardSafeSheet(item:content:)`). A pop, which shows a screen that
+  // was already there, keeps editing as it is. The draft stays, and the
+  // keyboard returns when the reader taps the field.
   func keyboardSafeNavigation(_ path: [Destination]) -> some View {
-    onChange(of: path.count) { old, new in
-      guard new > old else { return }
+    onChange(of: path) { old, new in
+      if new.count < old.count, old.starts(with: new) { return }
       UIApplication.shared.sendAction(
         #selector(UIResponder.resignFirstResponder),
         to: nil,
