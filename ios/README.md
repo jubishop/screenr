@@ -2142,9 +2142,9 @@ accent.
     opens, and `tests/test_ios_sheets.py` fails when the app or an extension
     presents a sheet, cover, or popover any other way.
   - `.keyboardSafeNavigation(_:)` ends editing whenever a tab's navigation
-    path shows a new screen, before the transition starts. Otherwise UIKit
-    ends it inside a Core Animation commit as a push starts, and brings the
-    keyboard back as the pop animates.
+    path shows a new screen, before the transition starts. Otherwise editing
+    ends inside a Core Animation commit as a push starts or a replaced screen
+    goes, and UIKit brings the keyboard back as the pop animates.
   - A composer takes focus only as it opens, not each time its screen
     appears again, such as after a pop or a tab switch.
 
