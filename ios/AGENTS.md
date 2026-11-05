@@ -72,7 +72,8 @@ layout, commands, and toolchain notes, and the
   [product brief's accepted decisions](../docs/product-brief.md#accepted-decisions).
 - **Views:** keep views declarative. Put behavior in ScreenrKit view models.
 - **Sheets:** present every sheet with `.keyboardSafeSheet(item:content:)`,
-  never `.sheet` directly, so closing one never brings back a keyboard; see
+  never `.sheet`, `.fullScreenCover`, or `.popover` directly, so closing one
+  never brings back a keyboard. `tests/test_ios_sheets.py` enforces it; see
   the [keyboard deadlock](README.md#toolchain-notes).
 
 ## Tests

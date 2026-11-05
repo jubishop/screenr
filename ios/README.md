@@ -2113,8 +2113,10 @@ accent.
   struck when a sheet closed over a feed's open composer: UIKit brings the
   keyboard back as the closing sheet animates. On 2026-11-05 it froze the
   app in 1 of 100 runs of `testKeepsAnUnsentCommentBeneathTheSheet` beside
-  other Simulators' UI tests.
-  `.keyboardSafeSheet(item:content:)` ends editing before every sheet opens,
-  so nothing comes back. A UI test that logs "App event loop idle
-  notification not received" may be such a hang: run `sample` on the app's
-  process in its Simulator while the test waits, and read the main thread.
+  other Simulators' UI tests. `.keyboardSafeSheet(item:content:)` ends
+  editing before every sheet opens, so nothing comes back, and
+  `tests/test_ios_sheets.py` fails when the app or an extension presents a
+  sheet, cover, or popover any other way. A UI test that logs "App event
+  loop idle notification not received" may be such a hang: run `sample` on
+  the app's process in its Simulator while the test waits, and read the
+  main thread.
