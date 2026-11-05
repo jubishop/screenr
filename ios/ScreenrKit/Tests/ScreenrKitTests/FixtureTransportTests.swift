@@ -162,6 +162,40 @@ struct FixtureTransportTests {
     #expect(after == before)
   }
 
+  // A UI test keeps a change in flight while it chooses: while the holds
+  // directory has a file at a request's path, that request waits, other
+  // requests answer, and removing the file lets the held request answer.
+  @Test func holdsARequestWhileItsFileExists() async throws {
+    let directory = FileManager.default.temporaryDirectory
+      .appending(path: UUID().uuidString, directoryHint: .isDirectory)
+    let held = directory.appending(path: "api/screenr")
+    try FileManager.default.createDirectory(at: held, withIntermediateDirectories: true)
+    defer {
+      do {
+        try FileManager.default.removeItem(at: directory)
+      } catch {
+        Issue.record("Could not remove \(directory.path()): \(error)")
+      }
+    }
+    let photo = held.appending(path: "photo")
+    #expect(FileManager.default.createFile(atPath: photo.path(), contents: Data()))
+    let services = try services("-ScreenrFixtureHolds", directory.path())
+    let answers = Answers()
+
+    let upload = Task {
+      let saved = try await services.api.send(.uploadPhoto(jpeg: Data(count: 4000)))
+      answers.record("photo")
+      return saved
+    }
+    _ = try await services.api.send(.screen(path: "/account"))
+    answers.record("account")
+    try FileManager.default.removeItem(at: photo)
+    let saved = try await upload.value
+
+    #expect(answers.order == ["account", "photo"])
+    #expect(saved.photo == "6b8351fef1a68536")
+  }
+
   @Test func needsASignalForUpdates() {
     #expect(throws: FixtureError.self) {
       try FixtureTransport(
@@ -570,7 +604,7 @@ struct APISourceTests {
         "-ScreenrOpenURL", "screenr-dev://people", "-ScreenrFixtureProfile", "pending",
         "-ScreenrFixturePush", "denied", "-ScreenrFixtureUpdate", "screen/feed/incoming",
         "-ScreenrFixtureUpdateSignal", "/tmp/update", "-ScreenrFixturePosters", "solid",
-        "-ScreenrFixtureOutageSignal", "/tmp/outage",
+        "-ScreenrFixtureOutageSignal", "/tmp/outage", "-ScreenrFixtureHolds", "/tmp/holds",
       ],
       variant: .dev
     )
@@ -590,6 +624,7 @@ struct APISourceTests {
             updates: ["screen/feed/incoming"],
             updateSignal: URL(filePath: "/tmp/update"),
             outageSignal: URL(filePath: "/tmp/outage"),
+            holds: URL(filePath: "/tmp/holds", directoryHint: .isDirectory),
             posters: .solid
           )
         )
@@ -693,5 +728,15 @@ struct EnvironmentTests {
       try await environment.screenrAPI.send(.screen(path: "/"))
     }
     #expect(error?.requestID == "fake")
+  }
+}
+
+// The order in which a test's requests answered.
+@MainActor
+private final class Answers {
+  private(set) var order: [String] = []
+
+  func record(_ name: String) {
+    order.append(name)
   }
 }

@@ -541,6 +541,7 @@ uses it when launched with these arguments; Release builds ignore them:
 | `-ScreenrFixtureUpdateSignal` | The file whose creation sends the `-ScreenrFixtureUpdate` fixtures. |
 | `-ScreenrFixtureFailure` | A fixture that answers every `/api/screenr` request, such as `errors/update-required`. |
 | `-ScreenrFixtureOutageSignal` | A file whose existence fails every `/api/screenr` request with a 502 and no body, as from the proxy during a deploy, so the app's next reads, such as a poll, fail until the file is removed. |
+| `-ScreenrFixtureHolds` | A directory where a file at a request's path holds the app's requests to that path, such as `api/screenr/photo` for a photo upload or `api/auth/link-social` for a link, until the file is removed, so a change stays in flight, such as through a failed read. A request the file releases then answers as any other. |
 | `-ScreenrFixtureLog` | A file that gets a line per `/api/screenr` and `/api/auth` request, such as `GET /api/screenr/screen?path=%2F`, with ` visit` after the app's [visit](#visits) and a write's JSON body, keys sorted, after the write: `POST /api/screenr/read-notification {"id":"18"}`. An upload has its type and size instead: `POST /api/screenr/photo image/jpeg 41250 bytes`. Sent [feedback](#feedback) adds a `FEEDBACK` line. A [trailer](#trailers)'s player adds `WEB <url>` for each page it asks for. The [share extension](#share-extension) adds `SHARE completed` or `SHARE cancelled` as it ends each request. The app's launch starts the file empty; the share and [notification](#push-content) extensions add their requests to it. |
 | `-ScreenrFixturePush` | The notification permission the app finds: `undecided` (default), `allowed`, or `denied`; or `system` for iOS's own permission and APNs registration. See [push notifications](#push-notifications). |
 | `-ScreenrOpenURL` | A link the app opens at launch, as if the system delivered it, such as `screenr-dev://titles/tv/201`. |
@@ -558,8 +559,10 @@ with the directory found from the test's source path; `requestLog`, `link`,
 `update: FixtureUpdate("screen/feed/incoming")` passes the update arguments,
 whose fixtures answer once the test calls `update.send()`; and
 `outage: FixtureOutage()` passes the outage signal, which `outage.begin()`
-creates and `outage.end()` removes. The fixture API keeps the session in
-memory.
+creates and `outage.end()` removes; and `holds: FixtureHolds()` passes the
+holds directory, where `holds.hold("/api/screenr/photo")` holds a path's
+requests and `holds.release(_:)` lets them answer. The fixture API keeps the
+session in memory.
 A request gets the fixture with the same action and
 query or body, then falls back to the screen's path or to a successful
 fixture for the action, and otherwise gets the server's recorded 404,
@@ -1142,9 +1145,10 @@ Settings is the `/account` screen in the sheet that the You tab's gear opens.
 `Screenr/Screens/AccountView.swift` lists its sections, and each section is a
 view in `Screens/Settings/` that takes a `SettingsContext`: the loaded
 `AccountScreen`, the signed-in `Person`, `refresh()` to read the screen after
-a change, `open(_:)` for an editor sheet, and the screen's `SignOutModel`.
-Its behavior lives in ScreenrKit's `Settings/`, `Photos/`, `Invitations/`,
-and `Feedback/` view models.
+a change, `open(_:)` for an editor sheet, and the screen's `SettingsModels`:
+the models of the sections that act in place rather than in a sheet, from
+Profile photo to Sign out. Its behavior lives in ScreenrKit's `Settings/`,
+`Photos/`, `Invitations/`, and `Feedback/` view models.
 
 | Section | View model | What it does |
 | --- | --- | --- |
@@ -1162,11 +1166,14 @@ and `Feedback/` view models.
 A new setting adds its section to `AccountView`'s list in one line, such as
 `PushSettingsSection(settings)`; Delete account stays last. A section that
 edits a draft opens its editor with
-`settings.open(_:)` after adding a case to `SettingsEditor`. `AccountView`
-presents those sheets, and the sign-out failure alert, outside
-`ScreenContent`, so a failed read, which replaces the sections with the
-error, keeps an open draft or alert. Setup shows `SignOutButton` too and
-presents the same alert; no read replaces its content.
+`settings.open(_:)` after adding a case to `SettingsEditor`, and a section
+that acts in place keeps its model in `SettingsModels`. `AccountView`
+keeps those models and presents those sheets and the sign-out failure alert
+outside `ScreenContent`, so a failed read, which replaces the sections with
+the error, keeps an open draft or alert, a change still saving, such as a
+photo upload or a link, and the last change's failure or confirmation, as on
+the web. Setup shows `SignOutButton` too and presents the same alert; no
+read replaces its content.
 
 Section headings use `SectionHeading`, and a setting's value `SettingRow`,
 which keep the primary color: the system's gray falls short of the contrast
@@ -1180,7 +1187,10 @@ and removing a photo, creating and revoking an invitation, revoking through a
 failed read beneath the confirmation, which `FixtureOutage` causes, turning on
 notifications and changing a push setting, connecting Sign in with Apple,
 sending feedback, signing out, and a failed sign-out whose alert stays up
-through a failed read beneath it. They check what each write sent in the
+through a failed read beneath it. Through a failed read beneath them, a
+push setting's and a link's failures stay, and a photo upload, an activity
+email change, and a link that `FixtureHolds` keeps in flight still show as
+saving, then show how they ended. They check what each write sent in the
 fixture API's request log, since a screen read after a write still returns
 the fixture. Their `performSettingsAudit()` leaves out the Dynamic Type and
 clipping checks, which the iOS 27 Simulator fails for the system's list text

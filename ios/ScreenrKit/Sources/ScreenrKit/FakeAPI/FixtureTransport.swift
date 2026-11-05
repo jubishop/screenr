@@ -53,6 +53,11 @@ public struct FixtureScenario: Hashable, Sendable {
   // creates the file to fail the app's next reads, such as a poll, and
   // removes it to end the outage.
   public var outageSignal: URL?
+  // A directory where a file at a request's path holds the request until the
+  // file is removed, such as `api/screenr/photo` for an upload. A UI test
+  // creates the file to keep a change in flight, such as through a failed
+  // read, and removes it to let the change finish.
+  public var holds: URL?
   // The posters the app shows; see `ImageSource.solidPosters`.
   public var posters: Posters
 
@@ -74,6 +79,7 @@ public struct FixtureScenario: Hashable, Sendable {
     updates: [String] = [],
     updateSignal: URL? = nil,
     outageSignal: URL? = nil,
+    holds: URL? = nil,
     posters: Posters = .placeholders
   ) {
     self.viewer = viewer
@@ -86,6 +92,7 @@ public struct FixtureScenario: Hashable, Sendable {
     self.updates = updates
     self.updateSignal = updateSignal
     self.outageSignal = outageSignal
+    self.holds = holds
     self.posters = posters
   }
 }
@@ -182,6 +189,9 @@ final class FixtureSetup: Sendable {
 // An in-process Screenr server that answers from the checked-in fixtures, so
 // the app runs its real client against recorded responses.
 //
+// - While the scenario's holds directory has a file at a request's path,
+//   such as `api/screenr/photo`, the request waits until the file is
+//   removed, then answers as below.
 // - While the scenario's outage signal exists, `/api/screenr` requests get
 //   a 502 without a body.
 // - `/api/screenr` requests without a bearer token, or with
@@ -277,12 +287,14 @@ public struct FixtureTransport: HTTPTransport {
     let path = url.path()
     if path.hasPrefix("/api/auth/") {
       try log?.record(request, path: path, body: Incoming.json(request))
+      try await waitWhileHeld(path)
       return try auth(String(path.dropFirst("/api/auth/".count)), request: request, url: url)
     }
     guard path.hasPrefix("/api/screenr/") else {
       return try reply(url: url, status: 404, body: ["error": "Not found."])
     }
     try log?.record(request, path: path, body: Incoming.json(request))
+    try await waitWhileHeld(path)
     if inOutage() { return try reply(url: url, status: 502) }
     let requestID = request.value(forHTTPHeaderField: "Screenr-Request-Id")
     if let failure = fixture(named: scenario.failure) {
@@ -411,6 +423,14 @@ public struct FixtureTransport: HTTPTransport {
   private func inOutage() -> Bool {
     guard let signal = scenario.outageSignal else { return false }
     return FileManager.default.fileExists(atPath: signal.path())
+  }
+
+  // Waits while the scenario's holds directory has a file at `path`. A
+  // request the test releases then answers as any other would, such as with
+  // a 502 during an outage.
+  private func waitWhileHeld(_ path: String) async throws {
+    guard let holds = scenario.holds else { return }
+    try await FileRemoval.wait(for: holds.appending(path: path.drop { $0 == "/" }))
   }
 
   private func closeness(of fixture: Fixture, to incoming: Incoming) -> Closeness? {
