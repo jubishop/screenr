@@ -572,11 +572,11 @@ checked-in cases in `ios/ScreenrKit/SharedCases/feed-layout.json`, through
 a change to one that the other lacks fails a test
 ([shared cases](../ios/README.md#shared-cases)).
 
-An entry with nothing waiting shows as the server sent it, with the
-server's `visible_activity`, which is the layout's own with every reply
-accepted, so a large feed rebuilds only the entries whose activity waits.
-Ties in visible activity break by entry ID in code-unit order, as the server
-orders by UUID. On 2026-11-04, laying out a synthetic 4,800-entry feed with
+On the web, an entry with nothing waiting keeps the object and
+`visible_activity` the server sent, which equal the layout's own with every
+reply accepted, so a large feed rebuilds only the entries whose activity
+waits. Ties in visible activity break by entry ID in code-unit order, as the
+server orders by UUID. On 2026-11-04, laying out a synthetic 4,800-entry feed with
 every activity accepted took 0.8 ms in Node 26 on an Apple M5 Pro, down from
 4.9 ms when every entry rebuilt its replies and visible activity
 ([issue #376](https://github.com/jubishop/screenr/issues/376) measured that

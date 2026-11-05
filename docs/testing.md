@@ -339,6 +339,11 @@ enforces it. UI tests
 run the app against the same files through the
 [fixture API](../ios/README.md#fixture-api).
 
+Rules that both clients still apply, such as the feed's New activity layout,
+have hand-written [shared cases](../ios/README.md#shared-cases) in
+`ios/ScreenrKit/SharedCases/` instead, which a web test and a ScreenrKit
+test both run.
+
 After an intended payload change, regenerate the fixtures and commit the
 fixture diff with the server change:
 
