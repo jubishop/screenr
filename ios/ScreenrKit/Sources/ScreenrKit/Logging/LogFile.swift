@@ -26,6 +26,10 @@ public final class LogFile: LogSink {
       .appending(path: "Library/Logs/Screenr", directoryHint: .isDirectory)
   }
 
+  static func currentURL(_ name: String, in directory: URL) -> URL {
+    directory.appending(path: "\(name).ndjson")
+  }
+
   public init(
     directory: URL,
     name: String,
@@ -33,7 +37,7 @@ public final class LogFile: LogSink {
     maximumFileSize: Int = 256 * 1024,
     minimumLevel: LogLevel = .info
   ) {
-    currentURL = directory.appending(path: "\(name).ndjson")
+    currentURL = Self.currentURL(name, in: directory)
     previousURL = directory.appending(path: "\(name).1.ndjson")
     self.minimumLevel = minimumLevel
     let (stream, commands) = AsyncStream.makeStream(of: Command.self)

@@ -13,10 +13,21 @@ public enum ScreenshotPreparation {
     (2048, 0.8), (2048, 0.65), (1600, 0.65), (1280, 0.6), (1024, 0.5),
   ]
 
+  // The long side of the form's preview, in pixels: its 64-point rows on a
+  // 3× screen, with room for larger text.
+  static let thumbnailSide = 512
+
   // Runs off the caller's actor, since decoding and encoding take a moment.
   @concurrent
   public static func jpeg(from data: Data) async throws(PhotoPreparation.Failure) -> Data {
     try prepare(data)
+  }
+
+  // The prepared JPEG's preview, decoded now, off the caller's actor, so the
+  // form never decodes the full screenshot as the member types.
+  @concurrent
+  public static func thumbnail(of jpeg: Data) async -> CGImage? {
+    Thumbnail.image(jpeg, longSide: thumbnailSide)
   }
 
   static func prepare(_ data: Data) throws(PhotoPreparation.Failure) -> Data {

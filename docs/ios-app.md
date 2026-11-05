@@ -590,6 +590,15 @@ to investigate that for PodHaven too.
 - Copying PodHaven's dependency set: Factory, GRDB, Nuke, swift-log, Tagged,
   IdentifiedCollections, CasePaths, and others.
 
+**Updated — 2026-11-04:** Avatars no longer use `AsyncImage`, which decodes
+each 512-pixel profile photo whole, about 1 MB, for a 28 to 64 point circle,
+and keeps no decoded image, so a list decodes it again whenever it recreates
+a row. ScreenrKit's small `AvatarImages` loads photos through the same image
+session and cache, decodes each at the avatar's size with ImageIO, and keeps
+the results in memory
+([#386](https://github.com/jubishop/screenr/issues/386)). Posters and logos
+still use `AsyncImage`, and no package was added.
+
 **Sources:** [Apple's WWDC26 SwiftUI guide](https://developer.apple.com/wwdc26/guides/swiftui/),
 [AsyncImage in iOS 27](https://spaceport.build/blog/asyncimage-ios-27).
 

@@ -36,7 +36,7 @@ public final class LiveRead<Value: Decodable & Hashable & Sendable> {
 
   @ObservationIgnored private let api: any ScreenrAPI
   @ObservationIgnored private let clock: any Clock<Duration>
-  @ObservationIgnored private let onLoad: @MainActor (Value) -> Void
+  @ObservationIgnored private let onLoad: @MainActor (Value, ReadChange) -> Void
   @ObservationIgnored private var visible = false
   @ObservationIgnored private var active = false
   @ObservationIgnored private(set) var pollTask: Task<Void, Never>?
@@ -45,12 +45,13 @@ public final class LiveRead<Value: Decodable & Hashable & Sendable> {
   // Counts reads, so only the newest one's result applies.
   @ObservationIgnored private var readGeneration = 0
 
-  // `onLoad` sees every value a read returns, such as for the bell's count.
+  // `onLoad` sees every value a read returns, such as for the bell's count,
+  // and whether it differs from the one before it.
   public init(
     _ request: APIRequest<Value>,
     api: any ScreenrAPI,
     clock: any Clock<Duration> = ContinuousClock(),
-    onLoad: @escaping @MainActor (Value) -> Void = { _ in }
+    onLoad: @escaping @MainActor (Value, ReadChange) -> Void = { _, _ in }
   ) {
     self.request = request
     self.api = api
@@ -194,8 +195,9 @@ public final class LiveRead<Value: Decodable & Hashable & Sendable> {
     guard generation == readGeneration else { return }
     switch result {
     case .success(let value):
-      if phase != .loaded(value) { phase = .loaded(value) }
-      onLoad(value)
+      let change: ReadChange = phase == .loaded(value) ? .unchanged : .changed
+      if change == .changed { phase = .loaded(value) }
+      onLoad(value, change)
     case .failure(let error) where error.kind == .cancelled:
       break
     case .failure(let error):
@@ -253,6 +255,13 @@ public final class LiveRead<Value: Decodable & Hashable & Sendable> {
   }
 }
 
+// Whether a live read's value differs from the one before it. Most polls
+// are unchanged.
+public enum ReadChange: Hashable, Sendable {
+  case changed
+  case unchanged
+}
+
 // How often a live read polls, and how long each read waits, as on the web.
 public enum LiveReadTiming {
   public static let interval: Duration = .seconds(3)
@@ -265,7 +274,7 @@ extension LiveRead where Value == Screen {
     path: String,
     api: any ScreenrAPI,
     clock: any Clock<Duration> = ContinuousClock(),
-    onLoad: @escaping @MainActor (Screen) -> Void = { _ in }
+    onLoad: @escaping @MainActor (Screen, ReadChange) -> Void = { _, _ in }
   ) {
     self.init(.screen(path: path), api: api, clock: clock, onLoad: onLoad)
   }

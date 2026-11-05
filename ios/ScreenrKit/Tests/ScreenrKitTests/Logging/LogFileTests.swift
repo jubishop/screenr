@@ -35,6 +35,26 @@ struct LogFileTests {
     #expect(records.last?["message"] as? String == "Signed in")
   }
 
+  // Starting a log again in the same process, as a share extension that iOS
+  // keeps for the next share does, keeps its one writer, so each line goes in
+  // once.
+  @Test func keepsOneWriterForEachFile() async throws {
+    defer { directory.remove() }
+    let router = LogRouter()
+    let first = router.file("share", in: directory.url)
+    let again = router.file("share", in: directory.url)
+    let other = router.file("notifications", in: directory.url)
+
+    Log(.app, router: router).info("Shared a link")
+    await first.flush()
+    await other.flush()
+
+    #expect(again === first)
+    #expect(other !== first)
+    #expect(try Self.records(in: first.currentURL).count == 1)
+    #expect(try Self.records(in: other.currentURL).count == 1)
+  }
+
   @Test func leavesDebugLinesToTheUnifiedLog() async throws {
     defer { directory.remove() }
     let file = LogFile(directory: directory.url, name: "app", launchID: launch)

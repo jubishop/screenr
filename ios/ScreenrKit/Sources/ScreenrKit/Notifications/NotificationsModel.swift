@@ -195,7 +195,7 @@ public final class NotificationsModel {
     shell: ShellModel,
     clock: any Clock<Duration>
   ) -> LiveRead<NotificationPage> {
-    LiveRead(request, api: shell.api, clock: clock) { [weak shell] page in
+    LiveRead(request, api: shell.api, clock: clock) { [weak shell] page, _ in
       shell?.setUnreadNotifications(page.unread)
     }
   }

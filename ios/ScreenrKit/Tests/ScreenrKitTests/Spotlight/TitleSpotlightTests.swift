@@ -38,6 +38,27 @@ struct TitleSpotlightTests {
     return try ScreenrJSON.decoder().decode(Screen.self, from: try JSONEncoder().encode(changed))
   }
 
+  private static func signedIn() throws -> SessionStore {
+    try SessionStore(keychain: InMemoryKeychain(token: "signed-token"))
+  }
+
+  // A record file in a directory of its own, which the test removes.
+  private static func temporaryRecord() -> URL {
+    FileManager.default.temporaryDirectory
+      .appending(path: UUID().uuidString, directoryHint: .isDirectory)
+      .appending(path: "titles.json")
+  }
+
+  private static func remove(_ record: URL) {
+    do {
+      try FileManager.default.removeItem(at: record.deletingLastPathComponent())
+    } catch CocoaError.fileNoSuchFile {
+      // Nothing was written.
+    } catch {
+      Issue.record("Could not remove \(record.path()): \(error)")
+    }
+  }
+
   @Test func findsTheTitlesEachScreenShowsTheViewerInteractedWith() throws {
     // Want to watch, Recommend, a top 10 rank, and other statuses, but not
     // friends' titles the viewer has done nothing with.
@@ -118,6 +139,73 @@ struct TitleSpotlightTests {
         .remove(["movie:105"]),
       ]
     )
+  }
+
+  // Finding the titles, reading their posters, and writing the index all
+  // happen off the main actor, which draws the screens.
+  @Test func writesOffTheMainActor() async throws {
+    let (spotlight, index, _) = try spotlight()
+
+    spotlight.screenLoaded(try screen("screen/feed/default"))
+    spotlight.screenLoaded(try screen("screen/title/full-top-ten"))
+    await spotlight.finishWrites()
+
+    #expect(index.changes.count == 2)
+    #expect(index.mainThreadWrites == 0)
+  }
+
+  // The record keeps what the index holds, so a later launch writes only
+  // what changed since, until the session ends.
+  @Test func remembersTheIndexedTitlesAcrossLaunches() async throws {
+    let record = Self.temporaryRecord()
+    defer { Self.remove(record) }
+    let feed = try screen("screen/feed/default")
+    let indexed = ["movie:104", "movie:103", "tv:201", "movie:102", "movie:101", "tv:202"]
+    let first = RecordingTitleIndex()
+    let launch = TitleSpotlight(index: first, session: try Self.signedIn(), record: record)
+    launch.screenLoaded(feed)
+    await launch.finishWrites()
+
+    let next = RecordingTitleIndex()
+    let session = try Self.signedIn()
+    let relaunch = TitleSpotlight(index: next, session: session, record: record)
+    relaunch.screenLoaded(feed)
+    relaunch.screenLoaded(try screen("screen/title/full-top-ten"))
+    await relaunch.finishWrites()
+
+    #expect(first.changes == [.index(indexed)])
+    #expect(next.changes == [.remove(["movie:105"])])
+
+    try session.end(token: "signed-token")
+    await relaunch.finishWrites()
+    let after = RecordingTitleIndex()
+    let third = TitleSpotlight(index: after, session: try Self.signedIn(), record: record)
+    third.screenLoaded(feed)
+    await third.finishWrites()
+
+    #expect(next.changes.last == .removeAll)
+    #expect(after.changes == [.index(indexed)])
+  }
+
+  // A title removed from the index leaves the record, so it goes in again
+  // after a later launch.
+  @Test func forgetsARemovedTitleAcrossLaunches() async throws {
+    let record = Self.temporaryRecord()
+    defer { Self.remove(record) }
+    let saved = TitleSummary(id: "movie:105", name: "Quiet Orbit", kind: .movie)
+    let first = RecordingTitleIndex()
+    let launch = TitleSpotlight(index: first, session: try Self.signedIn(), record: record)
+    launch.saved(saved)
+    launch.screenLoaded(try screen("screen/title/full-top-ten"))
+    await launch.finishWrites()
+
+    let next = RecordingTitleIndex()
+    let relaunch = TitleSpotlight(index: next, session: try Self.signedIn(), record: record)
+    relaunch.saved(saved)
+    await relaunch.finishWrites()
+
+    #expect(first.changes == [.index(["movie:105"]), .remove(["movie:105"])])
+    #expect(next.changes == [.index(["movie:105"])])
   }
 
   @Test func indexesAShortcutsSave() async throws {
@@ -238,6 +326,7 @@ final class RecordingTitleIndex: TitleIndex {
     var changes: [Change] = []
     var titles: [TitleSummary] = []
     var failing = false
+    var mainThreadWrites = 0
   }
 
   private let state = Mutex(State())
@@ -249,6 +338,8 @@ final class RecordingTitleIndex: TitleIndex {
     get { state.withLock { $0.failing } }
     set { state.withLock { $0.failing = newValue } }
   }
+  // How many writes ran on the main thread.
+  var mainThreadWrites: Int { state.withLock { $0.mainThreadWrites } }
 
   func index(_ titles: [TitleSummary]) async throws {
     try record(.index(titles.map(\.id)))
@@ -264,9 +355,13 @@ final class RecordingTitleIndex: TitleIndex {
   }
 
   private func record(_ change: Change) throws {
+    let onMainThread = Self.isMainThread()
     try state.withLock { state in
+      if onMainThread { state.mainThreadWrites += 1 }
       guard !state.failing else { throw WriteFailed() }
       state.changes.append(change)
     }
   }
+
+  private static func isMainThread() -> Bool { Thread.isMainThread }
 }

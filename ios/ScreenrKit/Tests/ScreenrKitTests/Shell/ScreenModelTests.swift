@@ -105,7 +105,9 @@ struct ScreenModelTests {
     defer { api.open() }
     let clock = TestClock()
     var loaded: [Screen] = []
-    let model = ScreenModel(path: "/", api: api, clock: clock) { loaded.append($0) }
+    let model = ScreenModel(path: "/", api: api, clock: clock) { screen, _ in
+      loaded.append(screen)
+    }
     model.appeared(appActive: true)
     await api.waitForRequests(1)
     let polling = try #require(model.pollTask)
@@ -430,18 +432,24 @@ struct ScreenModelTests {
     model.disappeared()
   }
 
+  // Each read's screen, and whether it changed since the read before.
   @Test func reportsEachLoadedScreen() async throws {
-    let api = ScriptedAPI([.screen(feed), .screen(emptyFeed)])
+    let api = ScriptedAPI([.screen(feed), .screen(feed), .screen(emptyFeed)])
     let clock = TestClock()
-    let loaded = Mutex<[Screen]>([])
-    let model = ScreenModel(path: "/", api: api, clock: clock) { screen in
-      loaded.withLock { $0.append(screen) }
+    let screens = Mutex<[Screen]>([])
+    let changes = Mutex<[ReadChange]>([])
+    let model = ScreenModel(path: "/", api: api, clock: clock) { screen, change in
+      screens.withLock { $0.append(screen) }
+      changes.withLock { $0.append(change) }
     }
     model.appeared(appActive: true)
     await clock.waitForSleep(until: .seconds(3))
     clock.advance(by: .seconds(3))
     await clock.waitForSleep(until: .seconds(6))
+    clock.advance(by: .seconds(3))
+    await clock.waitForSleep(until: .seconds(9))
 
-    #expect(loaded.withLock { $0 } == [feed, emptyFeed])
+    #expect(screens.withLock { $0 } == [feed, feed, emptyFeed])
+    #expect(changes.withLock { $0 } == [.changed, .unchanged, .changed])
   }
 }

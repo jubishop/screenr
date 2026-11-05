@@ -4,6 +4,14 @@ import Foundation
 // and the fixture API answer requests in process.
 public protocol HTTPTransport: Sendable {
   func send(_ request: URLRequest) async throws -> (Data, HTTPURLResponse)
+  // Lets the requests in flight finish, then releases the connections. The
+  // transport sends nothing after.
+  func close()
+}
+
+extension HTTPTransport {
+  // An in-process transport holds no connections.
+  public func close() {}
 }
 
 public struct URLSessionTransport: HTTPTransport {
@@ -36,5 +44,9 @@ public struct URLSessionTransport: HTTPTransport {
       throw URLError(.badServerResponse)
     }
     return (data, response)
+  }
+
+  public func close() {
+    session.finishTasksAndInvalidate()
   }
 }

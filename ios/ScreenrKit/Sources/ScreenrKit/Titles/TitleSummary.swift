@@ -2,7 +2,7 @@ import Foundation
 
 // A movie or show as Siri, the Shortcuts app, and Spotlight show it: its name,
 // kind and year, and poster. `id` is the API's title ID, such as `tv:201`.
-public struct TitleSummary: Hashable, Sendable, Identifiable {
+public struct TitleSummary: Codable, Hashable, Sendable, Identifiable {
   public let id: String
   public let name: String
   public let kind: TitleKind
