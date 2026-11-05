@@ -1357,6 +1357,9 @@ type AuthCase = {
   // The member whose session sends the request.
   viewer?: Viewer;
   before?: (post: AuthPost, codes: string[]) => Promise<void>;
+  // Undoes what `before` changed beyond the rows each case restores, such as
+  // a trigger.
+  after?: () => Promise<void>;
   // The lines Better Auth prints while answering, which the case captures
   // and checks.
   printed?: string[];
@@ -1508,6 +1511,26 @@ const authPosts: Record<string, Record<string, AuthCase>> = {
       status: 200,
       viewer: "alice",
       body: {},
+    },
+    failed: {
+      description:
+        "A sign-out whose session survived, so the member stays signed in and can try again.",
+      status: 500,
+      viewer: "alice",
+      body: {},
+      // The session's row survives Better Auth's delete.
+      before: async () => {
+        await db.query(`CREATE OR REPLACE FUNCTION keep_session() RETURNS trigger
+          LANGUAGE plpgsql AS $$BEGIN RETURN NULL; END$$;
+          CREATE OR REPLACE TRIGGER keep_session BEFORE DELETE ON session
+          FOR EACH ROW EXECUTE FUNCTION keep_session()`);
+      },
+      after: async () => {
+        await db.query(
+          "DROP TRIGGER IF EXISTS keep_session ON session; DROP FUNCTION IF EXISTS keep_session()",
+        );
+      },
+      printed: ['{"event":"sign out failed"}'],
     },
   },
 };
@@ -1857,8 +1880,9 @@ for (const [file, item] of cases.filter(([, item]) => changes(item)))
     await record(file, item, world);
   });
 for (const [file, path, item] of authCases)
-  test(file, async () => {
+  test(file, async (t) => {
     await saved.restore();
+    if (item.after) t.after(item.after);
     await recordAuth(file, path, item);
   });
 for (const [file, path, item] of authReadCases)

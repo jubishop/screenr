@@ -1,0 +1,16 @@
+{
+  "description": "A sign-out whose session survived, so the member stays signed in and can try again.",
+  "viewer": "alice",
+  "request": {
+    "method": "POST",
+    "action": "sign-out",
+    "path": "/api/auth/sign-out",
+    "body": {}
+  },
+  "response": {
+    "status": 500,
+    "body": {
+      "message": "Could not sign out. Try again."
+    }
+  }
+}

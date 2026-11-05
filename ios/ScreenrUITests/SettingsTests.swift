@@ -280,6 +280,38 @@ final class SettingsTests: XCTestCase {
     XCTAssertFalse(app.tab("You").exists)
   }
 
+  // A sign-out the server could not confirm says so, and a failed read
+  // beneath the alert, as when the phone goes offline, leaves it up.
+  @MainActor
+  func testKeepsTheSignOutFailureThroughAFailedRead() throws {
+    let log = RequestLog.temporary()
+    let outage = FixtureOutage()
+    let app = openSettings(log: log, overrides: ["auth/sign-out/failed"], outage: outage)
+    let signOut = app.buttons["Sign out"]
+    app.scrollTo(signOut)
+    signOut.tap()
+    let alert = app.alerts["Could not sign out"]
+    XCTAssertTrue(alert.waitForExistence(timeout: 10))
+    XCTAssertTrue(alert.staticTexts["Could not sign out. Try again."].exists)
+
+    // The first failed read has replaced the sections beneath with the error
+    // by the time the app reads them again.
+    outage.begin()
+    let reads = try log.screenPaths().count
+    wait(
+      for: [log.expectation { $0.dropFirst(reads).filter { $0 == "/account" }.count >= 2 }],
+      timeout: 15
+    )
+    XCTAssertTrue(alert.exists)
+    alert.buttons["OK"].tap()
+    XCTAssertTrue(alert.waitForNonExistence(timeout: 10))
+    let failure = app.staticTexts["Screenr didn't load"]
+    XCTAssertTrue(failure.exists)
+
+    outage.end()
+    XCTAssertTrue(failure.waitForNonExistence(timeout: 10))
+  }
+
   // At the largest accessibility text size, every Settings control and Invite
   // friends' controls can still be reached and tapped.
   @MainActor
@@ -319,11 +351,19 @@ final class SettingsTests: XCTestCase {
   @MainActor
   private func openSettings(
     log: RequestLog,
+    overrides: [String] = [],
     textSize: String? = nil,
     outage: FixtureOutage? = nil
   ) -> XCUIApplication {
     let app = XCUIApplication()
-    app.launch(with: FixtureLaunch(requestLog: log.file, textSize: textSize, outage: outage))
+    app.launch(
+      with: FixtureLaunch(
+        overrides: overrides,
+        requestLog: log.file,
+        textSize: textSize,
+        outage: outage
+      )
+    )
     XCTAssertTrue(app.tab("You").waitForExistence(timeout: 10))
     app.tab("You").tap()
     app.buttons["Settings"].tap()

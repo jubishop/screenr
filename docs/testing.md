@@ -374,8 +374,8 @@ Each file holds one case, named for the state it shows, such as `default`,
 - `auth/<route>/<case>.json`: Better Auth's routes that the app uses, as
   they succeed, such as a sign-in with its `set-auth-token` header and the
   signed-in `user.id`, and the errors the app shows as the server words them,
-  such as the code request limits, too many wrong codes, and a provider's
-  token the server rejects, and the
+  such as the code request limits, too many wrong codes, a provider's token
+  the server rejects, and a sign-out the server could not confirm, and the
   [invitation check](data-and-access.md#invitation-tokens)'s answers.
   `<route>` is the path under `/api/auth/`, which the request's `action` also
   names. An error body is `{"message": "<message>"}`, with Better Auth's

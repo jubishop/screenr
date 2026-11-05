@@ -56,6 +56,7 @@ struct RequestTests {
       .linkGoogle(idToken: "fixture-google-id-token", nonce: "fixture-nonce")
     ),
     Shape("auth/sign-out/default", .signOut),
+    Shape("auth/sign-out/failed", .signOut),
     Shape("actions/activity/recommend", .activity(title: "movie:105", .recommended, value: true)),
     Shape(
       "actions/activity/want-to-watch",
