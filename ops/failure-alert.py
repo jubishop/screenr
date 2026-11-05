@@ -42,6 +42,13 @@ JOBS = {
         'PostgreSQL update check failed',
         'The daily PostgreSQL update check could not list pending package updates, save its '
         'state, or email its notice. A pending PostgreSQL update may go unreported.'),
+    'screenr-memory-check.service': (
+        'service near its memory limit or OOM-killed',
+        'The daily memory check found a run of the Screenr web application, email worker, or '
+        'database that peaked above 75% of its MemoryMax, or a process of one killed by the OOM '
+        'killer, or it could not read the journal. Its journal names the service and when. For '
+        'the worker, follow https://github.com/jubishop/screenr/blob/main/docs/deployment.md'
+        '#worker-memory-headroom'),
 }
 SERVICES = {
     'screenr-web.service': 'web application',
