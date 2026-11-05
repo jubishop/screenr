@@ -544,7 +544,7 @@ the account forget it. [Settings](#settings) ends with `SignOutButton`.
 
 | Piece | Where | What it does |
 | --- | --- | --- |
-| `Destination` | ScreenrKit `Navigation/` | One case per member route, plus `join` and `notFound`. `Destination(path:)` and `path` match the web's member routes, `Destination(url:)` reads universal links and `screenr-dev://` links, `shareURL` builds a screenr.club link, and `pageName(for:)` names the page. |
+| `Destination` | ScreenrKit `Navigation/` | One case per member route, plus `join` and `notFound`. `Destination(path:)` and `path` match the web's member routes, as the [shared cases](#shared-cases) check, `Destination(url:)` reads universal links and `screenr-dev://` links, `shareURL` builds a screenr.club link, and `pageName(for:)` names the page. |
 | `Router` | ScreenrKit `Navigation/` | `@Observable`: the selected tab, each tab's stack, and the sheet. `open(_:)` takes links from outside the app, and puts an invitation link's token in `PendingInvitation`. The last link waits until `screenLoaded(_:)` reports the screen that shows it, so `sessionEnded(_:)` can keep it across an expired session. |
 | `ShellModel` | ScreenrKit `Shell/` | `@Observable`: the account check, the viewer, the bell's unread count, the app's activity, `screenModel(for:)`, `pushArrived()`, `refreshLiveReads()`, and `onUnreadCount(_:)`, which reports each unread count, such as for the app icon's badge. Views read it with `@Environment(ShellModel.self)`. |
 | `LiveRead`, `ScreenModel` | ScreenrKit `Shell/` | A GET request's `phase` (`loading`, `loaded`, or `failed`) and its polling. `ScreenModel` is `LiveRead<Screen>`; other live reads, such as the notifications sheet's, use `LiveRead(.notifications(), api:)`. |
@@ -1742,6 +1742,13 @@ ScreenrKit's run alike, so the two clients cannot drift apart on rules that
 both still apply. `feed-layout.json` lays out feeds after New activity
 ([unified title feed](../docs/title-feed.md#new-activity)): the web's
 `tests/app/feed-layout.test.ts` and `SharedFeedLayoutTests` run every case.
+`member-routes.json` lists member paths with their canonical paths and route
+patterns, which the web's `src/member-routes.ts`, `Destination`, and
+`RoutePattern` must agree on: `tests/app/member-routes.test.ts`,
+`DestinationTests`, and `RoutePatternTests` run every case. The web's routes
+also hold Find a title's filters and a paged history's window, which the app
+adds to its screen reads through `FindModel` and `HistoryWindow`, so those
+cases stay in the web's test.
 Edit the cases by hand, and run both suites after a change.
 
 ## Logging

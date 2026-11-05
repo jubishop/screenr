@@ -1,7 +1,12 @@
+import type { SaveSurface } from "./shared";
+
 // Member pages share one catch-all route. The page, the screen loader, and the
 // browser shell read requested paths through this parser, so they agree on
-// which screen a URL names and which of its query parameters matter. Sign-in
-// accepts only these paths as return paths.
+// which screen a URL names and which of its query parameters matter, and every
+// member link is built with memberPath. Sign-in accepts only these paths as
+// return paths. The iPhone app's Destination and RoutePattern read the same
+// paths, and all three run the cases in
+// ios/ScreenrKit/SharedCases/member-routes.json.
 type ItemTarget = { item?: string; reply?: string };
 // Find a title's tabs. Suggestions is the default, so only Friends recommend
 // appears in the URL.
@@ -30,6 +35,16 @@ export type ListMode = "theaters";
 export type HistoryWindow = { since?: string; before?: string };
 // The newest page, which each visit starts from.
 export const newestHistory: HistoryWindow = { before: "now" };
+// The lists that open title pages with `from`, so a Want to watch save there
+// reports where the member found the title (docs/usage-telemetry.md). A
+// title page ignores any other value.
+const titleOrigins = [
+  "friends_recommend",
+  "suggestion_recommendation",
+  "suggestion",
+  "watch_together",
+] as const satisfies readonly SaveSurface[];
+export type TitleOrigin = (typeof titleOrigins)[number];
 export type MemberRoute =
   | ({ kind: "feed" } & ItemTarget & HistoryWindow)
   | ({ kind: "search"; q?: string; tab?: SearchTab } & FindFilters)
@@ -37,7 +52,7 @@ export type MemberRoute =
   | { kind: "invites" }
   | { kind: "account" }
   | { kind: "watch-together"; with: string[]; mode?: ListMode }
-  | ({ kind: "title"; id: string } & ItemTarget)
+  | ({ kind: "title"; id: string; from?: TitleOrigin } & ItemTarget)
   | ({ kind: "profile"; username: string } & HistoryWindow)
   | { kind: "want-to-watch"; username: string; mode?: ListMode }
   | { kind: "conversation"; id: string; reply?: string }
@@ -60,6 +75,7 @@ export function parseMemberRoute(path: string): MemberRoute {
   const history = () => ({ since: param("since"), before: param("before") });
   const mode = param("mode") === "theaters" ? "theaters" : undefined;
   const type = param("type");
+  const from = titleOrigins.find((surface) => surface === param("from"));
   let parts: string[];
   try {
     parts = url.pathname.split("/").filter(Boolean).map(decodeURIComponent);
@@ -88,7 +104,7 @@ export function parseMemberRoute(path: string): MemberRoute {
     if (page) return { kind: page };
   }
   if (section === "titles" && rest.length === 2)
-    return { kind: "title", id: rest.join(":"), ...target() };
+    return { kind: "title", id: rest.join(":"), ...target(), from };
   if (section === "people" && rest.length === 1)
     return { kind: "profile", username: rest[0], ...history() };
   if (section === "people" && rest.length === 2 && rest[1] === "want-to-watch")
@@ -141,7 +157,8 @@ export const initialFindFilters: FindFilters = { finished: "hidden" };
 /**
  * The path the web reads for the member screen at `path`: Find a title's
  * with `filters`, and the friends feed's or a profile's with `history`, in
- * place of any in the address, and any other screen's own path.
+ * place of any in the address, a title's without the list that opened it,
+ * which doesn't change its screen, and any other screen's own path.
  */
 export function screenPath(
   path: string,
@@ -162,6 +179,7 @@ export function screenPath(
       since: history.since,
       before: history.before,
     });
+  if (route.kind === "title") return memberPath({ ...route, from: undefined });
   return path;
 }
 
@@ -185,6 +203,7 @@ function withQuery(
   {
     item,
     reply,
+    from,
     tab,
     q,
     with: usernames = [],
@@ -197,6 +216,7 @@ function withQuery(
   }: ItemTarget &
     FindFilters &
     HistoryWindow & {
+      from?: TitleOrigin;
       tab?: SearchTab;
       q?: string;
       with?: string[];
@@ -206,6 +226,7 @@ function withQuery(
   const query = new URLSearchParams();
   if (item) query.set("item", item);
   if (reply) query.set("reply", reply);
+  if (from) query.set("from", from);
   if (tab) query.set("tab", tab);
   if (q) query.set("q", q);
   for (const username of usernames) query.append("with", username);

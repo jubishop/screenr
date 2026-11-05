@@ -2,6 +2,7 @@
 import { Link } from "./pending-navigation";
 import { useRef, useState } from "react";
 import type { Person } from "../shared";
+import { memberPath } from "../member-routes";
 import { useInteractive } from "./client";
 import { ActionButton } from "./action-button";
 
@@ -130,7 +131,7 @@ export function AccountProfileEditor({
             </button>
             <Link
               className="secondary button"
-              href={`/people/${user.username}`}
+              href={memberPath({ kind: "profile", username: user.username })}
               prefetch={false}
             >
               View your profile

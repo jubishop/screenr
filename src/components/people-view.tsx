@@ -3,6 +3,7 @@ import { Link } from "./pending-navigation";
 import { useRef, useState, type ReactNode } from "react";
 import type { ScreenData } from "../server/screens";
 import type { Person } from "../shared";
+import { memberPath } from "../member-routes";
 import { useInteractive } from "./client";
 import { Avatar } from "./avatar";
 import { useActionError } from "./action-error";
@@ -93,7 +94,7 @@ function PersonRow({
       ) : (
         <Link
           className="person"
-          href={`/people/${person.username}`}
+          href={memberPath({ kind: "profile", username: person.username })}
           prefetch={false}
         >
           {name}
@@ -226,7 +227,10 @@ export function PeopleView({
             onSubmit={(e) => {
               e.preventDefault();
               window.location.assign(
-                `/people/${encodeURIComponent(query.trim().toLowerCase())}`,
+                memberPath({
+                  kind: "profile",
+                  username: query.trim().toLowerCase(),
+                }),
               );
             }}
           >
@@ -327,7 +331,10 @@ export function PeopleView({
                       <span key={mutual.user_id}>
                         {index > 0 && ", "}
                         <Link
-                          href={`/people/${mutual.username}`}
+                          href={memberPath({
+                            kind: "profile",
+                            username: mutual.username,
+                          })}
                           prefetch={false}
                         >
                           {mutual.display_name} (@{mutual.username})

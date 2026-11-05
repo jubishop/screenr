@@ -15,7 +15,7 @@ extension APIRequest where Response == Screen {
       endpoint: .action("screen"),
       query: ["path": path],
       visit: visit,
-      route: "/api/screenr/screen?path=" + MemberPath.pattern(of: path)
+      route: "/api/screenr/screen?path=" + RoutePattern(path: path).path
     )
   }
 }
@@ -448,24 +448,5 @@ extension APIRequest {
       body: .json(.members(body)),
       invitation: invitation
     )
-  }
-}
-
-// Member paths reduced to their route patterns, which name no person, title,
-// or search, for logs and error reports.
-enum MemberPath {
-  static func pattern(of path: String) -> String {
-    let parts = path.prefix { $0 != "?" && $0 != "#" }.split(separator: "/")
-    switch parts.count {
-    case 0: return "/"
-    case 1 where ["search", "people", "invites", "account", "watch-together"].contains(parts[0]):
-      return "/\(parts[0])"
-    case 2 where parts[0] == "people": return "/people/:username"
-    case 3 where parts[0] == "people" && parts[2] == "want-to-watch":
-      return "/people/:username/want-to-watch"
-    case 2 where parts[0] == "conversations": return "/conversations/:id"
-    case 3 where parts[0] == "titles": return "/titles/:kind/:id"
-    default: return "/:unknown"
-    }
   }
 }

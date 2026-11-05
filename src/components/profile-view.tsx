@@ -105,7 +105,10 @@ export function ProfileView({
                 <div className="person-row link-row" key={person.user_id}>
                   <Link
                     className="person"
-                    href={`/people/${person.username}`}
+                    href={memberPath({
+                      kind: "profile",
+                      username: person.username,
+                    })}
                     prefetch={false}
                   >
                     <Avatar person={person} />
@@ -201,7 +204,10 @@ function ProfileActions({
           {profile.accepted_at ? (
             <Link
               className="primary button"
-              href={`/watch-together?with=${encodeURIComponent(profile.username)}`}
+              href={memberPath({
+                kind: "watch-together",
+                with: [profile.username],
+              })}
               prefetch={false}
             >
               Watch together
