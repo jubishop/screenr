@@ -288,7 +288,8 @@ public enum LiveReadTiming {
 extension LiveRead where Value == Screen {
   // The screen at a member path, such as `/titles/tv/201`. A paged screen,
   // the friends feed or a profile, starts from its newest page, and each
-  // read moves later ones to the window it names.
+  // read moves later ones to the window it names. Any other screen keeps
+  // reading its own path.
   public convenience init(
     path: String,
     paged: Bool = false,
@@ -302,7 +303,9 @@ extension LiveRead where Value == Screen {
       clock: clock,
       onLoad: onLoad,
       follow: { screen, sent in
-        guard let page = screen.historyPage, let path = sent.query["path"] else { return nil }
+        guard paged, let page = screen.historyPage, let path = sent.query["path"] else {
+          return nil
+        }
         return .screen(path: HistoryWindow(after: page).path(path), visit: sent.visit)
       }
     )

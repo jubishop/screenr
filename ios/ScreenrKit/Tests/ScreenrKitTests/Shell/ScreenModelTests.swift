@@ -19,6 +19,8 @@ struct ScreenModelTests {
     emptyFeed = try screen("screen/feed/empty")
   }
 
+  // A screen that does not page keeps reading its own path, even when the
+  // feed it reads names a window.
   @Test func readsWhenItAppearsAndPollsEveryThreeSeconds() async throws {
     let api = ScriptedAPI([.screen(feed), .screen(feed), .screen(emptyFeed)])
     let clock = TestClock()
