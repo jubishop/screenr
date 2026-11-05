@@ -78,7 +78,7 @@ struct FixtureDecodingTests {
   // The server's tests keep exactly one file for each of their cases, so
   // this floor is the count checked in, lowered only when a case is removed.
   @Test func findsTheFixtures() {
-    #expect(Self.fixtureNames().count >= 117)
+    #expect(Self.fixtureNames().count >= 119)
   }
 
   @Test(arguments: fixtureNames())
@@ -216,6 +216,18 @@ struct FixtureDecodingTests {
     #expect(search.suggestions.map(\.id) == ["movie:105", "tv:204"])
     #expect(search.recommendations.map(\.id) == ["movie:101", "tv:201", "movie:105"])
     #expect(search.recommendations.first?.recommendedBy.first?.rank == 1)
+    #expect(search.finishedRecommendations == nil)
+    // A read that hides finished titles counts the ones it left out.
+    guard case .search(let hidden) = try Self.screen("screen/search/finished-hidden").content,
+      case .search(let shown) = try Self.screen("screen/search/finished-shown").content
+    else {
+      Issue.record("Expected Find a title")
+      return
+    }
+    #expect(hidden.recommendations.isEmpty)
+    #expect(hidden.finishedRecommendations == 2)
+    #expect(shown.recommendations.map(\.viewerStatus) == [.finished, .finished])
+    #expect(shown.finishedRecommendations == nil)
 
     guard case .account(let account) = try Self.screen("screen/account/default").content else {
       Issue.record("Expected Account")

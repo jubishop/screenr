@@ -29,7 +29,8 @@ const { findAction } = await import("../../src/server/actions");
 const { readVersion } = await import("../../src/server/screens");
 const { parseMemberRoute } = await import("../../src/member-routes");
 const { migrate } = await import("../../scripts/migrate");
-const { updateTopTen } = await import("../../src/server/title-actions");
+const { updateTopTen, updateWatchStatus } =
+  await import("../../src/server/title-actions");
 const { createDiscussionPost } = await import("../../src/server/comments");
 const { createAuth } = await import("../../src/server/auth");
 const { completeSignup } = await import("../../src/server/invitations");
@@ -130,6 +131,24 @@ const afterPatJoins = (item: Case): Case => ({
       "pat",
       world.invitations.spare,
     );
+    return item.request(world);
+  },
+});
+
+// A read after Alice finishes the two movies her friends recommend, Night
+// Crossing and Winter Garden, so Find a title's Movies filter has only
+// finished titles for her.
+const afterAliceFinishesMovies = (item: Case): Case => ({
+  ...item,
+  changesWorld: true,
+  request: async (world) => {
+    for (const title of ["movie:101", "movie:105"])
+      await updateWatchStatus(
+        world.users.alice,
+        title,
+        "finished",
+        "2026-10-02",
+      );
     return item.request(world);
   },
 });
@@ -255,6 +274,21 @@ const screens: Record<MemberRoute["kind"], Record<string, Case>> = {
       // The unknown availability's provider request fails.
       failures: ["catalog request failed"],
     },
+    // The iPhone app sends Find's filters in the path, as the web does.
+    "finished-hidden": afterAliceFinishesMovies(
+      screen(
+        "alice",
+        "/search?type=movie&finished=hidden",
+        "Find a title with Movies on and finished titles hidden, after Alice finishes both movies her friends recommend: none listed, and how many the read left out.",
+      ),
+    ),
+    "finished-shown": afterAliceFinishesMovies(
+      screen(
+        "alice",
+        "/search?type=movie",
+        "The same read with Show finished on: both finished movies.",
+      ),
+    ),
   },
   people: {
     default: screen(

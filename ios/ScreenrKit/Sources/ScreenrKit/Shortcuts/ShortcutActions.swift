@@ -137,17 +137,17 @@ public final class ShortcutActions {
   public func friendsRecommend() async throws(Failure) -> FriendsRecommendSummary {
     try requireSession()
     let page = try await friendsRecommendPage()
-    let unfinished = page.recommendations.filter { $0.viewerStatus != .finished }
-    let titles = unfinished.prefix(Self.friendsRecommendLimit).map { TitleSummary($0.title) }
+    let titles = page.recommendations.prefix(Self.friendsRecommendLimit)
+      .map { TitleSummary($0.title) }
     let message: String
-    if page.recommendations.isEmpty {
-      message = "No recommendations yet."
-    } else if titles.isEmpty {
-      message = "You finished every title your friends recommend."
-    } else {
-      let more = unfinished.count - titles.count
+    if !titles.isEmpty {
+      let more = page.recommendations.count - titles.count
       let names = titles.map(\.name) + (more > 0 ? ["\(more) more"] : [])
       message = "Your friends recommend \(Self.list(names))."
+    } else if (page.finishedRecommendations ?? 0) > 0 {
+      message = "You finished every title your friends recommend."
+    } else {
+      message = "No recommendations yet."
     }
     return FriendsRecommendSummary(titles: titles, message: message)
   }
@@ -193,9 +193,11 @@ public final class ShortcutActions {
     return (page, screen.user.userId)
   }
 
-  // Find a title, whose page holds Friends recommend.
+  // Find a title, whose page holds Friends recommend, read as the tab first
+  // reads it. Finished titles stay out, so they leave room for others in
+  // the capped list, and the page counts them.
   private func friendsRecommendPage() async throws(Failure) -> SearchScreen {
-    let screen = try await send(.screen(path: Destination.search().path, visit: .never))
+    let screen = try await send(.screen(path: FindModel.initialScreenPath, visit: .never))
     guard case .search(let page) = screen.content else { throw .failed(Self.fallback) }
     return page
   }

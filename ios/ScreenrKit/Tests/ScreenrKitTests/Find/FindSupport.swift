@@ -217,15 +217,22 @@ enum FindData {
     return .integer(rank)
   }
 
+  // A page as a read returns it, with `finishedRecommendations` only when the
+  // read hid finished titles.
   static func page(
     suggestions: [JSONValue] = [],
     recommendations: [JSONValue] = [],
-    serviceIds: [String] = []
+    serviceIds: [String] = [],
+    finishedRecommendations: Int? = nil
   ) throws -> SearchScreen {
-    try decode([
+    var page: [String: JSONValue] = [
       "suggestions": .array(suggestions),
       "recommendations": .array(recommendations),
       "serviceIds": .array(serviceIds.map { .string($0) }),
-    ])
+    ]
+    if let finishedRecommendations {
+      page["finishedRecommendations"] = .integer(finishedRecommendations)
+    }
+    return try decode(.object(page))
   }
 }

@@ -58,7 +58,8 @@ final class ShellTests: XCTestCase {
     wait(
       for: [
         log.expectation { paths in
-          ["/", "/people", "/people/alice", "/account", "/search"].allSatisfy(paths.contains)
+          ["/", "/people", "/people/alice", "/account", "/search?finished=hidden"]
+            .allSatisfy(paths.contains)
         }
       ],
       timeout: 10
@@ -121,7 +122,7 @@ final class ShellTests: XCTestCase {
     try open(
       app,
       "search?q=Lost&tab=friends-recommend",
-      reads: "/search",
+      reads: "/search?finished=hidden",
       log: log,
       title: "Find a title",
       tab: "Find a title"

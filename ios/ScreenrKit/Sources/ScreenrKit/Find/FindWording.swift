@@ -4,6 +4,8 @@ import Foundation
 public enum FindWording {
   public static let tooShort = "Enter at least two characters to search."
   public static let servicesUnavailable = "Your services could not be loaded. Try refreshing."
+  static let noSuggestions =
+    "No suggestions on your services or free. Turn off My services to see all suggestions."
 
   // Friends recommend's empty message: the titles Show finished would show,
   // or that the filters leave none.

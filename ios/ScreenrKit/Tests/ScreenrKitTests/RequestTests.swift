@@ -170,6 +170,8 @@ struct RequestTests {
       .screen(path: "/titles/tv/201?item=e22cb5a7-a2dd-4582-8f62-db3e31f2761b&reply=5")
     ),
     Shape("screen/watch-together/default", .screen(path: "/watch-together?with=ben")),
+    Shape("screen/search/finished-hidden", .screen(path: "/search?type=movie&finished=hidden")),
+    Shape("screen/search/finished-shown", .screen(path: "/search?type=movie")),
   ]
 
   @Test(arguments: shapes)

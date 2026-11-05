@@ -344,6 +344,50 @@ struct ScreenModelTests {
     #expect(api.reads.count == 1)
   }
 
+  // A screen read with a new path, such as Find a title's with changed
+  // filters, reads at once in place of the read in flight, keeps the screen
+  // shown until it answers, and polls the new path after.
+  @Test func readsAChangedPathAtOnceAndKeepsTheScreenUntilItAnswers() async throws {
+    let api = ScriptedAPI([.screen(feed), .hang, .screen(emptyFeed)])
+    let clock = TestClock()
+    let model = ScreenModel(path: "/search", api: api, clock: clock)
+    model.appeared(appActive: true)
+    await clock.waitForSleep(until: .seconds(3))
+    clock.advance(by: .seconds(3))
+    await api.waitForReads(2)
+
+    model.change(path: "/search?type=tv")
+    #expect(model.phase == .loaded(feed))
+    await clock.waitForSleep(until: .seconds(6))
+
+    #expect(model.path == "/search?type=tv")
+    #expect(api.reads == ["/search", "/search", "/search?type=tv"])
+    #expect(model.phase == .loaded(emptyFeed))
+
+    // The same path again reads nothing new.
+    model.change(path: "/search?type=tv")
+    clock.advance(by: .seconds(3))
+    await clock.waitForSleep(until: .seconds(9))
+    #expect(api.reads == ["/search", "/search", "/search?type=tv", "/search?type=tv"])
+    #expect(api.triggers == [.demand, .poll, .demand, .poll])
+    model.disappeared()
+  }
+
+  // A hidden screen reads a changed path once it shows again.
+  @Test func readsAPathChangedWhileHiddenWhenItShows() async throws {
+    let api = ScriptedAPI([.screen(feed)])
+    let clock = TestClock()
+    let model = ScreenModel(path: "/search?finished=hidden", api: api, clock: clock)
+
+    model.change(path: "/search")
+    #expect(api.reads.isEmpty)
+    model.appeared(appActive: true)
+    await clock.waitForSleep(until: .seconds(3))
+
+    #expect(api.reads == ["/search"])
+    model.disappeared()
+  }
+
   @Test func namesTheScreenARedirectOpens() async throws {
     let redirect = try screen("screen/conversation/redirect")
     let api = ScriptedAPI([.screen(redirect)])
