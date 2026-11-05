@@ -1037,8 +1037,7 @@ journalctl -u screenr-worker --since '1 day ago' --no-pager | grep '"event":"ema
 | `email delivery failed` | worker | `job` ID, `kind` (`code` or `activity`), `attempt`, `final`, and `stale` when a block or opt-out committed during the send ([stale sends](notifications.md#activity-email)) |
 | `push delivery failed` | worker | `job` ID, `kind` (`alert` or `badge`), `environment` (`sandbox` or `production`), `attempt`, `final`, and `status` and `reason` for an APNs reply |
 | `push delivery off` | worker | `missing` setting names, or `reason` `invalid key` with error fields; see [push settings](#provisioning) |
-| `google photo copy failed` | web, worker | `user` ID, `trigger` (`account`, `choice`, or `backfill`), `reason`, and `status` for an HTTP reply |
-| `google photo backfill failed` | worker | Error fields only |
+| `google photo copy failed` | web | `user` ID, `trigger` (`account` or `choice`), `reason`, and `status` for an HTTP reply |
 | `database connection failed` | web, worker | Error fields only, once per connection that PostgreSQL ended, such as in a restart |
 | `database rollback failed` | web, worker | Error fields only; the failure that ended the transaction is still reported |
 | `sentry report failed` | web, worker | `status` for a Sentry reply, `reason` `invalid DSN`, or error fields; see [failure reports](#failure-reports-in-sentry) |
@@ -1173,27 +1172,7 @@ events, add error fields:
 A `google photo copy failed` reason is `status` (Google replied with another
 HTTP status), `redirect` (a redirect left Google's image hosts or exceeded
 three), `too large` (over 200 KB), `not an image`, or `error` with error
-fields, such as a timeout. The worker prints the
-[Google photo backfill](data-and-access.md#profile-photos) result once, on
-standard output, as counts only:
-
-```sh
-journalctl -u screenr-worker --no-pager | grep '"event":"google photo'
-```
-
-```json
-{"event":"google photo backfill finished","copied":3,"kept":0,"no picture":1,"failed":0}
-```
-
-`kept` counts people who chose a photo during the pass, and `no picture`
-counts Google accounts with no picture URL. To retry failed copies, remove
-the marker and restart the worker; people with a photo or a removal are
-skipped:
-
-```sh
-runuser -u screenr-db -- psql -h /run/screenr-db -p 5439 -d screenr -c "DELETE FROM screenr_backfill WHERE name='google-photos'"
-systemctl restart screenr-worker
-```
+fields, such as a timeout.
 
 Logs never include error messages, PostgreSQL details, page paths, request
 bodies, email addresses, email content, device tokens, cookies, or keys.

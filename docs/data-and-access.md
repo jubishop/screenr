@@ -532,14 +532,11 @@ ignored, so the URL cannot direct a request elsewhere.
   `google photo copy failed` without failing the sign-in.
 - **Use my Google photo:** shown with a Google sign-in. It replaces the
   current photo or a removal, and reports a failed copy beside the button.
-- **One-time backfill:** after the release with photos deploys,
-  `screenr-worker` copies the picture for everyone with a Google account and
-  no photo row, one at a time, beside email delivery. It logs each failure
-  and then one `google photo backfill finished` line with counts, and records
-  `google-photos` in `screenr_backfill` so later starts skip it. A stopped
-  pass runs again on the next start. To retry failures, delete that row and
-  restart the worker, as in [deployment](deployment.md#failure-logs); a
-  retry fetches only for people who still have no photo or removal.
+- **One-time backfill:** after the release with photos deployed,
+  `screenr-worker` copied the picture for everyone with a Google account and
+  no photo row. Production's pass finished on 2026-10-12 and recorded
+  `google-photos` in `screenr_backfill`, so the worker no longer runs it. The
+  table stays, unused.
 
 A rollback to a release without photos keeps the table and ignores it;
 avatars show initials until the photo release returns.

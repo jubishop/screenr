@@ -510,8 +510,8 @@ requests without the header, malformed headers, request ID echo, and the
 deployment check of the minimum.
 `tests/app/profile-photos.test.ts` covers photo upload validation, who may
 load a photo and its caching headers, automatic Google copies after signup
-and after linking, the removed-photo rule, Use my Google photo, and the
-backfill. A replaced `fetch` stands in for Google's image servers, so no test
+and after linking, failed copies, the removed-photo rule, and Use my Google
+photo. A replaced `fetch` stands in for Google's image servers, so no test
 contacts Google. `tests/browser/profile-photos.spec.ts` adds, replaces, and
 removes photos at phone and desktop widths. It fits a detailed camera photo
 under the upload limit, falls back to a smaller size when no 512-pixel JPEG
