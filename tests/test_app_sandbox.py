@@ -4,7 +4,7 @@ Deployment installs these units and activation restarts the web and worker
 under them, with no automatic return to the previous units. A setting that
 stops either service therefore takes production down, so these tests keep what
 the services need open: loopback PostgreSQL, HTTPS to Resend and TMDB, the Node
-runtime, the release, and the web's Next cache.
+runtime, the release, the web's Next cache, and its shared poster cache.
 
 Every other Screenr unit except the PostgreSQL server, and
 ops/run-release-script.sh, which runs a release's maintenance scripts outside
@@ -30,6 +30,10 @@ JOBS = sorted(path.name for path in (ROOT / 'ops').glob('screenr-*.service')
               if path.name not in APPS + (DATABASE,))
 RUNNER = ROOT / 'ops' / 'run-release-script.sh'
 NODE = '/opt/screenr/node/bin/node'
+# The active release's Next cache, which belongs to its build.
+RELEASE_CACHE = '/opt/screenr/current/.next/cache'
+# The settings that let a unit write files.
+WRITABLE = ('ReadWritePaths', 'CacheDirectory', 'CacheDirectoryMode', 'BindPaths')
 # The decided sandbox for both units (#118).
 DECIDED = {
     'NoNewPrivileges': 'true',
@@ -140,11 +144,27 @@ class AppSandboxTests(unittest.TestCase):
                     self.assertEqual(settings.get(key), [value])
 
     def test_web_and_worker_share_one_sandbox(self):
-        # Only the web writes files: Next's image and fetch cache.
+        # Only the web writes files: Next's caches.
         web, worker = service('screenr-web.service'), service('screenr-worker.service')
-        self.assertEqual(web.pop('ReadWritePaths'), ['/opt/screenr/current/.next/cache'])
-        self.assertNotIn('ReadWritePaths', worker)
+        self.assertEqual(web.pop('ReadWritePaths'), [RELEASE_CACHE])
+        for key in WRITABLE:
+            self.assertNotIn(key, worker)
         self.assertEqual(sandbox(web), sandbox(worker))
+
+    def test_web_keeps_optimized_posters_in_one_directory_for_every_release(self):
+        # Next always writes optimized posters to .next/cache/images, and
+        # activation gives each release an empty .next/cache. The web mounts
+        # one cache directory there instead, so a deploy or rollback keeps the
+        # posters already optimized, and retained releases hold no copies
+        # (#423). Image cache keys hold only the URL, width, quality, and
+        # format, so releases can share entries; the rest of .next/cache
+        # belongs to one build.
+        web = service('screenr-web.service')
+        # systemd creates /var/cache/screenr/images before each start, owned
+        # by screenr, private to it, and writable in the sandbox.
+        self.assertEqual(web.get('CacheDirectory'), ['screenr/images'])
+        self.assertEqual(web.get('CacheDirectoryMode'), ['0700'])
+        self.assertEqual(web.get('BindPaths'), ['/var/cache/screenr/images:' + RELEASE_CACHE + '/images'])
 
     def test_sandbox_keeps_network_access_the_services_need(self):
         for name in APPS:
