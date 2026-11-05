@@ -8,7 +8,15 @@ it. Without --simulator, the check creates its own Simulator and deletes it
 afterward, so concurrent checkouts never share one.
 Build output, logs, and result bundles stay in ios/build/, which Git ignores.
 The package and app builds there are removed before building when
-ios/ScreenrKit/Package.resolved differs from the one they were built with.
+ios/ScreenrKit/Package.resolved, or the package sources they used, differ from
+the ones they were built with.
+
+xcodebuild's package sources and both tools' package downloads are in the
+Mac's shared package cache, outside every checkout (bin/_ios_packages.py).
+After taking its slot, a check resolves its packages there, under the cache's
+lock, and holds the cache in use until it exits. The cache is in
+~/Library/Caches/screenr-ios-packages, or in SCREENR_IOS_PACKAGE_CACHE, which
+tests set.
 
 At most SLOTS checks run at once on the Mac. Before its first step, a check
 waits for a free slot, saying so, and holds it until it exits. The slots are
@@ -25,7 +33,6 @@ is recent; the pre-push hook and bin/ios-testflight rely on the same records.
 
 import argparse
 import fcntl
-import hashlib
 import json
 import os
 from pathlib import Path
@@ -39,6 +46,7 @@ import time
 
 sys.dont_write_bytecode = True
 import _ios_check_records as records  # noqa: E402
+import _ios_packages as packages  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 BUILD = ROOT / "ios/build"
@@ -46,11 +54,12 @@ OUTPUT = BUILD / "check"
 # swift test's scratch directory and xcodebuild's derived data build on their
 # last run's modules. After a package update, such as a sentry-cocoa bump,
 # those modules fail to load against the new framework headers, so both
-# directories start over when Package.resolved changes. The stamp holds the
-# hash of the Package.resolved they were built with.
-RESOLVED = ROOT / "ios/ScreenrKit/Package.resolved"
+# directories start over when Package.resolved changes, and when the package
+# sources move, as they did from each checkout's own copy in
+# DerivedData/SourcePackages to the shared cache. The stamp holds the hash of
+# the Package.resolved they were built with and the sources directory.
 PACKAGE_BUILDS = (BUILD / "ScreenrKit", BUILD / "DerivedData")
-PACKAGE_STAMP = BUILD / "Package.resolved.sha256"
+PACKAGE_STAMP = BUILD / "packages.stamp"
 MINIMUM_XCODE = 27
 # The Simulator tests took 13 minutes on the user's Mac on 2026-10-14, and 30
 # on 2026-11-01 once the UI tests audited one check at a time; a run that takes
@@ -78,7 +87,8 @@ NOT_A_WARNING = re.compile(
 # worktree, would send SwiftPM's package checkouts to this repository.
 ENVIRONMENT = {key: value for key, value in records.outside_git().items() if key != "SDKROOT"}
 XCODEBUILD = ["xcodebuild", "-hideShellScriptEnvironment", "-project", "ios/Screenr.xcodeproj",
-              "-scheme", "Screenr", "-derivedDataPath", str(BUILD / "DerivedData")]
+              "-scheme", "Screenr", "-derivedDataPath", str(BUILD / "DerivedData"),
+              *packages.xcodebuild_options(ROOT)]
 
 
 class CheckFailure(Exception):
@@ -208,28 +218,26 @@ def take_slot():
 
 
 def clear_stale_package_builds():
-    """Remove PACKAGE_BUILDS unless the stamp shows they were built with this Package.resolved.
+    """Remove PACKAGE_BUILDS unless the stamp shows they were built with these packages and sources.
 
     Output without a stamp predates it, so it may come from any packages.
     """
+    sources = packages.sources(ROOT)
+    built_with = f"{packages.pins(ROOT)} {sources}"
     try:
-        pins = hashlib.sha256(RESOLVED.read_bytes()).hexdigest()
-    except FileNotFoundError:
-        pins = "none"
-    try:
-        if PACKAGE_STAMP.read_text().strip() == pins:
+        if PACKAGE_STAMP.read_text().strip() == built_with:
             return
     except FileNotFoundError:
         pass
     if any(path.exists() for path in PACKAGE_BUILDS):
         names = " and ".join(str(path.relative_to(ROOT)) for path in PACKAGE_BUILDS)
-        print(f"Removing {names}: nothing records that they were built with this "
-              f"{RESOLVED.relative_to(ROOT)}.", flush=True)
+        print(f"Removing {names}: nothing records that they were built with this {packages.RESOLVED} "
+              f"and the package sources in {sources}.", flush=True)
         for path in PACKAGE_BUILDS:
             if path.exists():
                 shutil.rmtree(path)
     BUILD.mkdir(parents=True, exist_ok=True)
-    PACKAGE_STAMP.write_text(pins + "\n")
+    PACKAGE_STAMP.write_text(built_with + "\n")
 
 
 def create_simulator():
@@ -293,8 +301,9 @@ def main():
     clear_stale_package_builds()
     shutil.rmtree(OUTPUT, ignore_errors=True)
     OUTPUT.mkdir(parents=True)
+    packages.use(ROOT, lambda command: run("Package resolution", command, packages.RESOLVE_TIMEOUT_MINUTES))
     run("ScreenrKit tests", ["swift", "test", "--package-path", "ios/ScreenrKit",
-                             "--scratch-path", str(BUILD / "ScreenrKit")])
+                             "--scratch-path", str(BUILD / "ScreenrKit"), *packages.swift_options()])
     release = OUTPUT / "Release.xcresult"
     run("Release build", [*XCODEBUILD, "-configuration", "Release", "-destination",
                           "generic/platform=iOS Simulator", "-resultBundlePath", str(release), "build"])

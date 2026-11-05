@@ -68,7 +68,8 @@ bin/check-ios --test-timeout <minutes>
 ```
 
 `bin/check-ios` fails on any failed or skipped test and on any warning, from
-the compiler, linker, or tools. It runs:
+the compiler, linker, or tools. It resolves the app's packages into the
+[shared package cache](#package-cache), then runs:
 
 1. ScreenrKit's tests on the Mac with `swift test`.
 2. A Release build for the Simulator.
@@ -87,12 +88,13 @@ Each run builds on the last run's output: ScreenrKit's in
 `ios/build/ScreenrKit` and the app's in `ios/build/DerivedData`. A package
 update, such as a sentry-cocoa bump, replaces framework headers that modules
 there were built against, and those modules then fail to load ("has been
-modified since the module file was built"). So the check records the hash of
-`ios/ScreenrKit/Package.resolved` in `ios/build/Package.resolved.sha256`.
-When the file differs from the recorded one, or nothing is recorded, the
-check removes both directories before it builds. Each checkout keeps one
-copy of each. The commands below that reuse those directories don't check;
-after a package update, run `bin/check-ios` first or remove them.
+modified since the module file was built"). So the check records, in
+`ios/build/packages.stamp`, the hash of `ios/ScreenrKit/Package.resolved`
+and the [package sources](#package-cache) directory the builds used. When
+either differs from the recorded one, or nothing is recorded, the check
+removes both directories before it builds. Each checkout keeps one copy of
+each. The commands below that reuse those directories don't check; after a
+package update, run `bin/check-ios` first or remove them.
 
 At most three checks run at once on the Mac, since more load it enough to
 make accessibility audits time out. Before its first step, a check waits for
@@ -106,8 +108,8 @@ The check fails fast and never hangs:
   Collecting a sysdiagnose after a failed UI test took about 10 minutes and
   sometimes never finished.
 - **Timeouts:** the Simulator tests stop and fail after 60 minutes, or after
-  `--test-timeout <minutes>`, and the Simulator boot after 10 minutes. The
-  failure shows the end of the step's log.
+  `--test-timeout <minutes>`, the Simulator boot after 10 minutes, and the
+  package resolution after 15. The failure shows the end of the step's log.
 - **Stopping:** each step runs in its own process group. A timeout,
   Control-C, or `SIGTERM` stops that group: `SIGTERM` first, then `SIGKILL`
   for whatever is left after 5 seconds. The check then deletes its Simulator.
@@ -129,21 +131,70 @@ On a Mac, `bin/check --full` runs `bin/check-ios --reuse` when the iOS files
 differ from where the branch left `origin/main`, including uncommitted and
 untracked files. On Linux it skips the iOS checks.
 
+### Package cache
+
+The app's packages are mostly sentry-cocoa's prebuilt frameworks, about
+3.5 GB for each release once resolved. Before
+[#381](https://github.com/jubishop/screenr/issues/381), every checkout that
+ran the check resolved its own copy into `ios/build/DerivedData`. Now
+`bin/check-ios`, the
+[TestFlight archive](../docs/development-workflow.md#testflight-releases),
+and `bin/ios-packages` share one cache on the Mac, outside every checkout:
+`~/Library/Caches/screenr-ios-packages`. `bin/_ios_packages.py` manages it.
+
+- **Sources:** xcodebuild resolves the packages into `sources/<hash>/`, named
+  for the hash of `ios/ScreenrKit/Package.resolved`, through
+  `-clonedSourcePackagesDirPath`, and builds against them there. Checkouts
+  with the same `Package.resolved` share one copy. One on another version
+  gets its own directory, so neither changes the sources the other builds
+  against. `-onlyUsePackageVersionsFromResolvedFile` keeps each directory to
+  the versions it is named for: a `Package.resolved` that no longer matches
+  `Package.swift` fails the resolution.
+- **Downloads:** xcodebuild's `-packageCachePath` and SwiftPM's
+  `--cache-path` both point at `swiftpm/`, so each release is downloaded
+  once, and not into SwiftPM's default `~/Library/Caches/org.swift.swiftpm`.
+  SwiftPM keeps the packages it resolves in its scratch path, beside its
+  build, and has no option to put them elsewhere. So `swift test` still
+  extracts its own copy into `ios/build/ScreenrKit` from those downloads, and
+  the check clears it with the rest of that directory.
+- **Locks:** a command resolves packages into the cache, or deletes it, only
+  while it holds `resolve.lock` exclusively, so two never write it at once;
+  another command waits, saying so. Before letting go, it takes `users.lock`
+  shared, and holds it until it exits, so nothing deletes the cache while it
+  builds. A check takes its [slot](#checks) before the cache's locks, and
+  nothing that holds those waits for a slot, so they cannot deadlock.
+- **Size:** when the cache holds more than 12 GB, more than two releases'
+  packages, the next command deletes everything in it but its locks, then
+  resolves again. A fresh resolution downloads about 1 GB, and took under 30
+  seconds on 2026-11-04. If another command holds the cache in use, the
+  command says so and leaves the deletion to a later one.
+
+Run other `xcodebuild` and `swift` commands through `bin/ios-packages`, as
+below. `bin/ios-packages xcodebuild <arguments>` resolves the packages and
+adds the options that build against them, and
+`bin/ios-packages swift <subcommand> <arguments>` adds `--cache-path`. Both
+hold the cache in use while the command runs and exit with its status. A
+plain `xcodebuild` resolves another 3.5 GB copy into its derived data
+instead, and its build then differs from the check's.
+`tests/test_ios_packages.py` covers the cache, and `tests/test_check_ios.py`
+the check's use of it.
+
 ## Run one test
 
 ScreenrKit on the Mac, by suite or by test:
 
 ```sh
-swift test --package-path ios/ScreenrKit --scratch-path ios/build/ScreenrKit \
-  --filter AppConfigurationTests
+bin/ios-packages swift test --package-path ios/ScreenrKit \
+  --scratch-path ios/build/ScreenrKit --filter AppConfigurationTests
 ```
 
 In the Simulator, name the target and suite with `-only-testing`, such as
 `ScreenrKitTests/AppConfigurationTests` or `ScreenrUITests/LaunchTests`:
 
 ```sh
-xcodebuild test -project ios/Screenr.xcodeproj -scheme Screenr \
-  -configuration Debug -destination "platform=iOS Simulator,id=$udid" \
+bin/ios-packages xcodebuild test -project ios/Screenr.xcodeproj \
+  -scheme Screenr -configuration Debug \
+  -destination "platform=iOS Simulator,id=$udid" \
   -derivedDataPath ios/build/DerivedData \
   -only-testing:ScreenrUITests/LaunchTests
 ```
@@ -157,8 +208,9 @@ udid=$(xcrun simctl create screenr-dev "iPhone 18 Pro" \
   com.apple.CoreSimulator.SimRuntime.iOS-27-0)
 xcrun simctl boot "$udid"
 open -a Simulator
-xcodebuild build -project ios/Screenr.xcodeproj -scheme Screenr \
-  -configuration Debug -destination "platform=iOS Simulator,id=$udid" \
+bin/ios-packages xcodebuild build -project ios/Screenr.xcodeproj \
+  -scheme Screenr -configuration Debug \
+  -destination "platform=iOS Simulator,id=$udid" \
   -derivedDataPath ios/build/DerivedData
 xcrun simctl install "$udid" \
   ios/build/DerivedData/Build/Products/Debug-iphonesimulator/Screenr.app
@@ -1612,9 +1664,9 @@ there.
   runs only in the Simulator, so its `.dev` app group is not registered.
 - **New extensions:** the App Store Connect key cannot register a new
   extension's App ID. One archive signed through the Mac's Xcode account,
-  `xcodebuild archive … -allowProvisioningUpdates` without the key flags,
-  registers it, and the release script's key signs it from then on. Neither
-  archive needs uploading.
+  `bin/ios-packages xcodebuild archive … -allowProvisioningUpdates` without
+  the key flags, registers it, and the release script's key signs it from
+  then on. Neither archive needs uploading.
 - **Keychain:** the app group is also the Keychain access group. Pass it as
   `kSecAttrAccessGroup`; there is no `keychain-access-groups` entitlement. In
   the Simulator, the Dev app can store and read items in its group, and

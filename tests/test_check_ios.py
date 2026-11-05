@@ -56,6 +56,9 @@ if sys.argv[1:] == ['-version']:
     print(os.environ.get('FAKE_XCODE_VERSION', 'Xcode 27.0\\nBuild version 27A266a'))
     sys.exit(0)
 record('xcodebuild', *sys.argv[1:])
+if '-resolvePackageDependencies' in sys.argv:
+    build_into('-clonedSourcePackagesDirPath')
+    finish('RESOLVE')
 build_into('-derivedDataPath')
 step = sys.argv[-1].upper()
 bundle = Path(sys.argv[sys.argv.index('-resultBundlePath') + 1])
@@ -123,12 +126,14 @@ class CheckIOSTests(unittest.TestCase):
         base = Path(temporary.name).resolve()
         self.repo = base / "checkout"
         (self.repo / "bin").mkdir(parents=True)
-        for name in ("bin/check-ios", "bin/_ios_check_records.py"):
+        for name in ("bin/check-ios", "bin/_ios_check_records.py", "bin/_ios_packages.py"):
             shutil.copy2(SOURCE / name, self.repo / name)
         self.events = base / "events.jsonl"
         # The check's machine-wide slots, kept apart from real checks on this Mac.
         self.slots = base / "slots"
         self.slots.mkdir()
+        # The Mac's shared package cache, kept apart from the real one.
+        self.cache = base / "Caches/screenr-ios-packages"
         self.tools = base / "tools"
         self.tools.mkdir()
         (self.tools / "python3").symlink_to(sys.executable)
@@ -138,6 +143,7 @@ class CheckIOSTests(unittest.TestCase):
                     if not key.startswith("FAKE_") and not key.startswith("GIT_")}
         self.env.update(PATH=str(self.tools), CHECK_EVENTS=str(self.events), PYTHONDONTWRITEBYTECODE="1",
                         FAKE_RUNTIMES=json.dumps(RUNTIMES), SCREENR_CHECK_IOS_SLOT_DIR=str(self.slots),
+                        SCREENR_IOS_PACKAGE_CACHE=str(self.cache),
                         SDKROOT="/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform")
 
     def tool(self, name, body):
@@ -167,38 +173,66 @@ class CheckIOSTests(unittest.TestCase):
                 fcntl.flock(slot, fcntl.LOCK_EX | fcntl.LOCK_NB)
             yield
 
-    def test_runs_package_tests_a_release_build_then_simulator_tests_on_its_own_simulator(self):
+    def test_resolves_packages_then_runs_package_tests_a_release_build_and_simulator_tests_on_its_own_simulator(self):
         result = self.check()
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("iOS checks passed with no warnings", result.stdout)
         build = str(self.repo / "ios/build")
         events = self.recorded()
-        self.assertEqual(events[0], ["swift", "test", "--package-path", "ios/ScreenrKit",
-                                     "--scratch-path", build + "/ScreenrKit"])
+        # xcodebuild's package sources and both tools' downloads are in the
+        # Mac's shared cache, outside the checkout.
+        sources = events[0][events[0].index("-clonedSourcePackagesDirPath") + 1]
+        self.assertTrue(Path(sources).is_relative_to(self.cache))
+        packages = ["-clonedSourcePackagesDirPath", sources, "-packageCachePath", str(self.cache / "swiftpm"),
+                    "-onlyUsePackageVersionsFromResolvedFile"]
+        self.assertEqual(events[0], ["xcodebuild", "-resolvePackageDependencies", "-project",
+                                     "ios/Screenr.xcodeproj", *packages])
+        self.assertEqual(events[1], ["swift", "test", "--package-path", "ios/ScreenrKit",
+                                     "--scratch-path", build + "/ScreenrKit", "--cache-path", str(self.cache / "swiftpm")])
         project = ["-hideShellScriptEnvironment", "-project", "ios/Screenr.xcodeproj", "-scheme", "Screenr",
-                   "-derivedDataPath", build + "/DerivedData"]
-        self.assertEqual(events[1], ["xcodebuild", *project, "-configuration", "Release", "-destination",
+                   "-derivedDataPath", build + "/DerivedData", *packages]
+        self.assertEqual(events[2], ["xcodebuild", *project, "-configuration", "Release", "-destination",
                                      "generic/platform=iOS Simulator", "-resultBundlePath",
                                      build + "/check/Release.xcresult", "build"])
-        self.assertEqual(events[2][:3], ["xcrun", "simctl", "create"])
-        self.assertTrue(events[2][3].startswith("screenr-check-checkout-"))
-        self.assertEqual(events[2][4:], ["iphone-18-pro", "runtime-27-0"])
+        self.assertEqual(events[3][:3], ["xcrun", "simctl", "create"])
+        self.assertTrue(events[3][3].startswith("screenr-check-checkout-"))
+        self.assertEqual(events[3][4:], ["iphone-18-pro", "runtime-27-0"])
         # A new Simulator finishes its first boot before tests launch the app.
-        self.assertEqual(events[3], ["xcrun", "simctl", "bootstatus", "NEW-UDID", "-b"])
-        self.assertEqual(events[4], ["xcodebuild", *project, "-configuration", "Debug", "-destination",
+        self.assertEqual(events[4], ["xcrun", "simctl", "bootstatus", "NEW-UDID", "-b"])
+        self.assertEqual(events[5], ["xcodebuild", *project, "-configuration", "Debug", "-destination",
                                      "platform=iOS Simulator,id=NEW-UDID", "-parallel-testing-enabled", "NO",
                                      # A failure reports at once instead of gathering a sysdiagnose.
                                      "-collect-test-diagnostics", "never",
                                      "-resultBundlePath", build + "/check/Tests.xcresult", "test"])
-        self.assertEqual(events[5:], [["xcrun", "simctl", "shutdown", "NEW-UDID"],
+        self.assertEqual(events[6:], [["xcrun", "simctl", "shutdown", "NEW-UDID"],
                                       ["xcrun", "simctl", "delete", "NEW-UDID"]])
 
     def test_uses_a_given_simulator_and_leaves_it_in_place(self):
         result = self.check("--simulator", "MY-UDID")
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(self.steps(), ["swift", "xcodebuild", "simctl bootstatus", "xcodebuild"])
-        self.assertEqual(self.recorded()[2], ["xcrun", "simctl", "bootstatus", "MY-UDID", "-b"])
+        self.assertEqual(self.steps(), ["xcodebuild", "swift", "xcodebuild", "simctl bootstatus", "xcodebuild"])
+        self.assertEqual(self.recorded()[3], ["xcrun", "simctl", "bootstatus", "MY-UDID", "-b"])
         self.assertIn("platform=iOS Simulator,id=MY-UDID", self.recorded()[-1])
+
+    def test_a_failed_package_resolution_stops_before_the_package_tests(self):
+        result = self.check(FAKE_OUTPUT_RESOLVE="xcodebuild: error: an out-of-date resolved file was detected",
+                            FAKE_STATUS_RESOLVE="74")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("an out-of-date resolved file was detected", result.stderr)
+        self.assertIn("Package resolution failed with status 74", result.stderr)
+        self.assertEqual(self.steps(), ["xcodebuild"])
+
+    def test_deletes_a_shared_package_cache_past_12_gb_before_resolving_again(self):
+        # Several releases' frameworks, at an apparent 12.5 GB that takes no disk.
+        old = self.cache / "sources/0123456789abcdef/artifacts/Sentry.xcframework.zip"
+        old.parent.mkdir(parents=True)
+        with old.open("wb") as stream:
+            stream.truncate(int(12.5 * 1024 ** 3))
+        result = self.check()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn(f"Deleting the shared iOS package cache in {self.cache}: it holds 12.5 GB", result.stdout)
+        self.assertFalse(old.exists())
+        self.assertEqual(self.steps()[:2], ["xcodebuild", "swift"])
 
     def test_a_failed_boot_still_deletes_its_simulator(self):
         result = self.check(FAKE_STATUS_BOOTSTATUS="1")
@@ -218,7 +252,7 @@ class CheckIOSTests(unittest.TestCase):
         result = self.check(FAKE_OUTPUT_SWIFT="ld: warning: duplicate library")
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("ScreenrKit tests reported 1 warning(s)", result.stderr)
-        self.assertEqual(self.steps(), ["swift"])
+        self.assertEqual(self.steps(), ["xcodebuild", "swift"])
 
     def test_the_app_intents_extraction_notice_is_not_a_warning(self):
         result = self.check(FAKE_OUTPUT_BUILD=APP_INTENTS_NOTICE, FAKE_OUTPUT_TEST=APP_INTENTS_NOTICE)
@@ -229,7 +263,7 @@ class CheckIOSTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("error: no such module", result.stderr)
         self.assertIn("ScreenrKit tests failed with status 1", result.stderr)
-        self.assertEqual(self.steps(), ["swift"])
+        self.assertEqual(self.steps(), ["xcodebuild", "swift"])
 
     def test_fails_when_the_result_bundle_counts_warnings(self):
         counts = json.dumps({"errorCount": 0, "warningCount": 1, "analyzerWarningCount": 0})
@@ -252,6 +286,41 @@ class CheckIOSTests(unittest.TestCase):
                 self.assertNotEqual(result.returncode, 0)
                 self.assertIn("Simulator tests: " + message, result.stderr)
                 self.assertEqual(self.steps()[-1], "simctl delete")
+
+    def test_builds_against_other_package_sources_start_over(self):
+        # A checkout's builds from before the shared cache used xcodebuild's
+        # own copy of the sources in ios/build/DerivedData/SourcePackages.
+        build = self.repo / "ios/build"
+        own_copy = build / "DerivedData/SourcePackages/artifacts/sentry-cocoa"
+        for cache, kept in ((self.cache, False), (self.cache, True), (self.cache.parent / "moved", False)):
+            with self.subTest(cache=cache.name, kept=kept):
+                own_copy.mkdir(parents=True, exist_ok=True)
+                result = self.check(SCREENR_IOS_PACKAGE_CACHE=str(cache))
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(own_copy.exists(), kept)
+                self.assertEqual("Removing ios/build/ScreenrKit and ios/build/DerivedData" in result.stdout,
+                                 not kept)
+
+    def test_holds_the_shared_package_cache_in_use_until_it_exits(self):
+        pids = self.events.parent / "hung.pids"
+        check = self.start(FAKE_HANG_TEST=str(pids))
+        deadline = time.monotonic() + 30
+        while not (pids.exists() and pids.read_text()):
+            self.assertLess(time.monotonic(), deadline, "the test run never started")
+            time.sleep(0.05)
+
+        def deletable():
+            with (self.cache / "users.lock").open("w") as users:
+                try:
+                    fcntl.flock(users, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    return True
+                except BlockingIOError:
+                    return False
+        # While its Simulator tests run, nothing can delete the cache.
+        self.assertFalse(deletable())
+        check.send_signal(signal.SIGTERM)
+        check.communicate(timeout=30)
+        self.assertTrue(deletable())
 
     def test_a_package_update_rebuilds_the_package_and_derived_data_from_scratch(self):
         # A sentry-cocoa update replaced its framework's headers in both
@@ -358,7 +427,7 @@ class CheckIOSTests(unittest.TestCase):
         # It took the first check's slot before it started its first step.
         lines = output.splitlines()
         self.assertRegex(lines[0], r"^Took iOS check slot 2 of 3 after waiting \d+\.\d minutes\.$")
-        self.assertEqual(lines[1], "==> ScreenrKit tests")
+        self.assertEqual(lines[1], "==> Package resolution")
         self.assertIn("iOS checks passed with no warnings", output)
 
     def test_requires_xcode_27_and_an_ios_27_runtime(self):
@@ -410,7 +479,7 @@ class CheckIOSTests(unittest.TestCase):
                 self.events.unlink(missing_ok=True)
                 result = self.check(*args, **extra)
                 self.assertEqual(result.returncode, 0, result.stderr)
-                self.assertEqual(self.steps()[0], "swift")
+                self.assertEqual(self.steps()[:2], ["xcodebuild", "swift"])
 
     def test_runs_outside_the_git_repository_that_launched_it(self):
         # Git exports GIT_DIR and its other repository variables to hooks and to
@@ -422,7 +491,7 @@ class CheckIOSTests(unittest.TestCase):
         result = self.check(GIT_DIR=str(other / ".git"), GIT_WORK_TREE=str(other),
                             GIT_INDEX_FILE=str(other / ".git/index"), GIT_PREFIX="ios/")
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(self.steps()[0], "swift")
+        self.assertEqual(self.steps()[:2], ["xcodebuild", "swift"])
         self.assertIn("Recorded this pass for these iOS files", result.stdout)
         self.assertEqual(len(list((self.repo / ".git/screenr-ios-checks").glob("*.json"))), 1)
         self.assertFalse((other / ".git/screenr-ios-checks").exists())
@@ -440,7 +509,7 @@ class CheckIOSTests(unittest.TestCase):
                 self.events.unlink(missing_ok=True)
                 result = self.check("--reuse")
                 self.assertEqual(result.returncode, 0, result.stderr)
-                self.assertEqual(self.steps()[0], "swift")
+                self.assertEqual(self.steps()[:2], ["xcodebuild", "swift"])
                 self.assertIn("This pass is not recorded for reuse", result.stdout)
                 if original is None:
                     (self.repo / name).unlink()
