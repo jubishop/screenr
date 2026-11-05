@@ -113,7 +113,6 @@ function AtHome({ data: { titles, viewerHasServices } }: { data: AtHomePage }) {
                     key={title.id}
                     title={title}
                     heading="h3"
-                    serviceIds={title.matchingServiceIds}
                     shared
                     from="watch_together"
                   />

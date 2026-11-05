@@ -165,7 +165,8 @@ struct WantToWatchTests {
 
     #expect(garden.title.kindAndYear == "Movie · 2019")
     #expect(
-      garden.viewing.lines(savedServices: garden.matchingServiceIds, savedBy: .viewer).map(\.text)
+      garden.viewing.lines(matchingServices: garden.matchingServiceIds, savedBy: .viewer)
+        .map(\.text)
         == ["On Netflix", "Included in your saved services"]
     )
   }

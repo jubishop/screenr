@@ -372,8 +372,10 @@ filters lists every title, finished ones included, as iPhone builds from
 before #448 expect; they filter the capped lists themselves. On the server, My
 services leaves out titles whose stored viewing options, current or stale,
 list neither a subscription from one of the viewer's services nor a free
-option, as `viewingAccess` decides in the browser; titles with unknown
-options stay in, and the browser leaves them out with its notice. Both
+option, the [viewing access](title-availability.md#viewing-access) rule;
+titles with unknown options stay in, and clients leave them out with their
+notice. Every listed title and search result carries its `access` and
+`matchingServiceIds`, which the web and the iPhone app filter and mark by. Both
 queries score every eligible title, then read title details, gather direct
 friends' names, and build JSON only for the listed ones. Viewing options are
 read and refreshed only for listed titles, so titles below the cap are not

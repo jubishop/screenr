@@ -2,8 +2,7 @@ import { AppError, db } from "./db";
 import { titleColumns } from "./catalog";
 import type { Person, Title } from "../shared";
 import type { ListMode } from "../member-routes";
-import { inTheaters, withViewingOptions } from "./title-viewing";
-import { matchingServices, viewingAccess } from "../viewing";
+import { inTheaters, withAccess, withViewingOptions } from "./title-viewing";
 
 // Watch together (docs/watch-together.md): every title all participants
 // currently want to watch, newest shared first. At home sorts them by the
@@ -68,11 +67,8 @@ export async function watchTogether(
     participants,
     // Prompts the viewer to save services; reveals nothing about the friend's.
     viewerHasServices: services.some((service) => service.viewer),
-    titles: (await withViewingOptions(titles)).map((title) => ({
-      ...title,
-      access: viewingAccess(title.viewing, serviceIds),
-      // Expose only services matching a shared title, not a friend's full list.
-      matchingServiceIds: matchingServices(title.viewing, serviceIds),
-    })),
+    // Each title names only the participants' services that offer it, not a
+    // friend's full list.
+    titles: withAccess(await withViewingOptions(titles), serviceIds),
   };
 }

@@ -2,9 +2,9 @@
 import { Fragment } from "react";
 import { Link } from "./pending-navigation";
 import type {
+  AccessTitle,
   FriendsRecommendation,
   SaveSurface,
-  ViewingTitle,
 } from "../shared";
 import { ActionButton } from "./action-button";
 import { useActionError } from "./action-error";
@@ -119,19 +119,17 @@ export function FriendsRecommend({
   setShowFinished,
   included,
   myServices,
-  serviceIds,
   activity,
   busy,
 }: {
-  recommendations: ViewingTitle<FriendsRecommendation>[];
+  recommendations: AccessTitle<FriendsRecommendation>[];
   hiddenFinished: number;
   kind: TitleKindFilter;
   setKind: (kind: TitleKindFilter) => void;
   showFinished: boolean;
   setShowFinished: (showFinished: boolean) => void;
-  included: (title: ViewingTitle) => boolean;
+  included: (title: AccessTitle) => boolean;
   myServices: boolean;
-  serviceIds: string[];
   activity: Activity;
   busy: boolean;
 }) {
@@ -168,13 +166,7 @@ export function FriendsRecommend({
       </div>
       <section className="search-results" aria-label="Friends recommend">
         {visible.map((title) => (
-          <TitleCard
-            key={title.id}
-            title={title}
-            heading="h2"
-            serviceIds={serviceIds}
-            from={surface}
-          >
+          <TitleCard key={title.id} title={title} heading="h2" from={surface}>
             <p className="recommenders">
               Recommended by <Names people={title.recommended_by} />
             </p>

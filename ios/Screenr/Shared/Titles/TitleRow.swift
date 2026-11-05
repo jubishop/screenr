@@ -13,8 +13,9 @@ struct TitleRow<Extra: View>: View {
   let viewing: TitleViewing?
   let release: TitleRelease?
   let score: TMDBScore?
-  let serviceIds: [String]
-  // Whose saved services `serviceIds` are.
+  // The saved services that offer the title, which the server sent.
+  let matchingServiceIds: [String]
+  // Whose saved services `matchingServiceIds` are.
   var savedBy = SavedServicesOwner.viewer
   // Lines after the title's own, such as who recommends it.
   @ViewBuilder var extra: () -> Extra
@@ -35,7 +36,11 @@ struct TitleRow<Extra: View>: View {
           .foregroundStyle(.muted)
         TitleStatusLine(release: release, score: score)
         if let viewing {
-          ViewingLinesView(viewing: viewing, serviceIds: serviceIds, savedBy: savedBy)
+          ViewingLinesView(
+            viewing: viewing,
+            matchingServiceIds: matchingServiceIds,
+            savedBy: savedBy
+          )
         }
         extra()
       }
@@ -50,7 +55,7 @@ extension TitleRow where Extra == EmptyView {
     viewing: TitleViewing?,
     release: TitleRelease?,
     score: TMDBScore?,
-    serviceIds: [String],
+    matchingServiceIds: [String],
     savedBy: SavedServicesOwner = .viewer
   ) {
     self.init(
@@ -58,7 +63,7 @@ extension TitleRow where Extra == EmptyView {
       viewing: viewing,
       release: release,
       score: score,
-      serviceIds: serviceIds,
+      matchingServiceIds: matchingServiceIds,
       savedBy: savedBy
     ) {
       EmptyView()

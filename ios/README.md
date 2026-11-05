@@ -1166,7 +1166,7 @@ ScreenContent(model: model) { screen in
 | `.buttonStyle(.accent)` | `Screenr/Shared/AccentButtonStyle.swift` | The prominent accent-filled button, such as Accept, Send sign-in code, or Join Screenr, with its label in `.onAccent`. Use it in place of `.borderedProminent`. |
 | `FeedModel` | ScreenrKit `Conversation/` | `@Observable` page state: accepted activity (`layout(_:viewer:)`, `receive`, `showIncoming`, and `show(entry:in:viewer:)` for a title page's friend line), Show older (`showOlder(_:)`, through its `showOlder` closure), revealed spoilers, each discussion's preview and groups, composers and their drafts, reactions, removals through `confirmation`, and Want to watch and Recommend with the top 10 confirmations. Every write reads the screen again through its `refresh` closure. |
 | `HistoryWindow`, `HistoryPage` | ScreenrKit `Conversation/` | A paged friends feed's or profile's window in its screen path (`before=now`, `since=<time>`, or `before=<time>`), and what a paged read sent besides its entries: `since` and `older`, as `screen.historyPage`. |
-| `FeedLayout`, `ThreadLayout` | ScreenrKit `Conversation/` | The web's rules as values: which entries and replies show, their order, the New activity count, the three-comment preview, Show earlier comments, and nested groups. |
+| `FeedLayout`, `ThreadLayout` | ScreenrKit `Conversation/` | The web's rules as values: which entries and replies show, their order, the New activity count, the three-comment preview, Show earlier comments, and nested groups. `SharedFeedLayoutTests` runs `FeedLayout` on the [shared cases](#shared-cases) that the web's layout runs too. |
 | `ConversationStarter` | ScreenrKit `Conversation/` | Start a conversation: `.post` on the friends feed, or `.title(id:kind:)`, which loads a TV show's seasons and each chosen season's episodes. |
 | Presentation | ScreenrKit `EntryPresentation.swift` | `item.action(style:)`, `item.title`, `discussionLabel`, `removedLabel`, `link(reply:)`, `RelativeTime`, `FinishedDate`, `ReviewStars`, `ReactionKind.options`, and `TopTenLeaving`. |
 | `ImageSource` | ScreenrKit | `@Environment(\.imageSource)`: TMDB poster requests, and profile photo requests with the bearer token. Against the fixture API it loads nothing, so UI tests show placeholders, unless `FixtureLaunch(posters: .solid)` (`-ScreenrFixturePosters solid`) asks for a solid gray poster from a data URL for every poster path. |
@@ -1252,7 +1252,11 @@ failed screen read and the search keeps working:
   sets the search and list once, through `apply(_:)` and `router.findSearch`.
 - **Filters:** My services keeps titles on the viewer's saved subscription
   services or free, across results and both lists, and counts the titles
-  with unknown viewing options it leaves out. Friends recommend adds Movies/TV
+  with unknown viewing options it leaves out. Each title's `access` and
+  `matchingServiceIds` come from the server's
+  [viewing access](../docs/title-availability.md#viewing-access), which the
+  app never decides; `receive(savedServices:)` searches again when a screen
+  read brings other saved services. Friends recommend adds Movies/TV
   and Show finished; finished titles start hidden. Edit services opens
   Settings over the tab.
 - **Screen read:** the filters go in the read's path, as on the
@@ -1308,13 +1312,13 @@ Views that list titles share these pieces:
 | --- | --- | --- |
 | `TitleRow` | `Screenr/Shared/Titles/` | A title's `PosterImage`, name, kind and year, release status and TMDB user score, and where it streams, with optional lines after them. As on the web at phone widths, it leaves out the overview. At accessibility sizes the text moves beneath the poster. Put it in a `NavigationLink`. |
 | `TitleStatusLine` | `Screenr/Shared/Titles/` | The [release status](../docs/title-availability.md#release-status-implementation), such as "In theaters · Digital Nov 20", with the [TMDB user score](../docs/title-catalog.md#tmdb-user-score-implementation) beside it, the `TMDBLogo` asset and a percentage such as 73%, in title rows, Find a title's suggestions, and atop Where to watch, or nothing without a label or score. |
-| `ViewingLinesView` | `Screenr/Shared/Titles/` | "On Netflix, Hulu" and "Free on Tubi TV", with saved services marked, or why there are no options. `savedBy: .eitherPerson` marks either person's services, as Watch together does. |
+| `ViewingLinesView` | `Screenr/Shared/Titles/` | "On Netflix, Hulu" and "Free on Tubi TV", with the title's `matchingServiceIds` marked, or why there are no options. `savedBy: .eitherPerson` marks either person's services, as Watch together does. |
 | `TitleKindPicker`, `TitleKindFilter` | `Screenr/Shared/Titles/`, ScreenrKit `Titles/` | The All, Movies, and TV filter that Watch together and Want to watch pages share. Each choice keeps the list's order. |
 | `ViewingAttribution` | `Screenr/Shared/Titles/` | JustWatch's credit beneath a list of titles' viewing options. |
 | `Title.kindAndYear` | ScreenrKit `Titles/` | "Movie · 2024", or only the kind without a release date. |
 | `TMDBScore.text` | ScreenrKit `Titles/` | The server's whole percentage, such as "73%". The app never computes a score. |
 | `TitleRelease.text` | ScreenrKit `Titles/` | "In theaters", then each upcoming date's label as the server worded it, joined with " · ", or nil when there is none or the release data could not be loaded. The app never derives a status from the dates. |
-| `TitleViewing.matchingServices(_:)`, `access(for:)`, `lines(savedServices:savedBy:)` | ScreenrKit `Titles/` | The viewer's saved services that offer a title, whether the viewer can watch it, and the lines `ViewingLinesView` shows. |
+| `TitleViewing.lines(matchingServices:savedBy:)` | ScreenrKit `Titles/` | The lines `ViewingLinesView` shows, marking the saved services that the server found offer the title. |
 | `ScreenrAPI.send(_:within:clock:)` | ScreenrKit `API/Deadline.swift` | Sends a request that fails as `.timedOut` after a deadline. |
 
 ## Title pages
@@ -1690,6 +1694,15 @@ and its embedded extensions, for what package tests cannot reach:
   with the fixture arguments kept in the app group as Screenr Dev's launch
   keeps them, and checks the alert it delivers. See
   [push tests](#push-tests).
+
+### Shared cases
+
+`ScreenrKit/SharedCases/` holds hand-written cases that the web's tests and
+ScreenrKit's run alike, so the two clients cannot drift apart on rules that
+both still apply. `feed-layout.json` lays out feeds after New activity
+([unified title feed](../docs/title-feed.md#new-activity)): the web's
+`tests/app/feed-layout.test.ts` and `SharedFeedLayoutTests` run every case.
+Edit the cases by hand, and run both suites after a change.
 
 ## Logging
 

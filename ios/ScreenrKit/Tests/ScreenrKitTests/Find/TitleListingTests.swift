@@ -14,17 +14,37 @@ struct TitleListingTests {
     #expect(undated.title.kindAndYear == "TV show")
   }
 
-  @Test func decidesWhetherTheViewerCanWatch() throws {
+  // The server decides whether the viewer can watch each title, and which of
+  // their saved services offer it.
+  @Test func readsTheViewersAccessFromTheServer() throws {
     let cam = try FindData.page("screen/search/viewer-statuses")
-    let viewing = Dictionary(uniqueKeysWithValues: cam.suggestions.map { ($0.id, $0.viewing) })
-    let night = try #require(try FindData.results().first).viewing
+    let access = Dictionary(uniqueKeysWithValues: cam.suggestions.map { ($0.id, $0.access) })
+    let results = try FindData.results()
 
-    #expect(night.access(for: ["service:netflix"]) == .available)
-    #expect(night.matchingServices(["service:netflix", "service:hulu"]) == ["service:netflix"])
-    #expect(night.access(for: ["service:hulu"]) == .unmatched)
-    #expect(viewing["movie:102"]?.access(for: []) == .available)
-    #expect(viewing["movie:104"]?.access(for: ["service:netflix"]) == .unknown)
-    #expect(viewing["movie:301"]?.access(for: []) == .unmatched)
+    // Alice saved Netflix and Hulu.
+    #expect(results.map(\.access) == [.available, .unmatched])
+    #expect(results.map(\.matchingServiceIds) == [["service:netflix"], []])
+    #expect(access["movie:102"] == .available)
+    #expect(access["movie:104"] == .unknown)
+    #expect(access["movie:301"] == .unmatched)
+    let alice = try FindData.page("screen/search/default")
+    #expect(
+      alice.recommendations.map(\.matchingServiceIds) == [
+        ["service:netflix"], [], ["service:netflix"],
+      ]
+    )
+
+    // A payload from a server older than this build marks nothing and counts
+    // as unknown.
+    let older: ViewingTitle = try FindData.decode(
+      FindData.title(
+        "movie:9",
+        "Older",
+        fields: ["viewing": FindData.viewing("ok", ["free": ["x"]])]
+      )
+    )
+    #expect(older.access == .unknown)
+    #expect(older.matchingServiceIds.isEmpty)
   }
 
   @Test func summarizesWhereATitleStreams() throws {
@@ -32,7 +52,7 @@ struct TitleListingTests {
     let viewing = Dictionary(uniqueKeysWithValues: cam.suggestions.map { ($0.id, $0.viewing) })
     let night = try #require(try FindData.results().first).viewing
 
-    let saved = night.lines(savedServices: ["service:netflix"])
+    let saved = night.lines(matchingServices: ["service:netflix"])
     #expect(
       saved == [
         .offers(.subs, [ListedService(name: "Netflix", saved: true)]),
@@ -42,19 +62,19 @@ struct TitleListingTests {
     #expect(saved.map(\.text) == ["On Netflix", "Included in your saved services"])
     // Watch together marks the services either person saved.
     #expect(
-      night.lines(savedServices: ["service:netflix"], savedBy: .eitherPerson).map(\.text) == [
+      night.lines(matchingServices: ["service:netflix"], savedBy: .eitherPerson).map(\.text) == [
         "On Netflix", "Included in either person’s saved services",
       ]
     )
     #expect(
-      viewing["movie:102"]?.lines(savedServices: []).map(\.text) == ["Free on Pluto TV, Tubi TV"]
+      viewing["movie:102"]?.lines(matchingServices: []).map(\.text) == ["Free on Pluto TV, Tubi TV"]
     )
-    #expect(viewing["movie:104"]?.lines(savedServices: []) == [.unknown])
-    #expect(viewing["movie:301"]?.lines(savedServices: []) == [.noOptions])
+    #expect(viewing["movie:104"]?.lines(matchingServices: []) == [.unknown])
+    #expect(viewing["movie:301"]?.lines(matchingServices: []) == [.noOptions])
 
     let stale: TitleViewing = try FindData.decode(FindData.viewing("stale", ["subs": ["Hulu"]]))
     #expect(
-      stale.lines(savedServices: ["Hulu"]).map(\.text) == [
+      stale.lines(matchingServices: ["Hulu"]).map(\.text) == [
         "On Hulu", "Included in your saved services", "Older availability. Check title details.",
       ]
     )

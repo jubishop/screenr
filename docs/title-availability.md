@@ -381,6 +381,36 @@ for discovery and Watch together. Free options qualify without a saved
 selection. Paid rental and purchase offers do not qualify. Older results keep
 an age warning, and failed lookups stay distinct from known unmatched titles.
 
+### Viewing access
+
+The server decides whether a viewer can watch each listed title, and clients
+only show it ([issue #388](https://github.com/jubishop/screenr/issues/388)).
+Every list that shows viewing options sends two fields with each title: Find
+a title's screen and `search` action, Want to watch pages, and Watch
+together.
+
+- `access`: `available` when its US options list a subscription from one of
+  the saved services or any free or ad-supported option, `unmatched` when
+  they list neither, and `unknown` when they could not be loaded.
+- `matchingServiceIds`: the saved services that offer it by subscription,
+  which clients mark. A list that combines several people's services names
+  only the ones that offer the title, never anyone's full list.
+
+`withAccess` in `src/server/title-viewing.ts` applies the rule. Its
+`myServicesFilter` applies the same rule in SQL to stored options, so Find
+a title's My services can narrow each list before its cap; titles with
+unknown options stay in for clients to leave out with their notice. Both read
+the provider categories behind each viewing section from `sectionCategories`
+in `src/server/watch-sources.ts`, and `tests/app/title-suggestions.test.ts`
+checks that the filter keeps exactly the titles whose access is not
+`unmatched`. The web and the iPhone app filter and mark titles by these fields
+and keep no copy of the rule, so a rule change reaches installed iPhone
+builds without an update. A search's fields are the server's for the services
+saved when it ran, so when a screen read brings other saved services, as
+after a change in another tab or in the app's Settings over Find, both
+clients search again, keeping the shown results until the new ones arrive. Builds from before #388 still compute Find's access
+themselves from `serviceIds`, which the search screen keeps sending.
+
 ## Release status implementation
 
 This implements the

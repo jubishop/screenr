@@ -560,6 +560,28 @@ content. [Comment notifications](notifications.md#current-implementation),
 added in [#92](https://github.com/jubishop/screenr/issues/92), open their exact
 reply through these same title links.
 
+### New activity
+
+`src/feed-layout.ts` lays out the web's interactive feed from its latest
+snapshot and the activity the reader has accepted: which entries and replies
+show, in what order, and how many entries wait behind **New activity**. The
+iPhone app's `FeedLayout` makes the same decisions
+([issue #388](https://github.com/jubishop/screenr/issues/388)). Both run the
+checked-in cases in `ios/ScreenrKit/SharedCases/feed-layout.json`, through
+`tests/app/feed-layout.test.ts` and ScreenrKit's `SharedFeedLayoutTests`, so
+a change to one that the other lacks fails a test
+([shared cases](../ios/README.md#shared-cases)).
+
+On the web, an entry with nothing waiting keeps the object and
+`visible_activity` the server sent, which equal the layout's own with every
+reply accepted, so a large feed rebuilds only the entries whose activity
+waits. Ties in visible activity break by entry ID in code-unit order, as the
+server orders by UUID. On 2026-11-04, laying out a synthetic 4,800-entry feed with
+every activity accepted took 0.8 ms in Node 26 on an Apple M5 Pro, down from
+4.9 ms when every entry rebuilt its replies and visible activity
+([issue #376](https://github.com/jubishop/screenr/issues/376) measured that
+work as most of `FeedView`'s render).
+
 ### Paged histories
 
 The friends feed and profiles send their history a page at a time, on the

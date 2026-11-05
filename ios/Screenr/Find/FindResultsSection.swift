@@ -5,23 +5,22 @@ import SwiftUI
 struct FindResultsSection: View {
   let find: FindModel
   let titles: [ViewingTitle]
-  let serviceIds: [String]?
 
   var body: some View {
     Section {
       ListHeader("Search results")
-      ForEach(find.visibleResults(titles, serviceIds: serviceIds)) { result in
+      ForEach(find.visibleResults(titles)) { result in
         NavigationLink(value: Destination.title(id: result.id)) {
           TitleRow(
             title: result.title,
             viewing: result.viewing,
             release: result.release,
             score: result.tmdbScore,
-            serviceIds: serviceIds ?? []
+            matchingServiceIds: result.matchingServiceIds
           )
         }
       }
-      if let message = find.resultsMessage(titles, serviceIds: serviceIds) {
+      if let message = find.resultsMessage(titles) {
         Text(message)
       }
     }

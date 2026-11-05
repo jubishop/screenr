@@ -10,8 +10,9 @@ public enum FindList: Hashable, Sendable, CaseIterable {
 }
 
 // Find a title, the search-role tab at `/search`. The screen read supplies
-// suggestions, Friends recommend, and the viewer's saved services; this model
-// keeps everything the member changes, which outlives a failed read:
+// suggestions and Friends recommend, and it and each search give every title
+// the viewer's access to it, which the server decides. This model keeps
+// everything the member changes, which outlives a failed read:
 //
 // - Search: typing searches TMDB through the `search` action once the member
 //   pauses, and the keyboard's Search key searches at once. A newer search or
@@ -107,6 +108,8 @@ public final class FindModel {
   @ObservationIgnored private(set) var pauseTask: Task<Void, Never>?
   @ObservationIgnored private(set) var searchTask: Task<Void, Never>?
   @ObservationIgnored private var generation = 0
+  // The saved services of the last screen read that had them.
+  @ObservationIgnored private var savedServices: [String]?
   // The last link that set the search, which is applied once.
   @ObservationIgnored private var link = Destination.search()
 
@@ -158,7 +161,21 @@ public final class FindModel {
     run(Self.trimmed(query), reportingShort: true)
   }
 
-  private func run(_ text: String, reportingShort: Bool) {
+  // A screen read's saved services, or nil after a failed read. Each
+  // result's access is the server's for the services saved when it searched,
+  // so when they change, as in Settings over this tab, the results showing
+  // search again. They stay until the new ones arrive, and a failed search
+  // keeps them.
+  public func receive(savedServices serviceIds: [String]?) {
+    guard let serviceIds else { return }
+    defer { savedServices = serviceIds }
+    guard let previous = savedServices, previous != serviceIds,
+      case .found(let text, _) = search
+    else { return }
+    run(text, reportingShort: false, keepingResults: true)
+  }
+
+  private func run(_ text: String, reportingShort: Bool, keepingResults: Bool = false) {
     searchTask?.cancel()
     searchTask = nil
     generation += 1
@@ -166,7 +183,7 @@ public final class FindModel {
       search = text.isEmpty || !reportingShort ? .none : .tooShort
       return
     }
-    search = .searching(text)
+    if !keepingResults { search = .searching(text) }
     let generation = generation
     let api = api
     let clock = clock
@@ -177,6 +194,8 @@ public final class FindModel {
       switch result {
       case .success(let titles):
         search = .found(text, titles)
+      case .failure where keepingResults:
+        break
       case .failure(let error) where error.kind == .timedOut && error.message == nil:
         search = .failed(text, message: "Search timed out. Please try again.")
       case .failure(let error):
@@ -221,26 +240,24 @@ public final class FindModel {
 
   // MARK: - What shows
 
-  // Whether My services keeps a title. Without the saved services, as after
-  // a failed read, it keeps none.
-  public func includes(_ viewing: TitleViewing, serviceIds: [String]?) -> Bool {
+  // Whether My services keeps a title with this access, which the server
+  // decided.
+  public func includes(_ access: ViewingAccess) -> Bool {
     switch serviceFilter {
-    case .allServices: return true
-    case .myServices:
-      guard let serviceIds else { return false }
-      return viewing.access(for: serviceIds) == .available
+    case .allServices: true
+    case .myServices: access == .available
     }
   }
 
-  public func visibleResults(_ titles: [ViewingTitle], serviceIds: [String]?) -> [ViewingTitle] {
-    titles.filter { includes($0.viewing, serviceIds: serviceIds) }
+  public func visibleResults(_ titles: [ViewingTitle]) -> [ViewingTitle] {
+    titles.filter { includes($0.access) }
   }
 
   // Suggestions after My services, and why they are empty when they are. A
   // read with My services on lists only matching suggestions, so an empty
   // one explains the filter.
   public func suggestions(_ page: SearchScreen) -> FindListContent<TitleSuggestion> {
-    let visible = page.suggestions.filter { includes($0.viewing, serviceIds: page.serviceIds) }
+    let visible = page.suggestions.filter { includes($0.access) }
     guard visible.isEmpty else { return .listed(visible, emptyMessage: nil) }
     if serviceFilter == .allServices { return .nothingYet }
     return .listed([], emptyMessage: FindWording.noSuggestions)
@@ -252,7 +269,7 @@ public final class FindModel {
   // narrows means friends recommend nothing.
   public func friendsRecommend(_ page: SearchScreen) -> FindListContent<FriendsRecommendation> {
     let matching = page.recommendations.filter {
-      kindFilter.includes($0.title) && includes($0.viewing, serviceIds: page.serviceIds)
+      kindFilter.includes($0.title) && includes($0.access)
     }
     let visible = matching.filter(finishedFilter.includes)
     guard visible.isEmpty else { return .listed(visible, emptyMessage: nil) }
@@ -273,28 +290,28 @@ public final class FindModel {
   // options, which the filter leaves out.
   public func unknownViewingNotice(_ page: SearchScreen?) -> String? {
     guard serviceFilter == .myServices else { return nil }
-    let listed: [TitleViewing]
+    let listed: [ViewingAccess]
     switch search {
-    case .found(_, let titles): listed = titles.map(\.viewing)
+    case .found(_, let titles): listed = titles.map(\.access)
     case .searching, .failed: listed = []
     case .none, .tooShort:
       guard let page else { return nil }
       switch list {
-      case .suggestions: listed = page.suggestions.map(\.viewing)
+      case .suggestions: listed = page.suggestions.map(\.access)
       case .friendsRecommend:
         listed = page.recommendations
           .filter { kindFilter.includes($0.title) && finishedFilter.includes($0) }
-          .map(\.viewing)
+          .map(\.access)
       }
     }
-    let unknown = listed.count(where: { $0.access(for: page?.serviceIds ?? []) == .unknown })
+    let unknown = listed.count(where: { $0 == .unknown })
     return FindWording.unknownViewing(unknown)
   }
 
   // Why search results are empty, when they are.
-  public func resultsMessage(_ titles: [ViewingTitle], serviceIds: [String]?) -> String? {
+  public func resultsMessage(_ titles: [ViewingTitle]) -> String? {
     if titles.isEmpty { return "No matches. Try a different title." }
-    guard visibleResults(titles, serviceIds: serviceIds).isEmpty else { return nil }
+    guard visibleResults(titles).isEmpty else { return nil }
     return "No matches on your services or free. Turn off My services to see all results."
   }
 }

@@ -223,7 +223,7 @@ const actions = {
   search: read({
     usage: true,
     input: (query) => query.get("q") ?? "",
-    run: (text) => findTitles(text),
+    run: (text, { userId }) => findTitles(text, userId),
   }),
   // The iPhone share extension's link and text: the title it names, or the
   // text to search for one.

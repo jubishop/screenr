@@ -11,7 +11,7 @@
   },
   "response": {
     "status": 200,
-    "etag": "W/\"K6JlZIQTaEYsgHbqirAUGbxjKuM1RlB-AUsxtaoIDYk\"",
+    "etag": "W/\"QJcx2GePMI5kwN5EIm0uS4-yHT7lhHTSIJ9d5uboNIg\"",
     "body": {
       "kind": "search",
       "suggestions": [
@@ -63,7 +63,11 @@
               }
             ]
           },
-          "tmdb_score": 81
+          "tmdb_score": 81,
+          "access": "available",
+          "matchingServiceIds": [
+            "service:hulu"
+          ]
         }
       ],
       "recommendations": [
@@ -107,7 +111,11 @@
             "in_theaters": false,
             "upcoming": []
           },
-          "tmdb_score": null
+          "tmdb_score": null,
+          "access": "available",
+          "matchingServiceIds": [
+            "service:netflix"
+          ]
         },
         {
           "id": "movie:105",
@@ -149,7 +157,11 @@
             "in_theaters": false,
             "upcoming": []
           },
-          "tmdb_score": null
+          "tmdb_score": null,
+          "access": "available",
+          "matchingServiceIds": [
+            "service:netflix"
+          ]
         }
       ],
       "serviceIds": [

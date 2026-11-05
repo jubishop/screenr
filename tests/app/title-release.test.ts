@@ -536,7 +536,7 @@ test("failed release data leaves title details, Where to watch, conversations, a
     media_type: "movie",
     title: `Searched ${id}`,
   }));
-  const found = await findTitles("searched");
+  const found = await findTitles("searched", "viewer");
   assert.deepEqual(
     found.map((title) => [title.name, title.release.status]),
     [
@@ -659,7 +659,7 @@ test("Find a title bounds release requests and keeps its search deadline during 
   }));
   slow = true;
   const start = Date.now();
-  const found = await findTitles("outage");
+  const found = await findTitles("outage", "viewer");
   assert.equal(found.length, 12);
   assert.ok(found.every((title) => title.release.status === "unavailable"));
   assert.ok(found.every((title) => title.viewing.status === "ok"));
@@ -700,7 +700,7 @@ test("Find a title results carry release status from full details, not the searc
       networks: [netflix],
     }),
   };
-  const found = await findTitles("summary");
+  const found = await findTitles("summary", "viewer");
   assert.deepEqual(
     found.map((title) => [title.name, title.release]),
     [
@@ -721,7 +721,7 @@ test("Find a title results carry release status from full details, not the searc
       ],
     ],
   );
-  await findTitles("summary");
+  await findTitles("summary", "viewer");
   assert.equal(
     detailRequests.length,
     2,

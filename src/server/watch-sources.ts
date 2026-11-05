@@ -1,4 +1,9 @@
-import type { WatchAvailability, WatchProvider, WatchSection } from "../shared";
+import type {
+  WatchAvailability,
+  WatchCategory,
+  WatchProvider,
+  WatchSection,
+} from "../shared";
 import registry from "./watch-provider-registry.json";
 
 const english = new Intl.Collator("en", { sensitivity: "base" });
@@ -15,10 +20,18 @@ const members = new Map(
   ),
 );
 
+// The TMDB provider categories behind each viewing section: a subscription
+// lists a title under Subs, and a free or ad-supported option under Free.
+// The viewer's access to a title (title-viewing.ts) reads the same
+// categories, from these sections and from stored options.
+export const sectionCategories = {
+  subs: ["flatrate"],
+  free: ["free", "ads"],
+} as const satisfies Record<WatchSection["key"], readonly WatchCategory[]>;
+
 // The TMDB providers that count as the given saved services, each a
 // `service:<key>`, such as Netflix's own provider and its other listings.
-// A subscription from one of them puts a title on the viewer's services, as
-// matchingServices in src/viewing.ts decides from these sections.
+// A subscription from one of them puts a title on the viewer's services.
 export function serviceProviders(serviceIds: string[]): number[] {
   return registry
     .filter((service) => serviceIds.includes(`service:${service.key}`))
@@ -31,10 +44,11 @@ export function watchSections(
   providers: WatchAvailability["providers"],
 ): WatchSection[] {
   const sections: WatchSection[] = [];
-  for (const [key, label, categories] of [
-    ["subs", "Subs", ["flatrate"]],
-    ["free", "Free", ["free", "ads"]],
+  for (const [key, label] of [
+    ["subs", "Subs"],
+    ["free", "Free"],
   ] as const) {
+    const categories = sectionCategories[key];
     const groups = new Map<string, WatchProvider[]>();
     for (const category of categories) {
       for (const provider of providers[category] ?? []) {

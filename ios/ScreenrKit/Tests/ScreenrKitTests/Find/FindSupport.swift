@@ -191,6 +191,7 @@ enum FindData {
     status: String? = nil,
     recommended: Bool = false,
     viewing: JSONValue = viewing(),
+    access: String = "available",
     by friends: [(String, Int?)] = [("Ben Ortiz", nil)]
   ) -> JSONValue {
     title(
@@ -200,6 +201,8 @@ enum FindData {
         "viewer_status": .nullable(status),
         "viewer_recommended": .bool(recommended),
         "viewing": viewing,
+        "access": .string(access),
+        "matchingServiceIds": [],
         "recommended_by": .array(
           friends.map { friend in
             [
