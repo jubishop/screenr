@@ -1,12 +1,12 @@
 import Foundation
 
 // The services an extension keeps from one request to the next, since iOS may
-// show several pushes in one process, and new connections cost each push its
-// own TCP and TLS setup. They last while the Keychain holds the session token
-// they read and the launch arguments stay the same. Once the member signs in
-// or out in the app, or Screenr Dev's app launches with other fixtures, the
-// next request gets new services, and the replaced ones close their
-// connections when no request uses them.
+// run several pushes or shares in one process, and new connections cost each
+// one its own TCP and TLS setup. They last while the Keychain holds the
+// session token they read and the launch arguments stay the same. Once the
+// member signs in or out in the app, or Screenr Dev's app launches with other
+// fixtures, the next request gets new services, and the replaced ones close
+// their connections when no request uses them.
 @MainActor
 public final class ExtensionServices {
   private final class Kept {

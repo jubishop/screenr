@@ -1701,7 +1701,7 @@ the member can Recommend it or mark it Want to watch:
 
 | Piece | Where | What it does |
 | --- | --- | --- |
-| `ShareViewController` | `ScreenrShare/` | The principal class. It builds `AppServices(…, host: .shareExtension)`, whose client marks no [visits](#visits), with `Telemetry.localOnly()`, logs to `share.ndjson` in the app group's log directory through one writer per process, hosts `ShareView`, and closes the sheet. |
+| `ShareViewController` | `ScreenrShare/` | The principal class. It runs each share with the process's `AppServices(…, host: .shareExtension)`, whose client marks no [visits](#visits), with `Telemetry.localOnly()`, logs to `share.ndjson` in the app group's log directory through one writer per process, hosts `ShareView`, and closes the sheet. |
 | `ShareView`, `ShareSearchView`, `ShareTitleView` | `ScreenrShare/` | The views, in a navigation stack with the system Close button. Large text stacks posters above names. |
 | `SharedContent`, `ShareModel`, `ShareTitleModel` | ScreenrKit `Share/` | The behavior above. |
 | `FixtureHandoff` | ScreenrKit `FakeAPI/` | Screenr Dev keeps its fixture launch arguments in the app group, so the extension, which the system starts without arguments, answers from the same fixtures. A launch without fixtures forgets them; Release builds neither keep nor read them. |
@@ -1716,6 +1716,16 @@ the member can Recommend it or mark it Want to watch:
   `AccentColor` tint; the icon sets compile only into the app.
 - **Sentry:** the extension never starts Sentry. `Telemetry.localOnly()` logs
   its API calls, and the [feedback form](#feedback) attaches its log.
+- **Services:** iOS may keep the extension's process for the next share, so
+  shares reuse one set of services through `ExtensionServices`, as pushes do
+  in the [notification extension](#push-content), rather than each opening
+  its own connections. `ExtensionServices.share(arguments:_:)` runs a share
+  until `ShareModel.finished()`: the sheet has closed, with Close or a swipe,
+  and every request the share sent has answered. After the sheet closes, the
+  share sends nothing more, and its later requests, such as the page's read
+  after a save, fail as `.cancelled`. So when the member signs in again or
+  out in the app and a later share replaces the services, the old ones close
+  only once a save still finishing answers.
 - **Signing:** the bundle ID is the app's with `.Share`, and
   `Config/ScreenrShare.entitlements` holds only the app group. See
   [Apple Developer](../docs/running-screenr.md#apple-developer).
@@ -1724,8 +1734,9 @@ the member can Recommend it or mark it Want to watch:
   `ShareExtensionTests` drives the extension from the app's own share sheet,
   where iOS lists Screenr Dev for a title's link: it finds the title, shows
   its friends, saves Want to watch, and closes, and the request log shows
-  what the extension sent. The [hosted tests](#hosted-tests) check that the
-  built extension's `Info.plist` has the app's settings. To try a link from
+  what the extension sent. A second share then finds the title again. The
+  [hosted tests](#hosted-tests) check that the built extension's
+  `Info.plist` has the app's settings. To try a link from
   another app in your Simulator, launch Screenr Dev with fixture arguments,
   such as `-ScreenrFixtures "$PWD/ios/ScreenrKit/Fixtures" -ScreenrFixtureLog
   /tmp/requests.log`, open a TMDB or IMDb title in Safari, and choose Page
