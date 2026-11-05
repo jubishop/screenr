@@ -3,8 +3,9 @@
 
 Runs ScreenrKit's tests with swift test on the Mac, builds the Release variant
 for the Simulator, then boots an iPhone Simulator, waits for it to finish
-booting, and runs the Screenr scheme's tests (ScreenrKit and the UI tests) in
-it. Without --simulator, the check creates its own Simulator and deletes it
+booting, marks the keyboard's one-time slide-to-type introduction as shown,
+and runs the Screenr scheme's tests (ScreenrKit and the UI tests) in it.
+Without --simulator, the check creates its own Simulator and deletes it
 afterward, so concurrent checkouts never share one.
 Build output, logs, and result bundles stay in ios/build/, which Git ignores.
 The package and app builds there are removed before building when
@@ -478,6 +479,12 @@ def main():
         # A new Simulator keeps setting itself up after xcodebuild boots it, and
         # on a slow Mac that can outlast a UI test's app launch timeout.
         run("Simulator boot", ["xcrun", "simctl", "bootstatus", udid, "-b"], BOOT_TIMEOUT_MINUTES)
+        # A Simulator covers its keyboard once, at an early keyboard appearance,
+        # with an introduction to sliding across the letters, which a test's tap
+        # there then misses, such as Post in a push's reply field. Which test
+        # meets it depends on every earlier test's keyboard, so it never shows.
+        capture("xcrun", "simctl", "spawn", udid, "defaults", "write", "com.apple.keyboard.preferences",
+                "DidShowContinuousPathIntroduction", "-bool", "true")
         tests = OUTPUT / "Tests.xcresult"
         # Collecting diagnostics after a failed UI test took about 10 minutes
         # and sometimes never finished.

@@ -242,12 +242,16 @@ class CheckIOSTests(unittest.TestCase):
         self.assertEqual(events[3][4:], ["iphone-18-pro", "runtime-27-0"])
         # A new Simulator finishes its first boot before tests launch the app.
         self.assertEqual(events[4], ["xcrun", "simctl", "bootstatus", "NEW-UDID", "-b"])
-        self.assertEqual(events[5], ["xcodebuild", *project, "-configuration", "Debug", "-destination",
+        # The keyboard's one-time introduction never covers what a test taps.
+        self.assertEqual(events[5], ["xcrun", "simctl", "spawn", "NEW-UDID", "defaults", "write",
+                                     "com.apple.keyboard.preferences", "DidShowContinuousPathIntroduction",
+                                     "-bool", "true"])
+        self.assertEqual(events[6], ["xcodebuild", *project, "-configuration", "Debug", "-destination",
                                      "platform=iOS Simulator,id=NEW-UDID", "-parallel-testing-enabled", "NO",
                                      # A failure reports at once instead of gathering a sysdiagnose.
                                      "-collect-test-diagnostics", "never",
                                      "-resultBundlePath", build + "/check/Tests.xcresult", "test"])
-        self.assertEqual(events[6:], [["xcrun", "simctl", "shutdown", "NEW-UDID"],
+        self.assertEqual(events[7:], [["xcrun", "simctl", "shutdown", "NEW-UDID"],
                                       ["xcrun", "simctl", "delete", "NEW-UDID"]])
 
     def test_delivers_the_pushes_ui_tests_ask_for_to_its_simulator(self):
@@ -283,8 +287,10 @@ class CheckIOSTests(unittest.TestCase):
     def test_uses_a_given_simulator_and_leaves_it_in_place(self):
         result = self.check("--simulator", "MY-UDID")
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(self.steps(), ["xcodebuild", "swift", "xcodebuild", "simctl bootstatus", "xcodebuild"])
+        self.assertEqual(self.steps(), ["xcodebuild", "swift", "xcodebuild", "simctl bootstatus", "simctl spawn",
+                                        "xcodebuild"])
         self.assertEqual(self.recorded()[3], ["xcrun", "simctl", "bootstatus", "MY-UDID", "-b"])
+        self.assertEqual(self.recorded()[4][:4], ["xcrun", "simctl", "spawn", "MY-UDID"])
         self.assertIn("platform=iOS Simulator,id=MY-UDID", self.recorded()[-1])
 
     def test_a_failed_package_resolution_stops_before_the_package_tests(self):
@@ -477,6 +483,9 @@ class CheckIOSTests(unittest.TestCase):
                 # Before the Simulator exists, so there is none to delete.
                 ("DEVICES", re.escape("xcrun simctl list --json devices"), []),
                 ("CREATE", r"xcrun simctl create screenr-check-checkout-\d+ iphone-18-pro runtime-27-0", []),
+                ("SPAWN", re.escape("xcrun simctl spawn NEW-UDID defaults write com.apple.keyboard.preferences "
+                                    "DidShowContinuousPathIntroduction -bool true"),
+                 ["simctl shutdown", "simctl delete"]),
                 ("SUMMARY", re.escape(f"xcrun xcresulttool get test-results summary --path {bundle}"),
                  ["simctl shutdown", "simctl delete"])):
             with self.subTest(step=step):

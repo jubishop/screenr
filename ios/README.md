@@ -79,8 +79,16 @@ the compiler, linker, or tools. It resolves the app's packages into the
    again, on iOS, the [hosted tests](#hosted-tests), and the UI tests. It
    first boots the Simulator and waits with `xcrun simctl bootstatus` until
    the boot finishes, since a new Simulator's first boot can otherwise
-   outlast a UI test's launch timeout on a slow Mac. Meanwhile it delivers
-   the pushes the UI tests ask for; see [push tests](#push-tests).
+   outlast a UI test's launch timeout on a slow Mac. Then it marks the
+   keyboard's slide-to-type introduction as shown
+   (`DidShowContinuousPathIntroduction` in
+   `com.apple.keyboard.preferences`). A Simulator shows it once, over the
+   keyboard, at an early keyboard appearance, and the test that meets it
+   depends on every earlier test's keyboard. On 2026-11-05 it covered the
+   Post button of a push's reply field in `PushTests`; see
+   [run one test](#run-one-test) for a Simulator of your own. Meanwhile
+   it delivers the pushes the UI tests ask for; see
+   [push tests](#push-tests).
 
 Without `--simulator`, it creates a Simulator on the newest iOS runtime and
 deletes it afterward, so several checkouts can check at once. With
@@ -389,6 +397,14 @@ bin/ios-packages xcodebuild test -project ios/Screenr.xcodeproj \
   -destination "platform=iOS Simulator,id=$udid" \
   -derivedDataPath ios/build/DerivedData \
   -only-testing:ScreenrUITests/LaunchTests
+```
+
+On a new Simulator, first mark the keyboard's slide-to-type introduction as
+shown, as `bin/check-ios` does, so it never covers what a UI test taps:
+
+```sh
+xcrun simctl spawn "$udid" defaults write com.apple.keyboard.preferences \
+  DidShowContinuousPathIntroduction -bool true
 ```
 
 ## Run the Dev app
