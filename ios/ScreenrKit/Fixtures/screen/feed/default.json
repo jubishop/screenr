@@ -11,7 +11,7 @@
   },
   "response": {
     "status": 200,
-    "etag": "W/\"1dzi95graZjsQkMy5KxjNM1riOPP8nR5qSU4zcu-epU\"",
+    "etag": "W/\"YjgKRRG2PW93pusfrJoRMsVpzwBvGVbjwN7VhsZ-KIk\"",
     "body": {
       "kind": "feed",
       "conversations": [
@@ -878,6 +878,8 @@
       ],
       "target": null,
       "targetUnavailable": false,
+      "since": "2026-10-13T12:00:00.000Z",
+      "older": false,
       "unreadNotifications": 6,
       "user": {
         "user_id": "user-alice",

@@ -284,7 +284,7 @@ describes the records behind them.
 | `APNS_PRIVATE_KEY` | APNs auth key, which signs the provider tokens for push requests | [#240](https://github.com/jubishop/screenr/issues/240) |
 | `GOOGLE_IOS_CLIENT_ID` | iOS OAuth client ID, accepted as the audience of the app's Google ID tokens | [#216](https://github.com/jubishop/screenr/issues/216) |
 | `REVIEW_SIGN_IN_CODE` | Fixed six-digit sign-in code for the [demo circle](running-screenr.md#demo-circle-for-apple-review)'s reviewer, given in App Store Connect's review notes | [#247](https://github.com/jubishop/screenr/issues/247) |
-| `SCREENR_IOS_MINIMUM_BUILD` | Optional lowest app build served; older builds get HTTP 426. Leave it unset until a [breaking payload change](data-and-access.md#changes-that-app-builds-depend-on) needs it. Activation rejects a value that is not a whole number | [#213](https://github.com/jubishop/screenr/issues/213) |
+| `SCREENR_IOS_MINIMUM_BUILD` | Optional lowest app build served; older builds get HTTP 426. Raise it only when a [breaking payload change](data-and-access.md#changes-that-app-builds-depend-on) needs it; that section records the current value. Activation rejects a value that is not a whole number | [#213](https://github.com/jubishop/screenr/issues/213), [#502](https://github.com/jubishop/screenr/issues/502) |
 
 Both private keys use the
 [single-line form](running-screenr.md#apple-key-files). Like the other

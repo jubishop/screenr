@@ -11,7 +11,7 @@
   },
   "response": {
     "status": 200,
-    "etag": "W/\"bL-Q5D15Dr6cn5563ZP01RpJ0guGzBVLCOgi2Z0pYJ4\"",
+    "etag": "W/\"dIaHZ0dc8-cQ5uLi6Gj2W1ehepJ5xL7tsZyfy1GeOuw\"",
     "body": {
       "kind": "profile",
       "profile": {
@@ -33,6 +33,8 @@
       },
       "topTen": [],
       "conversations": [],
+      "since": null,
+      "older": false,
       "unreadNotifications": 0,
       "user": {
         "user_id": "user-pat",

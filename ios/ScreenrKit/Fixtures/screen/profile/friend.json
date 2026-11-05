@@ -11,7 +11,7 @@
   },
   "response": {
     "status": 200,
-    "etag": "W/\"0_ZqQAp6UsGOnXhWGBJOL_uT0j3uLoPSGHu9iruItOQ\"",
+    "etag": "W/\"o-gyls_K65r0GAkbfLCT5GgoWn3jRvYZKDNl01h5HWA\"",
     "body": {
       "kind": "profile",
       "profile": {
@@ -299,6 +299,8 @@
           "reactions": []
         }
       ],
+      "since": "2026-10-13T12:00:00.000Z",
+      "older": false,
       "unreadNotifications": 6,
       "user": {
         "user_id": "user-alice",

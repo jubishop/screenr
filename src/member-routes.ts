@@ -29,9 +29,8 @@ export type ListMode = "theaters";
 // (docs/title-feed.md#paged-histories): `before` asks for the page of
 // entries older than a time, or than `now` for the newest page, with every
 // newer entry; `since` asks for every entry at or after the time that a
-// paged read's response named. A read with neither sends the whole history,
-// as installed iPhone builds expect. The web keeps them out of its address;
-// see screenPath.
+// paged read's response named. A read with neither reads the newest page.
+// The web keeps them out of its address; see screenPath.
 export type HistoryWindow = { since?: string; before?: string };
 // The newest page, which each visit starts from.
 export const newestHistory: HistoryWindow = { before: "now" };

@@ -11,7 +11,7 @@
   },
   "response": {
     "status": 200,
-    "etag": "W/\"-pMnO11lwYCPTMIMiayQNzRTdAOm0zCxlh6_rq0OvR0\"",
+    "etag": "W/\"KnTfDPLzOJD1BH5mSYhk4Kmt8DlMCKN8gQPVeCOq8A0\"",
     "body": {
       "kind": "feed",
       "conversations": [
@@ -465,6 +465,8 @@
         "reply": "8"
       },
       "targetUnavailable": false,
+      "since": "2026-10-13T12:00:00.000Z",
+      "older": false,
       "unreadNotifications": 0,
       "user": {
         "user_id": "user-hana",
