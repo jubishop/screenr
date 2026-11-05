@@ -610,17 +610,16 @@ an issue at once ([#292](https://github.com/jubishop/screenr/issues/292)).
 down. One `check` job ran `bin/check --full` in sequence, and its runs on
 `main` had grown to 10 to 13 minutes, one of them 20.
 
-The check workflow runs these jobs. After `scope`, the next four start
-together, and together they run everything `bin/check --full` runs on Linux:
+The check workflow runs these jobs. The first four start together, and
+together they run everything `bin/check --full` runs on Linux:
 
 | Job | Work |
 | --- | --- |
-| `scope` | Runs [`bin/ci-scope`](../bin/ci-scope), which decides whether the jobs below run. |
 | `static` | `bin/check`, with its shell lint for `.envrc`, `bin/`, and `bin/hooks/`, then `bin/check-application --part static`: shell lint for `ops/`, Python tests, formatting, and typechecking. |
 | `app (I/N)` | `bin/check-application --part app --shard I/N`: one shard of the application and PostgreSQL test files, with the [pinned Caddy](#ci-caddy) and Playwright's headless Chromium for the browser harness tests. |
 | `browser (I/N)` | `bin/check-application --part browser --shard I/N`: one Playwright shard against a production build. |
 | `release` | Runs [`bin/deployment-decision`](#main-branch-delivery), then builds the release and runs the [packaging check](deployment.md#build-and-activate-a-release) on every run, pull requests included. It uploads the release only when the run deploys. |
-| `check` | Passes only when every job above passed, or when `scope` skipped them. Merging a pull request [requires it](#required-check-on-main--2026-11-01), and so does `bin/deploy-ci`. |
+| `check` | Passes only when every job above passed. Merging a pull request [requires it](#required-check-on-main--2026-11-01), and so does `bin/deploy-ci`. |
 | `deploy` | Waits for `check` and deploys the package from `release`. |
 
 `bin/check-application --shard I/N` passes Playwright's `--shard` to the
@@ -630,35 +629,39 @@ that runs `npm test` gets every file. Node splits the application test files
 by their sorted position; Playwright splits browser tests evenly. Each matrix
 job uses its `strategy.job-total` as N, so adding a `shard` entry adds a shard.
 `tests/test_check_application.py` checks that the workflow runs the foundation
-checks and every part and shard, that `check` covers every other job and
-passes only when they passed or `scope` skipped them, and that every run
-packages the release while only a deploying run uploads it.
+checks and every part and shard, that every check job runs for every change,
+that `check` covers every other job and passes only when they all passed, and
+that every run packages the release while only a deploying run uploads it.
 
-The workflow runs for pull requests, pushes to `main`, and manual runs. A
-change only to Markdown needs no check jobs, except Markdown that a check
-reads, so that its failure can't surface first in an unrelated pull request.
+The workflow runs every check job for every pull request, push to `main`,
+and manual run, whatever the change. Its triggers filter no paths, unlike the
+[engineering policy's](foundation/engineering-policy.md#hosted-ci) Markdown
+filter, because a change to Markdown alone can fail a check.
 `tests/test_app_sandbox.py` scans the pages in `docs/`, `memory/`, and the
 root for runbooks that would run release code outside the sandbox
-([#371](https://github.com/jubishop/screenr/issues/371)). The `static` job's
-`bin/check` checks the links and heading anchors of every tracked Markdown
-file, which otherwise lives only in `ios/` and `bin/`
-([#439](https://github.com/jubishop/screenr/issues/439)). A change to
-Markdown in any of these folders alone runs every check job.
+([#371](https://github.com/jubishop/screenr/issues/371)), and the `static`
+job's `bin/check` checks the links and heading anchors of every tracked
+Markdown file ([#439](https://github.com/jubishop/screenr/issues/439)). A
+change that skipped the checks could fail first in an unrelated pull
+request. `tests/test_app_sandbox.py` checks that the triggers filter no
+paths.
 
-A push to `main` skips other Markdown with a `paths` filter in the
-[engineering policy's](foundation/engineering-policy.md#hosted-ci) form. A
-run that started only to skip would join the workflow's concurrency group
-and could replace a pending run that deploys. A pull request has no filter,
-because a skipped workflow reports no status and merging requires `check`
-([#372](https://github.com/jubishop/screenr/issues/372)). Its `scope` job
-compares GitHub's test merge commit with the base it merged into, counting a
-renamed file by both paths. When only other Markdown changed, the check jobs
-are skipped and `check` passes in under a minute. Any other event, and any
-doubt, runs every job. `tests/test_app_sandbox.py` checks that the filter
-re-includes exactly these folders' globs, that `bin/ci-scope` runs the checks
-for the same Markdown, and that the globs cover every tracked Markdown file.
-Markdown added in a new folder fails that test until both skips include the
-folder.
+Until [#470](https://github.com/jubishop/screenr/issues/470), CI skipped
+Markdown outside the folders those checks read: a push to `main` with a
+`paths` filter, and a pull request with a `scope` job that skipped the check
+jobs while `check` still reported. Both skips left out Markdown in a folder
+that held none yet, such as a first `ops/README.md`, and saved almost
+nothing: none of the 371 commits on `main` through 2026-11-01 changed only
+Markdown that they left out. Keeping the skips was rejected.
+
+A push to `main` that changes only Markdown therefore runs the checks and,
+like any push, deploys unless every commit since the last successful
+deployment carries the [skip trailers](#main-branch-delivery). Push runs share
+a concurrency group that never cancels a running one, so a deployment in
+progress finishes. A newer push's run replaces one still waiting in the
+group, and it decides deployment for that run's commits too, because
+`bin/deployment-decision` covers every commit since the last successful
+deployment.
 
 Each browser shard builds its own production artifact, as the
 [browser harness](testing.md#browser-harness) requires, and the `release` job
@@ -682,11 +685,13 @@ Since [#370](https://github.com/jubishop/screenr/issues/370), `release`
 packages on every run. In a pull request run on 2026-11-01 it took 68
 seconds, 45 of them to build and package, while the slowest app shard took
 212, and the run passed `check` 3 minutes 40 seconds after it started.
-Since [#372](https://github.com/jubishop/screenr/issues/372), `scope` runs
+From [#372](https://github.com/jubishop/screenr/issues/372) until
+[#470](https://github.com/jubishop/screenr/issues/470), a `scope` job ran
 first. In a pull request run later that day, the check jobs started 10
 seconds after the run did, and it passed `check` 2 minutes 57 seconds after
 it started. A pull request that changed only `ios/README.md` passed `check`
-15 seconds after its run started.
+15 seconds after its run started, because `scope` skipped the check jobs;
+such a pull request now runs them all.
 
 To bring a run back under budget, find the slowest job with
 `gh run view <run> --json jobs`, then add a shard to its matrix or move work
@@ -969,8 +974,9 @@ admin role, which only the owner's account holds, in `always` mode so direct
 pushes work. GitHub still reports a pull request as blocked while `check`
 fails or runs, such as `BLOCKED` in `gh pr view --json mergeStateStatus`.
 `gh api repos/jubishop/screenr/rulesets` lists it. The
-[check workflow](#ci-jobs) runs for every pull request, and its `scope` job
-skips the other check jobs when only Markdown that no check reads changed.
+[check workflow](#ci-jobs) runs every check job for every pull request, a
+Markdown-only one included
+([#470](https://github.com/jubishop/screenr/issues/470)).
 
 ## Scheduled memory audit
 
@@ -989,7 +995,7 @@ validation, and failure handling. Screenr's `memoryAudit` settings in
 - **Deployment:** each audit commit carries `Screenr-Deploy: skip` trailers,
   so a memory-only commit never forces a
   [deployment](#main-branch-delivery). CI still runs its checks on each audit
-  push, because tests read memory notes ([CI jobs](#ci-jobs)).
+  push, as on every push ([CI jobs](#ci-jobs)).
 - **Failure issue:** a new `Memory audit failing` issue gets the `bug` and
   `area: tooling` labels.
 - **Index:** archiving a note removes its entry from the README's
