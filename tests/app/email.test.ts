@@ -5,7 +5,12 @@ import { once } from "node:events";
 import { createServer, type AddressInfo } from "node:net";
 import { setTimeout } from "node:timers/promises";
 import { promisify } from "node:util";
-import { db, captureFailures, testDatabaseURL } from "./social-fixture";
+import {
+  db,
+  captureFailures,
+  assertNotLogged,
+  testDatabaseURL,
+} from "./social-fixture";
 
 process.env.EMAIL_TRANSPORT = "resend";
 process.env.RESEND_API_KEY = "test-key-never-used-on-the-network";
@@ -217,8 +222,11 @@ test("network failures log the error class, cause code, and stack without messag
   assert.ok(
     stack.length > 0 && stack.every((frame: string) => /^at /.test(frame)),
   );
-  for (const value of ["fetch failed", "getaddrinfo", "network@example.test"])
-    assert.ok(!printed[0].includes(value), `Logged ${value}`);
+  assertNotLogged(printed, [
+    "fetch failed",
+    "getaddrinfo",
+    "network@example.test",
+  ]);
 });
 
 test("permanent Resend rejections are not retried; timeouts, conflicts, limits, and server errors are", async () => {

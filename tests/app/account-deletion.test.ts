@@ -15,6 +15,7 @@ import {
   signIn,
   assertRouteError,
   captureFailures,
+  captureLog,
   denied,
 } from "./social-fixture";
 import { fakeApple, serve } from "./identity-providers";
@@ -134,6 +135,9 @@ const failureEvents = (failures: string[]) =>
   failures
     .filter((line) => line.startsWith("{"))
     .map((line) => JSON.parse(line).event);
+
+// The record each deletion prints for the journal, which captureLog collects.
+const journaled = (userId: string) => ({ event: "account deleted", userId });
 
 const appleNotDisconnected = {
   status: 503,
@@ -413,6 +417,7 @@ test("deleting an account erases every row that refers to the member, keeping re
   const world = await departingMember(t);
   const { departing, email, alice, ids } = world;
   await linkApple(apple, departing);
+  const printed = captureLog(t);
 
   // The schema scan finds the columns this test relies on.
   const columns = await personColumns();
@@ -438,6 +443,7 @@ test("deleting an account erases every row that refers to the member, keeping re
   });
   assert.equal(response.status, 200, await response.clone().text());
   assert.deepEqual(await response.json(), { ok: true });
+  assert.deepEqual(printed, [journaled(departing)]);
 
   // Apple's authorization ended, as Apple requires.
   assert.deepEqual(
@@ -582,11 +588,13 @@ test("deletion leaves another member's pending code and sign-in state, even when
     "other's state",
   ]);
 
+  const printed = captureLog(t);
   const response = await deleteAccount({
     Cookie: cookies[departing],
     Origin: origin,
   });
   assert.equal(response.status, 200, await response.clone().text());
+  assert.deepEqual(printed, [journaled(departing)]);
   assert.deepEqual(await verifications(), ["other's code", "other's state"]);
   // The other member's code still signs them in.
   const signedIn = await post("sign-in/email-otp", {
@@ -599,10 +607,12 @@ test("deletion leaves another member's pending code and sign-in state, even when
 test("friends' feeds, title pages, profiles, and notifications still render after a member deletes their account", async (t) => {
   const world = await departingMember(t);
   const { departing, alice, ben, cam, eve, ids } = world;
+  const printed = captureLog(t);
   const response = await deleteAccount({
     Authorization: `Bearer ${world.session}`,
   });
   assert.equal(response.status, 200, await response.clone().text());
+  assert.deepEqual(printed, [journaled(departing)]);
 
   type Screen = Awaited<ReturnType<typeof loadScreen>>;
   const conversationsOf = (screen: Screen): FeedItem[] =>
@@ -730,8 +740,9 @@ test("erasing an account reads comments and the tables that refer to them only t
   }
 });
 
-test("deletion needs a sign-in from the last ten minutes", async () => {
+test("deletion needs a sign-in from the last ten minutes", async (t) => {
   const departing = await person("departing");
+  const printed = captureLog(t);
   const cookie = await cookieFor(departing);
   await db.query(
     `UPDATE session SET "createdAt"=now()-interval '11 minutes' WHERE "userId"=$1`,
@@ -761,10 +772,12 @@ test("deletion needs a sign-in from the last ten minutes", async () => {
   });
   assert.equal(response.status, 200, await response.clone().text());
   assert.deepEqual(await references(departing), []);
+  assert.deepEqual(printed, [journaled(departing)]);
 });
 
-test("the iPhone app signs in again while signed in, then deletes with the new token", async () => {
+test("the iPhone app signs in again while signed in, then deletes with the new token", async (t) => {
   const departing = await person("departing");
+  const printed = captureLog(t);
   const stale = await bearer(departing);
   await db.query(
     `UPDATE session SET "createdAt"=now()-interval '11 minutes' WHERE "userId"=$1`,
@@ -794,6 +807,7 @@ test("the iPhone app signs in again while signed in, then deletes with the new t
   const response = await deleteAccount({ Authorization: `Bearer ${token}` });
   assert.equal(response.status, 200, await response.clone().text());
   assert.deepEqual(await references(departing), []);
+  assert.deepEqual(printed, [journaled(departing)]);
 });
 
 test("when Apple does not confirm revocation, nothing is erased and a retry deletes the account", async (t) => {
@@ -806,6 +820,7 @@ test("when Apple does not confirm revocation, nothing is erased and a retry dele
   // Apple rejects Screenr's key until it is fixed.
   apple.rotateKey();
   const failures = captureFailures();
+  const printed = captureLog(t);
   await assertRouteError(await deleteAccount(headers), appleNotDisconnected);
   assert.deepEqual(failureEvents(failures), ["apple revoke failed"]);
   assert.equal(
@@ -820,6 +835,7 @@ test("when Apple does not confirm revocation, nothing is erased and a retry dele
   assert.equal(response.status, 200, await response.clone().text());
   assert.equal(apple.revoked.length, 1);
   assert.deepEqual(await references(departing), []);
+  assert.deepEqual(printed, [journaled(departing)]);
 });
 
 test("a token no secret can open no longer blocks deletion", async (t) => {
@@ -834,9 +850,11 @@ test("a token no secret can open no longer blocks deletion", async (t) => {
     [departing],
   );
   const failures = captureFailures();
+  const printed = captureLog(t);
   const response = await deleteAccount(await bearer(departing));
   assert.equal(response.status, 200, await response.clone().text());
   assert.deepEqual(failureEvents(failures), ["apple token unreadable"]);
+  assert.deepEqual(printed, [journaled(departing)]);
   assert.equal(apple.revoked.length, 0);
   assert.deepEqual(await references(departing), []);
 });
@@ -866,8 +884,10 @@ test("a Sign in with Apple token stored between revocation and erasure is revoke
   const departing = await person("departing");
   configureApple(t, apple, signInDuringRevocation(apple, departing, 1));
   await linkApple(apple, departing);
+  const printed = captureLog(t);
   const response = await deleteAccount(await bearer(departing));
   assert.equal(response.status, 200, await response.clone().text());
+  assert.deepEqual(printed, [journaled(departing)]);
   // Both the linked token and the one the later sign-in stored were revoked.
   assert.equal(apple.exchanged.length, 2);
   assert.deepEqual(
@@ -904,6 +924,7 @@ test("without Sign in with Apple settings, a member with an Apple token cannot d
   for (const name of Object.keys(apple.env())) delete process.env[name];
 
   const failures = captureFailures();
+  const printed = captureLog(t);
   await assertRouteError(await deleteAccount(await bearer(departing)), {
     status: 503,
     message:
@@ -917,33 +938,23 @@ test("without Sign in with Apple settings, a member with an Apple token cannot d
   const response = await deleteAccount(await bearer(withoutApple));
   assert.equal(response.status, 200, await response.clone().text());
   assert.deepEqual(await references(withoutApple), []);
+  assert.deepEqual(printed, [journaled(withoutApple)]);
 });
 
-test("a person who never finished setup can delete their account", async () => {
+test("a person who never finished setup can delete their account", async (t) => {
   const { token } = await createInvitation(null);
   const pat = await pending("pat", token);
+  const printed = captureLog(t);
   const response = await deleteAccount(await bearer(pat));
   assert.equal(response.status, 200, await response.clone().text());
   assert.deepEqual(await references(pat), []);
+  assert.deepEqual(printed, [journaled(pat)]);
 });
-
-// Replaces console.log until the test ends and returns the JSON events it
-// printed.
-function captureEvents(t: TestContext) {
-  const printed: Record<string, unknown>[] = [];
-  mock.method(console, "log", (line: unknown) => {
-    try {
-      printed.push(JSON.parse(String(line)));
-    } catch {}
-  });
-  t.after(() => mock.restoreAll());
-  return printed;
-}
 
 test("each deletion leaves one journal line that names only the user ID", async (t) => {
   const departing = await person("departing");
   const stale = await person("stale");
-  const events = captureEvents(t);
+  const printed = captureLog(t);
   const staleSession = await bearer(stale);
   await db.query(
     `UPDATE session SET "createdAt"=now()-interval '11 minutes' WHERE "userId"=$1`,
@@ -951,7 +962,7 @@ test("each deletion leaves one journal line that names only the user ID", async 
   );
   assert.equal((await deleteAccount(staleSession)).status, 403);
   assert.equal((await deleteAccount(await bearer(departing))).status, 200);
-  assert.deepEqual(events, [{ event: "account deleted", userId: departing }]);
+  assert.deepEqual(printed, [{ event: "account deleted", userId: departing }]);
 });
 
 // Runs a command in the checkout, with this suite's database, writing

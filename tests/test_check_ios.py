@@ -45,12 +45,18 @@ def record(*event):
 def finish(step):
     print(os.environ.get('FAKE_OUTPUT_' + step, ''))
     sys.exit(int(os.environ.get('FAKE_STATUS_' + step, '0')))
+def build_into(option):
+    # Leave build output in the directory the option names, as the real tool does.
+    output = Path(sys.argv[sys.argv.index(option) + 1])
+    output.mkdir(parents=True, exist_ok=True)
+    (output / 'built').touch()
 """
 XCODEBUILD = RECORD + """
 if sys.argv[1:] == ['-version']:
     print(os.environ.get('FAKE_XCODE_VERSION', 'Xcode 27.0\\nBuild version 27A266a'))
     sys.exit(0)
 record('xcodebuild', *sys.argv[1:])
+build_into('-derivedDataPath')
 step = sys.argv[-1].upper()
 bundle = Path(sys.argv[sys.argv.index('-resultBundlePath') + 1])
 bundle.mkdir(parents=True)
@@ -91,7 +97,18 @@ else:
 """
 SWIFT = RECORD + """
 record('swift', *sys.argv[1:])
+build_into('--scratch-path')
 finish('SWIFT')
+"""
+PINS = """{
+  "pins" : [
+    {
+      "identity" : "sentry-cocoa",
+      "state" : { "version" : "%s" }
+    }
+  ],
+  "version" : 3
+}
 """
 
 
@@ -235,6 +252,33 @@ class CheckIOSTests(unittest.TestCase):
                 self.assertNotEqual(result.returncode, 0)
                 self.assertIn("Simulator tests: " + message, result.stderr)
                 self.assertEqual(self.steps()[-1], "simctl delete")
+
+    def test_a_package_update_rebuilds_the_package_and_derived_data_from_scratch(self):
+        # A sentry-cocoa update replaced its framework's headers in both
+        # directories, and modules built before it then failed to load.
+        build = self.repo / "ios/build"
+        previous = [build / "ScreenrKit/out/Sentry.framework", build / "DerivedData/Build/Sentry.framework"]
+        resolved = self.repo / "ios/ScreenrKit/Package.resolved"
+        resolved.parent.mkdir(parents=True)
+        for version, kept in (
+                # Output from before the check recorded its packages may be from any version.
+                ("9.30.1", False),
+                # The same packages keep the last run's output to build on.
+                ("9.30.1", True),
+                ("9.32.0", False)):
+            with self.subTest(version=version, kept=kept):
+                resolved.write_text(PINS % version)
+                for path in previous:
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    path.write_text("from the previous run")
+                result = self.check()
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual([path.exists() for path in previous], [kept, kept])
+                self.assertEqual("Removing ios/build/ScreenrKit and ios/build/DerivedData" in result.stdout,
+                                 not kept)
+                # The steps built after the check removed the old output.
+                self.assertTrue((build / "ScreenrKit/built").exists())
+                self.assertTrue((build / "DerivedData/built").exists())
 
     def assert_stopped(self, pids):
         """Require that the hung xcodebuild and its child have exited."""

@@ -2,6 +2,7 @@ import { before, beforeEach, after, mock, type TestContext } from "node:test";
 import assert from "node:assert/strict";
 import { randomBytes } from "node:crypto";
 import { setTimeout } from "node:timers/promises";
+import { fileURLToPath } from "node:url";
 import { format } from "node:util";
 import { testDatabaseURL } from "../../scripts/checkout";
 import { failureRecord } from "../../scripts/failure-lines";
@@ -73,15 +74,17 @@ async function idle() {
   }
 }
 
-// Replaces console.error until mock.restoreAll(), or until the test ends when
-// given its context, and returns what each call would have printed, so tests
-// can read failure logs. failure-guard.ts fails a test that prints a failure
-// line it doesn't capture.
+// Replaces console.error and console.warn until mock.restoreAll(), or until
+// the test ends when given its context, and returns what each call would have
+// printed, in order, so tests can read failure logs and Better Auth's own
+// lines. failure-guard.ts fails a test that prints either kind of line
+// without capturing it.
 export function captureFailures(t?: TestContext) {
   const printed: string[] = [];
-  (t?.mock ?? mock).method(console, "error", (...args: unknown[]) => {
-    printed.push(format(...args));
-  });
+  for (const method of ["error", "warn"] as const)
+    (t?.mock ?? mock).method(console, method, (...args: unknown[]) => {
+      printed.push(format(...args));
+    });
   return printed;
 }
 
@@ -89,6 +92,56 @@ export function captureFailures(t?: TestContext) {
 export function failureEvents(printed: string[]) {
   return printed.flatMap((line) => failureRecord(line)?.event ?? []);
 }
+
+// Replaces console.log as captureFailures replaces console.error and
+// console.warn, and returns what each call would have printed, parsed when
+// it is JSON. Each account deletion prints an "account deleted" record for
+// the journal (src/server/account-deletion.ts), which failure-guard.ts
+// doesn't flag, so a test that deletes an account captures and asserts it
+// to keep npm test's output clean.
+export function captureLog(t?: TestContext) {
+  const printed: unknown[] = [];
+  (t?.mock ?? mock).method(console, "log", (...args: unknown[]) => {
+    const line = format(...args);
+    try {
+      printed.push(JSON.parse(line));
+    } catch {
+      printed.push(line);
+    }
+  });
+  return printed;
+}
+
+// Stack frames, in failure lines and in Sentry reports, name each file in the
+// checkout by a path or file URL that begins with the checkout's own path, as
+// it is or escaped in JSON. That path can hold any word: every checkout under
+// macOS's /private/tmp holds "private" (#487).
+const checkoutURL = new URL("../..", import.meta.url).href.replace(/\/$/, "");
+const checkoutPath = fileURLToPath(checkoutURL);
+const checkoutForms = [
+  checkoutURL,
+  checkoutPath,
+  JSON.stringify(checkoutPath).slice(1, -1),
+];
+
+// Asserts that no captured line or report holds any of the values, such as a
+// request's path, a cookie, or an error's message. It reads them without the
+// checkout's path, so only what was logged can match, wherever the checkout
+// is.
+export function assertNotLogged(printed: string[], values: string[]) {
+  const text = checkoutForms.reduce(
+    (rest, form) => rest.replaceAll(form, ""),
+    printed.join("\n"),
+  );
+  for (const value of values)
+    assert.ok(!text.includes(value), `Logged ${value}`);
+}
+
+// In production Caddy forwards each client's address in X-Forwarded-For, and
+// Better Auth's rate limits key on it. Test requests to a rate-limited auth
+// instance send this one; without an address Better Auth warns and counts
+// them all in one shared bucket per path, as one address does.
+export const clientAddress = { "X-Forwarded-For": "192.0.2.1" };
 
 export async function pending(name: string, token: string, verified = true) {
   const id = randomBytes(24).toString("base64url");

@@ -83,6 +83,17 @@ deletes it afterward, so several checkouts can check at once. With
 `--simulator`, it uses that Simulator and leaves it in place. Logs and result
 bundles from the last run are in `ios/build/check/`.
 
+Each run builds on the last run's output: ScreenrKit's in
+`ios/build/ScreenrKit` and the app's in `ios/build/DerivedData`. A package
+update, such as a sentry-cocoa bump, replaces framework headers that modules
+there were built against, and those modules then fail to load ("has been
+modified since the module file was built"). So the check records the hash of
+`ios/ScreenrKit/Package.resolved` in `ios/build/Package.resolved.sha256`.
+When the file differs from the recorded one, or nothing is recorded, the
+check removes both directories before it builds. Each checkout keeps one
+copy of each. The commands below that reuse those directories don't check;
+after a package update, run `bin/check-ios` first or remove them.
+
 At most three checks run at once on the Mac, since more load it enough to
 make accessibility audits time out. Before its first step, a check waits for
 a free machine-wide slot, printing that it is waiting, and holds it until it

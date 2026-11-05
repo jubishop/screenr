@@ -75,8 +75,9 @@ COMMANDS = {
 }
 # Deployment and cleanup write these markers; a release cannot supply them.
 RESERVED = {'.deployment-pending', '.deployment-success'}
-# Activation creates .next/cache and changes its owner as root.
-NOT_LINKS = {'.', '.next', '.next/cache'}
+# Activation creates .next/cache and the web's poster cache mount point in it,
+# and changes their owner as root.
+NOT_LINKS = {'.', '.next', '.next/cache', '.next/cache/images'}
 # bin/deploy-ci deletes the release artifact before uploading it, so a retry
 # must rebuild it: rerunning only the deploy job cannot download it.
 RETRY = 'use Re-run all jobs in GitHub Actions'

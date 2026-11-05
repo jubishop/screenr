@@ -9,6 +9,7 @@ import {
   assertAuthError,
   assertRouteError,
   captureFailures,
+  clientAddress,
   person,
   cookieFor,
   bearerFor,
@@ -224,7 +225,7 @@ function signOut(authorization: string) {
   return auth().handler(
     new Request(`${origin}/api/auth/sign-out`, {
       method: "POST",
-      headers: { Authorization: authorization },
+      headers: { Authorization: authorization, ...clientAddress },
     }),
   );
 }
@@ -356,7 +357,10 @@ test("a sign-out whose session delete fails keeps the session and says so", asyn
     { Cookie: cookie, Origin: origin },
   ] as Record<string, string>[]) {
     const response = await auth().handler(
-      new Request(`${origin}/api/auth/sign-out`, { method: "POST", headers }),
+      new Request(`${origin}/api/auth/sign-out`, {
+        method: "POST",
+        headers: { ...headers, ...clientAddress },
+      }),
     );
     await assertAuthError(response, 500, {
       message: "Could not sign out. Try again.",

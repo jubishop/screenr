@@ -314,6 +314,8 @@ class UploadTests(ReceiverTests):
                                       file_member('./modules/injected.js', b'x')],
             'duplicate member': [file_member('./server.js', b'// replaced')],
             'release cache link': [link_member('./.next/cache', '../node_modules')],
+            'poster cache mount point link': [directory_member('./.next/cache'),
+                                              link_member('./.next/cache/images', '../../node_modules')],
             'pending marker': [file_member('./.deployment-pending')],
             'success marker': [link_member('./.deployment-success', 'server.js')],
         }
