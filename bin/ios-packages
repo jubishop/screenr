@@ -7,8 +7,10 @@ For xcodebuild, it first resolves this checkout's packages into the Mac's
 shared cache, then runs xcodebuild with the options that build against them.
 For swift, it runs the command with SwiftPM's downloads in the cache. Either
 way, it holds the cache in use while the command runs, so nothing deletes it
-meanwhile, and exits with the command's status. bin/check-ios and the
-TestFlight archive use the same cache; see ios/README.md#package-cache.
+meanwhile, and exits with the command's status. Afterward, it makes the
+package artifacts that SwiftPM extracted into this checkout APFS clones of the
+cache's identical files. bin/check-ios and the TestFlight archive use the same
+cache; see ios/README.md#package-cache.
 """
 
 import os
@@ -62,6 +64,7 @@ def main():
         except KeyboardInterrupt:
             # Control-C reached the tool too; wait for it to finish stopping.
             continue
+    packages.share_artifacts(ROOT)
     return 128 - status if status < 0 else status
 
 

@@ -14,7 +14,9 @@ the ones they were built with.
 xcodebuild's package sources and both tools' package downloads are in the
 Mac's shared package cache, outside every checkout (bin/_ios_packages.py).
 After taking its slot, a check resolves its packages there, under the cache's
-lock, and holds the cache in use until it exits. The cache is in
+lock, and holds the cache in use until it exits. After the package tests, it
+makes the package artifacts that SwiftPM extracted into the checkout APFS
+clones of the cache's identical files. The cache is in
 ~/Library/Caches/screenr-ios-packages, or in SCREENR_IOS_PACKAGE_CACHE, which
 tests set.
 
@@ -362,6 +364,7 @@ def main():
     packages.use(ROOT, lambda command: run("Package resolution", command, packages.RESOLVE_TIMEOUT_MINUTES))
     run("ScreenrKit tests", ["swift", "test", "--package-path", "ios/ScreenrKit",
                              "--scratch-path", str(BUILD / "ScreenrKit"), *packages.swift_options()])
+    packages.share_artifacts(ROOT)
     release = OUTPUT / "Release.xcresult"
     run("Release build", [*XCODEBUILD, "-configuration", "Release", "-destination",
                           "generic/platform=iOS Simulator", "-resultBundlePath", str(release), "build"])

@@ -1,11 +1,13 @@
 """Verify the iPhone app's shared package cache through bin/ios-packages, with simulated Xcode tools."""
 
 import contextlib
+import ctypes
 import fcntl
 import json
 import os
 from pathlib import Path
 import shutil
+import struct
 import subprocess
 import sys
 import tempfile
@@ -15,12 +17,34 @@ import unittest
 SOURCE = Path(__file__).resolve().parents[1]
 GB = 1024 ** 3
 PINS = '{"pins": [{"identity": "sentry-cocoa", "state": {"version": "%s"}}], "version": 3}\n'
+# A simulated SwiftPM extracts the package artifacts that FAKE_ARTIFACTS holds
+# into its scratch path or package sources directory, as SwiftPM does when its
+# workspace state lacks them: into new files, with the archive's modification
+# times.
+EXTRACT = """
+def extract(directory):
+    template = os.environ.get('FAKE_ARTIFACTS')
+    if not template or (directory / 'workspace-state.json').exists():
+        return
+    for path in sorted(Path(template).rglob('*')):
+        target = directory / path.relative_to(template)
+        if path.is_symlink():
+            target.symlink_to(os.readlink(path))
+        elif path.is_dir():
+            target.mkdir(parents=True, exist_ok=True)
+        else:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(path.read_bytes())
+            target.chmod(path.stat().st_mode)
+            os.utime(target, ns=(path.stat().st_atime_ns, path.stat().st_mtime_ns))
+"""
 # Each simulated tool records its arguments and whether another process held
 # each of the cache's locks while it ran, then exits as the test configures it.
 # Resolving creates the sources directory, as xcodebuild does.
 TOOL = """import fcntl, json, os, sys
 from pathlib import Path
 cache = Path(os.environ['SCREENR_IOS_PACKAGE_CACHE'])
+""" + EXTRACT + """
 def held(name):
     descriptor = os.open(cache / name, os.O_RDWR | os.O_CREAT)
     try:
@@ -37,9 +61,60 @@ with open(os.environ['CHECK_EVENTS'], 'a') as stream:
 if '-resolvePackageDependencies' in arguments:
     sources = Path(arguments[arguments.index('-clonedSourcePackagesDirPath') + 1])
     (sources / 'checkouts/sentry-cocoa').mkdir(parents=True, exist_ok=True)
+    extract(sources)
     sys.exit(int(os.environ.get('FAKE_STATUS_RESOLVE', '0')))
+if '--scratch-path' in arguments:
+    extract(Path(arguments[arguments.index('--scratch-path') + 1]))
 sys.exit(int(os.environ.get('FAKE_STATUS', '0')))
 """
+FRAMEWORK = "artifacts/sentry-cocoa/Sentry/Sentry.xcframework/macos-arm64_arm64e_x86_64/Sentry.framework"
+HEADER = FRAMEWORK + "/Versions/A/Headers/Sentry.h"
+OBJC = "artifacts/sentry-cocoa/SentryObjC-Static/SentryObjC-Static.xcframework/Info.plist"
+# When sentry-cocoa's archives were built, before anything extracted them.
+ARCHIVED_NS = 1_777_000_000_123_456_789
+
+
+def package_artifacts(directory):
+    """Write a simulated release of sentry-cocoa's frameworks into directory, as SwiftPM records and extracts it."""
+    def artifact(target, checksum):
+        return {"kind": {"xcframework": {}},
+                "packageRef": {"identity": "sentry-cocoa", "kind": "remoteSourceControl", "name": "sentry-cocoa",
+                               "location": "https://github.com/getsentry/sentry-cocoa.git"},
+                "path": f"{directory}/artifacts/sentry-cocoa/{target}/{target}.xcframework",
+                "source": {"checksum": checksum, "type": "remote",
+                           "url": f"https://github.com/getsentry/sentry-cocoa/releases/download/9.32.0/{target}.zip"},
+                "targetName": target}
+    files = {"artifacts/sentry-cocoa/Sentry/Sentry.xcframework/Info.plist": b"<plist>Sentry</plist>\n",
+             HEADER: b"@interface SentrySDK : NSObject\n@end\n",
+             FRAMEWORK + "/Versions/A/Sentry": bytes(range(256)) * 64,
+             OBJC: b"<plist>SentryObjC-Static</plist>\n"}
+    for name, data in files.items():
+        (directory / name).parent.mkdir(parents=True, exist_ok=True)
+        (directory / name).write_bytes(data)
+        os.utime(directory / name, ns=(ARCHIVED_NS, ARCHIVED_NS))
+    (directory / FRAMEWORK / "Versions/A/Sentry").chmod(0o755)
+    (directory / FRAMEWORK / "Versions/Current").symlink_to("A")
+    (directory / "workspace-state.json").write_text(json.dumps({"object": {
+        "artifacts": [artifact("Sentry", "ae8864b6"), artifact("SentryObjC-Static", "2174c3a4")],
+        "dependencies": []}, "version": 7}))
+    return directory
+
+
+class AttributeList(ctypes.Structure):
+    _fields_ = [("bitmapcount", ctypes.c_ushort), ("reserved", ctypes.c_uint16), ("commonattr", ctypes.c_uint32),
+                ("volattr", ctypes.c_uint32), ("dirattr", ctypes.c_uint32), ("fileattr", ctypes.c_uint32),
+                ("forkattr", ctypes.c_uint32)]
+
+
+def data_id(path):
+    """APFS's ID for a file's data, which its clones share until one of them changes, from getattrlist(2)."""
+    # ATTR_CMNEXT_CLONEID, read with FSOPT_NOFOLLOW and FSOPT_ATTR_CMN_EXTENDED.
+    attributes = AttributeList(5, 0, 0, 0, 0, 0, 0x100)
+    buffer = ctypes.create_string_buffer(16)
+    if ctypes.CDLL(None, use_errno=True).getattrlist(os.fsencode(path), ctypes.byref(attributes), buffer,
+                                                     len(buffer), 0x21):
+        raise OSError(ctypes.get_errno(), "getattrlist failed", str(path))
+    return struct.unpack_from("=IQ", buffer)[1]
 
 
 class IOSPackagesTests(unittest.TestCase):
@@ -196,6 +271,51 @@ class IOSPackagesTests(unittest.TestCase):
         output, error = process.communicate(timeout=30)
         self.assertEqual(process.returncode, 0, error)
         self.assertEqual(len(self.recorded()), 2)
+
+    @unittest.skipUnless(sys.platform == "darwin", "APFS clones need macOS")
+    def test_swiftpms_extracted_artifacts_become_clones_of_the_caches_identical_files(self):
+        template = package_artifacts(self.base / "download")
+        self.env["FAKE_ARTIFACTS"] = str(template)
+        self.assertEqual(self.run_in(self.repo, "xcodebuild", "build").returncode, 0)
+        sources = self.sources(self.recorded())
+        # SourceKit-LSP runs SwiftPM in its index build outside any command.
+        # There, one framework is from another release, and one header changed
+        # after SwiftPM extracted it.
+        index = self.repo / "ios/ScreenrKit/.build/index-build"
+        subprocess.run([self.base / "tools/swift", "build", "--scratch-path", index], env=self.env, check=True)
+        state = json.loads((index / "workspace-state.json").read_text())
+        state["object"]["artifacts"][1]["source"]["checksum"] = "an older release"
+        (index / "workspace-state.json").write_text(json.dumps(state))
+        os.utime(index / HEADER, ns=(ARCHIVED_NS, ARCHIVED_NS + 1))
+        result = self.run_in(self.repo, "swift", "test", "--package-path", "ios/ScreenrKit", "--scratch-path",
+                             "ios/build/ScreenrKit")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("GB of SwiftPM's package artifacts in this checkout now share the identical files of the "
+                      f"shared iOS package cache in {self.cache}.", result.stdout)
+        tests_copy = self.repo / "ios/build/ScreenrKit"
+        for copy in (tests_copy, index):
+            for original in sorted(path for path in template.rglob("*") if path.is_file() and not path.is_symlink()
+                                   and path.name != "workspace-state.json"):
+                name = str(original.relative_to(template))
+                with self.subTest(copy=copy.name, file=name):
+                    # Each file keeps its contents and modification time, so
+                    # modules built against it stay valid.
+                    self.assertEqual((copy / name).read_bytes(), original.read_bytes())
+                    self.assertEqual((copy / name).stat().st_mode, original.stat().st_mode)
+                    changed = copy == index and name == HEADER
+                    self.assertEqual((copy / name).stat().st_mtime_ns, ARCHIVED_NS + changed)
+                    self.assertEqual(data_id(copy / name) == data_id(sources / name),
+                                     copy == tests_copy or name not in (HEADER, OBJC))
+            self.assertEqual(os.readlink(copy / FRAMEWORK / "Versions/Current"), "A")
+        # No staged clone is left behind.
+        self.assertEqual([path.name for path in tests_copy.iterdir() if path.name.startswith(".")], [])
+        # Files that already share the cache's stay as they are, so builds that
+        # track them see no change.
+        before = {path: path.stat().st_ino for path in tests_copy.rglob("*")}
+        result = self.run_in(self.repo, "swift", "build", "--scratch-path", "ios/build/ScreenrKit")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertNotIn("now share", result.stdout)
+        self.assertEqual({path: path.stat().st_ino for path in tests_copy.rglob("*")}, before)
 
     def test_accepts_only_xcodebuild_and_swift(self):
         for args in ((), ("make", "build"), ("swift",)):

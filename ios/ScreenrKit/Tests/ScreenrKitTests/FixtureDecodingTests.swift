@@ -166,7 +166,6 @@ struct FixtureDecodingTests {
     #expect(tv.title.kind == .tv)
     #expect(tv.availability.status == .ok)
     #expect(tv.availability.checkedAt == Self.instant)
-    #expect(tv.availability.providers.flatrate?.first?.providerName == "HBO Max")
     #expect(tv.availability.sections.first?.key == .subs)
     #expect(tv.availability.sections.first?.services.first?.routeNote == "via Amazon")
     #expect(tv.topTen.map(\.rank) == [1, 2, 3])
@@ -354,7 +353,7 @@ struct FixtureDecodingTests {
 
     let stale = try Self.titleScreen("screen/title/stale-availability")
     #expect(stale.availability.status == .stale)
-    #expect(stale.availability.providers.flatrate?.first?.providerName == "Netflix")
+    #expect(stale.availability.sections.first?.services.first?.name == "Netflix")
 
     #expect(try Self.titleScreen("screen/title/stopped").watch.status == .stopped)
 

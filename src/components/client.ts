@@ -3,6 +3,12 @@ import { useSyncExternalStore } from "react";
 import { createAuthClient } from "better-auth/react";
 import { emailOTPClient } from "better-auth/client/plugins";
 import { loginPath, returnPath } from "../member-routes";
+import type {
+  ActionName,
+  ActionResult,
+  ReadAction,
+  WriteAction,
+} from "../server/actions";
 // `status` is the HTTP status, or undefined when no response arrived.
 export class ApiError extends Error {
   constructor(
@@ -96,49 +102,67 @@ export async function signOut() {
     );
   window.location.assign("/login");
 }
-// A Blob, such as a photo, is sent as the raw request body; other data as JSON.
-export async function api<T = Record<string, unknown>>(
-  action: string,
-  data?: unknown,
+// Each action's address, with a read's query.
+type Query = Record<string, string> | URLSearchParams;
+function address(action: ActionName, query?: Query) {
+  const search = new URLSearchParams(query).toString();
+  return `/api/screenr/${action}${search ? `?${search}` : ""}`;
+}
+
+// Sends a write with its data: a Blob, such as a photo, as the raw request
+// body, and other data as JSON.
+export async function api<Name extends WriteAction>(
+  action: Name,
+  data: unknown,
   signal?: AbortSignal,
-): Promise<T> {
-  const { response, text } = await send(`/api/screenr/${action}`, {
-    method: data === undefined ? "GET" : "POST",
+): Promise<ActionResult<Name>> {
+  const { response, text } = await send(address(action), {
+    method: "POST",
     cache: "no-store",
     signal,
-    headers:
-      data === undefined
-        ? {}
-        : {
-            "Content-Type":
-              data instanceof Blob ? data.type : "application/json",
-          },
-    body:
-      data === undefined || data instanceof Blob ? data : JSON.stringify(data),
+    headers: {
+      "Content-Type": data instanceof Blob ? data.type : "application/json",
+    },
+    body: data instanceof Blob ? data : JSON.stringify(data),
   });
-  return readReply<T>(response, text);
+  return readReply(response, text);
+}
+
+// Reads with the query in the address.
+export async function read<Name extends ReadAction>(
+  action: Name,
+  query: Query,
+  signal?: AbortSignal,
+): Promise<ActionResult<Name>> {
+  const { response, text } = await send(address(action, query), {
+    cache: "no-store",
+    signal,
+  });
+  return readReply(response, text);
 }
 
 // A repeated read sends the version of the copy it holds. An unchanged reply
 // is 304 without a body and returns null; otherwise the read returns its data
 // and new version.
-export async function readChanged<T = Record<string, unknown>>(
-  action: string,
+export async function readChanged<Name extends ReadAction>(
+  action: Name,
+  query: Query,
   version: string | null,
   signal?: AbortSignal,
-): Promise<{ data: T; version: string | null } | null> {
-  const { response, text } = await send(`/api/screenr/${action}`, {
+): Promise<{ data: ActionResult<Name>; version: string | null } | null> {
+  const { response, text } = await send(address(action, query), {
     cache: "no-store",
     signal,
     headers: version ? { "If-None-Match": version } : {},
   });
   if (response.status === 304) return null;
   return {
-    data: readReply<T>(response, text),
+    data: readReply(response, text),
     version: response.headers.get("ETag"),
   };
 }
 
+// The reply's JSON, which the caller types as its action's result.
 function readReply<T>(response: Response, text: string): T {
   if (response.status === 401) {
     // Return to this member page, or to the one setup was continuing to.

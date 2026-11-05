@@ -86,8 +86,9 @@ export function Notifications({
       query.set("through", cursor.through);
     }
     try {
-      const result = await readChanged<NotificationPage>(
-        `notifications?${query}`,
+      const result = await readChanged(
+        "notifications",
+        query,
         version.current,
         anySignal([controller.signal, timeout]),
       );
@@ -180,7 +181,7 @@ export function Notifications({
     setBusy(true);
     setFailedAt(item.id);
     await failure.run(async () => {
-      const result = await api<{ href: string }>("read-notification", {
+      const result = await api("read-notification", {
         id: item.id,
       });
       void refreshScreen();

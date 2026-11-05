@@ -43,9 +43,12 @@ export async function addComment(
         : undefined;
       if (!parent) throw new AppError("Reply target not found.", 404);
     }
+    // A reply repeats its entry's conversation, as the foreign key to its
+    // entry requires. Posts have none.
     const result = await client.query(
       `INSERT INTO comment(${entryColumn(conversation.item_type)},author_id,body,spoiler,root_id,addressed_id,conversation_id)
-      VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING id::text`,
+      VALUES($1,$2,$3,$4,$5,$6,(SELECT conversation_id FROM ${feedEntries} c WHERE c.id=$1::uuid))
+      RETURNING id::text`,
       [
         conversation.id,
         viewer,
@@ -53,7 +56,6 @@ export async function addComment(
         spoiler,
         parent ? (parent.root_id ?? parent.id) : null,
         parent?.author_id ?? null,
-        conversation.conversation_id,
       ],
     );
     return result.rows[0].id as string;

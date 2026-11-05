@@ -1,5 +1,6 @@
 import { expect } from "@playwright/test";
 import { browserConfig } from "../../scripts/browser-config";
+import { db } from "./database-fixture";
 import { test, monitorErrors } from "./monitored-test";
 import { befriend, confirmProfileAction } from "./journey-helpers";
 
@@ -104,13 +105,17 @@ test("an unavailable legacy link navigates after friendship restores access", as
   });
   expect(response.status()).toBe(200);
   const { id } = await response.json();
-  const screen = await owner.request.get("/api/screenr/screen?path=/");
-  const entry = (await screen.json()).conversations.find(
-    (item: { id: string }) => item.id === id,
-  );
+  // An old /conversations link names the entry's conversation, which the API
+  // doesn't send.
+  const [{ conversation_id }] = (
+    await db.query<{ conversation_id: string }>(
+      "SELECT conversation_id FROM feed_item WHERE id=$1",
+      [id],
+    )
+  ).rows;
   const waiting = await reader.context().newPage();
   monitorErrors(waiting);
-  const missing = await waiting.goto(`/conversations/${entry.conversation_id}`);
+  const missing = await waiting.goto(`/conversations/${conversation_id}`);
   expect(missing?.status()).toBe(404);
   await expect(waiting.getByRole("main").locator(".error")).toContainText(
     "Conversation not found.",

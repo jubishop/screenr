@@ -18,11 +18,13 @@ ROOT = Path(__file__).resolve().parents[1]
 AGE_CHECK = ROOT / 'ops/check-backup-age.py'
 
 
-def default_interrupt():
-    """Give a child the default SIGINT handling. A shell that starts this suite in the
-    background ignores SIGINT, children inherit that, and a script cannot trap a
-    signal it starts with ignored."""
-    signal.signal(signal.SIGINT, signal.SIG_DFL)
+def default_stop_signals():
+    """Give a child the default handling of every signal these tests send, as systemd
+    starts the scripts. A shell that starts this suite in the background ignores
+    SIGINT and nohup ignores SIGHUP; children inherit that, and a script cannot trap
+    a signal it starts with ignored."""
+    for stop in (signal.SIGHUP, signal.SIGINT, signal.SIGTERM):
+        signal.signal(stop, signal.SIG_DFL)
 
 
 HOUR = 3600
@@ -142,7 +144,7 @@ rm() { echo "rm $*"; }
         environment = {**os.environ, 'SCRIPT': str(ROOT / 'ops/backup.sh'), 'DUMP': dump,
                        'FAIL': fail, 'TIMES': str(times)}
         return subprocess.run(['sh', '-c', wrapper], text=True, capture_output=True,
-                              env=environment, timeout=10, preexec_fn=default_interrupt)
+                              env=environment, timeout=10, preexec_fn=default_stop_signals)
 
     def test_backup_uploads_prunes_and_removes_the_dump(self):
         result = self.execute()
@@ -225,7 +227,7 @@ psql() {
                        'SNAPSHOTS': json.dumps([{'time': stamp.isoformat().replace('+00:00', 'Z'),
                                                  'short_id': 'fixture'}])}
         return subprocess.run(['sh', '-c', wrapper], text=True, capture_output=True,
-                              env=environment, timeout=10, preexec_fn=default_interrupt)
+                              env=environment, timeout=10, preexec_fn=default_stop_signals)
 
     def storage_steps(self, result):
         return [line for line in result.stderr.splitlines() if line.startswith(('restic ', 'sleep '))]

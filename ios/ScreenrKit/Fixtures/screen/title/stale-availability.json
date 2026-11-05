@@ -11,7 +11,7 @@
   },
   "response": {
     "status": 200,
-    "etag": "W/\"GUAcK0nPquhf5QyRFvWcwKQdRF7lLREWVg99U-iFrMM\"",
+    "etag": "W/\"NZZi8ytBIfBIivlzKr_GB9EJ85g9Fp9X_0-U_ANverg\"",
     "body": {
       "kind": "title",
       "title": {
@@ -86,12 +86,10 @@
       "conversations": [
         {
           "id": "d96511cd-0569-4f0c-8c20-402a2422ce98",
-          "conversation_id": "04063826-113f-466f-8d5a-96c0a8b45a95",
           "owner_id": "user-ben",
           "title_id": "movie:104",
           "item_type": "want_to_watch",
           "active": true,
-          "created_at": "2026-10-13T12:00:00.000Z",
           "activity_at": "2026-10-13T12:00:00.000Z",
           "body": null,
           "spoiler": false,
@@ -120,12 +118,10 @@
         },
         {
           "id": "0c266b83-8255-491f-8380-39761af9b4a1",
-          "conversation_id": "14ca381c-e8f0-4227-8411-0415a65f8c0a",
           "owner_id": "user-alice",
           "title_id": "movie:104",
           "item_type": "want_to_watch",
           "active": true,
-          "created_at": "2026-10-13T12:00:00.000Z",
           "activity_at": "2026-10-13T12:00:00.000Z",
           "body": null,
           "spoiler": false,
