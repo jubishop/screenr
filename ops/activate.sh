@@ -13,7 +13,8 @@ run() {
 }
 run scripts/validate-config.ts
 run scripts/migrate.ts
-mkdir -p "$release/.next/cache"
+# The web unit mounts the shared poster cache at .next/cache/images.
+mkdir -p "$release/.next/cache/images"
 chown -R screenr:screenr "$release/.next/cache"
 previous=$(readlink /opt/screenr/current || true)
 # -fT replaces a link left by an interrupted run instead of creating the new

@@ -488,7 +488,12 @@ class RemoteDeploymentTests(unittest.TestCase):
             fi
         }
         readlink() { command cat "$FIXTURE/current"; }
-        mkdir() { printf 'created\n' >> "$FIXTURE/events"; }
+        # Record the directories that deployment creates and gives to screenr,
+        # in order with systemctl.
+        mkdir() {
+            printf 'created\n' >> "$FIXTURE/events"
+            printf 'mkdir %s\n' "$*" >> "$FIXTURE/systemctl"
+        }
         tar() { printf 'ran tar\n' >> "$FIXTURE/events"; return 1; }
         touch() { :; }
         rm() { printf 'removed\n' >> "$FIXTURE/events"; }
@@ -523,7 +528,7 @@ class RemoteDeploymentTests(unittest.TestCase):
         # Release code never runs through systemd-run outside the runner.
         unsandboxed_run() { printf 'ran systemd-run outside the runner\n' >> "$FIXTURE/events"; return 1; }
         alias systemd-run=unsandboxed_run
-        chown() { :; }
+        chown() { printf 'chown %s\n' "$*" >> "$FIXTURE/systemctl"; }
         # GNU ln and mv for the links beside /opt/screenr/current. The link
         # files in the fixture hold their targets.
         ln() {
@@ -654,6 +659,18 @@ class RemoteDeploymentTests(unittest.TestCase):
                         self.systemctl_calls.index(HOST_CONFIG))
         self.assertLess(self.systemctl_calls.index(HOST_CONFIG), self.first_restart())
         self.assertNotIn('unchecked', events)
+
+    def test_activation_creates_the_poster_cache_mount_point_before_restarting(self):
+        # The web unit mounts the shared poster cache at the release's
+        # .next/cache/images, so activation creates that directory and gives
+        # it to screenr with the rest of .next/cache before the restart.
+        result, events, current = self.execute_remote()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        cache = f'/opt/screenr/releases/{REVISION}/.next/cache'
+        created = self.systemctl_calls.index(f'mkdir -p {cache}/images')
+        owned = self.systemctl_calls.index(f'chown -R screenr:screenr {cache}')
+        self.assertLess(created, owned)
+        self.assertLess(owned, self.first_restart())
 
     def test_host_configuration_drift_does_not_extract_or_activate(self):
         result, events, current = self.execute_remote(HOST_DRIFT='yes')
