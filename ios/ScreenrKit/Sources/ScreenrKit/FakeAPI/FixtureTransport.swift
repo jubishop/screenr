@@ -38,7 +38,8 @@ public struct FixtureScenario: Hashable, Sendable {
   public var failure: String?
   // A file that gets one line per `/api/screenr` and `/api/auth` request,
   // such as `GET /api/screenr/screen?path=%2F`, so UI tests can see when the
-  // app reads and what it writes.
+  // app reads and what it writes. The app's launch empties it, and the
+  // extensions add their requests to it.
   public var requestLog: URL?
   // The notification permission the app finds; see `FixturePushSystem`.
   public var push: Push
@@ -97,10 +98,21 @@ final class FixtureRequestLog: Sendable {
   private let file: URL
   private let lock = Mutex(())
 
-  // Starts an empty log.
-  init(file: URL) throws {
-    guard FileManager.default.createFile(atPath: file.path(), contents: Data()) else {
-      throw FixtureError("Cannot create the request log \(file.path())")
+  // The app's launch starts an empty log. An extension adds to the log the
+  // app started, so the log keeps both processes' requests in order, and
+  // starts one only when there is none.
+  init(file: URL, host: AppServices.Host) throws {
+    switch host {
+    case .app:
+      guard FileManager.default.createFile(atPath: file.path(), contents: Data()) else {
+        throw FixtureError("Cannot create the request log \(file.path())")
+      }
+    case .shareExtension, .notificationExtension:
+      do {
+        try Data().write(to: file, options: .withoutOverwriting)
+      } catch CocoaError.fileWriteFileExists {
+        // The app started it.
+      }
     }
     self.file = file
   }
@@ -220,12 +232,18 @@ public struct FixtureTransport: HTTPTransport {
     FixtureFeedback(log: log)
   }
 
-  public init(directory: URL, scenario: FixtureScenario = FixtureScenario()) throws {
+  // `host` is the process that answers: only the app's launch starts an empty
+  // request log, and an extension adds to it.
+  public init(
+    directory: URL,
+    scenario: FixtureScenario = FixtureScenario(),
+    host: AppServices.Host = .app
+  ) throws {
     fixtures = try Fixture.all(in: directory)
     beforeProfile = try FixtureRule(named: "before-profile", in: directory).actions
     self.scenario = scenario
     if let file = scenario.requestLog {
-      log = try FixtureRequestLog(file: file)
+      log = try FixtureRequestLog(file: file, host: host)
     } else {
       log = nil
     }
