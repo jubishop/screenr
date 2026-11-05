@@ -105,6 +105,7 @@ struct RequestTests {
       .removePushDevice(token: "5ce7e1d2a0b94c3f8e6d7a1b2c3d4e5f60718293a4b5c6d7e8f9011223344556")
     ),
     Shape("actions/push-settings/default", .pushSettings(comment: false)),
+    Shape("actions/push-settings/failed", .pushSettings(comment: false)),
     Shape(
       "actions/reaction/default",
       .reaction(item: "872a205a-bab2-48f8-8c27-b737397eb469", reply: "8", kind: .care)

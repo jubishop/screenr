@@ -6,39 +6,12 @@ import SwiftUI
 // and Sign in with Apple join it only when the member links them here.
 struct SignInMethodsSection: View {
   let settings: SettingsContext
-  @Environment(\.screenrAPI) private var api
-  @Environment(\.identityProviders) private var providers
-
-  init(_ settings: SettingsContext) {
-    self.settings = settings
-  }
-
-  var body: some View {
-    let refresh = settings.refresh
-    SignInMethods(
-      page: settings.page,
-      model: AccountLinkModel(api: api, providers: injectedProviders) { await refresh() }
-    )
-  }
-
-  private var injectedProviders: IdentityProviders {
-    guard let providers else {
-      preconditionFailure("Inject the services with .screenrServices(_:) before linking")
-    }
-    return providers
-  }
-}
-
-private struct SignInMethods: View {
-  let page: AccountScreen
-  @State private var model: AccountLinkModel
   @Environment(\.webAuthenticationSession) private var webAuthenticationSession
   @Environment(\.colorScheme) private var colorScheme
   @ScaledMetric(relativeTo: .body) private var appleButtonHeight = 44.0
 
-  init(page: AccountScreen, model: AccountLinkModel) {
-    self.page = page
-    _model = State(initialValue: model)
+  init(_ settings: SettingsContext) {
+    self.settings = settings
   }
 
   var body: some View {
@@ -58,6 +31,9 @@ private struct SignInMethods: View {
     }
     .disabled(model.state != .idle)
   }
+
+  private var page: AccountScreen { settings.page }
+  private var model: AccountLinkModel { settings.models.accountLink }
 
   private var linkedStatus: String? {
     guard let linked = model.linked else { return nil }

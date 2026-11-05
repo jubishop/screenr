@@ -71,6 +71,8 @@ struct FixtureLaunch {
   var update: FixtureUpdate?
   // An outage that fails the app's requests while the test holds it.
   var outage: FixtureOutage?
+  // Requests that wait while the test holds them, such as a photo upload.
+  var holds: FixtureHolds?
   var posters = Posters.placeholders
   // Text over every screen that the audit must fail.
   var auditProbe: AuditProbe?
@@ -100,6 +102,7 @@ struct FixtureLaunch {
       arguments += ["-ScreenrFixtureUpdateSignal", update.signal.path()]
     }
     if let outage { arguments += ["-ScreenrFixtureOutageSignal", outage.signal.path()] }
+    if let holds { arguments += ["-ScreenrFixtureHolds", holds.directory.path()] }
     return arguments
   }
 }
@@ -150,6 +153,49 @@ struct FixtureOutage {
     } catch {
       XCTFail("Could not remove \(signal.path()): \(error)", file: file, line: line)
     }
+  }
+}
+
+// Requests that wait while the test holds them, so a change stays in flight,
+// such as through a failed read beneath it, until the test releases them.
+struct FixtureHolds {
+  // Where a file at a request's path, such as `api/screenr/photo`, holds it.
+  let directory = FileManager.default.temporaryDirectory
+    .appending(path: "holds-\(UUID().uuidString)", directoryHint: .isDirectory)
+
+  // Holds the app's requests to `path`, such as "/api/screenr/photo" or
+  // "/api/auth/link-social", until `release(_:)`.
+  func hold(_ path: String, file: StaticString = #filePath, line: UInt = #line) {
+    let held = signal(for: path)
+    do {
+      try FileManager.default.createDirectory(
+        at: held.deletingLastPathComponent(),
+        withIntermediateDirectories: true
+      )
+    } catch {
+      XCTFail("Could not create \(held.path()): \(error)", file: file, line: line)
+      return
+    }
+    XCTAssertTrue(
+      FileManager.default.createFile(atPath: held.path(), contents: Data()),
+      "Could not create \(held.path())",
+      file: file,
+      line: line
+    )
+  }
+
+  // Lets the held requests to `path`, and later ones, answer.
+  func release(_ path: String, file: StaticString = #filePath, line: UInt = #line) {
+    let held = signal(for: path)
+    do {
+      try FileManager.default.removeItem(at: held)
+    } catch {
+      XCTFail("Could not remove \(held.path()): \(error)", file: file, line: line)
+    }
+  }
+
+  private func signal(for path: String) -> URL {
+    directory.appending(path: path.drop { $0 == "/" })
   }
 }
 

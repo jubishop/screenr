@@ -7,30 +7,11 @@ import UIKit
 // decides, or a way to iOS Settings once they turn them off.
 struct PushSettingsSection: View {
   let settings: SettingsContext
-  @Environment(\.screenrAPI) private var api
-
-  init(_ settings: SettingsContext) {
-    self.settings = settings
-  }
-
-  var body: some View {
-    let refresh = settings.refresh
-    PushSettingsToggles(
-      saved: settings.page.pushSettings,
-      model: PushSettingsModel(api: api) { await refresh() }
-    )
-  }
-}
-
-private struct PushSettingsToggles: View {
-  let saved: PushSettings?
-  @State private var model: PushSettingsModel
   @Environment(PushNotifications.self) private var push
   @Environment(\.openURL) private var openURL
 
-  init(saved: PushSettings?, model: PushSettingsModel) {
-    self.saved = saved
-    _model = State(initialValue: model)
+  init(_ settings: SettingsContext) {
+    self.settings = settings
   }
 
   var body: some View {
@@ -49,7 +30,7 @@ private struct PushSettingsToggles: View {
       case .allowed, .unknown:
         EmptyView()
       }
-      if let saved {
+      if let saved = settings.page.pushSettings {
         ForEach(PushKind.allCases, id: \.self) { kind in
           // While a change saves, its switch keeps focus but ignores changes.
           Toggle(
@@ -69,6 +50,8 @@ private struct PushSettingsToggles: View {
     // The member may have changed the permission in iOS Settings.
     .task { await push.readPermission() }
   }
+
+  private var model: PushSettingsModel { settings.models.push }
 
   private var footer: String {
     switch push.permission {

@@ -4,28 +4,9 @@ import SwiftUI
 // Whether Screenr emails the member about activity they have not read.
 struct ActivityEmailSection: View {
   let settings: SettingsContext
-  @Environment(\.screenrAPI) private var api
 
   init(_ settings: SettingsContext) {
     self.settings = settings
-  }
-
-  var body: some View {
-    let refresh = settings.refresh
-    ActivityEmailToggle(
-      saved: settings.page.activityEmail,
-      model: ActivityEmailModel(api: api) { await refresh() }
-    )
-  }
-}
-
-private struct ActivityEmailToggle: View {
-  let saved: Bool
-  @State private var model: ActivityEmailModel
-
-  init(saved: Bool, model: ActivityEmailModel) {
-    self.saved = saved
-    _model = State(initialValue: model)
   }
 
   var body: some View {
@@ -34,7 +15,7 @@ private struct ActivityEmailToggle: View {
       Toggle(
         "Email me about new activity",
         isOn: Binding(
-          get: { model.isOn(saved: saved) },
+          get: { model.isOn(saved: settings.page.activityEmail) },
           set: { enabled in Task { await model.set(enabled) } }
         )
       )
@@ -48,4 +29,6 @@ private struct ActivityEmailToggle: View {
       )
     }
   }
+
+  private var model: ActivityEmailModel { settings.models.activityEmail }
 }

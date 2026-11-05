@@ -1,0 +1,18 @@
+{
+  "description": "A push setting the server could not save, which keeps its value, so the member can try again.",
+  "viewer": "alice",
+  "request": {
+    "method": "POST",
+    "action": "push-settings",
+    "path": "/api/screenr/push-settings",
+    "body": {
+      "comment": false
+    }
+  },
+  "response": {
+    "status": 500,
+    "body": {
+      "error": "Something went wrong. Please try again."
+    }
+  }
+}

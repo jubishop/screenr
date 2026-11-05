@@ -5,20 +5,6 @@ import SwiftUI
 // Google sign-in, through the editor that setup shares.
 struct PhotoSection: View {
   let settings: SettingsContext
-  @Environment(\.screenrAPI) private var api
-
-  init(_ settings: SettingsContext) {
-    self.settings = settings
-  }
-
-  var body: some View {
-    PhotoEditorSection(settings: settings, model: ProfilePhotoModel(api: api))
-  }
-}
-
-private struct PhotoEditorSection: View {
-  let settings: SettingsContext
-  @State private var model: ProfilePhotoModel
 
   // What the account screen last said about the photo.
   private struct Reported: Hashable {
@@ -27,9 +13,8 @@ private struct PhotoEditorSection: View {
     let google: Bool
   }
 
-  init(settings: SettingsContext, model: ProfilePhotoModel) {
+  init(_ settings: SettingsContext) {
     self.settings = settings
-    _model = State(initialValue: model)
   }
 
   var body: some View {
@@ -42,6 +27,8 @@ private struct PhotoEditorSection: View {
       model.show(userId: reported.userId, version: reported.version, google: reported.google)
     }
   }
+
+  private var model: ProfilePhotoModel { settings.models.photo }
 
   private var reported: Reported {
     Reported(

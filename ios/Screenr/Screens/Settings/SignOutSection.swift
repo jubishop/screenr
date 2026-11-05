@@ -11,7 +11,7 @@ struct SignOutSection: View {
 
   var body: some View {
     Section {
-      SignOutButton(model: settings.signOut)
+      SignOutButton(model: settings.models.signOut)
     }
   }
 }

@@ -970,6 +970,27 @@ const actions: Record<Exclude<ActionName, "screen">, Record<string, Case>> = {
       { comment: false },
       "Turning comment pushes off returns every push setting.",
     ),
+    failed: {
+      ...write(
+        "push-settings",
+        "alice",
+        () => {
+          // The database fails the save.
+          const query = db.query.bind(db) as (...values: unknown[]) => unknown;
+          mock.method(db, "query", (...args: unknown[]) =>
+            typeof args[0] === "string" &&
+            args[0].startsWith("UPDATE profile SET push_")
+              ? Promise.reject(new Error("The database is unavailable."))
+              : query(...args),
+          );
+          return { comment: false };
+        },
+        "A push setting the server could not save, which keeps its value, so the member can try again.",
+        500,
+      ),
+      // The server logs the failed request.
+      failures: ["request failed"],
+    },
   },
   "streaming-services": {
     default: write(

@@ -312,6 +312,82 @@ final class SettingsTests: XCTestCase {
     XCTAssertTrue(failure.waitForNonExistence(timeout: 10))
   }
 
+  // Changes the server refused keep saying so through a failed read beneath
+  // their sections, as when the phone goes offline.
+  @MainActor
+  func testKeepsSettingsFailuresThroughAFailedRead() throws {
+    let log = RequestLog.temporary()
+    let outage = FixtureOutage()
+    let app = openSettings(
+      log: log,
+      overrides: ["actions/push-settings/failed", "auth/link-social/invalid-token"],
+      outage: outage
+    )
+    let comments = app.switches["Comments on your posts"]
+    app.scrollTo(comments)
+    comments.switches.firstMatch.tap()
+    let pushFailure = app.staticTexts["Something went wrong. Please try again."]
+    XCTAssertTrue(pushFailure.waitForExistence(timeout: 10))
+    let connect = app.buttons["Connect Apple"]
+    app.scrollTo(connect)
+    connect.tap()
+    let linkFailure = app.staticTexts["Screenr could not confirm your Apple account. Try again."]
+    app.scrollTo(linkFailure)
+
+    try failReads(beneath: app, log: log, outage: outage)
+
+    app.scrollTo(pushFailure)
+    app.scrollTo(linkFailure)
+  }
+
+  // Changes still saving through a failed read beneath their sections show as
+  // saving once the sections return, and then how they ended.
+  @MainActor
+  func testKeepsSettingsChangesInFlightThroughAFailedRead() throws {
+    let log = RequestLog.temporary()
+    let outage = FixtureOutage()
+    let holds = FixtureHolds()
+    let app = openSettings(
+      log: log,
+      overrides: ["auth/link-social/invalid-token"],
+      outage: outage,
+      holds: holds
+    )
+    for path in ["/api/screenr/photo", "/api/screenr/activity-email", "/api/auth/link-social"] {
+      holds.hold(path)
+    }
+    app.buttons["Replace photo"].tap()
+    let savingPhoto = app.buttons["Saving…"]
+    XCTAssertTrue(savingPhoto.waitForExistence(timeout: 10))
+    wait(for: [log.logged(where: { $0.hasPrefix("POST /api/screenr/photo ") })], timeout: 20)
+    let email = app.switches["Email me about new activity"]
+    app.scrollTo(email)
+    XCTAssertEqual(email.value as? String, "0")
+    email.switches.firstMatch.tap()
+    wait(for: [log.logged(#"POST /api/screenr/activity-email {"enabled":true}"#)], timeout: 10)
+    XCTAssertEqual(email.value as? String, "1")
+    let connect = app.buttons["Connect Apple"]
+    app.scrollTo(connect)
+    connect.tap()
+    let connecting = app.buttons["Connecting…"]
+    XCTAssertTrue(connecting.waitForExistence(timeout: 10))
+    wait(for: [log.logged(where: { $0.hasPrefix("POST /api/auth/link-social ") })], timeout: 10)
+
+    try failReads(beneath: app, log: log, outage: outage)
+
+    XCTAssertTrue(savingPhoto.exists)
+    holds.release("/api/screenr/photo")
+    XCTAssertTrue(app.staticTexts["Photo replaced."].waitForExistence(timeout: 10))
+    app.scrollTo(email)
+    XCTAssertEqual(email.value as? String, "1")
+    app.scrollTo(connecting)
+    XCTAssertFalse(connecting.isEnabled)
+    holds.release("/api/auth/link-social")
+    XCTAssertTrue(connect.waitForExistence(timeout: 10))
+    app.scrollTo(app.staticTexts["Screenr could not confirm your Apple account. Try again."])
+    holds.release("/api/screenr/activity-email")
+  }
+
   // At the largest accessibility text size, every Settings control and Invite
   // friends' controls can still be reached and tapped.
   @MainActor
@@ -353,7 +429,8 @@ final class SettingsTests: XCTestCase {
     log: RequestLog,
     overrides: [String] = [],
     textSize: String? = nil,
-    outage: FixtureOutage? = nil
+    outage: FixtureOutage? = nil,
+    holds: FixtureHolds? = nil
   ) -> XCUIApplication {
     let app = XCUIApplication()
     app.launch(
@@ -361,7 +438,8 @@ final class SettingsTests: XCTestCase {
         overrides: overrides,
         requestLog: log.file,
         textSize: textSize,
-        outage: outage
+        outage: outage,
+        holds: holds
       )
     )
     XCTAssertTrue(app.tab("You").waitForExistence(timeout: 10))
@@ -370,6 +448,31 @@ final class SettingsTests: XCTestCase {
     XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 10))
     XCTAssertTrue(app.buttons["Edit profile"].waitForExistence(timeout: 10))
     return app
+  }
+
+  // Fails Settings' reads, as when the phone goes offline, until the error
+  // has replaced the sections, then ends the outage and waits for them to
+  // return, with the list scrolled to its top.
+  @MainActor
+  private func failReads(
+    beneath app: XCUIApplication,
+    log: RequestLog,
+    outage: FixtureOutage
+  ) throws {
+    // The first failed read has replaced the sections with the error by the
+    // time the app reads them again.
+    outage.begin()
+    let reads = try log.screenPaths().count
+    wait(
+      for: [log.expectation { $0.dropFirst(reads).filter { $0 == "/account" }.count >= 2 }],
+      timeout: 15
+    )
+    let failure = app.staticTexts["Screenr didn't load"]
+    XCTAssertTrue(failure.exists)
+
+    outage.end()
+    XCTAssertTrue(failure.waitForNonExistence(timeout: 10))
+    XCTAssertTrue(app.buttons["Edit profile"].waitForExistence(timeout: 10))
   }
 
   // Puts the cursor at the end of the field's text, deletes it, and types.
