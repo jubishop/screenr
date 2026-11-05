@@ -179,6 +179,33 @@ instead, and its build then differs from the check's.
 `tests/test_ios_packages.py` covers the cache, and `tests/test_check_ios.py`
 the check's use of it.
 
+SourceKit-LSP, the Swift language server that editors and agents' language
+tools start when they open a Swift file, keeps one more copy of the packages
+in each checkout where it has opened a ScreenrKit file: its index build, in
+`ios/ScreenrKit/.build/index-build`. Its background indexing resolves the
+packages and builds ScreenrKit's modules there, apart from the check's
+builds, and that is what lets a test file see ScreenrKit's module and report
+diagnostics. On 2026-11-04 it held 4.3 GB: 3.3 GB of all seven sentry-cocoa
+frameworks, the same files as the cache's, 0.8 GB of build and index, and
+0.2 GB of sentry-cocoa's Git repository and checkout. It holds only one
+release: when `Package.resolved` changes, SwiftPM removes a package's old
+frameworks before it extracts the new ones. It goes away with its worktree.
+SourceKit-LSP has no option for another download cache, so it downloads into
+SwiftPM's default one, `~/Library/Caches/org.swift.swiftpm`, which nothing
+prunes.
+
+The repository can't move the index build or turn it off. The SourceKit-LSP
+in Xcode 27.2 reads a checkout's `ios/ScreenrKit/.sourcekit-lsp/config.json`,
+which can set its scratch path or turn background indexing off, only after
+the editor answers a prompt to trust that checkout's `ios/ScreenrKit`. On
+2026-11-04 an agent's language tool left the prompt unanswered, so with such
+a file in place the index build still landed in `.build/index-build`, and a
+client that trusted it still resolved the packages there before it moved to
+the file's scratch path. Turning background indexing off would save only
+about 0.7 GB: SourceKit-LSP still resolved the packages into
+`ios/ScreenrKit/.build`, and a test file then reported "No such module
+'ScreenrKit'".
+
 ## Run one test
 
 ScreenrKit on the Mac, by suite or by test:
