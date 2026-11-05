@@ -138,6 +138,13 @@ final class FindTests: XCTestCase {
     app.buttons["Friends recommend"].tap()
     XCTAssertTrue(app.staticTexts["Recommended by Ben Ortiz (#1)"].waitForExistence(timeout: 10))
 
+    let myServices = app.switches["My services"].switches.firstMatch
+    myServices.tap()
+    wait(for: [log.read("/search?services=mine&finished=hidden")], timeout: 10)
+    let reads = try log.screenPaths().count
+    myServices.tap()
+    wait(for: [log.read("/search?finished=hidden", after: reads)], timeout: 10)
+
     app.buttons["Movies"].tap()
     let finished = app.staticTexts[
       "You finished all 2 movie recommendations. Turn on Show finished to see them."
@@ -150,12 +157,9 @@ final class FindTests: XCTestCase {
 
     app.switches["Show finished"].switches.firstMatch.tap()
     XCTAssertTrue(app.buttons["Finished, Night Crossing"].waitForExistence(timeout: 10))
-    XCTAssertTrue(app.buttons["Finished, Winter Garden"].exists)
     XCTAssertFalse(finished.exists)
     wait(for: [log.read("/search?type=movie")], timeout: 10)
-
-    app.switches["My services"].switches.firstMatch.tap()
-    wait(for: [log.read("/search?services=mine&type=movie")], timeout: 10)
+    XCTAssertTrue(scroll(app, to: app.buttons["Finished, Winter Garden"]))
     try audit(app)
   }
 
