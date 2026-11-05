@@ -230,7 +230,8 @@ final class NotificationsTests: XCTestCase {
   }
 
   // An unsent comment on the screen beneath survives opening and closing the
-  // sheet.
+  // sheet, and the keyboard stays down once the sheet closes: bringing it
+  // back while the sheet's dismissal animates could deadlock the app.
   @MainActor
   func testKeepsAnUnsentCommentBeneathTheSheet() throws {
     let log = RequestLog.temporary()
@@ -248,6 +249,7 @@ final class NotificationsTests: XCTestCase {
     app.buttons["Close"].tap()
 
     XCTAssertTrue(app.navigationBars["Your circle"].waitForExistence(timeout: 10))
+    XCTAssertFalse(app.keyboards.firstMatch.waitForExistence(timeout: 2))
     XCTAssertEqual(app.composerField("Add your reply").value as? String, "Saw it twice.")
     XCTAssertEqual(try log.lines().filter { $0.hasPrefix("POST") }, [])
   }

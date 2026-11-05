@@ -86,7 +86,7 @@ private struct TitleScreen: View {
       }
     }
     // A failed read replaces the content, so the sheets show the last header.
-    .sheet(item: $page.sheet) { sheet in
+    .keyboardSafeSheet(item: $page.sheet) { sheet in
       if let header = page.header {
         TitleSheet(sheet: sheet, header: header, model: page)
       }

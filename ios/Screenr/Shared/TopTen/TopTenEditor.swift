@@ -16,7 +16,7 @@ struct ProfileWithTopTenEditor: View {
         await model.refresh()
       }
     }
-    .sheet(item: $editor) { editor in
+    .keyboardSafeSheet(item: $editor) { editor in
       TopTenEditorSheet(editor: editor, screen: model)
     }
   }
