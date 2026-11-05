@@ -667,7 +667,7 @@ the account forget it. [Settings](#settings) ends with `SignOutButton`.
 | `ShellModel` | ScreenrKit `Shell/` | `@Observable`: the account check, the viewer, the bell's unread count, the app's activity, `screenModel(for:)`, `pushArrived()`, `refreshLiveReads()`, and `onUnreadCount(_:)`, which reports each unread count, such as for the app icon's badge. Views read it with `@Environment(ShellModel.self)`. |
 | `LiveRead`, `ScreenModel` | ScreenrKit `Shell/` | A GET request's `phase` (`loading`, `loaded`, or `failed`) and its polling. `ScreenModel` is `LiveRead<Screen>`; other live reads, such as the notifications sheet's, use `LiveRead(.notifications(), api:)`. |
 | `DestinationView` | `Screenr/Shell/` | Maps each destination to its screen, owns its `ScreenModel`, and adds polling, the navigation title, and redirects. |
-| `ScreenContent`, `MessageView` | `Screenr/Shell/` | Render a model's phase: a spinner, the error with Try again, or the loaded screen; and a full-screen message. |
+| `ScreenContent`, `MessageView` | `Screenr/Shell/` | Render a model's phase: a spinner, the error with Try again, or the loaded screen, in one container that stays the screen's root as the phase changes; and a full-screen message. |
 | `.livePolling(_:)` | `Screenr/Shell/` | Connects any `LiveRead` to its view's visibility, the app's activity, pull-to-refresh, and pushes. |
 | `IncomingActivityButton` | `Screenr/Shell/` | The New activity control; `.incomingActivity(_:count:show:)` floats it over a screen, and only the control animates. `show` must keep the reader's place, as `FeedList` does. The control's identifier is `incoming-activity`; `performShellAudit()` treats its glass like a bar's, so a test checks its label with `labelContrast()`. |
 | `ShareButton` | `Screenr/Shell/` | A `ShareLink` for a destination's screenr.club link. |
@@ -766,7 +766,14 @@ marks the visit for `ShellTests`.
 2. **Behavior:** put it in an `@Observable` view model in ScreenrKit that takes
    `any ScreenrAPI` (from `@Environment(\.screenrAPI)`). After a write, call
    `await model.refresh()`. A failed read replaces the content, so keep drafts
-   in the view model or in state outside `ScreenContent`.
+   in the view model or in state outside `ScreenContent`, and attach sheets
+   and confirmation dialogs outside it too, or the failure closes them.
+   `ScreenContent` keeps one container as the screen's root through every
+   phase: in the iOS 27 Simulator, when the root itself changed with the
+   phase, a confirmation dialog attached outside stayed on screen through a
+   failed read, but SwiftUI reset its binding and its buttons did nothing. A
+   prompt that a later read can make stale takes each read through its
+   model's `reconcile(with:)`, as `TitlePageModel` and `ProfileModel` do.
 3. **Navigation:** push with `NavigationLink(value: Destination.title(id:))`;
    the tab's stack shows it. Use `shell.router.open(_:)` only for links from
    outside the current screen, such as a notification.
@@ -830,7 +837,9 @@ over the page. Its behavior is ScreenrKit's `NotificationsModel`
   `through`, which an earlier page keeps, so later arrivals stay unread.
 - **Friend requests:** Accept, and Decline after a confirmation, through
   `respond-friend-request`. The answered row keeps its result until the view
-  changes.
+  changes. The confirmation sits outside the read's content, so a failed
+  read beneath leaves it open, and `reconcile()` closes it once the page no
+  longer offers the request an answer.
 - **Counts:** after each action, `shell.refreshLiveReads()` makes the screen
   beneath read again, so every screen's unread count, and the bell's, catch
   up.
@@ -1158,7 +1167,8 @@ such as Remove photo, uses `.danger`, since the system's red falls short of
 4.5:1 on the button's gray fill.
 
 `SettingsTests` cover the journeys: changing the name and username, uploading
-and removing a photo, creating and revoking an invitation, turning on
+and removing a photo, creating and revoking an invitation, revoking through a
+failed read beneath the confirmation, which `FixtureOutage` causes, turning on
 notifications and changing a push setting, connecting Sign in with Apple,
 sending feedback, and signing out. They check what each write sent in the
 fixture API's request log, since a screen read after a write still returns
@@ -1288,8 +1298,9 @@ screen uses them:
 //   FeedModel(api: api, refresh: { await model.refresh() },
 //     showOlder: { await model.showOlder() })
 //   ConversationStarter(subject: .title(id: id, kind: kind), api: api) { … }
-// The inner view keeps them in State, outside ScreenContent, so drafts and
-// the reader's place outlive a failed read.
+// The inner view keeps them in State, outside ScreenContent, and presents the
+// feed's confirmation there, so drafts, the reader's place, and an open
+// confirmation outlive a failed read.
 init(model: ScreenModel, feed: FeedModel, starter: ConversationStarter) {
   self.model = model
   _feed = State(initialValue: feed)
@@ -1308,11 +1319,12 @@ ScreenContent(model: model) { screen in
     }
   }
 }
+.feedConfirmation(feed)
 ```
 
 | Piece | Where | What it does |
 | --- | --- | --- |
-| `FeedList` | `Screenr/Conversation/` | The scrolling feed beneath a header: entries in visible-activity order, New activity, the permalink's scroll and highlight, "This activity is unavailable.", the empty message, and the confirmation dialog. `style: .compact` drops the poster, title, Want to watch, and Recommend for title pages. Changing `headerRequests` scrolls back to the header, such as when Start a conversation opens. Its `ScrollPosition` keeps the reader's place; see Reading place below. |
+| `FeedList` | `Screenr/Conversation/` | The scrolling feed beneath a header: entries in visible-activity order, New activity, the permalink's scroll and highlight, "This activity is unavailable.", and the empty message. Its screen attaches the feed's confirmation dialog, `feedConfirmation(_:)`, outside `ScreenContent`. `style: .compact` drops the poster, title, Want to watch, and Recommend for title pages. Changing `headerRequests` scrolls back to the header, such as when Start a conversation opens. Its `ScrollPosition` keeps the reader's place; see Reading place below. |
 | `FeedAnchor` | ScreenrKit `Conversation/` | What the feed's scroll position names just before New activity shows: what it already names, the first entry before the reader scrolls, or nothing beneath a header that fills the screen. |
 | `EntryView`, `ThreadView`, `CommentView` | `Screenr/Conversation/` | An entry, its discussion, and one comment, following the web's `feed.tsx` and `thread.tsx`. Each entry and comment carries the accessibility identifier `entry-<id>` or `comment-<id>`. |
 | `CommentComposer`, `DiscussionComposer`, `StartConversationComposer` | `Screenr/Conversation/` | The one composer form, bound to a reply or comment target, or to a `ConversationStarter` with Season and Episode pickers on a TV title. |
@@ -1507,8 +1519,9 @@ ScreenrKit's `TitlePage/`:
   top 10 themselves; `TitleHeader.topTenLimit` is the list's size.
 - **Friend line:** each name is a button that shows that friend's entry
   through `FeedList`'s `entryRequest`.
-- **Sheets:** the status, review, and replacement sheets sit outside the
-  screen's content, as the profile's top 10 editor does, so a failed read
+- **Sheets:** the status, review, and replacement sheets, and the
+  confirmations of the header's Recommend and the feed's actions, sit outside
+  the screen's content, as the profile's top 10 editor does, so a failed read
   beneath leaves them open with the page's last header and the review's
   draft.
 - **Credits:** Where to watch links TMDB's viewing options page and credits
@@ -1539,9 +1552,10 @@ page reads again. Nothing loads before Play trailer.
   after Play trailer, without the network.
 
 `TitleTests` also covers the watch status and finished date, Recommend and
-its confirmation, the friend line, adding to a full top 10, the review and a
-failed read beneath it, which `FixtureOutage` causes, the largest text size,
-and every `screen/title` fixture. The status and
+its confirmation, the friend line, adding to a full top 10, the review and
+the Recommend confirmation with a failed read beneath each, which
+`FixtureOutage` causes, the largest text size, and every `screen/title`
+fixture. The status and
 replacement sheets are system lists, so their audit is
 `performSettingsAudit()`, and the largest text size test reaches each of
 their controls instead.
@@ -1560,8 +1574,8 @@ parts in `Screenr/People/`, and their behavior is in ScreenrKit's `People/`.
 
 | Piece | Where | What it does |
 | --- | --- | --- |
-| `FriendsSections`, `FriendsModel` | ScreenrKit `People/` | Friends in the web's order: Requests, Friends, Sent requests, People you may know with their mutual friends, and Blocked people. Accept, Decline after a confirmation, Cancel, Send friend request, and Unblock go through `relationship`, one at a time, and the page reads again after each. A failed action's message stays with its person. `searchDestination` opens an exact username's profile. |
-| `Relationship`, `ProfileModel` | ScreenrKit `People/` | `Relationship(profile, viewer:)` is `own`, `friend`, `requestSent`, `requestReceived`, or `none`, and gives the visible `action`, such as Watch together or Accept friend request, and the More actions `menu`. Unfriend and Block confirm in the web's words. |
+| `FriendsSections`, `FriendsModel` | ScreenrKit `People/` | Friends in the web's order: Requests, Friends, Sent requests, People you may know with their mutual friends, and Blocked people. Accept, Decline after a confirmation, Cancel, Send friend request, and Unblock go through `relationship`, one at a time, and the page reads again after each. `reconcile(with:)` closes Decline's confirmation once a read no longer has the request. A failed action's message stays with its person. `searchDestination` opens an exact username's profile. |
+| `Relationship`, `ProfileModel` | ScreenrKit `People/` | `Relationship(profile, viewer:)` is `own`, `friend`, `requestSent`, `requestReceived`, or `none`, and gives the visible `action`, such as Watch together or Accept friend request, and the More actions `menu`. Unfriend and Block confirm in the web's words, and `reconcile(with:)` closes Unfriend's confirmation once a read shows the friendship ended. |
 | `WatchTogetherSection` | ScreenrKit `People/` | Ready to watch, Not on your services, and Availability unknown, filtered by [`TitleKindFilter`](#title-lists); and the count and empty states. Each shared title is a [`TitleRow`](#title-lists) that marks the services either person saved. |
 | `WantToWatchSection`, `WantToWatchEmpty` | ScreenrKit `People/` | A Want to watch page's Ready to watch and Availability unknown, filtered by `TitleKindFilter`; the count of titles to watch now; and why nothing is ready, worded for the viewer's own page or a friend's. Each title is a `TitleRow` that marks the viewer's saved services. |
 | `ListModePicker`, `Destination.ListMode` | `Screenr/Shared/Titles/`, ScreenrKit `Navigation/` | The At home and In theaters switch between the introduction and the filter on Want to watch pages and Watch together. Each mode is its own destination, `mode=theaters` in its path, and choosing one replaces the screen on top of the tab with `Router.replace(_:with:)`, so Back leaves the page. |
@@ -1624,11 +1638,20 @@ parts in `Screenr/People/`, and their behavior is in ScreenrKit's `People/`.
   viewer's fixtures. Accept, Send friend request, and Watch together use
   `.buttonStyle(.accent)`, and `FriendsTests` measures their labels with
   `labelContrast()` in dark mode.
-- **iOS 27 controls:** a confirmation dialog is a popover without Cancel;
-  tap `PopoverDismissRegion` to cancel, and `app.popovers.buttons[…]` to
-  confirm. Avoid `ViewThatFits`, which the Dynamic Type audit fails, and use
-  symbol buttons rather than text buttons in toolbars, which the audit also
-  fails.
+- **Confirmations:** Unfriend's, Block's, and Decline's confirmations sit
+  outside the screens' content, as the feed's do, so a failed read beneath
+  leaves them open, and `reconcile(with:)` closes one that a read makes
+  stale. `FriendsTests` and `ProfileTests` fail a poll beneath Decline's and
+  Unfriend's with `FixtureOutage`.
+- **iOS 27 controls:** a confirmation dialog shows as a popover without
+  Cancel, at the control that asked or at the top of the screen, or, for one
+  that a whole screen presents, sometimes as a sheet with Cancel in the
+  middle of the screen; runs of the same test have seen all three.
+  `app.confirmationButton(_:)` finds a dialog's button in any of them, and
+  `app.cancelConfirmation()` closes it with Cancel or with a tap on
+  `PopoverDismissRegion` away from the dialog. Avoid `ViewThatFits`, which
+  the Dynamic Type audit fails, and use symbol buttons rather than text
+  buttons in toolbars, which the audit also fails.
 
 ### Top 10 editor
 

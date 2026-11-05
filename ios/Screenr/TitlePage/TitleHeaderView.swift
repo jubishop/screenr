@@ -38,7 +38,7 @@ struct TitleHeaderView: View {
 
 // Recommend, the top 10, the watch status, and the review. One write runs at
 // a time; a failure shows beneath the buttons. Withdrawing a top 10 title's
-// Recommend asks first.
+// Recommend asks first, in `leavingConfirmation(_:)`.
 private struct TitleActions: View {
   let header: TitleHeader
   let model: TitlePageModel
@@ -77,20 +77,38 @@ private struct TitleActions: View {
       .disabled(model.write == .saving)
       WriteFailure(message: model.failure?.message)
     }
-    .confirmationDialog(
-      model.leaving?.message ?? "",
-      isPresented: Binding(
-        get: { model.leaving != nil && model.sheet == nil },
-        set: { presented in if !presented { model.leaving = nil } }
-      ),
-      titleVisibility: .visible,
-      presenting: model.leaving
-    ) { leaving in
-      Button(leaving.action, role: .destructive) {
-        Task { await model.confirm(leaving, for: header) }
+  }
+}
+
+extension View {
+  // The confirmation before a top 10 title's Recommend is withdrawn, for the
+  // page's latest header. The title page presents it outside its content, so
+  // a failed read beneath leaves it open. The status sheet asks for itself.
+  func leavingConfirmation(_ model: TitlePageModel) -> some View {
+    modifier(LeavingConfirmationDialog(model: model))
+  }
+}
+
+private struct LeavingConfirmationDialog: ViewModifier {
+  let model: TitlePageModel
+
+  func body(content: Content) -> some View {
+    content
+      .confirmationDialog(
+        model.leaving?.message ?? "",
+        isPresented: Binding(
+          get: { model.leaving != nil && model.sheet == nil },
+          set: { presented in if !presented { model.leaving = nil } }
+        ),
+        titleVisibility: .visible,
+        presenting: model.leaving
+      ) { leaving in
+        Button(leaving.action, role: .destructive) {
+          guard let header = model.header else { return }
+          Task { await model.confirm(leaving, for: header) }
+        }
+        Button("Cancel", role: .cancel) {}
       }
-      Button("Cancel", role: .cancel) {}
-    }
   }
 }
 

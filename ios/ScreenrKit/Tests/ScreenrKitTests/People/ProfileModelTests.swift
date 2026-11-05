@@ -75,7 +75,7 @@ struct ProfileModelTests {
     let model = ProfileModel(shell: ShellModel(api: api)) { await refreshes.refresh() }
 
     model.ask(.unfriend, about: ben, .friend)
-    let confirmation = try #require(model.confirmation(for: .friend))
+    let confirmation = try #require(model.confirmation)
     #expect(confirmation.title == "Unfriend Ben Ortiz?")
     #expect(
       confirmation.message == "You’ll both lose access to each other’s posts and discussions."
@@ -87,7 +87,7 @@ struct ProfileModelTests {
 
     #expect(api.requests.map(\.body) == [["target": "user-ben", "action": "remove"]])
     #expect(refreshes.count == 1)
-    #expect(model.confirmation(for: .friend) == nil)
+    #expect(model.confirmation == nil)
   }
 
   @Test func cancellingChangesNothing() {
@@ -95,19 +95,30 @@ struct ProfileModelTests {
     let model = ProfileModel(shell: ShellModel(api: api)) {}
     model.ask(.block, about: ben, .none)
     model.cancelConfirmation()
-    #expect(model.confirmation(for: .none) == nil)
+    #expect(model.confirmation == nil)
     #expect(api.requests.isEmpty)
   }
 
-  // A friendship that ended elsewhere no longer offers Unfriend.
+  // A friendship that ended elsewhere no longer offers Unfriend, and a read
+  // that keeps it leaves the confirmation open.
   @Test func unfriendClosesWhenTheFriendshipEnds() {
     let model = ProfileModel(shell: ShellModel(api: RecordingAPI())) {}
     model.ask(.unfriend, about: ben, .friend)
-    #expect(model.confirmation(for: .none) == nil)
+    model.reconcile(with: .friend)
+    #expect(model.confirmation == .unfriend(ben))
+    model.reconcile(with: .none)
+    #expect(model.confirmation == nil)
     // Unfriend is only for friends.
-    model.cancelConfirmation()
     model.ask(.unfriend, about: ben, .requestSent)
-    #expect(model.confirmation(for: .requestSent) == nil)
+    #expect(model.confirmation == nil)
+  }
+
+  // Block applies whatever the relationship becomes.
+  @Test func blockStaysOpenWhenTheFriendshipEnds() {
+    let model = ProfileModel(shell: ShellModel(api: RecordingAPI())) {}
+    model.ask(.block, about: ben, .friend)
+    model.reconcile(with: .none)
+    #expect(model.confirmation == .block(ben, .friend))
   }
 
   @Test(arguments: [
@@ -118,7 +129,7 @@ struct ProfileModelTests {
   func blockSaysWhatItEnds(_ relationship: Relationship, _ effect: String) throws {
     let model = ProfileModel(shell: ShellModel(api: RecordingAPI())) {}
     model.ask(.block, about: ben, relationship)
-    let confirmation = try #require(model.confirmation(for: relationship))
+    let confirmation = try #require(model.confirmation)
     #expect(confirmation.title == "Block Ben Ortiz?")
     #expect(
       confirmation.message
@@ -148,7 +159,7 @@ struct ProfileModelTests {
     shell.router[stack: .find] = [.wantToWatch(username: "cam"), .title(id: "tv:202")]
 
     model.ask(.block, about: ben, .friend)
-    await model.confirm(try #require(model.confirmation(for: .friend)))
+    await model.confirm(try #require(model.confirmation))
 
     #expect(api.requests.map(\.body) == [["target": "user-ben", "action": "block"]])
     #expect(refreshes.count == 0)
@@ -169,7 +180,7 @@ struct ProfileModelTests {
     let model = ProfileModel(shell: shell) { await refreshes.refresh() }
 
     model.ask(.block, about: ben, .friend)
-    await model.confirm(try #require(model.confirmation(for: .friend)))
+    await model.confirm(try #require(model.confirmation))
 
     #expect(model.failure == "The relationship failed.")
     #expect(model.activity == .idle)

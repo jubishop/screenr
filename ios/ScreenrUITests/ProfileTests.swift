@@ -57,19 +57,48 @@ final class ProfileTests: XCTestCase {
     XCTAssertTrue(
       app.staticTexts["You’ll both lose access to each other’s posts and discussions."].exists
     )
-    app.otherElements["PopoverDismissRegion"]
-      .coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.9))
-      .tap()
+    app.cancelConfirmation()
     XCTAssertTrue(question.waitForNonExistence(timeout: 10))
 
     app.buttons["More actions for Ben Ortiz"].tap()
     app.buttons["Unfriend"].tap()
-    let unfriend = app.popovers.buttons["Unfriend"]
-    XCTAssertTrue(unfriend.waitForExistence(timeout: 10))
-    unfriend.tap()
+    XCTAssertTrue(question.waitForExistence(timeout: 10))
+    app.confirmationButton("Unfriend").tap()
 
     wait(for: [log.wrote("relationship", #"{"action":"remove","target":"user-ben"}"#)], timeout: 10)
     XCTAssertEqual(try log.loggedLines().filter { $0.hasPrefix("POST") }.count, 1)
+  }
+
+  // A failed read beneath Unfriend's confirmation, as during a deploy, leaves
+  // it open to confirm once reads succeed again.
+  @MainActor
+  func testKeepsTheUnfriendConfirmationThroughAFailedRead() throws {
+    let log = RequestLog.temporary()
+    let outage = FixtureOutage()
+    let app = XCUIApplication()
+    app.launch(
+      with: FixtureLaunch(link: "screenr-dev://people/ben", requestLog: log.file, outage: outage)
+    )
+    XCTAssertTrue(app.buttons["Watch together"].waitForExistence(timeout: 10))
+    app.buttons["More actions for Ben Ortiz"].tap()
+    app.buttons["Unfriend"].tap()
+    let question = app.staticTexts["Unfriend Ben Ortiz?"]
+    XCTAssertTrue(question.waitForExistence(timeout: 10))
+
+    // The first failed read has replaced the profile beneath with the error
+    // by the time the app polls again.
+    outage.begin()
+    let reads = try log.screenPaths().count
+    wait(for: [log.screenReads(atLeast: reads + 2)], timeout: 15)
+    let failure = app.staticTexts["Screenr didn't load"]
+    XCTAssertTrue(failure.exists)
+    XCTAssertTrue(question.exists)
+
+    outage.end()
+    XCTAssertTrue(failure.waitForNonExistence(timeout: 10))
+    XCTAssertTrue(question.exists)
+    app.confirmationButton("Unfriend").tap()
+    wait(for: [log.wrote("relationship", #"{"action":"remove","target":"user-ben"}"#)], timeout: 10)
   }
 
   // Someone who is not a friend sees the profile and top 10 but not the
@@ -97,7 +126,7 @@ final class ProfileTests: XCTestCase {
     XCTAssertFalse(app.buttons["Unfriend"].exists)
     app.buttons["Block"].tap()
     XCTAssertTrue(app.staticTexts["Block Erin Walsh?"].waitForExistence(timeout: 10))
-    app.popovers.buttons["Block"].tap()
+    app.confirmationButton("Block").tap()
 
     wait(for: [log.wrote("relationship", #"{"action":"block","target":"user-erin"}"#)], timeout: 10)
     XCTAssertTrue(app.navigationBars["Friends"].waitForExistence(timeout: 10))

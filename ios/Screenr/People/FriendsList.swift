@@ -193,8 +193,7 @@ private struct PersonActionsRow<Note: View>: View {
       .buttonStyle(.accent)
       .disabled(friends.isSending)
     case .decline:
-      // Read while rendering, so asking presents the confirmation.
-      let declining = friends.declining == person
+      // Asks first, in `declineConfirmation(_:)`.
       Button {
         friends.askToDecline(person)
       } label: {
@@ -202,21 +201,6 @@ private struct PersonActionsRow<Note: View>: View {
       }
       .buttonStyle(.bordered)
       .disabled(friends.isSending)
-      .confirmationDialog(
-        "Decline \(person.displayName)’s friend request?",
-        isPresented: Binding(
-          get: { declining },
-          set: { if !$0 { friends.cancelDecline() } }
-        ),
-        titleVisibility: .visible
-      ) {
-        Button("Decline", role: .destructive) {
-          Task { await friends.run(.decline, for: person) }
-        }
-        Button("Cancel", role: .cancel) { friends.cancelDecline() }
-      } message: {
-        Text("The request will be removed.")
-      }
     case .cancel, .unblock:
       Button {
         Task { await friends.run(action, for: person) }
@@ -226,6 +210,44 @@ private struct PersonActionsRow<Note: View>: View {
       .buttonStyle(.bordered)
       .disabled(friends.isSending)
     }
+  }
+}
+
+extension View {
+  // Decline's confirmation, which closes once the request is no longer
+  // pending. The Friends page presents it outside its content, so a failed
+  // read beneath leaves it open.
+  func declineConfirmation(_ friends: FriendsModel) -> some View {
+    modifier(DeclineConfirmationDialog(friends: friends))
+  }
+}
+
+private struct DeclineConfirmationDialog: ViewModifier {
+  let friends: FriendsModel
+
+  func body(content: Content) -> some View {
+    content
+      .confirmationDialog(
+        title,
+        isPresented: Binding(
+          get: { friends.declining != nil },
+          set: { if !$0 { friends.cancelDecline() } }
+        ),
+        titleVisibility: .visible,
+        presenting: friends.declining
+      ) { person in
+        Button("Decline", role: .destructive) {
+          Task { await friends.run(.decline, for: person) }
+        }
+        Button("Cancel", role: .cancel) { friends.cancelDecline() }
+      } message: { _ in
+        Text("The request will be removed.")
+      }
+  }
+
+  private var title: String {
+    guard let person = friends.declining else { return "" }
+    return "Decline \(person.displayName)’s friend request?"
   }
 }
 

@@ -140,6 +140,15 @@ public final class FriendsModel {
     declining = nil
   }
 
+  // Takes each read's sections. Decline's confirmation closes once its
+  // request is no longer pending, such as after an answer elsewhere.
+  public func reconcile(with sections: FriendsSections) {
+    guard let declining, !sections.requests.contains(where: { $0.id == declining.id }) else {
+      return
+    }
+    self.declining = nil
+  }
+
   // The profile to open for the search, which then clears, or nil with
   // `searchProblem` saying what a username is.
   public func find() -> Destination? {

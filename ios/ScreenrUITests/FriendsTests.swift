@@ -22,23 +22,20 @@ final class FriendsTests: XCTestCase {
     XCTAssertTrue(app.staticTexts["Requests"].exists)
     try app.performShellAudit()
 
-    // The confirmation is a popover; tapping outside it cancels.
+    // Closing the confirmation changes nothing.
     fay.buttons["Decline"].tap()
     let question = app.staticTexts["Decline Fay Chen’s friend request?"]
     XCTAssertTrue(question.waitForExistence(timeout: 10))
     XCTAssertTrue(app.staticTexts["The request will be removed."].exists)
-    app.otherElements["PopoverDismissRegion"]
-      .coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.1))
-      .tap()
+    app.cancelConfirmation()
     XCTAssertTrue(question.waitForNonExistence(timeout: 10))
 
     fay.buttons["Accept"].tap()
     wait(for: [log.wrote("relationship", #"{"action":"accept","target":"user-fay"}"#)], timeout: 10)
 
     fay.buttons["Decline"].tap()
-    let decline = app.popovers.buttons["Decline"]
-    XCTAssertTrue(decline.waitForExistence(timeout: 10))
-    decline.tap()
+    XCTAssertTrue(question.waitForExistence(timeout: 10))
+    app.confirmationButton("Decline").tap()
     wait(for: [log.wrote("relationship", #"{"action":"remove","target":"user-fay"}"#)], timeout: 10)
 
     let gus = app.person("gus")
@@ -67,6 +64,38 @@ final class FriendsTests: XCTestCase {
       timeout: 10
     )
     try app.performShellAudit()
+  }
+
+  // A failed read beneath Decline's confirmation, as during a deploy, leaves
+  // it open to confirm once reads succeed again.
+  @MainActor
+  func testKeepsTheDeclineConfirmationThroughAFailedRead() throws {
+    let log = RequestLog.temporary()
+    let outage = FixtureOutage()
+    let app = XCUIApplication()
+    app.launch(
+      with: FixtureLaunch(link: "screenr-dev://people", requestLog: log.file, outage: outage)
+    )
+    let fay = app.person("fay")
+    XCTAssertTrue(fay.waitForExistence(timeout: 10))
+    fay.buttons["Decline"].tap()
+    let question = app.staticTexts["Decline Fay Chen’s friend request?"]
+    XCTAssertTrue(question.waitForExistence(timeout: 10))
+
+    // The first failed read has replaced the list beneath with the error by
+    // the time the app polls again.
+    outage.begin()
+    let reads = try log.screenPaths().count
+    wait(for: [log.screenReads(atLeast: reads + 2)], timeout: 15)
+    let failure = app.staticTexts["Screenr didn't load"]
+    XCTAssertTrue(failure.exists)
+    XCTAssertTrue(question.exists)
+
+    outage.end()
+    XCTAssertTrue(failure.waitForNonExistence(timeout: 10))
+    XCTAssertTrue(question.exists)
+    app.confirmationButton("Decline").tap()
+    wait(for: [log.wrote("relationship", #"{"action":"remove","target":"user-fay"}"#)], timeout: 10)
   }
 
   // An exact username opens that person's profile, whatever its case.

@@ -95,6 +95,23 @@ struct FriendsModelTests {
     #expect(api.requests.count == 1)
   }
 
+  // Decline's confirmation stays open while the request is pending, and
+  // closes once a read no longer has it, such as after an answer elsewhere.
+  @Test func declineClosesOnceTheRequestIsGone() throws {
+    let model = FriendsModel(api: RecordingAPI()) {}
+    let (page, viewer) = try people()
+    let sections = FriendsSections(page, viewer: viewer)
+    let fay = try #require(sections.requests.first)
+
+    model.askToDecline(fay)
+    model.reconcile(with: sections)
+    #expect(model.declining == fay)
+
+    let (empty, emptyViewer) = try people("screen/people/empty")
+    model.reconcile(with: FriendsSections(empty, viewer: emptyViewer))
+    #expect(model.declining == nil)
+  }
+
   @Test func aFailedActionShowsWithItsPersonUntilTheirNextAction() async {
     let api = RecordingAPI(
       sequences: ["relationship": [.failure(.notFound), .success(["ok": true])]]

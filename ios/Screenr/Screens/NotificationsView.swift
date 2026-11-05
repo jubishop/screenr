@@ -17,6 +17,8 @@ struct NotificationsView: View {
   }
 }
 
+// The model, the failure alert, and Decline's confirmation live here,
+// outside the read's content, so a failed read leaves an open confirmation.
 private struct NotificationsList: View {
   @State private var model: NotificationsModel
 
@@ -43,10 +45,31 @@ private struct NotificationsList: View {
     } message: { failure in
       Text(failure.error.explanation)
     }
+    .confirmationDialog(
+      declineTitle,
+      isPresented: Binding(
+        get: { model.declining != nil },
+        set: { if !$0 { model.cancelDecline() } }
+      ),
+      titleVisibility: .visible,
+      presenting: model.declining
+    ) { item in
+      Button("Decline", role: .destructive) {
+        Task { await model.respond(to: item, .decline) }
+      }
+      Button("Cancel", role: .cancel) { model.cancelDecline() }
+    } message: { _ in
+      Text("The request will be removed.")
+    }
   }
 
   // Read while rendering, so a new failure renders the alert.
   private var failure: NotificationsModel.Failure? { model.failure }
+
+  private var declineTitle: String {
+    guard let item = model.declining else { return "" }
+    return "Decline \(item.actor)’s friend request?"
+  }
 
   private var failureTitle: String {
     switch failure?.action {
@@ -124,6 +147,7 @@ private struct NotificationsContent: View {
         }
       }
       .listStyle(.plain)
+      .onChange(of: model.rows, initial: true) { model.reconcile() }
     }
   }
 }
@@ -182,28 +206,15 @@ private struct NotificationRow: View {
     .contentShape(.rect)
   }
 
+  // Decline asks first, in the list's confirmation.
   private var responses: some View {
-    // Read while rendering, so asking to decline presents the confirmation.
-    let declining = model.declining?.id == row.id
-    return HStack(spacing: 12) {
+    HStack(spacing: 12) {
       Button("Accept") {
         Task { await model.respond(to: row.item, .accept) }
       }
       .buttonStyle(.accent)
       Button("Decline") { model.askToDecline(row.item) }
         .buttonStyle(.bordered)
-        .confirmationDialog(
-          "Decline \(row.item.actor)’s friend request?",
-          isPresented: Binding(get: { declining }, set: { if !$0 { model.cancelDecline() } }),
-          titleVisibility: .visible
-        ) {
-          Button("Decline", role: .destructive) {
-            Task { await model.respond(to: row.item, .decline) }
-          }
-          Button("Cancel", role: .cancel) { model.cancelDecline() }
-        } message: {
-          Text("The request will be removed.")
-        }
     }
   }
 }

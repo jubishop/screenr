@@ -112,6 +112,46 @@ final class SettingsTests: XCTestCase {
     )
   }
 
+  // A failed read beneath Revoke's confirmation, as during a deploy, leaves
+  // it open to confirm once reads succeed again.
+  @MainActor
+  func testKeepsTheRevokeConfirmationThroughAFailedRead() throws {
+    let log = RequestLog.temporary()
+    let outage = FixtureOutage()
+    let app = openSettings(log: log, outage: outage)
+    app.buttons["Invite friends"].tap()
+    let revokeInvitation = app.buttons["Revoke invitation"].firstMatch
+    XCTAssertTrue(revokeInvitation.waitForExistence(timeout: 10))
+    revokeInvitation.tap()
+    let question = app.staticTexts["Revoke this invitation? Its link will stop working."]
+    XCTAssertTrue(question.waitForExistence(timeout: 5))
+
+    // The first failed read has replaced the invitations beneath with the
+    // error by the time the app reads them again.
+    outage.begin()
+    let reads = try log.screenPaths().count
+    wait(
+      for: [log.expectation { $0.dropFirst(reads).filter { $0 == "/invites" }.count >= 2 }],
+      timeout: 15
+    )
+    let failure = app.staticTexts["Screenr didn't load"]
+    XCTAssertTrue(failure.exists)
+    XCTAssertTrue(question.exists)
+
+    outage.end()
+    XCTAssertTrue(failure.waitForNonExistence(timeout: 10))
+    XCTAssertTrue(question.exists)
+    app.buttons["Revoke"].tap()
+    wait(
+      for: [
+        log.logged(
+          #"POST /api/screenr/revoke-invite {"id":"a93ecb20-a553-4bee-8e54-0c690ca36d03"}"#
+        )
+      ],
+      timeout: 10
+    )
+  }
+
   // The fixture launch's member has not decided about notifications, and
   // allows them when asked.
   @MainActor
@@ -277,9 +317,13 @@ final class SettingsTests: XCTestCase {
   }
 
   @MainActor
-  private func openSettings(log: RequestLog, textSize: String? = nil) -> XCUIApplication {
+  private func openSettings(
+    log: RequestLog,
+    textSize: String? = nil,
+    outage: FixtureOutage? = nil
+  ) -> XCUIApplication {
     let app = XCUIApplication()
-    app.launch(with: FixtureLaunch(requestLog: log.file, textSize: textSize))
+    app.launch(with: FixtureLaunch(requestLog: log.file, textSize: textSize, outage: outage))
     XCTAssertTrue(app.tab("You").waitForExistence(timeout: 10))
     app.tab("You").tap()
     app.buttons["Settings"].tap()

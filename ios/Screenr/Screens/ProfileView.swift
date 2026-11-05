@@ -29,8 +29,9 @@ struct ProfileView: View {
   }
 }
 
-// The models live here, outside the screen's content, so drafts in the
-// activity and the reader's place survive a failed read.
+// The models and the confirmations live here, outside the screen's content,
+// so drafts in the activity, the reader's place, and an open confirmation
+// survive a failed read.
 private struct ProfilePage: View {
   let model: ScreenModel
   let editTopTen: (() -> Void)?
@@ -81,6 +82,9 @@ private struct ProfilePage: View {
           }
           .padding(.vertical)
         }
+        .onChange(of: relationship, initial: true) { _, relationship in
+          actions.reconcile(with: relationship)
+        }
         .toolbar {
           ToolbarItem(placement: .topBarTrailing) {
             ShareButton(
@@ -96,6 +100,8 @@ private struct ProfilePage: View {
         }
       }
     }
+    .profileConfirmation(actions)
+    .feedConfirmation(feed)
     // The header names the person, so the bar keeps the name small, from
     // the first read on.
     .toolbarTitleDisplayMode(.inline)
