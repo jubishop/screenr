@@ -171,6 +171,18 @@ extension XCUIApplication {
   }
 }
 
+// A member path without the window that a paged friends feed's or profile's
+// read names, such as `/` for `/?before=now`.
+func withoutWindow(_ path: String) -> String {
+  let pathname = path.prefix { $0 != "?" }
+  let pairs = path.dropFirst(pathname.count + 1).split(separator: "&")
+  let kept = pairs.filter { pair in
+    let name = pair.prefix { $0 != "=" }
+    return name != "since" && name != "before"
+  }
+  return kept.isEmpty ? String(pathname) : pathname + "?" + kept.joined(separator: "&")
+}
+
 // The fixture API's request log, a line per API request, such as
 // `GET /api/screenr/screen?path=%2Fpeople`, with ` visit` after the app's
 // visit. It shows which screens the app read, and when, whatever the screens
@@ -193,15 +205,7 @@ struct RequestLog {
 
     // The member path without the window that a paged feed's or profile's
     // read names, so `/` names every read of the friends feed.
-    var path: String {
-      let pathname = sent.prefix { $0 != "?" }
-      let pairs = sent.dropFirst(pathname.count + 1).split(separator: "&")
-      let kept = pairs.filter { pair in
-        let name = pair.prefix { $0 != "=" }
-        return name != "since" && name != "before"
-      }
-      return kept.isEmpty ? String(pathname) : pathname + "?" + kept.joined(separator: "&")
-    }
+    var path: String { withoutWindow(sent) }
   }
 
   // Each screen the app read, in order.

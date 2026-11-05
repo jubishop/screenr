@@ -313,7 +313,10 @@ final class FeedTests: XCTestCase {
       .sorted()
     XCTAssertEqual(
       names,
-      ["default", "empty", "incoming", "joined", "linked-reply", "unavailable-link"]
+      [
+        "default", "empty", "incoming", "joined", "linked-reply", "newest-page", "older-page",
+        "page", "unavailable-link",
+      ]
     )
     for name in names {
       let fixture = try FeedFixtureFile(directory.appending(path: "\(name).json"))
@@ -374,7 +377,8 @@ private struct FeedFixtureFile {
     let body = (json?["response"] as? [String: Any])?["body"] as? [String: Any]
     let entries = body?["conversations"] as? [[String: Any]] ?? []
     viewer = json?["viewer"] as? String ?? "alice"
-    path = query?["path"] ?? "/"
+    // A paged read's window is the app's own; the link names the screen.
+    path = withoutWindow(query?["path"] ?? "/")
     targetUnavailable = body?["targetUnavailable"] as? Bool ?? false
     firstEntry = entries.compactMap { $0["id"] as? String }.min()
     targetReply = (body?["target"] as? [String: Any])?["reply"] as? String
