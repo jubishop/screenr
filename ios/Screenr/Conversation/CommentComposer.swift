@@ -18,6 +18,12 @@ struct CommentComposer<Context: View>: View {
   // Shown above the field, such as the reply's destination or season pickers.
   @ViewBuilder var context: () -> Context
   @FocusState private var focused: Bool
+  // The field takes focus as the composer opens, and not again when its
+  // screen reappears, such as after a pop or a tab switch: a keyboard that
+  // came back as that transition animates could deadlock the app, as one
+  // could under a closing sheet (see `keyboardSafeSheet(item:content:)`).
+  // The reader taps the field to go on.
+  @State private var opening = Opening.pending
 
   var body: some View {
     VStack(alignment: .leading, spacing: 10) {
@@ -50,8 +56,18 @@ struct CommentComposer<Context: View>: View {
     }
     .padding(12)
     .background(RoundedRectangle(cornerRadius: 12).strokeBorder(.separator))
-    .onAppear { focused = true }
+    .onAppear {
+      guard opening == .pending else { return }
+      opening = .focused
+      focused = true
+    }
   }
+}
+
+// Whether a composer's field has taken its opening focus.
+private enum Opening {
+  case pending
+  case focused
 }
 
 // The composer's posting button: filled with the accent color, or muted

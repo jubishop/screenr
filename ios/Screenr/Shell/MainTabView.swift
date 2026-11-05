@@ -63,5 +63,6 @@ private struct TabStack: View {
         DestinationView(destination)
       }
     }
+    .keyboardSafeNavigation(router[stack: tab])
   }
 }

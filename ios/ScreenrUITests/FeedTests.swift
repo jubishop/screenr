@@ -296,6 +296,46 @@ final class FeedTests: XCTestCase {
     )
   }
 
+  // An unsent comment survives leaving the feed for a title page, whether
+  // the feed or a link pushed it, and for another tab, and the keyboard stays
+  // down on each return: bringing it back while the screen's transition
+  // animates could deadlock the app.
+  @MainActor
+  func testKeepsAnUnsentCommentAcrossScreens() throws {
+    let app = XCUIApplication()
+    app.launch(with: FixtureLaunch())
+    let entry = app.entry(FeedFixture.benRecommend)
+    XCTAssertTrue(entry.waitForExistence(timeout: 10))
+    entry.buttons["Comment"].tap()
+    let field = app.composerField("Add your reply")
+    XCTAssertTrue(field.waitForExistence(timeout: 5))
+    field.typeText("Saw it twice.")
+
+    entry.buttons(starting: "Night Crossing").tap()
+    let title = app.navigationBars["Night Crossing"]
+    XCTAssertTrue(title.waitForExistence(timeout: 10))
+    title.buttons["BackButton"].tap()
+    XCTAssertTrue(app.navigationBars["Your circle"].waitForExistence(timeout: 10))
+    XCTAssertFalse(app.keyboards.firstMatch.waitForExistence(timeout: 2))
+
+    app.tab("Friends").tap()
+    XCTAssertTrue(app.tab("Friends").isSelected)
+    app.tab("Circle").tap()
+    XCTAssertTrue(app.navigationBars["Your circle"].waitForExistence(timeout: 10))
+    XCTAssertFalse(app.keyboards.firstMatch.waitForExistence(timeout: 2))
+    XCTAssertEqual(field.value as? String, "Saw it twice.")
+
+    // A link pushes its screen, as a notification's tap does.
+    field.tap()
+    XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5))
+    XCUIDevice.shared.system.open(try XCTUnwrap(URL(string: "screenr-dev://titles/movie/101")))
+    XCTAssertTrue(title.waitForExistence(timeout: 10))
+    title.buttons["BackButton"].tap()
+    XCTAssertTrue(app.navigationBars["Your circle"].waitForExistence(timeout: 10))
+    XCTAssertFalse(app.keyboards.firstMatch.waitForExistence(timeout: 2))
+    XCTAssertEqual(field.value as? String, "Saw it twice.")
+  }
+
   // Ben posts while the reader is a little way down the feed, reading the
   // second entry. The post waits behind New activity, and showing it puts the
   // post above that entry without moving the entry.
