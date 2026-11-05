@@ -174,8 +174,10 @@ test("members rate, review, edit, and remove from the title page while friends r
   ).toBeVisible();
 
   // The comment notifies the author and opens the review on the title page.
+  // The accepted friendship already left the author one unread notification,
+  // so the badge reaches 2 only once the author's screen reads the comment.
   const bell = author.getByRole("button", { name: /^Notifications/ });
-  await expect(bell.locator(".notification-badge")).toHaveText("1");
+  await expect(bell.locator(".notification-badge")).toHaveText("2");
   await bell.click();
   const notice = author
     .getByRole("dialog", { name: "Notifications" })

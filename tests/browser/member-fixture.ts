@@ -171,6 +171,9 @@ export async function userId(page: Page) {
   return (await response.json()).user.id as string;
 }
 
+// Befriend two signed-in members through the API: `a` requests and `b`
+// accepts. The accept leaves `a` an unread friend_accepted notification,
+// which `a`'s notification badge counts.
 export async function prepareFriendship(a: Page, b: Page) {
   const [aId, bId] = await Promise.all([userId(a), userId(b)]);
   for (const [page, target, action] of [

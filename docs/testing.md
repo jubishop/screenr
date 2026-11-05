@@ -214,10 +214,12 @@ Only email delivery is replaced with an in-memory code capture. The browser
 and application still use normal sessions and access checks. `member` creates
 a mobile browser context; `signIn` prepares the test's existing page.
 `prepareFriendship` sends and accepts requests through the authenticated API.
-For people a test never signs in as, `person` creates a completed profile
-without a session, and `friend` accepts a friendship between two user IDs
-through the relationship rules. `userId` reads the user behind a page's
-session. Specs import these helpers instead of defining their own copies.
+The accept leaves the requesting member an unread `friend_accepted`
+notification, which that member's notification badge counts. For people a
+test never signs in as, `person` creates a completed profile without a
+session, and `friend` accepts a friendship between two user IDs through the
+relationship rules. `userId` reads the user behind a page's session. Specs
+import these helpers instead of defining their own copies.
 
 - Every application suite that uses the test database or server modules
   imports [social-fixture.ts](../tests/app/social-fixture.ts) first. Before
