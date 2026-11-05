@@ -269,9 +269,9 @@ installed apps.
   controls without moving the reader.
 
 **Implementation note:** ScreenrKit's `ScreenModel` polls each visible
-screen, and `IncomingActivity` holds other people's new activity behind the
-shell's controls. Showing it keeps the entry at the top of the screen where
-it is, as the web's `preservePosition` does; the
+screen, and a feed's `AcceptedActivity` and `FeedLayout` hold other people's
+new activity behind the shell's New activity control. Showing it keeps the
+entry at the top of the screen where it is, as the web's `preservePosition` does; the
 [conversations](../ios/README.md#conversations) section describes how. Each read also has the web's ten-second deadline and the
 same rules for passing and permanent errors. The
 [app shell](../ios/README.md#polling) section describes them.

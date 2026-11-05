@@ -86,7 +86,6 @@ struct InvitationsModelTests {
 
     #expect(used.link?.absoluteString.hasPrefix("http://localhost:3000/join/") == true)
     #expect(used.uses == 1)
-    #expect(used.remainingUses == 2)
     #expect(used.joined.map(\.username) == ["hana"])
   }
 

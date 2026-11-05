@@ -548,21 +548,24 @@ test("pushes go only to notifications still visible and unread when sent, on the
   ]);
   sandbox.received.length = 0;
 
-  // A device whose session expired receives nothing.
+  // A device whose session expired receives nothing, while her device on a
+  // live session still does.
+  await device(alice, tokenB);
   await addComment(outsider, conversation, "Expired session", false);
   await db.query(
     `UPDATE session SET "expiresAt"=now()-interval '1 second' WHERE token=$1`,
     [decodeURIComponent(phone).split(".")[0]],
   );
   await deliverPushes(apns);
-  assert.deepEqual(sandbox.received, []);
+  const tokens = () => sandbox.received.splice(0).map(({ token }) => token);
+  assert.deepEqual(tokens(), [tokenB]);
 
   // A phone that another member signed in to never receives alice's pushes.
   await device(alice, tokenA);
   await addComment(outsider, conversation, "Moved phone", false);
   await device(outsider, tokenA);
   await deliverPushes(apns);
-  assert.deepEqual(sandbox.received, []);
+  assert.deepEqual(tokens(), [tokenB]);
   assert.equal(await jobs(), 0);
 });
 

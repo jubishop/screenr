@@ -77,6 +77,4 @@ public final class InvitationsModel {
 extension Invitation {
   // The invitation link, such as `https://screenr.club/join/<token>`.
   public var link: URL? { URL(string: url) }
-
-  public var remainingUses: Int { max(maxUses - uses, 0) }
 }

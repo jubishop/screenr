@@ -31,12 +31,16 @@ public final class LiveRead<Value: Decodable & Hashable & Sendable> {
     case failed(APIError)
   }
 
+  // What the next read sends, which a change of path or a read's value can
+  // move, as a paged screen's window does.
   public private(set) var request: APIRequest<Value>
   public private(set) var phase: Phase = .loading
 
   @ObservationIgnored private let api: any ScreenrAPI
   @ObservationIgnored private let clock: any Clock<Duration>
   @ObservationIgnored private let onLoad: @MainActor (Value, ReadChange) -> Void
+  @ObservationIgnored private let follow:
+    @MainActor (Value, APIRequest<Value>) -> APIRequest<Value>?
   @ObservationIgnored private var visible = false
   @ObservationIgnored private var active = false
   @ObservationIgnored private(set) var pollTask: Task<Void, Never>?
@@ -46,16 +50,20 @@ public final class LiveRead<Value: Decodable & Hashable & Sendable> {
   @ObservationIgnored private var readGeneration = 0
 
   // `onLoad` sees every value a read returns, such as for the bell's count,
-  // and whether it differs from the one before it.
+  // and whether it differs from the one before it. `follow` names the request
+  // that reads after a value, given the request that read it, or returns nil
+  // to read the same again.
   public init(
     _ request: APIRequest<Value>,
     api: any ScreenrAPI,
     clock: any Clock<Duration> = ContinuousClock(),
-    onLoad: @escaping @MainActor (Value, ReadChange) -> Void = { _, _ in }
+    onLoad: @escaping @MainActor (Value, ReadChange) -> Void = { _, _ in },
+    follow: @escaping @MainActor (Value, APIRequest<Value>) -> APIRequest<Value>? = { _, _ in nil }
   ) {
     self.request = request
     self.api = api
     self.clock = clock
+    self.follow = follow
     self.onLoad = onLoad
   }
 
@@ -93,6 +101,13 @@ public final class LiveRead<Value: Decodable & Hashable & Sendable> {
     await read(replacing: true)
     guard isLive, pollTask == nil, !isPermanentlyFailed else { return }
     startPolling(.later)
+  }
+
+  // Reads `request` now, and later reads follow from it, such as a paged
+  // screen's Show older.
+  public func read(_ request: APIRequest<Value>) async {
+    self.request = request
+    await refresh()
   }
 
   // Reads now if the view is live, such as when a push notification arrives
@@ -191,10 +206,12 @@ public final class LiveRead<Value: Decodable & Hashable & Sendable> {
   }
 
   private func load(_ trigger: RequestTrigger, generation: Int) async {
-    let result = await Self.fetch(request.triggered(by: trigger), api: api, clock: clock)
+    let sent = request
+    let result = await Self.fetch(sent.triggered(by: trigger), api: api, clock: clock)
     guard generation == readGeneration else { return }
     switch result {
     case .success(let value):
+      if let next = follow(value, sent), next.query != request.query { request = next }
       let change: ReadChange = phase == .loaded(value) ? .unchanged : .changed
       if change == .changed { phase = .loaded(value) }
       onLoad(value, change)
@@ -269,17 +286,29 @@ public enum LiveReadTiming {
 }
 
 extension LiveRead where Value == Screen {
-  // The screen at a member path, such as `/titles/tv/201`.
+  // The screen at a member path, such as `/titles/tv/201`. A paged screen,
+  // the friends feed or a profile, starts from its newest page, and each
+  // read moves later ones to the window it names.
   public convenience init(
     path: String,
+    paged: Bool = false,
     api: any ScreenrAPI,
     clock: any Clock<Duration> = ContinuousClock(),
     onLoad: @escaping @MainActor (Screen, ReadChange) -> Void = { _, _ in }
   ) {
-    self.init(.screen(path: path), api: api, clock: clock, onLoad: onLoad)
+    self.init(
+      .screen(path: paged ? HistoryWindow.newest.path(path) : path),
+      api: api,
+      clock: clock,
+      onLoad: onLoad,
+      follow: { screen, sent in
+        guard let page = screen.historyPage, let path = sent.query["path"] else { return nil }
+        return .screen(path: HistoryWindow(after: page).path(path), visit: sent.visit)
+      }
+    )
   }
 
-  // The member path the screen API reads.
+  // The member path the screen API reads, with a paged screen's window.
   public var path: String? { request.query["path"] }
 
   // Reads the screen at `path` from now on, such as Find a title's with
@@ -288,6 +317,13 @@ extension LiveRead where Value == Screen {
   public func change(path: String) {
     guard path != self.path else { return }
     change(to: .screen(path: path, visit: request.visit))
+  }
+
+  // Show older: reads the window extended by the page before the loaded
+  // page's start now, waiting for the answer, and later reads keep it.
+  public func showOlder() async {
+    guard let since = screen?.historyPage?.since, let path else { return }
+    await read(.screen(path: HistoryWindow.before(since).path(path), visit: request.visit))
   }
 
   // The loaded screen, or nil while loading or after a failed read.

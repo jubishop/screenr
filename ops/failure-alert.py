@@ -86,15 +86,26 @@ def compose(unit, state):
     return 'Screenr alert: ' + subject, text
 
 
-def send(message, api_key):
-    key = 'screenr-failure-alert/' + str(uuid.uuid4())
+# Resend replies that a retry cannot change.
+REJECTIONS = (400, 401, 403, 404, 422)
+
+
+def deliver(message, api_key, key, agent, what, before_attempt=None, on_http_error=None):
+    """Email message through Resend in up to three attempts and return its email ID.
+
+    Every attempt sends the idempotency key, so a lost response cannot send twice.
+    before_attempt() runs ahead of each attempt, and on_http_error(status) after each HTTP
+    error reply; check-backup-size.py keeps its saved retry state with them. what names the
+    email in errors.
+    """
     for attempt in range(3):
+        if before_attempt:
+            before_attempt()
         request = urllib.request.Request('https://api.resend.com/emails',
             data=json.dumps(message).encode(), headers={
                 'Authorization': 'Bearer ' + api_key,
                 'Content-Type': 'application/json',
-                'User-Agent': 'Screenr-failure-alert/1',
-                # Retries reuse the key, so a lost response cannot send twice.
+                'User-Agent': agent,
                 'Idempotency-Key': key,
             }, method='POST')
         try:
@@ -102,15 +113,22 @@ def send(message, api_key):
                 receipt = json.load(response)
             if not isinstance(receipt, dict) or not isinstance(receipt.get('id'), str) or not receipt['id']:
                 raise ValueError('Missing Resend acceptance receipt')
-            return
+            return receipt['id']
         except urllib.error.HTTPError as error:
             error.close()
-            if attempt == 2 or error.code in (400, 401, 403, 404, 422):
-                raise ValueError(f'Resend rejected the alert (HTTP {error.code})') from None
+            if on_http_error:
+                on_http_error(error.code)
+            if attempt == 2 or error.code in REJECTIONS:
+                raise ValueError(f'Resend rejected {what} (HTTP {error.code})') from None
         except (OSError, ValueError):
             if attempt == 2:
-                raise ValueError('Resend did not accept the alert after 3 attempts') from None
+                raise ValueError(f'Resend did not accept {what} after 3 attempts') from None
         time.sleep(2 ** attempt)
+
+
+def send(message, api_key):
+    deliver(message, api_key, 'screenr-failure-alert/' + str(uuid.uuid4()),
+            'Screenr-failure-alert/1', 'the alert')
 
 
 def main():

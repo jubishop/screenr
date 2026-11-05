@@ -325,7 +325,8 @@
   color: var(--ink);
   border-bottom-color: var(--ink);
 }
-/* Friends recommend's Movies/TV group and Show finished switch. */
+/* The All, Movies, and TV group, and Friends recommend's row of it and its
+   Show finished switch. */
 .recommend-filters,
 .kind-filter {
   display: flex;

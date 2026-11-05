@@ -17,12 +17,6 @@ export const pushTopics = [
 ] as const;
 export type PushTopic = (typeof pushTopics)[number];
 export type PushEnvironment = "sandbox" | "production";
-export type PushDevice = {
-  token: string;
-  environment: PushEnvironment;
-  topic: PushTopic;
-  build: number;
-};
 
 // Each notification kind's setting: its key in the account payload and the
 // push-settings action, and its profile column.
@@ -104,24 +98,6 @@ export async function changePushDevice(
     deviceToken(fields.token),
     userId,
   ]);
-}
-
-// The member's devices on live sessions. With a kind, only when the member
-// allows pushes of that kind.
-export async function pushDevices(
-  userId: string,
-  kind?: PushKind,
-  client: Queryable = db,
-) {
-  const allowed = kind ? `AND p.${settings[kind][1]}` : "";
-  return (
-    await client.query<PushDevice>(
-      `SELECT d.token,d.environment,d.topic,d.build FROM push_device d
-      ${liveSession} JOIN profile p ON p.user_id=d.user_id
-      WHERE d.user_id=$1 ${allowed} ORDER BY d.token`,
-      [userId],
-    )
-  ).rows;
 }
 
 // Deletes a token that APNs reports no longer reaches the app, with status

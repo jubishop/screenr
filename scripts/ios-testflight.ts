@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import { createWriteStream } from "node:fs";
-import { mkdir, readFile, rm } from "node:fs/promises";
+import { mkdir, readFile, readdir, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
@@ -24,6 +24,10 @@ const notePaths = ["ios", "src/server", "src/app/api"];
 const tagPattern = /^ios-v(\d+(?:\.\d+){0,2})b([1-9]\d*)$/;
 // App Store Connect accepts What to Test notes of up to 4,000 characters.
 const notesLimit = 4000;
+// ios/build/release keeps the archives and logs of this many of the newest
+// releases. --distribute-only needs none of them, and the archive uploads its
+// symbols to Sentry.
+const releasesKept = 3;
 
 export type Output = "capture" | "terminal" | { log: string };
 export type Exec = (
@@ -282,7 +286,8 @@ async function archiveAndUpload(
     log: (line: string) => void;
   },
 ) {
-  const directory = join(root, "ios/build/release", tag.name);
+  const releases = join(root, "ios/build/release");
+  const directory = join(releases, tag.name);
   const archive = join(directory, "Screenr.xcarchive");
   await rm(directory, { recursive: true, force: true });
   await mkdir(directory, { recursive: true });
@@ -302,12 +307,16 @@ async function archiveAndUpload(
     name: string,
     args: string[],
     environment: Environment,
+    { packages = false } = {},
   ) => {
     const logPath = join(directory, `${name}.log`);
     log(`==> ${label}; the log is ${logPath}`);
+    // bin/ios-packages resolves the packages into the Mac's shared cache and
+    // holds it in use while xcodebuild builds against it.
+    const options = ["-hideShellScriptEnvironment", ...args];
     const { status } = await exec(
-      "xcodebuild",
-      ["-hideShellScriptEnvironment", ...args],
+      packages ? join(root, "bin/ios-packages") : "xcodebuild",
+      packages ? ["xcodebuild", ...options] : options,
       {
         output: { log: logPath },
         env: environment,
@@ -346,6 +355,7 @@ async function archiveAndUpload(
       `CURRENT_PROJECT_VERSION=${tag.build}`,
     ],
     base,
+    { packages: true },
   );
   // The upload's rsync starts its helper through PATH and needs Apple's, not
   // a newer one from Homebrew.
@@ -365,6 +375,25 @@ async function archiveAndUpload(
     { ...base, PATH: `/usr/bin:/bin:/usr/sbin:/sbin:${base.PATH ?? ""}` },
   );
   await rm(join(directory, "DerivedData"), { recursive: true, force: true });
+  await pruneReleases(releases, log);
+}
+
+// Removes the output of all but the newest releasesKept releases. The build
+// is already uploaded, so a failure here only leaves more output behind.
+async function pruneReleases(releases: string, log: (line: string) => void) {
+  try {
+    const old = releaseTags(await readdir(releases)).slice(0, -releasesKept);
+    for (const { name } of old)
+      await rm(join(releases, name), { recursive: true, force: true });
+    if (old.length)
+      log(
+        `==> Removed the output of ${old.map(({ name }) => name).join(", ")}; ${releases} keeps the newest ${releasesKept} releases.`,
+      );
+  } catch (error) {
+    log(
+      `Could not remove older release output from ${releases}: ${(error as Error).message}`,
+    );
+  }
 }
 
 async function pushTag(exec: Exec, name: string) {

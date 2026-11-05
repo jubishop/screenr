@@ -553,7 +553,7 @@ within the 200 KB maximum. Safari's JPEG of a detailed iPhone photo exceeded
 60 KB at every quality the first version tried, so the browser now lowers the
 quality further and then tries the smaller sizes, which replace the fixed 512
 pixels for those photos ([issue #204](https://github.com/jubishop/screenr/issues/204)).
-The worker runs the backfill once after deployment.
+The worker ran the backfill once after deployment, finishing on 2026-10-12.
 [Profile photos](data-and-access.md#profile-photos) describes storage,
 access, caching, and the Google copies.
 

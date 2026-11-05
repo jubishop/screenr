@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { generateKeyPairSync } from "node:crypto";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -163,6 +163,7 @@ async function releaseFixture(
       { stdout: "✨ feat(ios): Add the You tab (#301)\n" },
     ],
     [/\/bin\/check-ios --reuse$/, {}],
+    [/\/bin\/ios-packages xcodebuild /, {}],
     [/^xcodebuild /, {}],
     [/^git tag --annotate /, {}],
     [/^git push origin refs\/tags\/ios-v1\.0b4$/, {}],
@@ -206,13 +207,14 @@ test("a release archives and uploads the next build, then tags and pushes the co
     );
     assert.deepEqual(fixture.shell.calls[gate]?.args, ["--reuse"]);
     assert.equal(fixture.shell.calls[gate]?.output, "terminal");
-    assert.ok(
-      gate <
-        fixture.shell.calls.findIndex(
-          ({ command }) => command === "xcodebuild",
-        ),
+    // The archive builds against the Mac's shared package cache, which
+    // bin/ios-packages resolves and holds in use while xcodebuild runs.
+    const archiving = fixture.shell.calls.findIndex(
+      ({ command }) => command === join(fixture.root, "bin/ios-packages"),
     );
-    const [archive, upload] = fixture.shell.calls.filter(
+    assert.ok(gate < archiving);
+    const archive = fixture.shell.calls[archiving];
+    const upload = fixture.shell.calls.find(
       ({ command }) => command === "xcodebuild",
     );
     const directory = join(fixture.root, "ios/build/release/ios-v1.0b4");
@@ -226,6 +228,7 @@ test("a release archives and uploads the next build, then tags and pushes the co
       "issuer",
     ];
     assert.deepEqual(archive?.args, [
+      "xcodebuild",
       "-hideShellScriptEnvironment",
       "archive",
       "-project",
@@ -274,6 +277,49 @@ test("a release archives and uploads the next build, then tags and pushes the co
     assert.deepEqual(fixture.requests, ["/v1/apps"]);
   } finally {
     await fixture.cleanup();
+  }
+});
+
+test("a release keeps the output of the newest three release tags after its upload", async () => {
+  const fixture = await releaseFixture();
+  const output = join(fixture.root, "ios/build/release");
+  try {
+    for (const name of ["ios-v1.0b1", "ios-v1.0b2", "ios-v1.0b3", "notes"])
+      await mkdir(join(output, name, "Screenr.xcarchive"), { recursive: true });
+    await assert.rejects(
+      release({ distributeOnly: false, submitReview: false }, fixture.io),
+      { message: /ios-v1\.0b4 is uploaded and tagged/ },
+    );
+    // Only directories named for release tags are release output.
+    assert.deepEqual((await readdir(output)).sort(), [
+      "ios-v1.0b2",
+      "ios-v1.0b3",
+      "ios-v1.0b4",
+      "notes",
+    ]);
+  } finally {
+    await fixture.cleanup();
+  }
+  // A failed upload removes nothing.
+  const failed = await releaseFixture([
+    [/^xcodebuild .*-exportArchive/, { status: 70 }],
+  ]);
+  const kept = join(failed.root, "ios/build/release");
+  try {
+    for (const name of ["ios-v1.0b1", "ios-v1.0b2", "ios-v1.0b3"])
+      await mkdir(join(kept, name), { recursive: true });
+    await assert.rejects(
+      release({ distributeOnly: false, submitReview: false }, failed.io),
+      { message: /Uploading failed with status 70/ },
+    );
+    assert.deepEqual((await readdir(kept)).sort(), [
+      "ios-v1.0b1",
+      "ios-v1.0b2",
+      "ios-v1.0b3",
+      "ios-v1.0b4",
+    ]);
+  } finally {
+    await failed.cleanup();
   }
 });
 
@@ -332,7 +378,10 @@ test("a release refuses a dirty, stale, released, or failing checkout and tags n
       );
       if (name !== "upload")
         assert.ok(
-          !fixture.shell.calls.some((call) => call.command === "xcodebuild"),
+          !fixture.shell.calls.some(
+            ({ command, args }) =>
+              command === "xcodebuild" || args[0] === "xcodebuild",
+          ),
         );
       assert.ok(
         !fixture.shell
@@ -365,7 +414,7 @@ test("--distribute-only retries the newest tag's build without building", async 
       !fixture.shell
         .lines()
         .some((line) =>
-          /^(xcodebuild|\S+\/bin\/check-ios|git (status|tag --annotate|push))/.test(
+          /^(xcodebuild|\S+\/bin\/(check-ios|ios-packages)|git (status|tag --annotate|push))/.test(
             line,
           ),
         ),

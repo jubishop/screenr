@@ -59,6 +59,13 @@ hooks of every agent's pushes.
   `killall Simulator`. One did, and it killed other agents' test runs. Stop
   `bin/check-ios` itself, by its PID, rather than `xcodebuild`.
 - **Simulators:** each agent creates and deletes its own Simulator.
+- **Package cache:** every checkout's iOS checks, the TestFlight archive,
+  and `bin/ios-packages` share the resolved Swift packages in
+  `~/Library/Caches/screenr-ios-packages`, under locks
+  ([package cache](../ios/README.md#package-cache),
+  [#381](https://github.com/jubishop/screenr/issues/381)). Never delete it
+  by hand: a command over its size bound deletes it once nothing uses it.
+  Run hand-run `xcodebuild` and `swift` commands through `bin/ios-packages`.
 - **Scratch files:** keep scratch files in the agent's own worktree.
   Agents that shared an orchestrator scratch directory overwrote each other's
   `pr-body.md`.

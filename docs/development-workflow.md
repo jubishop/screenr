@@ -362,8 +362,10 @@ long as an archive plus Apple's processing, often 15 to 30 minutes, plus
    Xcode as `CURRENT_PROJECT_VERSION`. Raise the marketing version in a
    normal commit; build numbers keep counting across versions.
 3. **Archive:** `xcodebuild archive` builds the Release configuration without
-   the Xcode interface. `-allowProvisioningUpdates` with the API key signs it
-   automatically for team `34TKMKM889`. Its last build phase uploads the
+   the Xcode interface, through `bin/ios-packages`, against the Mac's
+   [shared package cache](../ios/README.md#package-cache).
+   `-allowProvisioningUpdates` with the API key signs it automatically for
+   team `34TKMKM889`. Its last build phase uploads the
    [symbols to Sentry](../ios/README.md#symbols).
 4. **Upload:** `xcodebuild -exportArchive` with
    `ios/Config/ExportOptions.plist` (`app-store-connect` method, `upload`
@@ -400,8 +402,11 @@ say where the link lives.
 command. After the upload, the build number is used and the tag exists.
 `bin/ios-testflight --distribute-only` repeats the processing wait, notes,
 and groups for the newest tag without building, and accepts
-`--submit-review`. Each run keeps the archive and the `archive.log` and
-`upload.log` files in `ios/build/release/<tag>/`, which Git ignores.
+`--submit-review`. Each release keeps its archive and its `archive.log` and
+`upload.log` files in `ios/build/release/<tag>/`, which Git ignores. After
+each upload, the script removes all but the newest three tags' directories
+there ([#381](https://github.com/jubishop/screenr/issues/381)): retrying
+needs none of them, and the archive already uploaded its symbols to Sentry.
 
 **Signing requests:** App Store Connect accepts ES256 JWTs with the key ID,
 the issuer ID, and the `appstoreconnect-v1` audience, expiring within 20
@@ -409,7 +414,8 @@ minutes. The script signs a new 15-minute token for each request with
 `src/server/apple-jwt.ts`, the same signer as the APNs sender and Sign in
 with Apple, which reads the `.p8` file as PEM. Its tests,
 `tests/app/ios-testflight.test.ts` and `tests/app/app-store-connect.test.ts`,
-fake Git, `bin/check-ios`, Xcode, and the App Store Connect API.
+fake Git, `bin/check-ios`, `bin/ios-packages`, Xcode, and the App Store
+Connect API.
 
 ## TypeScript checkout isolation
 

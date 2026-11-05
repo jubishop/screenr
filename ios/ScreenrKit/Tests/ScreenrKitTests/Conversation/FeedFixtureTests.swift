@@ -28,7 +28,8 @@ struct FeedFixtureTests {
     #expect(
       Self.fixtures == [
         "screen/feed/default", "screen/feed/empty", "screen/feed/incoming",
-        "screen/feed/joined", "screen/feed/linked-reply", "screen/feed/unavailable-link",
+        "screen/feed/joined", "screen/feed/linked-reply", "screen/feed/newest-page",
+        "screen/feed/older-page", "screen/feed/page", "screen/feed/unavailable-link",
       ]
     )
   }
@@ -53,6 +54,40 @@ struct FeedFixtureTests {
     feed.showIncoming(later.conversations, viewer: viewer)
     let shown = feed.layout(later.conversations, viewer: viewer).entries.map(\.id)
     #expect(shown == ["00000000-0000-4000-8000-000000000001"] + waiting.entries.map(\.id))
+  }
+
+  // Show older on Nora's feed: the entries the older page adds show at once,
+  // while one with newer activity still waits behind New activity.
+  @Test func showsTheOlderPageAtOnce() async throws {
+    let first = try screen("screen/feed/newest-page")
+    let page = try #require(first.historyPage)
+    let newest = try FeedFixtures.entries("screen/feed/newest-page")
+    var older = try FeedFixtures.entries("screen/feed/older-page")
+    let viewer = "user-nora"
+    var reads = 0
+    let feed = FeedModel(api: RecordingAPI(), refresh: {}, showOlder: { reads += 1 })
+    feed.receive(newest, viewer: viewer)
+    let added = older.filter { item in !newest.contains { $0.id == item.id } }
+    #expect(added.count == 7)
+    #expect(feed.layout(older, viewer: viewer).incoming == added.count)
+
+    // One of the added entries moved past the newest page's start since.
+    let moved = try #require(added.last)
+    let index = try #require(older.firstIndex { $0.id == moved.id })
+    let later = JSONValue.string(Date(timeIntervalSince1970: 1_791_892_900).formatted(.iso8601))
+    older[index] = try FeedFixtures.entry(
+      moved.id,
+      changing: ["activity_at": later, "visible_activity": later],
+      in: "screen/feed/older-page"
+    )
+    await feed.showOlder(page)
+    feed.receive(older, viewer: viewer)
+    let layout = feed.layout(older, viewer: viewer)
+
+    #expect(reads == 1)
+    #expect(layout.incoming == 1)
+    #expect(Set(layout.entries.map(\.id)) == Set(older.map(\.id)).subtracting([moved.id]))
+    #expect(feed.older == .idle)
   }
 
   @Test(arguments: fixtures)

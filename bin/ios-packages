@@ -1,0 +1,76 @@
+#!/usr/bin/env python3
+"""Run xcodebuild or swift against the iPhone app's shared package cache.
+
+usage: bin/ios-packages xcodebuild|swift <arguments>
+
+For xcodebuild, it first resolves this checkout's packages into the Mac's
+shared cache, then runs xcodebuild with the options that build against them.
+For swift, it runs the command with SwiftPM's downloads in the cache. Either
+way, it holds the cache in use while the command runs, so nothing deletes it
+meanwhile, and exits with the command's status. bin/check-ios and the
+TestFlight archive use the same cache; see ios/README.md#package-cache.
+"""
+
+import os
+from pathlib import Path
+import signal
+import subprocess
+import sys
+
+sys.dont_write_bytecode = True
+import _ios_check_records as records  # noqa: E402
+import _ios_packages as packages  # noqa: E402
+
+ROOT = Path(__file__).resolve().parents[1]
+USAGE = "usage: bin/ios-packages xcodebuild|swift <arguments>"
+# Resolution runs without a macOS SDKROOT and without Git's repository
+# variables, as in bin/check-ios, so SwiftPM's package checkouts use their own
+# repositories.
+ENVIRONMENT = {key: value for key, value in records.outside_git().items() if key != "SDKROOT"}
+
+
+def resolve(command):
+    try:
+        status = subprocess.run(command, cwd=ROOT, env=ENVIRONMENT,
+                                timeout=packages.RESOLVE_TIMEOUT_MINUTES * 60).returncode
+    except subprocess.TimeoutExpired:
+        raise SystemExit(f"Package resolution stopped after {packages.RESOLVE_TIMEOUT_MINUTES} minutes "
+                         "without finishing.") from None
+    if status:
+        raise SystemExit(f"Package resolution failed with status {status}.")
+
+
+def main():
+    arguments = sys.argv[1:]
+    if not arguments or arguments[0] not in ("xcodebuild", "swift") or len(arguments) < 2:
+        print(USAGE, file=sys.stderr)
+        return 2
+    tool, *rest = arguments
+    if tool == "xcodebuild":
+        packages.use(ROOT, resolve)
+        command = [tool, *packages.xcodebuild_options(ROOT), *rest]
+    else:
+        packages.use(ROOT)
+        command = [tool, rest[0], *packages.swift_options(), *rest[1:]]
+    process = subprocess.Popen(command)
+    # Stopping this command stops the tool, which keeps the cache in use until it exits.
+    signal.signal(signal.SIGTERM, lambda signum, frame: process.terminate())
+    while True:
+        try:
+            status = process.wait()
+            break
+        except KeyboardInterrupt:
+            # Control-C reached the tool too; wait for it to finish stopping.
+            continue
+    return 128 - status if status < 0 else status
+
+
+if __name__ == "__main__":
+    try:
+        sys.exit(main())
+    except KeyboardInterrupt:
+        print("bin/ios-packages stopped before it finished.", file=sys.stderr)
+        sys.exit(130)
+    except OSError as error:
+        print(error, file=sys.stderr)
+        sys.exit(1)

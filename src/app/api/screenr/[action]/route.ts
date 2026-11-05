@@ -5,6 +5,11 @@ import { AppError } from "../../../../server/db";
 import { logFailure } from "../../../../server/log";
 import { member } from "../../../../server/profiles";
 import { readVersion } from "../../../../server/screens";
+import {
+  changeMark,
+  rememberedVersion,
+  rememberVersion,
+} from "../../../../server/screen-versions";
 import { recordActiveDay } from "../../../../server/usage";
 
 // Responses depend on the session, and no cache may store them.
@@ -16,15 +21,14 @@ const json = (data: unknown, status = 200) =>
   Response.json(data, { status, headers });
 // A successful read carries its version. A request whose If-None-Match lists
 // it, compared weakly, gets 304 without a body.
-function versioned(request: Request, data: unknown) {
-  const body = JSON.stringify(data);
-  const version = readVersion(body);
-  const held = request.headers.get("If-None-Match")?.split(",") ?? [];
-  if (held.some((tag) => tag.trim().replace(/^W\//, "") === version.slice(2)))
-    return new Response(null, {
-      status: 304,
-      headers: { ...headers, ETag: version },
-    });
+const holds = (request: Request, version: string) =>
+  (request.headers.get("If-None-Match")?.split(",") ?? []).some(
+    (tag) => tag.trim().replace(/^W\//, "") === version.slice(2),
+  );
+const notModified = (version: string) =>
+  new Response(null, { status: 304, headers: { ...headers, ETag: version } });
+function versioned(request: Request, body: string, version: string) {
+  if (holds(request, version)) return notModified(version);
   return new Response(body, {
     headers: { ...headers, ETag: version, "Content-Type": "application/json" },
   });
@@ -92,6 +96,14 @@ async function handle(
         : await body(request);
       return json((await action.respond(input, context)) ?? { ok: true });
     }
+    // A read that changes only with the database reads the change mark
+    // before anything it sends, the reader's own profile included.
+    const query = new URL(request.url).searchParams;
+    const key =
+      action?.method === "GET" && action.profile
+        ? action.remembers?.(query, context.userId)
+        : undefined;
+    const remembered = key && { key, mark: await changeMark() };
     const user = await member(context.userId);
     if (!action) throw new AppError("Action not found.", 404);
     // A visit records the day before the read, so an unchanged screen's 304
@@ -104,9 +116,13 @@ async function handle(
     )
       await recordActiveDay(context.userId, client);
     if (action.method === "GET") {
-      const query = new URL(request.url).searchParams;
+      const unchanged = remembered && rememberedVersion(remembered);
+      if (unchanged && holds(request, unchanged)) return notModified(unchanged);
       const result = await action.respond(query, { ...context, user });
-      return versioned(request, result ?? { ok: true });
+      const body = JSON.stringify(result ?? { ok: true });
+      const version = readVersion(body);
+      if (remembered) rememberVersion(remembered, version);
+      return versioned(request, body, version);
     }
     const result = await action.respond(await body(request), {
       ...context,

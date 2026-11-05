@@ -106,7 +106,7 @@ in Cloudflare R2. See the [application stack](docs/application-stack.md) and
 | `src/shared.ts`, `src/viewing.ts`, `src/member-routes.ts` | Types, helpers, and the member route parser shared by browser and server code |
 | `public/` | Static files: the TMDB logo, manifest icons, and the offline-page service worker |
 | `db/` | Numbered SQL migrations |
-| `scripts/` | Migration, bootstrap invitation, email and photo backfill worker, usage report, release packaging, icon generation, and browser-test harness commands |
+| `scripts/` | Migration, bootstrap invitation, email and push worker, usage report, release packaging, icon generation, and browser-test harness commands |
 | `tests/` | Application and PostgreSQL tests in `app/`, Playwright suites in `browser/`, and Python tests for operations and check scripts |
 | `ops/` | VPS provisioning, release activation, systemd units, Caddy and PostgreSQL configuration, backups, restore checks, and failure alerts |
 | `bin/` | Repository setup, checks, knowledge search, deployment helpers, and Git hooks |

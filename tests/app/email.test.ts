@@ -398,8 +398,6 @@ test("the worker refuses to start without the Resend transport, key, and sender"
 test("the worker deletes expired jobs on its first pass and exits cleanly on SIGTERM", async () => {
   // No member left by another suite can queue activity email for the worker.
   await db.query('TRUNCATE "user" CASCADE');
-  // The first start also runs the one-time Google photo backfill.
-  await db.query("DELETE FROM screenr_backfill");
   await queueCode({ email: "stale@example.test", otp: "000000" });
   await db.query("UPDATE email_job SET expires_at=now()-interval '1 second'");
   const child = spawn(process.execPath, worker, {
@@ -411,12 +409,9 @@ test("the worker deletes expired jobs on its first pass and exits cleanly on SIG
   const exited = once(child, "exit");
   try {
     // The worker handles SIGTERM before its first pass, which deletes
-    // expired jobs, and before the backfill records its marker.
+    // expired jobs.
     const deadline = Date.now() + 15_000;
-    while (
-      (await db.query("SELECT 1 FROM email_job")).rowCount ||
-      !(await db.query("SELECT 1 FROM screenr_backfill")).rowCount
-    ) {
+    while ((await db.query("SELECT 1 FROM email_job")).rowCount) {
       assert.equal(child.exitCode, null, output);
       assert.ok(Date.now() < deadline, `No expired job cleanup. ${output}`);
       await setTimeout(50);
@@ -428,22 +423,18 @@ test("the worker deletes expired jobs on its first pass and exits cleanly on SIG
       exited,
       setTimeout(5_000).then(() => assert.fail("The worker did not stop.")),
     ]);
-    // Push delivery, without APNs settings, says once that it is off. The
-    // backfill, with no Google members, reports its counts. Nothing else is
-    // printed.
+    // Push delivery, without APNs settings, says once that it is off.
+    // Nothing else is printed.
     assert.deepEqual(
       { code, signal, output },
       {
         code: 0,
         signal: null,
-        output:
-          '{"event":"push delivery off","reason":"no APNs settings"}\n' +
-          '{"event":"google photo backfill finished","copied":0,"kept":0,"no picture":0,"failed":0}\n',
+        output: '{"event":"push delivery off","reason":"no APNs settings"}\n',
       },
     );
   } finally {
     child.kill("SIGKILL");
-    await db.query("DELETE FROM screenr_backfill");
   }
 });
 
@@ -495,7 +486,6 @@ test("the worker keeps running while PostgreSQL is unreachable, logs each loop's
         .map(({ stack, ...fields }) => fields)
         .sort((a, b) => a.event.localeCompare(b.event)),
       [
-        { event: "google photo backfill failed", ...failed },
         { event: "push delivery off", reason: "no APNs settings" },
         { event: "worker failed", failures: 1, ...failed },
         { event: "worker failed", failures: 1, ...failed },

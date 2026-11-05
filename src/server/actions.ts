@@ -33,6 +33,7 @@ import { setReaction } from "./reactions";
 import { changeRelationship } from "./relationships";
 import { removeReview, saveReview } from "./reviews";
 import { loadScreen, screenResponse } from "./screens";
+import { screenKey } from "./screen-versions";
 import { resolveSharedTitle } from "./shared-links";
 import { saveServices } from "./streaming-services";
 import {
@@ -71,6 +72,9 @@ export type Action =
       usage: boolean;
       // Records the day when the request carries `Screenr-Visit: 1`.
       visits: boolean;
+      // The key that this read's unchanged versions are remembered under, for
+      // a read that changes only with the database (screen-versions.ts).
+      remembers?: (query: Query, userId: string) => string | undefined;
       respond: (query: Query, context: Member) => Promise<unknown>;
     }
   | {
@@ -103,15 +107,19 @@ function read<Input>({
   run,
   usage = false,
   visits = false,
+  remembers,
 }: Definition<Query, Input, Member> & {
   usage?: boolean;
   visits?: boolean;
+  remembers?: (input: Input, userId: string) => string | undefined;
 }): Action {
   return {
     method: "GET",
     profile: true,
     usage,
     visits,
+    remembers:
+      remembers && ((query, userId) => remembers(input(query), userId)),
     respond: (query, context) => run(input(query), context),
   };
 }
@@ -210,6 +218,7 @@ const actions = {
     input: (query) => query.get("path") ?? "/",
     run: async (path, { userId, user }) =>
       screenResponse(await loadScreen(userId, path), user),
+    remembers: (path, userId) => screenKey(userId, path),
   }),
   search: read({
     usage: true,
