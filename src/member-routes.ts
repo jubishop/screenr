@@ -20,15 +20,25 @@ export type FindFilters = {
 // Want to watch pages' and Watch together's lists. At home is the default, so
 // only In theaters appears in the URL, as `mode=theaters`.
 export type ListMode = "theaters";
+// A paged read of the friends feed or a profile
+// (docs/title-feed.md#paged-histories): `before` asks for the page of
+// entries older than a time, or than `now` for the newest page, with every
+// newer entry; `since` asks for every entry at or after the time that a
+// paged read's response named. A read with neither sends the whole history,
+// as installed iPhone builds expect. The web keeps them out of its address;
+// see screenPath.
+export type HistoryWindow = { since?: string; before?: string };
+// The newest page, which each visit starts from.
+export const newestHistory: HistoryWindow = { before: "now" };
 export type MemberRoute =
-  | ({ kind: "feed" } & ItemTarget)
+  | ({ kind: "feed" } & ItemTarget & HistoryWindow)
   | ({ kind: "search"; q?: string; tab?: SearchTab } & FindFilters)
   | { kind: "people" }
   | { kind: "invites" }
   | { kind: "account" }
   | { kind: "watch-together"; with: string[]; mode?: ListMode }
   | ({ kind: "title"; id: string } & ItemTarget)
-  | { kind: "profile"; username: string }
+  | ({ kind: "profile"; username: string } & HistoryWindow)
   | { kind: "want-to-watch"; username: string; mode?: ListMode }
   | { kind: "conversation"; id: string; reply?: string }
   | { kind: "not-found"; path: string };
@@ -47,6 +57,7 @@ export function parseMemberRoute(path: string): MemberRoute {
   }
   const param = (key: string) => url.searchParams.get(key) || undefined;
   const target = () => ({ item: param("item"), reply: param("reply") });
+  const history = () => ({ since: param("since"), before: param("before") });
   const mode = param("mode") === "theaters" ? "theaters" : undefined;
   const type = param("type");
   let parts: string[];
@@ -56,7 +67,7 @@ export function parseMemberRoute(path: string): MemberRoute {
     return { kind: "not-found", path: url.pathname };
   }
   const [section, ...rest] = parts;
-  if (!parts.length) return { kind: "feed", ...target() };
+  if (!parts.length) return { kind: "feed", ...target(), ...history() };
   if (!rest.length) {
     // Search trims its query, so whitespace alone names no search.
     if (section === "search")
@@ -79,7 +90,7 @@ export function parseMemberRoute(path: string): MemberRoute {
   if (section === "titles" && rest.length === 2)
     return { kind: "title", id: rest.join(":"), ...target() };
   if (section === "people" && rest.length === 1)
-    return { kind: "profile", username: rest[0] };
+    return { kind: "profile", username: rest[0], ...history() };
   if (section === "people" && rest.length === 2 && rest[1] === "want-to-watch")
     return { kind: "want-to-watch", username: rest[0], mode };
   if (section === "conversations" && rest.length === 1)
@@ -104,7 +115,10 @@ export function memberPath(route: MemberRoute): string {
         mode: route.mode,
       });
     case "profile":
-      return `/people/${segments(route.username)}`;
+      return withQuery(`/people/${segments(route.username)}`, {
+        since: route.since,
+        before: route.before,
+      });
     case "want-to-watch":
       return withQuery(`/people/${segments(route.username)}/want-to-watch`, {
         mode: route.mode,
@@ -126,14 +140,29 @@ export const initialFindFilters: FindFilters = { finished: "hidden" };
 
 /**
  * The path the web reads for the member screen at `path`: Find a title's
- * with `filters` in place of any in the address, and any other screen's own
- * path.
+ * with `filters`, and the friends feed's or a profile's with `history`, in
+ * place of any in the address, and any other screen's own path.
  */
-export function screenPath(path: string, filters: FindFilters) {
+export function screenPath(
+  path: string,
+  filters: FindFilters,
+  history: HistoryWindow = {},
+) {
   const route = parseMemberRoute(path);
-  return route.kind === "search"
-    ? memberPath({ kind: "search", q: route.q, tab: route.tab, ...filters })
-    : path;
+  if (route.kind === "search")
+    return memberPath({
+      kind: "search",
+      q: route.q,
+      tab: route.tab,
+      ...filters,
+    });
+  if (route.kind === "feed" || route.kind === "profile")
+    return memberPath({
+      ...route,
+      since: history.since,
+      before: history.before,
+    });
+  return path;
 }
 
 /**
@@ -163,8 +192,11 @@ function withQuery(
     services,
     type,
     finished,
+    since,
+    before,
   }: ItemTarget &
-    FindFilters & {
+    FindFilters &
+    HistoryWindow & {
       tab?: SearchTab;
       q?: string;
       with?: string[];
@@ -181,6 +213,8 @@ function withQuery(
   if (services) query.set("services", services);
   if (type) query.set("type", type);
   if (finished) query.set("finished", finished);
+  if (since) query.set("since", since);
+  if (before) query.set("before", before);
   // Safari before 17, a supported browser, has no URLSearchParams size.
   const search = query.toString();
   return search ? `${path}?${search}` : path;

@@ -22,7 +22,10 @@ release. Shared reads and writes live in `src/server/` by area: `profiles.ts`,
 `reviews.ts` ([ratings and reviews](title-feed.md#reviews)), `comments.ts`,
 and `reactions.ts`. PostgreSQL functions
 `screenr_can_read` and `screenr_blocked` apply the same current relationship
-rules to threads, cards, and comments. `screenr_friends` lists a person's
+rules to threads, cards, and comments. Feed reads apply those rules once per
+statement, through the reader's readable owners and each owner's readers,
+rather than once per row
+([feed implementation](title-feed.md#shared-feed-implementation)). `screenr_friends` lists a person's
 friends, each an accepted friendship where neither person has blocked the
 other, for profiles, People suggestions, Friends recommend, and Find a title
 suggestions; each caller adds its own checks between the viewer and those
@@ -32,7 +35,9 @@ and real members apart. The title page friend line comes
 from the viewer's title feed read, so it names only friends whose entries
 that feed shows. Friendship pairs are ordered by
 PostgreSQL, including mixed-case auth IDs. No private feed or permission
-result is persistently cached.
+result is persistently cached; the web process remembers only the version
+hash of each feed and profile screen it sent, as the
+[refresh behavior](#write-lock-and-refresh-behavior) describes.
 
 ## API actions
 
@@ -638,7 +643,25 @@ without a body. The page then keeps its data and doesn't render again
 stay `Cache-Control: private, no-store` with `Vary: Cookie, Authorization`,
 so a version
 never answers for another member and no shared cache keeps a screen. Every
-refresh still reads the database and checks access. Each refresh
+refresh still reads the database and checks access.
+
+An unchanged poll of the friends feed or a profile answers 304 without
+building the screen
+([issue #373](https://github.com/jubishop/screenr/issues/373)). Every write
+to a table those screens read, access included, advances one database-wide
+change mark through a trigger (`db/040-screen-changes.sql`); a catalog
+refresh counts only when it changes a title's name, kind, poster, or release
+date. For each reader and screen path, the web process
+(`src/server/screen-versions.ts`) remembers the version of the body it last
+sent, with the mark it read before reading anything that body holds. A poll
+that holds that version while the mark stands gets 304 after reading only
+the mark; one that lands after a write builds the screen and compares its
+body as before. The version stays a hash of the body, so a client sees only
+the speed, and nothing about other members' writes. A restart forgets the
+remembered versions. Other screens can change without a write, through the
+catalog or the date, so they always build. A table that a feed or profile
+read starts reading needs the trigger too; `tests/app/screen-refresh.test.ts`
+fails until it has one. Each refresh
 has a ten-second deadline; failure clears server content until a successful
 refresh. A permanent error, any 4xx response except 408 and 429, stops polling
 until a read succeeds. Until then, only Try again, returning to the page, a

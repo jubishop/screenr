@@ -52,6 +52,30 @@ export const entryOf = (row: string) =>
 // replies but have no content, so they show and take no reactions.
 export const erasable = (itemType: string) =>
   itemType === "comment" || itemType === "review" || itemType === "post";
+// The reader's ($1) access, read once per statement instead of calling
+// screenr_can_read and screenr_blocked for each row (issue #373). `audience`
+// has a row for each owner whose entries the reader can read, the reader and
+// their friends, with `readers`, everyone who can read that owner's entries.
+// `hidden` lists everyone the reader has blocked or been blocked by.
+const access = `audience AS MATERIALIZED (
+    SELECT r.owner_id,ARRAY(SELECT user_id FROM screenr_friends(r.owner_id)) || r.owner_id AS readers
+    FROM (SELECT $1::text AS owner_id UNION ALL SELECT user_id FROM screenr_friends($1)) r
+  ), hidden AS MATERIALIZED (
+    SELECT ARRAY(SELECT CASE WHEN blocker_id=$1 THEN blocked_id ELSE blocker_id END
+      FROM block WHERE $1 IN (blocker_id,blocked_id)) AS users
+  )`;
+// The reader's entries, each joined with its owner's audience as `a` and the
+// reader's hidden people as `h`. The lateral join, which its LIMIT keeps
+// PostgreSQL from flattening, reads entries first, so a lookup of one entry,
+// or of one title's, still starts from that index.
+const readableEntries = `${feedEntries} c
+  JOIN LATERAL (SELECT readers FROM audience WHERE audience.owner_id=c.owner_id LIMIT 1) a ON true
+  CROSS JOIN hidden h`;
+// Whether `person` takes part in entry c's discussion for this reader: they
+// can read its owner's entries, and neither they nor the reader blocked the
+// other.
+const takesPart = (person: string) =>
+  `(${person}=ANY(a.readers) AND NOT ${person}=ANY(h.users))`;
 // Counts include only current participants visible to this reader. A reaction
 // to a reply also requires that its author can still see the reply's author.
 // Deleted standalone comments and removed reviews have no content, so they
@@ -60,8 +84,14 @@ const reactionSummary = (
   reply: boolean,
 ) => `(SELECT coalesce(jsonb_agg(summary ORDER BY kind),'[]') FROM (
   SELECT r.kind,count(*)::int AS count,bool_or(r.user_id=$1) AS reacted FROM reaction r
-  WHERE ${reply ? "r.comment_id=cm.id AND cm.accessible AND cm.removed_at IS NULL AND NOT screenr_blocked(r.user_id,cm.author_id)" : `${belongsTo("r", "c.id")} AND (c.item_type NOT IN ('comment','review','post') OR c.active)`}
-    AND screenr_can_read(r.user_id,c.owner_id) AND NOT screenr_blocked($1,r.user_id)
+  WHERE ${
+    reply
+      ? `r.comment_id=cm.id AND cm.accessible AND cm.removed_at IS NULL AND NOT EXISTS (
+    SELECT 1 FROM block b WHERE (b.blocker_id=r.user_id AND b.blocked_id=cm.author_id)
+      OR (b.blocker_id=cm.author_id AND b.blocked_id=r.user_id))`
+      : `${belongsTo("r", "c.id")} AND (c.item_type NOT IN ('comment','review','post') OR c.active)`
+  }
+    AND ${takesPart("r.user_id")}
   GROUP BY r.kind
 ) summary)`;
 // The reader's ($1) current status for a title: a progress status, Want to
@@ -70,7 +100,12 @@ export const viewerStatus = (title: string) => `coalesce(
     (SELECT own.status FROM watch_progress own WHERE own.owner_id=$1 AND own.title_id=${title} AND own.active),
     (SELECT 'want_to_watch' FROM feed_item own WHERE own.owner_id=$1 AND own.title_id=${title}
       AND own.item_type='want_to_watch' AND own.active))`;
-export const itemQuery = `SELECT c.*,p.username,p.display_name,screenr_photo(p.user_id) AS photo,t.name AS title_name,t.poster_path,t.kind,t.release_date,
+// Each entry of `entries`, a FROM list that names entry c with its owner's
+// audience a and the reader's hidden people h, as the reader sees it, with
+// its replies and reactions, if the reader can see it at all.
+const items = (
+  entries: string,
+) => `SELECT c.*,p.username,p.display_name,screenr_photo(p.user_id) AS photo,t.name AS title_name,t.poster_path,t.kind,t.release_date,
   (c.item_type='recommended' AND c.active) AS recommended,
   (c.item_type='want_to_watch' AND c.active) AS want_to_watch,
   EXISTS (SELECT 1 FROM feed_item own WHERE own.owner_id=$1 AND own.title_id=c.title_id
@@ -83,13 +118,12 @@ export const itemQuery = `SELECT c.*,p.username,p.display_name,screenr_photo(p.u
     ELSE greatest(c.activity_at,coalesce(replies.activity,c.activity_at)) END) AS visible_activity,
   coalesce(replies.comments,'[]') AS comments,
   ${reactionSummary(false)} AS reactions
-  FROM ${feedEntries} c JOIN profile p ON p.user_id=c.owner_id LEFT JOIN title t ON t.id=c.title_id
+  FROM ${entries} JOIN profile p ON p.user_id=c.owner_id LEFT JOIN title t ON t.id=c.title_id
   LEFT JOIN LATERAL (
     WITH candidates AS (
       -- A removed comment whose author deleted their account has no author;
       -- it shows as removed, without one, while its replies remain.
-      SELECT cm.*,cm.author_id IS NULL OR (screenr_can_read(cm.author_id,c.owner_id)
-        AND NOT screenr_blocked($1,cm.author_id)) AS accessible
+      SELECT cm.*,cm.author_id IS NULL OR ${takesPart("cm.author_id")} AS accessible
       FROM comment cm WHERE ${belongsTo("cm", "c.id")}
     ), retained AS (
       SELECT cm.* FROM candidates cm
@@ -106,8 +140,7 @@ export const itemQuery = `SELECT c.*,p.username,p.display_name,screenr_photo(p.u
       'body',CASE WHEN cm.accessible AND cm.removed_at IS NULL THEN cm.body ELSE '' END,
       'spoiler',cm.accessible AND cm.spoiler,
       'root_id',cm.root_id::text,'addressed_username',CASE WHEN cm.accessible
-        AND screenr_can_read(cm.addressed_id,c.owner_id)
-        AND NOT screenr_blocked($1,cm.addressed_id) THEN addressed.username ELSE NULL END,
+        AND ${takesPart("cm.addressed_id")} THEN addressed.username ELSE NULL END,
       'removed',cm.removed_at IS NOT NULL,'unavailable',NOT cm.accessible,
       'created_at',cm.created_at,
       'reactions',${reactionSummary(true)}) ORDER BY cm.created_at,cm.id) AS comments,
@@ -116,9 +149,11 @@ export const itemQuery = `SELECT c.*,p.username,p.display_name,screenr_photo(p.u
     FROM retained cm LEFT JOIN profile author ON author.user_id=cm.author_id
     LEFT JOIN profile addressed ON addressed.user_id=cm.addressed_id
   ) replies ON true
-  WHERE screenr_can_read($1,c.owner_id)
-    AND (c.active OR replies.activity IS NOT NULL
+  WHERE (c.active OR replies.activity IS NOT NULL
       OR (c.item_type='earlier' AND replies.placeholder_activity IS NOT NULL))`;
+// Every entry the reader ($1) can see. Callers add conditions on c, such as
+// `AND c.id=$2::uuid`.
+export const itemQuery = `WITH ${access} ${items(readableEntries)}`;
 
 export async function conversations(
   viewer: string,
@@ -132,6 +167,80 @@ export async function conversations(
       [viewer, filter.title ?? null, filter.owner ?? null],
     )
   ).rows;
+}
+
+// The friends feed and profiles send a page of history at a time
+// (docs/title-feed.md#paged-histories).
+export const pageSize = 50;
+
+// Which entries a paged read sends: every entry whose latest visible activity
+// is at or after `since`, or the page of `pageSize` entries older than
+// `before` with every newer entry, where `Infinity` reads the newest page.
+// Entries tied with the page's last one come too.
+export type FeedWindow = { since: Date } | { before: Date | typeof Infinity };
+
+// A paged read of the reader's ($1) entries, or only `owner`'s. It first
+// places every entry by its latest visible activity, which reads only entry
+// times and reply authors, and then builds discussions for only the entries
+// it sends: the window, and `item`, an entry a link names, wherever it falls.
+// `since` names the window it sent, which later reads of the same window
+// send back, or is null when there are no entries; `older` says whether
+// older entries remain. All of it comes from one snapshot.
+export async function feedPage(
+  viewer: string,
+  window: FeedWindow,
+  { owner, item }: { owner?: string; item?: string } = {},
+): Promise<{
+  conversations: FeedItem[];
+  since: string | null;
+  older: boolean;
+}> {
+  const before = "before" in window ? window.before : null;
+  const { rows } = await db.query(
+    `WITH ${access}, entries AS MATERIALIZED (
+      SELECT c.id,c.item_type,c.active,c.created_at,c.activity_at,a.readers
+      FROM ${feedEntries} c JOIN audience a ON a.owner_id=c.owner_id
+      WHERE $2::text IS NULL OR c.owner_id=$2
+    ), replied AS (
+      SELECT e.id,max(cm.created_at) AS at
+      FROM hidden h,comment cm JOIN entries e ON ${entryOf("cm")}=e.id
+      WHERE cm.removed_at IS NULL AND cm.author_id=ANY(e.readers) AND NOT cm.author_id=ANY(h.users)
+      GROUP BY e.id
+    ), placed AS MATERIALIZED (
+      SELECT e.id,date_trunc('milliseconds',CASE WHEN e.item_type='earlier' THEN coalesce(r.at,e.created_at)
+        ELSE greatest(e.activity_at,coalesce(r.at,e.activity_at)) END) AS visible_activity
+      FROM entries e LEFT JOIN replied r ON r.id=e.id
+      WHERE e.active OR r.at IS NOT NULL
+    ), bound AS MATERIALIZED (
+      SELECT coalesce($3::timestamptz,
+        (SELECT visible_activity FROM placed WHERE visible_activity<$4::timestamptz
+          ORDER BY visible_activity DESC LIMIT 1 OFFSET ${pageSize - 1}),
+        (SELECT min(visible_activity) FROM placed WHERE visible_activity<$4::timestamptz),
+        nullif($4::timestamptz,'infinity')) AS since
+    ), shown AS (
+      SELECT p.id FROM placed p,bound b WHERE p.visible_activity>=b.since OR p.id=$5::uuid
+    )
+    SELECT b.since AS page_since,
+      EXISTS (SELECT 1 FROM placed p WHERE p.visible_activity<b.since) AS page_older,i.*
+    FROM bound b LEFT JOIN (${items(
+      `shown s JOIN ${feedEntries} c ON c.id=s.id JOIN audience a ON a.owner_id=c.owner_id CROSS JOIN hidden h`,
+    )}) i ON true
+    ORDER BY i.visible_activity DESC,i.id`,
+    [
+      viewer,
+      owner ?? null,
+      "since" in window ? window.since : null,
+      before === Infinity ? "infinity" : before,
+      isUuid(item) ? item : null,
+    ],
+  );
+  return {
+    conversations: rows.flatMap(({ page_since, page_older, ...entry }) =>
+      entry.id === null ? [] : [entry as FeedItem],
+    ),
+    since: (rows[0].page_since as Date | null)?.toISOString() ?? null,
+    older: rows[0].page_older,
+  };
 }
 
 // The title page friend line comes from the viewer's title feed, so it lists

@@ -10,6 +10,7 @@ import { Screen } from "../../../components/screen";
 import {
   initialFindFilters,
   memberPath,
+  newestHistory,
   parseMemberRoute,
   screenPath,
 } from "../../../member-routes";
@@ -43,25 +44,26 @@ export default async function Page({
           ? "Choose the Google account with the same email address as your Screenr account."
           : "Google could not be connected. Please try again.";
   // The first screen is read as the browser's screen reads it, with Find a
-  // title's filters as each visit starts them.
+  // title's filters as each visit starts them and the newest page of a feed
+  // or profile.
   const screen = await initialScreen(
     user.user_id,
-    screenPath(requestedPath, initialFindFilters),
+    screenPath(requestedPath, initialFindFilters, newestHistory),
   );
   // A missing title, person, or page responds 404 through not-found.tsx.
   if (screen.status === 404) notFound();
-  const initialData = screen.data && JSON.parse(JSON.stringify(screen.data));
-  if (initialData?.kind === "redirect") redirect(initialData.url);
+  if (screen.data?.kind === "redirect") redirect(screen.data.url);
+  // The page's screen is the JSON a screen read sends, so it has that read's
+  // version, and its dates arrive as the same strings. Serializing it once
+  // gives both.
+  const body = screen.data && JSON.stringify(screenResponse(screen.data, user));
   return (
     <Screen
       key={requestedPath}
       user={user}
       path={requestedPath}
-      initialData={initialData}
-      initialVersion={
-        screen.data &&
-        readVersion(JSON.stringify(screenResponse(screen.data, user)))
-      }
+      initialData={body && JSON.parse(body)}
+      initialVersion={body && readVersion(body)}
       initialError={screen.error}
       initialStatus={screen.status}
       initialGoogleError={initialGoogleError}

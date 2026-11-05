@@ -6,14 +6,26 @@ import {
   type Response,
 } from "@playwright/test";
 
+// The member path a screen read names, without the window that the friends
+// feed's and profiles' reads add (docs/title-feed.md#paged-histories), so
+// "/" names every read of the friends feed.
+export function readPath(read: Request | Response) {
+  const url = new URL(read.url());
+  if (url.pathname !== "/api/screenr/screen") return undefined;
+  const path = new URL(
+    url.searchParams.get("path") ?? "",
+    "http://screenr.local",
+  );
+  path.searchParams.delete("since");
+  path.searchParams.delete("before");
+  return path.pathname + path.search;
+}
+
 // A screen read of `path`, such as "/account" or "/?item=…", or of any path.
 function readOf(path?: string) {
   return (read: Request | Response) => {
-    const url = new URL(read.url());
-    return (
-      url.pathname === "/api/screenr/screen" &&
-      (path === undefined || url.searchParams.get("path") === path)
-    );
+    const named = readPath(read);
+    return named !== undefined && (path === undefined || named === path);
   };
 }
 

@@ -4,8 +4,10 @@ import { people } from "./relationships";
 import {
   conversations,
   conversationURL,
+  feedPage,
   friendActivity,
   linkTarget,
+  type FeedWindow,
 } from "./feed";
 import {
   getTitleAvailability,
@@ -27,7 +29,11 @@ import { appleConfigured } from "./apple";
 import { logFailure, withRequest } from "./log";
 import { watchStatus } from "./title-actions";
 import { topTen, topTenRanks } from "./top-ten";
-import { parseMemberRoute, type MemberRoute } from "../member-routes";
+import {
+  parseMemberRoute,
+  type HistoryWindow,
+  type MemberRoute,
+} from "../member-routes";
 import type { Person, Title } from "../shared";
 
 export async function loadScreen(userId: string, requestedPath: string) {
@@ -84,14 +90,39 @@ export function initialScreen(userId: string, requestedPath: string) {
   });
 }
 
+// The window a paged feed or profile read names, or null for a read of the
+// whole history. A time that does not parse reads the newest page.
+function historyWindow({ since, before }: HistoryWindow): FeedWindow | null {
+  const time = (value?: string) => {
+    const parsed = value ? new Date(value) : null;
+    return parsed && !Number.isNaN(parsed.getTime()) ? parsed : null;
+  };
+  if (since) {
+    const at = time(since);
+    return at ? { since: at } : { before: Infinity };
+  }
+  if (before) return { before: time(before) ?? Infinity };
+  return null;
+}
+
+// A paged read adds the window it sent and whether older entries remain
+// (docs/title-feed.md#paged-histories); a read of the whole history, as from
+// installed iPhone builds, sends the same fields as before.
+const paged = (page: { since: string | null; older: boolean } | null) =>
+  page && { since: page.since, older: page.older };
+
 async function loadContent(userId: string, route: MemberRoute) {
   if (route.kind === "feed") {
-    // Links to posts without a title open them here.
-    const threads = await conversations(userId);
+    // Links to posts without a title open them here, even when the entry is
+    // older than the page.
+    const window = historyWindow(route);
+    const page = window && (await feedPage(userId, window, route));
+    const threads = page?.conversations ?? (await conversations(userId));
     return {
       kind: "feed" as const,
       conversations: threads,
       ...linkTarget(threads, route),
+      ...paged(page),
     };
   }
   if (route.kind === "search") {
@@ -220,19 +251,28 @@ async function loadContent(userId: string, route: MemberRoute) {
   }
   if (route.kind === "profile") {
     const profile = await profileFor(userId, route.username);
+    const window = historyWindow(route);
+    const owner = { owner: profile.user_id };
     // The top 10 is visible to every member who can see the profile; the
     // entries and discussions behind it stay friends-only.
-    const [list, entries] = await settleAll([
+    const [list, page] = await settleAll([
       topTen(profile.user_id),
-      profile.can_read
-        ? conversations(userId, { owner: profile.user_id })
-        : Promise.resolve([]),
+      !profile.can_read
+        ? { conversations: [], since: null, older: false }
+        : window
+          ? feedPage(userId, window, owner)
+          : conversations(userId, owner).then((all) => ({
+              conversations: all,
+              since: null,
+              older: false,
+            })),
     ]);
     return {
       kind: "profile" as const,
       profile,
       topTen: list,
-      conversations: entries,
+      conversations: page.conversations,
+      ...paged(window && page),
     };
   }
   if (route.kind === "want-to-watch")

@@ -1,7 +1,11 @@
 import { expect, type Page } from "@playwright/test";
 import { test } from "./monitored-test";
 import { expectErrorBeside, failAction, press } from "./action-errors";
-import { openWithoutPolling, refreshOnReturn } from "./refresh-helpers";
+import {
+  openWithoutPolling,
+  readPath,
+  refreshOnReturn,
+} from "./refresh-helpers";
 
 const screenRead = "**/api/screenr/screen?**";
 const unavailable =
@@ -226,9 +230,8 @@ test("missing titles, people, and pages respond 404 and stop polling until the r
   const main = page.getByRole("main");
   const reads: string[] = [];
   page.on("request", (request) => {
-    const url = new URL(request.url());
-    if (url.pathname === "/api/screenr/screen")
-      reads.push(url.searchParams.get("path") ?? "");
+    const path = readPath(request);
+    if (path !== undefined) reads.push(path);
   });
   const readsOf = (path: string) => reads.filter((read) => read === path);
   // Paused timers poll only when the test advances the clock.
