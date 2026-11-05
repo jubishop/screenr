@@ -244,8 +244,8 @@ import these helpers instead of defining their own copies.
   call TMDB, Resend, Google, Apple, or Sentry, even when a developer shell
   exports real credentials. A suite that exercises a provider sets fake values
   after the import and answers with a loopback server or a replaced `fetch`;
-  `tests/app/failure-logs.test.ts` runs a loopback Sentry endpoint or replaces
-  `fetch`, and
+  `tests/app/sentry-reports.test.ts` runs a loopback Sentry endpoint or
+  replaces `fetch`, and
   [identity-providers.ts](../tests/app/identity-providers.ts) fakes Apple's
   and Google's key, token, and revoke endpoints with keys generated per run.
   `tests/app/social-fixture.test.ts` covers the clearing.
@@ -260,7 +260,10 @@ import these helpers instead of defining their own copies.
   a signed session cookie for route tests (`cookieFor`), the bearer token a
   native client receives from the same sign-in (`bearerFor`), and a small
   discussion fixture. Feature-specific setup and assertions stay in their
-  feature files. No suite imports another test file.
+  feature files. When one feature's tests span suites, their shared helpers
+  live in a module beside them, such as
+  [failure-fixture.ts](../tests/app/failure-fixture.ts) for the failure log
+  and Sentry report suites. No suite imports another test file.
 - Authorization tests assert the exact error: status and message for
   Screenr's errors, or status and code for Better Auth's. The helper's
   `denied` lists each access denial, and `assertRouteError` checks a route's
@@ -723,13 +726,18 @@ Auth callback and endpoint, worker, and Resend failures, and of failures
 Better Auth catches itself: a Google ID token signup whose account insert
 fails, a failed session read, and a failed OAuth state read, beside an unknown
 OAuth state that logs nothing.
-`tests/app/failure-logs.test.ts` also fails polls the same way, as in a
-database outage, which must each log a line with its request ID while only
-the first goes to Sentry, and another action's failure must report at once.
-On a fake clock it checks
-[folded Sentry reports](deployment.md#failure-reports-in-sentry): the hourly
-report with the folded count and latest request ID, and the end of a fold
-after an hour without a failure of its kind.
+`tests/app/sentry-reports.test.ts` checks the
+[failure reports in Sentry](deployment.md#failure-reports-in-sentry). A
+request failure's envelope carries the logged fields, frames, and request ID
+tag but no message, and the response doesn't wait for it; a failed worker
+pass reports too. A rejected or unreachable endpoint prints
+`sentry report failed` without reaching the caller, an invalid DSN prints it
+and sends nothing, and without a DSN a failure is only logged. The suite also
+fails polls the same way, as in a database outage, which must each log a line
+with its request ID while only the first goes to Sentry, and another action's
+failure must report at once. On a fake clock it checks folded reports: the
+hourly report with the folded count and latest request ID, and the end of a
+fold after an hour without a failure of its kind.
 `tests/app/catalog.test.ts` captures TMDB failures, invalid TMDB answers, and
 catalog cache failures, once for each request;
 `tests/app/availability.test.ts`, `tests/app/discussion-labels.test.ts`, and
