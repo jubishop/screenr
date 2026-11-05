@@ -83,6 +83,17 @@ deletes it afterward, so several checkouts can check at once. With
 `--simulator`, it uses that Simulator and leaves it in place. Logs and result
 bundles from the last run are in `ios/build/check/`.
 
+Each run builds on the last run's output: ScreenrKit's in
+`ios/build/ScreenrKit` and the app's in `ios/build/DerivedData`. A package
+update, such as a sentry-cocoa bump, replaces framework headers that modules
+there were built against, and those modules then fail to load ("has been
+modified since the module file was built"). So the check records the hash of
+`ios/ScreenrKit/Package.resolved` in `ios/build/Package.resolved.sha256`.
+When the file differs from the recorded one, or nothing is recorded, the
+check removes both directories before it builds. Each checkout keeps one
+copy of each. The commands below that reuse those directories don't check;
+after a package update, run `bin/check-ios` first or remove them.
+
 At most three checks run at once on the Mac, since more load it enough to
 make accessibility audits time out. Before its first step, a check waits for
 a free machine-wide slot, printing that it is waiting, and holds it until it
@@ -444,10 +455,14 @@ error; passing failures keep polling, and a permanent error stops it until a
 read succeeds. An unchanged screen keeps its `phase`, so nothing renders
 again. Each read after the three-second wait is a poll, sent as
 `RequestTrigger.poll`, which [Telemetry](#sentry) records quietly when it
-succeeds; every other read is `.demand`. A read's value can move later reads
-to another request through `LiveRead`'s `follow`, as a paged screen's window
-does, and `read(_:)` reads a new request now. `ScreenModelTests` cover the
-timing with a `TestClock`.
+succeeds; every other read is `.demand`. `ScreenModel.change(path:)` reads a
+new path from then on, such as Find a title's with changed
+[filters](#find-a-title): at once while the screen is live, replacing the
+read in flight, and keeping the screen shown until the new read answers. A
+read's value can also move later reads to another request through
+`LiveRead`'s `follow`, as a paged screen's window does, and `read(_:)` reads
+a new request now and waits for it, as Show older does. `ScreenModelTests`
+cover the timing with a `TestClock`.
 
 ### Visits
 
@@ -1088,6 +1103,19 @@ failed screen read and the search keeps working:
   with unknown viewing options it leaves out. Friends recommend adds Movies/TV
   and Show finished; finished titles start hidden. Edit services opens
   Settings over the tab.
+- **Screen read:** the filters go in the read's path, as on the
+  [web](../docs/title-suggestions.md#implementation): `services=mine`,
+  `type=movie` or `type=tv`, and `finished=hidden`, so the server applies
+  them before capping each list at 50 titles and a filtered list still
+  fills. `Destination.search().screenPath` is Find's first read,
+  `/search?finished=hidden`, and `FindModel.screenPath` builds the rest;
+  `FindView` passes each change to `ScreenModel.change(path:)`, which reads
+  at once. The lists on screen stay filtered on the phone until that read
+  answers. A read that hides finished titles counts them in
+  `finishedRecommendations`, which Show finished's empty message adds to any
+  the phone hides. An empty list that a filter narrows keeps its filters and
+  explains them; only an unnarrowed one shows "No suggestions yet." or "No
+  recommendations yet."
 - **Want to watch:** Friends recommend's one-tap save sends `activity` with
   the `friends_recommend` surface, then reads the screen again. Another
   status, or the viewer's own Recommend, opens the title instead.
@@ -1098,10 +1126,14 @@ failed screen read and the search keeps working:
 `FindSearchTests`, `FindWantToWatchTests`, and `FindListsTests` cover the
 model with `FindAPI`, a fake that answers searches by their text, and
 `TestClock`. `FindTests` drives the tab: searching, opening a result,
-Friends recommend, every `screen/search` and `actions/search` fixture, and
-a loaded poster in place of its title's initial.
-`screen/search/viewer-statuses` shows Cam's own statuses, free options,
-unknown availability, and no saved services.
+Friends recommend, the reads each filter sends, every `screen/search` and
+`actions/search` fixture, and a loaded poster in place of its title's
+initial. `screen/search/viewer-statuses` shows Cam's own statuses, free
+options, unknown availability, and no saved services.
+`screen/search/finished-hidden` and `finished-shown` read Alice's Movies
+after she finishes both movies her friends recommend, with finished titles
+hidden and shown. Other filtered reads get the viewer's `screen/search`
+fixture, which the phone filters.
 
 The audit flags some standard list parts, so Find avoids them: section
 headers and footers, subtitles, and secondary text are too faint at their
@@ -1422,7 +1454,11 @@ Intents are in `Screenr/Shortcuts/`.
   three titles that are not finished, as the tab first shows them, such as
   "Your friends recommend Night Crossing, Harbor Lights, and Winter Garden.",
   and returns them to the shortcut. Open Friends recommend opens the app at
-  Find a title's Friends recommend.
+  Find a title's Friends recommend. Both it and Add to Want to watch's
+  suggestions read Find's first read, `/search?finished=hidden`, so finished
+  titles, which neither offers, leave room for others in the capped list,
+  and `finishedRecommendations` tells "You finished every title your friends
+  recommend." from "No recommendations yet."
 - **Visits:** the actions read screens with `.screen(path:visit: .never)`, so
   they never carry the app's [visit](#visits), which stays due for the
   app's next screen.

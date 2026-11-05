@@ -3,6 +3,7 @@ import { once } from "node:events";
 import { createServer, type Server } from "node:http";
 import { setTimeout as delay } from "node:timers/promises";
 import { test, type TestContext } from "node:test";
+import { format } from "node:util";
 import { request } from "@playwright/test";
 import { createBrowserProxy } from "../../scripts/browser-proxy";
 
@@ -16,6 +17,17 @@ async function listen(t: TestContext, server: Server) {
   const address = server.address();
   assert.ok(address && typeof address !== "string");
   return address.port;
+}
+
+// Replaces console.error until the test ends and returns what each call
+// would have printed. For each request whose upstream fails, the proxy
+// prints a line naming the request, then the error with its stack and code.
+function captureErrors(t: TestContext) {
+  const printed: string[] = [];
+  t.mock.method(console, "error", (...args: unknown[]) => {
+    printed.push(format(...args));
+  });
+  return printed;
 }
 
 async function client(t: TestContext, port: number) {
@@ -139,6 +151,7 @@ test("browser proxy preserves application errors and reports transport failures 
     t,
     await listen(t, createBrowserProxy({ appPort, googlePort: appPort })),
   );
+  const printed = captureErrors(t);
   const appError = await api.post("/error", {
     data: { id: 52 },
     maxRetries: 0,
@@ -152,6 +165,12 @@ test("browser proxy preserves application errors and reports transport failures 
     /Browser fixture upstream failure.*ECONNRESET/,
   );
   assert.deepEqual(received, ["/error", "/reset"]);
+  // Only the transport failure is reported.
+  assert.equal(printed.length, 1);
+  assert.match(
+    printed[0]!,
+    /^Browser fixture upstream failure \(POST \/reset\): Error: [^]*code: 'ECONNRESET'/,
+  );
 });
 
 test("an interrupted upstream response fails promptly instead of returning partial success", async (t) => {
@@ -170,9 +189,15 @@ test("an interrupted upstream response fails promptly instead of returning parti
     t,
     await listen(t, createBrowserProxy({ appPort, googlePort: appPort })),
   );
+  const printed = captureErrors(t);
   await assert.rejects(
     api.post("/partial", { data: { id: 52 }, maxRetries: 0 }),
     /aborted|socket hang up|ECONNRESET/,
   );
   assert.equal(received, 1);
+  assert.equal(printed.length, 1);
+  assert.match(
+    printed[0]!,
+    /^Browser fixture upstream failure \(POST \/partial\): Error: [^]*code: 'ECONNRESET'/,
+  );
 });

@@ -1,6 +1,12 @@
 import { test, before, after, afterEach, mock } from "node:test";
 import assert from "node:assert/strict";
-import { captureFailures, db, failureEvents } from "./social-fixture";
+import {
+  captureFailures,
+  captureLog,
+  clientAddress,
+  db,
+  failureEvents,
+} from "./social-fixture";
 import {
   labelToken,
   saveDatabase,
@@ -31,7 +37,8 @@ const { memberPath, parseMemberRoute } =
   await import("../../src/member-routes");
 const { changeRelationship } = await import("../../src/server/relationships");
 const { migrate } = await import("../../scripts/migrate");
-const { updateTopTen } = await import("../../src/server/title-actions");
+const { updateTopTen, updateWatchStatus } =
+  await import("../../src/server/title-actions");
 const { createDiscussionPost } = await import("../../src/server/comments");
 const { createAuth } = await import("../../src/server/auth");
 const { completeSignup } = await import("../../src/server/invitations");
@@ -59,6 +66,9 @@ type Case = {
   // The failure events that answering the request logs, which the case
   // captures and checks.
   failures?: string[];
+  // What answering the request prints with console.log, such as an account
+  // deletion's journal record, which the case captures and checks.
+  logs?: (world: World) => unknown[];
 };
 type Maybe<T> = T | ((world: World) => T | Promise<T>);
 const resolve = <T>(value: Maybe<T>, world: World) =>
@@ -132,6 +142,24 @@ const afterPatJoins = (item: Case): Case => ({
       "pat",
       world.invitations.spare,
     );
+    return item.request(world);
+  },
+});
+
+// A read after Alice finishes the two movies her friends recommend, Night
+// Crossing and Winter Garden, so Find a title's Movies filter has only
+// finished titles for her.
+const afterAliceFinishesMovies = (item: Case): Case => ({
+  ...item,
+  changesWorld: true,
+  request: async (world) => {
+    for (const title of ["movie:101", "movie:105"])
+      await updateWatchStatus(
+        world.users.alice,
+        title,
+        "finished",
+        "2026-10-02",
+      );
     return item.request(world);
   },
 });
@@ -323,6 +351,21 @@ const screens: Record<MemberRoute["kind"], Record<string, Case>> = {
       // The unknown availability's provider request fails.
       failures: ["catalog request failed"],
     },
+    // The iPhone app sends Find's filters in the path, as the web does.
+    "finished-hidden": afterAliceFinishesMovies(
+      screen(
+        "alice",
+        "/search?type=movie&finished=hidden",
+        "Find a title with Movies on and finished titles hidden, after Alice finishes both movies her friends recommend: none listed, and how many the read left out.",
+      ),
+    ),
+    "finished-shown": afterAliceFinishesMovies(
+      screen(
+        "alice",
+        "/search?type=movie",
+        "The same read with Show finished on: both finished movies.",
+      ),
+    ),
   },
   people: {
     default: screen(
@@ -1029,12 +1072,17 @@ const actions: Record<Exclude<ActionName, "screen">, Record<string, Case>> = {
     ),
   },
   "delete-account": {
-    default: write(
-      "delete-account",
-      "alice",
-      {},
-      "Deleting the account with a session from a sign-in in the last ten minutes. The token then signs no one in.",
-    ),
+    default: {
+      ...write(
+        "delete-account",
+        "alice",
+        {},
+        "Deleting the account with a session from a sign-in in the last ten minutes. The token then signs no one in.",
+      ),
+      logs: (world) => [
+        { event: "account deleted", userId: world.users.alice },
+      ],
+    },
     "stale-sign-in": write(
       "delete-account",
       "alice",
@@ -1225,12 +1273,17 @@ async function recordAuth(file: string, path: string, item: AuthCase) {
       codes.push(otp);
     },
   });
-  // Like the app, without a cookie or Origin.
+  // Like the app, without a cookie or Origin, and with the client address
+  // Caddy forwards unless the request names its own.
   const post: AuthPost = (path, body, headers) =>
     auth.handler(
       new Request(`${origin}/api/auth/${path}`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", ...headers },
+        headers: {
+          "Content-Type": "application/json",
+          ...clientAddress,
+          ...headers,
+        },
         body: JSON.stringify(body),
       }),
     );
@@ -1288,8 +1341,11 @@ async function recordAuthRead(file: string, path: string, item: AuthRead) {
   const url = `/api/auth/${path}?${new URLSearchParams(query)}`;
   // The world's own sign-ins used up shared request limits.
   await db.query('TRUNCATE "rateLimit"');
-  // Like the app, without a cookie or Origin.
-  const response = await createAuth().handler(new Request(origin + url));
+  // Like the app, without a cookie or Origin, and with the client address
+  // Caddy forwards.
+  const response = await createAuth().handler(
+    new Request(origin + url, { headers: clientAddress }),
+  );
   const text = await response.text();
   assert.equal(response.status, 200, `${file} responded ${text}`);
   // The made-up token keeps its value in the path and the query.
@@ -1352,6 +1408,7 @@ const cases: [string, Case][] = [
 async function record(file: string, item: Case, world: World) {
   const request = await item.request(world);
   const printed = item.failures && captureFailures();
+  const logged = item.logs && captureLog();
   const result = await send(world, item.viewer, request, item.method);
   assert.equal(
     result.status,
@@ -1359,6 +1416,7 @@ async function record(file: string, item: Case, world: World) {
     `${file} responded ${JSON.stringify(result.body)}`,
   );
   if (printed) assert.deepEqual(failureEvents(printed), item.failures);
+  if (item.logs) assert.deepEqual(logged, item.logs(world));
   const fixture: Fixture = world.placeholders.scrub({
     description: item.description,
     viewer: item.viewer,

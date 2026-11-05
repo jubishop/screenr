@@ -17,6 +17,8 @@ import {
   bearerFor,
   cookieFor,
   captureFailures,
+  assertNotLogged,
+  captureLog,
 } from "./social-fixture";
 
 const { POST } = await import("../../src/app/api/screenr/[action]/route");
@@ -826,7 +828,7 @@ test("removing a reply updates the badge of each member who had it unread", asyn
   assert.deepEqual(await pushed(), { updates: { alice: 0 }, alerts: {} });
 });
 
-test("deleting an account updates the badge of each member whose unread notifications go with it", async () => {
+test("deleting an account updates the badge of each member whose unread notifications go with it", async (t) => {
   const { alice, ben, cam, conversation } = await setup();
   await device(alice, tokenA);
   await device(ben, tokenB);
@@ -848,12 +850,14 @@ test("deleting an account updates the badge of each member whose unread notifica
 
   // Unread: alice has ben's comment; cam has both acceptances and alice's
   // reply on ben's entry. Ben deletes his account on the web.
+  const printed = captureLog(t);
   const response = await act(
     { cookie: await cookieFor(ben) },
     "delete-account",
     {},
   );
   assert.equal(response.status, 200);
+  assert.deepEqual(printed, [{ event: "account deleted", userId: ben }]);
   assert.deepEqual(await pushed(), {
     updates: { alice: 0, cam: 1 },
     alerts: {},
@@ -958,7 +962,7 @@ test("without APNs settings the worker skips push delivery and says so once", ()
     { event: invalid.event, reason: invalid.reason },
     { event: "push delivery off", reason: "invalid key" },
   );
-  assert.ok(!failures.join("").includes(key.slice(0, 20)));
+  assertNotLogged(failures, [key.slice(0, 20)]);
 
   const configured = apnsFromEnvironment({
     APPLE_TEAM_ID: "TEAM123456",

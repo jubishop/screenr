@@ -101,7 +101,9 @@ struct ShortcutActionsTests {
   }
 
   // The picker suggests what friends recommend that Alice could still save:
-  // not Night Crossing or Harbor Lights, which she recommends.
+  // not Night Crossing or Harbor Lights, which she recommends. It reads
+  // Friends recommend as the tab first does, so finished titles, which she
+  // could not save either, leave room for others.
   @Test func suggestsFriendsRecommendationsTheMemberCouldSave() async throws {
     let harness = try harness()
     defer { #expect(throws: Never.self) { try cleanUp(harness) } }
@@ -109,7 +111,9 @@ struct ShortcutActionsTests {
     let suggestions = try await harness.actions.wantToWatchSuggestions()
 
     #expect(suggestions.map(\.name) == ["Winter Garden"])
-    #expect(try harness.requests() == ["GET /api/screenr/screen?path=%2Fsearch"])
+    #expect(
+      try harness.requests() == ["GET /api/screenr/screen?path=%2Fsearch%3Ffinished%3Dhidden"]
+    )
   }
 
   @Test func savesATitleToWantToWatchFromTheShortcutSurface() async throws {
@@ -206,10 +210,14 @@ struct ShortcutActionsTests {
     #expect(none.titles.isEmpty)
     #expect(none.message == "No recommendations yet.")
     // The read is not a visit.
-    #expect(try alice.requests() == ["GET /api/screenr/screen?path=%2Fsearch"])
+    #expect(
+      try alice.requests() == ["GET /api/screenr/screen?path=%2Fsearch%3Ffinished%3Dhidden"]
+    )
   }
 
-  // As the tab first shows them, finished titles are left out.
+  // As the tab first shows them, finished titles are left out: the read
+  // hides them, so they leave room for others in the capped list, and counts
+  // them, so the shortcut can say when the member finished every title.
   @Test func leavesOutFinishedRecommendations() async throws {
     let body = try JSONDecoder()
       .decode(
@@ -220,17 +228,18 @@ struct ShortcutActionsTests {
       Issue.record("The search fixture has no recommendations")
       return
     }
-    let finishedFirst = recommendations.enumerated()
-      .map { offset, title in
-        title.merging(["viewer_status": offset < 2 ? "finished" : .null])
-      }
-    let allFinished = recommendations.map { $0.merging(["viewer_status": "finished"]) }
-    let screens = try [finishedFirst, allFinished]
-      .map { titles in
+    let winter = recommendations.filter { $0.member("id") == "movie:105" }
+    let screens = try [(winter, 2), ([], 3), ([], 0)]
+      .map { titles, finished in
         try ScreenrJSON.decoder()
           .decode(
             Screen.self,
-            from: try JSONEncoder().encode(body.merging(["recommendations": .array(titles)]))
+            from: try JSONEncoder()
+              .encode(
+                body.merging([
+                  "recommendations": .array(titles), "finishedRecommendations": .integer(finished),
+                ])
+              )
           )
       }
     let session = try SessionStore(keychain: InMemoryKeychain(token: "signed-token"))
@@ -239,11 +248,14 @@ struct ShortcutActionsTests {
 
     let one = try await actions.friendsRecommend()
     let finished = try await actions.friendsRecommend()
+    let none = try await actions.friendsRecommend()
 
+    #expect(api.reads == Array(repeating: "/search?finished=hidden", count: 3))
     #expect(one.titles.map(\.id) == ["movie:105"])
     #expect(one.message == "Your friends recommend Winter Garden.")
     #expect(finished.titles.isEmpty)
     #expect(finished.message == "You finished every title your friends recommend.")
+    #expect(none.message == "No recommendations yet.")
   }
 
   @Test func opensFriendsRecommend() throws {

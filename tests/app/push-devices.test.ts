@@ -7,6 +7,7 @@ import {
   person,
   bearerFor,
   cookieFor,
+  clientAddress,
 } from "./social-fixture";
 
 const { POST } = await import("../../src/app/api/screenr/[action]/route");
@@ -256,7 +257,7 @@ test("removing a device and signing out delete only that member's devices", asyn
   const signedOut = await auth().handler(
     new Request(`${origin}/api/auth/sign-out`, {
       method: "POST",
-      headers: { Authorization: `Bearer ${phone}` },
+      headers: { Authorization: `Bearer ${phone}`, ...clientAddress },
     }),
   );
   assert.equal(signedOut.status, 200);

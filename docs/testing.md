@@ -111,6 +111,18 @@ The browser harness derives four loopback ports and a database named
 `screenr_browser_<checkout hash>_test` from the checkout's canonical path.
 Separate worktrees get separate defaults, Next output, screenshots, and
 `.cache/mail` captures. The harness prints its URL and database name at startup.
+
+The four ports form one of 5,120 blocks from 12288 through 32767, below the
+ephemeral ranges from which Linux (32768 through 60999 by default) and macOS
+(49152 through 65535) assign outbound source ports and port-0 listeners.
+Another socket could hold a fixture port in those ranges when the harness
+reserves it or its server listens; a CI run's harness, started from a
+temporary directory, found such a port in use
+([#490](https://github.com/jubishop/screenr/issues/490)). Common local
+services, such as Ollama on 11434, use ports below 12288. Two checkouts derive
+the same block with odds of 1 in 5,120, and the second to start fails as an
+occupied port. `tests/app/browser-harness.test.ts` checks the range.
+
 Browser-facing harness URLs use `127.0.0.1` to match their IPv4-only listeners. Do not replace
 this address with `localhost`: Chromium can try IPv6 first, where these servers
 do not listen. On macOS, an ephemeral client port that equals that destination
@@ -171,7 +183,8 @@ need no equivalent setting: `node:test` ignores `only` unless `--test-only`
 is passed, and `npm test` does not pass it.
 
 To override a port collision, set `SCREENR_BROWSER_PORT` to the first port in a
-free four-port range (1024 through 65532). The following ports serve the catalog,
+free four-port range (1024 through 65532), preferably below 32768 to stay out of
+the ephemeral ranges. The following ports serve the catalog,
 OAuth fixture, and Next, in that order. Set `SCREENR_BROWSER_DATABASE` to override
 the database; it must match `screenr_browser_<name>_test`, contain only lowercase
 letters, digits, and underscores, and be at most 63 characters. It must differ
@@ -214,10 +227,12 @@ Only email delivery is replaced with an in-memory code capture. The browser
 and application still use normal sessions and access checks. `member` creates
 a mobile browser context; `signIn` prepares the test's existing page.
 `prepareFriendship` sends and accepts requests through the authenticated API.
-For people a test never signs in as, `person` creates a completed profile
-without a session, and `friend` accepts a friendship between two user IDs
-through the relationship rules. `userId` reads the user behind a page's
-session. Specs import these helpers instead of defining their own copies.
+The accept leaves the requesting member an unread `friend_accepted`
+notification, which that member's notification badge counts. For people a
+test never signs in as, `person` creates a completed profile without a
+session, and `friend` accepts a friendship between two user IDs through the
+relationship rules. `userId` reads the user behind a page's session. Specs
+import these helpers instead of defining their own copies.
 
 - Every application suite that uses the test database or server modules
   imports [social-fixture.ts](../tests/app/social-fixture.ts) first. Before
@@ -229,8 +244,8 @@ session. Specs import these helpers instead of defining their own copies.
   call TMDB, Resend, Google, Apple, or Sentry, even when a developer shell
   exports real credentials. A suite that exercises a provider sets fake values
   after the import and answers with a loopback server or a replaced `fetch`;
-  `tests/app/failure-logs.test.ts` runs a loopback Sentry endpoint or replaces
-  `fetch`, and
+  `tests/app/sentry-reports.test.ts` runs a loopback Sentry endpoint or
+  replaces `fetch`, and
   [identity-providers.ts](../tests/app/identity-providers.ts) fakes Apple's
   and Google's key, token, and revoke endpoints with keys generated per run.
   `tests/app/social-fixture.test.ts` covers the clearing.
@@ -245,7 +260,10 @@ session. Specs import these helpers instead of defining their own copies.
   a signed session cookie for route tests (`cookieFor`), the bearer token a
   native client receives from the same sign-in (`bearerFor`), and a small
   discussion fixture. Feature-specific setup and assertions stay in their
-  feature files. No suite imports another test file.
+  feature files. When one feature's tests span suites, their shared helpers
+  live in a module beside them, such as
+  [failure-fixture.ts](../tests/app/failure-fixture.ts) for the failure log
+  and Sentry report suites. No suite imports another test file.
 - Authorization tests assert the exact error: status and message for
   Screenr's errors, or status and code for Better Auth's. The helper's
   `denied` lists each access denial, and `assertRouteError` checks a route's
@@ -719,13 +737,18 @@ Auth callback and endpoint, worker, and Resend failures, and of failures
 Better Auth catches itself: a Google ID token signup whose account insert
 fails, a failed session read, and a failed OAuth state read, beside an unknown
 OAuth state that logs nothing.
-`tests/app/failure-logs.test.ts` also fails polls the same way, as in a
-database outage, which must each log a line with its request ID while only
-the first goes to Sentry, and another action's failure must report at once.
-On a fake clock it checks
-[folded Sentry reports](deployment.md#failure-reports-in-sentry): the hourly
-report with the folded count and latest request ID, and the end of a fold
-after an hour without a failure of its kind.
+`tests/app/sentry-reports.test.ts` checks the
+[failure reports in Sentry](deployment.md#failure-reports-in-sentry). A
+request failure's envelope carries the logged fields, frames, and request ID
+tag but no message, and the response doesn't wait for it; a failed worker
+pass reports too. A rejected or unreachable endpoint prints
+`sentry report failed` without reaching the caller, an invalid DSN prints it
+and sends nothing, and without a DSN a failure is only logged. The suite also
+fails polls the same way, as in a database outage, which must each log a line
+with its request ID while only the first goes to Sentry, and another action's
+failure must report at once. On a fake clock it checks folded reports: the
+hourly report with the folded count and latest request ID, and the end of a
+fold after an hour without a failure of its kind.
 `tests/app/catalog.test.ts` captures TMDB failures, invalid TMDB answers, and
 catalog cache failures, once for each request;
 `tests/app/availability.test.ts`, `tests/app/discussion-labels.test.ts`, and
@@ -963,16 +986,41 @@ removing the guard as well.
 
 A test run fails on any structured failure line that no test expects: the
 JSON line with an `"event"` field that `logFailure` prints
-([failure logs](deployment.md#failure-logs)).
+([failure logs](deployment.md#failure-logs)). Application test runs also
+fail on Better Auth's own unstructured lines, such as
+`WARN [Better Auth]: Invalid id token`.
 
 - **Application tests:** `npm test` and `npm run test:coverage` load
   `tests/app/failure-guard.ts` into every test file's process. It fails a
-  test that prints a failure line it didn't capture, and fails the file for
-  a line printed outside any test. A test that fails something on purpose
-  reads its lines with `captureFailures()` from `tests/app/social-fixture.ts`,
-  passing its test context for a capture that ends with the test, and
-  asserts them, for example with `failureEvents()`. An iPhone fixture case
-  lists its lines in `failures`.
+  test that prints a failure line or Better Auth line it didn't capture, and
+  fails the file for a line printed outside any test. It checks a test after
+  the test's `afterEach` hooks and `t.after()` cleanups, which count as part
+  of the test, so a test it fails still closes its servers and restores its
+  mocks ([#474](https://github.com/jubishop/screenr/issues/474)). A test
+  that fails something on purpose reads its lines with `captureFailures()`
+  from `tests/app/social-fixture.ts`, which captures `console.error` and
+  `console.warn`, passing its test context for a capture that ends with the
+  test, and asserts them, for example with `failureEvents()`. It checks that
+  a value, such as a request's path or an error's message, stayed out of
+  them with `assertNotLogged()` from the same file, which reads the lines
+  without the checkout's own path: stack frames name files by that path, and
+  it can hold any word, as every checkout under macOS's `/private/tmp` holds
+  `private` ([#487](https://github.com/jubishop/screenr/issues/487)). An
+  iPhone fixture case lists its lines in `failures`. A request to a
+  rate-limited auth instance sends `clientAddress` from the same file, as
+  production's proxy forwards each client's address; without one, Better
+  Auth warns that it fell back to a shared bucket, once in each test file's
+  process, in whichever test sent the first such request
+  ([#481](https://github.com/jubishop/screenr/issues/481)).
+- **Deliberate lines the guard doesn't flag:** a test that causes one of
+  these captures and asserts it too, though the guard would let it print
+  ([#491](https://github.com/jubishop/screenr/issues/491)). A test that
+  deletes an account reads the `account deleted` record that each deletion
+  prints for the journal with `captureLog()` from
+  `tests/app/social-fixture.ts`, which captures `console.log`; an iPhone
+  fixture case lists the record in `logs`. A test that breaks the browser
+  proxy's upstream on purpose captures `console.error` and asserts the
+  proxy's `Browser fixture upstream failure` line.
 - **Browser runs:** `scripts/browser-server.ts` writes the application's
   failure lines, with when each printed, to
   `.cache/browser-failure-lines.jsonl`, which each run starts over, instead
@@ -999,3 +1047,27 @@ unnoticed, as invalid TMDB answers did before
 **Tradeoff:** a browser line's spec comes from timing, since two workers
 share one server, so another spec's identical line passes when it prints
 while the expecting spec runs.
+
+**Decision — 2026-11-04:** application test runs also fail on Better Auth
+lines that no test captures, and tests that cause one on purpose capture and
+assert it. Settled by the agent as routine in
+[#481](https://github.com/jubishop/screenr/issues/481); the user may
+override it.
+
+**Why:** the same as for failure lines: 13 Better Auth lines printed on
+every `npm test` run, and nothing kept more from piling up.
+
+**Decision — 2026-11-04:** tests capture and assert the `account deleted`
+records and the browser proxy's upstream failure lines they cause, and the
+guard flags no new kinds. Settled by the agent as routine in
+[#491](https://github.com/jubishop/screenr/issues/491); the user may
+override it.
+
+**Why:** 12 `account deleted` records and 3 proxy lines with stack traces
+printed on every `npm test` run, which teaches readers to ignore the output.
+Production prints the `account deleted` record on purpose, and the proxy's
+lines come only from tests that break its upstream on purpose, so capturing
+each line where it is caused is enough.
+
+**Rejected alternatives:** having the guard flag every `console.log` JSON
+record or every proxy line.

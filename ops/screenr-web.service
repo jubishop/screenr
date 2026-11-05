@@ -53,6 +53,11 @@ CapabilityBoundingSet=
 # Other applications on the shared host. '-' ignores a path that is missing.
 InaccessiblePaths=-/etc/caddy -/var/log/caddy -/opt/health -/opt/health-site -/opt/kidsbank -/opt/news -/opt/trading
 ReadWritePaths=/opt/screenr/current/.next/cache
+# Next always keeps optimized posters in .next/cache/images. Every release
+# mounts this one directory there, which systemd creates owned by screenr.
+CacheDirectory=screenr/images
+CacheDirectoryMode=0700
+BindPaths=/var/cache/screenr/images:/opt/screenr/current/.next/cache/images
 UMask=0077
 
 [Install]

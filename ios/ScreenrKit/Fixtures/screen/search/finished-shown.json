@@ -1,0 +1,168 @@
+{
+  "description": "The same read with Show finished on: both finished movies.",
+  "viewer": "alice",
+  "request": {
+    "method": "GET",
+    "action": "screen",
+    "path": "/api/screenr/screen?path=%2Fsearch%3Ftype%3Dmovie",
+    "query": {
+      "path": "/search?type=movie"
+    }
+  },
+  "response": {
+    "status": 200,
+    "etag": "W/\"Q85UmZRpwrD7A9dfL8kY-T9ESBn0gH169ZFE_jIw6OM\"",
+    "body": {
+      "kind": "search",
+      "suggestions": [
+        {
+          "id": "tv:204",
+          "kind": "tv",
+          "name": "Signal Fire",
+          "tmdb_id": 204,
+          "overview": "Radio operators on a remote island hear a distress call.",
+          "wanted_by": [],
+          "poster_path": "/signal-fire.jpg",
+          "watching_by": [
+            {
+              "username": "cam",
+              "display_name": "Cam Rivera"
+            }
+          ],
+          "release_date": "2025-02-14",
+          "recommended_by": [],
+          "second_degree_wanted": 0,
+          "second_degree_watching": 0,
+          "second_degree_recommended": 0,
+          "viewing": {
+            "status": "ok",
+            "checked_at": "2026-10-13T12:00:00.000Z",
+            "sections": [
+              {
+                "key": "subs",
+                "label": "Subs",
+                "services": [
+                  {
+                    "id": "service:hulu",
+                    "name": "Hulu",
+                    "logo_path": "/44uAnmSqvA4yBOdbPWN8YgQHjWm.png",
+                    "route_note": null
+                  }
+                ]
+              }
+            ]
+          },
+          "release": {
+            "status": "ok",
+            "in_theaters": false,
+            "upcoming": [
+              {
+                "kind": "season_premiere",
+                "date": "2026-11-04",
+                "label": "Season 2 premieres Nov 4"
+              }
+            ]
+          },
+          "tmdb_score": 81
+        }
+      ],
+      "recommendations": [
+        {
+          "id": "movie:101",
+          "kind": "movie",
+          "name": "Night Crossing",
+          "tmdb_id": 101,
+          "overview": "Two strangers share the last ferry across a frozen strait.",
+          "poster_path": "/night-crossing.jpg",
+          "release_date": "2024-03-08",
+          "viewer_status": "finished",
+          "recommended_by": [
+            {
+              "rank": 1,
+              "username": "ben",
+              "display_name": "Ben Ortiz"
+            }
+          ],
+          "viewer_recommended": true,
+          "viewing": {
+            "status": "ok",
+            "checked_at": "2026-10-13T12:00:00.000Z",
+            "sections": [
+              {
+                "key": "subs",
+                "label": "Subs",
+                "services": [
+                  {
+                    "id": "service:netflix",
+                    "name": "Netflix",
+                    "logo_path": "/rK1KljqmbvO9HQa1PBFLILWah72.png",
+                    "route_note": null
+                  }
+                ]
+              }
+            ]
+          },
+          "release": {
+            "status": "ok",
+            "in_theaters": false,
+            "upcoming": []
+          },
+          "tmdb_score": null
+        },
+        {
+          "id": "movie:105",
+          "kind": "movie",
+          "name": "Winter Garden",
+          "tmdb_id": 105,
+          "overview": "A botanist tends a greenhouse through the polar night.",
+          "poster_path": "/winter-garden.jpg",
+          "release_date": "2019-12-06",
+          "viewer_status": "finished",
+          "recommended_by": [
+            {
+              "rank": null,
+              "username": "cam",
+              "display_name": "Cam Rivera"
+            }
+          ],
+          "viewer_recommended": false,
+          "viewing": {
+            "status": "ok",
+            "checked_at": "2026-10-13T12:00:00.000Z",
+            "sections": [
+              {
+                "key": "subs",
+                "label": "Subs",
+                "services": [
+                  {
+                    "id": "service:netflix",
+                    "name": "Netflix",
+                    "logo_path": "/rK1KljqmbvO9HQa1PBFLILWah72.png",
+                    "route_note": null
+                  }
+                ]
+              }
+            ]
+          },
+          "release": {
+            "status": "ok",
+            "in_theaters": false,
+            "upcoming": []
+          },
+          "tmdb_score": null
+        }
+      ],
+      "serviceIds": [
+        "service:hulu",
+        "service:netflix"
+      ],
+      "unreadNotifications": 6,
+      "user": {
+        "user_id": "user-alice",
+        "username": "alice",
+        "display_name": "Alice Park",
+        "photo": "486e0212c15728ee"
+      }
+    }
+  }
+}

@@ -8,9 +8,14 @@ import {
 const mode = process.env.SCREENR_BROWSER_MODE ?? "production";
 if (mode !== "production" && mode !== "development")
   throw new Error("SCREENR_BROWSER_MODE must be production or development.");
+// The derived four-port block lies from 12288 through 32767. Linux assigns
+// outbound source ports and port-0 listeners from 32768 through 60999 by
+// default, and macOS from 49152 through 65535, so another socket could hold
+// a fixture port there when the harness reserves it or its server listens
+// (#490). Busy local services, such as Ollama on 11434, sit below 12288.
 const port = Number(
   process.env.SCREENR_BROWSER_PORT ??
-    20_000 + (parseInt(checkoutIdentity.slice(0, 8), 16) % 10_000) * 4,
+    12_288 + (parseInt(checkoutIdentity.slice(0, 8), 16) % 5_120) * 4,
 );
 if (!Number.isInteger(port) || port < 1024 || port > 65532)
   throw new Error(

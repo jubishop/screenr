@@ -71,6 +71,8 @@ const storedAppleToken = async (userId: string): Promise<string | null> =>
     )
   ).rows[0]?.refreshToken ?? null;
 const now = () => Math.floor(Date.now() / 1000);
+// What Better Auth prints when it rejects an ID token.
+const invalidToken = "WARN [Better Auth]: Invalid id token";
 
 // What the app posts after AuthenticationServices returns a credential. Apple
 // includes the person's name only on the first authorization.
@@ -256,6 +258,8 @@ test("Sign in with Apple rejects other apps, expired tokens, wrong nonces, and c
     options?: { nonce?: string },
   ) => post("sign-in/social", appleSignIn(authorization, options), headers);
 
+  // Better Auth warns about each token it rejects.
+  const failures = captureFailures();
   for (const authorization of [
     apple.authorize({ sub: "new", email, clientId: "com.example.Other" }),
     apple.authorize({
@@ -274,6 +278,7 @@ test("Sign in with Apple rejects other apps, expired tokens, wrong nonces, and c
     401,
     { code: "INVALID_TOKEN" },
   );
+  assert.deepEqual(failures.splice(0), Array(3).fill(invalidToken));
   assert.equal(apple.exchanged.length, 0);
 
   // A verified token still needs the code from the same authorization.
@@ -297,7 +302,6 @@ test("Sign in with Apple rejects other apps, expired tokens, wrong nonces, and c
   );
 
   apple.setUnavailable(true);
-  const failures = captureFailures();
   await assertAuthError(
     await attempt(apple.authorize({ sub: "new", email })),
     503,
@@ -452,6 +456,7 @@ test("Without Apple settings, Apple sign-in is unavailable and revocation has no
   configure(t, {});
   serve(apple);
   const post = client(createAuth({ rateLimit: false }));
+  const failures = captureFailures();
   await assertAuthError(
     await post(
       "sign-in/social",
@@ -462,6 +467,9 @@ test("Without Apple settings, Apple sign-in is unavailable and revocation has no
   );
   await revokeAppleTokens(await person("member"));
   assert.equal(apple.revoked.length, 0);
+  assert.deepEqual(failures, [
+    "ERROR [Better Auth]: Provider not found. Make sure to add the provider in your auth config",
+  ]);
 });
 
 test("Google ID tokens for the iPhone app's client sign in natively; other audiences and expired tokens are rejected", async (t) => {
@@ -518,6 +526,8 @@ test("Google ID tokens for the iPhone app's client sign in natively; other audie
   assert.equal(fromWeb.status, 200, await fromWeb.clone().text());
   assert.equal(fromWeb.headers.get("set-auth-token"), null);
 
+  // Better Auth warns about each token it rejects.
+  const failures = captureFailures();
   for (const [claims, nonce] of [
     [{ aud: "other-client.apps.googleusercontent.com" }],
     [{ iat: now() - 660, exp: now() - 60 }],
@@ -549,4 +559,5 @@ test("Google ID tokens for the iPhone app's client sign in natively; other audie
   );
   assert.equal(iosOnly.status, 200, await iosOnly.clone().text());
   assert.equal((await iosOnly.json()).user.id, user.id);
+  assert.deepEqual(failures, Array(5).fill(invalidToken));
 });

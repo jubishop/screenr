@@ -1,8 +1,8 @@
-import { test, before, beforeEach, after, afterEach, mock } from "node:test";
+import { test, before, beforeEach, after } from "node:test";
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
-import { db, captureFailures } from "./social-fixture";
+import { db, captureFailures, assertNotLogged } from "./social-fixture";
 
 const { migrate } = await import("../../scripts/migrate");
 const { loadScreen } = await import("../../src/server/screens");
@@ -64,11 +64,25 @@ before(async () => {
   process.env.SCREENR_TEST_TMDB_URL = `http://127.0.0.1:${(catalog.address() as AddressInfo).port}`;
   process.env.TMDB_READ_TOKEN = "availability-test-token";
 });
-// What each test's failures print.
-let printed: string[] = [];
-afterEach(() => mock.restoreAll());
+// The fields of the failure lines a test captured with captureFailures(t),
+// without their stacks.
+const failureLines = (printed: string[]) =>
+  printed.map((line) => {
+    const { stack, ...fields } = JSON.parse(line);
+    return fields;
+  });
+const outage = { event: "catalog request failed", status: 503 };
+const timedOut = {
+  event: "catalog request failed",
+  error: "DOMException",
+  name: "TimeoutError",
+};
+const invalidProviders = {
+  event: "catalog response invalid",
+  lookup: "providers",
+  error: "Error",
+};
 beforeEach(async () => {
-  printed = captureFailures();
   payload = options();
   status = 200;
   slow = false;
@@ -205,8 +219,16 @@ test("a successful refresh removes offers which are no longer listed", async () 
   assert.ok(Date.now() - Date.parse(refreshed.checked_at!) < 10_000);
 });
 
-for (const failure of ["http", "timeout", "malformed", "configuration"]) {
-  test(`a ${failure} failure preserves the last success and backs off before recovering`, async () => {
+// Only the failed refresh logs. An unconfigured catalog sends no request, so
+// it logs nothing.
+for (const [failure, logged] of [
+  ["http", [outage]],
+  ["timeout", [timedOut]],
+  ["malformed", [invalidProviders]],
+  ["configuration", []],
+] as const) {
+  test(`a ${failure} failure preserves the last success and backs off before recovering`, async (t) => {
+    const printed = captureFailures(t);
     const initial = await screen();
     const age = "2020-01-01T00:00:00.000Z";
     await db.query(
@@ -245,6 +267,7 @@ for (const failure of ["http", "timeout", "malformed", "configuration"]) {
     assert.equal(recovered.status, "ok");
     assert.deepEqual(recovered.providers, {});
     assert.notEqual(recovered.checked_at, age);
+    assert.deepEqual(failureLines(printed), logged);
   });
 }
 
@@ -260,7 +283,8 @@ for (const invalid of [
     results: { US: { link: "javascript:alert(1)", rent: [provider] } },
   },
 ]) {
-  test(`malformed availability does not become a successful empty result and logs once: ${JSON.stringify(invalid)}`, async () => {
+  test(`malformed availability does not become a successful empty result and logs once: ${JSON.stringify(invalid)}`, async (t) => {
+    const printed = captureFailures(t);
     payload = invalid;
     const unavailable = await screen();
     assert.equal(unavailable.status, "unavailable");
@@ -273,19 +297,15 @@ for (const invalid of [
     // The line names the lookup, never the answer's values.
     assert.equal(printed.length, 1, printed.join("\n"));
     const { stack, ...fields } = JSON.parse(printed[0]);
-    assert.deepEqual(fields, {
-      event: "catalog response invalid",
-      lookup: "providers",
-      error: "Error",
-    });
+    assert.deepEqual(fields, invalidProviders);
     assert.ok(Array.isArray(stack) && stack.length > 0, printed[0]);
     for (const frame of stack) assert.match(frame, /^at /);
-    for (const value of ["Harbor Stream", "harbor.jpg", "javascript"])
-      assert.ok(!printed[0].includes(value), `Logged ${value}`);
+    assertNotLogged(printed, ["Harbor Stream", "harbor.jpg", "javascript"]);
   });
 }
 
-test("an initial HTTP failure can recover after the retry delay", async () => {
+test("an initial HTTP failure can recover after the retry delay", async (t) => {
+  const printed = captureFailures(t);
   status = 503;
   assert.equal((await screen()).status, "unavailable");
   assert.equal((await screen()).status, "unavailable");
@@ -296,6 +316,7 @@ test("an initial HTTP failure can recover after the retry delay", async () => {
   );
   assert.equal((await screen()).status, "ok");
   assert.equal(requests.length, 2);
+  assert.deepEqual(failureLines(printed), [outage]);
 });
 
 test("unsafe or absent logos do not remove otherwise usable providers", async () => {
@@ -512,7 +533,8 @@ test("reported logo fallback and unknown duplicate identity are deterministic ac
 });
 
 for (const stale of [false, true]) {
-  test(`existing ${stale ? "stale" : "fresh"} five-category cache uses the same display rules without rewriting raw data`, async () => {
+  test(`existing ${stale ? "stale" : "fresh"} five-category cache uses the same display rules without rewriting raw data`, async (t) => {
+    const printed = captureFailures(t);
     const cached = {
       link: options().results.US.link,
       providers: {
@@ -548,6 +570,7 @@ for (const stale of [false, true]) {
     assert.deepEqual(stored.availability, cached);
     assert.equal(stored.fetched_at.toISOString(), age);
     assert.equal(requests.length, 1);
+    assert.deepEqual(failureLines(printed), [outage]);
   });
 }
 

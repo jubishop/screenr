@@ -11,15 +11,15 @@ struct FriendsRecommendView: View {
   let screen: ScreenModel
 
   var body: some View {
-    if page.recommendations.isEmpty {
+    switch find.friendsRecommend(page) {
+    case .nothingYet:
       Section {
         EmptyListMessage(
           title: "No recommendations yet.",
           message: "When friends recommend a movie or show, it will appear here."
         )
       }
-    } else {
-      let list = find.friendsRecommend(page)
+    case .listed(let titles, let emptyMessage):
       Section {
         Picker("Title type", selection: $find.kindFilter) {
           ForEach(FindModel.KindFilter.allCases, id: \.self) { kind in
@@ -30,11 +30,11 @@ struct FriendsRecommendView: View {
       }
       Section {
         Toggle("Show finished", isOn: showFinished)
-        if let message = list.emptyMessage {
-          Text(message)
+        if let emptyMessage {
+          Text(emptyMessage)
         }
       }
-      ForEach(list.titles) { title in
+      ForEach(titles) { title in
         Section {
           NavigationLink(value: title.destination) {
             TitleRow(

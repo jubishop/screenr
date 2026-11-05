@@ -171,10 +171,13 @@ extension Destination {
   }
 
   // The path the screen API reads for this destination, or nil when it is
-  // not a member screen. A title's origin does not change its screen.
+  // not a member screen. A title's origin does not change its screen. Find a
+  // title's lists do not depend on its search or tab, and its first read has
+  // the filters each visit starts with, which `FindModel` changes.
   public var screenPath: String? {
     switch self {
     case .join, .notFound: nil
+    case .search: FindModel.initialScreenPath
     default: withoutOrigin.path
     }
   }

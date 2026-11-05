@@ -1,0 +1,84 @@
+{
+  "description": "Find a title with Movies on and finished titles hidden, after Alice finishes both movies her friends recommend: none listed, and how many the read left out.",
+  "viewer": "alice",
+  "request": {
+    "method": "GET",
+    "action": "screen",
+    "path": "/api/screenr/screen?path=%2Fsearch%3Ftype%3Dmovie%26finished%3Dhidden",
+    "query": {
+      "path": "/search?type=movie&finished=hidden"
+    }
+  },
+  "response": {
+    "status": 200,
+    "etag": "W/\"2sWp-z0D21szYntbbzcXA4yYrsSCES7cJichi1L0i5s\"",
+    "body": {
+      "kind": "search",
+      "suggestions": [
+        {
+          "id": "tv:204",
+          "kind": "tv",
+          "name": "Signal Fire",
+          "tmdb_id": 204,
+          "overview": "Radio operators on a remote island hear a distress call.",
+          "wanted_by": [],
+          "poster_path": "/signal-fire.jpg",
+          "watching_by": [
+            {
+              "username": "cam",
+              "display_name": "Cam Rivera"
+            }
+          ],
+          "release_date": "2025-02-14",
+          "recommended_by": [],
+          "second_degree_wanted": 0,
+          "second_degree_watching": 0,
+          "second_degree_recommended": 0,
+          "viewing": {
+            "status": "ok",
+            "checked_at": "2026-10-13T12:00:00.000Z",
+            "sections": [
+              {
+                "key": "subs",
+                "label": "Subs",
+                "services": [
+                  {
+                    "id": "service:hulu",
+                    "name": "Hulu",
+                    "logo_path": "/44uAnmSqvA4yBOdbPWN8YgQHjWm.png",
+                    "route_note": null
+                  }
+                ]
+              }
+            ]
+          },
+          "release": {
+            "status": "ok",
+            "in_theaters": false,
+            "upcoming": [
+              {
+                "kind": "season_premiere",
+                "date": "2026-11-04",
+                "label": "Season 2 premieres Nov 4"
+              }
+            ]
+          },
+          "tmdb_score": 81
+        }
+      ],
+      "recommendations": [],
+      "serviceIds": [
+        "service:hulu",
+        "service:netflix"
+      ],
+      "finishedRecommendations": 2,
+      "unreadNotifications": 6,
+      "user": {
+        "user_id": "user-alice",
+        "username": "alice",
+        "display_name": "Alice Park",
+        "photo": "486e0212c15728ee"
+      }
+    }
+  }
+}

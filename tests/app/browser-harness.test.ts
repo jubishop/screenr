@@ -17,7 +17,9 @@ import { promisify } from "node:util";
 
 const execute = promisify(execFile);
 const root = process.cwd();
-async function playwrightConfig(cwd: string, env = {}) {
+// Loads a module's export as a process started in the given checkout
+// directory sees it.
+async function load(cwd: string, module: string, name: string, env = {}) {
   const result = await execute(
     process.execPath,
     [
@@ -25,7 +27,7 @@ async function playwrightConfig(cwd: string, env = {}) {
       resolve("node_modules/tsx/dist/loader.mjs"),
       "--input-type=module",
       "-e",
-      `import config from ${JSON.stringify(resolve("playwright.config.ts"))}; console.log(JSON.stringify(config));`,
+      `import { ${name} as value } from ${JSON.stringify(resolve(module))}; console.log(JSON.stringify(value));`,
     ],
     {
       cwd,
@@ -40,6 +42,8 @@ async function playwrightConfig(cwd: string, env = {}) {
   );
   return JSON.parse(result.stdout);
 }
+const playwrightConfig = (cwd: string, env = {}) =>
+  load(cwd, "playwright.config.ts", "default", env);
 
 test("browser runs refuse to reuse an unrelated server", async () => {
   const config = await playwrightConfig(root, { CI: "" });
@@ -51,14 +55,39 @@ test("browser runs refuse to reuse an unrelated server", async () => {
   );
 });
 
-test("separate checkout directories select separate browser URLs", async (t) => {
-  const other = await mkdtemp(join(tmpdir(), "screenr-browser-config-"));
-  t.after(() => rm(other, { recursive: true, force: true }));
-  const first = await playwrightConfig(root);
-  const second = await playwrightConfig(other);
-  assert.notEqual(first.use.baseURL, second.use.baseURL);
-  assert.equal(first.webServer.url, `${first.use.baseURL}/login`);
-  assert.equal(second.webServer.url, `${second.use.baseURL}/login`);
+test("checkout directories derive their own browser ports below the ephemeral port ranges", async (t) => {
+  const others = await Promise.all(
+    Array.from({ length: 12 }, () =>
+      mkdtemp(join(tmpdir(), "screenr-browser-config-")),
+    ),
+  );
+  t.after(() =>
+    Promise.all(
+      others.map((other) => rm(other, { recursive: true, force: true })),
+    ),
+  );
+  const configs = await Promise.all(
+    [root, ...others].map((cwd) =>
+      load(cwd, "scripts/browser-config.ts", "browserConfig"),
+    ),
+  );
+  // Linux assigns outbound source ports and port-0 listeners from 32768
+  // through 60999 by default, and macOS from 49152 through 65535, so another
+  // socket could hold a fixture port there (#490).
+  for (const config of configs)
+    for (const port of [
+      config.port,
+      config.catalogPort,
+      config.googlePort,
+      config.appPort,
+    ])
+      assert.ok(port >= 1024 && port < 32768, `${config.root} derived ${port}`);
+  // Two directories can derive the same ports, which the harness rejects as
+  // in use, but the ports follow the directory.
+  assert.ok(new Set(configs.map((config) => config.port)).size > 1);
+  const playwright = await playwrightConfig(others[0]);
+  assert.equal(playwright.use.baseURL, configs[1].baseURL);
+  assert.equal(playwright.webServer.url, `${configs[1].baseURL}/login`);
 });
 
 test("browser configuration honors a port override", async () => {

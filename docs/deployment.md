@@ -19,7 +19,7 @@ The old hostname now only [redirects](#old-hostname-redirect) to the new one.
 | Active release | `/opt/screenr/current` symlink |
 | Node runtime | `/opt/screenr/node/bin/node`, through a link to the host's shared `/opt/node/current` |
 | Web process | `screenr-web.service`, loopback port 3060, 384 MB memory limit |
-| Optimized poster cache | Each release's `.next/cache/images`, 512 MiB limit |
+| Optimized poster cache | `/var/cache/screenr/images`, shared by every release, 512 MiB limit |
 | Email and push worker | `screenr-worker.service`, 128 MB memory limit |
 | PostgreSQL 18 | `screenr-db.service`, loopback port 5439, 256 MB memory limit |
 | Database files | `/var/lib/screenr/postgres`, owned by `screenr-db` |
@@ -32,6 +32,52 @@ Recheck host memory, disk space and service health before installation. The
 documented limits protect a small shared host; they are not measured capacity
 guarantees. Inspect memory peaks, restart counts, CPU and disk use before
 deciding whether more capacity is needed.
+
+### Worker memory headroom
+
+The worker runs well inside its 128 MiB `MemoryMax`
+([#382](https://github.com/jubishop/screenr/issues/382)). On a Mac, the
+worker and the esbuild service that `tsx` keeps running measured about
+116 MB together, which suggested little headroom. macOS counts more resident
+memory than Linux does, and the host's numbers are much lower. Read-only
+checks on the host found:
+
+- **2026-11-01, 14:05 PST:** a peak of 55 MiB (43%) since that day's deploy
+  at 09:04 PST, and no OOM kill in the journal, which then went back to
+  2026-10-19.
+- **2026-11-04, 19:24 PST:** the current run, started by that evening's
+  deploy at 19:22 PST, had peaked at 52 MiB, with `NRestarts` 0 and zeros
+  for `max`, `oom`, and `oom_kill` in its cgroup's `memory.events`. That
+  covers only two minutes, so the history comes from the journal, where
+  systemd logs each run's memory peak when the run stops. The highest of
+  the 58 runs it recorded since 2026-10-24 was 82.4 MiB (64%), for a run
+  that ended on 2026-10-25. Every other run, including a 59-hour run that
+  ended at that deploy, peaked between 45 and 71 MiB. The journal keeps 14
+  days, back to 2026-10-22, and has no OOM kill, `code=killed` line, or
+  abnormal exit for the unit; the kernel log has no OOM kill. For
+  comparison, `screenr-web` peaked at most at 200 MiB of its 384 MiB limit.
+
+**Decision — 2026-11-01:** change nothing. Keep `MemoryMax=128M` and the
+`tsx` start in `ops/screenr-worker.service`. Answered from evidence by an
+agent in [#382](https://github.com/jubishop/screenr/issues/382) and
+confirmed by the 2026-11-04 re-read.
+
+**Why:** the highest peak measured on Linux is under two thirds of the limit,
+with no kill on record.
+
+**Revisit when:** a run peaks above 75% of the limit (96 MiB) or the unit has
+an OOM kill. Then run the worker from a bundled script, without `tsx`'s
+resident esbuild service, rather than raising the limit.
+
+`MemoryPeak` covers only the current run, and each deploy and Node update
+restarts the worker. Read earlier runs' peaks from the journal:
+
+```sh
+systemctl show screenr-worker -p MemoryPeak -p MemoryMax -p NRestarts -p ActiveEnterTimestamp
+journalctl -u screenr-worker --no-pager | grep 'memory peak'
+journalctl -u screenr-worker --no-pager | grep -iE 'oom|code=killed|Main process exited'
+journalctl _TRANSPORT=kernel --no-pager | grep -i 'out of memory'
+```
 
 ## Node runtime
 
@@ -65,17 +111,34 @@ with no capabilities and have:
   or hostname, create namespaces, use realtime scheduling, create SUID or
   SGID files, or change their execution domain.
 
-Only the web writes files: Next keeps optimized TMDB posters in the active
-release's `.next/cache`. `images.maximumDiskCacheSize` in `next.config.ts`
-bounds them at 512 MiB, past which Next deletes the least recently used;
-without it, Next would allow half the shared host's free disk. With the
-[retained releases](#build-and-activate-a-release), poster caches use at most
-about 1.5 GiB. Each release starts with an empty cache, so the first visits
-after a deploy optimize posters again
-([issue #423](https://github.com/jubishop/screenr/issues/423)).
-`MemoryDenyWriteExecute` stays off because V8's JIT
-writes executable memory. In the sandbox, `os.cpus()` returns an empty list
-and `os.networkInterfaces()` fails. Next calls the latter at startup when
+Only the web writes files, and only Next's caches. Next always keeps
+optimized TMDB posters in `.next/cache/images` and has no setting to move
+them, so the web unit mounts one directory there that every release shares
+([issue #423](https://github.com/jubishop/screenr/issues/423)):
+
+- `CacheDirectory=screenr/images` has systemd create
+  `/var/cache/screenr/images` before each start, owned by `screenr` with
+  mode 0700 and writable in the sandbox.
+- `BindPaths=` mounts it at the active release's `.next/cache/images`. The
+  mount exists only in the web's own mount namespace, so release cleanup
+  removes just the empty mount point.
+- Activation creates `.next/cache` and that mount point in each new release.
+  For a release without one, such as a rollback to a release activated
+  before this change, systemd creates the mount point itself.
+- The rest of `.next/cache` belongs to one build and stays in the release,
+  writable through `ReadWritePaths=`.
+
+A deploy or rollback therefore keeps the posters already optimized. Image
+cache keys hold only the URL, width, quality, and format, so releases can
+share entries. `images.maximumDiskCacheSize` in `next.config.ts` bounds the
+shared directory at 512 MiB: at the first image request after each start,
+Next reads the entries already there, and it deletes the least recently used
+past the limit. Without it, Next would allow half the shared host's free
+disk.
+
+`MemoryDenyWriteExecute` stays off because V8's JIT writes executable
+memory. In the sandbox, `os.cpus()` returns an empty list and
+`os.networkInterfaces()` fails. Next calls the latter at startup when
 `HOSTNAME` is unset, so the web unit needs `HOSTNAME=127.0.0.1`.
 `tests/test_app_sandbox.py` checks these settings.
 
@@ -90,6 +153,16 @@ session on a spare loopback port, wrote an optimized TMDB poster to
 seconds with its database connection and stopped cleanly. Probes reached
 PostgreSQL, Resend, and TMDB, and could not read other applications' files. A
 repeat in which a filtered call kills the process found no such call.
+
+On 2026-11-04, transient units tested the shared poster cache the same way,
+with a trial cache directory and a trial link in place of
+`/opt/screenr/current`. systemd created the directory owned by `screenr`
+with mode 0700, and the mount point in a release that had none. The web from
+a retained release optimized a poster into the shared directory; after the
+link moved to the active release, the web served that poster from the cache
+(`X-Nextjs-Cache: HIT`). The release directory and the rest of `/var/cache`
+stayed read-only, each run stayed up without restarting, and
+`systemd-analyze security` still rated the unit 1.5.
 
 Test a sandbox change the same way before deploying it. Pass each `[Service]`
 setting except `ExecStart` and the restart settings to `systemd-run` with
@@ -689,9 +762,10 @@ including shells, `scp`, and SFTP:
 The upload check accepts only directories, regular files, and relative links
 that resolve inside the release without passing through another link. It
 rejects setuid, setgid, sticky, and world-writable modes, deployment markers,
-and links at `.next` or `.next/cache`. It requires a `server.js` file and a
-`REVISION` file that names the revision, and it refuses sparse files and
-long-name or pax headers over 64 KiB before reading them. Upload and
+and links at `.next`, `.next/cache`, or the poster cache's mount point,
+`.next/cache/images`. It requires a `server.js` file and a `REVISION` file
+that names the revision, and it refuses sparse files and long-name or pax
+headers over 64 KiB before reading them. Upload and
 extraction limit their own address space to 512 MiB, so a crafted archive
 fails with a refusal instead of exhausting the shared host's memory.
 
@@ -763,8 +837,13 @@ production deployment.
 
 The shared VPS answers SSH only on its tailnet address, so the deploy job
 first joins the tailnet as an ephemeral `tag:ci` node with
-`tailscale/github-action` and pings the server. It authenticates through a
-Tailscale federated identity limited to the subject
+`tailscale/github-action` and pings the server. A step before it takes the
+address from `SCREENR_DEPLOY_HOST` and masks it, since the log masks only the
+whole secret, so neither this public repository nor its Actions logs name the
+server ([#493](https://github.com/jubishop/screenr/issues/493)).
+`tests/test_deploy_tailnet.py` runs that step and fails if any tracked file
+names a tailnet address. The join authenticates through a Tailscale federated
+identity limited to the subject
 `repo:jubishop@13165/screenr@1357742977:environment:production`, GitHub's
 immutable form with the owner and repository IDs, which needs the job's
 `id-token: write` permission; no Tailscale secret is stored in GitHub. The
@@ -774,7 +853,7 @@ Add these environment secrets:
 
 | Secret | Value |
 | --- | --- |
-| `SCREENR_DEPLOY_HOST` | `root@` and the VPS's tailnet address |
+| `SCREENR_DEPLOY_HOST` | `root@` and the VPS's tailnet address, which the deploy job also pings |
 | `SCREENR_DEPLOY_KEY` | A dedicated Ed25519 private key for this repository's deployments |
 | `SCREENR_DEPLOY_KNOWN_HOSTS` | The verified SSH host-key entry for that exact host |
 | `TS_OAUTH_CLIENT_ID` | The federated identity's client ID |

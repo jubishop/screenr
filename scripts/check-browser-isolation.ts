@@ -103,8 +103,11 @@ try {
     assert.ok(ready, "First browser fixture did not become healthy.");
     const contender = join(directory, "contender");
     await mkdir(contender);
-    // Use a third checkout path and a different port range to reach the
-    // database guard, then the original checkout to reach its capture-file guard.
+    // Use a third checkout path and the four ports just below both copies'
+    // ranges, still below the ephemeral port ranges, to reach the database
+    // guard, then the original checkout to reach its capture-file guard.
+    const contenderPort =
+      Math.min(...configurations.map((config) => config.port)) - 4;
     for (const [cwd, database, resource] of [
       [contender, first.databaseName, "database"],
       [checkouts[0], "screenr_browser_unused_contender_test", "checkout"],
@@ -121,7 +124,7 @@ try {
             cwd,
             env: {
               ...env,
-              SCREENR_BROWSER_PORT: String(first.port + 8),
+              SCREENR_BROWSER_PORT: String(contenderPort),
               SCREENR_BROWSER_DATABASE: database,
             },
             timeout: 15_000,

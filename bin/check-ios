@@ -7,6 +7,8 @@ booting, and runs the Screenr scheme's tests (ScreenrKit and the UI tests) in
 it. Without --simulator, the check creates its own Simulator and deletes it
 afterward, so concurrent checkouts never share one.
 Build output, logs, and result bundles stay in ios/build/, which Git ignores.
+The package and app builds there are removed before building when
+ios/ScreenrKit/Package.resolved differs from the one they were built with.
 
 At most SLOTS checks run at once on the Mac. Before its first step, a check
 waits for a free slot, saying so, and holds it until it exits. The slots are
@@ -23,6 +25,7 @@ is recent; the pre-push hook and bin/ios-testflight rely on the same records.
 
 import argparse
 import fcntl
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -40,6 +43,14 @@ import _ios_check_records as records  # noqa: E402
 ROOT = Path(__file__).resolve().parents[1]
 BUILD = ROOT / "ios/build"
 OUTPUT = BUILD / "check"
+# swift test's scratch directory and xcodebuild's derived data build on their
+# last run's modules. After a package update, such as a sentry-cocoa bump,
+# those modules fail to load against the new framework headers, so both
+# directories start over when Package.resolved changes. The stamp holds the
+# hash of the Package.resolved they were built with.
+RESOLVED = ROOT / "ios/ScreenrKit/Package.resolved"
+PACKAGE_BUILDS = (BUILD / "ScreenrKit", BUILD / "DerivedData")
+PACKAGE_STAMP = BUILD / "Package.resolved.sha256"
 MINIMUM_XCODE = 27
 # The Simulator tests took 13 minutes on the user's Mac on 2026-10-14, and 30
 # on 2026-11-01 once the UI tests audited one check at a time; a run that takes
@@ -196,6 +207,31 @@ def take_slot():
         time.sleep(SLOT_POLL_SECONDS)
 
 
+def clear_stale_package_builds():
+    """Remove PACKAGE_BUILDS unless the stamp shows they were built with this Package.resolved.
+
+    Output without a stamp predates it, so it may come from any packages.
+    """
+    try:
+        pins = hashlib.sha256(RESOLVED.read_bytes()).hexdigest()
+    except FileNotFoundError:
+        pins = "none"
+    try:
+        if PACKAGE_STAMP.read_text().strip() == pins:
+            return
+    except FileNotFoundError:
+        pass
+    if any(path.exists() for path in PACKAGE_BUILDS):
+        names = " and ".join(str(path.relative_to(ROOT)) for path in PACKAGE_BUILDS)
+        print(f"Removing {names}: nothing records that they were built with this "
+              f"{RESOLVED.relative_to(ROOT)}.", flush=True)
+        for path in PACKAGE_BUILDS:
+            if path.exists():
+                shutil.rmtree(path)
+    BUILD.mkdir(parents=True, exist_ok=True)
+    PACKAGE_STAMP.write_text(pins + "\n")
+
+
 def create_simulator():
     """Create an iPhone Simulator on the newest iOS runtime and return its UDID."""
     listing = json.loads(capture("xcrun", "simctl", "list", "--json", "runtimes"))
@@ -254,6 +290,7 @@ def main():
               flush=True)
         return
     take_slot()
+    clear_stale_package_builds()
     shutil.rmtree(OUTPUT, ignore_errors=True)
     OUTPUT.mkdir(parents=True)
     run("ScreenrKit tests", ["swift", "test", "--package-path", "ios/ScreenrKit",

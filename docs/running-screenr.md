@@ -35,17 +35,29 @@ Fast and document-only checks do not need Node. See the
 PostgreSQL runs natively from Homebrew's `postgresql@18` as a login service on
 port 5439, not in Docker; see the
 [local PostgreSQL decision](development-workflow.md#local-postgresql).
-Set its port and its time zone to UTC, start it as a login service, and create
-the local role and database once. Tests compare dates in UTC, as CI's server
-does, and the role is a superuser, as in CI, so tests can create and reset
-their databases:
+Set its port, its time zone to UTC, and `max_locks_per_transaction` to 256,
+start it as a login service, and create the local role and database once.
+Tests compare dates in UTC, as CI's server does, and the role is a superuser,
+as in CI, so tests can create and reset their databases. The larger lock
+table lets several checkouts run tests at once; see the
+[lock table decision](development-workflow.md#local-postgresql-lock-table).
 
 ```sh
 sed -i '' -e 's/^#port = 5432/port = 5439/' -e "s/^timezone = .*/timezone = 'UTC'/" \
+  -e 's/^#max_locks_per_transaction = 64/max_locks_per_transaction = 256/' \
   "$(brew --prefix)/var/postgresql@18/postgresql.conf"
 # Start postgresql@18 as a login service, then:
 psql -h 127.0.0.1 -p 5439 -d postgres -c "CREATE ROLE screenr LOGIN SUPERUSER PASSWORD 'screenr-local-only'"
 createdb -h 127.0.0.1 -p 5439 -U screenr screenr
+```
+
+To raise the setting on a server that is already running, where
+`SHOW max_locks_per_transaction` reports less than 256, run the following,
+then restart the login service when no checkout is running tests; the
+setting takes effect only at a restart:
+
+```sh
+psql -h 127.0.0.1 -p 5439 -U screenr -d postgres -c "ALTER SYSTEM SET max_locks_per_transaction = 256"
 ```
 
 Then set up the checkout:
@@ -410,8 +422,17 @@ Its `.p8` file stays on the owner's Mac at the path in `ASC_KEY_PATH`, and
 the owner's shell exports `ASC_KEY_ID` and `ASC_ISSUER_ID`.
 [TestFlight releases](development-workflow.md#testflight-releases) add each
 build to "Public testers" and create the group, without a public link, if it
-is missing. [#250](https://github.com/jubishop/screenr/issues/250) enables
-the link after the first build passes Beta App Review.
+is missing.
+
+**Public link:** "Public testers" has had its public link on since
+2026-11-04, after build 1.0 (2) passed Beta App Review
+([#250](https://github.com/jubishop/screenr/issues/250)). The link itself
+stays out of the repository. In App Store Connect, open Screenr's TestFlight
+tab and select "Public testers" under External Testing; the group's page
+shows the link. The API returns it as the `publicLink` attribute of
+`GET /v1/betaGroups/34f3f27c-157a-4567-add5-5e34c2a03843`. The link has no
+tester limit of its own, and anyone who installs from it still needs an
+invitation to join Screenr.
 
 ### Google
 
