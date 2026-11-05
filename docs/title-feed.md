@@ -607,8 +607,10 @@ web and in the iPhone app
 
 At the one-year synthetic size, 15 members with 4,800 entries and 12,800
 comments, a page of the friends feed is about 107 KB and builds in about
-60 ms, where the whole history was 8.1 MB and took 1.3 s, and an unchanged
-poll takes about 1 ms.
+60 ms, where the whole history was 8.1 MB and took 1.3 to 2 s. An unchanged
+poll takes about 1 ms, where it took as long as a full read. One load of
+the friends feed peaked the web process at 161 MB, against about 400 MB for
+the whole history and the service's 384 MB limit.
 
 ### Standalone title comments
 
