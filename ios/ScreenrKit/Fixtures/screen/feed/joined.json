@@ -11,7 +11,7 @@
   },
   "response": {
     "status": 200,
-    "etag": "W/\"D3dWZcSLKkBobV-VowuBGY2rboHrearyHEEL8ulhhKI\"",
+    "etag": "W/\"pdbVKAZ3Ep4Uw7ns6tP8NLoTF56534wfuY4ZRG_RgdM\"",
     "body": {
       "kind": "feed",
       "conversations": [
@@ -462,6 +462,8 @@
       ],
       "target": null,
       "targetUnavailable": false,
+      "since": "2026-10-13T12:00:00.000Z",
+      "older": false,
       "unreadNotifications": 0,
       "user": {
         "user_id": "user-pat",

@@ -69,10 +69,10 @@ struct ScreenModelTests {
     #expect(model.screen == older)
   }
 
-  // A screen that does not page, or a paged read answered by a server that
-  // sends the whole history, keeps reading its own path.
-  @Test func keepsTheSamePathWithoutAPage() async throws {
-    let api = ScriptedAPI([.screen(feed)])
+  // A paged history without entries names no window, so polls read the
+  // newest page again, and Show older has nothing to read.
+  @Test func readsTheNewestPageAgainWithoutEntries() async throws {
+    let api = ScriptedAPI([.screen(emptyFeed)])
     let clock = TestClock()
     let model = ScreenModel(path: "/", paged: true, api: api, clock: clock)
 

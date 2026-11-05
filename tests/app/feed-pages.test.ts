@@ -91,11 +91,9 @@ test("the friends feed sends its newest page, keeps each window it names, and re
   await addComment(alice, old[0], "Back to this one", false);
   assert.equal(ids(await read(alice, "/?before=now"))[0], old[0]);
 
-  // A read without a window, such as an installed iPhone build's, sends the
-  // whole history and no paging fields.
-  const whole = await read(alice, "/");
-  assert.equal(whole.conversations.length, 122);
-  assert.ok(!("since" in whole) && !("older" in whole));
+  // A read without a window reads the newest page too: no read sends the
+  // whole history.
+  assert.deepEqual(await read(alice, "/"), await read(alice, "/?before=now"));
 });
 
 test("a page includes every entry tied with its last one, and a time that does not parse reads the newest page", async () => {
@@ -168,9 +166,7 @@ test("profiles page their owner's entries, and unreadable or empty histories sen
   );
   assert.equal(rest.older, false);
   assert.equal(ids(rest).at(-1), old[0]);
-  const whole = await read(alice, "/people/ben");
-  assert.equal(whole.conversations.length, 55);
-  assert.ok(!("since" in whole) && !("older" in whole));
+  assert.deepEqual(await read(alice, "/people/ben"), page);
   // Cam is not Ben's friend, so his entries stay friends-only.
   const unreadable = await read(cam, "/people/ben?before=now");
   assert.deepEqual(unreadable.conversations, []);

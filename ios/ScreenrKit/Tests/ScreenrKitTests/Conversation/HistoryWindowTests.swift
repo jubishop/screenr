@@ -28,8 +28,10 @@ struct HistoryWindowTests {
     #expect(newest.start == ServerTimestamp.date(from: instant))
     #expect(try screen("screen/feed/older-page").historyPage?.older == false)
     #expect(try screen("screen/profile/page").historyPage?.older == false)
-    // A read of the whole history, as from a server before paging, names none.
-    #expect(try screen("screen/feed/default").historyPage == nil)
+    // A read without a window gets the newest page, and a screen that does
+    // not page names none.
+    let unwindowed = try screen("screen/feed/default").historyPage
+    #expect(unwindowed == HistoryPage(since: instant, older: false))
     #expect(try screen("screen/people/default").historyPage == nil)
     #expect(HistoryWindow(after: HistoryPage(since: nil, older: false)) == .newest)
   }

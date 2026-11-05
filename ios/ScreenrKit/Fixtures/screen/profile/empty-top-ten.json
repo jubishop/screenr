@@ -11,7 +11,7 @@
   },
   "response": {
     "status": 200,
-    "etag": "W/\"_wvaF852gHtplZOIN7t4tTKiSeYZGcCjyKJToqcsVXc\"",
+    "etag": "W/\"hkzEF0ynHMt_NPIH8b6eJHOpI1dT18jWyiI_7cGU4xI\"",
     "body": {
       "kind": "profile",
       "profile": {
@@ -26,6 +26,8 @@
       },
       "topTen": [],
       "conversations": [],
+      "since": null,
+      "older": false,
       "unreadNotifications": 0,
       "user": {
         "user_id": "user-nora",

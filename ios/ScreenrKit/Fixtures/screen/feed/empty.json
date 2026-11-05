@@ -11,12 +11,14 @@
   },
   "response": {
     "status": 200,
-    "etag": "W/\"ybkdy12oQ-yk1hLvfcHXuDeIzRjXfiD6mX2N_4yD-GU\"",
+    "etag": "W/\"D6I6FHYZI8MGS0GBPDxl5BegBgMeSUy6GHhrcZlov48\"",
     "body": {
       "kind": "feed",
       "conversations": [],
       "target": null,
       "targetUnavailable": false,
+      "since": null,
+      "older": false,
       "unreadNotifications": 0,
       "user": {
         "user_id": "user-nora",

@@ -705,8 +705,8 @@ recipients. A full run checks:
   activity still waits behind New activity, and a link to an entry older
   than the page opens it. `tests/app/feed-pages.test.ts` covers the windows,
   ties at a page's end, link targets, profiles, unreadable and empty
-  histories, access changes, and the whole-history read for installed
-  iPhone builds.
+  histories, access changes, and reads without a window, which get the
+  newest page.
 - A failed notification Accept, Decline, selection, or Mark all as read
   keeps the panel's list and focus and shows its message beside that
   control. A notifications read past its deadline says "Refresh timed out.
