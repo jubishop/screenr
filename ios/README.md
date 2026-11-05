@@ -1051,11 +1051,13 @@ the test writes the payload to the folder bin/check-ios names in
 `SCREENR_PUSH_RELAY`, and the check sends it with `xcrun simctl push` while
 the test waits; run outside the check, these tests skip. The app launches
 with `FixtureLaunch(push: .system)` and allows notifications at iOS's prompt
-when the bell first opens. Tapping the banner opens the item, and pressing
-and holding it offers Accept and Decline on a friend request and the Reply
-field on a comment, whose requests the request log shows. A tap that
-launches the app follows `FixtureLaunch(pushTap: "18")`, which passes
-`-ScreenrPushTap`.
+when the bell first opens. On a new Simulator under load the prompt can take
+over half a minute to come up, so the run's first test keeps the bell's sheet
+open until Springboard shows it, for up to two minutes. Tapping the banner
+opens the item, and pressing and holding it offers Accept and Decline on a
+friend request and the Reply field on a comment, whose requests the request
+log shows. A tap that launches the app follows `FixtureLaunch(pushTap: "18")`,
+which passes `-ScreenrPushTap`.
 
 `PushContentTests`, `PushContentLoaderTests`, and `NotificationServicesTests`
 cover [push content](#push-content) from the single-notification fixtures:

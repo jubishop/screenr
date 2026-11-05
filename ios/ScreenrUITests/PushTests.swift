@@ -126,7 +126,7 @@ final class PushTests: XCTestCase {
     let app = XCUIApplication()
     app.launch(with: FixtureLaunch(requestLog: log.file, push: .system))
     XCTAssertTrue(app.navigationBars["Your circle"].waitForExistence(timeout: 10))
-    app.allowNotifications(in: self)
+    app.allowNotifications()
     return app
   }
 }

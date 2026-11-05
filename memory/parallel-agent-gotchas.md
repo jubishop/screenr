@@ -133,8 +133,11 @@ is harmless.
 stays generic. A real APNs sandbox push to the Simulator's device token runs
 the extension; see
 [push content](../ios/README.md#push-content). To allow notifications in a
-fresh Simulator, a throwaway UI test that opens the bell with
-`-ScreenrFixturePush system` and taps Allow from an
-`addUIInterruptionMonitor` worked on 2026-10-25, where querying the
-springboard for the Allow button found none. `simctl privacy` has no
-notifications service.
+fresh Simulator, open the bell with `-ScreenrFixturePush system`, wait for
+Springboard's alert, and tap its Allow button, as `allowNotifications()` in
+`ios/ScreenrUITests/PushRelay.swift` does. On a new Simulator the prompt can
+take over half a minute to come up, so a single query may find no alert yet.
+On 2026-11-05, beside another Simulator running UI tests at load averages of
+40 to 190, it came 3 to 33 seconds after the bell in 8 runs, and later than
+30 seconds, but within 77, in 2 more. `simctl privacy` has no notifications
+service.
