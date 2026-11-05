@@ -11,7 +11,7 @@
   },
   "response": {
     "status": 200,
-    "etag": "W/\"NZZi8ytBIfBIivlzKr_GB9EJ85g9Fp9X_0-U_ANverg\"",
+    "etag": "W/\"NlaRZY4mI6IPmuxMjeKbFpU-EwFZbZJJsMi5zatZes4\"",
     "body": {
       "kind": "title",
       "title": {
@@ -25,19 +25,9 @@
       },
       "trailer": null,
       "availability": {
-        "country": "US",
         "status": "stale",
         "checked_at": "2026-10-13T12:00:00.000Z",
         "link": "https://www.themoviedb.org/movie/104-glass-meridian/watch",
-        "providers": {
-          "flatrate": [
-            {
-              "logo_path": null,
-              "provider_id": 8,
-              "provider_name": "Netflix"
-            }
-          ]
-        },
         "sections": [
           {
             "key": "subs",

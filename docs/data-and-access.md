@@ -188,6 +188,17 @@ the new shape. Then set `SCREENR_IOS_MINIMUM_BUILD` in `/etc/screenr/app.env`
 to that build and deploy the change: activation checks the value and
 restarts `screenr-web`, so both take effect together.
 
+**Minimum build:** production has required build 3 since 2026-11-05. Build
+3 is the first that pages the friends feed and profiles, so the server
+stopped sending their whole history to reads without a window
+([paged histories](title-feed.md#paged-histories),
+[issue #502](https://github.com/jubishop/screenr/issues/502)). Build 3 also
+reads a title's availability without TMDB's raw `providers` lists and
+`country`, so title screens stopped sending them
+([title availability](title-availability.md#current-implementation),
+[issue #510](https://github.com/jubishop/screenr/issues/510)). A later
+breaking change raises it to the first build that reads the new shape.
+
 ## Native client sessions
 
 The iPhone app signs in with Better Auth's bearer plugin instead of the

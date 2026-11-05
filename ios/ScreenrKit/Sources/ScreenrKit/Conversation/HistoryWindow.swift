@@ -3,8 +3,7 @@ import Foundation
 // Which entries a paged read of the friends feed or a profile asks for, as
 // on the web: the newest page, every entry whose latest activity is at or
 // after the time a paged response named, or that window extended by the
-// page before it. A read without a window gets the whole history, which
-// builds from before paging still read.
+// page before it.
 public enum HistoryWindow: Hashable, Sendable {
   case newest
   case since(String)
@@ -61,8 +60,7 @@ public struct HistoryPage: Hashable, Sendable {
 }
 
 extension Screen {
-  // A paged feed or profile read's window, or nil for another screen or a
-  // read of the whole history.
+  // A feed or profile read's window, or nil for another screen.
   public var historyPage: HistoryPage? {
     let since: String?
     let older: Bool?

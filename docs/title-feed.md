@@ -595,8 +595,9 @@ web and in the iPhone app
   `before=<time>` for the 50 entries placed before that time with every
   newer one. Entries tied with a page's last entry come too.
   The response adds `since`, where the window it sent starts, and `older`,
-  whether older entries remain. A time that does not parse reads the newest
-  page.
+  whether older entries remain. A read without a window, or with a time
+  that does not parse, reads the newest page, so no read sends the whole
+  history.
 - **Polls keep the window:** each later read sends the `since` that the
   last response named, so new activity joins the list without pushing the
   oldest entry out. Windows and pages place each entry by its latest
@@ -621,11 +622,11 @@ web and in the iPhone app
   visible activity, reading only entry times and reply authors, and then
   builds discussions, reactions, and the reader's own state for just the
   entries it sends.
-- **Installed iPhone builds:** a read without a window sends the whole
-  history and no paging fields, as builds from before paging expect under
-  the [additive-payload rule](data-and-access.md#changes-that-app-builds-depend-on).
-  Once `SCREENR_IOS_MINIMUM_BUILD` reaches the first build that pages, the
-  whole-history read can go.
+- **iPhone builds before paging:** builds 1 and 2 read without a window
+  and expected the whole history. Since 2026-11-05 the server's
+  [minimum build](data-and-access.md#changes-that-app-builds-depend-on) is
+  3, the first that pages, so they get the required-update screen
+  ([issue #502](https://github.com/jubishop/screenr/issues/502)).
 - **Unchanged polls** answer 304 from a change mark without building the
   screen, as the
   [refresh behavior](data-and-access.md#write-lock-and-refresh-behavior)

@@ -37,11 +37,6 @@ export const watchCategories = [
   "buy",
 ] as const;
 export type WatchCategory = (typeof watchCategories)[number];
-export type WatchProvider = {
-  provider_id: number;
-  provider_name: string;
-  logo_path: string | null;
-};
 export type WatchSection = {
   key: "subs" | "free";
   label: "Subs" | "Free";
@@ -52,18 +47,14 @@ export type WatchSection = {
     route_note: string | null;
   }[];
 };
-export type WatchAvailability = {
-  country: "US";
+// A title's US viewing options, as title lists send them.
+export type TitleViewing = {
   status: "ok" | "stale" | "unavailable";
   checked_at: string | null;
-  link: string | null;
-  providers: Partial<Record<WatchCategory, WatchProvider[]>>;
   sections: WatchSection[];
 };
-export type TitleViewing = Pick<
-  WatchAvailability,
-  "status" | "checked_at" | "sections"
->;
+// Where to watch on a title screen, with TMDB's watch page for the title.
+export type WatchAvailability = TitleViewing & { link: string | null };
 // A title's US release status (docs/title-availability.md#release-status-implementation),
 // which the server derives from stored TMDB dates each time it sends a
 // screen. `unavailable` means the release data could not be loaded, which

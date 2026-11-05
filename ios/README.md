@@ -1386,8 +1386,8 @@ ScreenContent(model: model) { screen in
   older while older entries remain; it calls `FeedModel.showOlder(_:)`,
   which reads the window extended by the page before it through
   `ScreenModel.showOlder()`, and shows the entries that read adds at once,
-  without New activity. A server read without a window, as before paging,
-  names no page, so the screen keeps its path. `FeedTests` shows Show older
+  without New activity. A history without entries names no window, so
+  polls read the newest page again. `FeedTests` shows Show older
   against `screen/feed/newest-page` and `screen/feed/older-page`.
 - **Writes:** after a write, `FeedModel` calls `refresh`, which reads again
   even while a poll is in flight, since that poll may have started before the

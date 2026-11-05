@@ -1,6 +1,6 @@
 import { AppError, db, settleAll } from "./db";
 import { logFailureOnce } from "./log";
-import { watchSections } from "./watch-sources";
+import { watchSections, type WatchProviders } from "./watch-sources";
 import {
   parseRelease,
   releaseCalendar,
@@ -535,7 +535,9 @@ export async function getTitleTrailer(
   }
 }
 
-type AvailabilityData = Pick<WatchAvailability, "link" | "providers">;
+// What the availability cache keeps for a title: TMDB's watch page and its
+// raw provider lists, from which each result derives its sections.
+type AvailabilityData = { link: string | null; providers: WatchProviders };
 type CachedAvailability = {
   availability: AvailabilityData | null;
   fetched_at: Date | null;
@@ -591,9 +593,7 @@ function parseAvailability(data: unknown, id: string): AvailabilityData {
 }
 
 function availabilityResult(cached?: CachedAvailability): WatchAvailability {
-  const providers = cached?.availability?.providers ?? {};
   return {
-    country: "US",
     status: !cached?.fetched_at
       ? "unavailable"
       : Date.now() - cached.fetched_at.getTime() < 86_400_000
@@ -601,8 +601,7 @@ function availabilityResult(cached?: CachedAvailability): WatchAvailability {
         : "stale",
     checked_at: cached?.fetched_at?.toISOString() ?? null,
     link: cached?.availability?.link ?? null,
-    providers,
-    sections: watchSections(providers),
+    sections: watchSections(cached?.availability?.providers ?? {}),
   };
 }
 

@@ -227,9 +227,9 @@ struct FixtureTransportTests {
   // that last answered its path, as the server does.
   @Test func answersPagedReadsAsOverridesAndKeepsTheirWindow() async throws {
     let plain = try services("-ScreenrFixtureViewer", "nora")
-    let unpaged = try await plain.api.send(.screen(path: "/?before=now"))
-    #expect(unpaged.historyPage == nil)
-    #expect(unpaged.feed?.conversations.isEmpty == true)
+    let fallback = try await plain.api.send(.screen(path: "/?before=now"))
+    #expect(fallback.historyPage == HistoryPage(since: nil, older: false))
+    #expect(fallback.feed?.conversations.isEmpty == true)
 
     let services = try services(
       "-ScreenrFixtureViewer",

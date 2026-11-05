@@ -11,7 +11,7 @@
   },
   "response": {
     "status": 200,
-    "etag": "W/\"81Yj72UsU7r6vMZvZri2-T9UI8wi4arhHL8LjoP4hOo\"",
+    "etag": "W/\"R0v0u6t6-jjqnif9OF7pdMwFmFYm5mxYuO0hdf7y95A\"",
     "body": {
       "kind": "profile",
       "profile": {
@@ -100,6 +100,8 @@
         }
       ],
       "conversations": [],
+      "since": null,
+      "older": false,
       "unreadNotifications": 6,
       "user": {
         "user_id": "user-alice",

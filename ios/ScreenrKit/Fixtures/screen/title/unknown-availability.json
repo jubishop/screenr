@@ -11,7 +11,7 @@
   },
   "response": {
     "status": 200,
-    "etag": "W/\"IpE3TPC8h3xjAl8-IKMa2GYK1dr_JshwaG066c_SqKw\"",
+    "etag": "W/\"7ma7kZ5afgVanIZwYkMq-xJ3HR8DHFjAW-ePewWsYXk\"",
     "body": {
       "kind": "title",
       "title": {
@@ -25,11 +25,9 @@
       },
       "trailer": null,
       "availability": {
-        "country": "US",
         "status": "unavailable",
         "checked_at": null,
         "link": null,
-        "providers": {},
         "sections": []
       },
       "release": {
