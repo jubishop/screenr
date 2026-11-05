@@ -11,7 +11,7 @@
   },
   "response": {
     "status": 200,
-    "etag": "W/\"B9RcwBjPF3e-tMmTlR6HaHQSHGnUCC8mkZ7tWkz0VAM\"",
+    "etag": "W/\"Oeo_WBPPHV0OWjNhx14I5MQyaI_brkevldgsLpN2dUE\"",
     "body": {
       "kind": "title",
       "title": {
@@ -100,12 +100,10 @@
       "conversations": [
         {
           "id": "79e80b02-163a-48fa-8241-b4d4ce4d542b",
-          "conversation_id": "23b8c7e5-135a-4389-8a29-08fa3ff9c275",
           "owner_id": "user-alice",
           "title_id": "tv:201",
           "item_type": "recommended",
           "active": true,
-          "created_at": "2026-10-13T12:00:00.000Z",
           "activity_at": "2026-10-13T12:00:00.000Z",
           "body": null,
           "spoiler": false,
@@ -134,12 +132,10 @@
         },
         {
           "id": "d5c4b90c-6ca6-40f7-83ca-ce19d41f44cc",
-          "conversation_id": "23b8c7e5-135a-4389-8a29-08fa3ff9c275",
           "owner_id": "user-alice",
           "title_id": "tv:201",
           "item_type": "comment",
           "active": true,
-          "created_at": "2026-10-13T12:00:00.000Z",
           "activity_at": "2026-10-13T12:00:00.000Z",
           "body": "The season 2 opener had me shouting.",
           "spoiler": true,
@@ -168,12 +164,10 @@
         },
         {
           "id": "e22cb5a7-a2dd-4582-8f62-db3e31f2761b",
-          "conversation_id": "23b8c7e5-135a-4389-8a29-08fa3ff9c275",
           "owner_id": "user-alice",
           "title_id": "tv:201",
           "item_type": "comment",
           "active": true,
-          "created_at": "2026-10-13T12:00:00.000Z",
           "activity_at": "2026-10-13T12:00:00.000Z",
           "body": "The harbor fog in this episode is gorgeous.",
           "spoiler": false,
@@ -278,12 +272,10 @@
         },
         {
           "id": "f0a222c0-d2f9-45e6-8f45-53413b726eed",
-          "conversation_id": "0cd200ec-33eb-4ea8-8db3-3e1b829825d2",
           "owner_id": "user-ben",
           "title_id": "tv:201",
           "item_type": "review",
           "active": true,
-          "created_at": "2026-10-13T12:00:00.000Z",
           "activity_at": "2026-10-13T12:00:00.000Z",
           "body": "The finale reveals that the lighthouse keeper narrated every episode.",
           "spoiler": true,
@@ -312,12 +304,10 @@
         },
         {
           "id": "dda3a8e1-76d2-4624-8d8e-211af6b405ea",
-          "conversation_id": "7b2f4608-2ded-4ade-865a-5c1dad0c123d",
           "owner_id": "user-cam",
           "title_id": "tv:201",
           "item_type": "progress",
           "active": true,
-          "created_at": "2026-10-13T12:00:00.000Z",
           "activity_at": "2026-10-13T12:00:00.000Z",
           "body": null,
           "spoiler": false,
@@ -346,12 +336,10 @@
         },
         {
           "id": "d4aa3cdf-08c6-4ef3-8d48-401cbb8460f2",
-          "conversation_id": "0cd200ec-33eb-4ea8-8db3-3e1b829825d2",
           "owner_id": "user-ben",
           "title_id": "tv:201",
           "item_type": "recommended",
           "active": true,
-          "created_at": "2026-10-13T12:00:00.000Z",
           "activity_at": "2026-10-13T12:00:00.000Z",
           "body": null,
           "spoiler": false,

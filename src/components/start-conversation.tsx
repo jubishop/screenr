@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import type { Episode, Season } from "../shared";
-import { api, useInteractive } from "./client";
+import { api, read, useInteractive } from "./client";
 import { CommentComposer, type CommentDraft } from "./comment-composer";
 
 type Draft = CommentDraft & { season: number | null; episode: number | null };
@@ -179,7 +179,7 @@ function useEpisodeLists(titleId: string | null, season: number | null) {
   useEffect(() => {
     if (!titleId || seasons !== undefined) return;
     let current = true;
-    api<{ seasons: Season[] }>(`seasons?title=${encodeURIComponent(titleId)}`)
+    read("seasons", { title: titleId })
       .then((result) => result.seasons)
       .catch(() => null)
       .then((list) => {
@@ -192,9 +192,7 @@ function useEpisodeLists(titleId: string | null, season: number | null) {
   useEffect(() => {
     if (!titleId || season === null || season in episodes) return;
     let current = true;
-    api<{ episodes: Episode[] }>(
-      `episodes?title=${encodeURIComponent(titleId)}&season=${season}`,
-    )
+    read("episodes", { title: titleId, season: String(season) })
       .then((result) => result.episodes)
       .catch(() => null)
       .then((list) => {

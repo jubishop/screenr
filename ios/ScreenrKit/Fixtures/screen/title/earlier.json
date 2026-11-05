@@ -11,7 +11,7 @@
   },
   "response": {
     "status": 200,
-    "etag": "W/\"L0plcS63eO5EAu1eNiVJ-FTlAT6XyiEU60Fts8YRUAM\"",
+    "etag": "W/\"a_maFtMtZNeboap1KzpkBWvXD3sP2bPJU0Dr90-z9EU\"",
     "body": {
       "kind": "title",
       "title": {
@@ -96,12 +96,10 @@
       "conversations": [
         {
           "id": "4e78cefb-d2b2-4677-86e1-aefb695de7d4",
-          "conversation_id": "4e78cefb-d2b2-4677-86e1-aefb695de7d4",
           "owner_id": "user-ben",
           "title_id": "movie:101",
           "item_type": "earlier",
           "active": false,
-          "created_at": "2026-10-13T12:00:00.000Z",
           "activity_at": "2026-10-13T12:00:00.000Z",
           "body": null,
           "spoiler": false,
@@ -146,12 +144,10 @@
         },
         {
           "id": "deb6f6bf-6172-4420-84a6-8b05a22ddf0b",
-          "conversation_id": "92ac34ff-5109-4cb9-8cc7-282ccd64e734",
           "owner_id": "user-alice",
           "title_id": "movie:101",
           "item_type": "recommended",
           "active": true,
-          "created_at": "2026-10-13T12:00:00.000Z",
           "activity_at": "2026-10-13T12:00:00.000Z",
           "body": null,
           "spoiler": false,
@@ -180,12 +176,10 @@
         },
         {
           "id": "0601645c-005d-450f-8b22-ae05a508119d",
-          "conversation_id": "4e78cefb-d2b2-4677-86e1-aefb695de7d4",
           "owner_id": "user-ben",
           "title_id": "movie:101",
           "item_type": "recommended",
           "active": true,
-          "created_at": "2026-10-13T12:00:00.000Z",
           "activity_at": "2026-10-13T12:00:00.000Z",
           "body": null,
           "spoiler": false,
@@ -262,12 +256,10 @@
         },
         {
           "id": "427028b3-d296-4c2f-834d-345c9c621faa",
-          "conversation_id": "5e6424b3-aca7-4390-8852-820618da2fa3",
           "owner_id": "user-cam",
           "title_id": "movie:101",
           "item_type": "want_to_watch",
           "active": true,
-          "created_at": "2026-10-13T12:00:00.000Z",
           "activity_at": "2026-10-13T12:00:00.000Z",
           "body": null,
           "spoiler": false,

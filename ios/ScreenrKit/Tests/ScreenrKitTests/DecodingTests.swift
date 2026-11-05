@@ -81,6 +81,18 @@ struct DecodingTests {
     #expect(title.posterPath == nil)
   }
 
+  @Test func decodesAvailabilityWithoutTheProviderListsOrCountry() throws {
+    let json = #"""
+      {"status": "ok", "checked_at": "2026-10-13T12:00:00.000Z", "link": null,
+      "sections": [{"key": "subs", "label": "Subs", "services": [{"id": "netflix",
+      "name": "Netflix", "logo_path": null, "route_note": null}]}]}
+      """#
+    let decoder = ScreenrJSON.decoder()
+    let availability = try decoder.decode(WatchAvailability.self, from: Data(json.utf8))
+    #expect(availability.status == .ok)
+    #expect(availability.sections.first?.services.first?.name == "Netflix")
+  }
+
   @Test func roundTripsJSONValues() throws {
     let value: JSONValue = [
       "text": "a/b", "count": 3, "ratio": .number(0.5), "on": true, "none": .null,

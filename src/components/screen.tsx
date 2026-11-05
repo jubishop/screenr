@@ -6,6 +6,7 @@ import {
 } from "./pending-navigation";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
+import type { ActionResult, WriteAction } from "../server/actions";
 import type { ScreenData } from "../server/screens";
 import type { Person, SaveSurface, TopTenChange, WatchStatus } from "../shared";
 import {
@@ -183,8 +184,9 @@ export function Screen({
     const timeout = AbortSignal.timeout(10_000);
     pending.current = controller;
     try {
-      const latest = await readChanged<ScreenData & { user: Person }>(
-        `screen?path=${encodeURIComponent(readPath.current)}`,
+      const latest = await readChanged(
+        "screen",
+        { path: readPath.current },
         version.current,
         anySignal([controller.signal, timeout]),
       );
@@ -260,7 +262,10 @@ export function Screen({
     };
   }, [refresh]);
   // A failed write rejects, so its caller shows the error beside the control.
-  async function mutate(action: string, body: unknown) {
+  async function mutate<Name extends WriteAction>(
+    action: Name,
+    body: unknown,
+  ): Promise<ActionResult<Name>> {
     pending.current?.abort();
     setBusy(true);
     try {
@@ -307,13 +312,13 @@ export function Screen({
   }
   async function saveDisplayName(name: string) {
     pending.current?.abort();
-    const updated = await api<Person>("display-name", { name });
+    const updated = await api("display-name", { name });
     setUser(updated);
     await refresh();
   }
   async function saveProfile(name: string, username: string) {
     pending.current?.abort();
-    const updated = await api<Person>("profile", { name, username });
+    const updated = await api("profile", { name, username });
     setUser(updated);
     await refresh();
   }
@@ -325,11 +330,11 @@ export function Screen({
   }
   async function saveServices(serviceIds: string[]) {
     pending.current?.abort();
-    const saved = await api<{ serviceIds: string[] }>("streaming-services", {
-      serviceIds,
-    });
+    const saved = await api("streaming-services", { serviceIds });
     setData((current) =>
-      current?.kind === "account" ? { ...current, ...saved } : current,
+      current?.kind === "account"
+        ? { ...current, serviceIds: saved.serviceIds }
+        : current,
     );
     await refresh();
   }

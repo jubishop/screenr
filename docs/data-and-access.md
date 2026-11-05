@@ -72,6 +72,15 @@ account deletion, which also works either way and records no usage. Its
 headers. Give it an [iPhone API fixture](testing.md#iphone-api-fixtures)
 case in the same change.
 
+Each entry keeps its result's type, and `ActionResult<Name>` gives it to the
+web ([issue #387](https://github.com/jubishop/screenr/issues/387)). The web
+client in `src/components/client.ts` calls actions by name: `api` sends a
+write's body, and `read` and `readChanged` send a read's query parameters.
+Each returns its action's result type, so `npm run typecheck` fails when a
+web reader expects a field that the action no longer returns. Read result
+fields by name rather than spreading a result into state, which would hide
+a renamed field from the check.
+
 ### Single notification read
 
 The iPhone Notification Service Extension reads one notification to build
@@ -167,6 +176,12 @@ changes to screen payloads and action results additive
   decodes an unknown enum value to a fallback.
 - Do not remove, rename, or retype a field, change its meaning, or make an
   existing request require a new field.
+- Send only the fields that the response's type declares. Select columns by
+  name rather than with `*`, so a new column never reaches clients unnoticed.
+- Give a new key the casing of the object it joins, and a new object's keys
+  camelCase. Responses mix snake_case keys, mostly database column names,
+  with camelCase ones, and shipped keys keep their casing
+  ([issue #387](https://github.com/jubishop/screenr/issues/387)).
 
 When a breaking change is unavoidable, first ship an app build that reads
 the new shape. Then set `SCREENR_IOS_MINIMUM_BUILD` in `/etc/screenr/app.env`

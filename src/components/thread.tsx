@@ -123,7 +123,7 @@ export function ThreadView({
     setBusy((current) => new Set([...current, destination]));
     setErrors((current) => ({ ...current, [destination]: "" }));
     try {
-      await api<{ id: string }>("comment", {
+      await api("comment", {
         conversation: currentSnapshot.conversation.id,
         ...draft,
         replyTo: destination === "direct" ? undefined : destination,

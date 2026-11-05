@@ -88,9 +88,6 @@ public struct FeedItem: Codable, Hashable, Sendable, Identifiable {
   public let visibleActivity: Date
   public let reactions: [ReactionSummary]
   public let comments: [Comment]
-  // Sent but not part of the server's declared type.
-  public let conversationId: String?
-  public let createdAt: Date?
 }
 
 // The entry, and optionally the reply, that a permalink opened.

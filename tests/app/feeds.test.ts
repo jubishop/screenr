@@ -1,10 +1,12 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { useDatabase, db, denied, friend, setup } from "./social-fixture";
+import type { Comment, FeedItem } from "../../src/shared";
 const { changeRelationship } = await import("../../src/server/relationships");
-const { thread, conversations } = await import("../../src/server/feed");
+const { thread, conversations, feedPage } =
+  await import("../../src/server/feed");
 const { updateTitleActivity } = await import("../../src/server/title-actions");
-const { addComment, removeComment, createTitleComment } =
+const { addComment, removeComment, createTitleComment, createDiscussionPost } =
   await import("../../src/server/comments");
 
 useDatabase();
@@ -163,6 +165,78 @@ test("all feeds share entries and order by only visible replies without promotin
     (await conversations(ben)).map((c) => [c.id, c.visible_activity]),
     ordered,
   );
+});
+
+// Every field that src/shared.ts declares for a feed entry and a reply. The
+// type checker keeps these lists complete, and the test below compares them
+// with what the feed queries send.
+const field = true;
+const entryFields = Object.keys({
+  id: field,
+  owner_id: field,
+  title_id: field,
+  item_type: field,
+  body: field,
+  spoiler: field,
+  active: field,
+  recommended: field,
+  want_to_watch: field,
+  status: field,
+  finished_on: field,
+  rating: field,
+  edited: field,
+  season: field,
+  episode: field,
+  viewer_want_to_watch: field,
+  viewer_recommended: field,
+  viewer_status: field,
+  viewer_top_ten_rank: field,
+  username: field,
+  display_name: field,
+  photo: field,
+  title_name: field,
+  poster_path: field,
+  kind: field,
+  release_date: field,
+  activity_at: field,
+  visible_activity: field,
+  reactions: field,
+  comments: field,
+} satisfies Record<keyof FeedItem, true>).sort();
+const commentFields = Object.keys({
+  id: field,
+  author_id: field,
+  username: field,
+  display_name: field,
+  photo: field,
+  body: field,
+  spoiler: field,
+  root_id: field,
+  addressed_username: field,
+  removed: field,
+  unavailable: field,
+  created_at: field,
+  reactions: field,
+} satisfies Record<keyof Comment, true>).sort();
+
+test("feed reads send only the declared entry and reply fields", async () => {
+  const { alice, ben, conversation } = await setup();
+  await friend(alice, ben);
+  await addComment(ben, conversation, "A reply", false);
+  await createDiscussionPost(alice, "A post", false);
+  const paged = await feedPage(ben, { before: Infinity });
+  const { conversation: entry, comments } = await thread(ben, conversation);
+  const entries = [
+    ...(await conversations(ben)),
+    ...paged.conversations,
+    { ...entry, comments },
+  ];
+  assert.equal(entries.length, 5);
+  for (const item of entries) {
+    assert.deepEqual(Object.keys(item).sort(), entryFields);
+    for (const comment of item.comments)
+      assert.deepEqual(Object.keys(comment).sort(), commentFields);
+  }
 });
 
 test("feed entries carry their title's release date for the year beside its kind", async () => {

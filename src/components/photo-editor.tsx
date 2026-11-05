@@ -102,10 +102,10 @@ export async function preparePhoto(file: Blob) {
 
 export function sendPhoto(change: PhotoChange) {
   return change === "remove"
-    ? api<{ photo: null }>("remove-photo", {})
+    ? api("remove-photo", {})
     : change === "google"
-      ? api<{ photo: string }>("google-photo", {})
-      : api<{ photo: string }>("photo", change);
+      ? api("google-photo", {})
+      : api("photo", change);
 }
 
 // Adds, replaces, or removes the signed-in person's photo, during setup and

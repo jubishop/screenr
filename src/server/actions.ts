@@ -56,63 +56,69 @@ type Body = Record<string, unknown>;
 type SignedIn = { userId: string; sessionId: string; headers: Headers };
 type Member = SignedIn & { user: Person };
 
-type Definition<Source, Input, Context> = {
+type Definition<Source, Input, Context, Output> = {
   // Reads this action's fields from the query or JSON body. The services
   // validate each value and own the error messages.
   input: (source: Source) => Input;
   // Its result is the JSON response; actions without one respond
   // `{ ok: true }`.
-  run: (input: Input, context: Context) => Promise<unknown>;
+  run: (input: Input, context: Context) => Promise<Output>;
 };
 
-export type Action =
-  | {
-      method: "GET";
-      profile: true;
-      usage: boolean;
-      // Records the day when the request carries `Screenr-Visit: 1`.
-      visits: boolean;
-      // The key that this read's unchanged versions are remembered under, for
-      // a read that changes only with the database (screen-versions.ts).
-      remembers?: (query: Query, userId: string) => string | undefined;
-      respond: (query: Query, context: Member) => Promise<unknown>;
-    }
-  | {
-      method: "POST";
-      profile: true;
-      usage: true;
-      respond: (body: Body, context: Member) => Promise<unknown>;
-    }
-  | {
-      method: "GET";
-      profile: false;
-      usage: false;
-      respond: (query: Query, context: SignedIn) => Promise<unknown>;
-    }
-  | {
-      method: "POST";
-      profile: false;
-      // Records the day only once the person has a profile.
-      usage: boolean;
-      // Reads the raw request body, up to this many bytes, as `upload`.
-      upload?: number;
-      respond: (body: Body, context: SignedIn) => Promise<unknown>;
-    };
+// Each kind of action keeps its result's type, which ActionResult gives
+// clients.
+type MemberRead<Output> = {
+  method: "GET";
+  profile: true;
+  usage: boolean;
+  // Records the day when the request carries `Screenr-Visit: 1`.
+  visits: boolean;
+  // The key that this read's unchanged versions are remembered under, for a
+  // read that changes only with the database (screen-versions.ts).
+  remembers?: (query: Query, userId: string) => string | undefined;
+  respond: (query: Query, context: Member) => Promise<Output>;
+};
+type MemberWrite<Output> = {
+  method: "POST";
+  profile: true;
+  usage: true;
+  respond: (body: Body, context: Member) => Promise<Output>;
+};
+type SignupRead<Output> = {
+  method: "GET";
+  profile: false;
+  usage: false;
+  respond: (query: Query, context: SignedIn) => Promise<Output>;
+};
+type SignupWrite<Output> = {
+  method: "POST";
+  profile: false;
+  // Records the day only once the person has a profile.
+  usage: boolean;
+  // Reads the raw request body, up to this many bytes, as `upload`.
+  upload?: number;
+  respond: (body: Body, context: SignedIn) => Promise<Output>;
+};
+export type Action<Output = unknown> =
+  | MemberRead<Output>
+  | MemberWrite<Output>
+  | SignupRead<Output>
+  | SignupWrite<Output>;
 
 // Member reads count toward usage telemetry only when `usage` is set. Screen
 // and notification reads, which clients repeat in the background, do not,
 // except a read with `visits` set that the client flags as a visit.
-function read<Input>({
+function read<Input, Output>({
   input,
   run,
   usage = false,
   visits = false,
   remembers,
-}: Definition<Query, Input, Member> & {
+}: Definition<Query, Input, Member, Output> & {
   usage?: boolean;
   visits?: boolean;
   remembers?: (input: Input, userId: string) => string | undefined;
-}): Action {
+}): MemberRead<Output> {
   return {
     method: "GET",
     profile: true,
@@ -124,7 +130,10 @@ function read<Input>({
   };
 }
 // Every member write counts toward usage telemetry, even when rejected.
-function write<Input>({ input, run }: Definition<Body, Input, Member>): Action {
+function write<Input, Output>({
+  input,
+  run,
+}: Definition<Body, Input, Member, Output>): MemberWrite<Output> {
   return {
     method: "POST",
     profile: true,
@@ -133,10 +142,10 @@ function write<Input>({ input, run }: Definition<Body, Input, Member>): Action {
   };
 }
 // Runs before the signed-in person has a profile, and records no usage.
-function signup<Input>({
+function signup<Input, Output>({
   input,
   run,
-}: Definition<Body, Input, SignedIn>): Action {
+}: Definition<Body, Input, SignedIn, Output>): SignupWrite<Output> {
   return {
     method: "POST",
     profile: false,
@@ -147,10 +156,10 @@ function signup<Input>({
 
 // A read that runs before the signed-in person has a profile, and records no
 // usage.
-function signupRead<Input>({
+function signupRead<Input, Output>({
   input,
   run,
-}: Definition<Query, Input, SignedIn>): Action {
+}: Definition<Query, Input, SignedIn, Output>): SignupRead<Output> {
   return {
     method: "GET",
     profile: false,
@@ -161,10 +170,10 @@ function signupRead<Input>({
 
 // Account deletion works with or without a profile. It records no usage,
 // since it erases the person's usage rows with everything else.
-function erasure<Input>({
+function erasure<Input, Output>({
   input,
   run,
-}: Definition<Body, Input, SignedIn>): Action {
+}: Definition<Body, Input, SignedIn, Output>): SignupWrite<Output> {
   return {
     method: "POST",
     profile: false,
@@ -175,11 +184,13 @@ function erasure<Input>({
 
 // Photo changes work during setup, before the profile exists, and later on
 // Account. They count toward usage telemetry once the profile exists.
-function photo<Input>({
+function photo<Input, Output>({
   input,
   run,
   upload,
-}: Definition<Body, Input, SignedIn> & { upload?: number }): Action {
+}: Definition<Body, Input, SignedIn, Output> & {
+  upload?: number;
+}): SignupWrite<Output> {
   return {
     method: "POST",
     profile: false,
@@ -468,6 +479,30 @@ const actions = {
 
 // Each action's name. The iPhone fixture suite needs a case for every one.
 export type ActionName = keyof typeof actions;
+// The actions that clients read with GET, and the rest, which they send with
+// POST.
+export type ReadAction = {
+  [Name in ActionName]: (typeof actions)[Name]["method"] extends "GET"
+    ? Name
+    : never;
+}[ActionName];
+export type WriteAction = Exclude<ActionName, ReadAction>;
+// The JSON response of the action `Name`. An action whose result is null or
+// undefined responds `{ ok: true }`.
+export type ActionResult<Name extends ActionName> = Reply<
+  Awaited<ReturnType<(typeof actions)[Name]["respond"]>>
+>;
+type Reply<Output> =
+  | Exclude<Output, void | null | undefined>
+  | (undefined extends Output ? { ok: true } : never)
+  | (null extends Output ? { ok: true } : never);
+// A result typed `any` or `unknown` would let every web reader type-check,
+// so the type check fails while an action's result has no type of its own.
+type UntypedResult = {
+  [Name in ActionName]: unknown extends ActionResult<Name> ? Name : never;
+}[ActionName];
+type Typed<Untyped extends never> = Untyped;
+type EveryResultTyped = Typed<UntypedResult>;
 
 export function findAction(name: string, method: string) {
   const action: Action | undefined = Object.hasOwn(actions, name)
