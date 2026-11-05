@@ -96,7 +96,8 @@ public struct AppServices: Sendable {
   // iOS's push permission, keeps the invitation in memory, and writes
   // feedback to its request log rather than to `feedback`, the build's
   // sender, which Screenr Dev lacks. Its request log also shows how the
-  // share extension ended its requests. Only the app's client marks visits;
+  // share extension ended its requests. The app's launch starts the request
+  // log, and the extensions add to it. Only the app's client marks visits;
   // the extensions' send none. `push` is iOS's own push system, which the
   // app target provides; the extensions have none. At the app's first launch
   // after an install, `launch` ends the session a deleted install left in
@@ -156,7 +157,7 @@ public struct AppServices: Sendable {
         }
       keychain = InMemoryKeychain(token: token)
       invitation = PendingInvitation()
-      let fixtures = try FixtureTransport(directory: directory, scenario: scenario)
+      let fixtures = try FixtureTransport(directory: directory, scenario: scenario, host: host)
       transport = fixtures
       feedbackSender = fixtures.feedback
       authorization = .fixture

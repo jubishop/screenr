@@ -7,7 +7,12 @@ import Testing
 // The fixture API that UI tests launch the app against.
 @MainActor
 struct FixtureTransportTests {
-  private func services(_ arguments: String...) throws -> AppServices {
+  // The services a Screenr Dev launch builds in the app, or in an extension,
+  // which has no push system.
+  private func services(
+    _ arguments: String...,
+    host: AppServices.Host = .app
+  ) throws -> AppServices {
     let configuration = try AppConfiguration(infoDictionary: [
       "ScreenrVariant": "dev",
       "ScreenrServerURL": "http://localhost:3000",
@@ -19,7 +24,8 @@ struct FixtureTransportTests {
     return try AppServices(
       configuration: configuration,
       arguments: ["Screenr", "-ScreenrFixtures", TestFixtures.directory.path()] + arguments,
-      push: RecordingPushSystem(.undecided)
+      host: host,
+      push: host == .app ? RecordingPushSystem(.undecided) : nil
     )
   }
 
@@ -460,6 +466,43 @@ struct FixtureTransportTests {
 
         """
     )
+  }
+
+  // Screenr Dev's extensions write to the log the app started, so a UI test
+  // sees the app's and a share's or push's requests in order. Only the app's
+  // launch starts an empty log.
+  @Test(arguments: [AppServices.Host.shareExtension, .notificationExtension])
+  func anExtensionAddsToTheAppsLog(_ host: AppServices.Host) async throws {
+    let directory = FileManager.default.temporaryDirectory
+      .appending(path: UUID().uuidString, directoryHint: .isDirectory)
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    defer {
+      do {
+        try FileManager.default.removeItem(at: directory)
+      } catch {
+        Issue.record("Could not remove \(directory.path()): \(error)")
+      }
+    }
+    let log = directory.appending(path: "requests.log")
+    let app = try services("-ScreenrFixtureLog", log.path())
+    _ = try await app.api.send(.screen(path: "/titles/movie/101"))
+
+    let later = try services("-ScreenrFixtureLog", log.path(), host: host)
+    _ = try await later.api.send(.screen(path: "/titles/tv/201"))
+    _ = try await app.api.send(.screen(path: "/"))
+    let logged = try String(contentsOf: log, encoding: .utf8)
+
+    #expect(
+      logged == """
+        GET /api/screenr/screen?path=%2Ftitles%2Fmovie%2F101 visit
+        GET /api/screenr/screen?path=%2Ftitles%2Ftv%2F201
+        GET /api/screenr/screen?path=%2F
+
+        """
+    )
+    _ = try services("-ScreenrFixtureLog", log.path())
+    let relaunched = try String(contentsOf: log, encoding: .utf8)
+    #expect(relaunched == "")
   }
 
   @Test func linksOnlyTheStubCredentials() async throws {
