@@ -64,9 +64,10 @@ SANDBOX = set(DECIDED) | {'RestrictAddressFamilies', 'RestrictRealtime', 'System
 NETWORK_LIMITS = ('PrivateNetwork', 'IPAddressDeny', 'IPAddressAllow', 'RestrictNetworkInterfaces')
 # Paths that the services, release scripts, and jobs read or write at run time:
 # the release and Node runtime, settings, TLS roots and DNS, the deploy kit and
-# restic, the backup workspace, the database socket, D-Bus for the alert's and
-# the memory check's systemctl, apt's package lists and the dynamic user's
-# state for the update check, and the journal and state of the memory check.
+# restic, the backup workspace, the database socket, D-Bus for the systemctl of
+# the alert, the memory check, and each service's memory peak read, apt's
+# package lists and the dynamic user's state for the update check, and the
+# journal and state of the memory check.
 NEEDED = ('/opt/screenr', '/opt/node', '/etc/screenr', '/usr', '/etc/ssl', '/etc/resolv.conf',
           '/var/lib/screenr-backup', '/run/screenr-db', '/run/dbus', '/run/systemd', '/var/lib/apt',
           '/var/lib/dpkg', '/etc/apt', '/var/lib/private', '/var/log/journal', '/run/log/journal',

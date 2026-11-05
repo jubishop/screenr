@@ -23,8 +23,9 @@ DAY = 86400
 UNIT = re.compile(r'screenr-[a-z0-9-]+\.service')
 # systemd's catalog IDs for a run's resource use, logged when the run ends, and
 # for a process of a unit killed by the OOM killer. systemd 255 logs the memory
-# peak it last read for the unit, if anything read one, so the check also reads
-# each current run's peak, which also refreshes that value.
+# peak it last read for the unit, which each service's ExecStopPost= reads as
+# the run ends. A run logs its line only when it ends, possibly weeks later, so
+# the check also reads each current run's peak.
 RESOURCES = 'ae8f7b866b0347b9af31fe1c80b127c0'
 OOM = 'fe6faa94e7774663a0da52717891d8ef'
 # The kernel's summary of each OOM kill names the killed task's cgroup.

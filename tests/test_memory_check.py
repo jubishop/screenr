@@ -231,8 +231,8 @@ class MemoryCheckTests(unittest.TestCase):
         self.assertIn('screenr-web.service: the kernel OOM-killed next-server (pid 77)', errors)
 
     def test_fails_when_a_current_run_has_peaked_above_75_percent_of_its_limit(self):
-        # A run's line when it stops carries only the peak last read, if any,
-        # so each check also reads the current runs.
+        # A run logs its line only when it stops, possibly weeks later, so each
+        # check also reads the current runs.
         runs = {'screenr-db.service': ('db-run', 200 * MIB), 'screenr-worker.service': ('worker-run', 50 * MIB)}
         code, output, errors = self.execute(FakeHost(runs=runs))
         self.assertEqual(code, 1)
@@ -385,6 +385,18 @@ class MemoryCheckUnitTests(unittest.TestCase):
         for unit in command[2:]:
             with self.subTest(unit=unit):
                 self.assertEqual(len(unit_file(unit)['Service'].get('MemoryMax', [])), 1)
+
+    def test_each_checked_service_logs_its_real_peak_when_a_run_ends(self):
+        # systemd 255 logs the memory peak it last read for the unit when a run
+        # ends, not the run's real peak (#535). Reading the unit's properties
+        # once its processes end, while its cgroup remains, refreshes that
+        # value, after a crash too. The read runs as the service's user in its
+        # sandbox, and '-' keeps a failed read from failing the stop.
+        command = unit_file('screenr-memory-check.service')['Service']['ExecStart'][0].split()
+        for unit in command[2:]:
+            with self.subTest(unit=unit):
+                self.assertEqual(unit_file(unit)['Service'].get('ExecStopPost'),
+                                 ['-/usr/bin/systemctl show %n --property=MemoryPeak'])
 
     def test_check_failure_starts_the_alert(self):
         self.assertEqual(unit_file('screenr-memory-check.service')['Unit'].get('OnFailure'),
