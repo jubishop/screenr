@@ -59,23 +59,33 @@ extension XCUIApplication {
     springboard.descendants(matching: .any)["NotificationShortLookView"].firstMatch
   }
 
-  // Answers iOS's notification permission prompt with Allow, if it asks: it
-  // asks once, when a member first opens the bell.
+  // Whether iOS may still ask for the notification permission in this run.
+  private enum PermissionPrompt {
+    case possible
+    case settled
+  }
+
+  @MainActor private static var permissionPrompt = PermissionPrompt.possible
+
+  // Answers iOS's notification permission prompt with Allow. iOS asks once,
+  // when a member first opens the bell. On a new Simulator under load, the
+  // prompt can take over half a minute to come up, so the sheet stays open
+  // until it does. Later calls in the run never wait. A Simulator where
+  // Screenr Dev allowed notifications before this run shows no prompt, so
+  // the run's first call there waits out the limit.
   @MainActor
-  func allowNotifications(in test: XCTestCase) {
-    let monitor = test.addUIInterruptionMonitor(withDescription: "Notification permission") {
-      alert in
-      let allow = alert.buttons["Allow"]
-      guard allow.exists else { return false }
-      allow.tap()
-      return true
-    }
+  func allowNotifications() {
     buttons["bell"].tap()
     let sheet = navigationBars["Notifications"]
     XCTAssertTrue(sheet.waitForExistence(timeout: 10))
-    // An interaction lets the monitor answer a prompt that came up.
-    sheet.tap()
-    test.removeUIInterruptionMonitor(monitor)
+    if Self.permissionPrompt == .possible {
+      let allow = Self.springboard.alerts.buttons["Allow"]
+      if allow.waitForExistence(timeout: 120) {
+        allow.tap()
+        XCTAssertTrue(allow.waitForNonExistence(timeout: 10))
+      }
+      Self.permissionPrompt = .settled
+    }
     buttons["Close"].tap()
     XCTAssertTrue(sheet.waitForNonExistence(timeout: 10))
   }
