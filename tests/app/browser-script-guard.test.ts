@@ -4,7 +4,7 @@ import { once } from "node:events";
 import { createServer } from "node:http";
 import { mkdir, mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
-import { promisify } from "node:util";
+import { format, promisify } from "node:util";
 import { test } from "node:test";
 import { createBrowserProxy } from "../../scripts/browser-proxy";
 
@@ -37,6 +37,11 @@ test("a failed script in a manually created context fails promptly and keeps the
       server.closeAllConnections();
       server.close();
     }
+  });
+  // The proxy reports the malformed response it answers with a 502.
+  const printed: string[] = [];
+  t.mock.method(console, "error", (...args: unknown[]) => {
+    printed.push(format(...args));
   });
   await writeFile(
     join(directory, "playwright.config.ts"),
@@ -78,6 +83,11 @@ test('successful page', async ({page}) => { await page.setContent('<p>ok</p>'); 
       assert.doesNotMatch(error.stdout ?? "", /Test timeout/);
       return true;
     },
+  );
+  assert.equal(printed.length, 1);
+  assert.match(
+    printed[0]!,
+    /^Browser fixture upstream failure \(GET \/_next\/static\/chunks\/broken\.js\): Error: Parse Error: [^]*code: 'HPE_INVALID_CONSTANT'/,
   );
   // Playwright's failure trace is the retained evidence. The retired transport
   // capture's reports must not return; .last-run.json is Playwright's own.

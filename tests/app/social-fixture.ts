@@ -93,6 +93,25 @@ export function failureEvents(printed: string[]) {
   return printed.flatMap((line) => failureRecord(line)?.event ?? []);
 }
 
+// Replaces console.log as captureFailures replaces console.error and
+// console.warn, and returns what each call would have printed, parsed when
+// it is JSON. Each account deletion prints an "account deleted" record for
+// the journal (src/server/account-deletion.ts), which failure-guard.ts
+// doesn't flag, so a test that deletes an account captures and asserts it
+// to keep npm test's output clean.
+export function captureLog(t?: TestContext) {
+  const printed: unknown[] = [];
+  (t?.mock ?? mock).method(console, "log", (...args: unknown[]) => {
+    const line = format(...args);
+    try {
+      printed.push(JSON.parse(line));
+    } catch {
+      printed.push(line);
+    }
+  });
+  return printed;
+}
+
 // Stack frames, in failure lines and in Sentry reports, name each file in the
 // checkout by a path or file URL that begins with the checkout's own path, as
 // it is or escaped in JSON. That path can hold any word: every checkout under

@@ -2,6 +2,7 @@ import { test, before, after, afterEach, mock } from "node:test";
 import assert from "node:assert/strict";
 import {
   captureFailures,
+  captureLog,
   clientAddress,
   db,
   failureEvents,
@@ -62,6 +63,9 @@ type Case = {
   // The failure events that answering the request logs, which the case
   // captures and checks.
   failures?: string[];
+  // What answering the request prints with console.log, such as an account
+  // deletion's journal record, which the case captures and checks.
+  logs?: (world: World) => unknown[];
 };
 type Maybe<T> = T | ((world: World) => T | Promise<T>);
 const resolve = <T>(value: Maybe<T>, world: World) =>
@@ -961,12 +965,17 @@ const actions: Record<Exclude<ActionName, "screen">, Record<string, Case>> = {
     ),
   },
   "delete-account": {
-    default: write(
-      "delete-account",
-      "alice",
-      {},
-      "Deleting the account with a session from a sign-in in the last ten minutes. The token then signs no one in.",
-    ),
+    default: {
+      ...write(
+        "delete-account",
+        "alice",
+        {},
+        "Deleting the account with a session from a sign-in in the last ten minutes. The token then signs no one in.",
+      ),
+      logs: (world) => [
+        { event: "account deleted", userId: world.users.alice },
+      ],
+    },
     "stale-sign-in": write(
       "delete-account",
       "alice",
@@ -1292,6 +1301,7 @@ const cases: [string, Case][] = [
 async function record(file: string, item: Case, world: World) {
   const request = await item.request(world);
   const printed = item.failures && captureFailures();
+  const logged = item.logs && captureLog();
   const result = await send(world, item.viewer, request, item.method);
   assert.equal(
     result.status,
@@ -1299,6 +1309,7 @@ async function record(file: string, item: Case, world: World) {
     `${file} responded ${JSON.stringify(result.body)}`,
   );
   if (printed) assert.deepEqual(failureEvents(printed), item.failures);
+  if (item.logs) assert.deepEqual(logged, item.logs(world));
   const fixture: Fixture = world.placeholders.scrub({
     description: item.description,
     viewer: item.viewer,

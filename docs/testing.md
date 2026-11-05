@@ -993,6 +993,15 @@ fail on Better Auth's own unstructured lines, such as
   Auth warns that it fell back to a shared bucket, once in each test file's
   process, in whichever test sent the first such request
   ([#481](https://github.com/jubishop/screenr/issues/481)).
+- **Deliberate lines the guard doesn't flag:** a test that causes one of
+  these captures and asserts it too, though the guard would let it print
+  ([#491](https://github.com/jubishop/screenr/issues/491)). A test that
+  deletes an account reads the `account deleted` record that each deletion
+  prints for the journal with `captureLog()` from
+  `tests/app/social-fixture.ts`, which captures `console.log`; an iPhone
+  fixture case lists the record in `logs`. A test that breaks the browser
+  proxy's upstream on purpose captures `console.error` and asserts the
+  proxy's `Browser fixture upstream failure` line.
 - **Browser runs:** `scripts/browser-server.ts` writes the application's
   failure lines, with when each printed, to
   `.cache/browser-failure-lines.jsonl`, which each run starts over, instead
@@ -1028,3 +1037,18 @@ override it.
 
 **Why:** the same as for failure lines: 13 Better Auth lines printed on
 every `npm test` run, and nothing kept more from piling up.
+
+**Decision — 2026-11-04:** tests capture and assert the `account deleted`
+records and the browser proxy's upstream failure lines they cause, and the
+guard flags no new kinds. Settled by the agent as routine in
+[#491](https://github.com/jubishop/screenr/issues/491); the user may
+override it.
+
+**Why:** 12 `account deleted` records and 3 proxy lines with stack traces
+printed on every `npm test` run, which teaches readers to ignore the output.
+Production prints the `account deleted` record on purpose, and the proxy's
+lines come only from tests that break its upstream on purpose, so capturing
+each line where it is caused is enough.
+
+**Rejected alternatives:** having the guard flag every `console.log` JSON
+record or every proxy line.
