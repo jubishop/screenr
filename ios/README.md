@@ -534,7 +534,7 @@ uses it when launched with these arguments; Release builds ignore them:
 | `-ScreenrFixtureUpdateSignal` | The file whose creation sends the `-ScreenrFixtureUpdate` fixtures. |
 | `-ScreenrFixtureFailure` | A fixture that answers every `/api/screenr` request, such as `errors/update-required`. |
 | `-ScreenrFixtureOutageSignal` | A file whose existence fails every `/api/screenr` request with a 502 and no body, as from the proxy during a deploy, so the app's next reads, such as a poll, fail until the file is removed. |
-| `-ScreenrFixtureLog` | A file that gets a line per `/api/screenr` and `/api/auth` request, such as `GET /api/screenr/screen?path=%2F`, with ` visit` after the app's [visit](#visits) and a write's JSON body, keys sorted, after the write: `POST /api/screenr/read-notification {"id":"18"}`. An upload has its type and size instead: `POST /api/screenr/photo image/jpeg 41250 bytes`. Sent [feedback](#feedback) adds a `FEEDBACK` line. A [trailer](#trailers)'s player adds `WEB <url>` for each page it asks for. |
+| `-ScreenrFixtureLog` | A file that gets a line per `/api/screenr` and `/api/auth` request, such as `GET /api/screenr/screen?path=%2F`, with ` visit` after the app's [visit](#visits) and a write's JSON body, keys sorted, after the write: `POST /api/screenr/read-notification {"id":"18"}`. An upload has its type and size instead: `POST /api/screenr/photo image/jpeg 41250 bytes`. Sent [feedback](#feedback) adds a `FEEDBACK` line. A [trailer](#trailers)'s player adds `WEB <url>` for each page it asks for. The [share extension](#share-extension) adds `SHARE completed` or `SHARE cancelled` as it ends each request. |
 | `-ScreenrFixturePush` | The notification permission the app finds: `undecided` (default), `allowed`, or `denied`; or `system` for iOS's own permission and APNs registration. See [push notifications](#push-notifications). |
 | `-ScreenrOpenURL` | A link the app opens at launch, as if the system delivered it, such as `screenr-dev://titles/tv/201`. |
 | `-ScreenrAppearance` | `dark` or `light`, in place of the system's appearance, which a Simulator changes for its apps only after it restarts. |
@@ -1701,7 +1701,7 @@ the member can Recommend it or mark it Want to watch:
 
 | Piece | Where | What it does |
 | --- | --- | --- |
-| `ShareViewController` | `ScreenrShare/` | The principal class. It runs each share with the process's `AppServices(…, host: .shareExtension)`, whose client marks no [visits](#visits), with `Telemetry.localOnly()`, logs to `share.ndjson` in the app group's log directory through one writer per process, hosts `ShareView`, and closes the sheet. |
+| `ShareViewController` | `ScreenrShare/` | The principal class. It runs each share with the process's `AppServices(…, host: .shareExtension)`, whose client marks no [visits](#visits), with `Telemetry.localOnly()`, logs to `share.ndjson` in the app group's log directory through one writer per process, hosts `ShareView`, and ends the host's request when the sheet closes. |
 | `ShareView`, `ShareSearchView`, `ShareTitleView` | `ScreenrShare/` | The views, in a navigation stack with the system Close button. Large text stacks posters above names. |
 | `SharedContent`, `ShareModel`, `ShareTitleModel` | ScreenrKit `Share/` | The behavior above. |
 | `FixtureHandoff` | ScreenrKit `FakeAPI/` | Screenr Dev keeps its fixture launch arguments in the app group, so the extension, which the system starts without arguments, answers from the same fixtures. A launch without fixtures forgets them; Release builds neither keep nor read them. |
@@ -1716,6 +1716,19 @@ the member can Recommend it or mark it Want to watch:
   `AccentColor` tint; the icon sets compile only into the app.
 - **Sentry:** the extension never starts Sentry. `Telemetry.localOnly()` logs
   its API calls, and the [feedback form](#feedback) attaches its log.
+- **Ending the request:** Close completes the host app's request, and the
+  host closes its share sheet too. A swipe down takes the sheet without
+  Close: iOS calls `viewDidDisappear` and shows the host's share sheet
+  again, so the extension cancels the request with
+  `CocoaError(.userCancelled)`, as the member's choice. The services'
+  `ShareEndings` report which; under the fixture API they add a `SHARE`
+  line to the request log. Until a request ends, iOS keeps its view
+  controller, with its `ShareView` and `ShareModel`, in the extension's
+  process; in a Simulator, a swiped share's controller stayed until the
+  host app quit. Once a request ends, iOS may stop the process, so a save
+  the member started before a swipe, which Close's `isSaving` rule cannot
+  stop, relies on [writes in the background](#screenrkit-api) to finish.
+  Backgrounding the app with the sheet open calls no `viewDidDisappear`.
 - **Services:** iOS may keep the extension's process for the next share, so
   shares reuse one set of services through `ExtensionServices`, as pushes do
   in the [notification extension](#push-content), rather than each opening
@@ -1734,7 +1747,9 @@ the member can Recommend it or mark it Want to watch:
   `ShareExtensionTests` drives the extension from the app's own share sheet,
   where iOS lists Screenr Dev for a title's link: it finds the title, shows
   its friends, saves Want to watch, and closes, and the request log shows
-  what the extension sent. A second share then finds the title again. The
+  what the extension sent and that Close completed the request. A second
+  share then finds the title again, and a swipe down cancels it and returns
+  to the app's share sheet. The
   [hosted tests](#hosted-tests) check that the built extension's
   `Info.plist` has the app's settings. To try a link from
   another app in your Simulator, launch Screenr Dev with fixture arguments,

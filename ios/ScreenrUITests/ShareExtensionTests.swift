@@ -13,8 +13,10 @@ final class ShareExtensionTests: XCTestCase {
   // The extension finds the shared title, shows it with the friends who
   // recommend it or want to watch it, and switches Alice's Recommend of it,
   // which is in her top 10, to Want to watch once she confirms, as the
-  // title page does. Then it closes, and a later share, which iOS may run in
-  // the same process with the first share's services, finds it again.
+  // title page does. Then Close completes the share. A later share, which iOS
+  // may run in the same process with the first share's services, finds it
+  // again, and a swipe down cancels it, which returns Alice to the app's
+  // share sheet.
   @MainActor
   func testSavesASharedTitleToWantToWatch() throws {
     let log = RequestLog.temporary()
@@ -60,13 +62,22 @@ final class ShareExtensionTests: XCTestCase {
     sheet.buttons["Close"].tap()
     XCTAssertTrue(sheet.waitForNonExistence(timeout: 10))
     XCTAssertTrue(app.navigationBars["Night Crossing"].exists)
+    wait(for: [log.logged("SHARE completed")], timeout: 10)
 
     app.buttons["Share"].firstMatch.tap()
     XCTAssertTrue(screenr.waitForExistence(timeout: 20))
     screenr.tap()
     XCTAssertTrue(sheet.waitForExistence(timeout: 30))
     XCTAssertTrue(friends.waitForExistence(timeout: 20))
-    sheet.buttons["Close"].tap()
+    sheet.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+      .press(
+        forDuration: 0.05,
+        thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.98)),
+        withVelocity: .fast,
+        thenHoldForDuration: 0
+      )
     XCTAssertTrue(sheet.waitForNonExistence(timeout: 10))
+    wait(for: [log.logged("SHARE cancelled")], timeout: 10)
+    XCTAssertTrue(screenr.exists)
   }
 }
