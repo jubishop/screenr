@@ -409,13 +409,10 @@ body.
   `{"pushSettings": {...}}` with all four. Kinds the body leaves out keep
   their values.
 
-Three helpers read and clean up the records. `pushDevices(userId, kind?,
-client?)` lists the member's devices on live sessions as `{token,
-environment, topic, build}`; with a notification kind, it returns none when
-the member turned that kind off. `removePushDevice(token, client?)` deletes a
-token that APNs rejects. `pushSettings(userId)` reads the settings. The
-worker applies the same session and setting rules when it sends; see
-[push delivery](notifications.md#push-delivery).
+Two helpers read and clean up the records. `removePushDevice(token,
+client?)` deletes a token that APNs rejects, and `pushSettings(userId)` reads
+the settings. The worker applies the session and setting rules when it
+sends; see [push delivery](notifications.md#push-delivery).
 
 ## Sign-in return path
 
