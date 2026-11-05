@@ -981,12 +981,17 @@ fail on Better Auth's own unstructured lines, such as
   that fails something on purpose reads its lines with `captureFailures()`
   from `tests/app/social-fixture.ts`, which captures `console.error` and
   `console.warn`, passing its test context for a capture that ends with the
-  test, and asserts them, for example with `failureEvents()`. An iPhone
-  fixture case lists its lines in `failures`. A request to a rate-limited
-  auth instance sends `clientAddress` from the same file, as production's
-  proxy forwards each client's address; without one, Better Auth warns that
-  it fell back to a shared bucket, once in each test file's process, in
-  whichever test sent the first such request
+  test, and asserts them, for example with `failureEvents()`. It checks that
+  a value, such as a request's path or an error's message, stayed out of
+  them with `assertNotLogged()` from the same file, which reads the lines
+  without the checkout's own path: stack frames name files by that path, and
+  it can hold any word, as every checkout under macOS's `/private/tmp` holds
+  `private` ([#487](https://github.com/jubishop/screenr/issues/487)). An
+  iPhone fixture case lists its lines in `failures`. A request to a
+  rate-limited auth instance sends `clientAddress` from the same file, as
+  production's proxy forwards each client's address; without one, Better
+  Auth warns that it fell back to a shared bucket, once in each test file's
+  process, in whichever test sent the first such request
   ([#481](https://github.com/jubishop/screenr/issues/481)).
 - **Browser runs:** `scripts/browser-server.ts` writes the application's
   failure lines, with when each printed, to

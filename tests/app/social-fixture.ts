@@ -2,6 +2,7 @@ import { before, beforeEach, after, mock, type TestContext } from "node:test";
 import assert from "node:assert/strict";
 import { randomBytes } from "node:crypto";
 import { setTimeout } from "node:timers/promises";
+import { fileURLToPath } from "node:url";
 import { format } from "node:util";
 import { testDatabaseURL } from "../../scripts/checkout";
 import { failureRecord } from "../../scripts/failure-lines";
@@ -90,6 +91,31 @@ export function captureFailures(t?: TestContext) {
 // The events of the failure lines that captureFailures collected.
 export function failureEvents(printed: string[]) {
   return printed.flatMap((line) => failureRecord(line)?.event ?? []);
+}
+
+// Stack frames, in failure lines and in Sentry reports, name each file in the
+// checkout by a path or file URL that begins with the checkout's own path, as
+// it is or escaped in JSON. That path can hold any word: every checkout under
+// macOS's /private/tmp holds "private" (#487).
+const checkoutURL = new URL("../..", import.meta.url).href.replace(/\/$/, "");
+const checkoutPath = fileURLToPath(checkoutURL);
+const checkoutForms = [
+  checkoutURL,
+  checkoutPath,
+  JSON.stringify(checkoutPath).slice(1, -1),
+];
+
+// Asserts that no captured line or report holds any of the values, such as a
+// request's path, a cookie, or an error's message. It reads them without the
+// checkout's path, so only what was logged can match, wherever the checkout
+// is.
+export function assertNotLogged(printed: string[], values: string[]) {
+  const text = checkoutForms.reduce(
+    (rest, form) => rest.replaceAll(form, ""),
+    printed.join("\n"),
+  );
+  for (const value of values)
+    assert.ok(!text.includes(value), `Logged ${value}`);
 }
 
 // In production Caddy forwards each client's address in X-Forwarded-For, and

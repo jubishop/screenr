@@ -17,6 +17,7 @@ import {
   bearerFor,
   cookieFor,
   captureFailures,
+  assertNotLogged,
 } from "./social-fixture";
 
 const { POST } = await import("../../src/app/api/screenr/[action]/route");
@@ -958,7 +959,7 @@ test("without APNs settings the worker skips push delivery and says so once", ()
     { event: invalid.event, reason: invalid.reason },
     { event: "push delivery off", reason: "invalid key" },
   );
-  assert.ok(!failures.join("").includes(key.slice(0, 20)));
+  assertNotLogged(failures, [key.slice(0, 20)]);
 
   const configured = apnsFromEnvironment({
     APPLE_TEAM_ID: "TEAM123456",

@@ -2,7 +2,7 @@ import { test, before, beforeEach, after } from "node:test";
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
-import { db, captureFailures } from "./social-fixture";
+import { db, captureFailures, assertNotLogged } from "./social-fixture";
 
 const { migrate } = await import("../../scripts/migrate");
 const { loadScreen } = await import("../../src/server/screens");
@@ -300,8 +300,7 @@ for (const invalid of [
     assert.deepEqual(fields, invalidProviders);
     assert.ok(Array.isArray(stack) && stack.length > 0, printed[0]);
     for (const frame of stack) assert.match(frame, /^at /);
-    for (const value of ["Harbor Stream", "harbor.jpg", "javascript"])
-      assert.ok(!printed[0].includes(value), `Logged ${value}`);
+    assertNotLogged(printed, ["Harbor Stream", "harbor.jpg", "javascript"]);
   });
 }
 

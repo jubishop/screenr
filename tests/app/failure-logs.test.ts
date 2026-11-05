@@ -10,6 +10,7 @@ import {
   setup,
   cookieFor,
   captureFailures,
+  assertNotLogged,
   clientAddress,
   person,
   assertAuthError,
@@ -48,11 +49,6 @@ function logged(printed: string[]) {
   assert.ok(Array.isArray(stack) && stack.length > 0, printed[0]);
   for (const frame of stack) assert.match(frame, /^at /);
   return { fields, stack: stack as string[] };
-}
-
-function excludes(printed: string[], values: string[]) {
-  for (const value of values)
-    assert.ok(!printed.join("\n").includes(value), `Logged ${value}`);
 }
 
 async function until(condition: () => boolean) {
@@ -198,7 +194,7 @@ test("an unexpected database failure in a request logs its action, error class, 
     stack.some((frame) => frame.includes("src/server/comments.ts")),
     "The stack leads back to the failing query",
   );
-  excludes(printed, privateValues);
+  assertNotLogged(printed, privateValues);
 });
 
 test("an unexpected page failure logs its route kind, error class, code, and stack without the path", async () => {
@@ -228,7 +224,12 @@ test("an unexpected page failure logs its route kind, error class, code, and sta
     assert.ok(
       stack.some((frame) => frame.includes("src/server/streaming-services.ts")),
     );
-    excludes(printed, [query, encodeURIComponent(query), alice, "exist"]);
+    assertNotLogged(printed, [
+      query,
+      encodeURIComponent(query),
+      alice,
+      "exist",
+    ]);
   } finally {
     await db.query(
       "ALTER TABLE member_streaming_service_hidden RENAME TO member_streaming_service",
@@ -310,7 +311,7 @@ test("a sign-in code request whose email cannot be queued logs the callback and 
     error: "TypeError",
   });
   assert.ok(stack.some((frame) => frame.includes("failure-logs.test.ts")));
-  excludes(printed, [message, "member@example.test"]);
+  assertNotLogged(printed, [message, "member@example.test"]);
 });
 
 // Requests a sign-in code for an address, as the web does, and returns the
@@ -365,7 +366,7 @@ test("a database failure inside Better Auth during an email code sign-in logs it
       code: "42P01",
     });
     assert.ok(stack.some((frame) => frame.includes("/better-auth/")));
-    excludes(printed, [code, "member@example.test", "exist"]);
+    assertNotLogged(printed, [code, "member@example.test", "exist"]);
   } finally {
     await db.query("ALTER TABLE verification_hidden RENAME TO verification");
   }
@@ -390,7 +391,7 @@ test("a Screenr callback failure that fails a sign-in logs only the callback, no
       error: "DatabaseError",
       code: "42P01",
     });
-    excludes(printed, [token, "new@example.test", "exist"]);
+    assertNotLogged(printed, [token, "new@example.test", "exist"]);
   } finally {
     await db.query("ALTER TABLE invitation_hidden RENAME TO invitation");
   }
@@ -419,7 +420,7 @@ test("a constraint that fails an invited email code signup logs the endpoint, co
       constraint: "failure_log_probe",
       table: "user",
     });
-    excludes(printed, [
+    assertNotLogged(printed, [
       email,
       invitationHash(token),
       token,
@@ -454,7 +455,7 @@ test("a database failure in Better Auth's rate limit answers a bare 500 and logs
       error: "DatabaseError",
       code: "42P01",
     });
-    excludes(printed, ["exist"]);
+    assertNotLogged(printed, ["exist"]);
   } finally {
     await db.query('ALTER TABLE rate_limit_hidden RENAME TO "rateLimit"');
   }
@@ -527,7 +528,7 @@ test("a database failure while a Google ID token signup creates the account logs
     assert.ok(
       stack.some((frame) => frame.includes("/@better-auth/kysely-adapter/")),
     );
-    excludes(printed, [
+    assertNotLogged(printed, [
       email,
       token,
       invitation,
@@ -558,7 +559,7 @@ test("a Screenr callback failure in a Google ID token signup logs only the callb
       error: "DatabaseError",
       code: "42P01",
     });
-    excludes(printed, [invitation, "new@example.test", "exist"]);
+    assertNotLogged(printed, [invitation, "new@example.test", "exist"]);
   } finally {
     await db.query("ALTER TABLE invitation_hidden RENAME TO invitation");
   }
@@ -587,7 +588,7 @@ test("a database failure while Better Auth reads a session logs it once with the
       error: "DatabaseError",
       code: "42P01",
     });
-    excludes(printed, [
+    assertNotLogged(printed, [
       ...cookie.split("; ").map((pair) => pair.split("=")[1]),
       "member@example.test",
       "exist",
@@ -632,7 +633,7 @@ test("a session read that fails in an API request logs Better Auth's caught erro
         cause: { error: "DatabaseError", code: "42P01" },
       },
     ]);
-    excludes(printed, [
+    assertNotLogged(printed, [
       ...cookie.split("; ").map((pair) => pair.split("=")[1]),
       "member@example.test",
       "exist",
@@ -688,7 +689,7 @@ test("an OAuth callback with an unknown or used state logs no failure, while a d
       error: "DatabaseError",
       code: "42P01",
     });
-    excludes(printed, [state, "private-code", "exist"]);
+    assertNotLogged(printed, [state, "private-code", "exist"]);
   } finally {
     await db.query("ALTER TABLE verification_hidden RENAME TO verification");
   }
@@ -737,7 +738,7 @@ test("a Google code exchange that Google rejects for Screenr's web client logs G
       new URL(response.headers.get("location")!).searchParams.get("error"),
       "invalid_code",
     );
-    excludes(printed, [
+    assertNotLogged(printed, [
       state,
       "private-code",
       secret,
@@ -796,7 +797,7 @@ test("a request error that reaches Next logs the route pattern, its type, and th
     method: "GET",
     error: "TypeError",
   });
-  excludes(printed, [message, "alice", "private"]);
+  assertNotLogged(printed, [message, "alice", "private"]);
 });
 
 test("in production, the line Next prints for an error before onRequestError shows only its class, code, and stack, without the message or PostgreSQL detail", async () => {
@@ -847,7 +848,7 @@ test("in production, the line Next prints for an error before onRequestError sho
     code: "23514",
     stack,
   });
-  excludes(printed, [value, "Probe rejected", "Failing row"]);
+  assertNotLogged(printed, [value, "Probe rejected", "Failing row"]);
 });
 
 // Runs code as Next's production server does, with NODE_ENV production.
@@ -919,7 +920,7 @@ test("a member page render failure that Next hands to the hook twice logs one li
     sent().map(({ contexts }) => contexts.failure),
     [fields, fields],
   );
-  excludes(
+  assertNotLogged(
     [...printed, ...sent().map((event) => JSON.stringify(event))],
     ["Private detail"],
   );
@@ -938,7 +939,7 @@ test("a failed email worker pass logs its error class, code, and stack", async (
       code: "42P01",
     });
     assert.ok(stack.some((frame) => frame.includes("src/server/email.ts")));
-    excludes(printed, ["exist"]);
+    assertNotLogged(printed, ["exist"]);
   } finally {
     await db.query("ALTER TABLE email_job_hidden RENAME TO email_job");
   }
@@ -999,7 +1000,7 @@ test("with a Sentry DSN, a request failure is also sent as an envelope with the 
   );
   assert.ok(query?.in_app, "The frames lead back to the failing query");
   assert.match(query.abs_path, /^\/.+\/src\/server\/comments\.ts$/);
-  excludes([report.body], [...privateValues, "Private comment"]);
+  assertNotLogged([report.body], [...privateValues, "Private comment"]);
 });
 
 test("a Sentry report tags the failure's request ID, and a rejected report prints its status without reaching the caller", async () => {
@@ -1028,7 +1029,7 @@ test("a Sentry report tags the failure's request ID, and a rejected report print
     event: "sentry report failed",
     status: 429,
   });
-  excludes([report.body, ...printed], [message]);
+  assertNotLogged([report.body, ...printed], [message]);
 });
 
 test("an unreachable Sentry endpoint prints the network error without reaching the caller", async () => {
@@ -1206,7 +1207,7 @@ test("after a kind's first report, Sentry gets the failures folded in the next h
     printed.map((line) => JSON.parse(line).requestId),
     ["a1", "a2", "a3", "b1", "b2", "a4", "a5"],
   );
-  excludes(
+  assertNotLogged(
     [...printed, ...sent().map((event) => JSON.stringify(event))],
     ["Private detail"],
   );

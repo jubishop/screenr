@@ -11,6 +11,7 @@ import {
   assertRouteError,
   captureFailures,
   failureEvents,
+  assertNotLogged,
 } from "./social-fixture";
 const { loadScreen } = await import("../../src/server/screens");
 const { thread } = await import("../../src/server/feed");
@@ -258,5 +259,5 @@ test("malformed TMDB season and episode lists fail and log their lookup", async 
       error: "AppError",
     })),
   );
-  assert.ok(!printed.join("\n").includes("Private Episode"));
+  assertNotLogged(printed, ["Private Episode"]);
 });

@@ -1,5 +1,6 @@
 import { test, mock } from "node:test";
 import assert from "node:assert/strict";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 // Values a developer shell might export. They are set before the shared setup
 // loads, as an inherited environment would be.
@@ -18,7 +19,7 @@ const inherited = {
   SENTRY_DSN: "https://inherited-key@sentry.example.test/1",
 };
 Object.assign(process.env, inherited);
-await import("./social-fixture");
+const { assertNotLogged } = await import("./social-fixture");
 const { searchTitles } = await import("../../src/server/catalog");
 
 test("the shared setup clears provider credentials inherited from the shell", async () => {
@@ -32,4 +33,21 @@ test("the shared setup clears provider credentials inherited from the shell", as
     message: "The movie catalog is not configured yet.",
   });
   assert.equal(fetch.mock.callCount(), 0, "no catalog request may be sent");
+});
+
+// Stack frames name files by the checkout's path, which can hold any word, as
+// every checkout under macOS's /private/tmp holds "private" (#487).
+test("a check that values were never logged ignores each word of the checkout's own path, and only there", () => {
+  const root = fileURLToPath(new URL("../..", import.meta.url)).replace(
+    /\/$/,
+    "",
+  );
+  // A frame names the path or its file URL, and a JSON line escapes the path.
+  const lines = [root, pathToFileURL(root).href, JSON.stringify(root)];
+  const words = root.split("/").filter(Boolean);
+  assertNotLogged(lines, words);
+  for (const word of words)
+    assert.throws(() => assertNotLogged([...lines, word], [word]), {
+      message: `Logged ${word}`,
+    });
 });

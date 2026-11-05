@@ -7,6 +7,7 @@ import {
   bearerFor,
   captureFailures,
   failureEvents,
+  assertNotLogged,
 } from "./social-fixture";
 
 // The share extension's `resolve-title` action (docs/title-catalog.md#shared-links):
@@ -174,7 +175,7 @@ test("an invalid TMDB find answer fails and logs its lookup", async () => {
     lookup: "find",
     error: "AppError",
   });
-  assert.ok(!printed[0].includes("Private Find Result"));
+  assertNotLogged(printed, ["Private Find Result"]);
 });
 
 test("a link TMDB does not know leaves a search of the shared text", async () => {

@@ -2,7 +2,12 @@ import { test, before, beforeEach, after } from "node:test";
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
-import { db, cookieFor, captureFailures } from "./social-fixture";
+import {
+  db,
+  cookieFor,
+  captureFailures,
+  assertNotLogged,
+} from "./social-fixture";
 
 const { migrate } = await import("../../scripts/migrate");
 const { initialScreen, loadScreen } = await import("../../src/server/screens");
@@ -514,12 +519,11 @@ test("invalid TMDB answers log one failure for each request, without their value
       : { ...invalidAnswer("details"), requestId: requestId(page) },
   );
   assert.deepEqual(rest, []);
-  for (const value of [
+  assertNotLogged(printed, [
     "Private Search Result",
     "Private Overview",
     "Private Trailer",
-  ])
-    assert.ok(!printed.join("\n").includes(value), `Logged ${value}`);
+  ]);
 });
 
 test("movie details without usable release dates are stored and log one failure for each request, without their values", async (t) => {
@@ -580,12 +584,11 @@ test("movie details without usable release dates are stored and log one failure 
       part: "release_dates",
     })),
   );
-  for (const value of [
+  assertNotLogged(printed, [
     "Private Release Dates",
     "Private US Dates",
     "Private Overview",
-  ])
-    assert.ok(!printed.join("\n").includes(value), `Logged ${value}`);
+  ]);
 });
 
 for (const [cache, table, read] of [
