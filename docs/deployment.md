@@ -1566,7 +1566,9 @@ unit and sends a failure alert; backups and deployments continue. The next
 run measures again and retries a pending warning.
 
 Email attempts share a persisted key and unchanged payload. The monitor makes
-up to three attempts per invocation. Resend retains keys for
+up to three attempts per invocation through `failure-alert.py`'s Resend
+delivery, which keeps the request, receipt check, and retries in one place;
+the monitor keeps its own saved retry state. Resend retains keys for
 [24 hours](https://resend.com/docs/dashboard/emails/idempotency-keys)
 (verified September 25, 2026). An uncertain delivery stops automatic retries
 after 23 hours, with margin for request duration and clock differences. Runs
