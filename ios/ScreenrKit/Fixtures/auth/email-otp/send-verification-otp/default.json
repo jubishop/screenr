@@ -1,0 +1,19 @@
+{
+  "description": "Requesting a sign-in code. The answer is the same whether or not the address belongs to a member.",
+  "viewer": null,
+  "request": {
+    "method": "POST",
+    "action": "email-otp/send-verification-otp",
+    "path": "/api/auth/email-otp/send-verification-otp",
+    "body": {
+      "email": "alice@example.test",
+      "type": "sign-in"
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "success": true
+    }
+  }
+}

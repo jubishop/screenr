@@ -1,0 +1,16 @@
+{
+  "description": "Signing out ends the session on the server.",
+  "viewer": "alice",
+  "request": {
+    "method": "POST",
+    "action": "sign-out",
+    "path": "/api/auth/sign-out",
+    "body": {}
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "success": true
+    }
+  }
+}

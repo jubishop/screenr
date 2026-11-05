@@ -1,0 +1,8 @@
+{
+  "description": "A badge-only update, which carries only the unread count and shows nothing.",
+  "payload": {
+    "aps": {
+      "badge": 6
+    }
+  }
+}

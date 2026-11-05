@@ -13,19 +13,21 @@ repository root.
 
 | Path | Contents |
 | --- | --- |
-| `Screenr.xcodeproj` | The Screenr app, the ScreenrShare and ScreenrNotificationService extensions, the ScreenrUITests targets, and the shared Screenr scheme. |
+| `Screenr.xcodeproj` | The Screenr app, the ScreenrShare and ScreenrNotificationService extensions, the ScreenrAppTests and ScreenrUITests targets, and the shared Screenr scheme. |
 | `Config/` | The `.xcconfig` build settings, the app's and extensions' entitlements, and the release export options. |
 | `Screenr/` | The app target: the [app shell](#app-shell) in `Shell/`, feature screens in `Screens/` with their parts in a folder named for the feature, such as `Find/` and the [title page](#title-pages)'s `TitlePage/`, components several features share in `Shared/`, such as the [title list views](#title-lists), the [conversations](#conversations) that the feed, title pages, and profiles share in `Conversation/`, the iOS side of [push notifications](#push-notifications) in `Push/`, the app lifecycle, assets, and `Info.plist`. |
 | `ScreenrShare/` | The [share extension](#share-extension), which the app embeds: its view controller, views, and `Info.plist`. |
 | `ScreenrNotificationService/` | The Notification Service Extension that builds [push content](#push-content), which the app embeds: its entry point and `Info.plist`. |
+| `ScreenrAppTests/` | [Hosted tests](#hosted-tests) that run inside Screenr Dev. |
 | `ScreenrUITests/` | XCUITest UI tests. |
 | `ScreenrKit/` | A local Swift package: `Sources/ScreenrKit`, `Tests/ScreenrKitTests`, and `Fixtures/`. |
 | `build/` | Build output, check logs, and result bundles. Git ignores it. |
 
-`Screenr/`, `ScreenrShare/`, `ScreenrNotificationService/`, and `ScreenrUITests/` are synchronized folders:
-a file added on disk joins its target with no `project.pbxproj` change. The
-Screenr scheme builds the app with its extensions and tests both ScreenrKit
-and the UI tests. Xcode also lists
+`Screenr/`, `ScreenrShare/`, `ScreenrNotificationService/`, `ScreenrAppTests/`, and `ScreenrUITests/` are synchronized folders:
+a file added on disk joins its target with no `project.pbxproj` change.
+ScreenrAppTests also compiles `ScreenrNotificationService/`'s sources. The
+Screenr scheme builds the app with its extensions and tests ScreenrKit, the
+hosted tests, and the UI tests. Xcode also lists
 an automatic ScreenrKit scheme for the package.
 
 ## Variants
@@ -74,10 +76,11 @@ the compiler, linker, or tools. It resolves the app's packages into the
 1. ScreenrKit's tests on the Mac with `swift test`.
 2. A Release build for the Simulator.
 3. The Screenr scheme's tests in an iPhone Simulator: ScreenrKit's tests
-   again, on iOS, and the UI tests. It first boots the Simulator and waits
-   with `xcrun simctl bootstatus` until the boot finishes, since a new
-   Simulator's first boot can otherwise outlast a UI test's launch timeout
-   on a slow Mac.
+   again, on iOS, the [hosted tests](#hosted-tests), and the UI tests. It
+   first boots the Simulator and waits with `xcrun simctl bootstatus` until
+   the boot finishes, since a new Simulator's first boot can otherwise
+   outlast a UI test's launch timeout on a slow Mac. Meanwhile it delivers
+   the pushes the UI tests ask for; see [push tests](#push-tests).
 
 Without `--simulator`, it creates a Simulator on the newest iOS runtime and
 deletes it afterward, so several checkouts can check at once. With
@@ -189,7 +192,8 @@ bin/ios-packages swift test --package-path ios/ScreenrKit \
 ```
 
 In the Simulator, name the target and suite with `-only-testing`, such as
-`ScreenrKitTests/AppConfigurationTests` or `ScreenrUITests/LaunchTests`:
+`ScreenrKitTests/AppConfigurationTests`, `ScreenrAppTests`, or
+`ScreenrUITests/LaunchTests`:
 
 ```sh
 bin/ios-packages xcodebuild test -project ios/Screenr.xcodeproj \
@@ -255,7 +259,7 @@ try await api.send(.comment(conversation: item.id, body: text, spoiler: false))
 | `ScreenrAPI`, `ScreenrClient` | `API/ScreenrClient.swift` | One method, `send(_:) async throws(APIError) -> Response`. The client runs off the caller's actor. |
 | `APIRequest<Response>` | `API/MemberRequests.swift`, `API/AuthRequests.swift` | One static function per action, such as `.screen(path:)`, `.topTen(title:_:)`, `.signIn(email:code:)`, `.linkGoogle(idToken:nonce:)`, and `.signOut`. |
 | `SessionStore` | `Session/SessionStore.swift` | `@MainActor @Observable`. Its `phase` is `.signedOut`, `.signedIn`, or `.updateRequired(minimumBuild:)`. |
-| `KeychainStorage` | `Session/KeychainStorage.swift` | The token's Keychain item: `SystemKeychain(accessGroup:)`, or `InMemoryKeychain` in tests. |
+| `KeychainStorage` | `Session/KeychainStorage.swift` | The token's Keychain item: `SystemKeychain(accessGroup:)`, or `InMemoryKeychain` in package tests and fixture launches. The [hosted tests](#hosted-tests) check `SystemKeychain`. |
 | `APIError` | `API/APIError.swift` | `kind`, the server's `message`, Better Auth's `code`, and the `requestID` the request sent. `isPermanent` says whether polling should stop, and `explanation(otherwise:)` words the failure for the member. |
 | `APIRequestObserver` | `API/APIRequestObserver.swift` | Sees every finished request: route pattern, request ID, status, duration, and error. The app's observer is `Telemetry`; see [Sentry](#sentry). |
 | Models | `Models/` | `Screens.swift`, `Feed.swift`, `Titles.swift`, `People.swift` (members and notifications), and `Results.swift` (other actions and `ErrorBody`). |
@@ -318,13 +322,13 @@ uses it when launched with these arguments; Release builds ignore them:
 | `-ScreenrFixtures` | The fixtures directory. |
 | `-ScreenrFixtureViewer` | The member whose fixtures answer first: `alice` (default), or `nora` for empty screens. |
 | `-ScreenrFixtureSession` | `signedIn` (default), `signedOut`, or `expired`: a saved session that gets `errors/signed-out` until the next sign-in. |
-| `-ScreenrFixtureProfile` | `complete` (default), or `pending` for a viewer without a profile, such as `pat`: member actions get `errors/incomplete-profile`, as on the server, until a setup request succeeds. |
+| `-ScreenrFixtureProfile` | `complete` (default), or `pending` for a viewer without a profile, such as `pat`: every action but those `rules/before-profile` lists, such as setup, gets `errors/incomplete-profile`, as on the server, until a setup request succeeds. |
 | `-ScreenrFixtureOverride` | A fixture that answers first, such as `screen/feed/empty`. Repeatable. |
 | `-ScreenrFixtureUpdate` | A fixture that answers before any other, overrides included, once the `-ScreenrFixtureUpdateSignal` file exists, such as `screen/feed/incoming`, so the app's next read, such as a poll, brings new activity. Repeatable. |
 | `-ScreenrFixtureUpdateSignal` | The file whose creation sends the `-ScreenrFixtureUpdate` fixtures. |
 | `-ScreenrFixtureFailure` | A fixture that answers every `/api/screenr` request, such as `errors/update-required`. |
 | `-ScreenrFixtureOutageSignal` | A file whose existence fails every `/api/screenr` request with a 502 and no body, as from the proxy during a deploy, so the app's next reads, such as a poll, fail until the file is removed. |
-| `-ScreenrFixtureLog` | A file that gets a line per `/api/screenr` request, such as `GET /api/screenr/screen?path=%2F`, with ` visit` after the app's [visit](#visits) and a write's JSON body, keys sorted, after the write: `POST /api/screenr/read-notification {"id":"18"}`. An upload has its type and size instead: `POST /api/screenr/photo image/jpeg 41250 bytes`. Sent [feedback](#feedback) adds a `FEEDBACK` line. A [trailer](#trailers)'s player adds `WEB <url>` for each page it asks for. |
+| `-ScreenrFixtureLog` | A file that gets a line per `/api/screenr` and `/api/auth` request, such as `GET /api/screenr/screen?path=%2F`, with ` visit` after the app's [visit](#visits) and a write's JSON body, keys sorted, after the write: `POST /api/screenr/read-notification {"id":"18"}`. An upload has its type and size instead: `POST /api/screenr/photo image/jpeg 41250 bytes`. Sent [feedback](#feedback) adds a `FEEDBACK` line. A [trailer](#trailers)'s player adds `WEB <url>` for each page it asks for. |
 | `-ScreenrFixturePush` | The notification permission the app finds: `undecided` (default), `allowed`, or `denied`; or `system` for iOS's own permission and APNs registration. See [push notifications](#push-notifications). |
 | `-ScreenrOpenURL` | A link the app opens at launch, as if the system delivered it, such as `screenr-dev://titles/tv/201`. |
 | `-ScreenrAppearance` | `dark` or `light`, in place of the system's appearance, which a Simulator changes for its apps only after it restarts. |
@@ -334,9 +338,10 @@ uses it when launched with these arguments; Release builds ignore them:
 
 In UI tests, `app.launch(with: FixtureLaunch(viewer: "nora"))` passes them,
 with the directory found from the test's source path; `requestLog`, `link`,
-`appearance`, `pushTap`, `posters`, and `auditProbe` pass
+`appearance`, `pushTap`, `push`, `posters`, and `auditProbe` pass
 `-ScreenrFixtureLog`, `-ScreenrOpenURL`, `-ScreenrAppearance`,
-`-ScreenrPushTap`, `-ScreenrFixturePosters`, and `-ScreenrAuditProbe`; and
+`-ScreenrPushTap`, `-ScreenrFixturePush`, `-ScreenrFixturePosters`, and
+`-ScreenrAuditProbe`; and
 `update: FixtureUpdate("screen/feed/incoming")` passes the update arguments,
 whose fixtures answer once the test calls `update.send()`; and
 `outage: FixtureOutage()` passes the outage signal, which `outage.begin()`
@@ -344,15 +349,20 @@ creates and `outage.end()` removes. The fixture API keeps the session in
 memory.
 A request gets the fixture with the same action and
 query or body, then falls back to the screen's path or to a successful
-fixture for the action. A matching ETag gets 304. Apart from setup, writes
+fixture for the action, and otherwise gets the server's recorded 404,
+`screen/not-found/default` or `errors/unknown-action`. A matching ETag gets
+304. Apart from setup, writes
 change nothing, so later reads answer as before; a UI test checks what a
 write sent in the request log.
 
-Requesting a code and signing in with one succeed, and every invitation
-link is available, unless an `auth/` override answers the route, such as
-`auth/email-otp/send-verification-otp/rate-limited` or
-`auth/invitation/unavailable`. Apple and Google sign-in accept only the stub
-credentials described in [Sign-in](#sign-in). Photos are not served, so
+Better Auth's routes answer with their recorded `auth/` fixtures: requesting
+a code, signing in, which returns `FixtureTransport.token` in
+`set-auth-token` and Alice as the user, linking, and signing out succeed,
+and every invitation link is available, unless an `auth/` override answers
+the route, such as `auth/email-otp/send-verification-otp/rate-limited` or
+`auth/invitation/unavailable`. Apple and Google sign-in and linking accept
+only the stub credentials described in [Sign-in](#sign-in), and answer
+others with the route's `invalid-token` fixture. Photos are not served, so
 avatars show initials.
 
 ## Sign-in
@@ -744,22 +754,34 @@ notification's actor before iOS shows it
   `-ScreenrFixturePush system`, and `-ScreenrFixtureLog`, allow
   notifications, and send the worker's payload to the device token from the
   log's `push-device` line, signed with the APNs key, as `src/server/apns.ts`
-  does. The fixture API loads no photos, so the avatar is the app icon. Use
-  a Simulator you will not pass to `bin/check-ios --simulator`: the
-  extension's log stays in the app group, and `SettingsTests` expects
-  feedback to attach only the app's.
+  does. The fixture API loads no photos, so the avatar is the app icon.
 
 ### Push tests
 
 `PushNotificationsTests` and `PushSettingsModelTests` cover the behavior with
 `RecordingPushSystem` and `RecordingAPI`. Fixture launches use
-`FixturePushSystem` instead of iOS, so UI tests never meet the permission
-prompt: `-ScreenrFixturePush` sets the permission the app finds, a member who
-has not decided allows notifications when asked, and no device token
-arrives, so nothing registers. `PushTests` follow a tap with
-`FixtureLaunch(pushTap: "18")`, which passes `-ScreenrPushTap`.
-`PushNotificationsTests` also cover each action's requests and the
-categories' actions; XCUITest cannot reach a notification's actions.
+`FixturePushSystem` instead of iOS, so most UI tests never meet the
+permission prompt: `-ScreenrFixturePush` sets the permission the app finds, a
+member who has not decided allows notifications when asked, and no device
+token arrives, so nothing registers. `PushNotificationsTests` also cover each
+action's requests and the categories' actions.
+
+The server's tests record what the worker sends APNs in `Fixtures/push/`:
+an alert for each kind of notification, with its category and thread, and
+a badge-only update. `PushPayloadTests` check that each alert is mutable and
+names the notification its `actions/notification/` fixture reads, and that
+the alerts use the categories the app registers.
+
+`PushTests` deliver those pushes to the app delegate through `PushRelay`:
+the test writes the payload to the folder bin/check-ios names in
+`SCREENR_PUSH_RELAY`, and the check sends it with `xcrun simctl push` while
+the test waits; run outside the check, these tests skip. The app launches
+with `FixtureLaunch(push: .system)` and allows notifications at iOS's prompt
+when the bell first opens. Tapping the banner opens the item, and pressing
+and holding it offers Accept and Decline on a friend request and the Reply
+field on a comment, whose requests the request log shows. A tap that
+launches the app follows `FixtureLaunch(pushTap: "18")`, which passes
+`-ScreenrPushTap`.
 
 `PushContentTests`, `PushContentLoaderTests`, and `NotificationServicesTests`
 cover [push content](#push-content) from the single-notification fixtures:
@@ -767,8 +789,11 @@ each kind's wording, spoilers, the avatar, and the generic alert after a
 hidden notification, a failed read, and time running out. A
 `PhotoRequests` fake holds a photo until its task is cancelled, and
 `ScriptedAPI`'s `.hang` holds the read. `CommunicationNotificationTests`
-check the message intent and run only in the Simulator. No UI test drives
-the extension, since UI tests cannot send a push.
+check the message intent and run only in the Simulator. iOS runs the
+extension only for an APNs push, which `simctl push` is not, so
+`NotificationServiceTests`, a [hosted test](#hosted-tests), hands the
+recorded pushes to the extension's `NotificationService` itself, compiled
+into the test target, and checks the alert it delivers.
 
 To see a real push in your Simulator against the fixture API, launch with
 `-ScreenrFixturePush system`, which keeps iOS's permission and APNs
@@ -1437,18 +1462,17 @@ the member can Recommend it or mark it Want to watch:
   [Apple Developer](../docs/running-screenr.md#apple-developer).
 - **Tests:** `SharedContentTests`, `ShareModelTests`, and `ShareServicesTests`
   cover ScreenrKit's part, and `tests/app/shared-links.test.ts` the server's.
-  No UI test drives the extension: the system starts it only from another
-  app's share sheet, and Safari's needs a live page. Check it in your
-  Simulator instead: launch Screenr Dev with fixture arguments, such as
-  `-ScreenrFixtures "$PWD/ios/ScreenrKit/Fixtures" -ScreenrFixtureLog
+  `ShareExtensionTests` drives the extension from the app's own share sheet,
+  where iOS lists Screenr Dev for a title's link: it finds the title, shows
+  its friends, saves Want to watch, and closes, and the request log shows
+  what the extension sent. The [hosted tests](#hosted-tests) check that the
+  built extension's `Info.plist` has the app's settings. To try a link from
+  another app in your Simulator, launch Screenr Dev with fixture arguments,
+  such as `-ScreenrFixtures "$PWD/ios/ScreenrKit/Fixtures" -ScreenrFixtureLog
   /tmp/requests.log`, open a TMDB or IMDb title in Safari, and choose Page
   Menu, Share, then Screenr Dev. The fixture API answers `resolve-title`
-  with the fixture for the same query, or another title's, and the request
-  log shows what the extension sent and wrote. Real links resolve only
-  against a server, such as `npm run dev` with a TMDB token. Use a
-  Simulator you will not pass to `bin/check-ios --simulator`: the
-  extension's log stays in the app group, and `SettingsTests` expects
-  feedback to attach only the app's.
+  with the fixture for the same query, or another title's. Real links
+  resolve only against a server, such as `npm run dev` with a TMDB token.
 
 ## Siri, Shortcuts, and Spotlight
 
@@ -1536,7 +1560,32 @@ path, as `TestFixtures.directory` in `Tests/ScreenrKitTests/Support/` does.
 This works under `swift test` and in the Simulator, which reads the Mac's
 file system. `FixtureDecodingTests` decodes every fixture as the model its
 action returns, and `RequestTests` checks that the request functions build
-the recorded requests.
+the recorded requests. `AuthFixtureTests` runs the client against Better
+Auth's recorded answers: a sign-in's `set-auth-token` and the `user.id` that
+a confirming sign-in checks. Two folders hold the server's other
+recordings, which `Fixture.all(in:)` leaves out: `push/`, the pushes the
+worker sent (see [push tests](#push-tests)), and `rules/`, the server's
+rules that the fixture API applies, such as `before-profile`, the actions a
+member can use before setup.
+
+## Hosted tests
+
+The ScreenrAppTests target runs inside Screenr Dev, with its entitlements
+and its embedded extensions, for what package tests cannot reach:
+
+- `SystemKeychainTests` writes, reads back, replaces, and deletes an item of
+  its own through `SystemKeychain` in the app group's access group, and
+  checks that the item stays in that group, readable after the first unlock
+  and only on this device.
+- `EmbeddedExtensionTests` reads each built extension's `Info.plist` with
+  `AppConfiguration`, which would otherwise stop the extension the first
+  time iOS starts it, and checks its bundle ID, extension point, and
+  principal class.
+- `NotificationServiceTests` hands recorded pushes to the notification
+  extension's `NotificationService`, whose sources the target compiles,
+  with the fixture arguments kept in the app group as Screenr Dev's launch
+  keeps them, and checks the alert it delivers. See
+  [push tests](#push-tests).
 
 ## Logging
 

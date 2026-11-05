@@ -1,0 +1,24 @@
+{
+  "description": "Linking a Google account whose address matches the signed-in member's.",
+  "viewer": "ben",
+  "request": {
+    "method": "POST",
+    "action": "link-social",
+    "path": "/api/auth/link-social",
+    "body": {
+      "provider": "google",
+      "idToken": {
+        "token": "fixture-google-id-token",
+        "nonce": "fixture-nonce"
+      }
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "url": "",
+      "status": true,
+      "redirect": false
+    }
+  }
+}

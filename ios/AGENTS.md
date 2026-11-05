@@ -11,8 +11,8 @@ layout, commands, and toolchain notes, and the
 - **No Xcode:** work from the command line and the Simulator. Write no
   `#Preview` blocks or preview content.
 - **Synchronized folders:** `Screenr/`, `ScreenrShare/`,
-  `ScreenrNotificationService/`, and `ScreenrUITests/` are synchronized
-  folder groups. Add, move, or delete files on disk; never edit
+  `ScreenrNotificationService/`, `ScreenrAppTests/`, and `ScreenrUITests/`
+  are synchronized folder groups. Add, move, or delete files on disk; never edit
   `project.pbxproj` to register a file. Change it only for a new target,
   capability, or setting that cannot live in an `.xcconfig` file.
 - **Settings:** build settings live in `Config/*.xcconfig`. Put a standard
@@ -79,8 +79,13 @@ layout, commands, and toolchain notes, and the
 - **ScreenrKit:** Swift Testing, run with `swift test`. Fake the network,
   Keychain, and other system boundaries behind protocols so ScreenrKit's own
   logic runs. Package tests have no host app or entitlements.
+- **Hosted tests:** Swift Testing in `ScreenrAppTests`, which runs inside
+  Screenr Dev, only for what needs the app's entitlements or embedded
+  extensions, such as the system Keychain and the built extensions. See
+  [hosted tests](README.md#hosted-tests).
 - **UI journeys:** XCUITest in `ScreenrUITests`, against in-process fakes
   rather than a server. Mark test methods that drive the app `@MainActor`.
+  A push comes from `PushRelay`, which bin/check-ios delivers.
 - **Simulators:** never use a shared booted Simulator. `bin/check-ios`
   creates its own; for direct `xcodebuild` runs, create and delete one as the
   [guide](README.md#run-the-dev-app) shows.

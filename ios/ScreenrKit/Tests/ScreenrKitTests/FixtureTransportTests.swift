@@ -375,7 +375,7 @@ struct FixtureTransportTests {
   }
 
   // UI tests read the log to see when the app polls, which read was its
-  // visit, and what it writes.
+  // visit, and what it writes, Better Auth's routes included.
   @Test func logsEachAPIRequest() async throws {
     let directory = FileManager.default.temporaryDirectory
       .appending(path: UUID().uuidString, directoryHint: .isDirectory)
@@ -400,6 +400,7 @@ struct FixtureTransportTests {
       try String(contentsOf: log, encoding: .utf8) == """
         GET /api/screenr/screen?path=%2F visit
         GET /api/screenr/screen?path=%2Ftitles%2Ftv%2F201
+        POST /api/auth/email-otp/send-verification-otp {"email":"alice@example.com","type":"sign-in"}
         POST /api/screenr/respond-friend-request {"action":"accept","id":"14"}
 
         """
@@ -454,6 +455,26 @@ struct FixtureTransportTests {
     #expect(error?.kind == .rejected(status: 401))
     #expect(error?.code == "INVALID_TOKEN")
     #expect(services.session.phase == .signedIn)
+  }
+
+  // A page or an action that no fixture answers gets the server's own
+  // answer.
+  @Test func answersAnUnknownPageOrActionAsTheServerDoes() async throws {
+    let services = try services()
+
+    let page = await #expect(throws: APIError.self) {
+      try await services.api.send(.screen(path: "/nothing/here"))
+    }
+    let action = await #expect(throws: APIError.self) {
+      try await services.api.send(
+        APIRequest<Acknowledgement>(method: .post, endpoint: .action("no-such-action"))
+      )
+    }
+
+    #expect(page?.kind == .notFound)
+    #expect(page?.message == "Page not found.")
+    #expect(action?.kind == .notFound)
+    #expect(action?.message == "Action not found.")
   }
 
   @Test func rejectsAMissingFixtureName() {

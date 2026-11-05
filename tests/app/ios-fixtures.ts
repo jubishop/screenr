@@ -35,9 +35,26 @@ export type Fixture = {
     status: number;
     // A GET's weak ETag, computed from the fixture body as the server does.
     etag?: string;
+    // The response headers the app reads besides the ETag: a sign-in's
+    // `set-auth-token`.
+    headers?: Record<string, string>;
     // The JSON body, or null when the response has none (304).
     body: unknown;
   };
+};
+
+// A push the worker sent to APNs: what the iPhone receives, and its
+// extension and app delegate read.
+export type PushFixture = {
+  description: string;
+  payload: unknown;
+};
+
+// A rule of the server's that the app's fixture API applies, taken from the
+// server's own definition.
+export type RuleFixture = {
+  description: string;
+  actions: string[];
 };
 
 // Every timestamp becomes this instant. The API sends two formats, and each
@@ -120,11 +137,14 @@ export class Placeholders {
   }
 }
 
-const serialize = (fixture: Fixture) => `${JSON.stringify(fixture, null, 2)}\n`;
+const serialize = (fixture: object) => `${JSON.stringify(fixture, null, 2)}\n`;
 
 // Writes the fixture in write mode. Otherwise fails when the checked-in file
 // is missing or differs, showing which fields changed.
-export async function verifyFixture(file: string, fixture: Fixture) {
+export async function verifyFixture(
+  file: string,
+  fixture: Fixture | PushFixture | RuleFixture,
+) {
   const path = join(fixtureRoot, file);
   const expected = serialize(fixture);
   if (writingFixtures) {

@@ -1,0 +1,351 @@
+{
+  "description": "More notifications than a page holds: the newest 30, with next naming the cursor for the older ones.",
+  "viewer": "alice",
+  "request": {
+    "method": "GET",
+    "action": "notifications",
+    "path": "/api/screenr/notifications",
+    "query": {}
+  },
+  "response": {
+    "status": 200,
+    "etag": "W/\"qS5kX4GMOuy80bJNES6FSbHO_jo_NdOh3MruNAYMSak\"",
+    "body": {
+      "items": [
+        {
+          "id": "54",
+          "kind": "comment",
+          "actor": "Ben Ortiz",
+          "actorId": "user-ben",
+          "actorPhoto": "8fc275dfeaca5cf8",
+          "message": "Ben Ortiz commented on your post.",
+          "href": "/?item=872a205a-bab2-48f8-8c27-b737397eb469&reply=39",
+          "createdAt": "2026-10-13T12:00:00.000000+00:00",
+          "read": false
+        },
+        {
+          "id": "53",
+          "kind": "comment",
+          "actor": "Ben Ortiz",
+          "actorId": "user-ben",
+          "actorPhoto": "8fc275dfeaca5cf8",
+          "message": "Ben Ortiz commented on your post.",
+          "href": "/?item=872a205a-bab2-48f8-8c27-b737397eb469&reply=38",
+          "createdAt": "2026-10-13T12:00:00.000000+00:00",
+          "read": false
+        },
+        {
+          "id": "52",
+          "kind": "comment",
+          "actor": "Ben Ortiz",
+          "actorId": "user-ben",
+          "actorPhoto": "8fc275dfeaca5cf8",
+          "message": "Ben Ortiz commented on your post.",
+          "href": "/?item=872a205a-bab2-48f8-8c27-b737397eb469&reply=37",
+          "createdAt": "2026-10-13T12:00:00.000000+00:00",
+          "read": false
+        },
+        {
+          "id": "51",
+          "kind": "comment",
+          "actor": "Ben Ortiz",
+          "actorId": "user-ben",
+          "actorPhoto": "8fc275dfeaca5cf8",
+          "message": "Ben Ortiz commented on your post.",
+          "href": "/?item=872a205a-bab2-48f8-8c27-b737397eb469&reply=36",
+          "createdAt": "2026-10-13T12:00:00.000000+00:00",
+          "read": false
+        },
+        {
+          "id": "50",
+          "kind": "comment",
+          "actor": "Ben Ortiz",
+          "actorId": "user-ben",
+          "actorPhoto": "8fc275dfeaca5cf8",
+          "message": "Ben Ortiz commented on your post.",
+          "href": "/?item=872a205a-bab2-48f8-8c27-b737397eb469&reply=35",
+          "createdAt": "2026-10-13T12:00:00.000000+00:00",
+          "read": false
+        },
+        {
+          "id": "49",
+          "kind": "comment",
+          "actor": "Ben Ortiz",
+          "actorId": "user-ben",
+          "actorPhoto": "8fc275dfeaca5cf8",
+          "message": "Ben Ortiz commented on your post.",
+          "href": "/?item=872a205a-bab2-48f8-8c27-b737397eb469&reply=34",
+          "createdAt": "2026-10-13T12:00:00.000000+00:00",
+          "read": false
+        },
+        {
+          "id": "48",
+          "kind": "comment",
+          "actor": "Ben Ortiz",
+          "actorId": "user-ben",
+          "actorPhoto": "8fc275dfeaca5cf8",
+          "message": "Ben Ortiz commented on your post.",
+          "href": "/?item=872a205a-bab2-48f8-8c27-b737397eb469&reply=33",
+          "createdAt": "2026-10-13T12:00:00.000000+00:00",
+          "read": false
+        },
+        {
+          "id": "47",
+          "kind": "comment",
+          "actor": "Ben Ortiz",
+          "actorId": "user-ben",
+          "actorPhoto": "8fc275dfeaca5cf8",
+          "message": "Ben Ortiz commented on your post.",
+          "href": "/?item=872a205a-bab2-48f8-8c27-b737397eb469&reply=32",
+          "createdAt": "2026-10-13T12:00:00.000000+00:00",
+          "read": false
+        },
+        {
+          "id": "46",
+          "kind": "comment",
+          "actor": "Ben Ortiz",
+          "actorId": "user-ben",
+          "actorPhoto": "8fc275dfeaca5cf8",
+          "message": "Ben Ortiz commented on your post.",
+          "href": "/?item=872a205a-bab2-48f8-8c27-b737397eb469&reply=31",
+          "createdAt": "2026-10-13T12:00:00.000000+00:00",
+          "read": false
+        },
+        {
+          "id": "45",
+          "kind": "comment",
+          "actor": "Ben Ortiz",
+          "actorId": "user-ben",
+          "actorPhoto": "8fc275dfeaca5cf8",
+          "message": "Ben Ortiz commented on your post.",
+          "href": "/?item=872a205a-bab2-48f8-8c27-b737397eb469&reply=30",
+          "createdAt": "2026-10-13T12:00:00.000000+00:00",
+          "read": false
+        },
+        {
+          "id": "44",
+          "kind": "comment",
+          "actor": "Ben Ortiz",
+          "actorId": "user-ben",
+          "actorPhoto": "8fc275dfeaca5cf8",
+          "message": "Ben Ortiz commented on your post.",
+          "href": "/?item=872a205a-bab2-48f8-8c27-b737397eb469&reply=29",
+          "createdAt": "2026-10-13T12:00:00.000000+00:00",
+          "read": false
+        },
+        {
+          "id": "43",
+          "kind": "comment",
+          "actor": "Ben Ortiz",
+          "actorId": "user-ben",
+          "actorPhoto": "8fc275dfeaca5cf8",
+          "message": "Ben Ortiz commented on your post.",
+          "href": "/?item=872a205a-bab2-48f8-8c27-b737397eb469&reply=28",
+          "createdAt": "2026-10-13T12:00:00.000000+00:00",
+          "read": false
+        },
+        {
+          "id": "42",
+          "kind": "comment",
+          "actor": "Ben Ortiz",
+          "actorId": "user-ben",
+          "actorPhoto": "8fc275dfeaca5cf8",
+          "message": "Ben Ortiz commented on your post.",
+          "href": "/?item=872a205a-bab2-48f8-8c27-b737397eb469&reply=27",
+          "createdAt": "2026-10-13T12:00:00.000000+00:00",
+          "read": false
+        },
+        {
+          "id": "41",
+          "kind": "comment",
+          "actor": "Ben Ortiz",
+          "actorId": "user-ben",
+          "actorPhoto": "8fc275dfeaca5cf8",
+          "message": "Ben Ortiz commented on your post.",
+          "href": "/?item=872a205a-bab2-48f8-8c27-b737397eb469&reply=26",
+          "createdAt": "2026-10-13T12:00:00.000000+00:00",
+          "read": false
+        },
+        {
+          "id": "40",
+          "kind": "comment",
+          "actor": "Ben Ortiz",
+          "actorId": "user-ben",
+          "actorPhoto": "8fc275dfeaca5cf8",
+          "message": "Ben Ortiz commented on your post.",
+          "href": "/?item=872a205a-bab2-48f8-8c27-b737397eb469&reply=25",
+          "createdAt": "2026-10-13T12:00:00.000000+00:00",
+          "read": false
+        },
+        {
+          "id": "39",
+          "kind": "comment",
+          "actor": "Ben Ortiz",
+          "actorId": "user-ben",
+          "actorPhoto": "8fc275dfeaca5cf8",
+          "message": "Ben Ortiz commented on your post.",
+          "href": "/?item=872a205a-bab2-48f8-8c27-b737397eb469&reply=24",
+          "createdAt": "2026-10-13T12:00:00.000000+00:00",
+          "read": false
+        },
+        {
+          "id": "38",
+          "kind": "comment",
+          "actor": "Ben Ortiz",
+          "actorId": "user-ben",
+          "actorPhoto": "8fc275dfeaca5cf8",
+          "message": "Ben Ortiz commented on your post.",
+          "href": "/?item=872a205a-bab2-48f8-8c27-b737397eb469&reply=23",
+          "createdAt": "2026-10-13T12:00:00.000000+00:00",
+          "read": false
+        },
+        {
+          "id": "37",
+          "kind": "comment",
+          "actor": "Ben Ortiz",
+          "actorId": "user-ben",
+          "actorPhoto": "8fc275dfeaca5cf8",
+          "message": "Ben Ortiz commented on your post.",
+          "href": "/?item=872a205a-bab2-48f8-8c27-b737397eb469&reply=22",
+          "createdAt": "2026-10-13T12:00:00.000000+00:00",
+          "read": false
+        },
+        {
+          "id": "36",
+          "kind": "comment",
+          "actor": "Ben Ortiz",
+          "actorId": "user-ben",
+          "actorPhoto": "8fc275dfeaca5cf8",
+          "message": "Ben Ortiz commented on your post.",
+          "href": "/?item=872a205a-bab2-48f8-8c27-b737397eb469&reply=21",
+          "createdAt": "2026-10-13T12:00:00.000000+00:00",
+          "read": false
+        },
+        {
+          "id": "35",
+          "kind": "comment",
+          "actor": "Ben Ortiz",
+          "actorId": "user-ben",
+          "actorPhoto": "8fc275dfeaca5cf8",
+          "message": "Ben Ortiz commented on your post.",
+          "href": "/?item=872a205a-bab2-48f8-8c27-b737397eb469&reply=20",
+          "createdAt": "2026-10-13T12:00:00.000000+00:00",
+          "read": false
+        },
+        {
+          "id": "34",
+          "kind": "comment",
+          "actor": "Ben Ortiz",
+          "actorId": "user-ben",
+          "actorPhoto": "8fc275dfeaca5cf8",
+          "message": "Ben Ortiz commented on your post.",
+          "href": "/?item=872a205a-bab2-48f8-8c27-b737397eb469&reply=19",
+          "createdAt": "2026-10-13T12:00:00.000000+00:00",
+          "read": false
+        },
+        {
+          "id": "33",
+          "kind": "comment",
+          "actor": "Ben Ortiz",
+          "actorId": "user-ben",
+          "actorPhoto": "8fc275dfeaca5cf8",
+          "message": "Ben Ortiz commented on your post.",
+          "href": "/?item=872a205a-bab2-48f8-8c27-b737397eb469&reply=18",
+          "createdAt": "2026-10-13T12:00:00.000000+00:00",
+          "read": false
+        },
+        {
+          "id": "32",
+          "kind": "comment",
+          "actor": "Ben Ortiz",
+          "actorId": "user-ben",
+          "actorPhoto": "8fc275dfeaca5cf8",
+          "message": "Ben Ortiz commented on your post.",
+          "href": "/?item=872a205a-bab2-48f8-8c27-b737397eb469&reply=17",
+          "createdAt": "2026-10-13T12:00:00.000000+00:00",
+          "read": false
+        },
+        {
+          "id": "31",
+          "kind": "comment",
+          "actor": "Ben Ortiz",
+          "actorId": "user-ben",
+          "actorPhoto": "8fc275dfeaca5cf8",
+          "message": "Ben Ortiz commented on your post.",
+          "href": "/?item=872a205a-bab2-48f8-8c27-b737397eb469&reply=16",
+          "createdAt": "2026-10-13T12:00:00.000000+00:00",
+          "read": false
+        },
+        {
+          "id": "30",
+          "kind": "comment",
+          "actor": "Ben Ortiz",
+          "actorId": "user-ben",
+          "actorPhoto": "8fc275dfeaca5cf8",
+          "message": "Ben Ortiz commented on your post.",
+          "href": "/?item=872a205a-bab2-48f8-8c27-b737397eb469&reply=15",
+          "createdAt": "2026-10-13T12:00:00.000000+00:00",
+          "read": false
+        },
+        {
+          "id": "29",
+          "kind": "comment",
+          "actor": "Ben Ortiz",
+          "actorId": "user-ben",
+          "actorPhoto": "8fc275dfeaca5cf8",
+          "message": "Ben Ortiz commented on your post.",
+          "href": "/?item=872a205a-bab2-48f8-8c27-b737397eb469&reply=14",
+          "createdAt": "2026-10-13T12:00:00.000000+00:00",
+          "read": false
+        },
+        {
+          "id": "28",
+          "kind": "comment",
+          "actor": "Ben Ortiz",
+          "actorId": "user-ben",
+          "actorPhoto": "8fc275dfeaca5cf8",
+          "message": "Ben Ortiz commented on your post.",
+          "href": "/?item=872a205a-bab2-48f8-8c27-b737397eb469&reply=13",
+          "createdAt": "2026-10-13T12:00:00.000000+00:00",
+          "read": false
+        },
+        {
+          "id": "27",
+          "kind": "comment",
+          "actor": "Ben Ortiz",
+          "actorId": "user-ben",
+          "actorPhoto": "8fc275dfeaca5cf8",
+          "message": "Ben Ortiz commented on your post.",
+          "href": "/?item=872a205a-bab2-48f8-8c27-b737397eb469&reply=12",
+          "createdAt": "2026-10-13T12:00:00.000000+00:00",
+          "read": false
+        },
+        {
+          "id": "26",
+          "kind": "comment",
+          "actor": "Ben Ortiz",
+          "actorId": "user-ben",
+          "actorPhoto": "8fc275dfeaca5cf8",
+          "message": "Ben Ortiz commented on your post.",
+          "href": "/?item=872a205a-bab2-48f8-8c27-b737397eb469&reply=11",
+          "createdAt": "2026-10-13T12:00:00.000000+00:00",
+          "read": false
+        },
+        {
+          "id": "25",
+          "kind": "comment",
+          "actor": "Ben Ortiz",
+          "actorId": "user-ben",
+          "actorPhoto": "8fc275dfeaca5cf8",
+          "message": "Ben Ortiz commented on your post.",
+          "href": "/?item=872a205a-bab2-48f8-8c27-b737397eb469&reply=10",
+          "createdAt": "2026-10-13T12:00:00.000000+00:00",
+          "read": false
+        }
+      ],
+      "through": "54",
+      "unread": 36,
+      "next": "25"
+    }
+  }
+}

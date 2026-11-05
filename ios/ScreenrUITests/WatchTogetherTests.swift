@@ -129,7 +129,10 @@ final class WatchTogetherTests: XCTestCase {
     let names = try FixtureNames.list("screen/watch-together")
     XCTAssertEqual(
       names,
-      ["default", "missing-friend", "nothing-shared", "theaters", "theaters-nothing-shared"]
+      [
+        "default", "missing-friend", "nothing-shared", "theaters", "theaters-nothing-shared",
+        "unmatched",
+      ]
     )
     let expected = [
       "default": "Ready to watch",
@@ -137,22 +140,40 @@ final class WatchTogetherTests: XCTestCase {
       "nothing-shared": "No shared titles yet.",
       "theaters": "1 shared movie in theaters",
       "theaters-nothing-shared": "No shared movies in theaters.",
+      "unmatched": "Not on your services",
     ]
-    // They are all Alice's, so one launch opens each fixture's link.
+    // They are all Alice's, so one launch opens each fixture's link. One
+    // that shares another's link, as `unmatched` shares `default`'s, answers
+    // only as an override, in a launch of its own.
+    let shared = ["unmatched"]
     let app = XCUIApplication()
     app.launch(with: FixtureLaunch())
     XCTAssertTrue(app.tabBars.firstMatch.waitForExistence(timeout: 10))
-    for name in names {
-      let fixture = try ScreenFixtureFile("screen/watch-together/\(name)")
-      XCTAssertEqual(fixture.viewer, "alice", fixture.name)
-      try app.openFixture(fixture)
-      let text = try XCTUnwrap(expected[name])
-      XCTAssertTrue(app.staticTexts[text].waitForExistence(timeout: 10), fixture.name)
-      XCTAssertTrue(app.navigationBars["Watch together"].exists, fixture.name)
-      if fixture.status == 200 {
-        let mode = fixture.body["mode"] == nil ? "At home" : "In theaters"
-        XCTAssertTrue(app.buttons[mode].isSelected, fixture.name)
-      }
+    for name in names where !shared.contains(name) {
+      try checkFixture(app, name, shows: try XCTUnwrap(expected[name]))
+    }
+    app.terminate()
+    for name in shared {
+      let overridden = XCUIApplication()
+      overridden.launch(with: FixtureLaunch(overrides: ["screen/watch-together/\(name)"]))
+      XCTAssertTrue(overridden.tabBars.firstMatch.waitForExistence(timeout: 10))
+      try checkFixture(overridden, name, shows: try XCTUnwrap(expected[name]))
+      overridden.terminate()
+    }
+  }
+
+  // Opens the fixture's link and checks that it shows `text` in the mode the
+  // link names.
+  @MainActor
+  private func checkFixture(_ app: XCUIApplication, _ name: String, shows text: String) throws {
+    let fixture = try ScreenFixtureFile("screen/watch-together/\(name)")
+    XCTAssertEqual(fixture.viewer, "alice", fixture.name)
+    try app.openFixture(fixture)
+    XCTAssertTrue(app.staticTexts[text].waitForExistence(timeout: 10), fixture.name)
+    XCTAssertTrue(app.navigationBars["Watch together"].exists, fixture.name)
+    if fixture.status == 200 {
+      let mode = fixture.body["mode"] == nil ? "At home" : "In theaters"
+      XCTAssertTrue(app.buttons[mode].isSelected, fixture.name)
     }
   }
 }
