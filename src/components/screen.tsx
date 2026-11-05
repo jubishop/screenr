@@ -173,7 +173,7 @@ export function Screen({
   // moves to the one it names, and Show older extends.
   const history = useRef(historyAfter(initialData));
   const readPath = useRef(screenPath(path, findFilters, history.current));
-  // Entries older than this time arrived through Show older, not as new
+  // Entries this old or older arrived through Show older, not as new
   // activity, so the feed shows them at once.
   const [olderThan, setOlderThan] = useState<string | null>(null);
   const refresh = useCallback(async () => {
