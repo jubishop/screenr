@@ -11,7 +11,7 @@
   },
   "response": {
     "status": 200,
-    "etag": "W/\"mEy2kp_AuCdOVr354nZLumsdc2xPSw0k4x_eJaj7UUY\"",
+    "etag": "W/\"C83xwCmnZPd7Z-d59Q8I_C4-ZavMsbX8LXpj0TMakeM\"",
     "body": [
       {
         "id": "movie:101",
@@ -44,7 +44,11 @@
           "in_theaters": false,
           "upcoming": []
         },
-        "tmdb_score": null
+        "tmdb_score": null,
+        "access": "available",
+        "matchingServiceIds": [
+          "service:netflix"
+        ]
       },
       {
         "id": "tv:203",
@@ -77,7 +81,9 @@
           "in_theaters": false,
           "upcoming": []
         },
-        "tmdb_score": 66
+        "tmdb_score": 66,
+        "access": "unmatched",
+        "matchingServiceIds": []
       }
     ]
   }

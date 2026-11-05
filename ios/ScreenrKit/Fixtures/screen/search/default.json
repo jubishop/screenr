@@ -11,7 +11,7 @@
   },
   "response": {
     "status": 200,
-    "etag": "W/\"P2l5qkdv1Iw971qbBgH-aVLR9MvH2eqQbofMBf1jPlA\"",
+    "etag": "W/\"t8tAWbNeSVzV0zwQe7F67zckBo_Z-S9bZygvvdJLxL0\"",
     "body": {
       "kind": "search",
       "suggestions": [
@@ -63,7 +63,11 @@
             "in_theaters": false,
             "upcoming": []
           },
-          "tmdb_score": null
+          "tmdb_score": null,
+          "access": "available",
+          "matchingServiceIds": [
+            "service:netflix"
+          ]
         },
         {
           "id": "tv:204",
@@ -113,7 +117,11 @@
               }
             ]
           },
-          "tmdb_score": 81
+          "tmdb_score": 81,
+          "access": "available",
+          "matchingServiceIds": [
+            "service:hulu"
+          ]
         }
       ],
       "recommendations": [
@@ -157,7 +165,11 @@
             "in_theaters": false,
             "upcoming": []
           },
-          "tmdb_score": null
+          "tmdb_score": null,
+          "access": "available",
+          "matchingServiceIds": [
+            "service:netflix"
+          ]
         },
         {
           "id": "tv:201",
@@ -205,7 +217,9 @@
             "in_theaters": false,
             "upcoming": []
           },
-          "tmdb_score": null
+          "tmdb_score": null,
+          "access": "unmatched",
+          "matchingServiceIds": []
         },
         {
           "id": "movie:105",
@@ -247,7 +261,11 @@
             "in_theaters": false,
             "upcoming": []
           },
-          "tmdb_score": null
+          "tmdb_score": null,
+          "access": "available",
+          "matchingServiceIds": [
+            "service:netflix"
+          ]
         }
       ],
       "serviceIds": [

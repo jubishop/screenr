@@ -19,24 +19,18 @@ import { around, useRemovalFocus, type FocusTarget } from "./removal-focus";
 import { ReviewStars, reviewPhrase } from "./review";
 import { entryPath, memberPath } from "../member-routes";
 import { leavingTopTen } from "./top-ten";
+import {
+  acceptActivity,
+  feedLayout,
+  withOlder,
+  type AcceptedActivity,
+} from "../feed-layout";
 
 // A TV comment's label, such as "Season 2" or "Season 2, Episode 4".
 function discussionLabel(season: number, episode: number | null) {
   return `Season ${season}${episode === null ? "" : `, Episode ${episode}`}`;
 }
 
-type Known = Map<string, { activity: string; comments: Set<string> }>;
-function capture(items: FeedItem[]): Known {
-  return new Map(
-    items.map((c) => [
-      c.id,
-      {
-        activity: c.activity_at,
-        comments: new Set(c.comments.map((r) => r.id)),
-      },
-    ]),
-  );
-}
 export function FeedView({
   snapshot,
   user,
@@ -80,8 +74,8 @@ export function FeedView({
   // already in it.
   olderThan: string | null;
 }) {
-  const [known, setKnown] = useState<Known | null>(() =>
-    snapshot ? capture(snapshot) : null,
+  const [known, setKnown] = useState<AcceptedActivity | null>(() =>
+    snapshot ? acceptActivity(snapshot) : null,
   );
   const [loadingOlder, setLoadingOlder] = useState(false);
   // The last entry shown when Show older last read, until that read ends.
@@ -90,85 +84,23 @@ export function FeedView({
   // Keep only identities when access is unavailable. The current authorized
   // snapshot is always the source of rendered server content.
   const [slots, setSlots] = useState(() => snapshot?.map((c) => c.id) ?? []);
-  const accepted = known ?? capture(snapshot ?? []);
+  const accepted = known ?? acceptActivity(snapshot ?? []);
   if (!known && snapshot) setKnown(accepted);
-  const loaded =
-    olderThan && snapshot
-      ? snapshot.filter(
-          (c) =>
-            !accepted.has(c.id) &&
-            Date.parse(c.visible_activity) <= Date.parse(olderThan),
-        )
-      : [];
-  if (loaded.length) setKnown(new Map([...accepted, ...capture(loaded)]));
+  if (olderThan && snapshot) {
+    const extended = withOlder(accepted, snapshot, olderThan);
+    if (extended !== accepted) setKnown(extended);
+  }
   // Large feeds hold thousands of entries, so lookups use sets and maps
   // built once per render instead of scanning the list for each entry.
   const slotted = new Set(slots);
   const newSlots =
     snapshot?.filter((c) => !slotted.has(c.id)).map((c) => c.id) ?? [];
   if (newSlots.length) setSlots([...slots, ...newSlots]);
-  const incoming =
-    snapshot?.filter(
-      (c) =>
-        (c.owner_id !== user.user_id &&
-          (!accepted.has(c.id) ||
-            accepted.get(c.id)!.activity !== c.activity_at)) ||
-        c.comments.some(
-          (r) =>
-            !r.removed &&
-            !r.unavailable &&
-            r.author_id !== user.user_id &&
-            !accepted.get(c.id)?.comments.has(r.id),
-        ),
-    ) ?? [];
-  const visible = (snapshot ?? [])
-    .flatMap((c) => {
-      const previous = accepted.get(c.id);
-      if (!previous && c.owner_id !== user.user_id) return [];
-      const acceptedComments = c.comments.filter(
-        (r) => previous?.comments.has(r.id) || r.author_id === user.user_id,
-      );
-      // Every accepted child needs its parent, including own replies posted
-      // in another tab. Keep unrelated incoming groups behind New activity.
-      const roots = new Set(
-        acceptedComments
-          .filter((r) => !r.removed && !r.unavailable)
-          .map((r) => r.root_id),
-      );
-      const comments = c.comments.filter(
-        (r) =>
-          roots.has(r.id) ||
-          (!r.removed && !r.unavailable && acceptedComments.includes(r)),
-      );
-      if (
-        !c.active &&
-        !comments.some((r) => !r.removed && !r.unavailable) &&
-        !(c.item_type === "earlier" && comments.length)
-      )
-        return [];
-      const activation =
-        c.owner_id === user.user_id ? c.activity_at : previous!.activity;
-      const times = comments
-        .filter((r) => !r.removed && !r.unavailable)
-        .map((r) => Date.parse(r.created_at));
-      const visibleTime =
-        c.item_type === "earlier"
-          ? Math.max(
-              ...(times.length
-                ? times
-                : comments.map((r) => Date.parse(r.created_at))),
-            )
-          : Math.max(Date.parse(activation), ...times);
-      return [
-        {
-          ...c,
-          comments,
-          visibleTime,
-          visible_activity: new Date(visibleTime).toISOString(),
-        },
-      ];
-    })
-    .sort((a, b) => b.visibleTime - a.visibleTime || a.id.localeCompare(b.id));
+  const { entries: visible, incoming } = feedLayout(
+    snapshot ?? [],
+    accepted,
+    user.user_id,
+  );
   const visibleById = new Map(visible.map((c) => [c.id, c]));
   const order = [
     ...visible.map((c) => c.id),
@@ -196,7 +128,7 @@ export function FeedView({
       !visibleById.has(shownEntry.item) &&
       snapshot.some((c) => c.id === shownEntry.item)
     )
-      setKnown(capture(snapshot));
+      setKnown(acceptActivity(snapshot));
   }
   return (
     <section
@@ -207,12 +139,14 @@ export function FeedView({
     >
       {targetUnavailable && <p>This activity is unavailable.</p>}
       <div className="feed-updates">
-        {snapshot && incoming.length > 0 && (
+        {snapshot && incoming > 0 && (
           <button
             className="new-replies"
-            onClick={() => preservePosition(() => setKnown(capture(snapshot)))}
+            onClick={() =>
+              preservePosition(() => setKnown(acceptActivity(snapshot)))
+            }
           >
-            New activity ({incoming.length})
+            New activity ({incoming})
           </button>
         )}
       </div>

@@ -11,7 +11,7 @@
   },
   "response": {
     "status": 200,
-    "etag": "W/\"Sqiqy2mkEms0Qr4q26QBvKh9xlJBsmHGy1bxmKLw3F8\"",
+    "etag": "W/\"aZKXxzHFrlyx2tZw7NxkMPf-ByxH9qzeXGDVR06PDkY\"",
     "body": {
       "kind": "search",
       "suggestions": [
@@ -45,7 +45,9 @@
             "in_theaters": false,
             "upcoming": []
           },
-          "tmdb_score": null
+          "tmdb_score": null,
+          "access": "unmatched",
+          "matchingServiceIds": []
         },
         {
           "id": "movie:302",
@@ -77,7 +79,9 @@
             "in_theaters": false,
             "upcoming": []
           },
-          "tmdb_score": null
+          "tmdb_score": null,
+          "access": "unmatched",
+          "matchingServiceIds": []
         },
         {
           "id": "movie:102",
@@ -128,7 +132,9 @@
             "in_theaters": false,
             "upcoming": []
           },
-          "tmdb_score": null
+          "tmdb_score": null,
+          "access": "available",
+          "matchingServiceIds": []
         },
         {
           "id": "movie:303",
@@ -160,7 +166,9 @@
             "in_theaters": false,
             "upcoming": []
           },
-          "tmdb_score": null
+          "tmdb_score": null,
+          "access": "unmatched",
+          "matchingServiceIds": []
         },
         {
           "id": "movie:304",
@@ -192,7 +200,9 @@
             "in_theaters": false,
             "upcoming": []
           },
-          "tmdb_score": null
+          "tmdb_score": null,
+          "access": "unmatched",
+          "matchingServiceIds": []
         },
         {
           "id": "movie:305",
@@ -224,7 +234,9 @@
             "in_theaters": false,
             "upcoming": []
           },
-          "tmdb_score": null
+          "tmdb_score": null,
+          "access": "unmatched",
+          "matchingServiceIds": []
         },
         {
           "id": "movie:306",
@@ -256,7 +268,9 @@
             "in_theaters": false,
             "upcoming": []
           },
-          "tmdb_score": null
+          "tmdb_score": null,
+          "access": "unmatched",
+          "matchingServiceIds": []
         },
         {
           "id": "movie:307",
@@ -288,7 +302,9 @@
             "in_theaters": false,
             "upcoming": []
           },
-          "tmdb_score": null
+          "tmdb_score": null,
+          "access": "unmatched",
+          "matchingServiceIds": []
         },
         {
           "id": "movie:308",
@@ -320,7 +336,9 @@
             "in_theaters": false,
             "upcoming": []
           },
-          "tmdb_score": null
+          "tmdb_score": null,
+          "access": "unmatched",
+          "matchingServiceIds": []
         },
         {
           "id": "movie:309",
@@ -352,7 +370,9 @@
             "in_theaters": false,
             "upcoming": []
           },
-          "tmdb_score": null
+          "tmdb_score": null,
+          "access": "unmatched",
+          "matchingServiceIds": []
         },
         {
           "id": "movie:310",
@@ -384,7 +404,9 @@
             "in_theaters": false,
             "upcoming": []
           },
-          "tmdb_score": null
+          "tmdb_score": null,
+          "access": "unmatched",
+          "matchingServiceIds": []
         },
         {
           "id": "movie:104",
@@ -419,7 +441,9 @@
             "in_theaters": false,
             "upcoming": []
           },
-          "tmdb_score": null
+          "tmdb_score": null,
+          "access": "unknown",
+          "matchingServiceIds": []
         },
         {
           "id": "movie:103",
@@ -473,7 +497,9 @@
               }
             ]
           },
-          "tmdb_score": 73
+          "tmdb_score": 73,
+          "access": "unmatched",
+          "matchingServiceIds": []
         },
         {
           "id": "tv:202",
@@ -504,7 +530,9 @@
             "in_theaters": false,
             "upcoming": []
           },
-          "tmdb_score": null
+          "tmdb_score": null,
+          "access": "unmatched",
+          "matchingServiceIds": []
         }
       ],
       "recommendations": [
@@ -553,7 +581,9 @@
             "in_theaters": false,
             "upcoming": []
           },
-          "tmdb_score": null
+          "tmdb_score": null,
+          "access": "unmatched",
+          "matchingServiceIds": []
         },
         {
           "id": "tv:201",
@@ -606,7 +636,9 @@
             "in_theaters": false,
             "upcoming": []
           },
-          "tmdb_score": null
+          "tmdb_score": null,
+          "access": "unmatched",
+          "matchingServiceIds": []
         },
         {
           "id": "movie:301",
@@ -635,7 +667,9 @@
             "in_theaters": false,
             "upcoming": []
           },
-          "tmdb_score": null
+          "tmdb_score": null,
+          "access": "unmatched",
+          "matchingServiceIds": []
         },
         {
           "id": "movie:302",
@@ -664,7 +698,9 @@
             "in_theaters": false,
             "upcoming": []
           },
-          "tmdb_score": null
+          "tmdb_score": null,
+          "access": "unmatched",
+          "matchingServiceIds": []
         },
         {
           "id": "movie:102",
@@ -712,7 +748,9 @@
             "in_theaters": false,
             "upcoming": []
           },
-          "tmdb_score": null
+          "tmdb_score": null,
+          "access": "available",
+          "matchingServiceIds": []
         },
         {
           "id": "movie:303",
@@ -741,7 +779,9 @@
             "in_theaters": false,
             "upcoming": []
           },
-          "tmdb_score": null
+          "tmdb_score": null,
+          "access": "unmatched",
+          "matchingServiceIds": []
         },
         {
           "id": "movie:304",
@@ -770,7 +810,9 @@
             "in_theaters": false,
             "upcoming": []
           },
-          "tmdb_score": null
+          "tmdb_score": null,
+          "access": "unmatched",
+          "matchingServiceIds": []
         },
         {
           "id": "movie:305",
@@ -799,7 +841,9 @@
             "in_theaters": false,
             "upcoming": []
           },
-          "tmdb_score": null
+          "tmdb_score": null,
+          "access": "unmatched",
+          "matchingServiceIds": []
         },
         {
           "id": "movie:306",
@@ -828,7 +872,9 @@
             "in_theaters": false,
             "upcoming": []
           },
-          "tmdb_score": null
+          "tmdb_score": null,
+          "access": "unmatched",
+          "matchingServiceIds": []
         },
         {
           "id": "movie:307",
@@ -857,7 +903,9 @@
             "in_theaters": false,
             "upcoming": []
           },
-          "tmdb_score": null
+          "tmdb_score": null,
+          "access": "unmatched",
+          "matchingServiceIds": []
         },
         {
           "id": "movie:308",
@@ -886,7 +934,9 @@
             "in_theaters": false,
             "upcoming": []
           },
-          "tmdb_score": null
+          "tmdb_score": null,
+          "access": "unmatched",
+          "matchingServiceIds": []
         },
         {
           "id": "movie:309",
@@ -915,7 +965,9 @@
             "in_theaters": false,
             "upcoming": []
           },
-          "tmdb_score": null
+          "tmdb_score": null,
+          "access": "unmatched",
+          "matchingServiceIds": []
         },
         {
           "id": "movie:310",
@@ -944,7 +996,9 @@
             "in_theaters": false,
             "upcoming": []
           },
-          "tmdb_score": null
+          "tmdb_score": null,
+          "access": "unmatched",
+          "matchingServiceIds": []
         }
       ],
       "serviceIds": [],

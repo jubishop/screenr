@@ -21,7 +21,7 @@ import { wantToWatch } from "./want-to-watch";
 import { titleSuggestions } from "./title-suggestions";
 import { friendsRecommend } from "./friends-recommend";
 import { savedServices, streamingServices } from "./streaming-services";
-import { withViewingOptions } from "./title-viewing";
+import { withAccess, withViewingOptions } from "./title-viewing";
 import { serviceProviders } from "./watch-sources";
 import { activityEmail, unreadNotifications } from "./notifications";
 import { pushSettings } from "./push";
@@ -150,7 +150,10 @@ async function loadContent(userId: string, route: MemberRoute) {
       ),
     );
     const withViewing = <T extends Title>(titles: T[]) =>
-      titles.map((title) => ({ ...title, ...listed.get(title.id)! }));
+      withAccess(
+        titles.map((title) => ({ ...title, ...listed.get(title.id)! })),
+        serviceIds,
+      );
     return {
       kind: "search" as const,
       suggestions: withViewing(suggestions),

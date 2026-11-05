@@ -110,7 +110,12 @@ test("search enriches movie and TV summaries and caches availability without rep
   await db.query(
     "INSERT INTO title(id,kind,tmdb_id,name,overview) VALUES('movie:93901','movie',93901,'Full title','Full overview')",
   );
-  const result = await findTitles("streaming");
+  const viewer = await person("viewer");
+  await db.query(
+    "INSERT INTO member_streaming_service(user_id,service_id) VALUES($1,'service:amc-plus')",
+    [viewer],
+  );
+  const result = await findTitles("streaming", viewer);
   assert.deepEqual(
     result.map((t) => t.id),
     ["movie:93901", "tv:93901"],
@@ -118,19 +123,28 @@ test("search enriches movie and TV summaries and caches availability without rep
   assert.ok(result.every((t) => t.viewing.status === "ok"));
   assert.equal(result[0].viewing.sections[0].services[0].name, "AMC+");
   assert.equal(result[0].viewing.sections[1].services[0].name, "Tubi TV");
+  // Each result carries the searcher's access to it and the saved services
+  // that offer it.
+  assert.deepEqual(
+    result.map((t) => [t.access, t.matchingServiceIds]),
+    [
+      ["available", ["service:amc-plus"]],
+      ["available", ["service:amc-plus"]],
+    ],
+  );
   // Only the summary-only show fetches its details, for its release status.
   assert.equal(details, 1);
   assert.equal((await getTitle("movie:93901")).name, "Full title");
   assert.equal((await getTitle("tv:93901")).name, "Detailed title");
   assert.equal(details, 1);
-  await findTitles("streaming");
+  await findTitles("streaming", "viewer");
   assert.equal(providers.length, 2);
 });
 
 test("failed list refresh retains older options and an initial failure stays unknown with retry backoff", async (t) => {
   // Each failed provider request logs a failure line, which this test reads.
   const printed = captureFailures(t);
-  await findTitles("streaming");
+  await findTitles("streaming", "viewer");
   await db.query(
     "UPDATE title_availability SET fetched_at=now()-interval '2 days',refresh_after=now()-interval '1 second'",
   );
@@ -141,14 +155,18 @@ test("failed list refresh retains older options and an initial failure stays unk
     name: "Unknown",
     media_type: "movie",
   });
-  const result = await findTitles("streaming");
+  const result = await findTitles("streaming", "viewer");
   assert.deepEqual(
-    result.map((t) => t.viewing.status),
-    ["stale", "stale", "unavailable"],
+    result.map((t) => [t.viewing.status, t.access]),
+    [
+      ["stale", "available"],
+      ["stale", "available"],
+      ["unavailable", "unknown"],
+    ],
   );
   assert.equal(result[0].viewing.sections[0].services[0].name, "AMC+");
   const requests = providers.length;
-  await findTitles("streaming");
+  await findTitles("streaming", "viewer");
   assert.equal(providers.length, requests);
   assert.deepEqual(
     failureEvents(printed),
@@ -168,7 +186,7 @@ test("a cold list bounds concurrent provider requests and returns every title du
   }));
   slow = true;
   const start = Date.now();
-  const result = await findTitles("streaming");
+  const result = await findTitles("streaming", "viewer");
   assert.equal(result.length, 30);
   assert.ok(result.every((t) => t.viewing.status === "unavailable"));
   assert.ok(maximum <= 4, `Observed ${maximum} concurrent provider requests`);
@@ -199,7 +217,7 @@ test("slow catalog search leaves time to return titles within the browser search
   searchDelay = 6000;
   slow = true;
   const start = Date.now();
-  const result = await findTitles("streaming");
+  const result = await findTitles("streaming", "viewer");
   assert.equal(result.length, 12);
   assert.ok(result.every((t) => t.viewing.status === "unavailable"));
   assert.ok(

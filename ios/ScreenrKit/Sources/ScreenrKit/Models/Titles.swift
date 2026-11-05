@@ -185,11 +185,13 @@ public struct TitleResolution: Decodable, Hashable, Sendable {
   public let query: String
 }
 
-// A title with where it streams, its release status, and its TMDB user
-// score: a search result.
+// A title with where it streams, the viewer's access to it, its release
+// status, and its TMDB user score: a search result.
 public struct ViewingTitle: Decodable, Hashable, Sendable, Identifiable {
   public let title: Title
   public let viewing: TitleViewing
+  public let access: ViewingAccess
+  public let matchingServiceIds: [String]
   public let release: TitleRelease?
   public let tmdbScore: TMDBScore?
 
@@ -197,6 +199,8 @@ public struct ViewingTitle: Decodable, Hashable, Sendable, Identifiable {
 
   private enum CodingKeys: CodingKey {
     case viewing
+    case access
+    case matchingServiceIds
     case release
     case tmdbScore
   }
@@ -205,6 +209,9 @@ public struct ViewingTitle: Decodable, Hashable, Sendable, Identifiable {
     title = try Title(from: decoder)
     let container = try decoder.container(keyedBy: CodingKeys.self)
     viewing = try container.decode(TitleViewing.self, forKey: .viewing)
+    access = try container.decodeIfPresent(ViewingAccess.self, forKey: .access) ?? .unknown
+    matchingServiceIds =
+      try container.decodeIfPresent([String].self, forKey: .matchingServiceIds) ?? []
     release = try container.decodeIfPresent(TitleRelease.self, forKey: .release)
     tmdbScore = try container.decodeIfPresent(TMDBScore.self, forKey: .tmdbScore)
   }
@@ -227,6 +234,8 @@ public struct Recommender: Codable, Hashable, Sendable {
 public struct TitleSuggestion: Decodable, Hashable, Sendable, Identifiable {
   public let title: Title
   public let viewing: TitleViewing
+  public let access: ViewingAccess
+  public let matchingServiceIds: [String]
   public let release: TitleRelease?
   public let tmdbScore: TMDBScore?
   public let recommendedBy: [Recommender]
@@ -241,6 +250,8 @@ public struct TitleSuggestion: Decodable, Hashable, Sendable, Identifiable {
 
   private enum CodingKeys: CodingKey {
     case viewing
+    case access
+    case matchingServiceIds
     case release
     case tmdbScore
     case recommendedBy
@@ -255,6 +266,9 @@ public struct TitleSuggestion: Decodable, Hashable, Sendable, Identifiable {
     title = try Title(from: decoder)
     let container = try decoder.container(keyedBy: CodingKeys.self)
     viewing = try container.decode(TitleViewing.self, forKey: .viewing)
+    access = try container.decodeIfPresent(ViewingAccess.self, forKey: .access) ?? .unknown
+    matchingServiceIds =
+      try container.decodeIfPresent([String].self, forKey: .matchingServiceIds) ?? []
     release = try container.decodeIfPresent(TitleRelease.self, forKey: .release)
     tmdbScore = try container.decodeIfPresent(TMDBScore.self, forKey: .tmdbScore)
     recommendedBy = try container.decode([Recommender].self, forKey: .recommendedBy)
@@ -270,6 +284,8 @@ public struct TitleSuggestion: Decodable, Hashable, Sendable, Identifiable {
 public struct FriendsRecommendation: Decodable, Hashable, Sendable, Identifiable {
   public let title: Title
   public let viewing: TitleViewing
+  public let access: ViewingAccess
+  public let matchingServiceIds: [String]
   public let release: TitleRelease?
   public let tmdbScore: TMDBScore?
   public let recommendedBy: [Recommender]
@@ -280,6 +296,8 @@ public struct FriendsRecommendation: Decodable, Hashable, Sendable, Identifiable
 
   private enum CodingKeys: CodingKey {
     case viewing
+    case access
+    case matchingServiceIds
     case release
     case tmdbScore
     case recommendedBy
@@ -291,6 +309,9 @@ public struct FriendsRecommendation: Decodable, Hashable, Sendable, Identifiable
     title = try Title(from: decoder)
     let container = try decoder.container(keyedBy: CodingKeys.self)
     viewing = try container.decode(TitleViewing.self, forKey: .viewing)
+    access = try container.decodeIfPresent(ViewingAccess.self, forKey: .access) ?? .unknown
+    matchingServiceIds =
+      try container.decodeIfPresent([String].self, forKey: .matchingServiceIds) ?? []
     release = try container.decodeIfPresent(TitleRelease.self, forKey: .release)
     tmdbScore = try container.decodeIfPresent(TMDBScore.self, forKey: .tmdbScore)
     recommendedBy = try container.decode([Recommender].self, forKey: .recommendedBy)
@@ -299,8 +320,11 @@ public struct FriendsRecommendation: Decodable, Hashable, Sendable, Identifiable
   }
 }
 
-// Whether the viewer can watch a Watch together title with their services.
-// The server also sends `unknown` when it has no availability for the title.
+// Whether the viewer can watch a title: on one of their saved services or
+// free, neither, or unknown when its viewing options could not be loaded. The
+// server decides it for every title list, with the saved services that offer
+// the title, and the app never does. A Find a title payload without them,
+// from a server older than this build, counts as unknown and marks none.
 public enum ViewingAccess: String, ServerEnum {
   case available
   case unmatched

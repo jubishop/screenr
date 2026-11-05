@@ -39,10 +39,36 @@ struct FindListsTests {
     // Alice saved Netflix and Hulu; Cam saved nothing, so only free titles stay.
     #expect(names(model.suggestions(alice)) == ["movie:105", "tv:204"])
     #expect(names(model.suggestions(cam)) == ["movie:102"])
-    #expect(names(model.visibleResults(results, serviceIds: alice.serviceIds)) == ["movie:101"])
+    #expect(names(model.visibleResults(results)) == ["movie:101"])
     #expect(names(model.friendsRecommend(cam)) == ["movie:102"])
-    // Without the saved services, such as after a failed read, nothing stays.
-    #expect(model.visibleResults(results, serviceIds: nil).isEmpty)
+  }
+
+  // My services keeps the titles the server found the viewer can watch,
+  // whatever their viewing options would suggest to the app.
+  @Test func myServicesFollowsTheServersAccess() throws {
+    let page = try FindData.page(
+      suggestions: [
+        FindData.title(
+          "movie:1",
+          "One",
+          fields: suggestionFields(
+            sections: ["subs": ["service:netflix"]],
+            access: "available",
+            matching: ["service:netflix"]
+          )
+        ),
+        FindData.title(
+          "movie:2",
+          "Two",
+          fields: suggestionFields(sections: ["free": ["service:tubi-tv"]], access: "unmatched")
+        ),
+      ]
+    )
+    let model = model()
+    model.serviceFilter = .myServices
+
+    #expect(names(model.suggestions(page)) == ["movie:1"])
+    #expect(page.suggestions.first?.matchingServiceIds == ["service:netflix"])
   }
 
   @Test func countsTitlesWithUnknownViewingOptions() throws {
@@ -59,8 +85,16 @@ struct FindListsTests {
     #expect(model.unknownViewingNotice(cam) == nil)
 
     let page = try FindData.page(suggestions: [
-      FindData.title("movie:1", "One", fields: suggestionFields(viewing: "unavailable")),
-      FindData.title("movie:2", "Two", fields: suggestionFields(viewing: "unavailable")),
+      FindData.title(
+        "movie:1",
+        "One",
+        fields: suggestionFields(viewing: "unavailable", access: "unknown")
+      ),
+      FindData.title(
+        "movie:2",
+        "Two",
+        fields: suggestionFields(viewing: "unavailable", access: "unknown")
+      ),
     ])
     model.list = .suggestions
     #expect(
@@ -107,7 +141,12 @@ struct FindListsTests {
     let page = try FindData.page(recommendations: [
       FindData.recommendation("movie:1", "One", status: "finished"),
       FindData.recommendation("movie:2", "Two", status: "finished"),
-      FindData.recommendation("tv:3", "Three", viewing: FindData.viewing("ok", ["subs": ["x"]])),
+      FindData.recommendation(
+        "tv:3",
+        "Three",
+        viewing: FindData.viewing("ok", ["subs": ["x"]]),
+        access: "unmatched"
+      ),
     ])
     let model = model()
 
@@ -210,16 +249,17 @@ struct FindListsTests {
 
   @Test func explainsEmptyResults() throws {
     let results = try FindData.results()
+    let unmatched = results.filter { $0.access == .unmatched }
     let model = model()
-    #expect(model.resultsMessage([], serviceIds: []) == "No matches. Try a different title.")
-    #expect(model.resultsMessage(results, serviceIds: []) == nil)
+    #expect(model.resultsMessage([]) == "No matches. Try a different title.")
+    #expect(model.resultsMessage(unmatched) == nil)
 
     model.serviceFilter = .myServices
     #expect(
-      model.resultsMessage(results, serviceIds: ["service:hulu"])
+      model.resultsMessage(unmatched)
         == "No matches on your services or free. Turn off My services to see all results."
     )
-    #expect(model.resultsMessage(results, serviceIds: ["service:netflix"]) == nil)
+    #expect(model.resultsMessage(results) == nil)
   }
 
   @Test func offersOneActionForEachRecommendation() throws {
@@ -306,11 +346,16 @@ struct FindListsTests {
 
   private func suggestionFields(
     viewing: String = "ok",
+    sections: [String: [String]] = [:],
+    access: String = "available",
+    matching: [String] = [],
     recommendedBy: [JSONValue] = [],
     secondDegree: (recommended: Int, wanted: Int, watching: Int) = (0, 0, 0)
   ) -> [String: JSONValue] {
     [
-      "viewing": FindData.viewing(viewing),
+      "viewing": FindData.viewing(viewing, sections),
+      "access": .string(access),
+      "matchingServiceIds": .array(matching.map { .string($0) }),
       "recommended_by": .array(recommendedBy), "wanted_by": [], "watching_by": [],
       "second_degree_recommended": .integer(secondDegree.recommended),
       "second_degree_wanted": .integer(secondDegree.wanted),

@@ -3,8 +3,7 @@ import { titleColumns } from "./catalog";
 import type { Person, Title, ViewingAccess } from "../shared";
 import type { ListMode } from "../member-routes";
 import { savedServices } from "./streaming-services";
-import { inTheaters, withViewingOptions } from "./title-viewing";
-import { matchingServices, viewingAccess } from "../viewing";
+import { inTheaters, withAccess, withViewingOptions } from "./title-viewing";
 
 // A profile's Want to watch page (docs/want-to-watch.md): the owner's current
 // Want to watch titles that the viewer can watch now, newest first, and those
@@ -56,17 +55,10 @@ export async function wantToWatch(
     // Whether the owner wants to watch anything, including titles the viewer
     // cannot watch now, so an empty page can say which is the case.
     hasWantToWatch: titles.length > 0,
-    titles: viewing
-      .map((title) => ({
-        ...title,
-        access: viewingAccess(title.viewing, serviceIds),
-        // Only the viewer's services that carry the title.
-        matchingServiceIds: matchingServices(title.viewing, serviceIds),
-      }))
-      .filter(
-        (title): title is typeof title & { access: ShownAccess } =>
-          title.access !== "unmatched",
-      ),
+    titles: withAccess(viewing, serviceIds).filter(
+      (title): title is typeof title & { access: ShownAccess } =>
+        title.access !== "unmatched",
+    ),
   };
 }
 

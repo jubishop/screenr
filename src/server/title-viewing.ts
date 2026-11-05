@@ -1,10 +1,20 @@
-import type { ReleaseTitle, Title, ViewingTitle } from "../shared";
+import type {
+  AccessTitle,
+  ReleaseTitle,
+  Title,
+  TitleViewing,
+  ViewingAccess,
+  ViewingTitle,
+  WatchCategory,
+} from "../shared";
 import {
   getTitleAvailabilities,
   getTitleReleases,
   searchTitles,
 } from "./catalog";
 import { db, settleAll } from "./db";
+import { savedServices } from "./streaming-services";
+import { sectionCategories } from "./watch-sources";
 
 // A title list stops starting provider requests this long after it begins.
 const listRefreshMs = 3000;
@@ -14,14 +24,57 @@ const listRefreshMs = 3000;
 // circle has saved (docs/title-suggestions.md#implementation).
 export const findListLimit = 50;
 
+// The viewer's access to a title, which every title list with viewing
+// options sends (docs/title-availability.md#viewing-access): `available`
+// when its US options list a subscription from one of `serviceIds`, the
+// viewer's saved services, or any free or ad-supported option; `unmatched`
+// when they list neither; and `unknown` when they could not be loaded.
+// Clients show it and never decide it. myServicesFilter applies the same
+// rule to stored options before a list is capped, and both read the
+// provider categories behind each viewing section.
+function viewingAccess(
+  viewing: TitleViewing,
+  serviceIds: string[],
+): ViewingAccess {
+  if (viewing.status === "unavailable") return "unknown";
+  return matchingServices(viewing, serviceIds).length ||
+    viewing.sections.some(
+      (section) => section.key === "free" && section.services.length,
+    )
+    ? "available"
+    : "unmatched";
+}
+
+// Only the given services that offer the title by subscription, so a list
+// that combines several people's services reveals none of their full lists.
+function matchingServices(viewing: TitleViewing, serviceIds: string[]) {
+  return (
+    viewing.sections
+      .find((section) => section.key === "subs")
+      ?.services.filter((service) => serviceIds.includes(service.id))
+      .map((service) => service.id) ?? []
+  );
+}
+
+// Adds each title's access for `serviceIds`, and the services among them that
+// offer it, which clients mark.
+export function withAccess<T extends Title>(
+  titles: ViewingTitle<T>[],
+  serviceIds: string[],
+): AccessTitle<T>[] {
+  return titles.map((title) => ({
+    ...title,
+    access: viewingAccess(title.viewing, serviceIds),
+    matchingServiceIds: matchingServices(title.viewing, serviceIds),
+  }));
+}
+
 // The My services condition of a title list query, for the title whose ID
 // is `title`: true without `services`, or, given the TMDB providers of the
 // viewer's saved services, which it adds to `params`, false when the title's
-// stored viewing options, current or stale, list neither a subscription from
-// one of them nor any free option. That leaves out the titles viewingAccess
-// in src/viewing.ts finds unmatched from the same options. A title whose
-// options are unknown stays in: the list's refresh may confirm them, and the
-// browser leaves it out until then.
+// stored viewing options, current or stale, would make its access
+// `unmatched`. A title whose options are unknown stays in: the list's refresh
+// may confirm them, and clients leave it out until then.
 export function myServicesFilter(
   title: string,
   services: number[] | null,
@@ -29,14 +82,21 @@ export function myServicesFilter(
 ) {
   if (!services) return "TRUE";
   const providers = `$${params.push(services)}::bigint[]`;
+  const listed = (category: WatchCategory) =>
+    `coalesce(a.availability->'providers'->'${category}','[]')`;
+  // A subscription from one of the services, or any free option.
+  const subscribed = (category: WatchCategory) =>
+    `EXISTS (SELECT 1 FROM jsonb_array_elements(${listed(category)}) p
+        WHERE (p->>'provider_id')::bigint=ANY(${providers}))`;
+  const free = (category: WatchCategory) =>
+    `jsonb_array_length(${listed(category)})>0`;
+  const offers = [
+    ...sectionCategories.subs.map(subscribed),
+    ...sectionCategories.free.map(free),
+  ].join("\n        OR ");
   return `NOT EXISTS (
     SELECT 1 FROM title_availability a WHERE a.title_id=${title} AND a.country='US'
-      AND a.fetched_at IS NOT NULL
-      AND NOT EXISTS (SELECT 1 FROM jsonb_array_elements(
-        coalesce(a.availability->'providers'->'flatrate','[]')) p
-        WHERE (p->>'provider_id')::bigint=ANY(${providers}))
-      AND coalesce(jsonb_array_length(a.availability->'providers'->'free'),0)=0
-      AND coalesce(jsonb_array_length(a.availability->'providers'->'ads'),0)=0)`;
+      AND a.fetched_at IS NOT NULL AND NOT (${offers}))`;
 }
 
 // Adds each title's viewing options, release status, and TMDB user score, as
@@ -85,11 +145,16 @@ export async function inTheaters<T extends Title>(
     );
 }
 
-export async function findTitles(query: string) {
+// Find a title's search for `viewer`: TMDB's matches with their viewing
+// options and the viewer's access to each.
+export async function findTitles(query: string, viewer: string) {
   // Reserve the last two seconds for in-flight provider requests and leave a
   // margin before the browser's ten-second search deadline.
   const refreshDeadline = Date.now() + 7000;
-  const results = await searchTitles(query);
+  const [results, serviceIds] = await settleAll([
+    searchTitles(query),
+    savedServices(viewer),
+  ]);
   if (results.length) {
     // The availability cache references a stored title. Search summaries create
     // only missing identities and never replace details or mark them fresh,
@@ -110,5 +175,8 @@ export async function findTitles(query: string) {
   const titles = results.map(
     ({ vote_average: _average, vote_count: _count, ...title }) => title,
   );
-  return withViewingOptions(titles, refreshDeadline);
+  return withAccess(
+    await withViewingOptions(titles, refreshDeadline),
+    serviceIds,
+  );
 }

@@ -42,7 +42,7 @@ struct FriendsRecommendView: View {
               viewing: title.viewing,
               release: title.release,
               score: title.tmdbScore,
-              serviceIds: page.serviceIds
+              matchingServiceIds: title.matchingServiceIds
             ) {
               Text(title.recommendedByText)
                 .font(.subheadline)

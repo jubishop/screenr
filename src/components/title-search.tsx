@@ -3,10 +3,10 @@ import { Link } from "./pending-navigation";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import type {
+  AccessTitle,
   FriendsRecommendation,
   SaveSurface,
   TitleSuggestion,
-  ViewingTitle,
 } from "../shared";
 import {
   memberPath,
@@ -14,7 +14,6 @@ import {
   type FindFilters,
   type SearchTab,
 } from "../member-routes";
-import { viewingAccess } from "../viewing";
 import { TitleServices, ViewingAttribution } from "./title-services";
 import { anySignal, api, useInteractive } from "./client";
 import { Poster } from "./poster";
@@ -122,8 +121,8 @@ export function TitleSearch({
   activity,
   busy,
 }: {
-  suggestions: ViewingTitle<TitleSuggestion>[] | null;
-  recommendations: ViewingTitle<FriendsRecommendation>[] | null;
+  suggestions: AccessTitle<TitleSuggestion>[] | null;
+  recommendations: AccessTitle<FriendsRecommendation>[] | null;
   // Friends recommend titles the server left out as finished.
   hiddenFinished: number;
   // The screen's filters, which its reads send to the server.
@@ -168,7 +167,7 @@ export function TitleSearch({
       services: on ? "mine" : undefined,
     }));
   const [query, setQuery] = useState(submitted);
-  const [results, setResults] = useState<ViewingTitle[] | null>(
+  const [results, setResults] = useState<AccessTitle[] | null>(
     submitted.length < 2 ? null : [],
   );
   const [searching, setSearching] = useState(submitted.length >= 2);
@@ -236,7 +235,7 @@ export function TitleSearch({
     setSearching(true);
     setResults([]);
     try {
-      const titles = await api<ViewingTitle[]>(
+      const titles = await api<AccessTitle[]>(
         `search?q=${encodeURIComponent(text)}`,
         undefined,
         anySignal([controller.signal, timeout]),
@@ -257,20 +256,19 @@ export function TitleSearch({
     }
   }
 
-  const included = (title: ViewingTitle) =>
-    !myServices ||
-    (serviceIds !== null &&
-      viewingAccess(title.viewing, serviceIds) === "available");
+  // Each title arrives with the viewer's access to it.
+  const included = (title: AccessTitle) =>
+    !myServices || title.access === "available";
   const visibleResults = results?.filter(included);
   const visibleSuggestions = suggestions?.filter(included);
-  const listed: ViewingTitle[] =
+  const listed: AccessTitle[] =
     results ??
     (tab
       ? recommendations?.filter(ofKind(kind)).filter(withFinished(showFinished))
       : suggestions) ??
     [];
   const unknownCount = listed.filter(
-    (title) => viewingAccess(title.viewing, serviceIds ?? []) === "unknown",
+    (title) => title.access === "unknown",
   ).length;
 
   return (
@@ -331,12 +329,7 @@ export function TitleSearch({
       {results !== null ? (
         <section className="search-results" aria-label="Search results">
           {visibleResults?.map((title) => (
-            <TitleCard
-              key={title.id}
-              title={title}
-              heading="h2"
-              serviceIds={serviceIds ?? []}
-            />
+            <TitleCard key={title.id} title={title} heading="h2" />
           ))}
           {!searching && !error && results.length === 0 && (
             <p className="empty">No matches. Try a different title.</p>
@@ -373,7 +366,6 @@ export function TitleSearch({
           setShowFinished={setShowFinished}
           included={included}
           myServices={myServices}
-          serviceIds={serviceIds ?? []}
           activity={activity}
           busy={busy}
         />
@@ -410,7 +402,7 @@ export function TitleSearch({
                   />
                   <TitleServices
                     viewing={title.viewing}
-                    serviceIds={serviceIds ?? []}
+                    matchingServiceIds={title.matchingServiceIds}
                   />
                   <div className="suggestion-reasons">
                     <Reason

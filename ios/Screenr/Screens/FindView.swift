@@ -95,7 +95,7 @@ private struct FindScreen: View {
         Label(message, systemImage: "exclamationmark.triangle")
       }
     case .found(_, let titles):
-      FindResultsSection(find: find, titles: titles, serviceIds: page?.serviceIds)
+      FindResultsSection(find: find, titles: titles)
     }
   }
 }

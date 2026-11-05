@@ -1,6 +1,7 @@
 import { test, before, beforeEach, after } from "node:test";
 import assert from "node:assert/strict";
 import { db, denied } from "./social-fixture";
+import type { AccessTitle } from "../../src/shared";
 
 const { migrate } = await import("../../scripts/migrate");
 const { loadScreen } = await import("../../src/server/screens");
@@ -314,8 +315,10 @@ test("top 10 Recommends count 1.5× at #10 up to 1.95× at #1 in groups that mee
   assert.equal(byId.get("movie:6")!.second_degree_recommended, 0);
   for (const entry of result) {
     assert.deepEqual(Object.keys(entry).sort(), [
+      "access",
       "id",
       "kind",
+      "matchingServiceIds",
       "name",
       "overview",
       "poster_path",
@@ -773,8 +776,9 @@ test("suggestions list the 50 highest-ranked eligible titles", async () => {
 });
 
 // My services narrows suggestions on the server before the cap, keeping the
-// titles src/viewing.ts would show and those whose options are unknown,
-// which the list's refresh may confirm.
+// titles whose access is not unmatched and those whose options are unknown,
+// which the list's refresh may confirm. Every listed title carries that
+// access, which the filter agrees with.
 test("My services keeps suggestions on the viewer's services, free, or unknown, then lists the top 50", async () => {
   await person("alice");
   await person("ben");
@@ -782,34 +786,29 @@ test("My services keeps suggestions on the viewer's services, free, or unknown, 
   await db.query(
     "INSERT INTO member_streaming_service(user_id,service_id) VALUES('alice','service:netflix')",
   );
+  const netflix = ["available", ["service:netflix"]] as const;
   const offers = [
-    ["netflix", { flatrate: [{ provider_id: 8 }] }],
+    ["netflix", netflix, { flatrate: [{ provider_id: 8 }] }],
     // Another of Netflix's TMDB providers.
-    ["netflix-other", { flatrate: [{ provider_id: 1796 }] }],
-    ["free", { free: [{ provider_id: 73 }] }],
-    ["ads", { ads: [{ provider_id: 300 }] }],
+    ["netflix-other", netflix, { flatrate: [{ provider_id: 1796 }] }],
+    ["free", ["available", []], { free: [{ provider_id: 73 }] }],
+    ["ads", ["available", []], { ads: [{ provider_id: 300 }] }],
     // Options checked days ago still count, as they do in the browser.
-    ["stale-netflix", { flatrate: [{ provider_id: 8 }] }, "3 days"],
-    ["unknown", null],
-    ["hulu", { flatrate: [{ provider_id: 15 }] }],
-    ["rent-only", { rent: [{ provider_id: 2 }] }],
-    ["nothing", {}],
+    ["stale-netflix", netflix, { flatrate: [{ provider_id: 8 }] }, "3 days"],
+    ["unknown", ["unknown", []], null],
+    ["hulu", ["unmatched", []], { flatrate: [{ provider_id: 15 }] }],
+    ["rent-only", ["unmatched", []], { rent: [{ provider_id: 2 }] }],
+    ["nothing", ["unmatched", []], {}],
   ] as const;
-  const kept = new Set([
-    "netflix",
-    "netflix-other",
-    "free",
-    "ads",
-    "stale-netflix",
-    "unknown",
-  ]);
   await db.query(`INSERT INTO title(id,kind,tmdb_id,name)
     SELECT 'movie:'||n,'movie',n,'Title '||n FROM generate_series(1,90) AS n`);
   const expected: string[] = [];
+  const access = new Map<string, readonly [string, readonly string[]]>();
   for (let n = 1; n <= 90; n++) {
     const id = `movie:${n}`;
-    const [offer, providers, age] = offers[n % offers.length] as readonly [
+    const [, shown, providers, age] = offers[n % offers.length] as readonly [
       string,
+      readonly [string, readonly string[]],
       object | null,
       string?,
     ];
@@ -820,21 +819,29 @@ test("My services keeps suggestions on the viewer's services, free, or unknown, 
       [id, providers && { link: null, providers }, age ?? "0 seconds"],
     );
     await updateTitleActivity("ben", id, "want_to_watch", true);
-    if (kept.has(offer)) expected.push(id);
+    access.set(id, shown);
+    if (shown[0] !== "unmatched") expected.push(id);
   }
   await db.query(
     "UPDATE feed_item SET activity_at=now()-split_part(title_id,':',2)::int*interval '1 minute'",
   );
+  const listed = (titles: AccessTitle[]) =>
+    titles.map((title) => [title.id, title.access, title.matchingServiceIds]);
+  const withAccess = (ids: string[]) =>
+    ids.map((id) => [id, ...access.get(id)!]);
   const screen = await loadScreen("alice", "/search?services=mine");
   assert.ok(screen.kind === "search");
   assert.ok(expected.length > 50);
   assert.deepEqual(
-    screen.suggestions.map((title) => title.id),
-    expected.slice(0, 50),
+    listed(screen.suggestions),
+    withAccess(expected.slice(0, 50)),
   );
-  // Without the filter, every eligible title can be listed.
+  // Without the filter, every eligible title can be listed, each with its
+  // access.
+  const unfiltered = await loadScreen("alice", "/search");
+  assert.ok(unfiltered.kind === "search");
   assert.deepEqual(
-    (await suggestions()).map((title) => title.id),
-    Array.from({ length: 50 }, (_, n) => `movie:${n + 1}`),
+    listed(unfiltered.suggestions),
+    withAccess(Array.from({ length: 50 }, (_, n) => `movie:${n + 1}`)),
   );
 });

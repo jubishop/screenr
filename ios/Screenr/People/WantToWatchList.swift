@@ -76,7 +76,7 @@ private struct TitlesSection: View {
             viewing: title.viewing,
             release: title.release,
             score: title.tmdbScore,
-            serviceIds: title.matchingServiceIds
+            matchingServiceIds: title.matchingServiceIds
           )
         }
       }

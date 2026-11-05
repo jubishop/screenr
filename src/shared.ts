@@ -100,6 +100,13 @@ export type ReleaseTitle<T extends Title = Title> = T & {
   tmdb_score: TmdbScore;
 };
 export type ViewingAccess = "available" | "unmatched" | "unknown";
+// A title in a list that shows where it streams, with the viewer's access to
+// it and the services among `serviceIds` that offer it by subscription, as the
+// server decides them (docs/title-availability.md#viewing-access).
+export type AccessTitle<T extends Title = Title> = ViewingTitle<T> & {
+  access: ViewingAccess;
+  matchingServiceIds: string[];
+};
 export type TitleSuggestion = Title & {
   // Direct friends who recommend the title, with their profile top 10 rank
   // for it: top 10 recommenders first, best rank first, then by username.

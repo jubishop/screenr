@@ -2,7 +2,7 @@ import Foundation
 
 // What a title list shows for each title, in the web's words: its kind and
 // year, its release status and TMDB user score, and where it streams, with
-// the viewer's saved services marked.
+// the saved services that the server found offer it marked.
 
 extension Title {
   // The kind and release year, such as "TV show · 2022", or only the kind
@@ -84,35 +84,23 @@ extension ViewingLine {
 }
 
 extension TitleViewing {
-  // The viewer's saved subscription services that offer the title. Free
-  // options need no saved service.
-  public func matchingServices(_ serviceIds: [String]) -> [String] {
-    let subscriptions = sections.first { $0.key == .subs }?.services ?? []
-    return subscriptions.filter { serviceIds.contains($0.id) }.map(\.id)
-  }
-
-  // Whether the viewer can watch the title on a saved service or for free.
-  public func access(for serviceIds: [String]) -> ViewingAccess {
-    guard status != .unavailable else { return .unknown }
-    let free = sections.contains { $0.key == .free && !$0.services.isEmpty }
-    return !matchingServices(serviceIds).isEmpty || free ? .available : .unmatched
-  }
-
-  // The summary a title list shows under each title, marking the services
-  // that `owner` saved.
+  // The summary a title list shows under each title, marking
+  // `matchingServices`, the saved services that the server found offer it,
+  // which `owner` saved.
   public func lines(
-    savedServices serviceIds: [String],
+    matchingServices: [String],
     savedBy owner: SavedServicesOwner = .viewer
   ) -> [ViewingLine] {
     guard status != .unavailable else { return [.unknown] }
-    let owned = matchingServices(serviceIds)
     var lines = sections.map { section in
       ViewingLine.offers(
         section.key,
-        section.services.map { ListedService(name: $0.name, saved: owned.contains($0.id)) }
+        section.services.map {
+          ListedService(name: $0.name, saved: matchingServices.contains($0.id))
+        }
       )
     }
-    if !owned.isEmpty { lines.append(.includesSavedServices(owner)) }
+    if !matchingServices.isEmpty { lines.append(.includesSavedServices(owner)) }
     if sections.isEmpty { lines.append(.noOptions) }
     if status == .stale { lines.append(.stale) }
     return lines

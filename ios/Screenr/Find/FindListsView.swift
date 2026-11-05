@@ -64,7 +64,7 @@ private struct SuggestionsView: View {
         ListHeader("From your circle")
         ForEach(suggestions) { suggestion in
           NavigationLink(value: suggestion.destination) {
-            SuggestionRow(suggestion: suggestion, serviceIds: page.serviceIds)
+            SuggestionRow(suggestion: suggestion)
           }
         }
         if let emptyMessage {
@@ -77,7 +77,6 @@ private struct SuggestionsView: View {
 
 private struct SuggestionRow: View {
   let suggestion: TitleSuggestion
-  let serviceIds: [String]
 
   var body: some View {
     HStack(alignment: .top, spacing: 12) {
@@ -86,7 +85,10 @@ private struct SuggestionRow: View {
         Text(suggestion.title.name)
           .font(.headline)
         TitleStatusLine(release: suggestion.release, score: suggestion.tmdbScore)
-        ViewingLinesView(viewing: suggestion.viewing, serviceIds: serviceIds)
+        ViewingLinesView(
+          viewing: suggestion.viewing,
+          matchingServiceIds: suggestion.matchingServiceIds
+        )
         ForEach(suggestion.reasons, id: \.self) { reason in
           Text(reason)
             .font(.subheadline)

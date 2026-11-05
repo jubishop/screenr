@@ -84,7 +84,7 @@ struct WatchTogetherTests {
     let meridian = try #require(page.titles.first { $0.title.name == "Glass Meridian" })
 
     let lines = { (title: SharedTitle) in
-      title.viewing.lines(savedServices: title.matchingServiceIds, savedBy: .eitherPerson)
+      title.viewing.lines(matchingServices: title.matchingServiceIds, savedBy: .eitherPerson)
     }
     #expect(orchard.title.kindAndYear == "Movie · 2025")
     #expect(

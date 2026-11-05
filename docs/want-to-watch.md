@@ -43,10 +43,11 @@ bounded provider work, as for Watch together and Find a title. The cache,
 grouping, failure retry, and older-data label follow
 [title availability](title-availability.md) unchanged.
 
-Each title's `access` comes from `viewingAccess` in `src/viewing.ts`: a
-subscription offer on one of the viewer's saved services, or any free or
-ad-supported option, makes it `available`; a failed lookup makes it
-`unknown`. Rental and purchase offers never count. The server drops
+Each title's `access` follows the
+[viewing access](title-availability.md#viewing-access) rule that every title
+list shares: a subscription offer on one of the viewer's saved services, or
+any free or ad-supported option, makes it `available`; a failed lookup makes
+it `unknown`. Rental and purchase offers never count. The server drops
 `unmatched` titles, so the page receives only titles it shows. The owner's
 saved services are never read: on a friend's page, the viewer's services
 decide, and the response is the same whatever the owner saves.

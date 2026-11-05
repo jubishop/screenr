@@ -69,7 +69,7 @@ private struct MoviesSection: View {
             viewing: nil,
             release: title.release,
             score: title.tmdbScore,
-            serviceIds: []
+            matchingServiceIds: []
           )
         }
       }

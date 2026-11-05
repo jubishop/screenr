@@ -1,19 +1,17 @@
 import { Link } from "./pending-navigation";
-import type { TitleViewing } from "../shared";
-import { matchingServices } from "../viewing";
+import type { AccessTitle } from "../shared";
 
+// Where a title streams, marking `matchingServiceIds`, the saved services
+// that the server found offer it.
 export function TitleServices({
   viewing,
-  serviceIds,
+  matchingServiceIds: owned,
   shared = false,
-}: {
-  viewing?: TitleViewing;
-  serviceIds: string[];
+}: Pick<AccessTitle, "viewing" | "matchingServiceIds"> & {
   shared?: boolean;
 }) {
-  if (!viewing || viewing.status === "unavailable")
+  if (viewing.status === "unavailable")
     return <p className="small muted">Viewing options unknown.</p>;
-  const owned = matchingServices(viewing, serviceIds);
   return (
     <div className="title-services small">
       {viewing.sections.map((section) => (

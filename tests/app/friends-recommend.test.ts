@@ -5,7 +5,6 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { useDatabase, db, friend, person } from "./social-fixture";
 import type { TitleKindFilter } from "../../src/components/title-kind-filter";
 import { screenPath, type FindFilters } from "../../src/member-routes";
-import { viewingAccess } from "../../src/viewing";
 const { loadScreen } = await import("../../src/server/screens");
 const { FriendsRecommend } =
   await import("../../src/components/friends-recommend");
@@ -116,6 +115,9 @@ test("Friends recommend sorts by recommending friends, then the most recent reco
       viewing: show.viewing,
       release: show.release,
       tmdb_score: null,
+      // No stored viewing options, so the viewer's access is unknown.
+      access: "unknown",
+      matchingServiceIds: [],
     },
   );
 
@@ -369,11 +371,8 @@ async function view(
       setKind: () => {},
       showFinished,
       setShowFinished: () => {},
-      included: (title) =>
-        !myServices ||
-        viewingAccess(title.viewing, read.serviceIds) === "available",
+      included: (title) => !myServices || title.access === "available",
       myServices,
-      serviceIds: read.serviceIds,
       activity: async () => {},
       busy: false,
     }),

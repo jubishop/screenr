@@ -95,7 +95,7 @@ struct ShareSearchView: View {
             ShareTitleRow(title: result.title)
           }
         }
-        if let message = find.resultsMessage(titles, serviceIds: nil) {
+        if let message = find.resultsMessage(titles) {
           Text(message)
         }
       }

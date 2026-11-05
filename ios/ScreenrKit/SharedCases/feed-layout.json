@@ -1,0 +1,825 @@
+{
+  "description": "How a feed lays out its latest snapshot after the reader accepted an earlier one, or none: which entries show, in what order, with which replies and visible activity, and how many entries wait behind New activity. The web's src/feed-layout.ts and the iPhone app's FeedLayout both run every case, in tests/app/feed-layout.test.ts and SharedFeedLayoutTests. Each entry and comment is `entry` or `comment` with the fields listed, and each snapshot's visible_activity is what the server sends. `older_than` is the start of the window that Show older extended.",
+  "viewer": "user-alice",
+  "entry": {
+    "id": "",
+    "owner_id": "user-ben",
+    "title_id": "movie:104",
+    "item_type": "recommended",
+    "body": null,
+    "spoiler": false,
+    "active": true,
+    "recommended": true,
+    "want_to_watch": false,
+    "status": null,
+    "finished_on": null,
+    "rating": null,
+    "edited": false,
+    "season": null,
+    "episode": null,
+    "viewer_want_to_watch": false,
+    "viewer_recommended": false,
+    "viewer_status": null,
+    "viewer_top_ten_rank": null,
+    "username": "ben",
+    "display_name": "Ben Ortiz",
+    "photo": null,
+    "title_name": "Glass Meridian",
+    "poster_path": null,
+    "kind": "movie",
+    "release_date": "2022-08-19",
+    "activity_at": "2026-10-13T12:00:00.000Z",
+    "visible_activity": "2026-10-13T12:00:00.000Z",
+    "reactions": [],
+    "comments": []
+  },
+  "comment": {
+    "id": "",
+    "author_id": "user-ben",
+    "username": "ben",
+    "display_name": "Ben Ortiz",
+    "photo": null,
+    "body": "A reply.",
+    "spoiler": false,
+    "root_id": null,
+    "addressed_username": null,
+    "removed": false,
+    "unavailable": false,
+    "created_at": "2026-10-13T12:00:00.000Z",
+    "reactions": []
+  },
+  "cases": [
+    {
+      "name": "The first snapshot is accepted as a whole, newest visible activity first, then by ID",
+      "accepted": null,
+      "snapshot": [
+        {
+          "id": "ben-want",
+          "activity_at": "2026-10-13T12:00:00.000Z",
+          "visible_activity": "2026-10-13T12:00:00.000Z",
+          "item_type": "want_to_watch",
+          "recommended": false,
+          "want_to_watch": true
+        },
+        {
+          "id": "ben-recommend",
+          "activity_at": "2026-10-13T12:00:00.000Z",
+          "visible_activity": "2026-10-13T12:00:00.000Z"
+        },
+        {
+          "id": "alice-recommend",
+          "owner_id": "user-alice",
+          "username": "alice",
+          "display_name": "Alice Park",
+          "activity_at": "2026-10-13T12:05:00.000Z",
+          "visible_activity": "2026-10-13T12:05:00.000Z"
+        },
+        {
+          "id": "cam-review",
+          "owner_id": "user-cam",
+          "username": "cam",
+          "display_name": "Cam Rivera",
+          "activity_at": "2026-10-13T12:00:00.000Z",
+          "visible_activity": "2026-10-13T12:01:00.000Z",
+          "comments": [
+            {
+              "id": "1",
+              "created_at": "2026-10-13T12:01:00.000Z"
+            }
+          ],
+          "item_type": "review",
+          "recommended": false,
+          "active": false,
+          "body": ""
+        }
+      ],
+      "entries": [
+        {
+          "id": "alice-recommend",
+          "comments": [],
+          "visible_activity": "2026-10-13T12:05:00.000Z"
+        },
+        {
+          "id": "cam-review",
+          "comments": [
+            "1"
+          ],
+          "visible_activity": "2026-10-13T12:01:00.000Z"
+        },
+        {
+          "id": "ben-recommend",
+          "comments": [],
+          "visible_activity": "2026-10-13T12:00:00.000Z"
+        },
+        {
+          "id": "ben-want",
+          "comments": [],
+          "visible_activity": "2026-10-13T12:00:00.000Z"
+        }
+      ],
+      "incoming": 0
+    },
+    {
+      "name": "A friend's new entry waits until the reader accepts it",
+      "accepted": [
+        {
+          "id": "ben-recommend",
+          "activity_at": "2026-10-13T12:00:00.000Z",
+          "visible_activity": "2026-10-13T12:00:00.000Z"
+        }
+      ],
+      "snapshot": [
+        {
+          "id": "ben-recommend",
+          "activity_at": "2026-10-13T12:00:00.000Z",
+          "visible_activity": "2026-10-13T12:00:00.000Z"
+        },
+        {
+          "id": "ben-want",
+          "activity_at": "2026-10-13T12:03:00.000Z",
+          "visible_activity": "2026-10-13T12:03:00.000Z",
+          "item_type": "want_to_watch",
+          "recommended": false,
+          "want_to_watch": true
+        }
+      ],
+      "entries": [
+        {
+          "id": "ben-recommend",
+          "comments": [],
+          "visible_activity": "2026-10-13T12:00:00.000Z"
+        }
+      ],
+      "incoming": 1
+    },
+    {
+      "name": "The reader's own new entry shows at once",
+      "accepted": [
+        {
+          "id": "ben-recommend",
+          "activity_at": "2026-10-13T12:00:00.000Z",
+          "visible_activity": "2026-10-13T12:00:00.000Z"
+        }
+      ],
+      "snapshot": [
+        {
+          "id": "ben-recommend",
+          "activity_at": "2026-10-13T12:00:00.000Z",
+          "visible_activity": "2026-10-13T12:00:00.000Z"
+        },
+        {
+          "id": "alice-recommend",
+          "owner_id": "user-alice",
+          "username": "alice",
+          "display_name": "Alice Park",
+          "activity_at": "2026-10-13T12:03:00.000Z",
+          "visible_activity": "2026-10-13T12:03:00.000Z"
+        }
+      ],
+      "entries": [
+        {
+          "id": "alice-recommend",
+          "comments": [],
+          "visible_activity": "2026-10-13T12:03:00.000Z"
+        },
+        {
+          "id": "ben-recommend",
+          "comments": [],
+          "visible_activity": "2026-10-13T12:00:00.000Z"
+        }
+      ],
+      "incoming": 0
+    },
+    {
+      "name": "The reader's own move shows at once",
+      "accepted": [
+        {
+          "id": "ben-recommend",
+          "activity_at": "2026-10-13T12:02:00.000Z",
+          "visible_activity": "2026-10-13T12:02:00.000Z"
+        },
+        {
+          "id": "alice-recommend",
+          "owner_id": "user-alice",
+          "username": "alice",
+          "display_name": "Alice Park",
+          "activity_at": "2026-10-13T12:00:00.000Z",
+          "visible_activity": "2026-10-13T12:00:00.000Z"
+        }
+      ],
+      "snapshot": [
+        {
+          "id": "ben-recommend",
+          "activity_at": "2026-10-13T12:02:00.000Z",
+          "visible_activity": "2026-10-13T12:02:00.000Z"
+        },
+        {
+          "id": "alice-recommend",
+          "owner_id": "user-alice",
+          "username": "alice",
+          "display_name": "Alice Park",
+          "activity_at": "2026-10-13T12:05:00.000Z",
+          "visible_activity": "2026-10-13T12:05:00.000Z"
+        }
+      ],
+      "entries": [
+        {
+          "id": "alice-recommend",
+          "comments": [],
+          "visible_activity": "2026-10-13T12:05:00.000Z"
+        },
+        {
+          "id": "ben-recommend",
+          "comments": [],
+          "visible_activity": "2026-10-13T12:02:00.000Z"
+        }
+      ],
+      "incoming": 0
+    },
+    {
+      "name": "Friends' replies on the reader's own new entry wait, and the reader's own replies show with the parents they answer",
+      "accepted": [],
+      "snapshot": [
+        {
+          "id": "alice-comment",
+          "owner_id": "user-alice",
+          "username": "alice",
+          "display_name": "Alice Park",
+          "activity_at": "2026-10-13T12:00:00.000Z",
+          "visible_activity": "2026-10-13T12:05:00.000Z",
+          "comments": [
+            {
+              "id": "1",
+              "created_at": "2026-10-13T12:01:00.000Z"
+            },
+            {
+              "id": "2",
+              "author_id": "user-alice",
+              "username": "alice",
+              "display_name": "Alice Park",
+              "created_at": "2026-10-13T12:02:00.000Z",
+              "root_id": "1",
+              "addressed_username": "ben"
+            },
+            {
+              "id": "3",
+              "author_id": "user-cam",
+              "username": "cam",
+              "display_name": "Cam Rivera",
+              "created_at": "2026-10-13T12:05:00.000Z"
+            },
+            {
+              "id": "4",
+              "author_id": "user-alice",
+              "username": "alice",
+              "display_name": "Alice Park",
+              "created_at": "2026-10-13T12:04:00.000Z"
+            }
+          ],
+          "item_type": "comment",
+          "recommended": false,
+          "body": "Loved it."
+        }
+      ],
+      "entries": [
+        {
+          "id": "alice-comment",
+          "comments": [
+            "1",
+            "2",
+            "4"
+          ],
+          "visible_activity": "2026-10-13T12:04:00.000Z"
+        }
+      ],
+      "incoming": 1
+    },
+    {
+      "name": "A friend's new reply waits, and the entry keeps the activity the reader accepted",
+      "accepted": [
+        {
+          "id": "ben-recommend",
+          "activity_at": "2026-10-13T12:00:00.000Z",
+          "visible_activity": "2026-10-13T12:01:00.000Z",
+          "comments": [
+            {
+              "id": "1",
+              "author_id": "user-cam",
+              "username": "cam",
+              "display_name": "Cam Rivera",
+              "created_at": "2026-10-13T12:01:00.000Z"
+            }
+          ]
+        }
+      ],
+      "snapshot": [
+        {
+          "id": "ben-recommend",
+          "activity_at": "2026-10-13T12:00:00.000Z",
+          "visible_activity": "2026-10-13T12:02:00.000Z",
+          "comments": [
+            {
+              "id": "1",
+              "author_id": "user-cam",
+              "username": "cam",
+              "display_name": "Cam Rivera",
+              "created_at": "2026-10-13T12:01:00.000Z"
+            },
+            {
+              "id": "2",
+              "author_id": "user-cam",
+              "username": "cam",
+              "display_name": "Cam Rivera",
+              "created_at": "2026-10-13T12:02:00.000Z"
+            }
+          ]
+        }
+      ],
+      "entries": [
+        {
+          "id": "ben-recommend",
+          "comments": [
+            "1"
+          ],
+          "visible_activity": "2026-10-13T12:01:00.000Z"
+        }
+      ],
+      "incoming": 1
+    },
+    {
+      "name": "The reader's own new reply shows at once and moves its entry",
+      "accepted": [
+        {
+          "id": "ben-recommend",
+          "activity_at": "2026-10-13T12:00:00.000Z",
+          "visible_activity": "2026-10-13T12:01:00.000Z",
+          "comments": [
+            {
+              "id": "1",
+              "author_id": "user-cam",
+              "username": "cam",
+              "display_name": "Cam Rivera",
+              "created_at": "2026-10-13T12:01:00.000Z"
+            }
+          ]
+        },
+        {
+          "id": "ben-want",
+          "activity_at": "2026-10-13T12:03:00.000Z",
+          "visible_activity": "2026-10-13T12:03:00.000Z",
+          "item_type": "want_to_watch",
+          "recommended": false,
+          "want_to_watch": true
+        }
+      ],
+      "snapshot": [
+        {
+          "id": "ben-recommend",
+          "activity_at": "2026-10-13T12:00:00.000Z",
+          "visible_activity": "2026-10-13T12:05:00.000Z",
+          "comments": [
+            {
+              "id": "1",
+              "author_id": "user-cam",
+              "username": "cam",
+              "display_name": "Cam Rivera",
+              "created_at": "2026-10-13T12:01:00.000Z"
+            },
+            {
+              "id": "2",
+              "author_id": "user-alice",
+              "username": "alice",
+              "display_name": "Alice Park",
+              "created_at": "2026-10-13T12:05:00.000Z"
+            }
+          ]
+        },
+        {
+          "id": "ben-want",
+          "activity_at": "2026-10-13T12:03:00.000Z",
+          "visible_activity": "2026-10-13T12:03:00.000Z",
+          "item_type": "want_to_watch",
+          "recommended": false,
+          "want_to_watch": true
+        }
+      ],
+      "entries": [
+        {
+          "id": "ben-recommend",
+          "comments": [
+            "1",
+            "2"
+          ],
+          "visible_activity": "2026-10-13T12:05:00.000Z"
+        },
+        {
+          "id": "ben-want",
+          "comments": [],
+          "visible_activity": "2026-10-13T12:03:00.000Z"
+        }
+      ],
+      "incoming": 0
+    },
+    {
+      "name": "The reader's own reply brings the waiting reply it answers",
+      "accepted": [
+        {
+          "id": "ben-recommend",
+          "activity_at": "2026-10-13T12:00:00.000Z",
+          "visible_activity": "2026-10-13T12:00:00.000Z"
+        }
+      ],
+      "snapshot": [
+        {
+          "id": "ben-recommend",
+          "activity_at": "2026-10-13T12:00:00.000Z",
+          "visible_activity": "2026-10-13T12:02:00.000Z",
+          "comments": [
+            {
+              "id": "30",
+              "created_at": "2026-10-13T12:01:00.000Z"
+            },
+            {
+              "id": "31",
+              "author_id": "user-alice",
+              "username": "alice",
+              "display_name": "Alice Park",
+              "created_at": "2026-10-13T12:02:00.000Z",
+              "root_id": "30",
+              "addressed_username": "ben"
+            }
+          ]
+        }
+      ],
+      "entries": [
+        {
+          "id": "ben-recommend",
+          "comments": [
+            "30",
+            "31"
+          ],
+          "visible_activity": "2026-10-13T12:02:00.000Z"
+        }
+      ],
+      "incoming": 1
+    },
+    {
+      "name": "A moved entry keeps its place until its new activity is accepted",
+      "accepted": [
+        {
+          "id": "ben-recommend",
+          "activity_at": "2026-10-13T12:02:00.000Z",
+          "visible_activity": "2026-10-13T12:02:00.000Z"
+        },
+        {
+          "id": "ben-review",
+          "activity_at": "2026-10-13T12:00:00.000Z",
+          "visible_activity": "2026-10-13T12:00:00.000Z",
+          "item_type": "review",
+          "recommended": false,
+          "body": "Great."
+        }
+      ],
+      "snapshot": [
+        {
+          "id": "ben-recommend",
+          "activity_at": "2026-10-13T12:02:00.000Z",
+          "visible_activity": "2026-10-13T12:02:00.000Z"
+        },
+        {
+          "id": "ben-review",
+          "activity_at": "2026-10-13T12:05:00.000Z",
+          "visible_activity": "2026-10-13T12:05:00.000Z",
+          "item_type": "review",
+          "recommended": false,
+          "body": "Edited.",
+          "edited": true
+        }
+      ],
+      "entries": [
+        {
+          "id": "ben-recommend",
+          "comments": [],
+          "visible_activity": "2026-10-13T12:02:00.000Z"
+        },
+        {
+          "id": "ben-review",
+          "comments": [],
+          "visible_activity": "2026-10-13T12:00:00.000Z"
+        }
+      ],
+      "incoming": 1
+    },
+    {
+      "name": "A withdrawn entry without live replies leaves at once",
+      "accepted": [
+        {
+          "id": "ben-recommend",
+          "activity_at": "2026-10-13T12:00:00.000Z",
+          "visible_activity": "2026-10-13T12:00:00.000Z"
+        },
+        {
+          "id": "ben-want",
+          "activity_at": "2026-10-13T12:01:00.000Z",
+          "visible_activity": "2026-10-13T12:01:00.000Z",
+          "item_type": "want_to_watch",
+          "recommended": false,
+          "want_to_watch": true
+        }
+      ],
+      "snapshot": [
+        {
+          "id": "ben-recommend",
+          "activity_at": "2026-10-13T12:00:00.000Z",
+          "visible_activity": "2026-10-13T12:00:00.000Z",
+          "active": false,
+          "recommended": false
+        },
+        {
+          "id": "ben-want",
+          "activity_at": "2026-10-13T12:01:00.000Z",
+          "visible_activity": "2026-10-13T12:01:00.000Z",
+          "item_type": "want_to_watch",
+          "recommended": false,
+          "want_to_watch": true
+        }
+      ],
+      "entries": [
+        {
+          "id": "ben-want",
+          "comments": [],
+          "visible_activity": "2026-10-13T12:01:00.000Z"
+        }
+      ],
+      "incoming": 0
+    },
+    {
+      "name": "A withdrawn entry stays for its live replies",
+      "accepted": [
+        {
+          "id": "ben-recommend",
+          "activity_at": "2026-10-13T12:00:00.000Z",
+          "visible_activity": "2026-10-13T12:02:00.000Z",
+          "comments": [
+            {
+              "id": "1",
+              "author_id": "user-cam",
+              "username": "cam",
+              "display_name": "Cam Rivera",
+              "created_at": "2026-10-13T12:02:00.000Z"
+            }
+          ]
+        }
+      ],
+      "snapshot": [
+        {
+          "id": "ben-recommend",
+          "activity_at": "2026-10-13T12:00:00.000Z",
+          "visible_activity": "2026-10-13T12:02:00.000Z",
+          "comments": [
+            {
+              "id": "1",
+              "author_id": "user-cam",
+              "username": "cam",
+              "display_name": "Cam Rivera",
+              "created_at": "2026-10-13T12:02:00.000Z"
+            }
+          ],
+          "active": false,
+          "recommended": false
+        }
+      ],
+      "entries": [
+        {
+          "id": "ben-recommend",
+          "comments": [
+            "1"
+          ],
+          "visible_activity": "2026-10-13T12:02:00.000Z"
+        }
+      ],
+      "incoming": 0
+    },
+    {
+      "name": "A removed reply stays as the parent of live replies",
+      "accepted": null,
+      "snapshot": [
+        {
+          "id": "ben-recommend",
+          "activity_at": "2026-10-13T12:00:00.000Z",
+          "visible_activity": "2026-10-13T12:02:00.000Z",
+          "comments": [
+            {
+              "id": "60",
+              "author_id": "user-cam",
+              "username": "cam",
+              "display_name": "Cam Rivera",
+              "created_at": "2026-10-13T12:01:00.000Z",
+              "removed": true,
+              "body": ""
+            },
+            {
+              "id": "61",
+              "author_id": "user-dee",
+              "username": "dee",
+              "display_name": "Dee Moss",
+              "created_at": "2026-10-13T12:02:00.000Z",
+              "root_id": "60"
+            }
+          ]
+        }
+      ],
+      "entries": [
+        {
+          "id": "ben-recommend",
+          "comments": [
+            "60",
+            "61"
+          ],
+          "visible_activity": "2026-10-13T12:02:00.000Z"
+        }
+      ],
+      "incoming": 0
+    },
+    {
+      "name": "Removed and unavailable replies never count as new activity",
+      "accepted": [
+        {
+          "id": "ben-recommend",
+          "activity_at": "2026-10-13T12:00:00.000Z",
+          "visible_activity": "2026-10-13T12:00:00.000Z"
+        }
+      ],
+      "snapshot": [
+        {
+          "id": "ben-recommend",
+          "activity_at": "2026-10-13T12:00:00.000Z",
+          "visible_activity": "2026-10-13T12:00:00.000Z",
+          "comments": [
+            {
+              "id": "50",
+              "created_at": "2026-10-13T12:01:00.000Z",
+              "removed": true,
+              "body": ""
+            },
+            {
+              "id": "51",
+              "author_id": null,
+              "username": null,
+              "display_name": null,
+              "unavailable": true,
+              "body": "",
+              "created_at": "2026-10-13T12:02:00.000Z"
+            }
+          ]
+        }
+      ],
+      "entries": [
+        {
+          "id": "ben-recommend",
+          "comments": [],
+          "visible_activity": "2026-10-13T12:00:00.000Z"
+        }
+      ],
+      "incoming": 0
+    },
+    {
+      "name": "An earlier discussion is placed by its replies",
+      "accepted": null,
+      "snapshot": [
+        {
+          "id": "ben-earlier",
+          "activity_at": "2026-10-13T12:00:00.000Z",
+          "visible_activity": "2026-10-13T12:30:00.000Z",
+          "comments": [
+            {
+              "id": "40",
+              "author_id": "user-cam",
+              "username": "cam",
+              "display_name": "Cam Rivera",
+              "created_at": "2026-10-13T12:30:00.000Z"
+            }
+          ],
+          "item_type": "earlier",
+          "active": false,
+          "recommended": false
+        }
+      ],
+      "entries": [
+        {
+          "id": "ben-earlier",
+          "comments": [
+            "40"
+          ],
+          "visible_activity": "2026-10-13T12:30:00.000Z"
+        }
+      ],
+      "incoming": 0
+    },
+    {
+      "name": "An earlier discussion keeps the replies the reader accepted",
+      "accepted": [
+        {
+          "id": "ben-earlier",
+          "activity_at": "2026-10-13T12:00:00.000Z",
+          "visible_activity": "2026-10-13T12:03:00.000Z",
+          "comments": [
+            {
+              "id": "40",
+              "author_id": "user-cam",
+              "username": "cam",
+              "display_name": "Cam Rivera",
+              "created_at": "2026-10-13T12:03:00.000Z"
+            }
+          ],
+          "item_type": "earlier",
+          "active": false,
+          "recommended": false
+        }
+      ],
+      "snapshot": [
+        {
+          "id": "ben-earlier",
+          "activity_at": "2026-10-13T12:00:00.000Z",
+          "visible_activity": "2026-10-13T12:06:00.000Z",
+          "comments": [
+            {
+              "id": "40",
+              "author_id": "user-cam",
+              "username": "cam",
+              "display_name": "Cam Rivera",
+              "created_at": "2026-10-13T12:03:00.000Z"
+            },
+            {
+              "id": "41",
+              "author_id": "user-cam",
+              "username": "cam",
+              "display_name": "Cam Rivera",
+              "created_at": "2026-10-13T12:06:00.000Z"
+            }
+          ],
+          "item_type": "earlier",
+          "active": false,
+          "recommended": false
+        }
+      ],
+      "entries": [
+        {
+          "id": "ben-earlier",
+          "comments": [
+            "40"
+          ],
+          "visible_activity": "2026-10-13T12:03:00.000Z"
+        }
+      ],
+      "incoming": 1
+    },
+    {
+      "name": "Entries that Show older brings show at once, and newer ones still wait",
+      "accepted": [
+        {
+          "id": "ben-recommend",
+          "activity_at": "2026-10-13T12:10:00.000Z",
+          "visible_activity": "2026-10-13T12:10:00.000Z"
+        }
+      ],
+      "older_than": "2026-10-13T12:05:00.000Z",
+      "snapshot": [
+        {
+          "id": "ben-recommend",
+          "activity_at": "2026-10-13T12:10:00.000Z",
+          "visible_activity": "2026-10-13T12:10:00.000Z"
+        },
+        {
+          "id": "ben-want",
+          "activity_at": "2026-10-13T12:02:00.000Z",
+          "visible_activity": "2026-10-13T12:02:00.000Z",
+          "item_type": "want_to_watch",
+          "recommended": false,
+          "want_to_watch": true
+        },
+        {
+          "id": "cam-recommend",
+          "owner_id": "user-cam",
+          "username": "cam",
+          "display_name": "Cam Rivera",
+          "activity_at": "2026-10-13T12:07:00.000Z",
+          "visible_activity": "2026-10-13T12:07:00.000Z"
+        }
+      ],
+      "entries": [
+        {
+          "id": "ben-recommend",
+          "comments": [],
+          "visible_activity": "2026-10-13T12:10:00.000Z"
+        },
+        {
+          "id": "ben-want",
+          "comments": [],
+          "visible_activity": "2026-10-13T12:02:00.000Z"
+        }
+      ],
+      "incoming": 1
+    }
+  ]
+}

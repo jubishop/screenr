@@ -128,12 +128,7 @@ function AtHome({ data, own }: { data: AtHomePage; own: boolean }) {
             <p className="small muted">On your services or free.</p>
             <div className="search-results">
               {ready.map((title) => (
-                <TitleCard
-                  key={title.id}
-                  title={title}
-                  heading="h3"
-                  serviceIds={title.matchingServiceIds}
-                />
+                <TitleCard key={title.id} title={title} heading="h3" />
               ))}
             </div>
           </section>
@@ -157,12 +152,7 @@ function AtHome({ data, own }: { data: AtHomePage; own: boolean }) {
             </p>
             <div className="search-results">
               {unknown.map((title) => (
-                <TitleCard
-                  key={title.id}
-                  title={title}
-                  heading="h3"
-                  serviceIds={title.matchingServiceIds}
-                />
+                <TitleCard key={title.id} title={title} heading="h3" />
               ))}
             </div>
           </section>

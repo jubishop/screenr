@@ -1,6 +1,6 @@
 import { Link } from "./pending-navigation";
 import type { ReactNode } from "react";
-import type { ReleaseTitle, SaveSurface, Title, ViewingTitle } from "../shared";
+import type { AccessTitle, ReleaseTitle, SaveSurface, Title } from "../shared";
 import { Poster } from "./poster";
 import { TitleServices } from "./title-services";
 import { TitleStatus } from "./title-status";
@@ -23,14 +23,12 @@ export function titleDetails(title: Pick<Title, "kind" | "release_date">) {
 export function TitleCard({
   title,
   heading: Heading,
-  serviceIds,
   shared,
   from,
   children,
 }: {
-  title: ViewingTitle | ReleaseTitle;
+  title: AccessTitle | ReleaseTitle;
   heading: "h2" | "h3";
-  serviceIds?: string[];
   shared?: boolean;
   from?: SaveSurface;
   children?: ReactNode;
@@ -50,7 +48,7 @@ export function TitleCard({
         {"viewing" in title && (
           <TitleServices
             viewing={title.viewing}
-            serviceIds={serviceIds ?? []}
+            matchingServiceIds={title.matchingServiceIds}
             shared={shared}
           />
         )}

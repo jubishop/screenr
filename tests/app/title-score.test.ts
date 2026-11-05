@@ -292,7 +292,7 @@ test("title lists and search results carry the stored score, and search summarie
     { id: 645, media_type: "tv", name: "Searched 645", ...votes(6, 19) },
     { id: 641, media_type: "movie", title: "Listed 641", ...votes(9.9, 999) },
   ];
-  const found = await findTitles("searched");
+  const found = await findTitles("searched", "viewer");
   assert.deepEqual(scores(found), {
     "movie:644": 56,
     "tv:645": null,

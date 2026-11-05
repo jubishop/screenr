@@ -11,7 +11,7 @@
   },
   "response": {
     "status": 200,
-    "etag": "W/\"2sWp-z0D21szYntbbzcXA4yYrsSCES7cJichi1L0i5s\"",
+    "etag": "W/\"rxzXXKNVJuDyoWXl-XCfJWB0lJS2dfoszTZUgGIBFpM\"",
     "body": {
       "kind": "search",
       "suggestions": [
@@ -63,7 +63,11 @@
               }
             ]
           },
-          "tmdb_score": 81
+          "tmdb_score": 81,
+          "access": "available",
+          "matchingServiceIds": [
+            "service:hulu"
+          ]
         }
       ],
       "recommendations": [],
