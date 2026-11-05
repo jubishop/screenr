@@ -47,6 +47,17 @@ struct ConversationStarterTests {
     #expect(starter.state == .failed("The discussion-post failed."))
   }
 
+  // The server counts a post's length in UTF-16 code units, as JavaScript
+  // does, so most emoji count as two.
+  @Test func limitsADraftTo2000CharactersAsTheServerCountsThem() {
+    let starter = ConversationStarter(subject: .post, api: RecordingAPI()) {}
+
+    starter.setBody(String(repeating: "a", count: 2_100))
+    #expect(starter.draft.body.count == 2_000)
+    starter.setBody(String(repeating: "🎬", count: 2_000))
+    #expect(starter.draft.body == String(repeating: "🎬", count: 1_000))
+  }
+
   @Test func labelsATVCommentWithASeasonAndEpisode() async {
     let api = RecordingAPI([
       "seasons": .success([

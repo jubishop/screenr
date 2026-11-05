@@ -26,18 +26,23 @@ struct ScreenrApp: App {
     // Sentry starts first, so it can catch a crash in the rest of launch.
     let telemetry = Telemetry(configuration: configuration)
     self.telemetry = telemetry
+    let launch: InstallLaunch
     if let directory = LogFile.directory(appGroup: configuration.appGroup) {
       let logFile = LogFile(directory: directory, name: "app")
+      // Before this launch logs, so the log shows only earlier launches.
+      launch = InstallLaunch.record(defaults: .standard, appLog: logFile)
       LogRouter.shared.add(logFile)
       self.logFile = logFile
     } else {
+      launch = InstallLaunch.record(defaults: .standard, appLog: nil)
       logFile = nil
       Log.app.fault("The app group container is unavailable, so the log file is off")
     }
     Log.app.info(
       "Launched",
       .label("variant", configuration.variant),
-      .label("telemetry", telemetry.state)
+      .label("telemetry", telemetry.state),
+      .bool("first_since_install", launch == .first)
     )
     let arguments = ProcessInfo.processInfo.arguments
     // Screenr Dev's share extension answers from the same fixtures.
@@ -49,6 +54,7 @@ struct ScreenrApp: App {
         observer: telemetry,
         feedback: telemetry.feedback,
         logFile: logFile,
+        launch: launch,
         push: SystemPush()
       )
     } catch {

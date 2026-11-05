@@ -9,8 +9,10 @@ import Observation
 // - Registration: while the member's tabs show and notifications are
 //   allowed, each launch and each return to the foreground asks APNs for the
 //   device token and registers it once for the session with `push-device`.
-//   Turning notifications off in iOS Settings removes the session's device.
-//   Signing out ends the session, which removes its devices on the server.
+//   While they are off in iOS Settings, the app asks APNs for the token all
+//   the same, which APNs issues regardless, and removes the device once per
+//   launch, since an earlier launch may have registered it. Signing out ends
+//   the session, which removes its devices on the server.
 // - Badge: the app icon shows the unread count the app last read.
 // - Session end: the badge and Notification Center clear. A launch without a
 //   session clears them too, since the session may have ended in an
@@ -19,7 +21,9 @@ import Observation
 //   does, and marks it read. One the member can no longer see opens the bell.
 // - Actions: Accept and Decline answer a friend request, and Reply posts a
 //   reply to the notification's comment and marks it read, in the
-//   background, without opening the app.
+//   background, without opening the app. One that fails for a reason that
+//   may pass posts an alert in its place, which opens the notification again,
+//   with a reply's text kept for its composer.
 // - While open: an arriving push makes the visible screen read again.
 @MainActor
 @Observable
@@ -33,10 +37,13 @@ public final class PushNotifications {
     case ready
   }
 
+  // What this launch knows of the device on the server for the session.
   private enum Registration: Equatable {
     case none
     case sending(String)
     case registered(String)
+    case removing(String)
+    case removed(String)
   }
 
   @ObservationIgnored private let api: any ScreenrAPI
@@ -82,11 +89,9 @@ public final class PushNotifications {
     await readPermission()
     guard member == .ready else { return }
     switch permission {
-    case .allowed:
+    case .allowed, .denied:
       system.registerForRemoteNotifications()
-      await registerIfNeeded()
-    case .denied:
-      await removeDevice()
+      await updateDevice()
     case .undecided, .unknown:
       break
     }
@@ -123,7 +128,7 @@ public final class PushNotifications {
         return byte < 16 ? "0" + digits : digits
       }
       .joined()
-    await registerIfNeeded()
+    await updateDevice()
   }
 
   public func registrationFailed(_ error: any Error) {
@@ -167,6 +172,12 @@ public final class PushNotifications {
       }
       return
     }
+    // The alert of a reply that did not post opens its composer with the text.
+    if let reply = tap.unpostedReply, let thread = notification.thread,
+      let comment = notification.comment
+    {
+      shell.keepReply(reply, for: .reply(entry: thread, comment: comment))
+    }
     shell.router.open(Destination(path: notification.item.href))
     do throws(APIError) {
       _ = try await api.send(.readNotification(id: id))
@@ -197,22 +208,39 @@ public final class PushNotifications {
   // Accept and Decline answer the request as the bell's buttons do, which
   // marks its notification read.
   private func respond(to id: String, _ response: FriendRequestResponse) async {
-    let action = PushAction.respond(response).identifier
+    let action = PushAction.respond(response)
     do throws(APIError) {
       _ = try await api.send(.respondToFriendRequest(notification: id, response))
     } catch {
-      actionFailed(action, error)
+      await actionFailed(action, notificationID: id, error)
       return
     }
-    Log.push.info("Answered a friend request from its notification", .label("action", action))
+    Log.push.info(
+      "Answered a friend request from its notification",
+      .label("action", action.identifier)
+    )
     shell.refreshLiveReads()
   }
 
   // Reply answers the notification's comment in its conversation, then marks
   // the notification read. A reply that fails leaves it unread in the bell.
+  // The server counts the trimmed text's UTF-16 code units, so a longer reply
+  // is never sent.
   private func reply(to id: String, _ text: String) async {
     guard CommentDraft(body: text).isPostable else {
       Log.push.info("Skipped an empty reply from a notification")
+      return
+    }
+    let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard trimmed.utf16.count <= CommentDraft.maximumLength else {
+      Log.push.info("A reply from a notification was too long to post")
+      await post(
+        FailedActionAlert(
+          notificationID: id,
+          action: .reply(text),
+          body: "Replies can have up to 2,000 characters."
+        )
+      )
       return
     }
     let notification: PushNotification
@@ -224,7 +252,7 @@ public final class PushNotifications {
         return
       }
     } catch {
-      actionFailed(.reply, error)
+      await actionFailed(.reply(text), notificationID: id, error)
       return
     }
     guard let thread = notification.thread, let comment = notification.comment else {
@@ -236,7 +264,7 @@ public final class PushNotifications {
         .comment(conversation: thread, body: text, spoiler: false, replyTo: comment)
       )
     } catch {
-      actionFailed(.reply, error)
+      await actionFailed(.reply(text), notificationID: id, error)
       return
     }
     Log.push.info("Replied from a notification")
@@ -255,28 +283,57 @@ public final class PushNotifications {
   // An action whose request or notification is gone, such as one answered
   // elsewhere or a removed comment, or one while signed out or needing an
   // update, which the session's phase shows, is expected. Other failures are
-  // warnings, which reach Sentry.
-  private func actionFailed(_ action: PushAction.Identifier, _ error: APIError) {
+  // warnings, which reach Sentry, and post an alert in the action's place,
+  // since the member may try again.
+  private func actionFailed(
+    _ action: PushAction,
+    notificationID: String,
+    _ error: APIError
+  ) async {
     switch error.kind {
     case .notFound, .signedOut, .updateRequired:
       Log.push.info(
         "A notification action no longer applies",
-        .label("action", action),
+        .label("action", action.identifier),
         .identifier("request_id", error.requestID)
       )
     default:
       Log.push.warning(
         "A notification action failed",
-        .label("action", action),
+        .label("action", action.identifier),
         .error(error),
         .identifier("request_id", error.requestID)
       )
+      await post(FailedActionAlert(notificationID: notificationID, action: action, error: error))
+    }
+  }
+
+  private func post(_ alert: FailedActionAlert) async {
+    do {
+      try await system.post(alert)
+    } catch {
+      Log.push.warning(
+        "Posting a failed action's alert failed",
+        .label("action", alert.action.identifier),
+        .error(error)
+      )
+    }
+  }
+
+  // Registers the device while notifications are allowed and removes it
+  // while they are off.
+  private func updateDevice() async {
+    switch permission {
+    case .allowed: await registerIfNeeded()
+    case .denied: await removeIfNeeded()
+    case .undecided, .unknown: break
     }
   }
 
   private func registerIfNeeded() async {
     guard member == .ready, permission == .allowed, let token else { return }
-    guard registration != .sending(token), registration != .registered(token) else { return }
+    let busy: [Registration] = [.sending(token), .registered(token), .removing(token)]
+    guard !busy.contains(registration) else { return }
     registration = .sending(token)
     do throws(APIError) {
       _ = try await api.send(
@@ -295,15 +352,30 @@ public final class PushNotifications {
     }
   }
 
-  private func removeDevice() async {
-    guard case .registered(let token) = registration else { return }
-    registration = .none
+  // Removes the device this launch registered, or else the one APNs's
+  // token names, which an earlier launch may have registered for the
+  // session. A registration in flight is removed on the next return.
+  private func removeIfNeeded() async {
+    guard member == .ready, permission == .denied else { return }
+    let removing: String
+    switch registration {
+    case .registered(let registered):
+      removing = registered
+    case .none, .removed:
+      guard let token, registration != .removed(token) else { return }
+      removing = token
+    case .sending, .removing:
+      return
+    }
+    let previous = registration
+    registration = .removing(removing)
     do throws(APIError) {
-      _ = try await api.send(.removePushDevice(token: token))
-      Log.push.info("Removed the device after notifications were turned off")
+      _ = try await api.send(.removePushDevice(token: removing))
+      if registration == .removing(removing) { registration = .removed(removing) }
+      Log.push.info("Removed the device while notifications are off")
     } catch {
       // The next return tries again.
-      if registration == .none { registration = .registered(token) }
+      if registration == .removing(removing) { registration = previous }
       Log.push.warning("Removing the push device failed", .error(error))
     }
   }
@@ -324,16 +396,23 @@ public final class PushNotifications {
 }
 
 // What a tapped push names: its notification, from the payload's
-// `notificationId`.
+// `notificationId`, and for the alert of a reply that did not post, the
+// reply's text.
 public struct PushTap: Hashable, Sendable {
-  public let notificationID: String?
+  static let notificationKey = "notificationId"
+  static let unpostedReplyKey = "unpostedReply"
 
-  public init(notificationID: String?) {
+  public let notificationID: String?
+  public let unpostedReply: String?
+
+  public init(notificationID: String?, unpostedReply: String? = nil) {
     self.notificationID = notificationID
+    self.unpostedReply = unpostedReply
   }
 
   public init(userInfo: [AnyHashable: Any]) {
-    notificationID = userInfo["notificationId"] as? String
+    notificationID = userInfo[Self.notificationKey] as? String
+    unpostedReply = userInfo[Self.unpostedReplyKey] as? String
   }
 
   // A notification that Screenr Dev opens at launch, as if the member had

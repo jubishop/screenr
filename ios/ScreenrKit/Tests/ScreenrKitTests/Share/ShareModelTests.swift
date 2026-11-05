@@ -190,6 +190,33 @@ struct ShareTitleModelTests {
     #expect(api.requests.map(\.action) == ["screen"])
   }
 
+  // A save in flight may already have reached the server, so the share
+  // counts its pages' saves, and Close stays off until each one answers.
+  // Reads, such as the page's read after the save, do not count.
+  @Test func countsASaveInFlightUntilItAnswers() async throws {
+    let api = GatedAPI(
+      RecordingAPI([
+        "screen": try reply("screen/title/full-top-ten"),
+        "watch-status": .success(["id": "1"]),
+      ]),
+      holding: [2]
+    )
+    let share = ShareModel(api: api)
+    let page = share.page(for: try title("full-top-ten"))
+    await page.load()
+    let header = try #require(page.header)
+    #expect(!share.isSaving)
+
+    let saving = Task { await page.toggleWantToWatch(header) }
+    await api.waitForRequests(2)
+    #expect(share.isSaving)
+
+    api.open()
+    await saving.value
+    #expect(!share.isSaving)
+    #expect(api.requests.map(\.action) == ["screen", "watch-status", "screen"])
+  }
+
   @Test func recommendsWithoutASurface() async throws {
     let api = RecordingAPI([
       "screen": try reply("screen/title/full-top-ten"),

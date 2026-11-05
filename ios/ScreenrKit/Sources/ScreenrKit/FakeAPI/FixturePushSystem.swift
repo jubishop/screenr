@@ -4,7 +4,7 @@ import Foundation
 // permission prompt. It reports the scenario's permission, and a member who
 // has not decided allows notifications when asked. It gets no device token,
 // so the app never registers a device, and it leaves the badge and
-// Notification Center alone.
+// Notification Center alone, posting no alerts.
 @MainActor
 public final class FixturePushSystem: PushSystem {
   private var current: PushPermission
@@ -25,6 +25,8 @@ public final class FixturePushSystem: PushSystem {
   public func setBadgeCount(_ count: Int) async throws {}
 
   public func removeDeliveredNotifications() {}
+
+  public func post(_ alert: FailedActionAlert) async throws {}
 }
 
 extension FixtureScenario {

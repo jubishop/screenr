@@ -5,7 +5,8 @@ import SwiftUI
 // share: a scrolling list of entries with their discussions, beneath the
 // screen's own header. Other people's new activity waits behind New activity,
 // which shows it without moving the entry at the top of the screen; a
-// permalink's entry or reply scrolls into view highlighted; and destructive
+// permalink's entry or reply scrolls into view highlighted; a reply that a
+// notification's Reply did not post opens in its composer; and destructive
 // actions ask first. The screen keeps `feed` across reads, since a failed
 // read replaces this view.
 struct FeedList<Header: View>: View {
@@ -30,6 +31,7 @@ struct FeedList<Header: View>: View {
   var history: HistoryPage?
   @ViewBuilder var header: () -> Header
 
+  @Environment(ShellModel.self) private var shell
   @State private var scrolled: FeedScrollTarget?
   @State private var pendingReply: String?
   // The entry at the top of the screen once the reader scrolls, which stays
@@ -124,6 +126,7 @@ struct FeedList<Header: View>: View {
       }
       .onChange(of: snapshot, initial: true) { _, snapshot in
         feed.receive(snapshot, viewer: viewer.userId)
+        feed.restoreReplies(from: shell, in: snapshot, viewer: viewer.userId)
       }
       .onChange(of: scrollTarget, initial: true) { _, target in
         scroll(to: target, in: layout, proxy)

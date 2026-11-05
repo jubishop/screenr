@@ -15,6 +15,7 @@ public enum ComposerTarget: Hashable, Sendable {
 }
 
 public struct CommentDraft: Hashable, Sendable {
+  // In UTF-16 code units, as the server counts it.
   public static let maximumLength = 2_000
 
   public var body = ""
@@ -311,7 +312,23 @@ public final class FeedModel {
   }
 
   public func setBody(_ body: String, for target: ComposerTarget) {
-    drafts[target, default: CommentDraft()].body = String(body.prefix(CommentDraft.maximumLength))
+    drafts[target, default: CommentDraft()].body = body.prefix(
+      utf16Limit: CommentDraft.maximumLength
+    )
+  }
+
+  // Opens the reply composers whose replies the shell kept for entries this
+  // snapshot shows, such as a notification's Reply that did not post, with
+  // the text as each one's draft, cut to the limit as typing would. A draft
+  // the reader already started there stays.
+  public func restoreReplies(from shell: ShellModel, in snapshot: [FeedItem], viewer: String) {
+    guard !shell.keptReplies.isEmpty else { return }
+    let shown = Set(layout(snapshot, viewer: viewer).entries.map(\.id))
+    for target in shell.keptReplies.keys where shown.contains(target.entry) {
+      guard let text = shell.takeReply(for: target) else { continue }
+      if !draft(for: target).isPostable { setBody(text, for: target) }
+      open(target)
+    }
   }
 
   public func setSpoiler(_ spoiler: Bool, for target: ComposerTarget) {

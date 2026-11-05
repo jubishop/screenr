@@ -363,6 +363,9 @@ struct TitlePageModelTests {
     model.openReview(try Self.header("movie"))
     model.review.setBody(String(repeating: "a", count: 2_100))
     #expect(model.review.draft.body.count == 2_000)
+    // As the server counts it, in UTF-16 code units: most emoji count as two.
+    model.review.setBody(String(repeating: "🎬", count: 2_000))
+    #expect(model.review.draft.body == String(repeating: "🎬", count: 1_000))
     model.review.rate(9)
     #expect(model.review.draft.rating == 5)
     model.review.rate(nil)

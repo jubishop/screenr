@@ -240,8 +240,9 @@ them; see
 Signing out deletes that session's devices. The worker sends each new
 notification to the member's devices as it is created. The iPhone app asks
 for permission after a new member joins or when a member first opens the
-bell, registers its device on each launch, and opens a tapped notification's
-item and marks it read; see
+bell, registers its device on each launch, removes it while notifications are
+off in iOS Settings, and opens a tapped notification's item and marks it
+read; see
 [iPhone push notifications](../ios/README.md#push-notifications).
 
 ### Push delivery

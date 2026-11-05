@@ -33,6 +33,9 @@ public final class ShellModel {
   // Results that a screen shows when it next appears, such as "You blocked
   // Ben Ortiz." on Friends after Block closes the profile.
   public private(set) var notices: [Destination: String] = [:]
+  // Replies that a notification's Reply did not post, each waiting for the
+  // first feed that shows its entry to open its composer with the text.
+  @ObservationIgnored private(set) var keptReplies: [ComposerTarget: String] = [:]
 
   @ObservationIgnored public let api: any ScreenrAPI
   @ObservationIgnored private let clock: any Clock<Duration>
@@ -91,6 +94,7 @@ public final class ShellModel {
     viewer = nil
     setUnreadNotifications(0)
     notices = [:]
+    keptReplies = [:]
     router.sessionEnded(ending)
   }
 
@@ -153,6 +157,16 @@ public final class ShellModel {
 
   public func dismissNotice(on destination: Destination) {
     if notices[destination] != nil { notices[destination] = nil }
+  }
+
+  // Keeps a reply that did not post for the composer `target` names.
+  func keepReply(_ text: String, for target: ComposerTarget) {
+    keptReplies[target] = text
+  }
+
+  // Hands over the kept reply for `target`, once.
+  func takeReply(for target: ComposerTarget) -> String? {
+    keptReplies.removeValue(forKey: target)
   }
 
   public func appActivityChanged(_ isActive: Bool) {

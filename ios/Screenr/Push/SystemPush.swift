@@ -32,4 +32,10 @@ final class SystemPush: PushSystem {
   func removeDeliveredNotifications() {
     center.removeAllDeliveredNotifications()
   }
+
+  func post(_ alert: FailedActionAlert) async throws {
+    try await center.add(
+      UNNotificationRequest(identifier: alert.identifier, content: alert.content, trigger: nil)
+    )
+  }
 }

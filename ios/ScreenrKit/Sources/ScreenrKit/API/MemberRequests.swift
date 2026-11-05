@@ -461,6 +461,8 @@ enum MemberPath {
     case 1 where ["search", "people", "invites", "account", "watch-together"].contains(parts[0]):
       return "/\(parts[0])"
     case 2 where parts[0] == "people": return "/people/:username"
+    case 3 where parts[0] == "people" && parts[2] == "want-to-watch":
+      return "/people/:username/want-to-watch"
     case 2 where parts[0] == "conversations": return "/conversations/:id"
     case 3 where parts[0] == "titles": return "/titles/:kind/:id"
     default: return "/:unknown"

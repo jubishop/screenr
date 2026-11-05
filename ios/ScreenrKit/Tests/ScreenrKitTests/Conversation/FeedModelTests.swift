@@ -127,11 +127,52 @@ struct FeedModelTests {
     #expect(feed.composerLabel(reply, in: try entry(aliceComment)) == "Replying to @ben")
   }
 
-  @Test func limitsADraftTo2000Characters() {
+  // A notification's Reply that did not post waits in the shell for the
+  // first feed that shows its entry, which opens the reply composer with the
+  // text as its draft. A feed without the entry leaves it waiting.
+  @Test func opensAReplyComposerWithAKeptReply() throws {
+    let shell = ShellModel(api: RecordingAPI(), clock: TestClock())
+    let target = ComposerTarget.reply(entry: aliceComment, comment: "3")
+    shell.keepReply("Agreed.", for: target)
+
+    let other = model(RecordingAPI(), RefreshCounter())
+    other.restoreReplies(from: shell, in: [], viewer: alice)
+    #expect(!other.isOpen(target))
+    #expect(shell.keptReplies == [target: "Agreed."])
+
+    let feed = model(RecordingAPI(), RefreshCounter())
+    feed.restoreReplies(from: shell, in: snapshot, viewer: alice)
+    #expect(feed.isOpen(target))
+    #expect(feed.draft(for: target).body == "Agreed.")
+    #expect(feed.canPost(target, in: try entry(aliceComment)))
+    #expect(shell.keptReplies.isEmpty)
+  }
+
+  // A kept reply over the limit fits the composer as typing would.
+  @Test func limitsAKeptReplyAsTheComposerDoes() {
+    let shell = ShellModel(api: RecordingAPI(), clock: TestClock())
+    let target = ComposerTarget.reply(entry: aliceComment, comment: "3")
+    shell.keepReply(String(repeating: "🎬", count: 1_001), for: target)
+
+    let feed = model(RecordingAPI(), RefreshCounter())
+    feed.restoreReplies(from: shell, in: snapshot, viewer: alice)
+
+    #expect(feed.draft(for: target).body == String(repeating: "🎬", count: 1_000))
+  }
+
+  // The server counts a comment's length in UTF-16 code units, as JavaScript
+  // does, so most emoji count as two, and a cut never splits a character.
+  @Test func limitsADraftTo2000CharactersAsTheServerCountsThem() {
     let feed = model(RecordingAPI(), RefreshCounter())
     let target = ComposerTarget.entry(alicePost)
     feed.setBody(String(repeating: "a", count: 2_100), for: target)
     #expect(feed.draft(for: target).body.count == 2_000)
+
+    feed.setBody(String(repeating: "🎬", count: 2_000), for: target)
+    #expect(feed.draft(for: target).body == String(repeating: "🎬", count: 1_000))
+
+    feed.setBody(String(repeating: "a", count: 1_999) + "🎬", for: target)
+    #expect(feed.draft(for: target).body == String(repeating: "a", count: 1_999))
   }
 
   @Test func reactsAndRemovesTheChosenReaction() async throws {

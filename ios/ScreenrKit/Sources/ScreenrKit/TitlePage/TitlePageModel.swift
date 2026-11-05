@@ -275,7 +275,7 @@ public final class ReviewEditor {
   }
 
   public func setBody(_ body: String) {
-    draft.body = String(body.prefix(ReviewDraft.maximumLength))
+    draft.body = body.prefix(utf16Limit: ReviewDraft.maximumLength)
   }
 
   public func setSpoiler(_ spoiler: Bool) {

@@ -89,7 +89,7 @@ public final class ConversationStarter {
   }
 
   public func setBody(_ body: String) {
-    draft.body = String(body.prefix(CommentDraft.maximumLength))
+    draft.body = body.prefix(utf16Limit: CommentDraft.maximumLength)
   }
 
   public func setSpoiler(_ spoiler: Bool) {

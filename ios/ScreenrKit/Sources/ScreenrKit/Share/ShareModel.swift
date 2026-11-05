@@ -32,6 +32,8 @@ public final class ShareModel {
   public private(set) var phase = Phase.resolving
   // The search, and its results, which a chosen result's page leaves in place.
   public let find: FindModel
+  // The title pages' saves in flight, even from a page the member left.
+  private var saves = 0
 
   @ObservationIgnored private let api: any ScreenrAPI
   @ObservationIgnored private let clock: any Clock<Duration>
@@ -83,6 +85,43 @@ public final class ShareModel {
   public func search(_ text: String) {
     find.apply(.search(query: text))
     phase = .search
+  }
+
+  // Whether a save is in flight, which the server may already have applied.
+  // Close stays off until it answers, since closing the sheet ends the
+  // extension.
+  public var isSaving: Bool { saves > 0 }
+
+  // A shared title's page, whose saves `isSaving` counts.
+  public func page(for title: Title) -> ShareTitleModel {
+    ShareTitleModel(title: title, api: CountedSaves(api: api, share: self))
+  }
+
+  fileprivate func saveStarted() {
+    saves += 1
+  }
+
+  fileprivate func saveFinished() {
+    saves -= 1
+  }
+}
+
+// Sends a title page's requests, counting its saves for `ShareModel.isSaving`.
+private struct CountedSaves: ScreenrAPI {
+  let api: any ScreenrAPI
+  let share: ShareModel
+
+  func send<Response>(_ request: APIRequest<Response>) async throws(APIError) -> Response {
+    guard request.method == .post else { return try await api.send(request) }
+    await share.saveStarted()
+    let result: Result<Response, APIError>
+    do throws(APIError) {
+      result = .success(try await api.send(request))
+    } catch {
+      result = .failure(error)
+    }
+    await share.saveFinished()
+    return try result.get()
   }
 }
 
