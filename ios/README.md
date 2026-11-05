@@ -698,7 +698,7 @@ the account forget it. [Settings](#settings) ends with `SignOutButton`.
 | `IncomingActivityButton` | `Screenr/Shell/` | The New activity control; `.incomingActivity(_:count:show:)` floats it over a screen, and only the control animates. `show` must keep the reader's place, as `FeedList` does. The control's identifier is `incoming-activity`; `performShellAudit()` treats its glass like a bar's, so a test checks its label with `labelContrast()`. |
 | `ShareButton` | `Screenr/Shell/` | A `ShareLink` for a destination's screenr.club link. |
 | `.keyboardSafeSheet(item:content:)` | `Screenr/Shared/` | Presents every sheet in the app. It ends text editing before the sheet opens, so UIKit has no keyboard to bring back as the sheet closes; see the [keyboard deadlock](#toolchain-notes). |
-| `.keyboardSafeNavigation(_:)` | `Screenr/Shared/` | Ends text editing as a tab's navigation path grows, before the push starts, whether a link or `Router` pushed, so the pop has no keyboard to bring back; see the [keyboard deadlock](#toolchain-notes). |
+| `.keyboardSafeNavigation(_:)` | `Screenr/Shared/` | Ends text editing whenever a tab's navigation path shows a new screen, before the transition starts, whether a link or `Router` changed it, so a later pop has no keyboard to bring back; see the [keyboard deadlock](#toolchain-notes). |
 | Feature screens | `Screenr/Screens/` | One file per screen. Each starts as a `PlaceholderScreen` that shows what the screen holds and its path. |
 
 ### Links
@@ -2141,10 +2141,10 @@ accent.
   - `.keyboardSafeSheet(item:content:)` ends editing before every sheet
     opens, and `tests/test_ios_sheets.py` fails when the app or an extension
     presents a sheet, cover, or popover any other way.
-  - `.keyboardSafeNavigation(_:)` ends editing as a tab's navigation path
-    grows, before the push starts. Otherwise UIKit ends it inside a Core
-    Animation commit as the push starts, and brings the keyboard back as the
-    pop animates.
+  - `.keyboardSafeNavigation(_:)` ends editing whenever a tab's navigation
+    path shows a new screen, before the transition starts. Otherwise editing
+    ends inside a Core Animation commit as a push starts or a replaced screen
+    goes, and UIKit brings the keyboard back as the pop animates.
   - A composer takes focus only as it opens, not each time its screen
     appears again, such as after a pop or a tab switch.
 
