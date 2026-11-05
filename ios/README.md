@@ -568,11 +568,11 @@ Better Auth's routes answer with their recorded `auth/` fixtures: requesting
 a code, signing in, which returns `FixtureTransport.token` in
 `set-auth-token` and Alice as the user, linking, and signing out succeed,
 and every invitation link is available, unless an `auth/` override answers
-the route, such as `auth/email-otp/send-verification-otp/rate-limited` or
-`auth/invitation/unavailable`. Apple and Google sign-in and linking accept
-only the stub credentials described in [Sign-in](#sign-in), and answer
-others with the route's `invalid-token` fixture. Photos are not served, so
-avatars show initials.
+the route, such as `auth/email-otp/send-verification-otp/rate-limited`,
+`auth/sign-out/failed`, or `auth/invitation/unavailable`. Apple and Google
+sign-in and linking accept only the stub credentials described in
+[Sign-in](#sign-in), and answer others with the route's `invalid-token`
+fixture. Photos are not served, so avatars show initials.
 
 ## Sign-in
 
@@ -1135,9 +1135,9 @@ Settings is the `/account` screen in the sheet that the You tab's gear opens.
 `Screenr/Screens/AccountView.swift` lists its sections, and each section is a
 view in `Screens/Settings/` that takes a `SettingsContext`: the loaded
 `AccountScreen`, the signed-in `Person`, `refresh()` to read the screen after
-a change, and `open(_:)` for an editor sheet. Its behavior lives in
-ScreenrKit's `Settings/`, `Photos/`, `Invitations/`, and `Feedback/` view
-models.
+a change, `open(_:)` for an editor sheet, and the screen's `SignOutModel`.
+Its behavior lives in ScreenrKit's `Settings/`, `Photos/`, `Invitations/`,
+and `Feedback/` view models.
 
 | Section | View model | What it does |
 | --- | --- | --- |
@@ -1149,15 +1149,17 @@ models.
 | Streaming services | `StreamingServicesModel` | A sheet with search, the selection, and Clear selections. |
 | Sign-in methods | `AccountLinkModel` | Connect Google runs the sign-in flow's PKCE code flow, and Sign in with Apple uses the system button; each posts the credential to `link-social`. Against the fixture API, both use the sign-in stubs. |
 | Feedback | `FeedbackModel` | Send feedback opens a sheet for a message and up to three screenshots, sent to Sentry with recent log tails; see [Feedback](#feedback). |
-| Sign out | `SignOutModel` | `SignOutButton`. |
+| Sign out | `SignOutModel` | `SignOutButton`, with the screen's `signOutFailure(_:)` alert when the server does not confirm it. |
 | Delete account | `AccountDeletionModel` | A sheet that confirms it's the member with a new sign-in, then deletes the account after a confirmation; see [account deletion](#account-deletion). |
 
 A new setting adds its section to `AccountView`'s list in one line, such as
 `PushSettingsSection(settings)`; Delete account stays last. A section that
 edits a draft opens its editor with
 `settings.open(_:)` after adding a case to `SettingsEditor`. `AccountView`
-presents those sheets outside `ScreenContent`, so a failed read, which
-replaces the sections with the error, keeps an open draft.
+presents those sheets, and the sign-out failure alert, outside
+`ScreenContent`, so a failed read, which replaces the sections with the
+error, keeps an open draft or alert. Setup shows `SignOutButton` too and
+presents the same alert; no read replaces its content.
 
 Section headings use `SectionHeading`, and a setting's value `SettingRow`,
 which keep the primary color: the system's gray falls short of the contrast
@@ -1170,7 +1172,8 @@ such as Remove photo, uses `.danger`, since the system's red falls short of
 and removing a photo, creating and revoking an invitation, revoking through a
 failed read beneath the confirmation, which `FixtureOutage` causes, turning on
 notifications and changing a push setting, connecting Sign in with Apple,
-sending feedback, and signing out. They check what each write sent in the
+sending feedback, signing out, and a failed sign-out whose alert stays up
+through a failed read beneath it. They check what each write sent in the
 fixture API's request log, since a screen read after a write still returns
 the fixture. Their `performSettingsAudit()` leaves out the Dynamic Type and
 clipping checks, which the iOS 27 Simulator fails for the system's list text

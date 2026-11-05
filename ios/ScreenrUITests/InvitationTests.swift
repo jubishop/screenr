@@ -88,7 +88,14 @@ final class InvitationTests: XCTestCase {
   @MainActor
   func testShowsSetupProblemsInTheServersWords() throws {
     let app = XCUIApplication()
-    app.launch(with: FixtureLaunch(viewer: "pat", profile: .pending, link: Self.link))
+    app.launch(
+      with: FixtureLaunch(
+        viewer: "pat",
+        profile: .pending,
+        overrides: ["auth/sign-out/failed"],
+        link: Self.link
+      )
+    )
 
     let username = app.textFields["Username"]
     XCTAssertTrue(username.waitForExistence(timeout: 10))
@@ -100,6 +107,17 @@ final class InvitationTests: XCTestCase {
     XCTAssertTrue(app.staticTexts["That username is already taken."].waitForExistence(timeout: 5))
     XCTAssertFalse(app.tabBars.firstMatch.exists)
     try app.performScreenrAudit()
+
+    // A sign-out the server could not confirm keeps setup open and says so.
+    let signOut = app.buttons["Sign out"]
+    app.scrollTo(signOut)
+    signOut.tap()
+    let alert = app.alerts["Could not sign out"]
+    XCTAssertTrue(alert.waitForExistence(timeout: 10))
+    XCTAssertTrue(alert.staticTexts["Could not sign out. Try again."].exists)
+    alert.buttons["OK"].tap()
+    XCTAssertTrue(alert.waitForNonExistence(timeout: 10))
+    XCTAssertTrue(app.buttons["Join Screenr"].exists)
   }
 
   // Waits for setup to fill in the name from the account.

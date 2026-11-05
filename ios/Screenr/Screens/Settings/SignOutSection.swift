@@ -1,7 +1,7 @@
 import ScreenrKit
 import SwiftUI
 
-// Signs this iPhone out.
+// Signs this iPhone out. The Settings screen presents a failure's alert.
 struct SignOutSection: View {
   let settings: SettingsContext
 
@@ -11,7 +11,7 @@ struct SignOutSection: View {
 
   var body: some View {
     Section {
-      SignOutButton()
+      SignOutButton(model: settings.signOut)
     }
   }
 }

@@ -14,7 +14,8 @@ struct SetupView: View {
     SetupForm(
       model: SetupModel(api: api, invitation: invitation) { [shell] in
         await shell.checkAccount()
-      }
+      },
+      signOut: SignOutModel(api: api)
     )
   }
 }
@@ -26,11 +27,13 @@ private struct SetupForm: View {
   }
 
   @State private var model: SetupModel
+  @State private var signOut: SignOutModel
   @FocusState private var focus: Field?
   @Environment(PendingInvitation.self) private var invitation
 
-  init(model: SetupModel) {
+  init(model: SetupModel, signOut: SignOutModel) {
     _model = State(initialValue: model)
+    _signOut = State(initialValue: signOut)
   }
 
   var body: some View {
@@ -45,7 +48,7 @@ private struct SetupForm: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         join
-        SignOutButton()
+        SignOutButton(model: signOut)
       }
       .padding(.horizontal, 24)
       .padding(.vertical, 40)
@@ -55,6 +58,7 @@ private struct SetupForm: View {
     .scrollDismissesKeyboard(.interactively)
     .background(Color(uiColor: .systemBackground))
     .task { await model.load() }
+    .signOutFailure(signOut)
   }
 
   private var header: some View {

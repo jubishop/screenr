@@ -2,14 +2,16 @@ import ScreenrKit
 import SwiftUI
 
 // What every Settings section reads: the loaded account screen, the signed-in
-// member, a way to read the screen again after a change, and a way to open an
-// editor sheet. Editor sheets belong to the Settings screen rather than to a
-// section, so a failed read, which replaces the sections with the error,
-// keeps an open editor and its draft.
+// member, a way to read the screen again after a change, the screen's
+// sign-out, and a way to open an editor sheet. Editor sheets and the sign-out
+// model belong to the Settings screen rather than to a section, so a failed
+// read, which replaces the sections with the error, keeps an open editor with
+// its draft and a sign-out's failure alert.
 struct SettingsContext {
   let page: AccountScreen
   let user: Person
   let screen: ScreenModel
+  let signOut: SignOutModel
   let open: (SettingsEditor) -> Void
 
   func refresh() async {

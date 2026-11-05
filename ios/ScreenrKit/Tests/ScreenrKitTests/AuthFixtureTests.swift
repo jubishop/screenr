@@ -42,6 +42,22 @@ struct AuthFixtureTests {
     #expect(test.session.phase == .signedOut)
   }
 
+  // A sign-out whose session survived on the server keeps it here too, and
+  // says so in the server's words.
+  @Test func keepsTheSessionWhenTheRecordedSignOutFails() async throws {
+    let test = try TestClient(
+      token: FixtureTransport.token,
+      replies: [try TestFixtures.reply("auth/sign-out/failed")]
+    )
+    let model = SignOutModel(api: test.client)
+
+    await model.signOut()
+
+    #expect(model.state == .failed("Could not sign out. Try again."))
+    #expect(try test.keychain.read() == FixtureTransport.token)
+    #expect(test.session.phase == .signedIn)
+  }
+
   // A provider's token that the server rejects keeps the session, and only
   // Better Auth's UNAUTHORIZED, for a request without a session, ends it.
   @Test func endsTheSessionOnlyWhenALinkFindsNone() async throws {
