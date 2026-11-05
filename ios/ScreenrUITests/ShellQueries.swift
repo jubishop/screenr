@@ -186,9 +186,22 @@ struct RequestLog {
   }
 
   private struct ScreenRead {
-    let path: String
+    // The member path as sent, with a paged read's window.
+    let sent: String
     // Words after the request, such as `visit`.
     let marks: ArraySlice<Substring>
+
+    // The member path without the window that a paged feed's or profile's
+    // read names, so `/` names every read of the friends feed.
+    var path: String {
+      let pathname = sent.prefix { $0 != "?" }
+      let pairs = sent.dropFirst(pathname.count + 1).split(separator: "&")
+      let kept = pairs.filter { pair in
+        let name = pair.prefix { $0 != "=" }
+        return name != "since" && name != "before"
+      }
+      return kept.isEmpty ? String(pathname) : pathname + "?" + kept.joined(separator: "&")
+    }
   }
 
   // Each screen the app read, in order.
@@ -202,13 +215,19 @@ struct RequestLog {
           let components = URLComponents(string: String(words[1])),
           let path = components.queryItems?.first(where: { $0.name == "path" })?.value
         else { return nil }
-        return ScreenRead(path: path, marks: words.dropFirst(2))
+        return ScreenRead(sent: path, marks: words.dropFirst(2))
       }
   }
 
-  // The member path of each screen the app read, in order.
+  // The member path of each screen the app read, in order, without a paged
+  // read's window.
   func screenPaths() throws -> [String] {
     try screenReads().map(\.path)
+  }
+
+  // Each screen read's member path as the app sent it, window and all.
+  func sentScreenPaths() throws -> [String] {
+    try screenReads().map(\.sent)
   }
 
   // The positions, among the screen reads, of the reads sent as visits.

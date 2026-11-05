@@ -21,6 +21,20 @@ public struct AcceptedActivity: Hashable, Sendable {
   }
 
   public func contains(entry: String) -> Bool { entries[entry] != nil }
+
+  // This activity with every entry of `snapshot` no newer than `date` that
+  // it lacks, as Show older brings them: every newer entry was already in
+  // the window that read extended.
+  func including(_ snapshot: [FeedItem], through date: Date) -> AcceptedActivity {
+    var activity = self
+    for item in snapshot where entries[item.id] == nil && item.visibleActivity <= date {
+      activity.entries[item.id] = Entry(
+        activity: item.activityAt,
+        comments: Set(item.comments.map(\.id))
+      )
+    }
+    return activity
+  }
 }
 
 // One entry as the reader sees it: the latest snapshot's content, with the
