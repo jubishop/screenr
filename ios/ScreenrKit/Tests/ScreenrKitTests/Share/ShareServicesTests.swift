@@ -4,8 +4,8 @@ import Testing
 @testable import ScreenrKit
 
 // The share extension's services: Screenr Dev hands its fixture arguments to
-// the extension through the app group, and the extension's client marks no
-// visits.
+// the extension through the app group, the extension's client marks no
+// visits, and shares in one process reuse one set of services.
 @MainActor
 struct ShareServicesTests {
   private let suite = "ScreenrKitTests.\(UUID().uuidString)"
@@ -105,5 +105,72 @@ struct ShareServicesTests {
     )
 
     #expect(services.push == nil)
+  }
+
+  // iOS may run several shares in one process, which reuse the first share's
+  // client and image connections while the member's session stays the same.
+  @Test func aLaterShareReusesTheServices() async throws {
+    let builder = ServicesBuilder()
+    let kept = ExtensionServices { try builder.services(arguments: $0) }
+    var sessions: [SessionStore] = []
+
+    for _ in 1...2 {
+      try await kept.share(arguments: ["ScreenrShare"]) { share, services in
+        sessions.append(services.session)
+        share.close()
+      }
+    }
+
+    #expect(sessions.count == 2)
+    #expect(sessions.first === sessions.last)
+    #expect(builder.transports.map(\.closed) == [0])
+  }
+
+  // A save in flight may already have reached the server, so a share whose
+  // sheet closed mid-save keeps its services until the save answers, even
+  // after the member signed in again in the app and a later share replaced
+  // them. Then they close, and the share sends nothing more, such as the
+  // page's read after the save.
+  @Test(.timeLimit(.minutes(1)))
+  func keepsReplacedServicesUntilTheSaveInFlightAnswers() async throws {
+    let hold = Hold()
+    let builder = ServicesBuilder(replies: [
+      try TestFixtures.reply("screen/title/full-top-ten"),
+      .held(hold, try TestFixtures.reply("actions/watch-status/watching")),
+    ])
+    let kept = ExtensionServices { try builder.services(arguments: $0) }
+    let (opened, opening) = AsyncStream<ShareModel>.makeStream()
+    let sharing = Task {
+      try await kept.share(arguments: ["ScreenrShare"]) { share, _ in opening.yield(share) }
+    }
+    var shares = opened.makeAsyncIterator()
+    let share = try #require(await shares.next())
+    let page = share.page(for: try title("full-top-ten"))
+    await page.load()
+    let header = try #require(page.header)
+    let saving = Task { await page.toggleWantToWatch(header) }
+    await hold.arrival()
+
+    share.close()
+    try builder.keychain.write("next-token")
+    try await kept.share(arguments: ["ScreenrShare"]) { later, _ in later.close() }
+    #expect(builder.transports.map(\.closed) == [0, 0])
+
+    hold.release()
+    await saving.value
+    try await sharing.value
+    #expect(builder.transports.map(\.closed) == [1, 0])
+    #expect(
+      builder.transports.first?.requests.map { $0.url?.path() }
+        == ["/api/screenr/screen", "/api/screenr/watch-status"]
+    )
+  }
+
+  // The title a title page fixture shows.
+  private func title(_ fixture: String) throws -> Title {
+    guard case .title(let page) = try screen("screen/title/\(fixture)").content else {
+      throw FeedFixtureError(description: "\(fixture) is not a title page")
+    }
+    return page.title
   }
 }

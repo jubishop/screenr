@@ -32,14 +32,17 @@ public final class ShareModel {
   public private(set) var phase = Phase.resolving
   // The search, and its results, which a chosen result's page leaves in place.
   public let find: FindModel
-  // The title pages' saves in flight, even from a page the member left.
-  private var saves = 0
 
+  // Every request the share sends, its search's and its pages' included.
+  @ObservationIgnored private let requests: ShareRequests
   @ObservationIgnored private let api: any ScreenrAPI
   @ObservationIgnored private let clock: any Clock<Duration>
   @ObservationIgnored private var shared = SharedContent()
 
   public init(api: any ScreenrAPI, clock: any Clock<Duration> = ContinuousClock()) {
+    let requests = ShareRequests()
+    let api = SentFromShare(api: api, requests: requests)
+    self.requests = requests
     self.api = api
     self.clock = clock
     find = FindModel(api: api, clock: clock)
@@ -90,37 +93,94 @@ public final class ShareModel {
   // Whether a save is in flight, which the server may already have applied.
   // Close stays off until it answers, since closing the sheet ends the
   // extension.
-  public var isSaving: Bool { saves > 0 }
+  public var isSaving: Bool { requests.saves > 0 }
 
   // A shared title's page, whose saves `isSaving` counts.
   public func page(for title: Title) -> ShareTitleModel {
-    ShareTitleModel(title: title, api: CountedSaves(api: api, share: self))
+    ShareTitleModel(title: title, api: api)
   }
 
-  fileprivate func saveStarted() {
-    saves += 1
+  // The sheet closed, with Close or a swipe. The share sends nothing more;
+  // a later request fails as `.cancelled`.
+  public func close() {
+    requests.close()
   }
 
-  fileprivate func saveFinished() {
-    saves -= 1
+  // Returns once the sheet has closed and every request the share sent,
+  // such as a save the member started before a swipe, has answered. Until
+  // then the share needs its services.
+  public func finished() async {
+    await requests.finished()
   }
 }
 
-// Sends a title page's requests, counting its saves for `ShareModel.isSaving`.
-private struct CountedSaves: ScreenrAPI {
+// What a share has in flight, and whether its sheet is still open.
+@MainActor
+@Observable
+private final class ShareRequests {
+  private enum Sheet {
+    case open
+    case closed
+  }
+
+  // The saves in flight, even from a page the member left.
+  private(set) var saves = 0
+  @ObservationIgnored private var sending = 0
+  @ObservationIgnored private var sheet = Sheet.open
+  @ObservationIgnored private var waiting: [CheckedContinuation<Void, Never>] = []
+
+  private var isFinished: Bool { sheet == .closed && sending == 0 }
+
+  // Counts a request about to go out, or refuses it once the sheet closed.
+  func start(saving: Bool) -> Bool {
+    guard sheet == .open else { return false }
+    sending += 1
+    if saving { saves += 1 }
+    return true
+  }
+
+  func end(saving: Bool) {
+    sending -= 1
+    if saving { saves -= 1 }
+    resumeIfFinished()
+  }
+
+  func close() {
+    sheet = .closed
+    resumeIfFinished()
+  }
+
+  func finished() async {
+    guard !isFinished else { return }
+    await withCheckedContinuation { waiting.append($0) }
+  }
+
+  private func resumeIfFinished() {
+    guard isFinished else { return }
+    let resumed = waiting
+    waiting = []
+    for continuation in resumed { continuation.resume() }
+  }
+}
+
+// Sends the share's requests while its sheet is open, counting each one until
+// it answers, and its saves, any POST, for `ShareModel.isSaving`.
+private struct SentFromShare: ScreenrAPI {
   let api: any ScreenrAPI
-  let share: ShareModel
+  let requests: ShareRequests
 
   func send<Response>(_ request: APIRequest<Response>) async throws(APIError) -> Response {
-    guard request.method == .post else { return try await api.send(request) }
-    await share.saveStarted()
+    let saving = request.method == .post
+    guard await requests.start(saving: saving) else {
+      throw APIError(kind: .cancelled, requestID: "")
+    }
     let result: Result<Response, APIError>
     do throws(APIError) {
       result = .success(try await api.send(request))
     } catch {
       result = .failure(error)
     }
-    await share.saveFinished()
+    await requests.end(saving: saving)
     return try result.get()
   }
 }
@@ -170,5 +230,22 @@ public final class ShareTitleModel {
       for: header,
       today: CalendarDay.today()
     )
+  }
+}
+
+extension ExtensionServices {
+  // Runs one share with the kept services, or new ones that replace them;
+  // `open` shows it. The share holds its services until it has finished, so
+  // services a later share replaced close only once its save answers. It
+  // throws only when new services cannot start.
+  public func share(
+    arguments: [String],
+    _ open: @MainActor (ShareModel, AppServices) -> Void
+  ) async throws {
+    try await run(arguments: arguments) { services in
+      let share = ShareModel(api: services.api)
+      open(share, services)
+      await share.finished()
+    }
   }
 }
