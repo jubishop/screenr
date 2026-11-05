@@ -142,6 +142,20 @@ final class FixtureRequestLog: Sendable {
   }
 }
 
+// The fixture that last answered each screen path, by its path without a
+// query.
+final class FixtureAnswers: Sendable {
+  private let last = Mutex<[String: String]>([:])
+
+  func record(_ fixture: String, for path: some StringProtocol) {
+    last.withLock { $0[String(path)] = fixture }
+  }
+
+  func fixture(for path: some StringProtocol) -> String? {
+    last.withLock { $0[String(path)] }
+  }
+}
+
 // Whether a viewer who started without a profile has set one up.
 final class FixtureSetup: Sendable {
   private let done = Mutex(false)
@@ -166,10 +180,13 @@ final class FixtureSetup: Sendable {
 //   does, until a setup request succeeds.
 // - Otherwise the fixture with the same action and the same query or body
 //   answers, preferring the scenario's viewer. A `screen` path with other
-//   query parameters falls back to its path alone. Other GETs and POSTs fall
-//   back to a successful fixture for the action, `default` first. Fixtures
-//   under `errors/`, and those whose request sent extra headers, answer only
-//   as overrides or the failure.
+//   query parameters falls back to its path alone. A paged feed's or
+//   profile's poll, whose path names `since`, prefers the fixture that last
+//   answered that path, as the server keeps the window the app read. Other
+//   GETs and POSTs fall back to a successful fixture for the action,
+//   `default` first. Fixtures under `errors/`, those whose request sent extra
+//   headers, and paged reads, whose path names a window, answer only as
+//   overrides or the failure.
 // - A fixture's ETag in `If-None-Match` gets 304, as on the server. A page
 //   or an action that no fixture answers gets `screen/not-found/default` or
 //   `errors/unknown-action`.
@@ -194,6 +211,7 @@ public struct FixtureTransport: HTTPTransport {
   private let beforeProfile: Set<String>
   private let scenario: FixtureScenario
   private let log: FixtureRequestLog?
+  private let answers = FixtureAnswers()
   // Set while the viewer's profile is pending.
   private let setup: FixtureSetup?
 
@@ -275,6 +293,9 @@ public struct FixtureTransport: HTTPTransport {
       return try reply(url: url, status: 304, etag: etag, requestID: requestID)
     }
     if action == "setup", (200..<300).contains(fixture.response.status) { setup?.complete() }
+    if action == "screen", let pathname = Self.pathname(incoming.query["path"]) {
+      answers.record(fixture.name, for: pathname)
+    }
     return try reply(url: url, fixture: fixture, requestID: requestID)
   }
 
@@ -318,6 +339,13 @@ public struct FixtureTransport: HTTPTransport {
 
   private func match(_ incoming: Incoming) -> Fixture? {
     let updated = updated()
+    // The fixture a paged poll prefers.
+    var kept: String?
+    if incoming.action == "screen", Self.window(of: incoming.query["path"]) == "since",
+      let pathname = Self.pathname(incoming.query["path"])
+    {
+      kept = answers.fixture(for: pathname)
+    }
     let ranked = fixtures.compactMap { fixture -> (Fixture, [Int])? in
       let update = updated && scenario.updates.contains(fixture.name)
       let overridden = update || scenario.overrides.contains(fixture.name)
@@ -335,6 +363,7 @@ public struct FixtureTransport: HTTPTransport {
           update ? 0 : 1,
           overridden ? 0 : 1,
           closeness.rawValue,
+          fixture.name == kept ? 0 : 1,
           closeness == .exact || succeeded ? 0 : 1,
           fixture.viewer == scenario.viewer ? 0 : 1,
           fixture.name.hasSuffix("/default") ? 0 : 1,
@@ -381,12 +410,22 @@ public struct FixtureTransport: HTTPTransport {
   // such as an old build's, answer only as overrides or the scenario's failure.
   private static func answersAnyRequest(_ fixture: Fixture) -> Bool {
     !fixture.name.hasPrefix("errors/") && !fixture.name.hasPrefix("auth/")
-      && fixture.request.headers == nil
+      && fixture.request.headers == nil && window(of: fixture.request.query?["path"]) == nil
   }
 
   private static func pathname(_ path: String?) -> Substring? {
     guard let path else { return nil }
     return path.prefix { $0 != "?" }
+  }
+
+  // The window a paged read's member path names, `since` or `before`, or nil.
+  private static func window(of path: String?) -> String? {
+    guard let path, let pathname = pathname(path) else { return nil }
+    let names = path.dropFirst(pathname.count + 1).split(separator: "&")
+      .map { pair in
+        pair.prefix { $0 != "=" }
+      }
+    return ["since", "before"].first { names.contains(Substring($0)) }
   }
 
   private func fixture(named name: String?) -> Fixture? {

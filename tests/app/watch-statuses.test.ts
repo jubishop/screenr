@@ -239,7 +239,9 @@ test("Want to watch replaces a progress status without a database trigger", asyn
   assert.deepEqual(
     (
       await db.query(
-        "SELECT tgname FROM pg_trigger WHERE tgrelid='feed_item'::regclass AND NOT tgisinternal",
+        // Only the screen change mark (db/040-screen-changes.sql) remains.
+        `SELECT tgname FROM pg_trigger WHERE tgrelid='feed_item'::regclass AND NOT tgisinternal
+        AND tgfoid<>'screenr_screen_changed'::regproc`,
       )
     ).rows,
     [],

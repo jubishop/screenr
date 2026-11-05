@@ -1,4 +1,5 @@
 import { test } from "node:test";
+import { randomUUID } from "node:crypto";
 import assert from "node:assert/strict";
 import {
   useDatabase,
@@ -11,10 +12,13 @@ import {
 } from "./social-fixture";
 
 const { GET } = await import("../../src/app/api/screenr/[action]/route");
-const { initialScreen, readVersion, screenResponse } =
+const { initialScreen, loadScreen, readVersion, screenResponse } =
   await import("../../src/server/screens");
 const { member, updateDisplayName } = await import("../../src/server/profiles");
-const { addComment } = await import("../../src/server/comments");
+const { addComment, removeComment } = await import("../../src/server/comments");
+const { updateTopTen } = await import("../../src/server/title-actions");
+const { notifications, readNotification } =
+  await import("../../src/server/notifications");
 const { setReaction } = await import("../../src/server/reactions");
 const { changeRelationship } = await import("../../src/server/relationships");
 const { saveServices, streamingServices } =
@@ -166,4 +170,158 @@ test("a version never answers for another member or an unreadable screen", async
   const missing = await read(aliceCookie, "/nothing/here", version);
   assert.equal(missing.status, 404);
   assert.equal(missing.headers.get("ETag"), null);
+});
+
+test("an unchanged feed or profile poll answers without building the screen", async (t) => {
+  const { alice, ben, conversation } = await setup();
+  await friend(alice, ben);
+  await addComment(ben, conversation, "A reply", false);
+  const cookie = await cookieFor(alice);
+  const query = db.query.bind(db);
+  for (const path of [
+    "/",
+    "/?before=now",
+    "/people/ben",
+    "/people/ben?before=now",
+  ]) {
+    const { version } = await changed(cookie, path);
+    const queries: string[] = [];
+    const spy = t.mock.method(db, "query", (...args: unknown[]) => {
+      const [text] = args;
+      queries.push(
+        typeof text === "string"
+          ? text
+          : String((text as { text?: unknown } | null)?.text),
+      );
+      return (query as (...values: unknown[]) => unknown)(...args);
+    });
+    await unchanged(cookie, path, version);
+    spy.mock.restore();
+    assert.ok(queries.length, path);
+    for (const text of queries)
+      assert.doesNotMatch(
+        text,
+        /\b(feed_item|comment|visible_notification|top_ten)\b/,
+        path,
+      );
+  }
+});
+
+// The relations a plan reads, views expanded to their tables.
+function relations(plan: Record<string, unknown>, found = new Set<string>()) {
+  if (typeof plan["Relation Name"] === "string")
+    found.add(plan["Relation Name"]);
+  for (const child of (plan.Plans as Record<string, unknown>[]) ?? [])
+    relations(child, found);
+  return found;
+}
+
+test("every table a feed or profile screen reads advances the change mark", async (t) => {
+  const { alice, ben, conversation } = await setup();
+  await friend(alice, ben);
+  await addComment(ben, conversation, "A reply", false);
+  const read = new Set<string>();
+  const query = db.query.bind(db) as (...values: unknown[]) => Promise<{
+    rows: { "QUERY PLAN": [{ Plan: Record<string, unknown> }] }[];
+  }>;
+  t.mock.method(db, "query", async (...args: unknown[]) => {
+    const [text, values] = args;
+    if (typeof text === "string" && /^\s*(WITH|SELECT)\b/.test(text)) {
+      const { rows } = await query(`EXPLAIN (FORMAT JSON) ${text}`, values);
+      relations(rows[0]["QUERY PLAN"][0].Plan, read);
+    }
+    return query(...args);
+  });
+  // The route reads the reader's own profile beside each screen.
+  await member(alice);
+  for (const path of [
+    "/",
+    "/?before=now",
+    "/people/ben",
+    "/people/ben?before=now",
+  ])
+    await loadScreen(alice, path);
+  t.mock.restoreAll();
+  // SQL functions that PostgreSQL does not inline read these: screenr_blocked
+  // and screenr_photo.
+  for (const table of ["block", "profile_photo"]) read.add(table);
+  const { rows } = await db.query<{ table: string }>(
+    `SELECT DISTINCT c.relname AS table FROM pg_trigger t
+    JOIN pg_class c ON c.oid=t.tgrelid JOIN pg_proc p ON p.oid=t.tgfoid
+    WHERE p.proname='screenr_screen_changed'`,
+  );
+  const changing = new Set(rows.map((row) => row.table));
+  read.delete("screen_change");
+  assert.ok(read.has("comment") && read.has("friendship"));
+  for (const table of read) assert.ok(changing.has(table), table);
+});
+
+test("each change that a paged feed or profile shows reaches a reader holding its version", async () => {
+  const { alice, ben, cam, conversation } = await setup();
+  await friend(alice, ben);
+  await friend(ben, cam);
+  await friend(alice, cam);
+  const reply = await addComment(cam, conversation, "Cam's reply", false);
+  const cookie = await cookieFor(ben);
+  for (const path of ["/?before=now", "/people/alice?before=now"]) {
+    let { version } = await changed(cookie, path);
+    const next = async () => {
+      const result = await changed(cookie, path, version);
+      version = result.version;
+      await unchanged(cookie, path, version);
+      return result.data.conversations.find(
+        (c: { id: string }) => c.id === conversation,
+      );
+    };
+    // A catalog refresh that changes nothing the screen shows keeps it.
+    await db.query(
+      "UPDATE title SET fetched_at=now(),vote_count=7 WHERE id='movie:1'",
+    );
+    await unchanged(cookie, path, version);
+    // Titles outlast each test's members, so the name is new each time.
+    const name = `${path} ${randomUUID()}`;
+    await db.query("UPDATE title SET name=$1 WHERE id='movie:1'", [name]);
+    assert.equal((await next()).title_name, name);
+    await db.query(
+      `INSERT INTO profile_photo(user_id,image,content_type,version,source)
+      VALUES($1,'\\x01','image/jpeg',$2,'upload') ON CONFLICT (user_id) DO UPDATE
+      SET version=excluded.version`,
+      [
+        alice,
+        path === "/?before=now" ? "0123456789abcdef" : "fedcba9876543210",
+      ],
+    );
+    assert.ok((await next()).photo);
+    await updateTopTen(ben, "movie:1", "add");
+    assert.equal((await next()).viewer_top_ten_rank, 1);
+    await updateTopTen(ben, "movie:1", "remove");
+    assert.equal((await next()).viewer_top_ten_rank, null);
+    await changeRelationship(ben, cam, "block");
+    assert.deepEqual((await next()).comments, []);
+    await changeRelationship(ben, cam, "unblock");
+    assert.equal((await next()).comments[0].id, reply);
+    await removeComment(cam, reply);
+    assert.deepEqual((await next()).comments, []);
+    await db.query("UPDATE comment SET removed_at=NULL WHERE id::text=$1", [
+      reply,
+    ]);
+    assert.equal((await next()).comments.length, 1);
+  }
+  // Notifications change every screen's unread count; the email worker's
+  // own bookkeeping on them does not.
+  let { version } = await changed(cookie, "/?before=now");
+  await db.query(
+    "UPDATE notification SET email_pending=false WHERE recipient_id=$1",
+    [alice],
+  );
+  await unchanged(cookie, "/?before=now", version);
+  await changeRelationship(cam, ben, "remove");
+  await changeRelationship(cam, ben, "request");
+  ({ version } = await changed(cookie, "/?before=now", version));
+  const [{ id }] = (await notifications(ben)).items;
+  await readNotification(ben, id);
+  assert.equal(
+    (await changed(cookie, "/?before=now", version)).data.unreadNotifications,
+    0,
+  );
 });

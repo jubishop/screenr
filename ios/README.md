@@ -350,8 +350,11 @@ memory.
 A request gets the fixture with the same action and
 query or body, then falls back to the screen's path or to a successful
 fixture for the action, and otherwise gets the server's recorded 404,
-`screen/not-found/default` or `errors/unknown-action`. A matching ETag gets
-304. Apart from setup, writes
+`screen/not-found/default` or `errors/unknown-action`. Paged feed and profile
+fixtures, whose path names a window, such as `screen/feed/newest-page` and
+`screen/feed/older-page`, answer only as overrides, and a paged poll, whose
+path names `since`, gets the fixture that last answered its path, as the
+server keeps the window the app read. A matching ETag gets 304. Apart from setup, writes
 change nothing, so later reads answer as before; a UI test checks what a
 write sent in the request log.
 
@@ -515,8 +518,11 @@ again. Each read after the three-second wait is a poll, sent as
 succeeds; every other read is `.demand`. `ScreenModel.change(path:)` reads a
 new path from then on, such as Find a title's with changed
 [filters](#find-a-title): at once while the screen is live, replacing the
-read in flight, and keeping the screen shown until the new read answers.
-`ScreenModelTests` cover the timing with a `TestClock`.
+read in flight, and keeping the screen shown until the new read answers. A
+read's value can also move later reads to another request through
+`LiveRead`'s `follow`, as a paged screen's window does, and `read(_:)` reads
+a new request now and waits for it, as Show older does. `ScreenModelTests`
+cover the timing with a `TestClock`.
 
 ### Visits
 
@@ -1048,7 +1054,8 @@ screen uses them:
 
 ```swift
 // The outer view reads @Environment(\.screenrAPI) and builds the models:
-//   FeedModel(api: api) { await model.refresh() }
+//   FeedModel(api: api, refresh: { await model.refresh() },
+//     showOlder: { await model.showOlder() })
 //   ConversationStarter(subject: .title(id: id, kind: kind), api: api) { … }
 // The inner view keeps them in State, outside ScreenContent, so drafts and
 // the reader's place outlive a failed read.
@@ -1081,7 +1088,8 @@ ScreenContent(model: model) { screen in
 | `ReactionControls`, `ReactionPicker`, `FeedActionStyle`, `WriteFailure` | `Screenr/Conversation/` | Reaction counts and React, which opens the seven reactions beneath its line, as on the web (a SwiftUI `Menu` label does not follow Dynamic Type); the compact actions with 44-point hit areas; and a failed write's message beneath its control. |
 | `Avatar`, `PosterImage`, `FlowLayout`, `.muted`, `.danger`, `.onAccent` | `Screenr/Shared/` | A member's photo or initial on the web's colors; a TMDB poster, or the title's initial only while no poster shows, so an audit never measures an initial beneath a poster; a row that wraps; and text colors that keep 4.5:1 contrast, which the system's secondary label and red miss at small sizes, and the system's white misses on the dark theme's lime accent. |
 | `.buttonStyle(.accent)` | `Screenr/Shared/AccentButtonStyle.swift` | The prominent accent-filled button, such as Accept, Send sign-in code, or Join Screenr, with its label in `.onAccent`. Use it in place of `.borderedProminent`. |
-| `FeedModel` | ScreenrKit `Conversation/` | `@Observable` page state: accepted activity (`layout(_:viewer:)`, `receive`, `showIncoming`, and `show(entry:in:viewer:)` for a title page's friend line), revealed spoilers, each discussion's preview and groups, composers and their drafts, reactions, removals through `confirmation`, and Want to watch and Recommend with the top 10 confirmations. Every write reads the screen again through its `refresh` closure. |
+| `FeedModel` | ScreenrKit `Conversation/` | `@Observable` page state: accepted activity (`layout(_:viewer:)`, `receive`, `showIncoming`, and `show(entry:in:viewer:)` for a title page's friend line), Show older (`showOlder(_:)`, through its `showOlder` closure), revealed spoilers, each discussion's preview and groups, composers and their drafts, reactions, removals through `confirmation`, and Want to watch and Recommend with the top 10 confirmations. Every write reads the screen again through its `refresh` closure. |
+| `HistoryWindow`, `HistoryPage` | ScreenrKit `Conversation/` | A paged friends feed's or profile's window in its screen path (`before=now`, `since=<time>`, or `before=<time>`), and what a paged read sent besides its entries: `since` and `older`, as `screen.historyPage`. |
 | `FeedLayout`, `ThreadLayout` | ScreenrKit `Conversation/` | The web's rules as values: which entries and replies show, their order, the New activity count, the three-comment preview, Show earlier comments, and nested groups. |
 | `ConversationStarter` | ScreenrKit `Conversation/` | Start a conversation: `.post` on the friends feed, or `.title(id:kind:)`, which loads a TV show's seasons and each chosen season's episodes. |
 | Presentation | ScreenrKit `EntryPresentation.swift` | `item.action(style:)`, `item.title`, `discussionLabel`, `removedLabel`, `link(reply:)`, `RelativeTime`, `FinishedDate`, `ReviewStars`, `ReactionKind.options`, and `TopTenLeaving`. |
@@ -1102,6 +1110,19 @@ ScreenContent(model: model) { screen in
   the top, such as an open composer or a title page's details, stays put on
   its own, with new entries beneath it. `FeedTests` checks the second entry
   stays put, against `screen/feed/incoming`, which `FixtureUpdate` sends.
+- **Paged histories:** the friends feed and profiles read a page of their
+  history at a time, as on the web
+  ([paged histories](../docs/title-feed.md#paged-histories)).
+  `ShellModel.screenModel(for:)` makes their `ScreenModel` with
+  `paged: true`, so the first read asks for the newest page, `before=now`,
+  and each read moves later ones to the window it names, `since=<time>`.
+  Beneath the entries, `FeedList(history: screen.historyPage)` shows Show
+  older while older entries remain; it calls `FeedModel.showOlder(_:)`,
+  which reads the window extended by the page before it through
+  `ScreenModel.showOlder()`, and shows the entries that read adds at once,
+  without New activity. A server read without a window, as before paging,
+  names no page, so the screen keeps its path. `FeedTests` shows Show older
+  against `screen/feed/newest-page` and `screen/feed/older-page`.
 - **Writes:** after a write, `FeedModel` calls `refresh`, which reads again
   even while a poll is in flight, since that poll may have started before the
   write. Composers stay open with an empty draft after posting; Cancel keeps

@@ -135,7 +135,7 @@ final class ProfileTests: XCTestCase {
     XCTAssertEqual(
       names,
       [
-        "empty-top-ten", "friend", "full-top-ten", "joined", "not-found", "own",
+        "empty-top-ten", "friend", "full-top-ten", "joined", "not-found", "own", "page",
         "pending-request", "sent-request",
       ]
     )

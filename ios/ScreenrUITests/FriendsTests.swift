@@ -211,8 +211,9 @@ struct ScreenFixtureFile {
     body = response?["body"] as? [String: Any] ?? [:]
   }
 
-  // The fixture's path as a Screenr Dev link.
-  var link: String { "screenr-dev://" + path.dropFirst() }
+  // The fixture's path as a Screenr Dev link, without a paged read's window,
+  // which the app adds itself.
+  var link: String { "screenr-dev://" + withoutWindow(path).dropFirst() }
 }
 
 extension XCUIApplication {

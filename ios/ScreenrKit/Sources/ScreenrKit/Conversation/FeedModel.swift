@@ -121,10 +121,21 @@ public final class FeedModel {
     case saving
   }
 
+  public enum OlderEntries: Hashable, Sendable {
+    case idle
+    // Show older's read is in flight.
+    case reading
+  }
+
   @ObservationIgnored private let api: any ScreenrAPI
   @ObservationIgnored private let refresh: @MainActor () async -> Void
+  @ObservationIgnored private let readOlder: @MainActor () async -> Void
 
   private var accepted: AcceptedActivity?
+  // Entries no newer than this came through Show older, not as new
+  // activity, so they show at once.
+  private var olderThan: Date?
+  public private(set) var older = OlderEntries.idle
   private var revealedEntries: Set<String> = []
   private var revealedComments: Set<String> = []
   private var threads: [String: ThreadState] = [:]
@@ -138,24 +149,46 @@ public final class FeedModel {
   // The action waiting for confirmation, which the screen presents.
   public var confirmation: FeedConfirmation?
 
-  // `refresh` reads the screen again, such as `ScreenModel.refresh()`.
-  public init(api: any ScreenrAPI, refresh: @escaping @MainActor () async -> Void) {
+  // `refresh` reads the screen again, such as `ScreenModel.refresh()`, and
+  // `showOlder` reads a paged screen's older entries, such as
+  // `ScreenModel.showOlder()`.
+  public init(
+    api: any ScreenrAPI,
+    refresh: @escaping @MainActor () async -> Void,
+    showOlder: @escaping @MainActor () async -> Void = {}
+  ) {
     self.api = api
     self.refresh = refresh
+    readOlder = showOlder
   }
 
   // MARK: - Snapshots
 
   // What the feed shows of a snapshot. `viewer` is the reader's user ID.
   public func layout(_ snapshot: [FeedItem], viewer: String) -> FeedLayout {
-    FeedLayout(snapshot: snapshot, accepted: accepted, viewer: viewer)
+    FeedLayout(snapshot: snapshot, accepted: shown(snapshot), viewer: viewer)
   }
 
   // Notes each new snapshot: the first is accepted as a whole, and each
   // discussion keeps the preview it first showed.
   public func receive(_ snapshot: [FeedItem], viewer: String) {
-    if accepted == nil { accepted = AcceptedActivity(snapshot) }
+    accepted = shown(snapshot) ?? AcceptedActivity(snapshot)
     keepPreviews(snapshot, viewer: viewer)
+  }
+
+  // The accepted activity, with the entries Show older brought.
+  private func shown(_ snapshot: [FeedItem]) -> AcceptedActivity? {
+    guard let accepted, let olderThan else { return accepted }
+    return accepted.including(snapshot, through: olderThan)
+  }
+
+  // Show older, beneath a paged feed's entries while `page` has older ones.
+  public func showOlder(_ page: HistoryPage) async {
+    guard page.older, let start = page.start, older == .idle else { return }
+    olderThan = min(olderThan ?? start, start)
+    older = .reading
+    await readOlder()
+    older = .idle
   }
 
   // New activity: everything in the snapshot shows.

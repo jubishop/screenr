@@ -89,6 +89,10 @@
   display: grid;
   gap: 16px;
 }
+/* Show older reads the next page of history beneath the entries. */
+.feed-older {
+  margin-top: 16px;
+}
 .activity-card {
   padding: 23px;
   background: var(--surface);

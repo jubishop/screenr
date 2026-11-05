@@ -100,6 +100,9 @@ struct ShellModelTests {
     #expect(shell.unreadNotifications == 6)
     #expect(shell.screenModel(for: .join(token: "token")) == nil)
     #expect(shell.screenModel(for: .notFound(path: "/unknown")) == nil)
+    // The friends feed and profiles start from their newest page.
+    #expect(shell.screenModel(for: .feed(item: "post"))?.path == "/?item=post&before=now")
+    #expect(shell.screenModel(for: .profile(username: "ben"))?.path == "/people/ben?before=now")
   }
 
   // The app names the signed-in member's opaque user ID in error reports.

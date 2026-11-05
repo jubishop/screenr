@@ -183,6 +183,31 @@ struct FixtureTransportTests {
     #expect(setup == Acknowledgement())
   }
 
+  // Paged reads answer only as overrides, and a paged poll keeps the window
+  // that last answered its path, as the server does.
+  @Test func answersPagedReadsAsOverridesAndKeepsTheirWindow() async throws {
+    let plain = try services("-ScreenrFixtureViewer", "nora")
+    let unpaged = try await plain.api.send(.screen(path: "/?before=now"))
+    #expect(unpaged.historyPage == nil)
+    #expect(unpaged.feed?.conversations.isEmpty == true)
+
+    let services = try services(
+      "-ScreenrFixtureViewer",
+      "nora",
+      "-ScreenrFixtureOverride",
+      "screen/feed/newest-page",
+      "-ScreenrFixtureOverride",
+      "screen/feed/older-page"
+    )
+    let since = "/?since=2026-10-13T12%3A00%3A00.000Z"
+    let before = "/?before=2026-10-13T12%3A00%3A00.000Z"
+    var counts: [Int?] = []
+    for path in ["/?before=now", since, before, since] {
+      counts.append(try await services.api.send(.screen(path: path)).feed?.conversations.count)
+    }
+    #expect(counts == [50, 50, 57, 57])
+  }
+
   @Test func answersAnUnknownPathWithNotFound() async throws {
     let services = try services()
 

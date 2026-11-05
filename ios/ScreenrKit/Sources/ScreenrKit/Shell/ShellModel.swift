@@ -60,12 +60,13 @@ public final class ShellModel {
     self.onScreen = onScreen
   }
 
-  // Reads the friends feed. A member without a profile gets 403 from every
-  // screen, which sends them to setup. Setup calls this again when it is done.
+  // Reads the friends feed's newest page. A member without a profile gets
+  // 403 from every screen, which sends them to setup. Setup calls this again
+  // when it is done.
   public func checkAccount() async {
     let session = endedSessions
     do throws(APIError) {
-      let screen = try await api.send(.screen(path: "/"))
+      let screen = try await api.send(.screen(path: HistoryWindow.newest.path("/")))
       guard session == endedSessions else { return }
       screenLoaded(screen)
       account = .ready
@@ -106,7 +107,8 @@ public final class ShellModel {
   public func screenModel(for destination: Destination) -> ScreenModel? {
     guard let path = destination.screenPath else { return nil }
     let session = endedSessions
-    return ScreenModel(path: path, api: api, clock: clock) { [weak self] screen in
+    return ScreenModel(path: path, paged: destination.pagesHistory, api: api, clock: clock) {
+      [weak self] screen in
       guard let self, session == endedSessions else { return }
       screenLoaded(screen)
       router.screenLoaded(destination)

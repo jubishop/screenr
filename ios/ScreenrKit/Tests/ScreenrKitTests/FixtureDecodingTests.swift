@@ -86,7 +86,7 @@ struct FixtureDecodingTests {
   // The server's tests keep exactly one file for each of their cases, so
   // this floor is the count checked in, lowered only when a case is removed.
   @Test func findsTheFixtures() {
-    #expect(Self.fixtureNames().count >= 135)
+    #expect(Self.fixtureNames().count >= 139)
   }
 
   @Test(arguments: fixtureNames())
