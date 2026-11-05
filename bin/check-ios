@@ -31,7 +31,10 @@ whole group. A tool call, such as xcrun simctl create, that has not finished
 within TOOL_TIMEOUT_SECONDS is stopped, and the check fails with its command.
 Shutting down and deleting the check's Simulator have the same limit but never
 change the check's result: a Simulator it could not delete is reported with
-its UDID.
+its UDID. Before it creates its Simulator, a check deletes, the same way, those
+that earlier checks left behind: each is named for its check's process ID, and
+one whose ID no process holds is left over. One whose ID is in use may be
+another checkout's running check, so it stays.
 
 UI tests that need a push, which a test cannot send, write its payload to the
 push relay directory, and the check delivers it to the Simulator with xcrun
@@ -115,6 +118,9 @@ PUSH_POLL_SECONDS = 0.5
 # ios/ScreenrUITests/PushRelay.swift waits, so the waiting test reports this
 # reason. Tests shorten it with SCREENR_CHECK_IOS_PUSH_TIMEOUT.
 PUSH_TIMEOUT_SECONDS = float(os.environ.get("SCREENR_CHECK_IOS_PUSH_TIMEOUT", 20))
+# Each check names its Simulator screenr-check-<checkout>-<pid> after its own
+# process ID, so a later check can tell whether the check that made it has ended.
+CHECK_SIMULATOR = re.compile(r"screenr-check-.+-(?P<pid>\d+)")
 WARNING =re.compile(r"warning:", re.IGNORECASE)
 # The App Intents extractor prints this for targets that do not link App
 # Intents. It is not a build diagnostic, and result bundles do not count it.
@@ -339,8 +345,46 @@ def clear_stale_package_builds():
     PACKAGE_STAMP.write_text(built_with + "\n")
 
 
+def ended(pid):
+    """Report whether no process has this ID, so the check that had it has ended.
+
+    An ID that another user's process holds, or that no process could have,
+    does not count as ended.
+    """
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return True
+    except (PermissionError, OverflowError):
+        pass
+    return False
+
+
+def delete_left_behind_simulators():
+    """Delete the Simulators of earlier checks whose processes have ended.
+
+    A check stopped with SIGKILL never deletes its Simulator, and neither does
+    one whose simctl delete failed or outlasted its time limit. A Simulator
+    whose check's process ID is in use is left alone, since it may be another
+    checkout's running check; a reused ID only delays its deletion until a
+    later check. Simulators that no check named, such as other projects', are
+    never touched.
+    """
+    listing = json.loads(capture("xcrun", "simctl", "list", "--json", "devices"))
+    for devices in listing.get("devices", {}).values():
+        for device in devices:
+            check = CHECK_SIMULATOR.fullmatch(device.get("name", ""))
+            if check and ended(int(check["pid"])) and delete_simulator(device["udid"]):
+                print(f"Deleted Simulator {device['name']} ({device['udid']}), which an earlier check left "
+                      f"behind: its process {check['pid']} has ended.", flush=True)
+
+
 def create_simulator():
-    """Create an iPhone Simulator on the newest iOS runtime and return its UDID."""
+    """Create an iPhone Simulator on the newest iOS runtime and return its UDID.
+
+    It first deletes the Simulators that earlier checks left behind.
+    """
+    delete_left_behind_simulators()
     listing = json.loads(capture("xcrun", "simctl", "list", "--json", "runtimes"))
     runtimes = [runtime for runtime in listing.get("runtimes", [])
                 if runtime.get("platform") == "iOS" and runtime.get("isAvailable")]
@@ -361,7 +405,7 @@ def create_simulator():
 
 
 def delete_simulator(udid):
-    """Shut down and delete the check's Simulator, reporting what simctl could not do.
+    """Shut down and delete a Simulator, report what simctl could not do, and return whether it is deleted.
 
     It runs after every Simulator test run, passing or failing, so it never
     raises: a Simulator left behind does not change the check's result.
@@ -382,6 +426,8 @@ def delete_simulator(udid):
         if action == "delete":
             print(f"Simulator {udid} was not deleted. Delete it with: xcrun simctl delete {udid}",
                   file=sys.stderr, flush=True)
+            return False
+    return True
 
 
 def main():

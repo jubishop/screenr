@@ -111,7 +111,10 @@ finish(step)
 """
 XCRUN = RECORD + """
 arguments = sys.argv[1:]
-if arguments[:2] == ['simctl', 'list']:
+if arguments == ['simctl', 'list', '--json', 'devices']:
+    hang('DEVICES')
+    print(os.environ.get('FAKE_DEVICES', json.dumps({'devices': {}})))
+elif arguments[:2] == ['simctl', 'list']:
     print(os.environ['FAKE_RUNTIMES'])
 elif arguments[:2] == ['simctl', 'create']:
     record('xcrun', *arguments)
@@ -472,6 +475,7 @@ class CheckIOSTests(unittest.TestCase):
         bundle = shlex.quote(str(self.repo / "ios/build/check/Tests.xcresult"))
         for step, command, cleanup in (
                 # Before the Simulator exists, so there is none to delete.
+                ("DEVICES", re.escape("xcrun simctl list --json devices"), []),
                 ("CREATE", r"xcrun simctl create screenr-check-checkout-\d+ iphone-18-pro runtime-27-0", []),
                 ("SUMMARY", re.escape(f"xcrun xcresulttool get test-results summary --path {bundle}"),
                  ["simctl shutdown", "simctl delete"])):
@@ -518,6 +522,62 @@ class CheckIOSTests(unittest.TestCase):
                 if pid.exists():
                     self.assert_stopped(pid)
                 self.assertEqual(self.steps()[-2:], ["simctl shutdown", "simctl delete"])
+
+    def ended_process(self):
+        """Return the ID of a process that has exited, as a check stopped with SIGKILL has."""
+        process = subprocess.Popen([sys.executable, "-c", ""])
+        process.wait()
+        return process.pid
+
+    def simctl_calls(self):
+        """List the check's simctl create, shutdown, and delete calls, with the Simulator each one ended."""
+        return [event[2] if event[2] == "create" else " ".join(event[2:4]) for event in self.recorded()
+                if event[:2] == ["xcrun", "simctl"] and event[2] in ("create", "shutdown", "delete")]
+
+    def test_deletes_simulators_that_ended_checks_left_behind_and_leaves_every_other_simulator_alone(self):
+        left, older = self.ended_process(), self.ended_process()
+        devices = {"devices": {
+            "com.apple.CoreSimulator.SimRuntime.iOS-27-0": [
+                # Left behind by a check whose process has ended, in a checkout whose name ends in a number.
+                {"name": f"screenr-check-issue-42-{left}", "udid": "LEFT-BEHIND", "state": "Booted"},
+                # A running check's: its process, here this test's, still runs.
+                {"name": f"screenr-check-checkout-{os.getpid()}", "udid": "RUNNING", "state": "Booted"},
+                # Another user's process, which the check cannot signal, has this ID.
+                {"name": "screenr-check-other-1", "udid": "OTHER-USER", "state": "Booted"},
+                # No check named these.
+                {"name": "iPhone 18 Pro", "udid": "DEFAULT", "state": "Booted"},
+                {"name": "screenr-dev", "udid": "DEVELOPMENT", "state": "Shutdown"},
+                {"name": "screenr-check-notes", "udid": "NO-PROCESS-ID", "state": "Shutdown"},
+                {"name": f"other-project-check-{left}", "udid": "OTHER-PROJECT", "state": "Shutdown"}],
+            "com.apple.CoreSimulator.SimRuntime.iOS-26-4": [
+                {"name": f"screenr-check-checkout-{older}", "udid": "OLDER", "state": "Shutdown"}]}}
+        result = self.check(FAKE_DEVICES=json.dumps(devices))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        for name, udid, pid in ((f"screenr-check-issue-42-{left}", "LEFT-BEHIND", left),
+                                (f"screenr-check-checkout-{older}", "OLDER", older)):
+            self.assertIn(f"Deleted Simulator {name} ({udid}), which an earlier check left behind: "
+                          f"its process {pid} has ended.", result.stdout)
+        # It deletes them before it creates its own, and its own at the end.
+        self.assertEqual(self.simctl_calls(), ["shutdown LEFT-BEHIND", "delete LEFT-BEHIND", "shutdown OLDER",
+                                               "delete OLDER", "create", "shutdown NEW-UDID", "delete NEW-UDID"])
+
+    def test_a_left_behind_simulator_it_cannot_delete_is_reported_and_the_check_goes_on(self):
+        pid = self.events.parent / "delete.pid"
+        devices = {"devices": {"com.apple.CoreSimulator.SimRuntime.iOS-27-0": [
+            {"name": f"screenr-check-checkout-{self.ended_process()}", "udid": "LEFT-BEHIND", "state": "Booted"}]}}
+        started = time.monotonic()
+        result = self.check(FAKE_DEVICES=json.dumps(devices), FAKE_HANG_DELETE=str(pid),
+                            SCREENR_CHECK_IOS_TOOL_TIMEOUT="2")
+        self.assertLess(time.monotonic() - started, 30)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("xcrun simctl delete LEFT-BEHIND did not finish within 2 seconds, so bin/check-ios "
+                      "stopped it.", result.stderr)
+        self.assertIn("Simulator LEFT-BEHIND was not deleted. Delete it with: xcrun simctl delete LEFT-BEHIND",
+                      result.stderr)
+        self.assertNotIn("Deleted Simulator", result.stdout)
+        self.assert_stopped(pid)
+        self.assertEqual(self.simctl_calls(), ["shutdown LEFT-BEHIND", "delete LEFT-BEHIND", "create",
+                                               "shutdown NEW-UDID", "delete NEW-UDID"])
 
     def test_stopping_the_check_stops_its_test_run_and_deletes_its_simulator(self):
         for stop in (signal.SIGINT, signal.SIGTERM):

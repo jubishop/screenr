@@ -121,7 +121,14 @@ The check fails fast and never hangs:
 - **Cleanup:** shutting down and deleting the check's Simulator have the same
   5-minute limit but never change the check's result. A Simulator the check
   could not delete is reported with its UDID and the command that deletes
-  it.
+  it. A check stopped with `SIGKILL` never deletes its Simulator, which held
+  about 3 GB on 2026-11-05. So before a check creates its Simulator, it
+  deletes any that earlier checks left behind, the same way, and names them.
+  Each check names its Simulator `screenr-check-<checkout>-<pid>` after its
+  process ID. One whose process has ended is deleted. One whose process ID is
+  in use may be another checkout's running check and is left alone, so a
+  reused ID only delays a deletion. Simulators named otherwise are never
+  touched.
 - **Stopping:** each step runs in its own process group. A timeout,
   Control-C, or `SIGTERM` stops that group: `SIGTERM` first, then `SIGKILL`
   for whatever is left after 5 seconds. The check then deletes its Simulator.
