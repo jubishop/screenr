@@ -111,6 +111,18 @@ The browser harness derives four loopback ports and a database named
 `screenr_browser_<checkout hash>_test` from the checkout's canonical path.
 Separate worktrees get separate defaults, Next output, screenshots, and
 `.cache/mail` captures. The harness prints its URL and database name at startup.
+
+The four ports form one of 5,120 blocks from 12288 through 32767, below the
+ephemeral ranges from which Linux (32768 through 60999 by default) and macOS
+(49152 through 65535) assign outbound source ports and port-0 listeners.
+Another socket could hold a fixture port in those ranges when the harness
+reserves it or its server listens; a CI run's harness, started from a
+temporary directory, found such a port in use
+([#490](https://github.com/jubishop/screenr/issues/490)). Common local
+services, such as Ollama on 11434, use ports below 12288. Two checkouts derive
+the same block with odds of 1 in 5,120, and the second to start fails as an
+occupied port. `tests/app/browser-harness.test.ts` checks the range.
+
 Browser-facing harness URLs use `127.0.0.1` to match their IPv4-only listeners. Do not replace
 this address with `localhost`: Chromium can try IPv6 first, where these servers
 do not listen. On macOS, an ephemeral client port that equals that destination
@@ -171,7 +183,8 @@ need no equivalent setting: `node:test` ignores `only` unless `--test-only`
 is passed, and `npm test` does not pass it.
 
 To override a port collision, set `SCREENR_BROWSER_PORT` to the first port in a
-free four-port range (1024 through 65532). The following ports serve the catalog,
+free four-port range (1024 through 65532), preferably below 32768 to stay out of
+the ephemeral ranges. The following ports serve the catalog,
 OAuth fixture, and Next, in that order. Set `SCREENR_BROWSER_DATABASE` to override
 the database; it must match `screenr_browser_<name>_test`, contain only lowercase
 letters, digits, and underscores, and be at most 63 characters. It must differ
