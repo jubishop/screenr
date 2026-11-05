@@ -1,0 +1,13 @@
+// The hosted test target, whose tests run inside Screenr Dev with its
+// entitlements and embedded extensions, for what package tests cannot reach:
+// the Keychain access group, the built extensions' settings, and the
+// notification extension's entry point, whose sources it also compiles.
+PRODUCT_NAME = ScreenrAppTests
+PRODUCT_BUNDLE_IDENTIFIER = com.artisanalsoftware.ScreenrAppTests
+GENERATE_INFOPLIST_FILE = YES
+TEST_HOST = $(BUILT_PRODUCTS_DIR)/Screenr.app/Screenr
+BUNDLE_LOADER = $(TEST_HOST)
+// The notification extension's code is nonisolated by default, as it is in
+// its own target.
+SWIFT_DEFAULT_ACTOR_ISOLATION = nonisolated
+LD_RUNPATH_SEARCH_PATHS = $(inherited) @executable_path/Frameworks @loader_path/Frameworks

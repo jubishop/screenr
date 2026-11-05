@@ -45,6 +45,11 @@ struct FixtureDecodingTests {
       model(.setup(name: "", username: "")),
       model(.setupDetails),
       model(.invitation(token: "")),
+      model(.sendCode(email: "")),
+      model(.signIn(email: "", code: "")),
+      model(.signInWithGoogle(idToken: "", nonce: "")),
+      model(.linkGoogle(idToken: "", nonce: "")),
+      model(.signOut),
       model(.deleteAccount),
     ]
   )
@@ -59,6 +64,7 @@ struct FixtureDecodingTests {
     }
   }
 
+  // The API exchanges, without the server's other recordings.
   static func fixtureNames() -> [String] {
     guard
       let files = FileManager.default.enumerator(
@@ -70,6 +76,8 @@ struct FixtureDecodingTests {
     var names: [String] = []
     for case let file as URL in files where file.pathExtension == "json" {
       let parts = file.resolvingSymlinksInPath().deletingPathExtension().pathComponents
+      guard let folder = parts.dropFirst(root).first, !Fixture.otherRecordings.contains(folder)
+      else { continue }
       names.append(parts.dropFirst(root).joined(separator: "/"))
     }
     return names.sorted()
@@ -78,7 +86,7 @@ struct FixtureDecodingTests {
   // The server's tests keep exactly one file for each of their cases, so
   // this floor is the count checked in, lowered only when a case is removed.
   @Test func findsTheFixtures() {
-    #expect(Self.fixtureNames().count >= 119)
+    #expect(Self.fixtureNames().count >= 139)
   }
 
   @Test(arguments: fixtureNames())
@@ -302,6 +310,64 @@ struct FixtureDecodingTests {
     #expect(page.next == nil)
   }
 
+  // More notifications than a page: the first page names the cursor for the
+  // next, which the next page's request sends with the first page's
+  // `through`.
+  @Test func readsNotificationPages() throws {
+    let first = try Self.decodeBody(
+      NotificationPage.self,
+      from: try Self.data("actions/notifications/first-page")
+    )
+    let next = try Self.decodeBody(
+      NotificationPage.self,
+      from: try Self.data("actions/notifications/next-page")
+    )
+    let request = try Fixture(
+      name: "actions/notifications/next-page",
+      data: try Self.data("actions/notifications/next-page")
+    )
+    .request
+
+    #expect(first.items.count == 30)
+    let cursor = try #require(first.next)
+    let through = try #require(first.through)
+    #expect(cursor == first.items.last?.id)
+    #expect(request.query == ["before": cursor, "through": through])
+    #expect(next.items.isEmpty == false)
+    #expect(next.next == nil)
+    #expect(next.through == first.through)
+    let firstIDs = Set(first.items.map(\.id))
+    #expect(next.items.allSatisfy { !firstIDs.contains($0.id) })
+  }
+
+  // The values that only some titles and entries have.
+  @Test func readsLessCommonValues() throws {
+    let earlier = try Self.titleScreen("screen/title/earlier")
+    #expect(earlier.conversations.contains { $0.itemType == .earlier && !$0.comments.isEmpty })
+
+    let theatrical = try Self.titleScreen("screen/title/theatrical-release")
+    #expect(theatrical.release?.upcoming.map(\.kind) == [.theatrical, .digital])
+    #expect(theatrical.release?.inTheaters == false)
+
+    let premiere = try Self.titleScreen("screen/title/premiere")
+    #expect(premiere.release?.upcoming.map(\.kind) == [.premiere])
+
+    let stale = try Self.titleScreen("screen/title/stale-availability")
+    #expect(stale.availability.status == .stale)
+    #expect(stale.availability.providers.flatrate?.first?.providerName == "Netflix")
+
+    #expect(try Self.titleScreen("screen/title/stopped").watch.status == .stopped)
+
+    guard
+      case .watchTogether(let together) = try Self.screen("screen/watch-together/unmatched")
+        .content
+    else {
+      Issue.record("Expected Watch together")
+      return
+    }
+    #expect(together.titles.map(\.access).contains(.unmatched))
+  }
+
   @Test func readsOneNotificationForAPushAlert() throws {
     let lookup = try Self.decodeBody(
       NotificationLookup.self,
@@ -387,6 +453,13 @@ struct FixtureDecodingTests {
 
   private static func screen(_ name: String) throws -> Screen {
     try decodeBody(Screen.self, from: try data(name))
+  }
+
+  private static func titleScreen(_ name: String) throws -> TitleScreen {
+    guard case .title(let page) = try screen(name).content else {
+      throw FixtureError("\(name) is not a title page")
+    }
+    return page
   }
 
   private static func decodeBody<Body: Decodable>(_ type: Body.Type, from data: Data) throws -> Body

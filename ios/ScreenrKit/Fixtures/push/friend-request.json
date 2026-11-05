@@ -1,0 +1,15 @@
+{
+  "description": "Fay's friend request, with the category whose actions are Accept and Decline.",
+  "payload": {
+    "aps": {
+      "alert": {
+        "body": "New activity on Screenr"
+      },
+      "badge": 6,
+      "sound": "default",
+      "mutable-content": 1,
+      "category": "FRIEND_REQUEST"
+    },
+    "notificationId": "14"
+  }
+}

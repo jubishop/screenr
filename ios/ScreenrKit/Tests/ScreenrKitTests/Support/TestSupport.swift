@@ -20,8 +20,24 @@ enum TestFixtures {
     return try JSONEncoder().encode(fixture.response.body)
   }
 
+  // A fixture's response, with its status and headers, as the transport
+  // fakes reply.
+  static func reply(_ name: String) throws -> RecordingTransport.Reply {
+    let data = try Data(contentsOf: directory.appending(path: "\(name).json"))
+    let response = try JSONDecoder().decode(Envelope.self, from: data).response
+    var headers = response.headers ?? [:]
+    headers["Content-Type"] = "application/json"
+    return .response(
+      status: response.status,
+      headers: headers,
+      body: try JSONEncoder().encode(response.body)
+    )
+  }
+
   private struct Envelope: Decodable {
     struct Response: Decodable {
+      let status: Int
+      let headers: [String: String]?
       let body: JSONValue
     }
 

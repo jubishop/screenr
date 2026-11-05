@@ -1,0 +1,35 @@
+{
+  "description": "Signing in with the ID token Google gave the app. The new session's token is in set-auth-token, and the user is the member who signed in.",
+  "viewer": null,
+  "request": {
+    "method": "POST",
+    "action": "sign-in/social",
+    "path": "/api/auth/sign-in/social",
+    "body": {
+      "provider": "google",
+      "idToken": {
+        "token": "fixture-google-id-token",
+        "nonce": "fixture-nonce"
+      }
+    }
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "set-auth-token": "fixture-session"
+    },
+    "body": {
+      "redirect": false,
+      "token": "fixture-session-token",
+      "user": {
+        "name": "alice",
+        "email": "alice@example.test",
+        "emailVerified": true,
+        "image": "https://lh3.googleusercontent.com/a/fixture-alice=s96-c",
+        "createdAt": "2026-10-13T12:00:00.000Z",
+        "updatedAt": "2026-10-13T12:00:00.000Z",
+        "id": "user-alice"
+      }
+    }
+  }
+}

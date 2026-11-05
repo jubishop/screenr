@@ -28,6 +28,10 @@ struct RequestTests {
   static let shapes: [Shape] = [
     Shape("actions/activity-email/default", .activityEmail(enabled: false)),
     Shape(
+      "auth/email-otp/send-verification-otp/default",
+      .sendCode(email: "alice@example.test")
+    ),
+    Shape(
       "auth/email-otp/send-verification-otp/rate-limited",
       .sendCode(email: "alice@example.test")
     ),
@@ -36,9 +40,22 @@ struct RequestTests {
       .invitation(token: "8FdwRYhlFy9tcqxOibjISU88FZTgsFeusFjHMbgJ1As")
     ),
     Shape(
+      "auth/sign-in/email-otp/default",
+      .signIn(email: "alice@example.test", code: "123456")
+    ),
+    Shape(
       "auth/sign-in/email-otp/invalid-code",
       .signIn(email: "alice@example.test", code: "000000")
     ),
+    Shape(
+      "auth/sign-in/social/google",
+      .signInWithGoogle(idToken: "fixture-google-id-token", nonce: "fixture-nonce")
+    ),
+    Shape(
+      "auth/link-social/google",
+      .linkGoogle(idToken: "fixture-google-id-token", nonce: "fixture-nonce")
+    ),
+    Shape("auth/sign-out/default", .signOut),
     Shape("actions/activity/recommend", .activity(title: "movie:105", .recommended, value: true)),
     Shape(
       "actions/activity/want-to-watch",
@@ -70,6 +87,7 @@ struct RequestTests {
     Shape("actions/notification/comment", .notification(id: "18")),
     Shape("actions/notifications/default", .notifications()),
     Shape("actions/notifications/unread", .notifications(filter: .unread)),
+    Shape("actions/notifications/next-page", .notifications(before: "25", through: "54")),
     Shape("actions/photo/upload", .uploadPhoto(jpeg: Data(count: 4000))),
     Shape("actions/profile/default", .profile(name: "Alice Park", username: "alicep")),
     Shape(

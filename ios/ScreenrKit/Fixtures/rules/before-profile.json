@@ -1,0 +1,11 @@
+{
+  "description": "The actions a signed-in member can use before setting up a profile. Every other action answers errors/incomplete-profile.",
+  "actions": [
+    "delete-account",
+    "google-photo",
+    "photo",
+    "remove-photo",
+    "setup",
+    "setup-details"
+  ]
+}

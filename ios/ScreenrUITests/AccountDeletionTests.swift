@@ -38,9 +38,14 @@ final class AccountDeletionTests: XCTestCase {
     )
     XCTAssertTrue(app.textFields["Email address"].exists)
     XCTAssertFalse(app.tab("You").exists)
+    // The new sign-in reached Better Auth before the deletion.
     XCTAssertEqual(
       try log.loggedLines().filter { $0.hasPrefix("POST") },
-      [Self.deleteRequest]
+      [
+        #"POST /api/auth/email-otp/send-verification-otp {"email":"alice@example.test","type":"sign-in"}"#,
+        #"POST /api/auth/sign-in/email-otp {"email":"alice@example.test","otp":"123456"}"#,
+        Self.deleteRequest,
+      ]
     )
     try app.performScreenrAudit()
   }
@@ -59,9 +64,12 @@ final class AccountDeletionTests: XCTestCase {
     ]
     XCTAssertTrue(failure.waitForExistence(timeout: 10))
     XCTAssertTrue(app.buttons["Delete my account"].isEnabled)
+    // Google's sign-in carries a new nonce each time, so only its route is
+    // compared.
     XCTAssertEqual(
-      try log.loggedLines().filter { $0.hasPrefix("POST") },
-      [Self.deleteRequest]
+      try log.loggedLines().filter { $0.hasPrefix("POST") }
+        .map { $0.split(separator: " ").prefix(2).joined(separator: " ") },
+      ["POST /api/auth/sign-in/social", "POST /api/screenr/delete-account"]
     )
     try app.performSettingsAudit()
   }

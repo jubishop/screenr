@@ -1,0 +1,16 @@
+{
+  "description": "Ben's spoiler reply to Alice's comment, a reply with the same category as a comment.",
+  "payload": {
+    "aps": {
+      "alert": {
+        "body": "New activity on Screenr"
+      },
+      "badge": 6,
+      "sound": "default",
+      "mutable-content": 1,
+      "category": "COMMENT",
+      "thread-id": "e22cb5a7-a2dd-4582-8f62-db3e31f2761b"
+    },
+    "notificationId": "20"
+  }
+}

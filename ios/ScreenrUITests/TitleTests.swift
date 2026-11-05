@@ -289,13 +289,18 @@ final class TitleTests: XCTestCase {
     XCTAssertEqual(
       names,
       [
-        "finished-review", "full-top-ten", "in-theaters", "linked-reply", "movie", "not-found",
-        "tv", "unknown-availability",
+        "earlier", "finished-review", "full-top-ten", "in-theaters", "linked-reply", "movie",
+        "not-found", "premiere", "stale-availability", "stopped", "theatrical-release", "tv",
+        "unknown-availability",
       ]
     )
     // The status and score sit atop Where to watch, apart from its services.
-    let releases = ["in-theaters": "In theaters · Digital Nov 20"]
-    let scores = ["in-theaters": "73%"]
+    let releases = [
+      "in-theaters": "In theaters · Digital Nov 20",
+      "premiere": "Premieres Dec 1 on Hulu",
+      "theatrical-release": "In theaters Dec 18 · Digital Feb 2, 2027",
+    ]
+    let scores = ["in-theaters": "73%", "premiere": "81%"]
     for name in names {
       let fixture = try TitleFixtureFile(directory.appending(path: "\(name).json"))
       let app = XCUIApplication()

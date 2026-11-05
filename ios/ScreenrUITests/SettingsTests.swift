@@ -175,11 +175,14 @@ final class SettingsTests: XCTestCase {
     app.buttons["Send"].tap()
 
     XCTAssertTrue(app.staticTexts["Thanks for your feedback"].waitForExistence(timeout: 10))
+    // The app's log comes first. The extensions' follow when they have run
+    // in this Simulator, as their tests run them.
     wait(
       for: [
-        log.logged(
-          #"FEEDBACK {"logs":["app"],"message":"Posters load slowly","screenshots":1}"#
-        )
+        log.logged(where: {
+          $0.hasPrefix(#"FEEDBACK {"logs":["app""#)
+            && $0.hasSuffix(#"],"message":"Posters load slowly","screenshots":1}"#)
+        })
       ],
       timeout: 10
     )
@@ -324,21 +327,5 @@ extension XCUIApplication {
         }
       }
     }
-  }
-}
-
-extension RequestLog {
-  // Fulfilled once the log has `line`, such as a write with its body.
-  fileprivate func logged(_ line: String) -> XCTestExpectation {
-    XCTNSPredicateExpectation(
-      predicate: NSPredicate { _, _ in
-        do {
-          return try loggedLines().contains(line)
-        } catch {
-          return false
-        }
-      },
-      object: nil
-    )
   }
 }
