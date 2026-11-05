@@ -21,6 +21,8 @@ public struct Fixture: Hashable, Sendable {
   public struct Response: Decodable, Hashable, Sendable {
     public let status: Int
     public let etag: String?
+    // The other headers the app reads, such as a sign-in's `set-auth-token`.
+    public let headers: [String: String]?
     // Null for a 304.
     public let body: JSONValue?
   }
@@ -49,7 +51,12 @@ public struct Fixture: Hashable, Sendable {
     response = file.response
   }
 
-  // Every fixture in a directory, sorted by name.
+  // The folders that hold the server's other recordings: the pushes the
+  // worker sent, and the server's rules that the fixture API applies.
+  public static let otherRecordings: Set = ["push", "rules"]
+
+  // Every fixture in a directory, sorted by name, without its other
+  // recordings.
   public static func all(in directory: URL) throws -> [Fixture] {
     let root = directory.resolvingSymlinksInPath().pathComponents
     guard
@@ -62,6 +69,8 @@ public struct Fixture: Hashable, Sendable {
     for case let file as URL in files where file.pathExtension == "json" {
       let parts = file.resolvingSymlinksInPath().deletingPathExtension().pathComponents
       let name = parts.dropFirst(root.count).joined(separator: "/")
+      guard let folder = parts.dropFirst(root.count).first, !otherRecordings.contains(folder)
+      else { continue }
       do {
         fixtures.append(try Fixture(name: name, data: try Data(contentsOf: file)))
       } catch {
@@ -72,6 +81,23 @@ public struct Fixture: Hashable, Sendable {
       throw FixtureError("There are no fixtures in \(directory.path())")
     }
     return fixtures.sorted { $0.name < $1.name }
+  }
+}
+
+// One of the server's rules that the fixture API applies, from
+// `ScreenrKit/Fixtures/rules/`, which the server's tests write from its own
+// definitions, such as `before-profile`: the actions a member can use before
+// setting up a profile.
+struct FixtureRule: Decodable, Hashable, Sendable {
+  let actions: Set<String>
+
+  init(named name: String, in directory: URL) throws {
+    let file = directory.appending(path: "rules/\(name).json")
+    do {
+      self = try JSONDecoder().decode(Self.self, from: try Data(contentsOf: file))
+    } catch {
+      throw FixtureError("Cannot read the rule rules/\(name): \(error)")
+    }
   }
 }
 

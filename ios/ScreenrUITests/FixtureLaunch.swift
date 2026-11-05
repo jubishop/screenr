@@ -30,6 +30,12 @@ struct FixtureLaunch {
     case faintClippedText
   }
 
+  enum Push: String {
+    // iOS's own notification permission and APNs registration, for pushes
+    // that `PushRelay` delivers.
+    case system
+  }
+
   enum Posters: String {
     // Nothing loads, so every poster shows its title's initial.
     case placeholders
@@ -58,6 +64,9 @@ struct FixtureLaunch {
   // A notification the app opens at launch, as if the member had tapped its
   // push, such as "18".
   var pushTap: String?
+  // The notification permission the app finds, in place of the fixture
+  // API's own.
+  var push: Push?
   // Fixtures that answer the app's reads once the test sends them.
   var update: FixtureUpdate?
   // An outage that fails the app's requests while the test holds it.
@@ -83,6 +92,7 @@ struct FixtureLaunch {
     if let textSize { arguments += ["-UIPreferredContentSizeCategoryName", textSize] }
     if let appearance { arguments += ["-ScreenrAppearance", appearance.rawValue] }
     if let pushTap { arguments += ["-ScreenrPushTap", pushTap] }
+    if let push { arguments += ["-ScreenrFixturePush", push.rawValue] }
     arguments += ["-ScreenrFixturePosters", posters.rawValue]
     if let auditProbe { arguments += ["-ScreenrAuditProbe", auditProbe.rawValue] }
     if let update {

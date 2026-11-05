@@ -43,6 +43,16 @@
             skipped = "NO">
             <BuildableReference
                BuildableIdentifier = "primary"
+               BlueprintIdentifier = "5C0000000000000000368007"
+               BuildableName = "ScreenrAppTests.xctest"
+               BlueprintName = "ScreenrAppTests"
+               ReferencedContainer = "container:Screenr.xcodeproj">
+            </BuildableReference>
+         </TestableReference>
+         <TestableReference
+            skipped = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
                BlueprintIdentifier = "5C000000000000000000000B"
                BuildableName = "ScreenrUITests.xctest"
                BlueprintName = "ScreenrUITests"

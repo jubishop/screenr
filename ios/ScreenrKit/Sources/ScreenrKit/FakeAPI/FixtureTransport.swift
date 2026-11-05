@@ -16,8 +16,9 @@ public struct FixtureScenario: Hashable, Sendable {
   public enum Profile: String, Hashable, Sendable {
     case complete
     // Like a new member on the server, the viewer gets
-    // `errors/incomplete-profile` from every action but setup, its details,
-    // photo changes, and account deletion, until a setup request succeeds.
+    // `errors/incomplete-profile` from every action but those that
+    // `rules/before-profile` lists, such as setup, until a setup request
+    // succeeds.
     case pending
   }
 
@@ -35,9 +36,9 @@ public struct FixtureScenario: Hashable, Sendable {
   // A fixture that answers every `/api/screenr` request, such as
   // `errors/update-required`.
   public var failure: String?
-  // A file that gets one line per `/api/screenr` request, such as
-  // `GET /api/screenr/screen?path=%2F`, so UI tests can see when the app reads
-  // and what it writes.
+  // A file that gets one line per `/api/screenr` and `/api/auth` request,
+  // such as `GET /api/screenr/screen?path=%2F`, so UI tests can see when the
+  // app reads and what it writes.
   public var requestLog: URL?
   // The notification permission the app finds; see `FixturePushSystem`.
   public var push: Push
@@ -89,8 +90,9 @@ public struct FixtureScenario: Hashable, Sendable {
 }
 
 // Appends each request the fixture API answers to the scenario's log file,
-// such as `GET /api/screenr/screen?path=%2F`, with ` visit` after the app's
-// visit and a write's JSON body after the write.
+// such as `GET /api/screenr/screen?path=%2F` or `POST /api/auth/sign-out {}`,
+// with ` visit` after the app's visit and a write's JSON body after the
+// write.
 final class FixtureRequestLog: Sendable {
   private let file: URL
   private let lock = Mutex(())
@@ -174,7 +176,8 @@ final class FixtureSetup: Sendable {
 //   `FixtureTransport.expiredToken`, get `errors/signed-out`.
 // - Once the scenario's update signal exists, its updates answer first.
 // - A viewer whose profile is pending gets `errors/incomplete-profile` from
-//   member actions until a setup request succeeds.
+//   every action but those that `rules/before-profile` lists, as the server
+//   does, until a setup request succeeds.
 // - Otherwise the fixture with the same action and the same query or body
 //   answers, preferring the scenario's viewer. A `screen` path with other
 //   query parameters falls back to its path alone. A paged feed's or
@@ -184,26 +187,28 @@ final class FixtureSetup: Sendable {
 //   `default` first. Fixtures under `errors/`, those whose request sent extra
 //   headers, and paged reads, whose path names a window, answer only as
 //   overrides or the failure.
-// - A fixture's ETag in `If-None-Match` gets 304, as on the server.
-// - Better Auth's routes succeed: requesting a code, signing in, which returns
-//   `FixtureTransport.token` in `set-auth-token`, linking a sign-in method,
-//   signing out, and checking an invitation, which is available. An `auth/`
-//   override answers its route instead, such as
-//   `auth/email-otp/send-verification-otp/rate-limited` or
-//   `auth/invitation/unavailable`. Apple and Google sign-in and linking accept
-//   only `FixtureIdentity`'s stub credentials.
+// - A fixture's ETag in `If-None-Match` gets 304, as on the server. A page
+//   or an action that no fixture answers gets `screen/not-found/default` or
+//   `errors/unknown-action`.
+// - Better Auth's routes answer from their `auth/` fixtures: an override
+//   first, such as `auth/email-otp/send-verification-otp/rate-limited` or
+//   `auth/invitation/unavailable`; then the route's `invalid-token` fixture
+//   for Apple and Google credentials other than `FixtureIdentity`'s stubs,
+//   and `link-social/signed-out` for a link without a session; and otherwise
+//   the route's successful fixture, the one for the same request first, then
+//   `default`. A sign-in's fixture returns `FixtureTransport.token` in
+//   `set-auth-token`, and an invitation is available.
 // - Google's token endpoint redeems `FixtureWebAuthenticator`'s stub codes.
 public struct FixtureTransport: HTTPTransport {
+  // The session token that the sign-in fixtures return.
   public static let token = "fixture-session"
   // The token of a session the fixture API no longer accepts.
   public static let expiredToken = "fixture-expired-session"
 
-  // The actions a member without a profile can use, as on the server.
-  private static let beforeProfile: Set = [
-    "setup", "setup-details", "photo", "remove-photo", "google-photo", "delete-account",
-  ]
-
   private let fixtures: [Fixture]
+  // The actions a member without a profile can use, which the server's tests
+  // record from its action table in `rules/before-profile`.
+  private let beforeProfile: Set<String>
   private let scenario: FixtureScenario
   private let log: FixtureRequestLog?
   private let answers = FixtureAnswers()
@@ -217,6 +222,7 @@ public struct FixtureTransport: HTTPTransport {
 
   public init(directory: URL, scenario: FixtureScenario = FixtureScenario()) throws {
     fixtures = try Fixture.all(in: directory)
+    beforeProfile = try FixtureRule(named: "before-profile", in: directory).actions
     self.scenario = scenario
     if let file = scenario.requestLog {
       log = try FixtureRequestLog(file: file)
@@ -246,6 +252,7 @@ public struct FixtureTransport: HTTPTransport {
     if url.host() == GoogleSignIn.tokenHost { return try googleToken(request, url: url) }
     let path = url.path()
     if path.hasPrefix("/api/auth/") {
+      try log?.record(request, path: path, body: Incoming.json(request))
       return try auth(String(path.dropFirst("/api/auth/".count)), request: request, url: url)
     }
     guard path.hasPrefix("/api/screenr/") else {
@@ -265,16 +272,20 @@ public struct FixtureTransport: HTTPTransport {
       return try reply(url: url, fixture: signedOut, requestID: requestID)
     }
     let action = String(path.dropFirst("/api/screenr/".count))
-    if let setup, !setup.isDone, !Self.beforeProfile.contains(action),
+    if let setup, !setup.isDone, !beforeProfile.contains(action),
       let incomplete = fixture(named: "errors/incomplete-profile")
     {
       return try reply(url: url, fixture: incomplete, requestID: requestID)
     }
     let incoming = Incoming(request: request, action: action)
     guard let fixture = match(incoming) else {
-      let error: JSONValue =
-        action == "screen" ? ["error": "Page not found."] : ["error": "Action not found."]
-      return try reply(url: url, status: 404, body: error, requestID: requestID)
+      // The server's answers to a page it does not know and an action it
+      // does not have.
+      let missing = action == "screen" ? "screen/not-found/default" : "errors/unknown-action"
+      guard let notFound = self.fixture(named: missing) else {
+        throw FixtureError("There is no fixture named \(missing)")
+      }
+      return try reply(url: url, fixture: notFound, requestID: requestID)
     }
     if let etag = fixture.response.etag,
       request.value(forHTTPHeaderField: "If-None-Match") == etag
@@ -427,48 +438,45 @@ public struct FixtureTransport: HTTPTransport {
     request: URLRequest,
     url: URL
   ) throws -> (Data, HTTPURLResponse) {
-    let override = fixtures.first { fixture in
+    let routeFixtures = fixtures.filter { fixture in
       fixture.name.hasPrefix("auth/") && fixture.request.action == route
-        && scenario.overrides.contains(fixture.name)
     }
-    if let override { return try reply(url: url, fixture: override, requestID: nil) }
-    switch route {
-    case "email-otp/send-verification-otp", "sign-out":
-      return try reply(url: url, status: 200, body: ["success": true])
-    case "invitation":
-      return try reply(url: url, status: 200, body: ["available": true])
-    case "sign-in/social" where !FixtureIdentity.accepts(Incoming.json(request)):
-      return try reply(
-        url: url,
-        status: 401,
-        body: ["code": "INVALID_TOKEN", "message": "Invalid token"]
-      )
-    case "sign-in/email-otp", "sign-in/social":
-      return try reply(
-        url: url,
-        status: 200,
-        body: [
-          "token": .string(Self.token), "user": ["id": .string("user-\(scenario.viewer)")],
-        ],
-        headers: ["set-auth-token": Self.token]
-      )
-    case "link-social" where request.value(forHTTPHeaderField: "Authorization") == nil:
-      return try reply(
-        url: url,
-        status: 401,
-        body: ["code": "UNAUTHORIZED", "message": "Unauthorized"]
-      )
-    case "link-social" where !FixtureIdentity.accepts(Incoming.json(request)):
-      return try reply(
-        url: url,
-        status: 401,
-        body: ["code": "INVALID_TOKEN", "message": "Invalid token"]
-      )
-    case "link-social":
-      return try reply(url: url, status: 200, body: ["url": "", "status": true, "redirect": false])
-    default:
+    if let override = routeFixtures.first(where: { scenario.overrides.contains($0.name) }) {
+      return try reply(url: url, fixture: override, requestID: nil)
+    }
+    let incoming = Incoming(request: request, action: route)
+    var error: String?
+    if route == "link-social", request.value(forHTTPHeaderField: "Authorization") == nil {
+      error = "signed-out"
+    } else if route == "sign-in/social" || route == "link-social",
+      !FixtureIdentity.accepts(incoming.body)
+    {
+      error = "invalid-token"
+    }
+    if let error {
+      let name = "auth/\(route)/\(error)"
+      guard let fixture = routeFixtures.first(where: { $0.name == name }) else {
+        throw FixtureError("There is no fixture named \(name)")
+      }
+      return try reply(url: url, fixture: fixture, requestID: nil)
+    }
+    let rank = { (fixture: Fixture) in
+      [
+        closeness(of: fixture, to: incoming) == .exact ? 0 : 1,
+        fixture.name.hasSuffix("/default") ? 0 : 1,
+      ]
+    }
+    let best =
+      routeFixtures
+      .filter { (200..<300).contains($0.response.status) }
+      .min { left, right in
+        rank(left) == rank(right)
+          ? left.name < right.name : rank(left).lexicographicallyPrecedes(rank(right))
+      }
+    guard let best else {
       return try reply(url: url, status: 404, body: ["message": "Not found"])
     }
+    return try reply(url: url, fixture: best, requestID: nil)
   }
 
   private func googleToken(_ request: URLRequest, url: URL) throws -> (Data, HTTPURLResponse) {
@@ -503,7 +511,8 @@ public struct FixtureTransport: HTTPTransport {
       status: fixture.response.status,
       body: fixture.response.body,
       etag: fixture.response.etag,
-      requestID: requestID
+      requestID: requestID,
+      headers: fixture.response.headers ?? [:]
     )
   }
 

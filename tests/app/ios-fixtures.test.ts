@@ -13,7 +13,9 @@ import {
   verifyFixture,
   verifyNoStaleFixtures,
   type Fixture,
+  type PushFixture,
 } from "./ios-fixtures";
+import { fakeGoogle, serve } from "./identity-providers";
 import {
   buildWorld,
   jpeg,
@@ -23,6 +25,7 @@ import {
   type World,
 } from "./ios-fixture-world";
 import type { ActionName } from "../../src/server/actions";
+import type { Apns, ApnsPush } from "../../src/server/apns";
 import type { MemberRoute } from "../../src/member-routes";
 
 // Checks the iPhone app's API fixtures (docs/testing.md#iphone-api-fixtures)
@@ -37,9 +40,11 @@ const { memberPath, parseMemberRoute } =
   await import("../../src/member-routes");
 const { changeRelationship } = await import("../../src/server/relationships");
 const { migrate } = await import("../../scripts/migrate");
-const { updateTopTen, updateWatchStatus } =
+const { updateTitleActivity, updateTopTen, updateWatchStatus } =
   await import("../../src/server/title-actions");
-const { createDiscussionPost } = await import("../../src/server/comments");
+const { addComment, createDiscussionPost } =
+  await import("../../src/server/comments");
+const { deliverPushes, queueBadgePush } = await import("../../src/server/push");
 const { createAuth } = await import("../../src/server/auth");
 const { completeSignup } = await import("../../src/server/invitations");
 const { uploadPhoto } = await import("../../src/server/photos");
@@ -128,6 +133,20 @@ const withHeaders = (
     ...(await item.request(world)),
     headers: await resolve(headers, world),
   }),
+});
+
+// A case whose request first changes the world with `change`, so it starts
+// from the saved world like a write.
+const changed = (
+  item: Case,
+  change: (world: World) => Promise<unknown>,
+): Case => ({
+  ...item,
+  changesWorld: true,
+  request: async (world) => {
+    await change(world);
+    return item.request(world);
+  },
 });
 
 // A read after Pat joins through Alice's one-signup link, which makes them
@@ -231,6 +250,18 @@ async function send(
     etag: response.headers.get("ETag"),
     body: text ? (JSON.parse(text) as unknown) : null,
   };
+}
+
+// Ben answers Alice's post 30 times, so her notifications fill more than a
+// page.
+async function manyNotifications(world: World) {
+  for (let reply = 1; reply <= 30; reply++)
+    await addComment(
+      world.users.ben,
+      world.ids.alicePost,
+      `Another pick: number ${reply}.`,
+      false,
+    );
 }
 
 const screens: Record<MemberRoute["kind"], Record<string, Case>> = {
@@ -417,6 +448,27 @@ const screens: Record<MemberRoute["kind"], Record<string, Case>> = {
       "/watch-together?with=cam&mode=theaters",
       "In theaters with a friend who shares no Want to watch movies.",
     ),
+    unmatched: {
+      ...changed(
+        screen(
+          "alice",
+          "/watch-together?with=ben",
+          "Alice and Ben also want to watch Copper Coast, which streams on none of her services.",
+        ),
+        async (world) => {
+          for (const owner of [world.users.alice, world.users.ben])
+            await updateTitleActivity(
+              owner,
+              "movie:301",
+              "want_to_watch",
+              true,
+            );
+        },
+      ),
+      // Glass Meridian's availability check fails, as in the saved world it
+      // has not been tried yet.
+      failures: ["catalog request failed"],
+    },
   },
   "want-to-watch": {
     own: screen(
@@ -505,6 +557,75 @@ const screens: Record<MemberRoute["kind"], Record<string, Case>> = {
         return { action: "screen", query: { path: "/titles/movie/105" } };
       },
     },
+    // Entries from before entries had kinds keep their discussions as
+    // earlier discussions.
+    earlier: changed(
+      screen(
+        "alice",
+        "/titles/movie/101",
+        "A friend's discussion from before entries had kinds, shown as an earlier discussion with its reply.",
+      ),
+      (world) =>
+        db.query(
+          `WITH earlier AS (
+            INSERT INTO feed_item(id,conversation_id,owner_id,title_id,item_type)
+            SELECT id,id,owner_id,title_id,'earlier' FROM conversation
+            WHERE owner_id=$1 AND title_id='movie:101' RETURNING id)
+          INSERT INTO comment(conversation_id,feed_item_id,author_id,body,spoiler)
+          SELECT id,id,$1,'Finally saw it on the big screen.',false FROM earlier`,
+          [world.users.ben],
+        ),
+    ),
+    "theatrical-release": changed(
+      screen(
+        "alice",
+        "/titles/movie/105",
+        "A movie whose next US theatrical release and first digital release are ahead.",
+      ),
+      () =>
+        db.query("UPDATE title SET release=$1 WHERE id='movie:105'", [
+          { theatrical: ["2019-12-06", "2026-12-18"], digital: ["2027-02-02"] },
+        ]),
+    ),
+    premiere: changed(
+      screen(
+        "alice",
+        "/titles/tv/204",
+        "A show whose premiere on its network is ahead.",
+      ),
+      () =>
+        db.query("UPDATE title SET release=$1 WHERE id='tv:204'", [
+          { premiere: "2026-12-01", network: "Hulu", seasons: [] },
+        ]),
+    ),
+    "stale-availability": changed(
+      screen(
+        "alice",
+        "/titles/movie/104",
+        "A title whose last availability check is more than a day old, with the next check not yet due.",
+      ),
+      () =>
+        db.query(
+          `INSERT INTO title_availability(title_id,country,availability,fetched_at,refresh_after)
+          VALUES('movie:104','US',$1,now()-interval '2 days',now()+interval '1 day')
+          ON CONFLICT (title_id,country) DO UPDATE SET availability=excluded.availability,
+            fetched_at=excluded.fetched_at,refresh_after=excluded.refresh_after`,
+          [
+            {
+              link: "https://www.themoviedb.org/movie/104-glass-meridian/watch",
+              providers: {
+                flatrate: [
+                  { provider_id: 8, provider_name: "Netflix", logo_path: null },
+                ],
+              },
+            },
+          ],
+        ),
+    ),
+    stopped: changed(
+      screen("alice", "/titles/tv/202", "A show Alice stopped watching."),
+      (world) => updateWatchStatus(world.users.alice, "tv:202", "stopped"),
+    ),
     "linked-reply": screen(
       "hana",
       (world) =>
@@ -721,6 +842,39 @@ const actions: Record<Exclude<ActionName, "screen">, Record<string, Case>> = {
       { unread: "true" },
       "Only unread notifications.",
     ),
+    "first-page": changed(
+      read(
+        "notifications",
+        "alice",
+        {},
+        "More notifications than a page holds: the newest 30, with next naming the cursor for the older ones.",
+      ),
+      manyNotifications,
+    ),
+    "next-page": {
+      ...read(
+        "notifications",
+        "alice",
+        {},
+        "The page before the first page's next, sent with its through so newer arrivals stay out.",
+      ),
+      changesWorld: true,
+      request: async (world) => {
+        await manyNotifications(world);
+        const first = await send(
+          world,
+          "alice",
+          { action: "notifications" },
+          "GET",
+        );
+        const { next, through } = first.body as {
+          next: string;
+          through: string;
+        };
+        assert.ok(next);
+        return { action: "notifications", query: { before: next, through } };
+      },
+    },
   },
   notification: {
     comment: read(
@@ -1182,11 +1336,13 @@ const errors: Record<string, Case> = {
   },
 };
 
-// Better Auth's sign-in errors, which the app shows as the server words them.
-// Each case starts from the saved world, with the request limits on and no
-// requests counted yet. `before` sends the requests that lead up to the
-// recorded one, through the same auth instance; `codes` holds the codes it
-// emailed.
+// Better Auth's routes that the app posts to: requesting a code, signing in,
+// linking a sign-in method, and signing out, as they succeed, and the errors
+// the app shows as the server words them. Each case starts from the saved
+// world, with the request limits on and no requests counted yet. `before`
+// sends the requests that lead up to the recorded one, through the same auth
+// instance; `codes` holds the codes it emailed. A sign-in's `set-auth-token`
+// header is recorded with its body.
 type AuthPost = (
   path: string,
   body: Body,
@@ -1195,9 +1351,17 @@ type AuthPost = (
 type AuthCase = {
   description: string;
   status: number;
-  body: Body;
+  // The JSON body, or a function of the codes `before` emailed and the
+  // Google stand-in, for a body that names them.
+  body: Body | ((codes: string[], google: Google) => Body);
+  // The member whose session sends the request.
+  viewer?: Viewer;
   before?: (post: AuthPost, codes: string[]) => Promise<void>;
+  // The lines Better Auth prints while answering, which the case captures
+  // and checks.
+  printed?: string[];
 };
+type Google = ReturnType<typeof fakeGoogle>;
 const signInCode = { email: "alice@example.test", type: "sign-in" };
 const requestCodes = async (post: AuthPost, emails: string[], ip?: number) => {
   for (const [index, email] of emails.entries())
@@ -1216,8 +1380,29 @@ const requestCodes = async (post: AuthPost, emails: string[], ip?: number) => {
       200,
     );
 };
-const authErrors: Record<string, Record<string, AuthCase>> = {
+// The ID token Google gives the app for Alice's linked Google account, or
+// for another account with these claims, issued to the app's client.
+const googleToken = (google: Google, claims: Record<string, string> = {}) => ({
+  provider: "google",
+  idToken: {
+    token: google.idToken({
+      sub: "fixture-google-subject",
+      email: "alice@example.test",
+      aud: process.env.GOOGLE_CLIENT_ID,
+      nonce: "fixture-nonce",
+      ...claims,
+    }),
+    nonce: "fixture-nonce",
+  },
+});
+const authPosts: Record<string, Record<string, AuthCase>> = {
   "email-otp/send-verification-otp": {
+    default: {
+      description:
+        "Requesting a sign-in code. The answer is the same whether or not the address belongs to a member.",
+      status: 200,
+      body: signInCode,
+    },
     "rate-limited": {
       description:
         "A fourth code request for one address within 15 minutes is refused, with Screenr's message.",
@@ -1238,6 +1423,13 @@ const authErrors: Record<string, Record<string, AuthCase>> = {
     },
   },
   "sign-in/email-otp": {
+    default: {
+      description:
+        "Signing in with the emailed code. The new session's token is in set-auth-token, and the user is the member who signed in.",
+      status: 200,
+      body: (codes) => ({ email: "alice@example.test", otp: codes.at(-1)! }),
+      before: (post) => requestCodes(post, [signInCode.email]),
+    },
     "invalid-code": {
       description: "A code that does not match the address's code.",
       status: 400,
@@ -1264,6 +1456,60 @@ const authErrors: Record<string, Record<string, AuthCase>> = {
       },
     },
   },
+  "sign-in/social": {
+    google: {
+      description:
+        "Signing in with the ID token Google gave the app. The new session's token is in set-auth-token, and the user is the member who signed in.",
+      status: 200,
+      body: (_, google) => googleToken(google),
+    },
+    "invalid-token": {
+      description:
+        "An ID token the provider did not issue to the app, or that expired.",
+      status: 401,
+      body: (_, google) => googleToken(google, { aud: "other-client" }),
+      printed: ["WARN [Better Auth]: Invalid id token"],
+    },
+  },
+  "link-social": {
+    google: {
+      description:
+        "Linking a Google account whose address matches the signed-in member's.",
+      status: 200,
+      viewer: "ben",
+      body: (_, google) =>
+        googleToken(google, {
+          sub: "fixture-ben-google-subject",
+          email: "ben@example.test",
+        }),
+    },
+    "invalid-token": {
+      description:
+        "An ID token the provider did not issue to the app, which leaves the session as it was.",
+      status: 401,
+      viewer: "ben",
+      body: (_, google) =>
+        googleToken(google, {
+          sub: "fixture-ben-google-subject",
+          email: "ben@example.test",
+          aud: "other-client",
+        }),
+      printed: ["WARN [Better Auth]: Invalid id token"],
+    },
+    "signed-out": {
+      description: "Linking without a session.",
+      status: 401,
+      body: (_, google) => googleToken(google),
+    },
+  },
+  "sign-out": {
+    default: {
+      description: "Signing out ends the session on the server.",
+      status: 200,
+      viewer: "alice",
+      body: {},
+    },
+  },
 };
 
 async function recordAuth(file: string, path: string, item: AuthCase) {
@@ -1282,32 +1528,59 @@ async function recordAuth(file: string, path: string, item: AuthCase) {
         headers: {
           "Content-Type": "application/json",
           ...clientAddress,
+          ...(item.viewer && {
+            Authorization: `Bearer ${world.tokens[item.viewer]}`,
+          }),
           ...headers,
         },
         body: JSON.stringify(body),
       }),
     );
+  // Google's keys verify the ID tokens a case sends. No request reaches
+  // Google.
+  const google = fakeGoogle();
+  serve(google);
   // The world's own sign-ins used up shared request limits.
   await db.query('TRUNCATE "rateLimit", login_code_request');
   await item.before?.(post, codes);
-  const response = await post(path, item.body);
+  const body =
+    typeof item.body === "function" ? item.body(codes, google) : item.body;
+  const printed = item.printed && captureFailures();
+  const response = await post(path, body);
   const text = await response.text();
   assert.equal(response.status, item.status, `${file} responded ${text}`);
+  if (printed) assert.deepEqual(printed, item.printed);
+  const result = JSON.parse(text) as Body;
+  const token = response.headers.get("set-auth-token");
+  if (token) assert.ok(result.token, `${file} has no session token`);
+  // The emailed code, the Google ID token, and the new session's tokens
+  // keep one value in every regeneration.
+  const idToken = body.idToken as Body | undefined;
   const fixture: Fixture = world.placeholders.scrub({
     description: item.description,
-    viewer: null,
+    viewer: item.viewer ?? null,
     request: {
       method: "POST",
       action: path,
       path: `/api/auth/${path}`,
-      body: item.body,
+      body: {
+        ...body,
+        ...(codes.includes(body.otp as string) && { otp: "123456" }),
+        ...(idToken && {
+          idToken: { ...idToken, token: "fixture-google-id-token" },
+        }),
+      },
     },
-    response: { status: response.status, body: JSON.parse(text) },
+    response: {
+      status: response.status,
+      ...(token && { headers: { "set-auth-token": "fixture-session" } }),
+      body: token ? { ...result, token: "fixture-session-token" } : result,
+    },
   });
   await verifyFixture(file, fixture);
 }
 
-const authCases = Object.entries(authErrors).flatMap(([path, variants]) =>
+const authCases = Object.entries(authPosts).flatMap(([path, variants]) =>
   Object.entries(variants).map(([name, item]): [string, string, AuthCase] => [
     `auth/${path}/${name}.json`,
     path,
@@ -1366,6 +1639,108 @@ const authReadCases = Object.entries(authReads).flatMap(([path, variants]) =>
     item,
   ]),
 );
+
+// The pushes the worker sends to Alice's iPhone
+// (docs/notifications.md#push-delivery): the payload APNs received for one of
+// her notifications, which the app's notification extension and delegate
+// read, or a badge-only update. Each case registers her device, as the app
+// does, and queues the push its notification queued when it arrived.
+type PushCase = {
+  description: string;
+  // The notification the push is about, or null for a badge-only update.
+  notification: (world: World) => Promise<string | null>;
+};
+const pushes: Record<string, PushCase> = {
+  "friend-request": {
+    description:
+      "Fay's friend request, with the category whose actions are Accept and Decline.",
+    notification: async (world) => world.ids.friendRequest,
+  },
+  comment: {
+    description:
+      "Ben's comment on Alice's TV comment, with the category whose action is Reply, threaded by its entry.",
+    notification: async (world) => world.ids.commentNotification,
+  },
+  spoiler: {
+    description:
+      "Ben's spoiler reply to Alice's comment, a reply with the same category as a comment.",
+    notification: async (world) => world.ids.spoilerNotification,
+  },
+  "friend-accepted": {
+    description:
+      "An accepted friend request, which has no category and no actions.",
+    notification: async (world) =>
+      (
+        await db.query<{ id: string }>(
+          `SELECT min(id)::text AS id FROM notification
+          WHERE recipient_id=$1 AND kind='friend_accepted' AND read_at IS NULL`,
+          [world.users.alice],
+        )
+      ).rows[0].id,
+  },
+  badge: {
+    description:
+      "A badge-only update, which carries only the unread count and shows nothing.",
+    notification: async () => null,
+  },
+};
+
+async function recordPush(file: string, item: PushCase) {
+  const registered = await send(
+    world,
+    "alice",
+    { action: "push-device", body: pushDevice },
+    "POST",
+  );
+  assert.equal(registered.status, 200);
+  const notification = await item.notification(world);
+  if (notification)
+    await db.query(
+      "INSERT INTO push_job(token,notification_id) VALUES($1,$2)",
+      [pushDevice.token, notification],
+    );
+  else await queueBadgePush(world.users.alice);
+  const sent: ApnsPush[] = [];
+  const apns = {
+    send: async (push: ApnsPush) => {
+      sent.push(push);
+      return { result: "sent" };
+    },
+  } as unknown as Apns;
+  assert.equal(await deliverPushes(apns), 1);
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0].token, pushDevice.token);
+  const fixture: PushFixture = world.placeholders.scrub({
+    description: item.description,
+    payload: sent[0].payload,
+  });
+  await verifyFixture(file, fixture);
+}
+
+const pushCases = Object.entries(pushes).map(
+  ([name, item]): [string, PushCase] => [`push/${name}.json`, item],
+);
+
+// The actions a signed-in member can use before setting up a profile, as the
+// server's action table declares them. The app's fixture API answers every
+// other action with errors/incomplete-profile until setup succeeds.
+const ruleFile = "rules/before-profile.json";
+async function recordRules() {
+  const allowed = Object.entries(actions)
+    .filter(([action, variants]) =>
+      Object.values(variants).some(
+        (item) => findAction(action, item.method)?.profile === false,
+      ),
+    )
+    .map(([action]) => action)
+    .sort();
+  assert.ok(findAction("screen", "GET")?.profile);
+  await verifyFixture(ruleFile, {
+    description:
+      "The actions a signed-in member can use before setting up a profile. Every other action answers errors/incomplete-profile.",
+    actions: allowed,
+  });
+}
 
 const cases: [string, Case][] = [
   ...Object.entries(screens).flatMap(([kind, variants]) =>
@@ -1491,6 +1866,12 @@ for (const [file, path, item] of authReadCases)
     await saved.restore();
     await recordAuthRead(file, path, item);
   });
+for (const [file, item] of pushCases)
+  test(file, async () => {
+    await saved.restore();
+    await recordPush(file, item);
+  });
+test(ruleFile, recordRules);
 
 // The case tables' types require an entry for each route kind and action.
 test("every screen route and action has a fixture case", () => {
@@ -1503,5 +1884,10 @@ test("every screen route and action has a fixture case", () => {
 
 test("every iPhone fixture has a case", () =>
   verifyNoStaleFixtures(
-    new Set([...cases, ...authCases, ...authReadCases].map(([file]) => file)),
+    new Set([
+      ...[...cases, ...authCases, ...authReadCases, ...pushCases].map(
+        ([file]) => file,
+      ),
+      ruleFile,
+    ]),
   ));

@@ -1,0 +1,31 @@
+{
+  "description": "Signing in with the emailed code. The new session's token is in set-auth-token, and the user is the member who signed in.",
+  "viewer": null,
+  "request": {
+    "method": "POST",
+    "action": "sign-in/email-otp",
+    "path": "/api/auth/sign-in/email-otp",
+    "body": {
+      "email": "alice@example.test",
+      "otp": "123456"
+    }
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "set-auth-token": "fixture-session"
+    },
+    "body": {
+      "token": "fixture-session-token",
+      "user": {
+        "name": "alice",
+        "email": "alice@example.test",
+        "emailVerified": true,
+        "image": "https://lh3.googleusercontent.com/a/fixture-alice=s96-c",
+        "createdAt": "2026-10-13T12:00:00.000Z",
+        "updatedAt": "2026-10-13T12:00:00.000Z",
+        "id": "user-alice"
+      }
+    }
+  }
+}

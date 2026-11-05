@@ -323,9 +323,11 @@ from the real API
 `tests/app/ios-fixtures.test.ts` sends each case through the
 `/api/screenr/[action]` handler as the app does, with the viewer's
 [bearer token](data-and-access.md#native-client-sessions) and no cookie or
-`Origin`. Sign-in error cases and the invitation check go through Better
-Auth's handler instead, with its request limits on. The test compares each response with its file under
-`ios/ScreenrKit/Fixtures/`. It runs in `npm test`, so `bin/check --full` and
+`Origin`. Sign-in, linking, signing out, and the invitation check go
+through Better Auth's handler instead, with its request limits on, and a
+stand-in for Google's signing keys. The pushes come from the worker's
+delivery, against a stand-in for APNs. The test compares each response with
+its file under `ios/ScreenrKit/Fixtures/`. It runs in `npm test`, so `bin/check --full` and
 CI fail when a response no longer matches its fixture, when a case has no
 file, or when a file has no case. The failure shows the changed fields.
 
@@ -363,15 +365,25 @@ Each file holds one case, named for the state it shows, such as `default`,
   session. Every error body is `{"error": "<message>"}`. The 426 for an
   [outdated app build](data-and-access.md#client-headers) in
   `update-required.json` also has `minimumBuild`.
-- `auth/<route>/<case>.json`: Better Auth's sign-in errors that the app shows
-  as the server words them, such as the code request limits and too many
-  wrong codes, and the
+- `auth/<route>/<case>.json`: Better Auth's routes that the app uses, as
+  they succeed, such as a sign-in with its `set-auth-token` header and the
+  signed-in `user.id`, and the errors the app shows as the server words them,
+  such as the code request limits, too many wrong codes, and a provider's
+  token the server rejects, and the
   [invitation check](data-and-access.md#invitation-tokens)'s answers.
   `<route>` is the path under `/api/auth/`, which the request's `action` also
   names. An error body is `{"message": "<message>"}`, with Better Auth's
   `code` when it sends one. The
-  [fixture API](../ios/README.md#fixture-api) answers with them only as
-  overrides.
+  [fixture API](../ios/README.md#fixture-api) answers each route with its
+  successful case, and with the others as overrides or for credentials it
+  does not accept.
+- `push/<case>.json`: the payload the worker sent APNs for one of Alice's
+  notifications, with its category and thread, or a badge-only update.
+  Each file holds a `description` and the `payload`.
+- `rules/<rule>.json`: a server rule that the fixture API applies, written
+  from the server's own definition, such as `before-profile`, the actions a
+  member can use before setting up a profile. Each file holds a
+  `description` and the rule's `actions`.
 
 ### Fixture format
 
@@ -401,7 +413,9 @@ Each file is one JSON object, shown here with a shortened body:
   body is a file, as for photo uploads. `headers` lists any extra request
   headers, such as `If-None-Match` or `Screenr-Invitation`.
 - `response` has the HTTP `status` and the JSON `body`, which is `null` for
-  a 304. A GET's `etag` is the version the server computes for that body.
+  a 304. A GET's `etag` is the version the server computes for that body,
+  and `headers` holds the other headers the app reads: a sign-in's
+  `set-auth-token`.
 
 ### Fixture data
 
@@ -421,7 +435,11 @@ title is fictional.
 
 GET cases share the world. Each POST case, and each GET case marked
 `changesWorld` because its request changes the world first, restores a saved
-copy of the database, so no case sees another's changes.
+copy of the database, so no case sees another's changes. Such a case adds
+what only some screens have: a discussion from before entries had kinds, a
+movie's theatrical release and a show's premiere ahead, availability more
+than a day old, a show Alice stopped, a Watch together title on none of her
+services, and more notifications than a page holds.
 
 Volatile values become placeholders, so regenerating without a payload
 change produces no diff:
@@ -438,6 +456,9 @@ change produces no diff:
   onward within each fixture.
 - **Invitation tokens:** 43-character tokens derived from a label.
 - **ETags:** recomputed from the fixture body.
+- **Sign-in secrets:** an emailed code becomes `123456`, a Google ID token
+  `fixture-google-id-token`, and a new session's tokens `fixture-session`
+  in `set-auth-token` and `fixture-session-token` in the body.
 
 Comment and notification IDs are sequence values. The suite resets the
 sequences, so they stay stable. Dates without a time, such as finished and

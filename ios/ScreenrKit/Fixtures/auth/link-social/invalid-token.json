@@ -1,0 +1,23 @@
+{
+  "description": "An ID token the provider did not issue to the app, which leaves the session as it was.",
+  "viewer": "ben",
+  "request": {
+    "method": "POST",
+    "action": "link-social",
+    "path": "/api/auth/link-social",
+    "body": {
+      "provider": "google",
+      "idToken": {
+        "token": "fixture-google-id-token",
+        "nonce": "fixture-nonce"
+      }
+    }
+  },
+  "response": {
+    "status": 401,
+    "body": {
+      "message": "Invalid token",
+      "code": "INVALID_TOKEN"
+    }
+  }
+}

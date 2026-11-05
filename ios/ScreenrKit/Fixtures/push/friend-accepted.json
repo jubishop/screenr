@@ -1,0 +1,14 @@
+{
+  "description": "An accepted friend request, which has no category and no actions.",
+  "payload": {
+    "aps": {
+      "alert": {
+        "body": "New activity on Screenr"
+      },
+      "badge": 6,
+      "sound": "default",
+      "mutable-content": 1
+    },
+    "notificationId": "1"
+  }
+}

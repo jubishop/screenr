@@ -1,0 +1,23 @@
+{
+  "description": "Linking without a session.",
+  "viewer": null,
+  "request": {
+    "method": "POST",
+    "action": "link-social",
+    "path": "/api/auth/link-social",
+    "body": {
+      "provider": "google",
+      "idToken": {
+        "token": "fixture-google-id-token",
+        "nonce": "fixture-nonce"
+      }
+    }
+  },
+  "response": {
+    "status": 401,
+    "body": {
+      "message": "Unauthorized",
+      "code": "UNAUTHORIZED"
+    }
+  }
+}

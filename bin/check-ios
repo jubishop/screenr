@@ -26,6 +26,10 @@ A failing test reports at once, without collecting a sysdiagnose. Each step
 runs in its own process group, and a Simulator test run that outlasts
 --test-timeout, or an interrupted check, stops that whole group.
 
+UI tests that need a push, which a test cannot send, write its payload to the
+push relay directory, and the check delivers it to the Simulator with xcrun
+simctl push while the tests run.
+
 A pass on a checkout whose iOS files match HEAD is recorded for those exact
 files and this Xcode. With --reuse, the check skips itself when such a pass
 is recent; the pre-push hook and bin/ios-testflight rely on the same records.
@@ -75,6 +79,14 @@ SLOT_DIRECTORY = Path(os.environ.get("SCREENR_CHECK_IOS_SLOT_DIR", "/tmp"))
 SLOT_POLL_SECONDS = 2
 # How long a stopped step's processes get to exit before SIGKILL.
 STOP_GRACE_SECONDS = 5
+# UI tests ask for a push by writing its payload to <name>.json here, which the
+# check sends to Screenr Dev with xcrun simctl push and then renames to
+# <name>.sent, or to <name>.failed with simctl's output. xcodebuild passes the
+# directory to the tests in SCREENR_PUSH_RELAY. It is inside OUTPUT, which each
+# run removes.
+PUSH_RELAY = OUTPUT / "push-relay"
+PUSH_TOPIC = "com.artisanalsoftware.Screenr.dev"
+PUSH_POLL_SECONDS = 0.5
 WARNING =re.compile(r"warning:", re.IGNORECASE)
 # The App Intents extractor prints this for targets that do not link App
 # Intents. It is not a build diagnostic, and result bundles do not count it.
@@ -116,7 +128,7 @@ def stop(process):
             continue
 
 
-def run(label, command, timeout_minutes=None):
+def run(label, command, timeout_minutes=None, environment=None):
     """Run a step with its output in a log, and fail on an error status, a warning line, or a timeout."""
     print(f"==> {label}", flush=True)
     log = OUTPUT / (label.lower().replace(" ", "-") + ".log")
@@ -124,8 +136,8 @@ def run(label, command, timeout_minutes=None):
     expired = threading.Event()
     with log.open("w") as stream:
         # Its own process group, so stopping the step reaches every process it started.
-        process = subprocess.Popen(command, cwd=ROOT, env=ENVIRONMENT, text=True, start_new_session=True,
-                                   stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        process = subprocess.Popen(command, cwd=ROOT, env=ENVIRONMENT | (environment or {}), text=True,
+                                   start_new_session=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
         watchdog = None
         if timeout_minutes:
             def expire():
@@ -175,6 +187,36 @@ def check_results(label, bundle, tests):
             problems.append("no tests passed")
     if problems:
         raise CheckFailure(f"{label}: " + "; ".join(problems) + f"; see {bundle}")
+
+
+class PushRelay:
+    """Deliver the pushes UI tests ask for to the Simulator while the block runs."""
+
+    def __init__(self, udid):
+        self.udid = udid
+        self.stopped = threading.Event()
+        self.thread = threading.Thread(target=self.relay, daemon=True)
+
+    def __enter__(self):
+        PUSH_RELAY.mkdir(parents=True, exist_ok=True)
+        self.thread.start()
+        return self
+
+    def __exit__(self, *exception):
+        self.stopped.set()
+        self.thread.join()
+
+    def relay(self):
+        while not self.stopped.wait(PUSH_POLL_SECONDS):
+            for request in sorted(PUSH_RELAY.glob("*.json")):
+                self.send(request)
+
+    def send(self, request):
+        result = subprocess.run(["xcrun", "simctl", "push", self.udid, PUSH_TOPIC, str(request)], cwd=ROOT,
+                                env=ENVIRONMENT, capture_output=True, text=True)
+        outcome = ".sent" if result.returncode == 0 else ".failed"
+        request.with_suffix(outcome).write_text(result.stdout + result.stderr)
+        request.unlink()
 
 
 def lock_slot(path):
@@ -316,10 +358,13 @@ def main():
         tests = OUTPUT / "Tests.xcresult"
         # Collecting diagnostics after a failed UI test took about 10 minutes
         # and sometimes never finished.
-        run("Simulator tests", [*XCODEBUILD, "-configuration", "Debug", "-destination",
-                                f"platform=iOS Simulator,id={udid}", "-parallel-testing-enabled", "NO",
-                                "-collect-test-diagnostics", "never",
-                                "-resultBundlePath", str(tests), "test"], args.test_timeout)
+        # xcodebuild passes TEST_RUNNER_ variables to the tests without the prefix.
+        with PushRelay(udid):
+            run("Simulator tests", [*XCODEBUILD, "-configuration", "Debug", "-destination",
+                                    f"platform=iOS Simulator,id={udid}", "-parallel-testing-enabled", "NO",
+                                    "-collect-test-diagnostics", "never",
+                                    "-resultBundlePath", str(tests), "test"], args.test_timeout,
+                {"TEST_RUNNER_SCREENR_PUSH_RELAY": str(PUSH_RELAY)})
         check_results("Simulator tests", tests, tests=True)
     finally:
         if not args.simulator:

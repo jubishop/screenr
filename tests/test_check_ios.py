@@ -67,6 +67,17 @@ bundle.mkdir(parents=True)
     {'errorCount': 0, 'warningCount': 0, 'analyzerWarningCount': 0})))
 (bundle / 'summary.json').write_text(os.environ.get('FAKE_TEST_SUMMARY', json.dumps(
     {'result': 'Passed', 'passedTests': 6, 'failedTests': 0, 'skippedTests': 0})))
+if step == 'TEST' and os.environ.get('FAKE_PUSH'):
+    # Ask for a push as a UI test does, and wait until the check delivers it.
+    import time
+    relay = Path(os.environ['TEST_RUNNER_SCREENR_PUSH_RELAY'])
+    (relay / 'friend-request.json.tmp').write_text(os.environ['FAKE_PUSH'])
+    (relay / 'friend-request.json.tmp').rename(relay / 'friend-request.json')
+    deadline = time.monotonic() + 20
+    while not (relay / 'friend-request.sent').exists() and time.monotonic() < deadline:
+        time.sleep(0.1)
+    record('delivered', (relay / 'friend-request.sent').exists(),
+           (relay / 'friend-request.json').exists())
 if os.environ.get('FAKE_HANG_' + step):
     # Hang with a child that ignores SIGTERM, as a stuck test run can, and
     # report both process IDs.
@@ -89,6 +100,9 @@ elif arguments[:2] == ['simctl', 'create']:
 elif arguments[:2] == ['simctl', 'bootstatus']:
     record('xcrun', *arguments)
     finish('BOOTSTATUS')
+elif arguments[:2] == ['simctl', 'push']:
+    record('xcrun', *arguments, Path(arguments[-1]).read_text())
+    print("Notification sent to '" + arguments[3] + "'")
 elif arguments[0] == 'simctl':
     record('xcrun', *arguments)
 elif arguments[:3] == ['xcresulttool', 'get', 'build-results']:
@@ -206,6 +220,21 @@ class CheckIOSTests(unittest.TestCase):
                                      "-resultBundlePath", build + "/check/Tests.xcresult", "test"])
         self.assertEqual(events[6:], [["xcrun", "simctl", "shutdown", "NEW-UDID"],
                                       ["xcrun", "simctl", "delete", "NEW-UDID"]])
+
+    def test_delivers_the_pushes_ui_tests_ask_for_to_its_simulator(self):
+        payload = json.dumps({"aps": {"alert": {"body": "New activity on Screenr"}}, "notificationId": "14"})
+        result = self.check(FAKE_PUSH=payload)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        relay = str(self.repo / "ios/build/check/push-relay")
+        test_run = next(event for event in self.recorded() if event[-1] == "test")
+        self.assertIn("platform=iOS Simulator,id=NEW-UDID", test_run)
+        pushes = [event for event in self.recorded() if event[:3] == ["xcrun", "simctl", "push"]]
+        self.assertEqual(pushes, [["xcrun", "simctl", "push", "NEW-UDID", "com.artisanalsoftware.Screenr.dev",
+                                   relay + "/friend-request.json", payload]])
+        # The test saw the delivery: the request became .sent with simctl's output.
+        self.assertIn(["delivered", True, False], self.recorded())
+        self.assertEqual((self.repo / "ios/build/check/push-relay/friend-request.sent").read_text(),
+                         "Notification sent to 'com.artisanalsoftware.Screenr.dev'\n")
 
     def test_uses_a_given_simulator_and_leaves_it_in_place(self):
         result = self.check("--simulator", "MY-UDID")

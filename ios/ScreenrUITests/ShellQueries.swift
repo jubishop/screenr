@@ -256,6 +256,25 @@ struct RequestLog {
     )
   }
 
+  // Fulfilled once the log has `line`, such as a write with its body.
+  func logged(_ line: String) -> XCTestExpectation {
+    logged { $0 == line }
+  }
+
+  // Fulfilled once the log has a line that `matches`.
+  func logged(where matches: @escaping @Sendable (String) -> Bool) -> XCTestExpectation {
+    XCTNSPredicateExpectation(
+      predicate: NSPredicate { _, _ in
+        do {
+          return try loggedLines().contains(where: matches)
+        } catch {
+          return false
+        }
+      },
+      object: nil
+    )
+  }
+
   // Fulfilled once the app has read screens at least `count` times.
   func screenReads(atLeast count: Int) -> XCTestExpectation {
     expectation { $0.count >= count }
