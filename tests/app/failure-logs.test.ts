@@ -10,6 +10,7 @@ import {
   setup,
   cookieFor,
   captureFailures,
+  clientAddress,
   person,
   assertAuthError,
 } from "./social-fixture";
@@ -434,7 +435,11 @@ test("a constraint that fails an invited email code signup logs the endpoint, co
 test("a database failure in Better Auth's rate limit answers a bare 500 and logs the error instead of throwing it to Next", async () => {
   const auth = createAuth();
   const ok = () =>
-    auth.handler(new Request("http://localhost:3000/api/auth/ok"));
+    auth.handler(
+      new Request("http://localhost:3000/api/auth/ok", {
+        headers: clientAddress,
+      }),
+    );
   // The first request also settles Better Auth's schema check.
   assert.equal((await ok()).status, 200);
   await db.query('ALTER TABLE "rateLimit" RENAME TO rate_limit_hidden');

@@ -73,15 +73,17 @@ async function idle() {
   }
 }
 
-// Replaces console.error until mock.restoreAll(), or until the test ends when
-// given its context, and returns what each call would have printed, so tests
-// can read failure logs. failure-guard.ts fails a test that prints a failure
-// line it doesn't capture.
+// Replaces console.error and console.warn until mock.restoreAll(), or until
+// the test ends when given its context, and returns what each call would have
+// printed, in order, so tests can read failure logs and Better Auth's own
+// lines. failure-guard.ts fails a test that prints either kind of line
+// without capturing it.
 export function captureFailures(t?: TestContext) {
   const printed: string[] = [];
-  (t?.mock ?? mock).method(console, "error", (...args: unknown[]) => {
-    printed.push(format(...args));
-  });
+  for (const method of ["error", "warn"] as const)
+    (t?.mock ?? mock).method(console, method, (...args: unknown[]) => {
+      printed.push(format(...args));
+    });
   return printed;
 }
 
@@ -89,6 +91,12 @@ export function captureFailures(t?: TestContext) {
 export function failureEvents(printed: string[]) {
   return printed.flatMap((line) => failureRecord(line)?.event ?? []);
 }
+
+// In production Caddy forwards each client's address in X-Forwarded-For, and
+// Better Auth's rate limits key on it. Test requests to a rate-limited auth
+// instance send this one; without an address Better Auth warns and counts
+// them all in one shared bucket per path, as one address does.
+export const clientAddress = { "X-Forwarded-For": "192.0.2.1" };
 
 export async function pending(name: string, token: string, verified = true) {
   const id = randomBytes(24).toString("base64url");

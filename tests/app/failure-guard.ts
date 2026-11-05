@@ -1,26 +1,33 @@
 import { afterEach, beforeEach, type TestContext } from "node:test";
 import { format } from "node:util";
-import { failureRecord } from "../../scripts/failure-lines";
+import { betterAuthLine, failureRecord } from "../../scripts/failure-lines";
 
 // npm test and test:coverage load this module into every application test
-// file's process with --import. It fails any test that prints a structured
-// failure line, the JSON line with an "event" field that logFailure prints,
-// which the test didn't capture. A test that fails something on purpose reads
-// its lines with captureFailures() from social-fixture.ts, or a test-scoped
-// console.error mock, and asserts them; a captured line never reaches this
-// guard. A line printed outside any test, such as in a file's before hook or
-// after its last test, fails the file when its process exits.
+// file's process with --import. It fails any test that prints a line it
+// didn't capture: a structured failure line, the JSON line with an "event"
+// field that logFailure prints, or one of Better Auth's own lines, such as
+// `WARN [Better Auth]: Invalid id token`. A test that causes one on purpose
+// reads its lines with captureFailures() from social-fixture.ts, or a
+// test-scoped console mock, and asserts them; a captured line never reaches
+// this guard. A line printed outside any test, such as in a file's before
+// hook or after its last test, fails the file when its process exits.
 // docs/testing.md#failure-lines
 
 const running: string[] = [];
 const printed: { test?: string; line: string }[] = [];
 
-const print = console.error;
-console.error = (...args: unknown[]) => {
-  const line = format(...args);
-  if (failureRecord(line)) printed.push({ test: running.at(-1), line });
-  print.apply(console, args);
-};
+// logFailure prints with console.error. Better Auth prints by level, with
+// console.error, console.warn, or console.log for the levels below warn,
+// which Screenr's log level leaves out.
+for (const method of ["error", "warn", "log"] as const) {
+  const print = console[method];
+  console[method] = (...args: unknown[]) => {
+    const line = format(...args);
+    if (betterAuthLine(line) || (method === "error" && failureRecord(line)))
+      printed.push({ test: running.at(-1), line });
+    print.apply(console, args);
+  };
+}
 
 // The lines printed while the named test ran, or outside any test.
 function take(test?: string) {
@@ -40,7 +47,7 @@ function check(context: TestContext) {
   const lines = take(context.fullName);
   if (lines.length)
     throw new Error(
-      `The test printed failure lines it didn't capture. Capture them with captureFailures() and assert them:\n${lines.join("\n")}`,
+      `The test printed failure lines or Better Auth lines it didn't capture. Capture them with captureFailures() and assert them:\n${lines.join("\n")}`,
     );
 }
 
@@ -59,7 +66,7 @@ process.on("exit", () => {
   const lines = take();
   if (!lines.length) return;
   process.stderr.write(
-    `Failure lines printed outside any test, which nothing captured:\n${lines.join("\n")}\n`,
+    `Failure lines or Better Auth lines printed outside any test, which nothing captured:\n${lines.join("\n")}\n`,
   );
   process.exitCode = 1;
 });

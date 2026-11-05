@@ -1,6 +1,11 @@
 import { test, before, after, afterEach, mock } from "node:test";
 import assert from "node:assert/strict";
-import { captureFailures, db, failureEvents } from "./social-fixture";
+import {
+  captureFailures,
+  clientAddress,
+  db,
+  failureEvents,
+} from "./social-fixture";
 import {
   labelToken,
   saveDatabase,
@@ -1152,12 +1157,17 @@ async function recordAuth(file: string, path: string, item: AuthCase) {
       codes.push(otp);
     },
   });
-  // Like the app, without a cookie or Origin.
+  // Like the app, without a cookie or Origin, and with the client address
+  // Caddy forwards unless the request names its own.
   const post: AuthPost = (path, body, headers) =>
     auth.handler(
       new Request(`${origin}/api/auth/${path}`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", ...headers },
+        headers: {
+          "Content-Type": "application/json",
+          ...clientAddress,
+          ...headers,
+        },
         body: JSON.stringify(body),
       }),
     );
@@ -1215,8 +1225,11 @@ async function recordAuthRead(file: string, path: string, item: AuthRead) {
   const url = `/api/auth/${path}?${new URLSearchParams(query)}`;
   // The world's own sign-ins used up shared request limits.
   await db.query('TRUNCATE "rateLimit"');
-  // Like the app, without a cookie or Origin.
-  const response = await createAuth().handler(new Request(origin + url));
+  // Like the app, without a cookie or Origin, and with the client address
+  // Caddy forwards.
+  const response = await createAuth().handler(
+    new Request(origin + url, { headers: clientAddress }),
+  );
   const text = await response.text();
   assert.equal(response.status, 200, `${file} responded ${text}`);
   // The made-up token keeps its value in the path and the query.

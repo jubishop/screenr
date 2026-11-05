@@ -954,19 +954,27 @@ removing the guard as well.
 
 A test run fails on any structured failure line that no test expects: the
 JSON line with an `"event"` field that `logFailure` prints
-([failure logs](deployment.md#failure-logs)).
+([failure logs](deployment.md#failure-logs)). Application test runs also
+fail on Better Auth's own unstructured lines, such as
+`WARN [Better Auth]: Invalid id token`.
 
 - **Application tests:** `npm test` and `npm run test:coverage` load
   `tests/app/failure-guard.ts` into every test file's process. It fails a
-  test that prints a failure line it didn't capture, and fails the file for
-  a line printed outside any test. It checks a test after the test's
-  `afterEach` hooks and `t.after()` cleanups, which count as part of the
-  test, so a test it fails still closes its servers and restores its mocks
-  ([#474](https://github.com/jubishop/screenr/issues/474)). A test that
-  fails something on purpose reads its lines with `captureFailures()` from
-  `tests/app/social-fixture.ts`, passing its test context for a capture that
-  ends with the test, and asserts them, for example with `failureEvents()`.
-  An iPhone fixture case lists its lines in `failures`.
+  test that prints a failure line or Better Auth line it didn't capture, and
+  fails the file for a line printed outside any test. It checks a test after
+  the test's `afterEach` hooks and `t.after()` cleanups, which count as part
+  of the test, so a test it fails still closes its servers and restores its
+  mocks ([#474](https://github.com/jubishop/screenr/issues/474)). A test
+  that fails something on purpose reads its lines with `captureFailures()`
+  from `tests/app/social-fixture.ts`, which captures `console.error` and
+  `console.warn`, passing its test context for a capture that ends with the
+  test, and asserts them, for example with `failureEvents()`. An iPhone
+  fixture case lists its lines in `failures`. A request to a rate-limited
+  auth instance sends `clientAddress` from the same file, as production's
+  proxy forwards each client's address; without one, Better Auth warns that
+  it fell back to a shared bucket, once in each test file's process, in
+  whichever test sent the first such request
+  ([#481](https://github.com/jubishop/screenr/issues/481)).
 - **Browser runs:** `scripts/browser-server.ts` writes the application's
   failure lines, with when each printed, to
   `.cache/browser-failure-lines.jsonl`, which each run starts over, instead
@@ -993,3 +1001,12 @@ unnoticed, as invalid TMDB answers did before
 **Tradeoff:** a browser line's spec comes from timing, since two workers
 share one server, so another spec's identical line passes when it prints
 while the expecting spec runs.
+
+**Decision — 2026-11-04:** application test runs also fail on Better Auth
+lines that no test captures, and tests that cause one on purpose capture and
+assert it. Settled by the agent as routine in
+[#481](https://github.com/jubishop/screenr/issues/481); the user may
+override it.
+
+**Why:** the same as for failure lines: 13 Better Auth lines printed on
+every `npm test` run, and nothing kept more from piling up.
