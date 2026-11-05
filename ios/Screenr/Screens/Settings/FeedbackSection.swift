@@ -102,7 +102,7 @@ struct FeedbackSheet: View {
       }
       Section {
         ForEach(Array(model.screenshots.enumerated()), id: \.element.id) { index, screenshot in
-          ScreenshotRow(number: index + 1, jpeg: screenshot.jpeg) {
+          ScreenshotRow(number: index + 1, thumbnail: screenshot.thumbnail) {
             model.remove(screenshot.id)
           }
         }
@@ -206,17 +206,18 @@ private struct LengthBar<Content: View>: View {
   }
 }
 
-// An attached screenshot's thumbnail, with its own Remove button.
+// An attached screenshot's thumbnail, which the model decoded once, with its
+// own Remove button.
 private struct ScreenshotRow: View {
   let number: Int
-  let jpeg: Data
+  let thumbnail: CGImage?
   let remove: () -> Void
   @ScaledMetric(relativeTo: .body) private var height = 64.0
 
   var body: some View {
     HStack(spacing: 12) {
-      if let image = UIImage(data: jpeg) {
-        Image(uiImage: image)
+      if let thumbnail {
+        Image(uiImage: UIImage(cgImage: thumbnail))
           .resizable()
           .scaledToFit()
           .frame(height: height)

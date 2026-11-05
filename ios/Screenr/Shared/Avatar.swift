@@ -5,7 +5,8 @@ import SwiftUI
 // so renaming keeps it. It always sits beside their visible name. It stays out
 // of the accessibility tree, so the initial never joins the label of a row or
 // link around it, which UI tests find it by. A person who is not available
-// gets a neutral placeholder.
+// gets a neutral placeholder. The photo is decoded at the avatar's size, once
+// for every avatar of that size, and the initial shows until it loads.
 struct Avatar: View {
   struct Member: Hashable {
     let userId: String
@@ -13,10 +14,20 @@ struct Avatar: View {
     let photo: String?
   }
 
+  // A decoded photo, and the request and size it was decoded for.
+  private struct Photo {
+    let url: URL?
+    let pixels: Int
+    let image: CGImage
+  }
+
   let member: Member?
   var size: CGFloat = 32
   @Environment(\.imageSource) private var images
+  @Environment(\.avatarImages) private var avatars
+  @Environment(\.displayScale) private var displayScale
   @ScaledMetric private var scale: CGFloat = 1
+  @State private var photo: Photo?
 
   init(_ member: Member?, size: CGFloat = 32) {
     self.member = member
@@ -33,14 +44,7 @@ struct Avatar: View {
   var body: some View {
     Group {
       if let member {
-        AsyncImage(request: images.photo(userId: member.userId, version: member.photo)) { phase in
-          // AsyncImage hosts its content apart, so it is hidden here too.
-          if case .success(let image) = phase {
-            image.resizable().scaledToFill().accessibilityHidden(true)
-          } else {
-            initial(member).accessibilityHidden(true)
-          }
-        }
+        photoOrInitial(member)
       } else {
         Image(systemName: "person.fill")
           .font(.system(size: size * scale * 0.5))
@@ -52,6 +56,32 @@ struct Avatar: View {
     .frame(width: size * scale, height: size * scale)
     .clipShape(Circle())
     .accessibilityHidden(true)
+  }
+
+  private func photoOrInitial(_ member: Member) -> some View {
+    let request = images.photo(userId: member.userId, version: member.photo)
+    let pixels = Int((size * scale * displayScale).rounded(.up))
+    return Group {
+      if let image = image(request, pixels: pixels) {
+        Image(decorative: image, scale: displayScale).resizable().scaledToFill()
+      } else {
+        initial(member)
+      }
+    }
+    // The avatar keeps its photo, which the shared cache may let go.
+    .task(id: "\(pixels) \(request?.url?.absoluteString ?? "")") {
+      guard let request, let image = await avatars.image(request, pixels: pixels),
+        photo?.image !== image
+      else { return }
+      photo = Photo(url: request.url, pixels: pixels, image: image)
+    }
+  }
+
+  // The photo this avatar holds, or one another avatar of its size decoded.
+  private func image(_ request: URLRequest?, pixels: Int) -> CGImage? {
+    guard let request else { return nil }
+    if let photo, photo.url == request.url, photo.pixels == pixels { return photo.image }
+    return avatars.cached(request, pixels: pixels)
   }
 
   private func initial(_ member: Member) -> some View {

@@ -11,7 +11,7 @@
   },
   "response": {
     "status": 200,
-    "etag": "W/\"Sqiqy2mkEms0Qr4q26QBvKh9xlJBsmHGy1bxmKLw3F8\"",
+    "etag": "W/\"NE7qK5249AVMXZxphSAGj7V78hjKfx3jTf84ZZmi3zw\"",
     "body": {
       "kind": "search",
       "suggestions": [
@@ -948,6 +948,7 @@
         }
       ],
       "serviceIds": [],
+      "recommendationCount": 13,
       "unreadNotifications": 3,
       "user": {
         "user_id": "user-cam",

@@ -1,3 +1,4 @@
+import CoreGraphics
 import Foundation
 import Observation
 
@@ -35,6 +36,9 @@ public final class FeedbackModel {
   public struct Screenshot: Identifiable, Hashable, Sendable {
     public let id: UUID
     public let jpeg: Data
+    // The form's preview, decoded once when the screenshot is attached, or
+    // nil if it could not be.
+    public let thumbnail: CGImage?
   }
 
   public static let maximumScreenshots = 3
@@ -108,7 +112,8 @@ public final class FeedbackModel {
           continue
         }
         let jpeg = try await ScreenshotPreparation.jpeg(from: image)
-        screenshots.append(Screenshot(id: UUID(), jpeg: jpeg))
+        let thumbnail = await ScreenshotPreparation.thumbnail(of: jpeg)
+        screenshots.append(Screenshot(id: UUID(), jpeg: jpeg, thumbnail: thumbnail))
       } catch {
         Log.app.warning("A feedback screenshot could not be attached", .error(error))
         failed += 1

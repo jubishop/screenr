@@ -48,7 +48,8 @@ public final class ShellModel {
 
   // `onViewer` learns who is signed in each time a new member's first screen
   // loads, such as to name the opaque user ID in error reports. `onScreen`
-  // sees every screen that loads, each poll included, such as for Spotlight.
+  // sees every screen that loads, and a screen read again only when it
+  // changed, such as for Spotlight.
   public init(
     api: any ScreenrAPI,
     router: Router = Router(),
@@ -112,9 +113,16 @@ public final class ShellModel {
     guard let path = destination.screenPath else { return nil }
     let session = endedSessions
     return ScreenModel(path: path, paged: destination.pagesHistory, api: api, clock: clock) {
-      [weak self] screen in
+      [weak self] screen, change in
       guard let self, session == endedSessions else { return }
-      screenLoaded(screen)
+      switch change {
+      case .changed:
+        screenLoaded(screen)
+      // Nothing the screen names changed, but pushes may have moved the badge
+      // meanwhile.
+      case .unchanged:
+        if let unread = screen.unreadNotifications { setUnreadNotifications(unread) }
+      }
       router.screenLoaded(destination)
     }
   }

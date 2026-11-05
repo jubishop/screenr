@@ -124,11 +124,15 @@ struct ShellModelTests {
     #expect(viewers.withLock { $0 } == ["user-alice", "user-nora"])
   }
 
-  // Spotlight sees every screen that loads, polls included.
-  @Test func reportsEveryLoadedScreen() async throws {
+  // Spotlight sees each screen that loads, and a poll only when its screen
+  // changed. An unchanged poll still reports the unread count, which keeps
+  // the badge on it after pushes moved it while the app was away.
+  @Test func reportsEachChangedScreenAndEveryUnreadCount() async throws {
     let seen = Mutex<[String]>([])
+    let title = try screen("screen/title/tv")
     let api = ScriptedAPI([
-      .screen(try screen("screen/feed/default")), .screen(try screen("screen/title/tv")),
+      .screen(try screen("screen/feed/default")), .screen(title), .screen(title),
+      .screen(try screen("screen/title/movie")),
     ])
     let clock = TestClock()
     let shell = ShellModel(
@@ -139,6 +143,8 @@ struct ShellModelTests {
         seen.withLock { $0.append(name) }
       }
     )
+    let counts = Mutex<[Int]>([])
+    shell.onUnreadCount { count in counts.withLock { $0.append(count) } }
 
     await shell.checkAccount()
     let model = try #require(shell.screenModel(for: .title(id: "tv:201")))
@@ -147,9 +153,13 @@ struct ShellModelTests {
     clock.advance(by: .seconds(3))
     await api.waitForReads(3)
     await clock.waitForSleep(until: .seconds(6))
+    clock.advance(by: .seconds(3))
+    await api.waitForReads(4)
+    await clock.waitForSleep(until: .seconds(9))
     model.disappeared()
 
-    #expect(seen.withLock { $0 } == ["feed", "tv:201", "tv:201"])
+    #expect(seen.withLock { $0 } == ["feed", "tv:201", "movie:101"])
+    #expect(counts.withLock { $0 }.count == 4)
   }
 
   @Test func followsTheAppsActivity() throws {
@@ -233,6 +243,25 @@ struct ShellModelTests {
 
     model.appeared(appActive: true)
     await clock.waitForSleep(until: .seconds(3))
+    model.disappeared()
+    shell.sessionEnded(.expired)
+
+    #expect(shell.router.paths.values.allSatisfy { $0.isEmpty })
+  }
+
+  // A link to the screen already showing reaches the member when that screen
+  // reads again, even unchanged.
+  @Test func forgetsALinkToTheShowingScreenOnceItReadsAgain() async throws {
+    let clock = TestClock()
+    let (shell, _) = try shell(clock: clock)
+    await shell.checkAccount()
+    let model = try #require(shell.screenModel(for: .title(id: "tv:201")))
+    model.appeared(appActive: true)
+    await clock.waitForSleep(until: .seconds(3))
+
+    shell.router.open(.title(id: "tv:201"))
+    clock.advance(by: .seconds(3))
+    await clock.waitForSleep(until: .seconds(6))
     model.disappeared()
     shell.sessionEnded(.expired)
 

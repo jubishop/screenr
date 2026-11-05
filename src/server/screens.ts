@@ -136,7 +136,7 @@ async function loadContent(userId: string, route: MemberRoute) {
     const services =
       route.services === "mine" ? serviceProviders(serviceIds) : null;
     const hideFinished = route.finished === "hidden";
-    const [suggestions, { titles: recommendations, finished }] =
+    const [suggestions, { titles: recommendations, total, finished }] =
       await settleAll([
         titleSuggestions(userId, services),
         friendsRecommend(userId, { type: route.type, services, hideFinished }),
@@ -156,10 +156,12 @@ async function loadContent(userId: string, route: MemberRoute) {
       suggestions: withViewing(suggestions),
       recommendations: withViewing(recommendations),
       serviceIds,
+      // How many Friends recommend titles pass the read's filters, including
+      // those past the cap on `recommendations`.
+      recommendationCount: total,
       // How many Friends recommend titles the read left out because the
-      // viewer finished them. Only a read that hides them has it, so
-      // installed iPhone builds, which hide them themselves, get the same
-      // fields as before.
+      // viewer finished them. Only a read that hides them has it; installed
+      // iPhone builds read without hiding them and hide them themselves.
       ...(hideFinished && { finishedRecommendations: finished }),
     };
   }

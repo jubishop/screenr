@@ -11,12 +11,13 @@
   },
   "response": {
     "status": 200,
-    "etag": "W/\"p5NH-LcX64XVG7JFpqS_9ZGez4bwAo_teYLWWpkWYwA\"",
+    "etag": "W/\"yi4fZTbtqrA8TUwbSoIf5gBQ5VNa8mTDCfPbK6j23YI\"",
     "body": {
       "kind": "search",
       "suggestions": [],
       "recommendations": [],
       "serviceIds": [],
+      "recommendationCount": 0,
       "unreadNotifications": 0,
       "user": {
         "user_id": "user-nora",

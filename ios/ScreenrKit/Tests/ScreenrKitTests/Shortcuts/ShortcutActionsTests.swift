@@ -237,7 +237,9 @@ struct ShortcutActionsTests {
             from: try JSONEncoder()
               .encode(
                 body.merging([
-                  "recommendations": .array(titles), "finishedRecommendations": .integer(finished),
+                  "recommendations": .array(titles),
+                  "recommendationCount": .integer(titles.count),
+                  "finishedRecommendations": .integer(finished),
                 ])
               )
           )
@@ -256,6 +258,40 @@ struct ShortcutActionsTests {
     #expect(finished.titles.isEmpty)
     #expect(finished.message == "You finished every title your friends recommend.")
     #expect(none.message == "No recommendations yet.")
+  }
+
+  // The read lists at most 50 titles but counts every one that passes its
+  // filters, so the sentence names how many remain past the list. A server
+  // without the count leaves the list's length.
+  @Test func countsTitlesPastTheListedOnes() async throws {
+    let body = try JSONDecoder()
+      .decode(
+        JSONValue.self,
+        from: try TestFixtures.body("screen/search/viewer-statuses")
+      )
+    guard case .object(var older) = body else {
+      Issue.record("The search fixture is not an object")
+      return
+    }
+    older["recommendationCount"] = nil
+    let screens = try [body.merging(["recommendationCount": .integer(64)]), .object(older)]
+      .map { try ScreenrJSON.decoder().decode(Screen.self, from: try JSONEncoder().encode($0)) }
+    let session = try SessionStore(keychain: InMemoryKeychain(token: "signed-token"))
+    let api = ScriptedAPI(screens.map { .screen($0) })
+    let actions = ShortcutActions(api: api, session: session, router: Router())
+
+    let counted = try await actions.friendsRecommend()
+    let listed = try await actions.friendsRecommend()
+
+    #expect(counted.titles.map(\.id) == ["movie:101", "tv:201", "movie:301"])
+    #expect(
+      counted.message
+        == "Your friends recommend Night Crossing, Harbor Lights, Copper Coast, and 61 more."
+    )
+    #expect(
+      listed.message
+        == "Your friends recommend Night Crossing, Harbor Lights, Copper Coast, and 10 more."
+    )
   }
 
   @Test func opensFriendsRecommend() throws {

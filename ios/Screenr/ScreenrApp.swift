@@ -70,7 +70,8 @@ struct ScreenrApp: App {
         guard let request = images.poster(path) else { return nil }
         return imageCache.cachedResponse(for: request)?.data
       },
-      session: services.session
+      session: services.session,
+      record: TitleSpotlight.record
     )
     // Error reports name the signed-in member's opaque user ID once a screen
     // shows who they are, and stop when the session ends; the next member

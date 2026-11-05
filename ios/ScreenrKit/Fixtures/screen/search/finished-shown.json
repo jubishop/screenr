@@ -11,7 +11,7 @@
   },
   "response": {
     "status": 200,
-    "etag": "W/\"Q85UmZRpwrD7A9dfL8kY-T9ESBn0gH169ZFE_jIw6OM\"",
+    "etag": "W/\"K6JlZIQTaEYsgHbqirAUGbxjKuM1RlB-AUsxtaoIDYk\"",
     "body": {
       "kind": "search",
       "suggestions": [
@@ -156,6 +156,7 @@
         "service:hulu",
         "service:netflix"
       ],
+      "recommendationCount": 2,
       "unreadNotifications": 6,
       "user": {
         "user_id": "user-alice",

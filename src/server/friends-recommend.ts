@@ -15,7 +15,8 @@ import type { FriendsRecommendation, Title } from "../shared";
 // Find a title lists the top titles that pass its filters: `type`, `services`
 // (the TMDB providers of the viewer's saved services, for My services), and
 // `hideFinished`, which leaves out titles the viewer marked Finished. Along
-// with them comes how many titles passing the other filters the viewer
+// with them come how many titles pass every filter, the list's length before
+// its cap, and how many titles passing the other filters the viewer
 // finished, so an empty list can say Show finished would list them.
 export async function friendsRecommend(
   viewer: string,
@@ -28,10 +29,15 @@ export async function friendsRecommend(
     services?: number[] | null;
     hideFinished?: boolean;
   } = {},
-): Promise<{ titles: FriendsRecommendation[]; finished: number }> {
+): Promise<{
+  titles: FriendsRecommendation[];
+  total: number;
+  finished: number;
+}> {
   const params: unknown[] = [viewer, type, hideFinished, findListLimit];
   const { rows } = await db.query<{
     titles: FriendsRecommendation[];
+    total: number;
     finished: number;
   }>(
     `WITH direct_friends AS (
@@ -54,11 +60,12 @@ export async function friendsRecommend(
       FROM totals s JOIN title t ON t.id=s.title_id
       WHERE ($2::text IS NULL OR t.kind=$2::text)
         AND ${myServicesFilter("t.id", services, params)}
+    ), kept AS (
+      SELECT * FROM matching WHERE NOT ($3::boolean AND finished)
     ), listed AS (
       -- Ranking needs every recommendation; names are gathered only for the
       -- listed titles.
-      SELECT * FROM matching WHERE NOT ($3::boolean AND finished)
-      ORDER BY score DESC,latest DESC,lower(name),id LIMIT $4
+      SELECT * FROM kept ORDER BY score DESC,latest DESC,lower(name),id LIMIT $4
     ), named AS (
       SELECT title_id,
         jsonb_agg(jsonb_build_object('username',username,'display_name',display_name,'rank',rank)
@@ -66,7 +73,8 @@ export async function friendsRecommend(
       FROM recommendations WHERE title_id IN (SELECT id FROM listed)
       GROUP BY title_id
     )
-    SELECT (SELECT count(*)::int FROM matching WHERE finished) AS finished,
+    SELECT (SELECT count(*)::int FROM kept) AS total,
+      (SELECT count(*)::int FROM matching WHERE finished) AS finished,
       coalesce((SELECT jsonb_agg(jsonb_build_object(${titleObject("t")},
         'recommended_by',n.recommended_by,
         'viewer_status',${viewerStatus("t.id")},

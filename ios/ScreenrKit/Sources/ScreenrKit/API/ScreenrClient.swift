@@ -1,5 +1,4 @@
 import Foundation
-import Synchronization
 
 // Sends Screenr API requests. Views and view models depend on this protocol,
 // so tests can replace the client with a fake.
@@ -15,12 +14,20 @@ public protocol ScreenrAPI: Sendable {
 // - A new `Screenr-Request-Id`, which errors and the observer report.
 // - `Screenr-Visit: 1` on the screen read that `visits` marks as a visit.
 // GET responses are cached in memory with their ETags. A repeated GET sends
-// its ETag, and a 304 returns the cached value.
+// its ETag, and a 304 returns the cached value. The cache keeps the most
+// recently used reads, within `cacheLimits`, and empties when memory runs low.
 public final class ScreenrClient: ScreenrAPI {
   private struct CachedRead: Sendable {
     let etag: String
     let value: any Sendable
   }
+
+  // Enough for the screens of every tab's stack and the notifications sheet,
+  // with room for their lookups. The size is the bodies' bytes, about two
+  // thirds of what their decoded values take: a 1,500-entry feed is about
+  // 1.4 MB of JSON. Notification links each read their screen anew, so
+  // without the size limit 32 of a long feed would hold about 70 MB.
+  static let cacheLimits = CacheLimits(count: 32, bytes: 8 << 20)
 
   private let serverURL: URL
   private let clientHeader: String
@@ -29,17 +36,19 @@ public final class ScreenrClient: ScreenrAPI {
   private let observer: (any APIRequestObserver)?
   private let visits: VisitTracker?
   // Keyed by path and query, such as `/api/screenr/screen?path=%2F`.
-  private let cache = Mutex<[String: CachedRead]>([:])
+  private let cache: RecentCache<CachedRead>
 
   // `clientHeader` is `AppConfiguration.clientHeader`. Without `visits`, as
-  // in an extension, no read is a visit.
+  // in an extension, no read is a visit. `notifications` posts the system's
+  // memory warnings.
   public init(
     serverURL: URL,
     clientHeader: String,
     session: SessionStore,
     transport: any HTTPTransport = URLSessionTransport(),
     observer: (any APIRequestObserver)? = nil,
-    visits: VisitTracker? = nil
+    visits: VisitTracker? = nil,
+    notifications: NotificationCenter = .default
   ) {
     self.serverURL = serverURL
     self.clientHeader = clientHeader
@@ -47,6 +56,7 @@ public final class ScreenrClient: ScreenrAPI {
     self.transport = transport
     self.observer = observer
     self.visits = visits
+    cache = RecentCache(limits: Self.cacheLimits, notifications: notifications)
   }
 
   // Runs off the caller's actor, so decoding a large screen never blocks the
@@ -88,7 +98,7 @@ public final class ScreenrClient: ScreenrAPI {
     let token = await session.token
     let cacheKey = request.method == .get ? request.pathAndQuery : nil
     var cached: CachedRead?
-    if let cacheKey { cached = cache.withLock { $0[cacheKey] } }
+    if let cacheKey { cached = cache.value(for: cacheKey) }
     let urlRequest: URLRequest
     do {
       urlRequest = try makeRequest(
@@ -180,7 +190,7 @@ public final class ScreenrClient: ScreenrAPI {
       let value = try Self.decode(request, from: data, requestID: context.requestID)
       try await requireSession(of: context, for: request)
       if let cacheKey = context.cacheKey, let etag = response.value(forHTTPHeaderField: "ETag") {
-        cache.withLock { $0[cacheKey] = CachedRead(etag: etag, value: value) }
+        cache.store(CachedRead(etag: etag, value: value), bytes: data.count, for: cacheKey)
       }
       try await apply(request.sessionChange, response: response, data: data, context: context)
       return value
@@ -299,7 +309,7 @@ public final class ScreenrClient: ScreenrAPI {
     } catch {
       throw APIError(kind: .keychain, requestID: context.requestID)
     }
-    cache.withLock { $0.removeAll() }
+    cache.removeAll()
   }
 
   // Signs out a new session that this device will not keep, such as another
@@ -338,12 +348,18 @@ public final class ScreenrClient: ScreenrAPI {
     ending: SessionStore.Ending,
     requestID: String
   ) async throws(APIError) {
-    cache.withLock { $0.removeAll() }
+    cache.removeAll()
     do {
       try await session.end(token: token, ending: ending)
     } catch {
       throw APIError(kind: .keychain, requestID: requestID)
     }
+  }
+
+  // Lets the requests in flight finish, then releases the transport's
+  // connections, as for services an extension replaces.
+  func close() {
+    transport.close()
   }
 
   // A photo's response is its JPEG; every other response is JSON.
