@@ -182,6 +182,42 @@ instead, and its build then differs from the check's.
 `tests/test_ios_packages.py` covers the cache, and `tests/test_check_ios.py`
 the check's use of it.
 
+`swift test` keeps its own copy. On 2026-11-04,
+[#494](https://github.com/jubishop/screenr/issues/494) compared it with
+running ScreenrKit's tests on the Mac through xcodebuild against the shared
+sources. After a run, `ios/build/ScreenrKit` held 3.7 GB: 3.3 GB of all
+seven sentry-cocoa frameworks, 0.2 GB of sentry-cocoa's Git repository and
+checkout, and 0.3 GB of build. xcodebuild's run added only 0.3 GB of build
+to `ios/build/DerivedData`, but it doesn't check what `swift test` checks:
+
+- **Unhandled files:** SwiftPM warns about a file in a target's folder that
+  the target doesn't handle, such as Markdown in
+  `ios/ScreenrKit/Sources/ScreenrKit/`: "found 1 file(s) which are
+  unhandled". xcodebuild printed no warning for such a file and counted none
+  in its result bundle, whether it tested ScreenrKit through a scheme in the
+  project or through the package's own scheme, and the check's Release build
+  passed with it too. `swift test` is the only step of the check that fails
+  on one. The Simulator tests run ScreenrKit's tests as well, but dropping
+  the step for them would lose that check too.
+- **Compiler checks:** both tools apply `Package.swift`'s settings. They
+  failed alike on an unused value, unsafe pointer use not marked `unsafe`,
+  global mutable state, and `Error` without `any`, in the package and in its
+  tests, and both ran the same 678 tests.
+- **Noise:** xcodebuild prints the test process's system log. On the Mac,
+  every run of all the tests logged CoreData `warning:` lines about the
+  Contacts store, which the check would count as warnings. xcodebuild would
+  also need a new shared scheme, since the project's ScreenrKit scheme has no
+  test action, and a destination that names the Mac's architecture:
+  `platform=macOS` matched several and printed a warning.
+- **Time:** at a load average near 20, both took about 38 seconds from an
+  empty build directory, where `swift test` also extracts the frameworks.
+  With a build in place and no change, `swift test` took 10 to 11 seconds
+  and xcodebuild 17; after a one-file change, 12 to 13 and 19.
+
+[#505](https://github.com/jubishop/screenr/issues/505) evaluates making the
+frameworks in this copy and in SourceKit-LSP's index build, below, APFS
+clones of the cache's files.
+
 SourceKit-LSP, the Swift language server that editors and agents' language
 tools start when they open a Swift file, keeps one more copy of the packages
 in each checkout where it has opened a ScreenrKit file: its index build, in
