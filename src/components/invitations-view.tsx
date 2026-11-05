@@ -1,6 +1,7 @@
 "use client";
 import { Link } from "./pending-navigation";
 import { useId, useRef, useState } from "react";
+import type { WriteAction } from "../server/actions";
 import type { ScreenData } from "../server/screens";
 import type { Person } from "../shared";
 import { dateLabel, useInteractive } from "./client";
@@ -22,7 +23,7 @@ export function InvitationsView({
 }: {
   data: Extract<ScreenData, { kind: "invites" }> | null;
   busy: boolean;
-  mutate: (action: string, body: unknown) => Promise<unknown>;
+  mutate: (action: WriteAction, body: unknown) => Promise<unknown>;
 }) {
   const interactive = useInteractive();
   const [inviteLimit, setInviteLimit] = useState(1);

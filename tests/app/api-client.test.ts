@@ -4,6 +4,7 @@ import {
   anySignal,
   api,
   ApiError,
+  read,
   readChanged,
 } from "../../src/components/client";
 
@@ -68,7 +69,7 @@ test("proxy HTML and empty error pages produce a retryable message", async () =>
   ] as const) {
     reply(body, { status: 502, headers });
     for (const request of [
-      () => api("screen?path=%2F"),
+      () => read("screen", { path: "/" }),
       () => api("invite", { limit: 1 }),
     ]) {
       const error = await failure(request());
@@ -81,7 +82,7 @@ test("proxy HTML and empty error pages produce a retryable message", async () =>
 test("unreadable successful replies produce the retryable message", async () => {
   for (const body of ["", "<html>Sign in to the network</html>", "{"]) {
     reply(body, { status: 200 });
-    const error = await failure(api("screen?path=%2F"));
+    const error = await failure(read("screen", { path: "/" }));
     assert.equal(error.message, unavailable);
     assert.equal(error.status, 200);
   }
@@ -112,7 +113,10 @@ test("error replies without a server message use a generic one", async () => {
     "Request failed. Please try again.",
   );
   reply(JSON.stringify({ message: "Upstream failed" }), { status: 503 });
-  assert.equal((await failure(api("screen?path=%2F"))).message, unavailable);
+  assert.equal(
+    (await failure(read("screen", { path: "/" }))).message,
+    unavailable,
+  );
 });
 
 test("changed reads send the held version and report an unchanged reply as null", async () => {
@@ -126,26 +130,49 @@ test("changed reads send the held version and report an unchanged reply as null"
   answer(() =>
     Response.json({ kind: "feed" }, { headers: { ETag: 'W/"one"' } }),
   );
-  assert.deepEqual(await readChanged("screen?path=%2F", null), {
+  assert.deepEqual(await readChanged("screen", { path: "/" }, null), {
     data: { kind: "feed" },
     version: 'W/"one"',
   });
   answer(
     () => new Response(null, { status: 304, headers: { ETag: 'W/"one"' } }),
   );
-  assert.equal(await readChanged("screen?path=%2F", 'W/"one"'), null);
+  assert.equal(await readChanged("screen", { path: "/" }, 'W/"one"'), null);
   // A reply without a version, such as through a proxy that drops it, reads
   // in full next time.
   answer(() => Response.json({ kind: "people" }));
-  assert.deepEqual(await readChanged("screen?path=%2Fpeople", 'W/"one"'), {
-    data: { kind: "people" },
-    version: null,
-  });
+  assert.deepEqual(
+    await readChanged("screen", { path: "/people" }, 'W/"one"'),
+    {
+      data: { kind: "people" },
+      version: null,
+    },
+  );
   assert.deepEqual(sent, [null, 'W/"one"', 'W/"one"']);
   answer(() => Response.json({ error: "Person not found." }, { status: 404 }));
-  const error = await failure(readChanged("screen?path=%2Fpeople%2Fx", null));
+  const error = await failure(
+    readChanged("screen", { path: "/people/x" }, null),
+  );
   assert.equal(error.message, "Person not found.");
   assert.equal(error.status, 404);
+});
+
+test("reads send their query in the address, and writes post to the action", async () => {
+  const sent: unknown[] = [];
+  globalThis.fetch = async (input, init) => {
+    sent.push([String(input), init?.method ?? "GET", init?.body ?? null]);
+    return Response.json({ ok: true });
+  };
+  await read("episodes", { title: "tv:1", season: "2" });
+  await read("search", new URLSearchParams({ q: "The Bear" }));
+  await readChanged("screen", { path: "/people/alice" }, null);
+  await api("invite", { limit: 1 });
+  assert.deepEqual(sent, [
+    ["/api/screenr/episodes?title=tv%3A1&season=2", "GET", null],
+    ["/api/screenr/search?q=The+Bear", "GET", null],
+    ["/api/screenr/screen?path=%2Fpeople%2Falice", "GET", null],
+    ["/api/screenr/invite", "POST", '{"limit":1}'],
+  ]);
 });
 
 test("a stalled mutation stops at its deadline with a retryable message", async () => {
@@ -176,7 +203,7 @@ test("a stalled read body stops at the deadline", async () => {
       }),
       { status: 200 },
     );
-  const request = failure(api("screen?path=%2F"));
+  const request = failure(read("screen", { path: "/" }));
   await new Promise((resolve) => setImmediate(resolve));
   deadlines[0].expire();
   assert.equal(
@@ -189,7 +216,7 @@ test("caller cancellation keeps its abort error", async () => {
   controlDeadlines();
   stall();
   const controller = new AbortController();
-  const request = api("screen?path=%2F", undefined, controller.signal);
+  const request = read("screen", { path: "/" }, controller.signal);
   controller.abort();
   await assert.rejects(request, (error: unknown) => {
     assert.ok(!(error instanceof ApiError));
@@ -219,7 +246,7 @@ test("without AbortSignal.any, requests stop at their deadline or the caller's c
     (await timedOut).message,
     "The request timed out. Please try again.",
   );
-  const cancelled = api("screen?path=%2F", undefined, controller.signal);
+  const cancelled = read("screen", { path: "/" }, controller.signal);
   controller.abort();
   await assert.rejects(cancelled, (error: unknown) => {
     assert.ok(!(error instanceof ApiError));
@@ -285,7 +312,7 @@ test("an expired session sends the reader to sign in and back to the same page",
     "/unknown",
   ]) {
     at(path);
-    const error = await failure(api("screen?path=%2F"));
+    const error = await failure(read("screen", { path: "/" }));
     assert.equal(error.status, 401);
   }
   assert.deepEqual(visits, [

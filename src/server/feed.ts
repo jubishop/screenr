@@ -102,10 +102,13 @@ export const viewerStatus = (title: string) => `coalesce(
       AND own.item_type='want_to_watch' AND own.active))`;
 // Each entry of `entries`, a FROM list that names entry c with its owner's
 // audience a and the reader's hidden people h, as the reader sees it, with
-// its replies and reactions, if the reader can see it at all.
+// its replies and reactions, if the reader can see it at all. It selects only
+// the fields that FeedItem declares.
 const items = (
   entries: string,
-) => `SELECT c.*,p.username,p.display_name,screenr_photo(p.user_id) AS photo,t.name AS title_name,t.poster_path,t.kind,t.release_date,
+) => `SELECT c.id,c.owner_id,c.title_id,c.item_type,c.active,c.activity_at,c.body,c.spoiler,
+  c.status,c.finished_on,c.rating,c.edited,c.season,c.episode,
+  p.username,p.display_name,screenr_photo(p.user_id) AS photo,t.name AS title_name,t.poster_path,t.kind,t.release_date,
   (c.item_type='recommended' AND c.active) AS recommended,
   (c.item_type='want_to_watch' AND c.active) AS want_to_watch,
   EXISTS (SELECT 1 FROM feed_item own WHERE own.owner_id=$1 AND own.title_id=c.title_id

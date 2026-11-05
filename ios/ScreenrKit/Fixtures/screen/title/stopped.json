@@ -11,7 +11,7 @@
   },
   "response": {
     "status": 200,
-    "etag": "W/\"J7YiCfr2dN2Yoel26GJqTdVZQl5XdWxjNP6dW4h1rc4\"",
+    "etag": "W/\"l2619jHE-nL8DX_Ohv7z__M8u59z9jWi9ylaQThux_E\"",
     "body": {
       "kind": "title",
       "title": {
@@ -65,12 +65,10 @@
       "conversations": [
         {
           "id": "398a02bb-53fa-4ee7-826e-9aa009db3b58",
-          "conversation_id": "aa6ff957-9a04-49e5-8f23-69446d1278fb",
           "owner_id": "user-alice",
           "title_id": "tv:202",
           "item_type": "progress",
           "active": true,
-          "created_at": "2026-10-13T12:00:00.000Z",
           "activity_at": "2026-10-13T12:00:00.000Z",
           "body": null,
           "spoiler": false,

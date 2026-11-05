@@ -11,7 +11,7 @@
   },
   "response": {
     "status": 200,
-    "etag": "W/\"uPH3sH1HybayvUKIqpIVkW2xETElC9NunSowxbGFOeU\"",
+    "etag": "W/\"0XWU5uI6wj24T7RwgoEDhXk8RTUxbAlhAlp2Nt4a33Q\"",
     "body": {
       "kind": "title",
       "title": {
@@ -99,12 +99,10 @@
       "conversations": [
         {
           "id": "db445b50-ed80-430c-8510-b86482a1787b",
-          "conversation_id": "41d48cfd-343d-4ca1-8a2a-56c8f1a69555",
           "owner_id": "user-alice",
           "title_id": "movie:102",
           "item_type": "recommended",
           "active": true,
-          "created_at": "2026-10-13T12:00:00.000Z",
           "activity_at": "2026-10-13T12:00:00.000Z",
           "body": null,
           "spoiler": false,
@@ -133,12 +131,10 @@
         },
         {
           "id": "b8a80276-c289-41c6-8ffa-ea874e9628bb",
-          "conversation_id": "41d48cfd-343d-4ca1-8a2a-56c8f1a69555",
           "owner_id": "user-alice",
           "title_id": "movie:102",
           "item_type": "review",
           "active": true,
-          "created_at": "2026-10-13T12:00:00.000Z",
           "activity_at": "2026-10-13T12:00:00.000Z",
           "body": "Lovely score, slow middle.",
           "spoiler": false,
@@ -167,12 +163,10 @@
         },
         {
           "id": "e1989f51-e93f-414c-8ae3-30f8ac20f409",
-          "conversation_id": "41d48cfd-343d-4ca1-8a2a-56c8f1a69555",
           "owner_id": "user-alice",
           "title_id": "movie:102",
           "item_type": "progress",
           "active": true,
-          "created_at": "2026-10-13T12:00:00.000Z",
           "activity_at": "2026-10-13T12:00:00.000Z",
           "body": null,
           "spoiler": false,

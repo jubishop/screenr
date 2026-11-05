@@ -11,7 +11,7 @@
   },
   "response": {
     "status": 200,
-    "etag": "W/\"XWisIAGi7VMNFx5P--_5vyXF8A8mzBCA-EGJrtOo_2c\"",
+    "etag": "W/\"0_ZqQAp6UsGOnXhWGBJOL_uT0j3uLoPSGHu9iruItOQ\"",
     "body": {
       "kind": "profile",
       "profile": {
@@ -60,12 +60,10 @@
       "conversations": [
         {
           "id": "d96511cd-0569-4f0c-8c20-402a2422ce98",
-          "conversation_id": "04063826-113f-466f-8d5a-96c0a8b45a95",
           "owner_id": "user-ben",
           "title_id": "movie:104",
           "item_type": "want_to_watch",
           "active": true,
-          "created_at": "2026-10-13T12:00:00.000Z",
           "activity_at": "2026-10-13T12:00:00.000Z",
           "body": null,
           "spoiler": false,
@@ -94,12 +92,10 @@
         },
         {
           "id": "90140334-3d69-478b-8869-17fe1ae4a2a9",
-          "conversation_id": "a53c9e16-3478-4ea7-8f38-057a171973ec",
           "owner_id": "user-ben",
           "title_id": "movie:103",
           "item_type": "want_to_watch",
           "active": true,
-          "created_at": "2026-10-13T12:00:00.000Z",
           "activity_at": "2026-10-13T12:00:00.000Z",
           "body": null,
           "spoiler": false,
@@ -128,12 +124,10 @@
         },
         {
           "id": "f0a222c0-d2f9-45e6-8f45-53413b726eed",
-          "conversation_id": "0cd200ec-33eb-4ea8-8db3-3e1b829825d2",
           "owner_id": "user-ben",
           "title_id": "tv:201",
           "item_type": "review",
           "active": true,
-          "created_at": "2026-10-13T12:00:00.000Z",
           "activity_at": "2026-10-13T12:00:00.000Z",
           "body": "The finale reveals that the lighthouse keeper narrated every episode.",
           "spoiler": true,
@@ -162,12 +156,10 @@
         },
         {
           "id": "0601645c-005d-450f-8b22-ae05a508119d",
-          "conversation_id": "4e78cefb-d2b2-4677-86e1-aefb695de7d4",
           "owner_id": "user-ben",
           "title_id": "movie:101",
           "item_type": "recommended",
           "active": true,
-          "created_at": "2026-10-13T12:00:00.000Z",
           "activity_at": "2026-10-13T12:00:00.000Z",
           "body": null,
           "spoiler": false,
@@ -244,12 +236,10 @@
         },
         {
           "id": "4300d142-345c-4077-8450-5146cef8a125",
-          "conversation_id": "4857e513-5308-411e-8996-d1d7bcc2a947",
           "owner_id": "user-ben",
           "title_id": "movie:105",
           "item_type": "want_to_watch",
           "active": true,
-          "created_at": "2026-10-13T12:00:00.000Z",
           "activity_at": "2026-10-13T12:00:00.000Z",
           "body": null,
           "spoiler": false,
@@ -278,12 +268,10 @@
         },
         {
           "id": "d4aa3cdf-08c6-4ef3-8d48-401cbb8460f2",
-          "conversation_id": "0cd200ec-33eb-4ea8-8db3-3e1b829825d2",
           "owner_id": "user-ben",
           "title_id": "tv:201",
           "item_type": "recommended",
           "active": true,
-          "created_at": "2026-10-13T12:00:00.000Z",
           "activity_at": "2026-10-13T12:00:00.000Z",
           "body": null,
           "spoiler": false,
