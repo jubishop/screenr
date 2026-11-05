@@ -141,7 +141,9 @@ public final class ShortcutActions {
       .map { TitleSummary($0.title) }
     let message: String
     if !titles.isEmpty {
-      let more = page.recommendations.count - titles.count
+      // The read's count includes titles past the list's cap; without it,
+      // from an older server, the list's length stands in.
+      let more = (page.recommendationCount ?? page.recommendations.count) - titles.count
       let names = titles.map(\.name) + (more > 0 ? ["\(more) more"] : [])
       message = "Your friends recommend \(Self.list(names))."
     } else if (page.finishedRecommendations ?? 0) > 0 {

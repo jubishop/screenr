@@ -1431,7 +1431,10 @@ Intents are in `Screenr/Shortcuts/`.
 - **Friends recommend:** "What do my friends recommend?" names the first
   three titles that are not finished, as the tab first shows them, such as
   "Your friends recommend Night Crossing, Harbor Lights, and Winter Garden.",
-  and returns them to the shortcut. Open Friends recommend opens the app at
+  and returns them to the shortcut. When more remain, it adds how many, as
+  in "and 61 more", from the read's `recommendationCount`, which counts
+  every unfinished title, not only the 50 listed, or from the list's length
+  when an older server omits it. Open Friends recommend opens the app at
   Find a title's Friends recommend. Both it and Add to Want to watch's
   suggestions read Find's first read, `/search?finished=hidden`, so finished
   titles, which neither offers, leave room for others in the capped list,

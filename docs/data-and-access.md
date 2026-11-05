@@ -602,7 +602,10 @@ iPhone builds read with `finished=hidden` while the switch is off, so
 finished titles leave the list before the cap, and the screen adds
 `finishedRecommendations`, how many it left out, for the empty message.
 Turning the switch on reads again. The iPhone's Friends recommend shortcuts
-read the same way.
+read the same way. Every read also adds `recommendationCount`, how many
+titles pass its filters, including those past the cap, so "What do my
+friends recommend?" can say exactly how many titles remain after the ones
+it names ([#489](https://github.com/jubishop/screenr/issues/489)).
 
 ## Write lock and refresh behavior
 
