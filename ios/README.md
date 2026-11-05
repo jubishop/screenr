@@ -111,8 +111,17 @@ The check fails fast and never hangs:
   Collecting a sysdiagnose after a failed UI test took about 10 minutes and
   sometimes never finished.
 - **Timeouts:** the Simulator tests stop and fail after 60 minutes, or after
-  `--test-timeout <minutes>`, the Simulator boot after 10 minutes, and the
-  package resolution after 15. The failure shows the end of the step's log.
+  `--test-timeout <minutes>`, the ScreenrKit tests and the Release build
+  after 30 minutes each, the Simulator boot after 10, and the package
+  resolution after 15. The failure names the step and shows the end of its
+  log. Simulator tools can hang under heavy load, so each tool call, such as
+  `xcrun simctl create` or `xcrun xcresulttool get`, stops after 5 minutes
+  and fails the check with its command. A push that `xcrun simctl push` has
+  not sent within 20 seconds fails the test that asked for it.
+- **Cleanup:** shutting down and deleting the check's Simulator have the same
+  5-minute limit but never change the check's result. A Simulator the check
+  could not delete is reported with its UDID and the command that deletes
+  it.
 - **Stopping:** each step runs in its own process group. A timeout,
   Control-C, or `SIGTERM` stops that group: `SIGTERM` first, then `SIGKILL`
   for whatever is left after 5 seconds. The check then deletes its Simulator.

@@ -25,8 +25,13 @@ waits for a free slot, saying so, and holds it until it exits. The slots are
 lock files in /tmp, or in SCREENR_CHECK_IOS_SLOT_DIR, which tests set.
 
 A failing test reports at once, without collecting a sysdiagnose. Each step
-runs in its own process group, and a Simulator test run that outlasts
---test-timeout, or an interrupted check, stops that whole group.
+runs in its own process group, and a step that outlasts its time limit, such
+as --test-timeout for the Simulator tests, or an interrupted check, stops that
+whole group. A tool call, such as xcrun simctl create, that has not finished
+within TOOL_TIMEOUT_SECONDS is stopped, and the check fails with its command.
+Shutting down and deleting the check's Simulator have the same limit but never
+change the check's result: a Simulator it could not delete is reported with
+its UDID.
 
 UI tests that need a push, which a test cannot send, write its payload to the
 push relay directory, and the check delivers it to the Simulator with xcrun
@@ -45,6 +50,7 @@ import json
 import os
 from pathlib import Path
 import re
+import shlex
 import shutil
 import signal
 import subprocess
@@ -74,6 +80,18 @@ MINIMUM_XCODE = 27
 # much longer is stuck.
 TEST_TIMEOUT_MINUTES = 60
 BOOT_TIMEOUT_MINUTES = 10
+# The ScreenrKit tests and the Release build each took about 40 seconds from an
+# empty build directory on the user's Mac on 2026-11-05, at a load average near
+# 40, and under a minute with a build in place. Simulators booting for other
+# checks push the load to 100 or even 300, so this leaves room for a much slower
+# run; one that takes longer is stuck. Tests shorten it with
+# SCREENR_CHECK_IOS_BUILD_TIMEOUT.
+BUILD_TIMEOUT_MINUTES = float(os.environ.get("SCREENR_CHECK_IOS_BUILD_TIMEOUT", 30))
+# simctl's create and delete, and xcresulttool's reads of a Release build's
+# result bundle, each took under a second on 2026-11-05 at load averages of 100
+# to 140, but Simulator tools can hang under heavy load. Tests shorten this with
+# SCREENR_CHECK_IOS_TOOL_TIMEOUT.
+TOOL_TIMEOUT_SECONDS = float(os.environ.get("SCREENR_CHECK_IOS_TOOL_TIMEOUT", 300))
 # With five or more checks at once, the Mac's load average passed 200, and the
 # UI tests' accessibility audits timed out or measured contrast wrongly. Three
 # kept it below 30 on 2026-10-14. Building loads the Mac too, so a slot covers
@@ -117,9 +135,30 @@ class CheckFailure(Exception):
     pass
 
 
+def call(command):
+    """Run a tool with its output captured, and stop it if it outlasts TOOL_TIMEOUT_SECONDS.
+
+    xcrun replaces itself with the tool it runs, so the timeout's SIGKILL
+    stops the tool itself.
+    """
+    return subprocess.run(command, cwd=ROOT, env=ENVIRONMENT, capture_output=True, text=True,
+                          timeout=TOOL_TIMEOUT_SECONDS)
+
+
+def stopped(command):
+    return (f"{shlex.join(command)} did not finish within {TOOL_TIMEOUT_SECONDS:g} seconds, "
+            "so bin/check-ios stopped it.")
+
+
 def capture(*command):
-    return subprocess.run(command, cwd=ROOT, env=ENVIRONMENT, check=True,
-                          capture_output=True, text=True).stdout
+    """Return a tool's output, and fail the check when the tool fails or outlasts TOOL_TIMEOUT_SECONDS."""
+    try:
+        result = call(command)
+    except subprocess.TimeoutExpired:
+        raise CheckFailure(stopped(command)) from None
+    if result.returncode:
+        raise subprocess.CalledProcessError(result.returncode, command, result.stdout, result.stderr)
+    return result.stdout
 
 
 def stop(process):
@@ -322,10 +361,27 @@ def create_simulator():
 
 
 def delete_simulator(udid):
-    subprocess.run(["xcrun", "simctl", "shutdown", udid], cwd=ROOT, env=ENVIRONMENT,
-                   capture_output=True)
-    subprocess.run(["xcrun", "simctl", "delete", udid], cwd=ROOT, env=ENVIRONMENT, check=True,
-                   capture_output=True)
+    """Shut down and delete the check's Simulator, reporting what simctl could not do.
+
+    It runs after every Simulator test run, passing or failing, so it never
+    raises: a Simulator left behind does not change the check's result.
+    """
+    for action in ("shutdown", "delete"):
+        command = ["xcrun", "simctl", action, udid]
+        try:
+            result = call(command)
+        except subprocess.TimeoutExpired:
+            problem = stopped(command)
+        else:
+            # Shutting down a Simulator that never booted fails, and the delete still works.
+            if action == "shutdown" or result.returncode == 0:
+                continue
+            problem = (f"{shlex.join(command)} failed with status {result.returncode}: "
+                       f"{(result.stdout + result.stderr).strip()}")
+        print(problem, file=sys.stderr, flush=True)
+        if action == "delete":
+            print(f"Simulator {udid} was not deleted. Delete it with: xcrun simctl delete {udid}",
+                  file=sys.stderr, flush=True)
 
 
 def main():
@@ -363,11 +419,13 @@ def main():
     OUTPUT.mkdir(parents=True)
     packages.use(ROOT, lambda command: run("Package resolution", command, packages.RESOLVE_TIMEOUT_MINUTES))
     run("ScreenrKit tests", ["swift", "test", "--package-path", "ios/ScreenrKit",
-                             "--scratch-path", str(BUILD / "ScreenrKit"), *packages.swift_options()])
+                             "--scratch-path", str(BUILD / "ScreenrKit"), *packages.swift_options()],
+        BUILD_TIMEOUT_MINUTES)
     packages.share_artifacts(ROOT)
     release = OUTPUT / "Release.xcresult"
     run("Release build", [*XCODEBUILD, "-configuration", "Release", "-destination",
-                          "generic/platform=iOS Simulator", "-resultBundlePath", str(release), "build"])
+                          "generic/platform=iOS Simulator", "-resultBundlePath", str(release), "build"],
+        BUILD_TIMEOUT_MINUTES)
     check_results("Release build", release, tests=False)
     udid = args.simulator or create_simulator()
     try:

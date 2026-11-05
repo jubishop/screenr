@@ -5,6 +5,8 @@ import fcntl
 import json
 import os
 from pathlib import Path
+import re
+import shlex
 import shutil
 import signal
 import subprocess
@@ -54,6 +56,23 @@ def build_into(option):
     output.mkdir(parents=True, exist_ok=True)
     (output / 'built').touch()
     extract(output)
+def hang(step):
+    # Never return, as Simulator tools can under heavy load, and report the process ID.
+    if os.environ.get('FAKE_HANG_' + step):
+        import time
+        Path(os.environ['FAKE_HANG_' + step]).write_text(str(os.getpid()))
+        time.sleep(600)
+def hang_with_child(step):
+    # Hang with a child that ignores SIGTERM, as a stuck build or test run can, and
+    # report both process IDs.
+    if os.environ.get('FAKE_HANG_' + step):
+        import signal, subprocess, time
+        signal.signal(signal.SIGTERM, signal.SIG_IGN)
+        child = subprocess.Popen([sys.executable, '-c', 'import signal, time; '
+                                  'signal.signal(signal.SIGTERM, signal.SIG_IGN); time.sleep(600)'])
+        print(step + ' started', flush=True)
+        Path(os.environ['FAKE_HANG_' + step]).write_text(f'{os.getpid()} {child.pid}')
+        time.sleep(600)
 """ + EXTRACT
 XCODEBUILD = RECORD + """
 if sys.argv[1:] == ['-version']:
@@ -87,16 +106,7 @@ if step == 'TEST' and os.environ.get('FAKE_PUSH'):
         print('PushTests.swift:70: error: -[PushTests testAcceptsAFriendRequestFromItsPush] : failed: '
               'xcrun simctl push failed: ' + failed.read_text())
         sys.exit(65)
-if os.environ.get('FAKE_HANG_' + step):
-    # Hang with a child that ignores SIGTERM, as a stuck test run can, and
-    # report both process IDs.
-    import signal, subprocess, time
-    signal.signal(signal.SIGTERM, signal.SIG_IGN)
-    child = subprocess.Popen([sys.executable, '-c', 'import signal, time; '
-                              'signal.signal(signal.SIGTERM, signal.SIG_IGN); time.sleep(600)'])
-    print('Testing started', flush=True)
-    Path(os.environ['FAKE_HANG_' + step]).write_text(f'{os.getpid()} {child.pid}')
-    time.sleep(600)
+hang_with_child(step)
 finish(step)
 """
 XCRUN = RECORD + """
@@ -105,23 +115,24 @@ if arguments[:2] == ['simctl', 'list']:
     print(os.environ['FAKE_RUNTIMES'])
 elif arguments[:2] == ['simctl', 'create']:
     record('xcrun', *arguments)
+    hang('CREATE')
     print('NEW-UDID')
 elif arguments[:2] == ['simctl', 'bootstatus']:
     record('xcrun', *arguments)
     finish('BOOTSTATUS')
 elif arguments[:2] == ['simctl', 'push']:
     record('xcrun', *arguments, Path(arguments[-1]).read_text())
-    if os.environ.get('FAKE_HANG_PUSH'):
-        # Never return, as Simulator tools can under heavy load, and report the process ID.
-        import time
-        Path(os.environ['FAKE_HANG_PUSH']).write_text(str(os.getpid()))
-        time.sleep(600)
+    hang('PUSH')
     print("Notification sent to '" + arguments[3] + "'")
 elif arguments[0] == 'simctl':
+    # shutdown and delete
     record('xcrun', *arguments)
+    hang(arguments[1].upper())
+    finish(arguments[1].upper())
 elif arguments[:3] == ['xcresulttool', 'get', 'build-results']:
     print((Path(arguments[-1]) / 'build.json').read_text())
 elif arguments[:4] == ['xcresulttool', 'get', 'test-results', 'summary']:
+    hang('SUMMARY')
     print((Path(arguments[-1]) / 'summary.json').read_text())
 else:
     sys.exit('unexpected xcrun ' + ' '.join(arguments))
@@ -129,6 +140,7 @@ else:
 SWIFT = RECORD + """
 record('swift', *sys.argv[1:])
 build_into('--scratch-path')
+hang_with_child('SWIFT')
 finish('SWIFT')
 """
 PINS = """{
@@ -419,7 +431,7 @@ class CheckIOSTests(unittest.TestCase):
                 self.assertTrue((build / "DerivedData/built").exists())
 
     def assert_stopped(self, pids):
-        """Require that the hung xcodebuild and its child have exited."""
+        """Require that a hung fake tool and any child it started have exited."""
         for pid in pids.read_text().split():
             deadline = time.monotonic() + 5
             while True:
@@ -435,10 +447,77 @@ class CheckIOSTests(unittest.TestCase):
         result = self.check("--test-timeout", "0.05", FAKE_HANG_TEST=str(pids))
         self.assertNotEqual(result.returncode, 0)
         self.assertLess(time.monotonic() - started, 40)
-        self.assertIn("Testing started", result.stderr)
+        self.assertIn("TEST started", result.stderr)
         self.assertIn("Simulator tests: stopped after 0.05 minutes without finishing", result.stderr)
         self.assert_stopped(pids)
         self.assertEqual(self.steps()[-2:], ["simctl shutdown", "simctl delete"])
+
+    def test_hung_package_tests_or_release_build_stop_with_their_processes_at_the_build_limit(self):
+        for step, label, steps in (("SWIFT", "ScreenrKit tests", ["xcodebuild", "swift"]),
+                                   ("BUILD", "Release build", ["xcodebuild", "swift", "xcodebuild"])):
+            with self.subTest(step=label):
+                self.events.unlink(missing_ok=True)
+                pids = self.events.parent / f"{step}.pids"
+                started = time.monotonic()
+                result = self.check(SCREENR_CHECK_IOS_BUILD_TIMEOUT="0.05", **{"FAKE_HANG_" + step: str(pids)})
+                self.assertLess(time.monotonic() - started, 40)
+                self.assertNotEqual(result.returncode, 0)
+                # The failure shows the end of the step's log.
+                self.assertIn(f"{step} started", result.stderr)
+                self.assertIn(f"{label}: stopped after 0.05 minutes without finishing", result.stderr)
+                self.assert_stopped(pids)
+                self.assertEqual(self.steps(), steps)
+
+    def test_a_hung_tool_call_is_stopped_and_fails_the_check_with_its_command(self):
+        bundle = shlex.quote(str(self.repo / "ios/build/check/Tests.xcresult"))
+        for step, command, cleanup in (
+                # Before the Simulator exists, so there is none to delete.
+                ("CREATE", r"xcrun simctl create screenr-check-checkout-\d+ iphone-18-pro runtime-27-0", []),
+                ("SUMMARY", re.escape(f"xcrun xcresulttool get test-results summary --path {bundle}"),
+                 ["simctl shutdown", "simctl delete"])):
+            with self.subTest(step=step):
+                self.events.unlink(missing_ok=True)
+                pid = self.events.parent / f"{step}.pid"
+                started = time.monotonic()
+                result = self.check(SCREENR_CHECK_IOS_TOOL_TIMEOUT="2", **{"FAKE_HANG_" + step: str(pid)})
+                self.assertLess(time.monotonic() - started, 30)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertRegex(result.stderr, command + " did not finish within 2 seconds, so bin/check-ios "
+                                                          r"stopped it\.")
+                self.assert_stopped(pid)
+                self.assertNotIn("iOS checks passed", result.stdout)
+                self.assertEqual([name for name in self.steps() if name in cleanup], cleanup)
+
+    def test_a_simulator_it_cannot_shut_down_or_delete_is_reported_and_leaves_the_result_alone(self):
+        pid = self.events.parent / "cleanup.pid"
+        stopped = "did not finish within 2 seconds, so bin/check-ios stopped it."
+        left = "Simulator NEW-UDID was not deleted. Delete it with: xcrun simctl delete NEW-UDID"
+        for case, extra, passes, reports in (
+                ("shutdown hangs", {"FAKE_HANG_SHUTDOWN": str(pid)}, True,
+                 [f"xcrun simctl shutdown NEW-UDID {stopped}"]),
+                ("delete hangs", {"FAKE_HANG_DELETE": str(pid)}, True,
+                 [f"xcrun simctl delete NEW-UDID {stopped}", left]),
+                ("delete fails", {"FAKE_STATUS_DELETE": "1", "FAKE_OUTPUT_DELETE": "Invalid device: NEW-UDID"},
+                 True, ["xcrun simctl delete NEW-UDID failed with status 1: Invalid device: NEW-UDID", left]),
+                # A failed check keeps its own failure.
+                ("boot and delete fail", {"FAKE_STATUS_BOOTSTATUS": "1", "FAKE_STATUS_DELETE": "1"}, False,
+                 ["Simulator boot failed with status 1", left])):
+            with self.subTest(case=case):
+                self.events.unlink(missing_ok=True)
+                pid.unlink(missing_ok=True)
+                started = time.monotonic()
+                result = self.check(SCREENR_CHECK_IOS_TOOL_TIMEOUT="2", **extra)
+                self.assertLess(time.monotonic() - started, 30)
+                self.assertEqual(result.returncode == 0, passes, result.stderr)
+                self.assertEqual("iOS checks passed with no warnings" in result.stdout, passes)
+                for report in reports:
+                    self.assertIn(report, result.stderr)
+                if case == "shutdown hangs":
+                    # The delete still ran, and it worked.
+                    self.assertNotIn("was not deleted", result.stderr)
+                if pid.exists():
+                    self.assert_stopped(pid)
+                self.assertEqual(self.steps()[-2:], ["simctl shutdown", "simctl delete"])
 
     def test_stopping_the_check_stops_its_test_run_and_deletes_its_simulator(self):
         for stop in (signal.SIGINT, signal.SIGTERM):
