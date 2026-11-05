@@ -10,6 +10,8 @@ next-env.d.ts
 /ios/ScreenrKit/.build/
 /ios/ScreenrKit/.swiftpm/
 xcuserdata/
+# SourceKit-LSP's Swift Build index build, from a language server started here
+/.build/
 
 # project-starter:begin
 .DS_Store

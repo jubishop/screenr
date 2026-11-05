@@ -43,8 +43,11 @@ USERS = "users.lock"
 POLL_SECONDS = 2
 # The SwiftPM scratch paths in a checkout, each with its own copy of the
 # packages' binary artifacts: swift test's in bin/check-ios, SourceKit-LSP's
-# index build, and a swift command's default.
-SCRATCH_PATHS = ("ios/build/ScreenrKit", "ios/ScreenrKit/.build/index-build", "ios/ScreenrKit/.build")
+# index build, and a swift command's default. With Swift Build, SourceKit-LSP
+# builds its index under the directory it started in, such as the checkout's
+# root.
+SCRATCH_PATHS = ("ios/build/ScreenrKit", "ios/ScreenrKit/.build/index-build", ".build/index-build",
+                 "ios/ScreenrKit/.build")
 # A first resolution downloaded about 1 GB in under 30 seconds on 2026-11-04.
 RESOLVE_TIMEOUT_MINUTES = 15
 GB = 1024 ** 3

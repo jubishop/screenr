@@ -317,6 +317,26 @@ class IOSPackagesTests(unittest.TestCase):
         self.assertNotIn("now share", result.stdout)
         self.assertEqual({path: path.stat().st_ino for path in tests_copy.rglob("*")}, before)
 
+    @unittest.skipUnless(sys.platform == "darwin", "APFS clones need macOS")
+    def test_an_index_build_at_the_checkouts_root_shares_the_caches_files_too(self):
+        template = package_artifacts(self.base / "download")
+        self.env["FAKE_ARTIFACTS"] = str(template)
+        self.assertEqual(self.run_in(self.repo, "xcodebuild", "build").returncode, 0)
+        sources = self.sources(self.recorded())
+        # With Swift Build, SourceKit-LSP builds its index in .build/index-build
+        # under the directory it started in, which can be the checkout's root.
+        index = self.repo / ".build/index-build"
+        subprocess.run([self.base / "tools/swift", "build", "--scratch-path", index], env=self.env, check=True)
+        result = self.run_in(self.repo, "swift", "build", "--scratch-path", "ios/build/ScreenrKit")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        for original in sorted(path for path in template.rglob("*") if path.is_file() and not path.is_symlink()
+                               and path.name != "workspace-state.json"):
+            name = str(original.relative_to(template))
+            with self.subTest(file=name):
+                self.assertEqual((index / name).read_bytes(), original.read_bytes())
+                self.assertEqual((index / name).stat().st_mtime_ns, ARCHIVED_NS)
+                self.assertEqual(data_id(index / name), data_id(sources / name))
+
     def test_accepts_only_xcodebuild_and_swift(self):
         for args in ((), ("make", "build"), ("swift",)):
             with self.subTest(args=args):
