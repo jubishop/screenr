@@ -392,8 +392,11 @@ build of Screenr for iPhone.", and a release with no such commits says
 **Beta App Review and the public link:** external testers get a build only
 after Beta App Review approves it, and a release does not submit it.
 `--submit-review` submits the build after the distribution steps, once the
-review information in App Store Connect is complete. The script never enables
-the group's public link. [#250](https://github.com/jubishop/screenr/issues/250)
+review information in App Store Connect is complete. Apple approved 1.0 (3)
+as soon as it was submitted on 2026-11-05, after approving 1.0 (2) of the
+same version, so a later build of an approved version may not wait for
+review ([#502](https://github.com/jubishop/screenr/issues/502)). The script
+never enables the group's public link. [#250](https://github.com/jubishop/screenr/issues/250)
 submitted the first external build and turned the link on through the API on
 2026-11-04; [App Store Connect records](running-screenr.md#app-store-connect)
 say where the link lives.
