@@ -240,43 +240,86 @@ to `ios/build/DerivedData`, but it doesn't check what `swift test` checks:
 
 SourceKit-LSP, the Swift language server that editors and agents' language
 tools start when they open a Swift file, keeps one more copy of the packages
-in each checkout where it has opened a ScreenrKit file: its index build, in
-`ios/ScreenrKit/.build/index-build`. Its background indexing resolves the
-packages and builds ScreenrKit's modules there, apart from the check's
-builds, and that is what lets a test file see ScreenrKit's module and report
-diagnostics. On 2026-11-04 it held 4.3 GB: 3.3 GB of all seven sentry-cocoa
-frameworks, the same files as the cache's, 0.8 GB of build and index, and
-0.2 GB of sentry-cocoa's Git repository and checkout. It holds only one
-release: when `Package.resolved` changes, SwiftPM removes a package's old
-frameworks before it extracts the new ones. It goes away with its worktree.
-SourceKit-LSP has no option for another download cache, so it downloads into
-SwiftPM's default one, `~/Library/Caches/org.swift.swiftpm`, which nothing
-prunes.
+in each checkout where it has opened a ScreenrKit file: its index build, by
+default in `ios/ScreenrKit/.build/index-build`. Its background indexing
+resolves the packages and builds ScreenrKit's modules there, apart from the
+check's builds, and that is what lets a test file see ScreenrKit's module and
+report diagnostics. It holds only one release: when `Package.resolved`
+changes, SwiftPM removes a package's old frameworks before it extracts the
+new ones. It goes away with its worktree. SourceKit-LSP has no option for
+another download cache, so it downloads into SwiftPM's default one,
+`~/Library/Caches/org.swift.swiftpm`, which nothing prunes.
 
-The repository can't move the index build or turn it off. The SourceKit-LSP
-in Xcode 27.2 reads a checkout's `ios/ScreenrKit/.sourcekit-lsp/config.json`,
-which can set its scratch path or turn background indexing off, only after
-the editor answers a prompt to trust that checkout's `ios/ScreenrKit`. On
-2026-11-04 an agent's language tool left the prompt unanswered, so with such
-a file in place the index build still landed in `.build/index-build`, and a
-client that trusted it still resolved the packages there before it moved to
-the file's scratch path. Turning background indexing off would save only
-about 0.7 GB: SourceKit-LSP still resolved the packages into
-`ios/ScreenrKit/.build`, and a test file then reported "No such module
-'ScreenrKit'".
+On the owner's Mac, a user-level SourceKit-LSP configuration file,
+`~/.sourcekit-lsp/config.json`, has SourceKit-LSP prepare packages with Swift
+Build, SwiftPM's newer build system, instead of its default native build
+system, which leaves Sentry's types unresolved, as described below. The owner
+opted in on 2026-11-05
+([#516](https://github.com/jubishop/screenr/issues/516)): Swift Build is the
+direction for SwiftPM's builds, the setting affects only language tools'
+index builds, not `swift` or `xcodebuild` commands or `bin/check-ios`, and
+deleting the file undoes it. The file holds:
+
+```json
+{
+  "swiftPM": {
+    "buildSystem": "swiftbuild",
+    "scratchPath": ".build/index-build"
+  }
+}
+```
+
+- **Index build:** on 2026-11-05 a fresh one held 3.8 GB: 3.3 GB of all seven
+  sentry-cocoa frameworks, the same files as the cache's, 0.3 GB of build and
+  index, and 0.2 GB of sentry-cocoa's Git repository and checkout. The native
+  build system's held 4.3 GB on 2026-11-04, 0.8 GB of it build and index.
+  Swift Build copies `Sentry.framework` into the build's
+  `out/Products/Debug` while preparing, so ScreenrKit's files resolve
+  `SentrySDK`, `Event`, and `SentryFeedback`, with go-to-definition into
+  Sentry's headers.
+- **Location:** the SourceKit-LSP in Xcode 27.2 passes `scratchPath` to Swift
+  Build as written, and Swift Build resolves it against the directory the
+  language server started in, not the package's. Agents' language tools start
+  it at the checkout's root, so their index build is the checkout's
+  `.build/index-build`; an editor that starts it in `ios/ScreenrKit` puts it
+  in `ios/ScreenrKit/.build/index-build`. `.gitignore` ignores both. Upstream
+  SourceKit-LSP resolves the path against the package since
+  [swiftlang/sourcekit-lsp#2692](https://github.com/swiftlang/sourcekit-lsp/pull/2692),
+  which Xcode 27.2's doesn't include. Without `scratchPath`, Swift Build would
+  build in `ios/ScreenrKit/.build`, where a `swift` command run without
+  `--scratch-path` also builds.
+- **Scope:** the file applies to every Swift package on the Mac, not only
+  ScreenrKit, and departs from SourceKit-LSP's default, which its maintainers
+  keep for background indexing while Swift Build's issues are worked out. A
+  running language server picks it up only when it restarts. A user-level file
+  needs no trust prompt: sessions started at the checkout's root and in
+  `ios/ScreenrKit` showed none on 2026-11-05.
+
+No file in the repository can move the index build or turn it off. The
+SourceKit-LSP in Xcode 27.2 reads a checkout's
+`ios/ScreenrKit/.sourcekit-lsp/config.json`, which can set its scratch path or
+turn background indexing off, only after the editor answers a prompt to trust
+that checkout's `ios/ScreenrKit`. On 2026-11-04 an agent's language tool left
+the prompt unanswered, so with such a file in place the index build still
+landed in `.build/index-build`, and a client that trusted it still resolved
+the packages there before it moved to the file's scratch path. Turning
+background indexing off would save only about 0.7 GB: SourceKit-LSP still
+resolved the packages into `ios/ScreenrKit/.build`, and a test file then
+reported "No such module 'ScreenrKit'".
 
 Both copies' frameworks are the cache's files, byte for byte, with the same
 modification times, which SwiftPM takes from the archives. So `bin/check-ios`,
 after its package tests, and `bin/ios-packages`, after its command, make them
 APFS clones of the cache's files: `share_artifacts()` in
 `bin/_ios_packages.py` ([#505](https://github.com/jubishop/screenr/issues/505)).
-It covers `ios/build/ScreenrKit`, the index build, and `ios/ScreenrKit/.build`,
-where a `swift` command run without `--scratch-path` builds, and says how much
-it shared. A clone shares its data with the cache's file, so it takes no space
-until either changes, yet stays a file of its own: SwiftPM replacing it, or the
-size bound deleting the cache, leaves the other intact, which a symbolic link
-into the cache would not. Once the cache is resolved again, the next command
-clones the new files.
+It covers `ios/build/ScreenrKit`, the index build, in either
+`ios/ScreenrKit/.build/index-build` or the checkout's `.build/index-build`, and
+`ios/ScreenrKit/.build`, where a `swift` command run without `--scratch-path`
+builds, and says how much it shared. A clone shares its data with the cache's
+file, so it takes no space until either changes, yet stays a file of its own:
+SwiftPM replacing it, or the size bound deleting the cache, leaves the other
+intact, which a symbolic link into the cache would not. Once the cache is
+resolved again, the next command clones the new files.
 
 - **Saving:** in two runs on 2026-11-05, a pass freed 3,329 MiB of the volume's
   free space, as `df` reports it, for one copy's frameworks, which take
@@ -306,7 +349,9 @@ clones the new files.
   preparation, the `swift build --experimental-prepare-for-indexing` that
   SourceKit-LSP runs, rebuilt nothing, and `swift test` compiled nothing but
   planned its build again and relinked its test bundle once, a few seconds,
-  since its build system tracks the files themselves. So a pass skips files
+  since its build system tracks the files themselves. With Swift Build, the
+  index build's next preparation copied `Sentry.framework` into its products
+  again, within a second, and rebuilt no module. So a pass skips files
   that already share the cache's data, by APFS's clone ID, and took about
   0.3 seconds for both copies when all did. A first pass took 1.1 to
   1.8 seconds per copy.
@@ -325,12 +370,12 @@ clones the new files.
   runs within commands checkouts already run, needs no new job or dependency,
   and leaves every file's contents and modification time as they were.
 
-In ScreenrKit's files, SourceKit-LSP resolves Foundation's and ScreenrKit's
-types but none of sentry-cocoa's, so language tools give no type, hover, or
-definition for `Event`, `SentrySDK`, or `SentryFeedback`
-([#513](https://github.com/jubishop/screenr/issues/513)). On 2026-11-05 a
-private SourceKit-LSP from Xcode 27.2, driven over its protocol in a fresh
-index build, showed why:
+With its default native build system, SourceKit-LSP resolves Foundation's
+and ScreenrKit's types in ScreenrKit's files but none of sentry-cocoa's, so
+language tools give no type, hover, or definition for `Event`, `SentrySDK`, or
+`SentryFeedback` ([#513](https://github.com/jubishop/screenr/issues/513)). On
+2026-11-05 a private SourceKit-LSP from Xcode 27.2, driven over its protocol
+in a fresh index build, showed why:
 
 - **Cause:** SourceKit-LSP prepares each target with
   `swift build --build-system native --experimental-prepare-for-indexing`.
@@ -362,9 +407,8 @@ index build, showed why:
   no diagnostics. It also indexed 10 batches of files instead of 217: 207 of
   the native build's come from sentry-cocoa targets that ScreenrKit never
   builds, such as `SentrySwift` and `SentryObjCInternal`. Its build and index
-  took 0.3 GB instead of 0.8 GB, in `ios/ScreenrKit/.build` unless
-  `scratchPath` names `.build/index-build`.
-- **Choice:** no repository change. A workspace
+  took 0.3 GB instead of 0.8 GB.
+- **Choice:** nothing in the repository can fix it. A workspace
   `ios/ScreenrKit/.sourcekit-lsp/config.json` choosing Swift Build takes effect
   only after the trust prompt above. A clone of the slice's framework in the
   products directory resolved Sentry's types in ScreenrKit's files, but test
@@ -372,10 +416,10 @@ index build, showed why:
   errors such as "Extra arguments" on `Telemetry(...)`, because preparation
   found ScreenrKit up to date. A pass in `share_artifacts()` would also reach
   an index build only at the checkout's next check or `bin/ios-packages`
-  command. A user-level configuration file, such as
-  `~/.sourcekit-lsp/config.json`, needs no prompt, but it applies to every
-  Swift package on the Mac and departs from SourceKit-LSP's default, so it is
-  the Mac owner's choice
+  command. A user-level configuration file needs no prompt, but it applies to
+  every Swift package on the Mac and departs from SourceKit-LSP's default, so
+  it was the Mac owner's choice. The owner opted in on 2026-11-05, with the
+  user-level file described above
   ([#516](https://github.com/jubishop/screenr/issues/516)).
 
 ## Run one test
