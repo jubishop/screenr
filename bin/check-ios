@@ -28,7 +28,9 @@ runs in its own process group, and a Simulator test run that outlasts
 
 UI tests that need a push, which a test cannot send, write its payload to the
 push relay directory, and the check delivers it to the Simulator with xcrun
-simctl push while the tests run.
+simctl push while the tests run. A push that simctl has not sent within
+PUSH_TIMEOUT_SECONDS is stopped, and the test that asked for it fails with
+that reason.
 
 A pass on a checkout whose iOS files match HEAD is recorded for those exact
 files and this Xcode. With --reuse, the check skips itself when such a pass
@@ -81,12 +83,18 @@ SLOT_POLL_SECONDS = 2
 STOP_GRACE_SECONDS = 5
 # UI tests ask for a push by writing its payload to <name>.json here, which the
 # check sends to Screenr Dev with xcrun simctl push and then renames to
-# <name>.sent, or to <name>.failed with simctl's output. xcodebuild passes the
-# directory to the tests in SCREENR_PUSH_RELAY. It is inside OUTPUT, which each
-# run removes.
+# <name>.sent, or to <name>.failed with simctl's output or why it stopped simctl.
+# xcodebuild passes the directory to the tests in SCREENR_PUSH_RELAY. It is
+# inside OUTPUT, which each run removes.
 PUSH_RELAY = OUTPUT / "push-relay"
 PUSH_TOPIC = "com.artisanalsoftware.Screenr.dev"
 PUSH_POLL_SECONDS = 0.5
+# How long simctl gets to send a push, since Simulator tools can hang under
+# heavy load. A push it has not sent by then fails, so the relay always finishes
+# once the tests end. This is shorter than the 30 seconds that
+# ios/ScreenrUITests/PushRelay.swift waits, so the waiting test reports this
+# reason. Tests shorten it with SCREENR_CHECK_IOS_PUSH_TIMEOUT.
+PUSH_TIMEOUT_SECONDS = float(os.environ.get("SCREENR_CHECK_IOS_PUSH_TIMEOUT", 20))
 WARNING =re.compile(r"warning:", re.IGNORECASE)
 # The App Intents extractor prints this for targets that do not link App
 # Intents. It is not a build diagnostic, and result bundles do not count it.
@@ -204,7 +212,8 @@ class PushRelay:
 
     def __exit__(self, *exception):
         self.stopped.set()
-        self.thread.join()
+        # A push in flight ends within its timeout; the grace covers stopping it and saying why.
+        self.thread.join(PUSH_TIMEOUT_SECONDS + STOP_GRACE_SECONDS)
 
     def relay(self):
         while not self.stopped.wait(PUSH_POLL_SECONDS):
@@ -212,10 +221,17 @@ class PushRelay:
                 self.send(request)
 
     def send(self, request):
-        result = subprocess.run(["xcrun", "simctl", "push", self.udid, PUSH_TOPIC, str(request)], cwd=ROOT,
-                                env=ENVIRONMENT, capture_output=True, text=True)
-        outcome = ".sent" if result.returncode == 0 else ".failed"
-        request.with_suffix(outcome).write_text(result.stdout + result.stderr)
+        try:
+            # xcrun replaces itself with simctl, so the timeout's SIGKILL stops simctl itself.
+            result = subprocess.run(["xcrun", "simctl", "push", self.udid, PUSH_TOPIC, str(request)],
+                                    cwd=ROOT, env=ENVIRONMENT, capture_output=True, text=True,
+                                    timeout=PUSH_TIMEOUT_SECONDS)
+            outcome = ".sent" if result.returncode == 0 else ".failed"
+            output = result.stdout + result.stderr
+        except subprocess.TimeoutExpired:
+            outcome = ".failed"
+            output = f"it did not finish within {PUSH_TIMEOUT_SECONDS:g} seconds, so bin/check-ios stopped it\n"
+        request.with_suffix(outcome).write_text(output)
         request.unlink()
 
 

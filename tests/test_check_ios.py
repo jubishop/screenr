@@ -68,16 +68,21 @@ bundle.mkdir(parents=True)
 (bundle / 'summary.json').write_text(os.environ.get('FAKE_TEST_SUMMARY', json.dumps(
     {'result': 'Passed', 'passedTests': 6, 'failedTests': 0, 'skippedTests': 0})))
 if step == 'TEST' and os.environ.get('FAKE_PUSH'):
-    # Ask for a push as a UI test does, and wait until the check delivers it.
+    # Ask for a push as a UI test does, wait until the check delivers it or
+    # gives up, and fail with the check's reason, as PushRelay.swift does.
     import time
     relay = Path(os.environ['TEST_RUNNER_SCREENR_PUSH_RELAY'])
     (relay / 'friend-request.json.tmp').write_text(os.environ['FAKE_PUSH'])
     (relay / 'friend-request.json.tmp').rename(relay / 'friend-request.json')
+    sent, failed = relay / 'friend-request.sent', relay / 'friend-request.failed'
     deadline = time.monotonic() + 20
-    while not (relay / 'friend-request.sent').exists() and time.monotonic() < deadline:
+    while not (sent.exists() or failed.exists()) and time.monotonic() < deadline:
         time.sleep(0.1)
-    record('delivered', (relay / 'friend-request.sent').exists(),
-           (relay / 'friend-request.json').exists())
+    record('delivered', sent.exists(), (relay / 'friend-request.json').exists())
+    if failed.exists():
+        print('PushTests.swift:70: error: -[PushTests testAcceptsAFriendRequestFromItsPush] : failed: '
+              'xcrun simctl push failed: ' + failed.read_text())
+        sys.exit(65)
 if os.environ.get('FAKE_HANG_' + step):
     # Hang with a child that ignores SIGTERM, as a stuck test run can, and
     # report both process IDs.
@@ -102,6 +107,11 @@ elif arguments[:2] == ['simctl', 'bootstatus']:
     finish('BOOTSTATUS')
 elif arguments[:2] == ['simctl', 'push']:
     record('xcrun', *arguments, Path(arguments[-1]).read_text())
+    if os.environ.get('FAKE_HANG_PUSH'):
+        # Never return, as Simulator tools can under heavy load, and report the process ID.
+        import time
+        Path(os.environ['FAKE_HANG_PUSH']).write_text(str(os.getpid()))
+        time.sleep(600)
     print("Notification sent to '" + arguments[3] + "'")
 elif arguments[0] == 'simctl':
     record('xcrun', *arguments)
@@ -235,6 +245,21 @@ class CheckIOSTests(unittest.TestCase):
         self.assertIn(["delivered", True, False], self.recorded())
         self.assertEqual((self.repo / "ios/build/check/push-relay/friend-request.sent").read_text(),
                          "Notification sent to 'com.artisanalsoftware.Screenr.dev'\n")
+
+    def test_a_push_simctl_never_sends_fails_its_test_with_the_reason_and_the_check_still_ends(self):
+        pid = self.events.parent / "push.pid"
+        started = time.monotonic()
+        result = self.check(FAKE_PUSH=json.dumps({"aps": {"badge": 3}}), FAKE_HANG_PUSH=str(pid),
+                            SCREENR_CHECK_IOS_PUSH_TIMEOUT="0.5")
+        self.assertLess(time.monotonic() - started, 30)
+        self.assertNotEqual(result.returncode, 0)
+        # The test that asked for the push failed with the check's reason for it.
+        self.assertIn("xcrun simctl push failed: it did not finish within 0.5 seconds, so bin/check-ios "
+                      "stopped it", result.stderr)
+        self.assertIn("Simulator tests failed with status 65", result.stderr)
+        self.assertIn(["delivered", False, False], self.recorded())
+        self.assert_stopped(pid)
+        self.assertEqual(self.steps()[-2:], ["simctl shutdown", "simctl delete"])
 
     def test_uses_a_given_simulator_and_leaves_it_in_place(self):
         result = self.check("--simulator", "MY-UDID")
