@@ -219,3 +219,43 @@ test("access changes and removals leave a page through the same rules as the who
   const page = await matches();
   assert.ok(page.conversations.length <= pageSize);
 });
+
+test("removing replies never moves an entry out of the window that holds it", async () => {
+  const { alice, ben, conversation } = await setup();
+  await friend(alice, ben);
+  const older = await posts(ben, 3);
+  const first = await addComment(ben, conversation, "Ben's comment", false);
+  const nested = await addComment(alice, conversation, "Nested", false, first);
+  const middle = await addComment(alice, conversation, "Middle", false);
+  const last = await addComment(ben, conversation, "Ben's last", false);
+  // Every entry fits, so the window starts at the oldest one, Ben's posts,
+  // while the recommendation's latest replies place it last. They go, so its
+  // activity falls below the window's start, but it stays.
+  await db.query(
+    "UPDATE discussion_post SET created_at=now()-interval '1 minute' WHERE id=ANY($1::uuid[])",
+    [older],
+  );
+  await db.query(
+    "UPDATE comment SET created_at=now()-interval '10 minutes' WHERE id::text=ANY($1)",
+    [[first, nested]],
+  );
+  await db.query(
+    "UPDATE feed_item SET created_at=now()-interval '20 minutes',activity_at=now()-interval '20 minutes' WHERE id=$1",
+    [conversation],
+  );
+  const window = await read(alice, "/?before=now");
+  await removeComment(alice, middle);
+  await removeComment(alice, last);
+  const after = await read(
+    alice,
+    `/?since=${encodeURIComponent(window.since!)}`,
+  );
+  assert.ok(ids(after).includes(conversation), "the recommendation stays");
+  assert.deepEqual(
+    after.conversations
+      .find((c) => c.id === conversation)!
+      .comments.map((r) => r.id),
+    [first, nested],
+  );
+  assert.equal(after.older, false);
+});

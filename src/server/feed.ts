@@ -173,19 +173,22 @@ export async function conversations(
 // (docs/title-feed.md#paged-histories).
 export const pageSize = 50;
 
-// Which entries a paged read sends: every entry whose latest visible activity
-// is at or after `since`, or the page of `pageSize` entries older than
-// `before` with every newer entry, where `Infinity` reads the newest page.
-// Entries tied with the page's last one come too.
+// Which entries a paged read sends: every entry placed at or after `since`,
+// or the page of `pageSize` entries placed before `before` with every newer
+// entry, where `Infinity` reads the newest page. Entries tied with the page's
+// last one come too.
 export type FeedWindow = { since: Date } | { before: Date | typeof Infinity };
 
 // A paged read of the reader's ($1) entries, or only `owner`'s. It first
-// places every entry by its latest visible activity, which reads only entry
-// times and reply authors, and then builds discussions for only the entries
-// it sends: the window, and `item`, an entry a link names, wherever it falls.
-// `since` names the window it sent, which later reads of the same window
-// send back, or is null when there are no entries; `older` says whether
-// older entries remain. All of it comes from one snapshot.
+// places every entry, which reads only entry times and reply authors, and
+// then builds discussions for only the entries it sends: the window, and
+// `item`, an entry a link names, wherever it falls. An entry's place is its
+// latest visible activity counting removed replies too, so removing a reply
+// never moves an entry out of a window that held it; the feed still orders
+// by visible activity, which a place is never older than. `since` names the
+// window it sent, which later reads of the same window send back, or is null
+// when there are no entries; `older` says whether older entries remain. All
+// of it comes from one snapshot.
 export async function feedPage(
   viewer: string,
   window: FeedWindow,
@@ -202,26 +205,26 @@ export async function feedPage(
       FROM ${feedEntries} c JOIN audience a ON a.owner_id=c.owner_id
       WHERE $2::text IS NULL OR c.owner_id=$2
     ), replied AS (
-      SELECT e.id,max(cm.created_at) AS at
+      SELECT e.id,max(cm.created_at) FILTER (WHERE cm.removed_at IS NULL) AS at,max(cm.created_at) AS placed
       FROM hidden h,comment cm JOIN entries e ON ${entryOf("cm")}=e.id
-      WHERE cm.removed_at IS NULL AND cm.author_id=ANY(e.readers) AND NOT cm.author_id=ANY(h.users)
+      WHERE cm.author_id=ANY(e.readers) AND NOT cm.author_id=ANY(h.users)
       GROUP BY e.id
     ), placed AS MATERIALIZED (
-      SELECT e.id,date_trunc('milliseconds',CASE WHEN e.item_type='earlier' THEN coalesce(r.at,e.created_at)
-        ELSE greatest(e.activity_at,coalesce(r.at,e.activity_at)) END) AS visible_activity
+      SELECT e.id,date_trunc('milliseconds',CASE WHEN e.item_type='earlier' THEN coalesce(r.placed,e.created_at)
+        ELSE greatest(e.activity_at,coalesce(r.placed,e.activity_at)) END) AS placed_at
       FROM entries e LEFT JOIN replied r ON r.id=e.id
       WHERE e.active OR r.at IS NOT NULL
     ), bound AS MATERIALIZED (
       SELECT coalesce($3::timestamptz,
-        (SELECT visible_activity FROM placed WHERE visible_activity<$4::timestamptz
-          ORDER BY visible_activity DESC LIMIT 1 OFFSET ${pageSize - 1}),
-        (SELECT min(visible_activity) FROM placed WHERE visible_activity<$4::timestamptz),
+        (SELECT placed_at FROM placed WHERE placed_at<$4::timestamptz
+          ORDER BY placed_at DESC LIMIT 1 OFFSET ${pageSize - 1}),
+        (SELECT min(placed_at) FROM placed WHERE placed_at<$4::timestamptz),
         nullif($4::timestamptz,'infinity')) AS since
     ), shown AS (
-      SELECT p.id FROM placed p,bound b WHERE p.visible_activity>=b.since OR p.id=$5::uuid
+      SELECT p.id FROM placed p,bound b WHERE p.placed_at>=b.since OR p.id=$5::uuid
     )
     SELECT b.since AS page_since,
-      EXISTS (SELECT 1 FROM placed p WHERE p.visible_activity<b.since) AS page_older,i.*
+      EXISTS (SELECT 1 FROM placed p WHERE p.placed_at<b.since) AS page_older,i.*
     FROM bound b LEFT JOIN (${items(
       `shown s JOIN ${feedEntries} c ON c.id=s.id JOIN audience a ON a.owner_id=c.owner_id CROSS JOIN hidden h`,
     )}) i ON true

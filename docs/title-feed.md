@@ -569,17 +569,21 @@ web and in the iPhone app
 
 - **Windows:** a paged read names its window in the screen path, which the
   web keeps out of its address. `before=now` asks for the newest 50 entries,
-  `since=<time>` for every entry whose latest visible activity is at or
-  after that time, and `before=<time>` for the 50 entries older than that
-  time with every newer one. Entries tied with a page's last entry come too.
+  `since=<time>` for every entry placed at or after that time, and
+  `before=<time>` for the 50 entries placed before that time with every
+  newer one. Entries tied with a page's last entry come too.
   The response adds `since`, where the window it sent starts, and `older`,
   whether older entries remain. A time that does not parse reads the newest
   page.
 - **Polls keep the window:** each later read sends the `since` that the
   last response named, so new activity joins the list without pushing the
-  oldest entry out. An entry whose activity falls below the window's start,
-  as when its only reply is removed, leaves until **Show older** reaches it
-  again. A history without entries reads the newest page again.
+  oldest entry out. Windows and pages place each entry by its latest
+  visible activity counting removed replies too, so removing a reply never
+  moves an entry out of a window that holds it; the feed still orders
+  entries by visible activity. An entry leaves only when it can no longer be
+  seen, or when an access change hides the replies that placed it, until
+  **Show older** reaches it again. A history without entries reads the
+  newest page again.
 - **Show older** sits beneath the entries while older ones remain and reads
   the window extended by the next page. The entries it adds show at once,
   without **New activity**: they are no newer than the old window's start,
