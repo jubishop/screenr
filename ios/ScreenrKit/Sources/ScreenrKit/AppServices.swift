@@ -6,8 +6,8 @@ import SwiftUI
 // views read `@Environment(\.screenrAPI)`, `@Environment(SessionStore.self)`,
 // `@Environment(PendingInvitation.self)`, `@Environment(\.identityProviders)`,
 // `@Environment(\.visitTracker)`, `@Environment(\.imageSource)`,
-// `@Environment(\.photoLibrary)`, `@Environment(\.feedbackService)`, and
-// `@Environment(\.trailerLoading)`.
+// `@Environment(\.avatarImages)`, `@Environment(\.photoLibrary)`,
+// `@Environment(\.feedbackService)`, and `@Environment(\.trailerLoading)`.
 public struct AppServices: Sendable {
   // The process the services run in: the app, or one of its extensions.
   public enum Host: Hashable, Sendable {
@@ -22,9 +22,11 @@ public struct AppServices: Sendable {
   public let identity: IdentityProviders
   public let photoLibrary: PhotoLibrary
   // Posters and profile photos load through `imageSession`, which keeps them
-  // in `imageCache`. The cache empties when the session ends.
+  // in `imageCache`, and avatars keep their decoded photos in `avatars`.
+  // Both empty when the session ends.
   public let imageCache: URLCache
   public let imageSession: URLSession
+  public let avatars: AvatarImages
   // The app reports its scene phase here, for the visits the client marks.
   public let visits: VisitTracker
   // The poster and profile photo requests for `AsyncImage`.
@@ -36,6 +38,9 @@ public struct AppServices: Sendable {
   // iOS's notification permission, APNs registration, and badge, or nil in
   // the extensions, which leave them to the app.
   public let push: (any PushSystem)?
+  // `api` when it is the Screenr client rather than a fake, whose
+  // connections `close()` releases.
+  private let client: ScreenrClient?
 
   @MainActor
   public init(
@@ -62,8 +67,15 @@ public struct AppServices: Sendable {
     self.feedback = feedback
     self.trailers = trailers
     self.push = push
-    imageSession = URLSession(configuration: Self.imageConfiguration(cache: imageCache))
-    session.onEnd { _ in imageCache.removeAllCachedResponses() }
+    client = api as? ScreenrClient
+    let imageSession = URLSession(configuration: Self.imageConfiguration(cache: imageCache))
+    self.imageSession = imageSession
+    let avatars = AvatarImages.network(session: imageSession)
+    self.avatars = avatars
+    session.onEnd { _ in
+      imageCache.removeAllCachedResponses()
+      avatars.removeAll()
+    }
     // An extension that got 401 removed the token and ran no end handler
     // here, so a launch without a session empties the cache too.
     if session.phase == .signedOut { imageCache.removeAllCachedResponses() }
@@ -185,6 +197,13 @@ public struct AppServices: Sendable {
     )
   }
 
+  // Lets the requests in flight finish, then releases the client's and the
+  // images' connections. Nothing sends through these services after.
+  func close() {
+    client?.close()
+    imageSession.finishTasksAndInvalidate()
+  }
+
   // Images send no cookies, and their responses' caching headers apply.
   static func imageConfiguration(cache: URLCache) -> URLSessionConfiguration {
     let configuration = URLSessionConfiguration.default
@@ -283,6 +302,7 @@ extension EnvironmentValues {
   // Nil outside `.screenrServices(_:)`.
   @Entry public var visitTracker: VisitTracker?
   @Entry public var imageSource = ImageSource.none
+  @Entry public var avatarImages = AvatarImages.none
   @Entry public var photoLibrary: PhotoLibrary = .system
   @Entry public var feedbackService = FeedbackService.none
   @Entry public var trailerLoading = TrailerLoading.network
@@ -296,6 +316,7 @@ extension View {
       .environment(\.identityProviders, services.identity)
       .environment(\.visitTracker, services.visits)
       .environment(\.imageSource, services.images)
+      .environment(\.avatarImages, services.avatars)
       .environment(\.photoLibrary, services.photoLibrary)
       .environment(\.feedbackService, services.feedback)
       .environment(\.trailerLoading, services.trailers)

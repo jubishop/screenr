@@ -109,12 +109,19 @@ final class RecordingTransport: HTTPTransport {
 
   private let replies: Mutex<[Reply]>
   private let sent = Mutex<[URLRequest]>([])
+  private let closes = Mutex(0)
 
   init(_ replies: [Reply]) {
     self.replies = Mutex(replies)
   }
 
   var requests: [URLRequest] { sent.withLock { $0 } }
+  // How many times the client closed the transport.
+  var closed: Int { closes.withLock { $0 } }
+
+  func close() {
+    closes.withLock { $0 += 1 }
+  }
 
   func send(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {
     sent.withLock { $0.append(request) }
@@ -158,6 +165,8 @@ struct TestClient {
   let session: SessionStore
   let transport: RecordingTransport
   let observer = RecordingObserver()
+  // Where the test posts memory warnings for the client.
+  let notifications = NotificationCenter()
   let client: ScreenrClient
 
   init(
@@ -174,7 +183,8 @@ struct TestClient {
       session: session,
       transport: transport,
       observer: observer,
-      visits: visits
+      visits: visits,
+      notifications: notifications
     )
   }
 
