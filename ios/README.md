@@ -698,6 +698,7 @@ the account forget it. [Settings](#settings) ends with `SignOutButton`.
 | `IncomingActivityButton` | `Screenr/Shell/` | The New activity control; `.incomingActivity(_:count:show:)` floats it over a screen, and only the control animates. `show` must keep the reader's place, as `FeedList` does. The control's identifier is `incoming-activity`; `performShellAudit()` treats its glass like a bar's, so a test checks its label with `labelContrast()`. |
 | `ShareButton` | `Screenr/Shell/` | A `ShareLink` for a destination's screenr.club link. |
 | `.keyboardSafeSheet(item:content:)` | `Screenr/Shared/` | Presents every sheet in the app. It ends text editing before the sheet opens, so UIKit has no keyboard to bring back as the sheet closes; see the [keyboard deadlock](#toolchain-notes). |
+| `.keyboardSafeNavigation(_:)` | `Screenr/Shared/` | Ends text editing as a tab's navigation path grows, before the push starts, whether a link or `Router` pushed, so the pop has no keyboard to bring back; see the [keyboard deadlock](#toolchain-notes). |
 | Feature screens | `Screenr/Screens/` | One file per screen. Each starts as a `PlaceholderScreen` that shows what the screen holds and its path. |
 
 ### Links
@@ -1368,7 +1369,7 @@ ScreenContent(model: model) { screen in
 | `FeedList` | `Screenr/Conversation/` | The scrolling feed beneath a header: entries in visible-activity order, New activity, the permalink's scroll and highlight, "This activity is unavailable.", and the empty message. Its screen attaches the feed's confirmation dialog, `feedConfirmation(_:)`, outside `ScreenContent`. `style: .compact` drops the poster, title, Want to watch, and Recommend for title pages. Changing `headerRequests` scrolls back to the header, such as when Start a conversation opens. Its `ScrollPosition` keeps the reader's place; see Reading place below. |
 | `FeedAnchor` | ScreenrKit `Conversation/` | What the feed's scroll position names just before New activity shows: what it already names, the first entry before the reader scrolls, or nothing beneath a header that fills the screen. |
 | `EntryView`, `ThreadView`, `CommentView` | `Screenr/Conversation/` | An entry, its discussion, and one comment, following the web's `feed.tsx` and `thread.tsx`. Each entry and comment carries the accessibility identifier `entry-<id>` or `comment-<id>`. |
-| `CommentComposer`, `DiscussionComposer`, `StartConversationComposer` | `Screenr/Conversation/` | The one composer form, bound to a reply or comment target, or to a `ConversationStarter` with Season and Episode pickers on a TV title. |
+| `CommentComposer`, `DiscussionComposer`, `StartConversationComposer` | `Screenr/Conversation/` | The one composer form, bound to a reply or comment target, or to a `ConversationStarter` with Season and Episode pickers on a TV title. Its field takes focus as it opens, and not again when its screen reappears; see the [keyboard deadlock](#toolchain-notes). |
 | `ReactionControls`, `ReactionPicker`, `FeedActionStyle`, `WriteFailure` | `Screenr/Conversation/` | Reaction counts and React, which opens the seven reactions beneath its line, as on the web (a SwiftUI `Menu` label does not follow Dynamic Type); the compact actions with 44-point hit areas; and a failed write's message beneath its control. |
 | `Avatar`, `PosterImage`, `FlowLayout`, `.muted`, `.danger`, `.onAccent` | `Screenr/Shared/` | A member's photo, decoded at the avatar's size, or initial on the web's colors; a TMDB poster, or the title's initial only while no poster shows, so an audit never measures an initial beneath a poster; a row that wraps; and text colors that keep 4.5:1 contrast, which the system's secondary label and red miss at small sizes, and the system's white misses on the dark theme's lime accent. |
 | `.buttonStyle(.accent)` | `Screenr/Shared/AccentButtonStyle.swift` | The prominent accent-filled button, such as Accept, Send sign-in code, or Join Screenr, with its label in `.onAccent`. Use it in place of `.borderedProminent`. |
@@ -2127,14 +2128,31 @@ accent.
   assistant into the scroll view, which waits for SwiftUI's update lock; the
   renderer holds that lock and waits in `-[CALayer addPresentationModifier:]`
   for Core Animation's. It is reported to Apple as FB22832280
-  ([Open Radar](http://openradar.appspot.com/FB22832280)). In Screenr it
-  struck when a sheet closed over a feed's open composer: UIKit brings the
-  keyboard back as the closing sheet animates. On 2026-11-05 it froze the
-  app in 1 of 100 runs of `testKeepsAnUnsentCommentBeneathTheSheet` beside
-  other Simulators' UI tests. `.keyboardSafeSheet(item:content:)` ends
-  editing before every sheet opens, so nothing comes back, and
-  `tests/test_ios_sheets.py` fails when the app or an extension presents a
-  sheet, cover, or popover any other way. A UI test that logs "App event
-  loop idle notification not received" may be such a hang: run `sample` on
-  the app's process in its Simulator while the test waits, and read the
-  main thread.
+  ([Open Radar](http://openradar.appspot.com/FB22832280)). As of
+  2026-11-05 no iOS release fixes it: the report is still open, its latest
+  comment found it in the iOS 27.0 beta, and the release notes of iOS
+  27.0.1 through 27.2, the iOS 27.3 beta, and iOS 26.6 through 26.7.2 list
+  no fix. Screenr's checks then ran on the iOS 27.0 Simulator. In Screenr
+  it struck when a sheet closed over a feed's open composer: UIKit brings
+  the keyboard back as the closing sheet animates. On 2026-11-05 it froze
+  the app in 1 of 100 runs of `testKeepsAnUnsentCommentBeneathTheSheet`
+  beside other Simulators' UI tests. So the app never brings a keyboard back
+  during a transition:
+  - `.keyboardSafeSheet(item:content:)` ends editing before every sheet
+    opens, and `tests/test_ios_sheets.py` fails when the app or an extension
+    presents a sheet, cover, or popover any other way.
+  - `.keyboardSafeNavigation(_:)` ends editing as a tab's navigation path
+    grows, before the push starts. Otherwise UIKit ends it inside a Core
+    Animation commit as the push starts, and brings the keyboard back as the
+    pop animates.
+  - A composer takes focus only as it opens, not each time its screen
+    appears again, such as after a pop or a tab switch.
+
+  Samples on 2026-11-05 found the renderer animating during navigation
+  transitions, sheets, and presses of toolbar glass buttons, and not during
+  New activity, tab switches, confirmation dialogs, menus, or the share
+  sheet's close. `FeedTests.testKeepsAnUnsentCommentAcrossScreens` covers
+  the pop after a push from the feed or from a link, and a tab switch. A UI
+  test that logs "App event loop idle notification not received" may be
+  such a hang: run `sample` on the app's process in its Simulator while the
+  test waits, and read the main thread.

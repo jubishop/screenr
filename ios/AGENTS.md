@@ -75,6 +75,10 @@ layout, commands, and toolchain notes, and the
   never `.sheet`, `.fullScreenCover`, or `.popover` directly, so closing one
   never brings back a keyboard. `tests/test_ios_sheets.py` enforces it; see
   the [keyboard deadlock](README.md#toolchain-notes).
+- **Navigation and focus:** give a navigation stack with a path
+  `.keyboardSafeNavigation(_:)`, and give a text field focus as it opens,
+  never each time its screen appears, so no push, pop, or tab switch brings
+  back a keyboard; see the [keyboard deadlock](README.md#toolchain-notes).
 
 ## Tests
 
