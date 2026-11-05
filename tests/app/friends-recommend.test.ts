@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { useDatabase, db, friend, person } from "./social-fixture";
-import type { TitleKind } from "../../src/components/friends-recommend";
+import type { TitleKindFilter } from "../../src/components/title-kind-filter";
 import { screenPath, type FindFilters } from "../../src/member-routes";
 import { viewingAccess } from "../../src/viewing";
 const { loadScreen } = await import("../../src/server/screens");
@@ -352,7 +352,7 @@ async function view(
     myServices = false,
   }: {
     showFinished?: boolean;
-    kind?: TitleKind;
+    kind?: TitleKindFilter;
     myServices?: boolean;
   } = {},
 ) {

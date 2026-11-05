@@ -13,7 +13,11 @@ struct FeedView: View {
   var body: some View {
     FeedScreen(
       model: model,
-      feed: FeedModel(api: api) { await model.refresh() },
+      feed: FeedModel(
+        api: api,
+        refresh: { await model.refresh() },
+        showOlder: { await model.showOlder() }
+      ),
       starter: ConversationStarter(subject: .post, api: api) { await model.refresh() }
     )
   }
@@ -43,7 +47,8 @@ private struct FeedScreen: View {
           target: page.target,
           targetUnavailable: page.targetUnavailable,
           emptyMessage: "Your entries and friends’ discussions will appear here.",
-          headerRequests: composing
+          headerRequests: composing,
+          history: screen.historyPage
         ) {
           if starter.visibility == .open {
             StartConversationComposer(starter: starter)

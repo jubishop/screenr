@@ -492,7 +492,11 @@ interview if they preserve these decisions:
 `src/server/feed.ts` reads each eligible action, progress entry, review,
 standalone comment, or [post without a title](#discussion-posts-without-a-title)
 and its replies in one PostgreSQL snapshot. The friends, title, and profile screens use this same
-read path. Items sort by the latest eligible activity at millisecond precision,
+read path. Each statement reads the reader's access once, as the owners whose
+entries they can read, each with the people who can read that owner's
+entries, and the people blocked either way, instead of calling
+`screenr_can_read` and `screenr_blocked` for every entry, reply, and
+reaction ([issue #373](https://github.com/jubishop/screenr/issues/373)). Items sort by the latest eligible activity at millisecond precision,
 then by item UUID for a stable tie. A removed or inaccessible direct comment
 remains as parent context only while it has eligible nested replies. It does
 not add activity or count as a live reply. Removed nested replies and empty
@@ -531,12 +535,10 @@ remains available. A successful nested post expands its parent group.
 
 Loading incoming replies retains the displayed preview, expanded groups, and
 drafts so the reply being read stays in place. A fresh visit starts with the
-three-comment preview and collapsed groups. All eligible items and replies are
-currently read in one request; there is no loaded-page boundary that can omit
-a link target. This retains the application's small-circle, unpaginated read
-model, which
-[paging feed and profile histories](#page-feed-and-profile-histories--2026-11-01)
-replaces once it ships.
+three-comment preview and collapsed groups. The friends feed and profiles
+read a page of their history at a time, as
+[paged histories](#paged-histories) describes; a title page reads all of its
+title's entries.
 
 Open feeds use the existing three-second poll, focus refresh, and ten-second
 refresh deadline. A failed refresh hides server content. Local drafts remain
@@ -557,6 +559,62 @@ an eligible action, the title feed, or a post on the friends feed. Inaccessible 
 content. [Comment notifications](notifications.md#current-implementation),
 added in [#92](https://github.com/jubishop/screenr/issues/92), open their exact
 reply through these same title links.
+
+### Paged histories
+
+The friends feed and profiles send their history a page at a time, on the
+web and in the iPhone app
+([decision](#page-feed-and-profile-histories--2026-11-01),
+[issue #373](https://github.com/jubishop/screenr/issues/373)):
+
+- **Windows:** a paged read names its window in the screen path, which the
+  web keeps out of its address. `before=now` asks for the newest 50 entries,
+  `since=<time>` for every entry placed at or after that time, and
+  `before=<time>` for the 50 entries placed before that time with every
+  newer one. Entries tied with a page's last entry come too.
+  The response adds `since`, where the window it sent starts, and `older`,
+  whether older entries remain. A time that does not parse reads the newest
+  page.
+- **Polls keep the window:** each later read sends the `since` that the
+  last response named, so new activity joins the list without pushing the
+  oldest entry out. Windows and pages place each entry by its latest
+  visible activity counting removed replies too, so removing a reply never
+  moves an entry out of a window that holds it; the feed still orders
+  entries by visible activity. An entry leaves only when it can no longer be
+  seen, or when an access change hides the replies that placed it, until
+  **Show older** reaches it again. A history without entries reads the
+  newest page again.
+- **Show older** sits beneath the entries while older ones remain and reads
+  the window extended by the next page. The entries it adds show at once,
+  without **New activity**: they are no newer than the old window's start,
+  and every newer entry was already in that window. Other people's new
+  activity still waits for **New activity**. On the web, Show older keeps
+  keyboard focus while older entries remain; when it leaves with the last
+  of them, focus moves to the first entry it added.
+- **Links:** a link to an entry, `/?item=<id>` for a post without a title,
+  sends that entry after the page's own entries even when it is older, so
+  permalinks and notifications open their target. The window stays the
+  page's own.
+- **The read:** one statement places every readable entry by its latest
+  visible activity, reading only entry times and reply authors, and then
+  builds discussions, reactions, and the reader's own state for just the
+  entries it sends.
+- **Installed iPhone builds:** a read without a window sends the whole
+  history and no paging fields, as builds from before paging expect under
+  the [additive-payload rule](data-and-access.md#changes-that-app-builds-depend-on).
+  Once `SCREENR_IOS_MINIMUM_BUILD` reaches the first build that pages, the
+  whole-history read can go.
+- **Unchanged polls** answer 304 from a change mark without building the
+  screen, as the
+  [refresh behavior](data-and-access.md#write-lock-and-refresh-behavior)
+  describes.
+
+At the one-year synthetic size, 15 members with 4,800 entries and 12,800
+comments, a page of the friends feed is about 107 KB and builds in about
+60 ms, where the whole history was 8.1 MB and took 1.3 to 2 s. An unchanged
+poll takes about 1 ms, where it took as long as a full read. One load of
+the friends feed peaked the web process at 161 MB, against about 400 MB for
+the whole history and the service's 384 MB limit.
 
 ### Standalone title comments
 

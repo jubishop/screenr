@@ -619,11 +619,7 @@ export function createAuth(
           // this after its transaction commits; failures keep the initial.
           after: async (account) => {
             if (account.providerId === "google")
-              await copyGooglePhoto(
-                account.userId,
-                "account",
-                options.fetchPhoto,
-              );
+              await copyGooglePhoto(account.userId, options.fetchPhoto);
           },
         },
       },

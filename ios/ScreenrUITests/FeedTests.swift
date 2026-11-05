@@ -51,6 +51,50 @@ final class FeedTests: XCTestCase {
     try app.performShellAudit()
   }
 
+  // A paged feed reads its newest page, and Show older reads the page before
+  // it, whose entries show at once, as later polls keep that longer window.
+  @MainActor
+  func testShowsOlderEntries() throws {
+    let log = RequestLog.temporary()
+    let app = XCUIApplication()
+    app.launch(
+      with: FixtureLaunch(
+        viewer: "nora",
+        overrides: ["screen/feed/newest-page", "screen/feed/older-page"],
+        requestLog: log.file
+      )
+    )
+    XCTAssertTrue(app.staticTexts["Post 51"].waitForExistence(timeout: 10))
+    let older = app.buttons["Show older"]
+    app.scrollTo(older)
+    XCTAssertFalse(app.staticTexts["Post 1"].exists)
+    try app.performShellAudit()
+    older.tap()
+
+    let first = app.staticTexts["Post 1"]
+    app.scrollTo(first)
+    XCTAssertFalse(app.buttons["Show older"].exists)
+    XCTAssertFalse(
+      app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'New activity'")).firstMatch.exists
+    )
+    let window = "2026-10-13T12%3A00%3A00.000Z"
+    wait(
+      for: [
+        log.expectation { _ in
+          do {
+            let sent = try log.sentScreenPaths()
+            return sent.first == "/?before=now" && sent.contains("/?before=\(window)")
+              && sent.last == "/?since=\(window)"
+          } catch {
+            return false
+          }
+        }
+      ],
+      timeout: 15
+    )
+    XCTAssertTrue(first.exists)
+  }
+
   @MainActor
   func testPostsRepliesAndComments() throws {
     let log = RequestLog.temporary()
@@ -269,7 +313,10 @@ final class FeedTests: XCTestCase {
       .sorted()
     XCTAssertEqual(
       names,
-      ["default", "empty", "incoming", "joined", "linked-reply", "unavailable-link"]
+      [
+        "default", "empty", "incoming", "joined", "linked-reply", "newest-page", "older-page",
+        "page", "unavailable-link",
+      ]
     )
     for name in names {
       let fixture = try FeedFixtureFile(directory.appending(path: "\(name).json"))
@@ -330,7 +377,8 @@ private struct FeedFixtureFile {
     let body = (json?["response"] as? [String: Any])?["body"] as? [String: Any]
     let entries = body?["conversations"] as? [[String: Any]] ?? []
     viewer = json?["viewer"] as? String ?? "alice"
-    path = query?["path"] ?? "/"
+    // A paged read's window is the app's own; the link names the screen.
+    path = withoutWindow(query?["path"] ?? "/")
     targetUnavailable = body?["targetUnavailable"] as? Bool ?? false
     firstEntry = entries.compactMap { $0["id"] as? String }.min()
     targetReply = (body?["target"] as? [String: Any])?["reply"] as? String

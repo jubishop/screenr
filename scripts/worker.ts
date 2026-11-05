@@ -1,7 +1,6 @@
 import { runWorkerPass } from "../src/server/email";
 import { apnsFromEnvironment } from "../src/server/apns";
 import { db } from "../src/server/db";
-import { runPhotoBackfill } from "../src/server/photos";
 import { runPushPass } from "../src/server/push";
 import { runWorkerLoop } from "../src/server/worker-loop";
 if (
@@ -19,9 +18,6 @@ for (const signal of ["SIGTERM", "SIGINT"])
 // Without APNs settings, as in development and CI, the push loop sends
 // nothing and only deletes expired push jobs.
 const apns = apnsFromEnvironment();
-// The one-time Google photo backfill runs beside email delivery. It does
-// nothing once its marker exists, and stops early when the worker stops.
-const backfill = runPhotoBackfill(fetch, stop.signal);
 // Pushes have their own loop, so a slow email send never delays them.
 async function pushLoop() {
   await runWorkerLoop((pass) => runPushPass(apns, pass), stop.signal);
@@ -30,5 +26,4 @@ async function pushLoop() {
 const pushes = pushLoop();
 await runWorkerLoop(runWorkerPass, stop.signal);
 await pushes;
-await backfill;
 await db.end();

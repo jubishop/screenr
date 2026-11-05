@@ -33,7 +33,9 @@ import type { MemberRoute } from "../../src/member-routes";
 const { GET, POST } = await import("../../src/app/api/screenr/[action]/route");
 const { findAction } = await import("../../src/server/actions");
 const { readVersion } = await import("../../src/server/screens");
-const { parseMemberRoute } = await import("../../src/member-routes");
+const { memberPath, parseMemberRoute } =
+  await import("../../src/member-routes");
+const { changeRelationship } = await import("../../src/server/relationships");
 const { migrate } = await import("../../scripts/migrate");
 const { updateTopTen, updateWatchStatus } =
   await import("../../src/server/title-actions");
@@ -162,6 +164,31 @@ const afterAliceFinishesMovies = (item: Case): Case => ({
   },
 });
 
+// Nora and Ben become friends, and Ben posts 51 times, so Nora's feed holds
+// more than a page (docs/title-feed.md#paged-histories): the newest page is
+// Ben's 50 latest posts, and the page before it his first post and the
+// entries he had.
+async function longFeed(world: World) {
+  await changeRelationship(world.users.nora, world.users.ben, "request");
+  await changeRelationship(world.users.ben, world.users.nora, "accept");
+  const posts: string[] = [];
+  for (let n = 1; n <= 51; n++)
+    posts.push(await createDiscussionPost(world.users.ben, `Post ${n}`, false));
+  // A second apart and after everything else, so each page is the same.
+  await db.query(
+    `UPDATE discussion_post p SET created_at=now()+t.n*interval '1 second'
+    FROM unnest($1::uuid[]) WITH ORDINALITY t(id,n) WHERE p.id=t.id`,
+    [posts],
+  );
+}
+
+// A time in a member path, as URLSearchParams writes it, and in the API path
+// that names that member path.
+const inPath = (time: string) =>
+  new URLSearchParams({ t: time }).toString().slice(2);
+const inApiPath = (time: string) =>
+  new URLSearchParams({ t: inPath(time) }).toString().slice(2);
+
 const origin = process.env.BETTER_AUTH_URL!;
 async function send(
   world: World,
@@ -250,6 +277,47 @@ const screens: Record<MemberRoute["kind"], Record<string, Case>> = {
       (world) => `/?item=${world.ids.alicePost}`,
       "A link to an entry the viewer cannot see reports the target unavailable.",
     ),
+    page: screen(
+      "alice",
+      "/?before=now",
+      "Alice's feed as a paged read: its newest page holds her whole feed, so it names where the window starts and has nothing older.",
+    ),
+    "newest-page": {
+      ...screen(
+        "nora",
+        "/?before=now",
+        "Nora's newest page after she and Ben become friends and he posts 51 times: 50 entries, with older ones remaining.",
+      ),
+      changesWorld: true,
+      request: async (world) => {
+        await longFeed(world);
+        return { action: "screen", query: { path: "/?before=now" } };
+      },
+    },
+    "older-page": {
+      ...screen(
+        "nora",
+        "/",
+        "Show older on that feed: the window extended by the page before the newest page's start, with nothing older.",
+      ),
+      changesWorld: true,
+      request: async (world) => {
+        await longFeed(world);
+        const newest = { action: "screen", query: { path: "/?before=now" } };
+        const { since } = (await send(world, "nora", newest, "GET")).body as {
+          since: string;
+        };
+        // The newest page's `since` becomes the placeholder instant, which
+        // the app then sends back.
+        const instant = "2026-10-13T12:00:00.000Z";
+        world.placeholders.add(inPath(since), inPath(instant));
+        world.placeholders.add(inApiPath(since), inApiPath(instant));
+        return {
+          action: "screen",
+          query: { path: memberPath({ kind: "feed", before: since }) },
+        };
+      },
+    },
     "not-modified": {
       method: "GET",
       description:
@@ -457,6 +525,11 @@ const screens: Record<MemberRoute["kind"], Record<string, Case>> = {
       "Alice's own profile, with a partial top 10 and her entries.",
     ),
     friend: screen("alice", "/people/ben", "A friend's profile and entries."),
+    page: screen(
+      "alice",
+      "/people/ben?before=now",
+      "A friend's profile as a paged read: its newest page holds all of his entries.",
+    ),
     "full-top-ten": screen(
       "alice",
       "/people/erin",

@@ -68,7 +68,8 @@ bin/check-ios --test-timeout <minutes>
 ```
 
 `bin/check-ios` fails on any failed or skipped test and on any warning, from
-the compiler, linker, or tools. It runs:
+the compiler, linker, or tools. It resolves the app's packages into the
+[shared package cache](#package-cache), then runs:
 
 1. ScreenrKit's tests on the Mac with `swift test`.
 2. A Release build for the Simulator.
@@ -87,12 +88,13 @@ Each run builds on the last run's output: ScreenrKit's in
 `ios/build/ScreenrKit` and the app's in `ios/build/DerivedData`. A package
 update, such as a sentry-cocoa bump, replaces framework headers that modules
 there were built against, and those modules then fail to load ("has been
-modified since the module file was built"). So the check records the hash of
-`ios/ScreenrKit/Package.resolved` in `ios/build/Package.resolved.sha256`.
-When the file differs from the recorded one, or nothing is recorded, the
-check removes both directories before it builds. Each checkout keeps one
-copy of each. The commands below that reuse those directories don't check;
-after a package update, run `bin/check-ios` first or remove them.
+modified since the module file was built"). So the check records, in
+`ios/build/packages.stamp`, the hash of `ios/ScreenrKit/Package.resolved`
+and the [package sources](#package-cache) directory the builds used. When
+either differs from the recorded one, or nothing is recorded, the check
+removes both directories before it builds. Each checkout keeps one copy of
+each. The commands below that reuse those directories don't check; after a
+package update, run `bin/check-ios` first or remove them.
 
 At most three checks run at once on the Mac, since more load it enough to
 make accessibility audits time out. Before its first step, a check waits for
@@ -106,8 +108,8 @@ The check fails fast and never hangs:
   Collecting a sysdiagnose after a failed UI test took about 10 minutes and
   sometimes never finished.
 - **Timeouts:** the Simulator tests stop and fail after 60 minutes, or after
-  `--test-timeout <minutes>`, and the Simulator boot after 10 minutes. The
-  failure shows the end of the step's log.
+  `--test-timeout <minutes>`, the Simulator boot after 10 minutes, and the
+  package resolution after 15. The failure shows the end of the step's log.
 - **Stopping:** each step runs in its own process group. A timeout,
   Control-C, or `SIGTERM` stops that group: `SIGTERM` first, then `SIGKILL`
   for whatever is left after 5 seconds. The check then deletes its Simulator.
@@ -129,21 +131,70 @@ On a Mac, `bin/check --full` runs `bin/check-ios --reuse` when the iOS files
 differ from where the branch left `origin/main`, including uncommitted and
 untracked files. On Linux it skips the iOS checks.
 
+### Package cache
+
+The app's packages are mostly sentry-cocoa's prebuilt frameworks, about
+3.5 GB for each release once resolved. Before
+[#381](https://github.com/jubishop/screenr/issues/381), every checkout that
+ran the check resolved its own copy into `ios/build/DerivedData`. Now
+`bin/check-ios`, the
+[TestFlight archive](../docs/development-workflow.md#testflight-releases),
+and `bin/ios-packages` share one cache on the Mac, outside every checkout:
+`~/Library/Caches/screenr-ios-packages`. `bin/_ios_packages.py` manages it.
+
+- **Sources:** xcodebuild resolves the packages into `sources/<hash>/`, named
+  for the hash of `ios/ScreenrKit/Package.resolved`, through
+  `-clonedSourcePackagesDirPath`, and builds against them there. Checkouts
+  with the same `Package.resolved` share one copy. One on another version
+  gets its own directory, so neither changes the sources the other builds
+  against. `-onlyUsePackageVersionsFromResolvedFile` keeps each directory to
+  the versions it is named for: a `Package.resolved` that no longer matches
+  `Package.swift` fails the resolution.
+- **Downloads:** xcodebuild's `-packageCachePath` and SwiftPM's
+  `--cache-path` both point at `swiftpm/`, so each release is downloaded
+  once, and not into SwiftPM's default `~/Library/Caches/org.swift.swiftpm`.
+  SwiftPM keeps the packages it resolves in its scratch path, beside its
+  build, and has no option to put them elsewhere. So `swift test` still
+  extracts its own copy into `ios/build/ScreenrKit` from those downloads, and
+  the check clears it with the rest of that directory.
+- **Locks:** a command resolves packages into the cache, or deletes it, only
+  while it holds `resolve.lock` exclusively, so two never write it at once;
+  another command waits, saying so. Before letting go, it takes `users.lock`
+  shared, and holds it until it exits, so nothing deletes the cache while it
+  builds. A check takes its [slot](#checks) before the cache's locks, and
+  nothing that holds those waits for a slot, so they cannot deadlock.
+- **Size:** when the cache holds more than 12 GB, more than two releases'
+  packages, the next command deletes everything in it but its locks, then
+  resolves again. A fresh resolution downloads about 1 GB, and took under 30
+  seconds on 2026-11-04. If another command holds the cache in use, the
+  command says so and leaves the deletion to a later one.
+
+Run other `xcodebuild` and `swift` commands through `bin/ios-packages`, as
+below. `bin/ios-packages xcodebuild <arguments>` resolves the packages and
+adds the options that build against them, and
+`bin/ios-packages swift <subcommand> <arguments>` adds `--cache-path`. Both
+hold the cache in use while the command runs and exit with its status. A
+plain `xcodebuild` resolves another 3.5 GB copy into its derived data
+instead, and its build then differs from the check's.
+`tests/test_ios_packages.py` covers the cache, and `tests/test_check_ios.py`
+the check's use of it.
+
 ## Run one test
 
 ScreenrKit on the Mac, by suite or by test:
 
 ```sh
-swift test --package-path ios/ScreenrKit --scratch-path ios/build/ScreenrKit \
-  --filter AppConfigurationTests
+bin/ios-packages swift test --package-path ios/ScreenrKit \
+  --scratch-path ios/build/ScreenrKit --filter AppConfigurationTests
 ```
 
 In the Simulator, name the target and suite with `-only-testing`, such as
 `ScreenrKitTests/AppConfigurationTests` or `ScreenrUITests/LaunchTests`:
 
 ```sh
-xcodebuild test -project ios/Screenr.xcodeproj -scheme Screenr \
-  -configuration Debug -destination "platform=iOS Simulator,id=$udid" \
+bin/ios-packages xcodebuild test -project ios/Screenr.xcodeproj \
+  -scheme Screenr -configuration Debug \
+  -destination "platform=iOS Simulator,id=$udid" \
   -derivedDataPath ios/build/DerivedData \
   -only-testing:ScreenrUITests/LaunchTests
 ```
@@ -157,8 +208,9 @@ udid=$(xcrun simctl create screenr-dev "iPhone 18 Pro" \
   com.apple.CoreSimulator.SimRuntime.iOS-27-0)
 xcrun simctl boot "$udid"
 open -a Simulator
-xcodebuild build -project ios/Screenr.xcodeproj -scheme Screenr \
-  -configuration Debug -destination "platform=iOS Simulator,id=$udid" \
+bin/ios-packages xcodebuild build -project ios/Screenr.xcodeproj \
+  -scheme Screenr -configuration Debug \
+  -destination "platform=iOS Simulator,id=$udid" \
   -derivedDataPath ios/build/DerivedData
 xcrun simctl install "$udid" \
   ios/build/DerivedData/Build/Products/Debug-iphonesimulator/Screenr.app
@@ -292,7 +344,11 @@ creates and `outage.end()` removes. The fixture API keeps the session in
 memory.
 A request gets the fixture with the same action and
 query or body, then falls back to the screen's path or to a successful
-fixture for the action. A matching ETag gets 304. Apart from setup, writes
+fixture for the action. Paged feed and profile fixtures, whose path names a
+window, such as `screen/feed/newest-page` and `screen/feed/older-page`,
+answer only as overrides, and a paged poll, whose path names `since`, gets
+the fixture that last answered its path, as the server keeps the window the
+app read. A matching ETag gets 304. Apart from setup, writes
 change nothing, so later reads answer as before; a UI test checks what a
 write sent in the request log.
 
@@ -391,11 +447,10 @@ the account forget it. [Settings](#settings) ends with `SignOutButton`.
 | `Router` | ScreenrKit `Navigation/` | `@Observable`: the selected tab, each tab's stack, and the sheet. `open(_:)` takes links from outside the app, and puts an invitation link's token in `PendingInvitation`. The last link waits until `screenLoaded(_:)` reports the screen that shows it, so `sessionEnded(_:)` can keep it across an expired session. |
 | `ShellModel` | ScreenrKit `Shell/` | `@Observable`: the account check, the viewer, the bell's unread count, the app's activity, `screenModel(for:)`, `pushArrived()`, `refreshLiveReads()`, and `onUnreadCount(_:)`, which reports each unread count, such as for the app icon's badge. Views read it with `@Environment(ShellModel.self)`. |
 | `LiveRead`, `ScreenModel` | ScreenrKit `Shell/` | A GET request's `phase` (`loading`, `loaded`, or `failed`) and its polling. `ScreenModel` is `LiveRead<Screen>`; other live reads, such as the notifications sheet's, use `LiveRead(.notifications(), api:)`. |
-| `IncomingActivity` | ScreenrKit `Shell/` | Which activity the reader accepted; the rest waits behind a control. |
 | `DestinationView` | `Screenr/Shell/` | Maps each destination to its screen, owns its `ScreenModel`, and adds polling, the navigation title, and redirects. |
 | `ScreenContent`, `MessageView` | `Screenr/Shell/` | Render a model's phase: a spinner, the error with Try again, or the loaded screen; and a full-screen message. |
 | `.livePolling(_:)` | `Screenr/Shell/` | Connects any `LiveRead` to its view's visibility, the app's activity, pull-to-refresh, and pushes. |
-| `IncomingActivityButton` | `Screenr/Shell/` | The "New activity" and "New replies" controls; `.incomingActivity(_:count:show:)` floats one over a screen, and only the control animates. `show` must keep the reader's place, as `FeedList` does. The control's identifier is `incoming-activity`; `performShellAudit()` treats its glass like a bar's, so a test checks its label with `labelContrast()`. |
+| `IncomingActivityButton` | `Screenr/Shell/` | The New activity control; `.incomingActivity(_:count:show:)` floats it over a screen, and only the control animates. `show` must keep the reader's place, as `FeedList` does. The control's identifier is `incoming-activity`; `performShellAudit()` treats its glass like a bar's, so a test checks its label with `labelContrast()`. |
 | `ShareButton` | `Screenr/Shell/` | A `ShareLink` for a destination's screenr.club link. |
 | Feature screens | `Screenr/Screens/` | One file per screen. Each starts as a `PlaceholderScreen` that shows what the screen holds and its path. |
 
@@ -454,8 +509,11 @@ again. Each read after the three-second wait is a poll, sent as
 succeeds; every other read is `.demand`. `ScreenModel.change(path:)` reads a
 new path from then on, such as Find a title's with changed
 [filters](#find-a-title): at once while the screen is live, replacing the
-read in flight, and keeping the screen shown until the new read answers.
-`ScreenModelTests` cover the timing with a `TestClock`.
+read in flight, and keeping the screen shown until the new read answers. A
+read's value can also move later reads to another request through
+`LiveRead`'s `follow`, as a paged screen's window does, and `read(_:)` reads
+a new request now and waits for it, as Show older does. `ScreenModelTests`
+cover the timing with a `TestClock`.
 
 ### Visits
 
@@ -491,9 +549,10 @@ marks the visit for `ShellTests`.
    the tab's stack shows it. Use `shell.router.open(_:)` only for links from
    outside the current screen, such as a notification.
 4. **Shared controls:** share with `ShareButton(destination:subject:)`. For
-   incoming activity, keep an `IncomingActivity<Key>` in the view model and
-   float `.incomingActivity(.activity, count: waiting.count) { … }` over the
-   screen.
+   other people's incoming activity, build on the feed's: `FeedModel` keeps
+   an `AcceptedActivity`, `FeedLayout` counts what waits in `incoming`, and
+   `FeedList` floats `.incomingActivity(.activity, count: layout.incoming)`
+   over the screen, as [Conversations](#conversations) describes.
 5. **Tests:** test the view model with `swift test`, against `ScriptedAPI` and
    `TestClock` in `Tests/ScreenrKitTests/Support/` or against
    `FixtureTransport`. Write UI journeys with
@@ -971,7 +1030,8 @@ screen uses them:
 
 ```swift
 // The outer view reads @Environment(\.screenrAPI) and builds the models:
-//   FeedModel(api: api) { await model.refresh() }
+//   FeedModel(api: api, refresh: { await model.refresh() },
+//     showOlder: { await model.showOlder() })
 //   ConversationStarter(subject: .title(id: id, kind: kind), api: api) { … }
 // The inner view keeps them in State, outside ScreenContent, so drafts and
 // the reader's place outlive a failed read.
@@ -1004,7 +1064,8 @@ ScreenContent(model: model) { screen in
 | `ReactionControls`, `ReactionPicker`, `FeedActionStyle`, `WriteFailure` | `Screenr/Conversation/` | Reaction counts and React, which opens the seven reactions beneath its line, as on the web (a SwiftUI `Menu` label does not follow Dynamic Type); the compact actions with 44-point hit areas; and a failed write's message beneath its control. |
 | `Avatar`, `PosterImage`, `FlowLayout`, `.muted`, `.danger`, `.onAccent` | `Screenr/Shared/` | A member's photo or initial on the web's colors; a TMDB poster, or the title's initial only while no poster shows, so an audit never measures an initial beneath a poster; a row that wraps; and text colors that keep 4.5:1 contrast, which the system's secondary label and red miss at small sizes, and the system's white misses on the dark theme's lime accent. |
 | `.buttonStyle(.accent)` | `Screenr/Shared/AccentButtonStyle.swift` | The prominent accent-filled button, such as Accept, Send sign-in code, or Join Screenr, with its label in `.onAccent`. Use it in place of `.borderedProminent`. |
-| `FeedModel` | ScreenrKit `Conversation/` | `@Observable` page state: accepted activity (`layout(_:viewer:)`, `receive`, `showIncoming`, and `show(entry:in:viewer:)` for a title page's friend line), revealed spoilers, each discussion's preview and groups, composers and their drafts, reactions, removals through `confirmation`, and Want to watch and Recommend with the top 10 confirmations. Every write reads the screen again through its `refresh` closure. |
+| `FeedModel` | ScreenrKit `Conversation/` | `@Observable` page state: accepted activity (`layout(_:viewer:)`, `receive`, `showIncoming`, and `show(entry:in:viewer:)` for a title page's friend line), Show older (`showOlder(_:)`, through its `showOlder` closure), revealed spoilers, each discussion's preview and groups, composers and their drafts, reactions, removals through `confirmation`, and Want to watch and Recommend with the top 10 confirmations. Every write reads the screen again through its `refresh` closure. |
+| `HistoryWindow`, `HistoryPage` | ScreenrKit `Conversation/` | A paged friends feed's or profile's window in its screen path (`before=now`, `since=<time>`, or `before=<time>`), and what a paged read sent besides its entries: `since` and `older`, as `screen.historyPage`. |
 | `FeedLayout`, `ThreadLayout` | ScreenrKit `Conversation/` | The web's rules as values: which entries and replies show, their order, the New activity count, the three-comment preview, Show earlier comments, and nested groups. |
 | `ConversationStarter` | ScreenrKit `Conversation/` | Start a conversation: `.post` on the friends feed, or `.title(id:kind:)`, which loads a TV show's seasons and each chosen season's episodes. |
 | Presentation | ScreenrKit `EntryPresentation.swift` | `item.action(style:)`, `item.title`, `discussionLabel`, `removedLabel`, `link(reply:)`, `RelativeTime`, `FinishedDate`, `ReviewStars`, `ReactionKind.options`, and `TopTenLeaving`. |
@@ -1025,6 +1086,19 @@ ScreenContent(model: model) { screen in
   the top, such as an open composer or a title page's details, stays put on
   its own, with new entries beneath it. `FeedTests` checks the second entry
   stays put, against `screen/feed/incoming`, which `FixtureUpdate` sends.
+- **Paged histories:** the friends feed and profiles read a page of their
+  history at a time, as on the web
+  ([paged histories](../docs/title-feed.md#paged-histories)).
+  `ShellModel.screenModel(for:)` makes their `ScreenModel` with
+  `paged: true`, so the first read asks for the newest page, `before=now`,
+  and each read moves later ones to the window it names, `since=<time>`.
+  Beneath the entries, `FeedList(history: screen.historyPage)` shows Show
+  older while older entries remain; it calls `FeedModel.showOlder(_:)`,
+  which reads the window extended by the page before it through
+  `ScreenModel.showOlder()`, and shows the entries that read adds at once,
+  without New activity. A server read without a window, as before paging,
+  names no page, so the screen keeps its path. `FeedTests` shows Show older
+  against `screen/feed/newest-page` and `screen/feed/older-page`.
 - **Writes:** after a write, `FeedModel` calls `refresh`, which reads again
   even while a poll is in flight, since that poll may have started before the
   write. Composers stay open with an empty draft after posting; Cancel keeps
@@ -1519,12 +1593,11 @@ holds one JSON object per line: `time`, `level`, `category`, `message`,
 `launch` (an ID for each launch), and `fields`. One task writes the file in
 order, so logging never waits on the disk. When the file would pass 256 KB it
 becomes `app.1.ndjson`, so the log keeps at most two files.
-`LogFile.recentTail(maximumBytes:)` returns the newest complete lines.
 Another process writes a file of its own name in the same directory, such
 as the [share extension](#share-extension)'s `share.ndjson` and the
 [notification extension](#push-content)'s `notifications.ndjson`, and
-`recentTails(maximumBytes:)` returns each file's newest lines for the
-[feedback form](#feedback).
+`LogFile.recentTails(maximumBytes:)` returns each file's newest complete
+lines for the [feedback form](#feedback).
 
 To read the Dev app's log in your Simulator:
 
@@ -1615,9 +1688,9 @@ there.
   runs only in the Simulator, so its `.dev` app group is not registered.
 - **New extensions:** the App Store Connect key cannot register a new
   extension's App ID. One archive signed through the Mac's Xcode account,
-  `xcodebuild archive … -allowProvisioningUpdates` without the key flags,
-  registers it, and the release script's key signs it from then on. Neither
-  archive needs uploading.
+  `bin/ios-packages xcodebuild archive … -allowProvisioningUpdates` without
+  the key flags, registers it, and the release script's key signs it from
+  then on. Neither archive needs uploading.
 - **Keychain:** the app group is also the Keychain access group. Pass it as
   `kSecAttrAccessGroup`; there is no `keychain-access-groups` entitlement. In
   the Simulator, the Dev app can store and read items in its group, and

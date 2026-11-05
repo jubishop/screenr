@@ -182,6 +182,15 @@ extension Destination {
     }
   }
 
+  // Whether the screen pages its history, as the friends feed and profiles
+  // do (`HistoryWindow`).
+  public var pagesHistory: Bool {
+    switch self {
+    case .feed, .profile: true
+    default: false
+    }
+  }
+
   // A link to this destination on screenr.club, for sharing. It opens the
   // app as a universal link where the app is installed, and the web elsewhere.
   // It leaves out a title's origin, which was the sharer's.

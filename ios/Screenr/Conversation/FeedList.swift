@@ -25,6 +25,9 @@ struct FeedList<Header: View>: View {
   // Shows and scrolls to an entry the screen names, such as a friend on a
   // title page's friend line, accepting waiting activity if it needs to.
   var entryRequest: EntryRequest?
+  // A paged feed's or profile's window, whose older entries Show older
+  // reads beneath the entries.
+  var history: HistoryPage?
   @ViewBuilder var header: () -> Header
 
   @State private var scrolled: FeedScrollTarget?
@@ -76,6 +79,17 @@ struct FeedList<Header: View>: View {
               proxy.frame(in: .named(FeedContent())).minY < 1 ? .entries : .header
             } action: {
               report.start = $0
+            }
+            if let history, history.older {
+              Button {
+                Task { await feed.showOlder(history) }
+              } label: {
+                Text("Show older")
+                  .frame(maxWidth: .infinity)
+              }
+              .buttonStyle(.bordered)
+              .disabled(feed.older == .reading)
+              .padding()
             }
             if layout.entries.isEmpty, let emptyMessage {
               Text(emptyMessage)

@@ -144,18 +144,13 @@ class PictureError extends Error {
 
 // Fetches one picture, following at most three redirects within Google's
 // hosts, and reads at most the photo limit.
-async function fetchGooglePicture(
-  start: URL,
-  fetcher: Fetch,
-  signal?: AbortSignal,
-) {
-  const deadline = AbortSignal.timeout(8000);
-  const stop = signal ? AbortSignal.any([signal, deadline]) : deadline;
+async function fetchGooglePicture(start: URL, fetcher: Fetch) {
+  const signal = AbortSignal.timeout(8000);
   let url = start;
   for (let redirects = 0; ; redirects++) {
     const response = await fetcher(url, {
       redirect: "manual",
-      signal: stop,
+      signal,
       cache: "no-store",
       headers: { Accept: "image/jpeg,image/png,image/webp" },
     });
@@ -194,7 +189,7 @@ async function fetchGooglePicture(
 
 function logCopyFailure(
   userId: string,
-  trigger: "account" | "backfill" | "choice",
+  trigger: "account" | "choice",
   error: unknown,
 ) {
   if (error instanceof PictureError)
@@ -213,34 +208,25 @@ function logCopyFailure(
 }
 
 // Copies the Google picture for someone with no photo and no recorded
-// removal: when a Google account is added, and in the one-time backfill.
-// It never replaces a photo and never throws. A failure keeps the initial
-// and is logged.
-export async function copyGooglePhoto(
-  userId: string,
-  trigger: "account" | "backfill",
-  fetcher: Fetch = fetch,
-  signal?: AbortSignal,
-): Promise<"copied" | "kept" | "no picture" | "failed"> {
+// removal, when a Google account is added. It never replaces a photo and
+// never throws. A failure keeps the initial and is logged.
+export async function copyGooglePhoto(userId: string, fetcher: Fetch = fetch) {
   try {
     if (
       (await db.query("SELECT 1 FROM profile_photo WHERE user_id=$1", [userId]))
         .rowCount
     )
-      return "kept";
+      return;
     const { url } = await googlePicture(userId);
-    if (!url) return "no picture";
-    const { image, type } = await fetchGooglePicture(url, fetcher, signal);
-    const inserted = await db.query(
+    if (!url) return;
+    const { image, type } = await fetchGooglePicture(url, fetcher);
+    await db.query(
       `INSERT INTO profile_photo(user_id,image,content_type,version,source)
       VALUES($1,$2,$3,$4,'google') ON CONFLICT (user_id) DO NOTHING`,
       [userId, image, type, photoVersion(image)],
     );
-    return inserted.rowCount ? "copied" : "kept";
   } catch (error) {
-    // A stopping worker abandons its copy; the next start retries it.
-    if (!signal?.aborted) logCopyFailure(userId, trigger, error);
-    return "failed";
+    logCopyFailure(userId, "account", error);
   }
 }
 
@@ -264,67 +250,6 @@ export async function chooseGooglePhoto(
     );
   }
   return savePhoto(userId, picture.image, picture.type, "google");
-}
-
-// Copies the Google picture of everyone with Google sign-in who has neither
-// a photo nor a recorded removal, one person at a time.
-async function backfill(fetcher: Fetch, signal?: AbortSignal) {
-  const { rows } = await db.query<{ id: string }>(
-    `SELECT DISTINCT a."userId" AS id FROM account a
-    WHERE a."providerId"='google'
-      AND NOT EXISTS (SELECT 1 FROM profile_photo p WHERE p.user_id=a."userId")
-    ORDER BY id`,
-  );
-  const counts = { copied: 0, kept: 0, "no picture": 0, failed: 0 };
-  for (const { id } of rows) {
-    if (signal?.aborted) return { counts, complete: false };
-    const result = await copyGooglePhoto(id, "backfill", fetcher, signal);
-    // A copy that a stopping worker abandoned is not a failure.
-    if (result === "failed" && signal?.aborted)
-      return { counts, complete: false };
-    counts[result]++;
-  }
-  return { counts, complete: true };
-}
-export async function backfillGooglePhotos(
-  fetcher: Fetch = fetch,
-  signal?: AbortSignal,
-) {
-  return (await backfill(fetcher, signal)).counts;
-}
-
-// screenr-worker runs the backfill once, when the first release with photos
-// starts. The marker is written after a complete pass, so a stopped pass runs
-// again on the next start. Deleting the marker and restarting the worker
-// retries failures; copies never replace a photo or a removal.
-export const photoBackfill = "google-photos";
-export async function runPhotoBackfill(
-  fetcher: Fetch = fetch,
-  signal?: AbortSignal,
-) {
-  try {
-    if (
-      (
-        await db.query("SELECT 1 FROM screenr_backfill WHERE name=$1", [
-          photoBackfill,
-        ])
-      ).rowCount
-    )
-      return null;
-    const { counts, complete } = await backfill(fetcher, signal);
-    if (!complete) return null;
-    await db.query(
-      "INSERT INTO screenr_backfill(name) VALUES($1) ON CONFLICT DO NOTHING",
-      [photoBackfill],
-    );
-    console.log(
-      JSON.stringify({ event: "google photo backfill finished", ...counts }),
-    );
-    return counts;
-  } catch (error) {
-    logFailure("google photo backfill failed", {}, error);
-    return null;
-  }
 }
 
 // The photo for an avatar URL, when the viewer may see that profile: their

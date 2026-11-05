@@ -90,7 +90,7 @@ export function WantToWatch({
 function AtHome({ data, own }: { data: AtHomePage; own: boolean }) {
   const [filter, setFilter] = useState<TitleKindFilter>("all");
   const { owner, titles } = data;
-  const shown = ofKind(titles, filter);
+  const shown = titles.filter(ofKind(filter));
   const ready = shown.filter((title) => title.access === "available");
   const unknown = shown.filter((title) => title.access === "unknown");
   const kindName = filter === "movie" ? "movies" : "TV shows";

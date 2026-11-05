@@ -160,8 +160,12 @@ test("Want to watch opens from own and friends' profiles, lists what the viewer 
 
   // The filter works from the keyboard and keeps newest first.
   const filter = (name: string) =>
-    page.getByRole("button", { name, exact: true });
+    page
+      .getByRole("group", { name: "Title type" })
+      .getByRole("button", { name, exact: true });
   await expect(filter("All")).toHaveAttribute("aria-pressed", "true");
+  // The buttons wait for the page to be interactive.
+  await expect(filter("Movies")).toBeEnabled();
   await filter("Movies").focus();
   await page.keyboard.press("Enter");
   await expect(filter("Movies")).toHaveAttribute("aria-pressed", "true");
