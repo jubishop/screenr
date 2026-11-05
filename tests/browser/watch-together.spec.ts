@@ -45,27 +45,27 @@ test("watch together opens from a friend profile, filters shared titles, and ref
     owner.getByRole("heading", { name: "Watch together", exact: true }),
   ).toBeVisible();
   const results = owner.getByLabel("Shared titles");
+  const kind = (name: string) =>
+    owner
+      .getByRole("group", { name: "Title type" })
+      .getByRole("button", { name, exact: true });
   await expect(results.getByRole("heading", { level: 3 })).toHaveText([
     "The Harbor Signal",
     "The Lantern Room",
   ]);
-  await expect(
-    owner.getByRole("button", { name: "All", exact: true }),
-  ).toHaveAttribute("aria-pressed", "true");
+  await expect(kind("All")).toHaveAttribute("aria-pressed", "true");
   await expect(
     owner.getByRole("button", { name: /Want to watch/ }),
   ).toHaveCount(0);
-  await owner.getByRole("button", { name: "Movies", exact: true }).click();
+  await kind("Movies").click();
   await expect(results.getByRole("heading", { level: 3 })).toHaveText([
     "The Lantern Room",
   ]);
   await owner.waitForResponse((response) =>
     response.url().includes("/api/screenr/screen?"),
   );
-  await expect(
-    owner.getByRole("button", { name: "Movies", exact: true }),
-  ).toHaveAttribute("aria-pressed", "true");
-  await owner.getByRole("button", { name: "TV", exact: true }).click();
+  await expect(kind("Movies")).toHaveAttribute("aria-pressed", "true");
+  await kind("TV").click();
   await expect(results.getByRole("heading", { level: 3 })).toHaveText([
     "The Harbor Signal",
   ]);
@@ -91,12 +91,12 @@ test("watch together opens from a friend profile, filters shared titles, and ref
   await expect(owner).toHaveURL("/titles/movie/987654?from=watch_together");
   await expect(statusButton(owner)).toHaveText("✓ Want to watch");
   await owner.goBack();
-  await owner.getByRole("button", { name: "TV", exact: true }).click();
+  await kind("TV").click();
   await chooseStatus(friend, "Clear status");
   await expect(
     owner.getByRole("heading", { name: "No shared TV shows yet." }),
   ).toBeVisible();
-  await owner.getByRole("button", { name: "All", exact: true }).click();
+  await kind("All").click();
   await expect(results.getByRole("heading", { level: 3 })).toHaveText([
     "The Lantern Room",
   ]);

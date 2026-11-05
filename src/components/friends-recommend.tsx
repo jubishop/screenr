@@ -4,24 +4,19 @@ import { Link } from "./pending-navigation";
 import type {
   FriendsRecommendation,
   SaveSurface,
-  Title,
   ViewingTitle,
 } from "../shared";
 import { ActionButton } from "./action-button";
 import { useActionError } from "./action-error";
 import { useInteractive } from "./client";
 import { TitleCard } from "./title-card";
+import {
+  ofKind,
+  TitleKindButtons,
+  type TitleKindFilter,
+} from "./title-kind-filter";
 import { statusLabels } from "./watch-status";
 
-export type TitleKind = "all" | Title["kind"];
-const kinds: { kind: TitleKind; label: string }[] = [
-  { kind: "all", label: "All" },
-  { kind: "movie", label: "Movies" },
-  { kind: "tv", label: "TV" },
-];
-// Whether a title passes the Movies/TV filter.
-export const ofKind = (kind: TitleKind) => (title: Pick<Title, "kind">) =>
-  kind === "all" || title.kind === kind;
 // Whether a title passes the Finished filter: titles the viewer marked
 // Finished stay hidden unless the Show finished switch is on.
 export const withFinished =
@@ -130,8 +125,8 @@ export function FriendsRecommend({
 }: {
   recommendations: ViewingTitle<FriendsRecommendation>[];
   hiddenFinished: number;
-  kind: TitleKind;
-  setKind: (kind: TitleKind) => void;
+  kind: TitleKindFilter;
+  setKind: (kind: TitleKindFilter) => void;
   showFinished: boolean;
   setShowFinished: (showFinished: boolean) => void;
   included: (title: ViewingTitle) => boolean;
@@ -160,20 +155,7 @@ export function FriendsRecommend({
   return (
     <>
       <div className="recommend-filters">
-        <div className="kind-filter" role="group" aria-label="Title type">
-          {kinds.map((option) => (
-            <button
-              key={option.kind}
-              type="button"
-              className={option.kind === kind ? "primary" : "secondary"}
-              aria-pressed={option.kind === kind}
-              disabled={!interactive}
-              onClick={() => setKind(option.kind)}
-            >
-              {option.label}
-            </button>
-          ))}
-        </div>
+        <TitleKindButtons value={kind} onChange={setKind} />
         <button
           type="button"
           className={showFinished ? "primary" : "secondary"}
