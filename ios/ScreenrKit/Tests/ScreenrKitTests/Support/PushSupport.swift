@@ -13,6 +13,8 @@ final class RecordingPushSystem: PushSystem {
   private(set) var registrations = 0
   private(set) var badges: [Int] = []
   private(set) var clearedDeliveries = 0
+  // The alerts the app posted itself.
+  private(set) var alerts: [FailedActionAlert] = []
 
   init(_ current: PushPermission, answer: PushPermission? = .allowed) {
     self.current = current
@@ -38,6 +40,10 @@ final class RecordingPushSystem: PushSystem {
 
   func removeDeliveredNotifications() {
     clearedDeliveries += 1
+  }
+
+  func post(_ alert: FailedActionAlert) async throws {
+    alerts.append(alert)
   }
 }
 

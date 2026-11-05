@@ -27,6 +27,8 @@ public protocol PushSystem: AnyObject, Sendable {
   func setBadgeCount(_ count: Int) async throws
   // Clears the notifications Notification Center still shows.
   func removeDeliveredNotifications()
+  // Shows an alert at once in place of a notification action that failed.
+  func post(_ alert: FailedActionAlert) async throws
 }
 
 // Where APNs reaches this build: the device token's environment, the bundle

@@ -3,7 +3,8 @@ import SwiftUI
 
 // Screenr's page in the share sheet: the shared title, with Recommend and
 // Want to watch, or a search for it. A member who is signed out of the app,
-// or whose build the server no longer accepts, gets the reason instead.
+// or whose build the server no longer accepts, gets the reason instead. Close
+// is off while a save is in flight, since closing ends the extension.
 struct ShareView: View {
   let model: ShareModel
   // Closes the share sheet.
@@ -18,10 +19,11 @@ struct ShareView: View {
         .toolbar {
           ToolbarItem(placement: .topBarTrailing) {
             Button(role: .close, action: done)
+              .disabled(model.isSaving)
           }
         }
         .navigationDestination(for: Title.self) { title in
-          ShareTitleView(title: title)
+          ShareTitleView(title: title, share: model)
         }
     }
   }
@@ -47,7 +49,7 @@ struct ShareView: View {
         ProgressView("Finding the title…")
           .frame(maxWidth: .infinity, maxHeight: .infinity)
       case .title(let title):
-        ShareTitleView(title: title)
+        ShareTitleView(title: title, share: model)
       case .search:
         ShareSearchView(find: model.find)
       case .needsSetup:

@@ -82,6 +82,7 @@ public struct TitleHeader: Hashable, Sendable {
 // A review's rating, text, and spoiler flag. A review needs a rating, text,
 // or both.
 public struct ReviewDraft: Hashable, Sendable {
+  // In UTF-16 code units, as the server counts it.
   public static let maximumLength = 2_000
 
   // Whole stars from 1 to 5, or nil for text alone.

@@ -6,10 +6,11 @@ import SwiftUI
 // which friends recommend it or want to watch it.
 struct ShareTitleView: View {
   let title: Title
-  @Environment(\.screenrAPI) private var api
+  // The share, which counts the page's saves.
+  let share: ShareModel
 
   var body: some View {
-    ShareTitlePage(model: ShareTitleModel(title: title, api: api))
+    ShareTitlePage(model: share.page(for: title))
   }
 }
 

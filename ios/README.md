@@ -345,6 +345,28 @@ try await api.send(.comment(conversation: item.id, body: text, spoiler: false))
   provider's token, such as `INVALID_TOKEN` or `OAUTH_LINK_ERROR`, is
   `.rejected(status: 401)` and keeps the session. Only Better Auth's
   `UNAUTHORIZED` code ends it.
+- **Reinstalls:** iOS keeps the Keychain when the app is deleted, but not
+  the app's own UserDefaults or its app group. Before the app's first log
+  line, `InstallLaunch.record(defaults:appLog:)` reads and sets a mark in
+  UserDefaults. A launch without the mark is the first since an install,
+  unless the app group already holds the app's `app.ndjson` log, which
+  every earlier build wrote at each launch, as after an update from a build
+  before the mark. At that first launch, `AppServices` removes any session
+  token a deleted install left, so the app starts signed out, then signs that
+  session out on the server, which removes its push devices; offline, it
+  ends when it expires. Fixture launches never read the Keychain, so UI
+  tests are unaffected. `InstallLaunchTests` cover it.
+- **Writes in the background:** `URLSessionTransport` runs every request
+  but a GET inside a `BackgroundActivity`, which in the app and its
+  extensions is `ProcessActivity`, iOS's expiring activity. So a write
+  started before the member leaves the app or the share sheet keeps running
+  until it answers, for as long as iOS allows, rather than failing after the
+  server applied it. Reads repeat on return, so they ask for no time.
+  `URLSessionTransportTests` cover it with a stand-in `URLProtocol`.
+- **Text limits:** comment, post, and review drafts stop at 2,000 UTF-16
+  code units, as the server counts with JavaScript's `length`, so most
+  emoji count as two, through `String.prefix(utf16Limit:)`. A cut never
+  splits a character.
 - **Caching:** each GET's response is kept in memory with its ETag. Reading
   the same path again sends `If-None-Match`, and a 304 returns the cached
   value. The cache keeps the 32 most recently used reads, and at most 8 MB
@@ -722,9 +744,12 @@ before launch finishes, and puts it in the environment.
   asks APNs for the device token, and `AppDelegate` passes it to
   `received(token:)`, which registers it with `push-device` once per session:
   the token in lowercase hex, and the environment, topic, and build of the
-  `PushTarget` that `AppConfiguration.pushTarget(infoDictionary:)` reads. A failed registration tries again on the next return. If
-  the member turns notifications off in iOS Settings after this launch
-  registered, the next return removes the device. Signing out ends the
+  `PushTarget` that `AppConfiguration.pushTarget(infoDictionary:)` reads. A failed registration tries again on the next return.
+  While notifications are off in iOS Settings, the app still asks APNs for
+  the token, which APNs issues regardless of the permission, and removes the
+  device with `push-device` once per launch, since an earlier launch in the
+  session may have registered it. A failed removal tries again on the next
+  return. Signing out ends the
   session, and the server deletes the session's devices with it; the app
   clears Notification Center and the badge, as it does on a launch without
   a session, and the next member registers the device again.
@@ -768,6 +793,18 @@ before launch finishes, and puts it in the environment.
   with an info log line; any other failure logs a `Log.push` warning, which
   reaches Sentry, and a reply that fails leaves the notification unread in
   the bell. The worker's badge-only updates then correct the app icon.
+- **Failed actions:** an action that fails with a warning, or a reply over
+  2,000 UTF-16 code units after trimming, which is never sent, posts a
+  `FailedActionAlert` through `PushSystem.post(_:)` in its place: "Your
+  reply wasn’t posted", or "The friend request wasn’t accepted" or
+  "…declined", with why. Its payload names the notification, so tapping it
+  opens the notification as tapping the push does. A reply's alert also
+  carries its text as `unpostedReply`; the tap keeps it in
+  `ShellModel.keepReply(_:for:)` for the reply composer beneath the
+  notification's comment, and the first `FeedList` that shows the entry
+  opens that composer with the text as its draft, through
+  `FeedModel.restoreReplies(from:in:viewer:)`. Ending the session forgets
+  kept replies.
 - **While open:** a push that arrives while the app is open shows its
   banner, sound, and badge as usual, and calls `shell.pushArrived()`, so the
   visible screen reads again.
@@ -1164,7 +1201,7 @@ ScreenContent(model: model) { screen in
 | `ReactionControls`, `ReactionPicker`, `FeedActionStyle`, `WriteFailure` | `Screenr/Conversation/` | Reaction counts and React, which opens the seven reactions beneath its line, as on the web (a SwiftUI `Menu` label does not follow Dynamic Type); the compact actions with 44-point hit areas; and a failed write's message beneath its control. |
 | `Avatar`, `PosterImage`, `FlowLayout`, `.muted`, `.danger`, `.onAccent` | `Screenr/Shared/` | A member's photo, decoded at the avatar's size, or initial on the web's colors; a TMDB poster, or the title's initial only while no poster shows, so an audit never measures an initial beneath a poster; a row that wraps; and text colors that keep 4.5:1 contrast, which the system's secondary label and red miss at small sizes, and the system's white misses on the dark theme's lime accent. |
 | `.buttonStyle(.accent)` | `Screenr/Shared/AccentButtonStyle.swift` | The prominent accent-filled button, such as Accept, Send sign-in code, or Join Screenr, with its label in `.onAccent`. Use it in place of `.borderedProminent`. |
-| `FeedModel` | ScreenrKit `Conversation/` | `@Observable` page state: accepted activity (`layout(_:viewer:)`, `receive`, `showIncoming`, and `show(entry:in:viewer:)` for a title page's friend line), Show older (`showOlder(_:)`, through its `showOlder` closure), revealed spoilers, each discussion's preview and groups, composers and their drafts, reactions, removals through `confirmation`, and Want to watch and Recommend with the top 10 confirmations. Every write reads the screen again through its `refresh` closure. |
+| `FeedModel` | ScreenrKit `Conversation/` | `@Observable` page state: accepted activity (`layout(_:viewer:)`, `receive`, `showIncoming`, and `show(entry:in:viewer:)` for a title page's friend line), Show older (`showOlder(_:)`, through its `showOlder` closure), revealed spoilers, each discussion's preview and groups, composers and their drafts, with replies a notification's Reply did not post (`restoreReplies(from:in:viewer:)`), reactions, removals through `confirmation`, and Want to watch and Recommend with the top 10 confirmations. Every write reads the screen again through its `refresh` closure. |
 | `HistoryWindow`, `HistoryPage` | ScreenrKit `Conversation/` | A paged friends feed's or profile's window in its screen path (`before=now`, `since=<time>`, or `before=<time>`), and what a paged read sent besides its entries: `since` and `older`, as `screen.historyPage`. |
 | `FeedLayout`, `ThreadLayout` | ScreenrKit `Conversation/` | The web's rules as values: which entries and replies show, their order, the New activity count, the three-comment preview, Show earlier comments, and nested groups. `SharedFeedLayoutTests` runs `FeedLayout` on the [shared cases](#shared-cases) that the web's layout runs too. |
 | `ConversationStarter` | ScreenrKit `Conversation/` | Start a conversation: `.post` on the friends feed, or `.title(id:kind:)`, which loads a TV show's seasons and each chosen season's episodes. |
@@ -1535,7 +1572,10 @@ the member can Recommend it or mark it Want to watch:
    another status, withdrawing or switching a top 10 title's Recommend asks
    first, and every write reads the page again. Want to watch reports the
    `title` save surface. Friends who recommend the title or want to watch it
-   show beneath.
+   show beneath. `ShareModel.page(for:)` makes each page's model and counts
+   its saves, even from a page the member left, so Close stays off while
+   `isSaving`: closing the sheet ends the extension, which could cut off a
+   save the server had applied.
 4. **The session:** the extension reads the app's session token from the
    shared Keychain group and never signs in. Signed out, it asks the member
    to sign in in the app; a 426 shows Update Screenr; a member without a

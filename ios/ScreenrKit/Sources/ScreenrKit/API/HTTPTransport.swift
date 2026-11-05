@@ -14,11 +14,20 @@ extension HTTPTransport {
   public func close() {}
 }
 
+// Sends requests through URLSession. A write, any request but a GET, keeps
+// the process running until it answers, through `activity`, so leaving the
+// app does not cut it off after the server applied it. A read repeats when
+// the app returns, so it asks for nothing.
 public struct URLSessionTransport: HTTPTransport {
   private let session: URLSession
+  private let activity: any BackgroundActivity
 
-  public init(configuration: URLSessionConfiguration = URLSessionTransport.configuration()) {
+  public init(
+    configuration: URLSessionConfiguration = URLSessionTransport.configuration(),
+    activity: any BackgroundActivity = ProcessActivity()
+  ) {
     session = URLSession(configuration: configuration)
+    self.activity = activity
   }
 
   // An ephemeral configuration that neither sends nor stores cookies, since
@@ -39,7 +48,12 @@ public struct URLSessionTransport: HTTPTransport {
   }
 
   public func send(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {
-    let (data, response) = try await session.data(for: request)
+    let (data, response) =
+      if request.httpMethod == "GET" {
+        try await session.data(for: request)
+      } else {
+        try await activity.keepRunning("Screenr write") { try await session.data(for: request) }
+      }
     guard let response = response as? HTTPURLResponse else {
       throw URLError(.badServerResponse)
     }

@@ -180,10 +180,63 @@ struct PushNotificationsTests {
       await push.received(token: token)
 
       #expect(push.permission == permission)
-      #expect(system.registrations == 0)
       #expect(system.prompts == 0)
-      #expect(api.requests.isEmpty)
+      #expect(!api.requests.contains(register(hex)))
     }
+  }
+
+  // A member who has not decided gives the app no reason to ask APNs.
+  @Test func asksAPNsForNothingBeforeTheMemberDecides() async {
+    let system = RecordingPushSystem(.undecided)
+    let api = RecordingAPI(["push-device": .success(["ok": true])])
+    let (push, _) = push(system, api: api)
+
+    await push.memberReady()
+
+    #expect(system.registrations == 0)
+    #expect(api.requests.isEmpty)
+  }
+
+  // After a relaunch, this launch registered nothing, but an earlier launch
+  // in the session may have. APNs issues the token even while notifications
+  // are off, so the app asks for it and removes the device with it.
+  @Test func removesTheDeviceAfterARelaunchWithNotificationsOff() async {
+    let system = RecordingPushSystem(.denied)
+    let api = RecordingAPI(["push-device": .success(["ok": true])])
+    let (push, _) = push(system, api: api)
+
+    await push.memberReady()
+    #expect(system.registrations == 1)
+    #expect(api.requests.isEmpty)
+    await push.received(token: token)
+    #expect(api.requests == [remove(hex)])
+
+    // Each return asks APNs again, and the device stays removed.
+    await push.memberReady()
+    await push.received(token: token)
+    #expect(system.registrations == 2)
+    #expect(api.requests == [remove(hex)])
+
+    // Turning notifications on registers the device again.
+    system.current = .allowed
+    await push.memberReady()
+    await push.received(token: token)
+    #expect(api.requests == [remove(hex), register(hex)])
+  }
+
+  @Test func triesAFailedRemovalAfterARelaunchAgainOnTheNextReturn() async {
+    let system = RecordingPushSystem(.denied)
+    let api = RecordingAPI(
+      sequences: ["push-device": [.failure(.offline), .success(["ok": true])]]
+    )
+    let (push, _) = push(system, api: api)
+    await push.memberReady()
+    await push.received(token: token)
+
+    await push.memberReady()
+    await push.memberReady()
+
+    #expect(api.requests == [remove(hex), remove(hex)])
   }
 
   // Turning Screenr's notifications off in iOS Settings while the app ran
@@ -508,13 +561,36 @@ struct PushNotificationsTests {
   // longer pending, and the server changes nothing.
   @Test func answeringARequestThatIsNoLongerPendingChangesNothing() async {
     let api = RecordingAPI(["respond-friend-request": .failure(.notFound)])
-    let (push, shell) = push(RecordingPushSystem(.allowed), api: api)
+    let system = RecordingPushSystem(.allowed)
+    let (push, shell) = push(system, api: api)
     let refreshes = shell.liveRefreshes
 
     await push.perform(.respond(.accept), notificationID: "14")
 
     #expect(api.requests == [respond("14", "accept")])
     #expect(shell.liveRefreshes == refreshes)
+    #expect(system.alerts.isEmpty)
+  }
+
+  // An answer that fails for a reason that may pass, such as a server error,
+  // posts an alert in its place, which opens the request again.
+  @Test func aFailedAnswerPostsAnAlertThatOpensTheRequest() async throws {
+    for (response, title) in [
+      (FriendRequestResponse.accept, "The friend request wasn’t accepted"),
+      (.decline, "The friend request wasn’t declined"),
+    ] {
+      let api = RecordingAPI(["respond-friend-request": .failure(.server(status: 503))])
+      let system = RecordingPushSystem(.allowed)
+      let (push, _) = push(system, api: api)
+
+      await push.perform(.respond(response), notificationID: "14")
+
+      let alert = try #require(system.alerts.first)
+      #expect(system.alerts.count == 1)
+      #expect(alert.title == title)
+      #expect(alert.body == "The respond-friend-request failed.")
+      #expect(PushTap(userInfo: alert.content.userInfo) == PushTap(notificationID: "14"))
+    }
   }
 
   // Reply answers the notification's comment in its conversation, then marks
@@ -588,6 +664,76 @@ struct PushNotificationsTests {
     #expect(shell.liveRefreshes == refreshes)
   }
 
+  // A reply that fails for a reason that may pass, such as being offline,
+  // posts an alert in its place. Tapping it opens the conversation at the
+  // comment, whose feed opens the reply composer with the text as its draft.
+  @Test func aFailedReplyPostsAnAlertThatKeepsItsText() async throws {
+    let api = RecordingAPI([
+      "notification": try .fixture("actions/notification/comment"),
+      "comment": .failure(.offline),
+      "read-notification": try .fixture("actions/read-notification/default"),
+    ])
+    let system = RecordingPushSystem(.allowed)
+    let (push, shell) = push(system, api: api)
+
+    await push.perform(.reply("Agreed."), notificationID: "18")
+
+    let alert = try #require(system.alerts.first)
+    #expect(system.alerts.count == 1)
+    #expect(alert.title == "Your reply wasn’t posted")
+    #expect(alert.body == "The comment failed.")
+    let tap = PushTap(userInfo: alert.content.userInfo)
+    #expect(tap == PushTap(notificationID: "18", unpostedReply: "Agreed."))
+
+    await push.open(tap)
+
+    #expect(shell.router[stack: .circle] == [.title(id: "tv:201", item: entry, reply: "3")])
+    #expect(shell.keptReplies == [.reply(entry: entry, comment: "3"): "Agreed."])
+    // The next member never sees it.
+    shell.sessionEnded(.signedOut)
+    #expect(shell.keptReplies.isEmpty)
+  }
+
+  // A reply that fails before the notification loads still keeps its text,
+  // since the tap reads the notification again.
+  @Test func aReplyWhoseNotificationFailedToLoadPostsAnAlert() async throws {
+    let api = RecordingAPI(["notification": .failure(.timedOut)])
+    let system = RecordingPushSystem(.allowed)
+    let (push, _) = push(system, api: api)
+
+    await push.perform(.reply("Agreed."), notificationID: "18")
+
+    let alert = try #require(system.alerts.first)
+    #expect(alert.title == "Your reply wasn’t posted")
+    #expect(
+      PushTap(userInfo: alert.content.userInfo)
+        == PushTap(notificationID: "18", unpostedReply: "Agreed.")
+    )
+  }
+
+  // The server takes at most 2,000 UTF-16 code units after trimming, so a
+  // longer reply is never sent; its alert keeps the text for the composer.
+  @Test func aReplyOverTheLimitPostsAnAlertInstead() async throws {
+    let api = RecordingAPI()
+    let system = RecordingPushSystem(.allowed)
+    let (push, _) = push(system, api: api)
+    let text = String(repeating: "🎬", count: 1_001)
+
+    await push.perform(
+      .reply(" " + String(repeating: "🎬", count: 1_000) + "\n"),
+      notificationID: "18"
+    )
+    #expect(system.alerts.isEmpty)
+    await push.perform(.reply(text), notificationID: "18")
+
+    #expect(api.requests.map(\.action) == ["notification"])
+    let alert = try #require(system.alerts.first)
+    #expect(system.alerts.count == 1)
+    #expect(alert.title == "Your reply wasn’t posted")
+    #expect(alert.body == "Replies can have up to 2,000 characters.")
+    #expect(PushTap(userInfo: alert.content.userInfo).unpostedReply == text)
+  }
+
   @Test func aReplyStillCountsWhenMarkingItReadFails() async throws {
     let api = RecordingAPI([
       "notification": try .fixture("actions/notification/comment"),
@@ -618,12 +764,14 @@ struct PushNotificationsTests {
     let api = RecordingAPI([
       "notification": .failure(.signedOut), "respond-friend-request": .failure(.signedOut),
     ])
-    let (push, _) = push(RecordingPushSystem(.allowed), api: api)
+    let system = RecordingPushSystem(.allowed)
+    let (push, _) = push(system, api: api)
 
     await push.perform(.reply("Agreed."), notificationID: "18")
     await push.perform(.respond(.decline), notificationID: "14")
 
     #expect(api.requests == [lookUp("18"), respond("14", "decline")])
+    #expect(system.alerts.isEmpty)
   }
 
   @Test func anActionWithoutANotificationSendsNothing() async {
@@ -659,6 +807,25 @@ struct PushNotificationsTests {
     #expect(PushTap(userInfo: userInfo) == PushTap(notificationID: "42"))
     #expect(PushTap(userInfo: ["aps": ["badge": 2]]) == PushTap(notificationID: nil))
     #expect(PushTap(userInfo: ["notificationId": 42]) == PushTap(notificationID: nil))
+  }
+
+  // The alert for a reply that did not post says why, offers no actions of
+  // its own, and names its notification and the text for the tap.
+  @Test func buildsAFailedActionsAlert() {
+    let alert = FailedActionAlert(
+      notificationID: "18",
+      action: .reply("Agreed."),
+      error: APIError(kind: .offline, requestID: "request-1")
+    )
+
+    #expect(alert.identifier == "failed-action-18")
+    let content = alert.content
+    #expect(content.title == "Your reply wasn’t posted")
+    #expect(content.body == "Could not reach Screenr. Check your connection and try again.")
+    #expect(content.categoryIdentifier.isEmpty)
+    #expect(
+      PushTap(userInfo: content.userInfo) == PushTap(notificationID: "18", unpostedReply: "Agreed.")
+    )
   }
 
   @Test func registersTheWorkersCategories() {

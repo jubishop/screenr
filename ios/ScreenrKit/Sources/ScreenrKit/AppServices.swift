@@ -93,7 +93,9 @@ public struct AppServices: Sendable {
   // feedback to its request log rather than to `feedback`, the build's
   // sender, which Screenr Dev lacks. Only the app's client marks visits; the
   // extensions' send none. `push` is iOS's own push system, which the app
-  // target provides; the extensions have none.
+  // target provides; the extensions have none. At the app's first launch
+  // after an install, `launch` ends the session a deleted install left in
+  // the Keychain, which the fixture API never reads.
   @MainActor
   public init(
     configuration: AppConfiguration,
@@ -102,6 +104,7 @@ public struct AppServices: Sendable {
     feedback: (any FeedbackSender)? = nil,
     logFile: LogFile? = nil,
     host: Host = .app,
+    launch: InstallLaunch = .later,
     push system: (any PushSystem)? = nil
   ) throws {
     let source = try APISource(arguments: arguments, variant: configuration.variant)
@@ -122,6 +125,12 @@ public struct AppServices: Sendable {
         storage: SystemKeychain.invitation(accessGroup: configuration.appGroup)
       )
       transport = URLSessionTransport()
+      _ = try launch.endEarlierSession(
+        keychain: keychain,
+        serverURL: configuration.serverURL,
+        clientHeader: configuration.clientHeader,
+        transport: transport
+      )
       authorization = .system
       photoLibrary = .system
       imageCache = URLCache(

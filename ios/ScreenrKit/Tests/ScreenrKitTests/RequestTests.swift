@@ -231,6 +231,7 @@ struct RequestTests {
     ("/search?q=night", "/search"),
     ("/people", "/people"),
     ("/people/ben", "/people/:username"),
+    ("/people/ben/want-to-watch?mode=theaters", "/people/:username/want-to-watch"),
     ("/titles/tv/201?item=1", "/titles/:kind/:id"),
     ("/conversations/abc?reply=3", "/conversations/:id"),
     ("/watch-together?with=ben", "/watch-together"),
