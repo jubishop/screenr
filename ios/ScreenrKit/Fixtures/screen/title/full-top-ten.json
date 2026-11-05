@@ -11,7 +11,7 @@
   },
   "response": {
     "status": 200,
-    "etag": "W/\"NPCRgQXjxOlyFqq9YBXNWTIl-7QfBvy299PHDDNLvgk\"",
+    "etag": "W/\"qea6T0GdOzy39lgQJd5xAm9MDQWiMbomRKXUvm213QY\"",
     "body": {
       "kind": "title",
       "title": {
@@ -25,19 +25,9 @@
       },
       "trailer": null,
       "availability": {
-        "country": "US",
         "status": "ok",
         "checked_at": "2026-10-13T12:00:00.000Z",
         "link": "https://www.themoviedb.org/movie/105-winter-garden/watch",
-        "providers": {
-          "flatrate": [
-            {
-              "logo_path": null,
-              "provider_id": 8,
-              "provider_name": "Netflix"
-            }
-          ]
-        },
         "sections": [
           {
             "key": "subs",

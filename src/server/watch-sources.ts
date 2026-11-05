@@ -1,10 +1,15 @@
-import type {
-  WatchAvailability,
-  WatchCategory,
-  WatchProvider,
-  WatchSection,
-} from "../shared";
+import type { WatchCategory, WatchSection } from "../shared";
 import registry from "./watch-provider-registry.json";
+
+// TMDB's US providers for a title by viewing category, rentals and purchases
+// included, as the availability cache keeps them. Only the server reads
+// them, to build the sections that clients show.
+export type WatchProvider = {
+  provider_id: number;
+  provider_name: string;
+  logo_path: string | null;
+};
+export type WatchProviders = Partial<Record<WatchCategory, WatchProvider[]>>;
 
 const english = new Intl.Collator("en", { sensitivity: "base" });
 const byIdentity = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
@@ -40,9 +45,7 @@ export function serviceProviders(serviceIds: string[]): number[] {
 
 // Used for every cache result, including old rows. Registry metadata never
 // creates an offer: only members reported in this section affect availability.
-export function watchSections(
-  providers: WatchAvailability["providers"],
-): WatchSection[] {
+export function watchSections(providers: WatchProviders): WatchSection[] {
   const sections: WatchSection[] = [];
   for (const [key, label] of [
     ["subs", "Subs"],
