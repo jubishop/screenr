@@ -68,6 +68,15 @@ hooks of every agent's pushes.
   `TEST_DATABASE_URL` unset: one shared between agents' checkouts makes their
   test files reset each other's tables. On 2026-10-31 that caused a
   `deadlock detected` failure in `tests/app/catalog.test.ts`.
+- **Lock table:** every checkout's test databases also share the server's
+  lock table. On 2026-11-01, at PostgreSQL's default
+  `max_locks_per_transaction` of 64, a one-off statement that tried to create
+  3,000 tables in one transaction filled it, and test resets running at the
+  same moment failed with `out of shared memory`. Run an experiment that locks
+  thousands of objects at once on a throwaway server, not the shared one.
+  [Local setup](../docs/running-screenr.md#local-setup) now sets the server
+  to 256 ([lock table decision](../docs/development-workflow.md#local-postgresql-lock-table),
+  [#480](https://github.com/jubishop/screenr/issues/480)).
 - **Test database drops:** each `DROP DATABASE` forces a PostgreSQL
   checkpoint, which took up to 18 seconds on 2026-11-01. Test-database setup
   claims removed checkouts' databases under a machine-wide lock and leaves

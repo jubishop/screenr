@@ -35,17 +35,29 @@ Fast and document-only checks do not need Node. See the
 PostgreSQL runs natively from Homebrew's `postgresql@18` as a login service on
 port 5439, not in Docker; see the
 [local PostgreSQL decision](development-workflow.md#local-postgresql).
-Set its port and its time zone to UTC, start it as a login service, and create
-the local role and database once. Tests compare dates in UTC, as CI's server
-does, and the role is a superuser, as in CI, so tests can create and reset
-their databases:
+Set its port, its time zone to UTC, and `max_locks_per_transaction` to 256,
+start it as a login service, and create the local role and database once.
+Tests compare dates in UTC, as CI's server does, and the role is a superuser,
+as in CI, so tests can create and reset their databases. The larger lock
+table lets several checkouts run tests at once; see the
+[lock table decision](development-workflow.md#local-postgresql-lock-table).
 
 ```sh
 sed -i '' -e 's/^#port = 5432/port = 5439/' -e "s/^timezone = .*/timezone = 'UTC'/" \
+  -e 's/^#max_locks_per_transaction = 64/max_locks_per_transaction = 256/' \
   "$(brew --prefix)/var/postgresql@18/postgresql.conf"
 # Start postgresql@18 as a login service, then:
 psql -h 127.0.0.1 -p 5439 -d postgres -c "CREATE ROLE screenr LOGIN SUPERUSER PASSWORD 'screenr-local-only'"
 createdb -h 127.0.0.1 -p 5439 -U screenr screenr
+```
+
+To raise the setting on a server that is already running, where
+`SHOW max_locks_per_transaction` reports less than 256, run the following,
+then restart the login service when no checkout is running tests; the
+setting takes effect only at a restart:
+
+```sh
+psql -h 127.0.0.1 -p 5439 -U screenr -d postgres -c "ALTER SYSTEM SET max_locks_per_transaction = 256"
 ```
 
 Then set up the checkout:
