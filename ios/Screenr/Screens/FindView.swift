@@ -53,6 +53,9 @@ private struct FindScreen: View {
     .onChange(of: find.screenPath, initial: true) { _, path in
       screen.change(path: path)
     }
+    .onChange(of: page?.serviceIds, initial: true) { _, serviceIds in
+      find.receive(savedServices: serviceIds)
+    }
     .alert(
       "Could not update Want to watch",
       isPresented: Binding(get: { saveFailure != nil }, set: { _ in find.dismissSaveFailure() }),

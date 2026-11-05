@@ -405,7 +405,10 @@ in `src/server/watch-sources.ts`, and `tests/app/title-suggestions.test.ts`
 checks that the filter keeps exactly the titles whose access is not
 `unmatched`. The web and the iPhone app filter and mark titles by these fields
 and keep no copy of the rule, so a rule change reaches installed iPhone
-builds without an update. Builds from before #388 still compute Find's access
+builds without an update. A search's fields are the server's for the services
+saved when it ran, so when a screen read brings other saved services, as
+after a change in another tab or in the app's Settings over Find, both
+clients search again, keeping the shown results until the new ones arrive. Builds from before #388 still compute Find's access
 themselves from `serviceIds`, which the search screen keeps sending.
 
 ## Release status implementation

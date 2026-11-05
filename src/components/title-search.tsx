@@ -188,6 +188,27 @@ export function TitleSearch({
     setQuery(submitted);
     void search(submitted);
   }, [submitted]);
+  // Each result carries the viewer's access for the services saved when it
+  // was searched. When a screen read brings other saved services, as after a
+  // change in another tab, the results showing search again. They stay until
+  // the new ones arrive, and a failed search keeps them.
+  const services = serviceIds?.join(" ") ?? null;
+  const searchedServices = useRef(services);
+  useEffect(() => {
+    if (services === null) return;
+    const previous = searchedServices.current;
+    searchedServices.current = services;
+    const text = shown.current;
+    if (
+      previous !== null &&
+      previous !== services &&
+      text &&
+      text.length >= 2 &&
+      !pending.current &&
+      !error
+    )
+      void search(text, true);
+  }, [services]);
 
   function changeQuery(value: string) {
     setQuery(value);
@@ -218,7 +239,7 @@ export function TitleSearch({
     void search(text);
   }
 
-  async function search(text: string) {
+  async function search(text: string, keepingResults = false) {
     shown.current = text;
     pending.current?.abort();
     pending.current = null;
@@ -232,8 +253,10 @@ export function TitleSearch({
     const controller = new AbortController();
     const timeout = AbortSignal.timeout(10_000);
     pending.current = controller;
-    setSearching(true);
-    setResults([]);
+    if (!keepingResults) {
+      setSearching(true);
+      setResults([]);
+    }
     try {
       const titles = await api<AccessTitle[]>(
         `search?q=${encodeURIComponent(text)}`,
@@ -242,7 +265,7 @@ export function TitleSearch({
       );
       if (pending.current === controller) setResults(titles);
     } catch (error) {
-      if (pending.current === controller)
+      if (pending.current === controller && !keepingResults)
         setError(
           timeout.aborted
             ? "Search timed out. Please try again."

@@ -1155,7 +1155,8 @@ failed screen read and the search keeps working:
   with unknown viewing options it leaves out. Each title's `access` and
   `matchingServiceIds` come from the server's
   [viewing access](../docs/title-availability.md#viewing-access), which the
-  app never decides. Friends recommend adds Movies/TV
+  app never decides; `receive(savedServices:)` searches again when a screen
+  read brings other saved services. Friends recommend adds Movies/TV
   and Show finished; finished titles start hidden. Edit services opens
   Settings over the tab.
 - **Screen read:** the filters go in the read's path, as on the

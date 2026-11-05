@@ -108,6 +108,8 @@ public final class FindModel {
   @ObservationIgnored private(set) var pauseTask: Task<Void, Never>?
   @ObservationIgnored private(set) var searchTask: Task<Void, Never>?
   @ObservationIgnored private var generation = 0
+  // The saved services of the last screen read that had them.
+  @ObservationIgnored private var savedServices: [String]?
   // The last link that set the search, which is applied once.
   @ObservationIgnored private var link = Destination.search()
 
@@ -159,7 +161,21 @@ public final class FindModel {
     run(Self.trimmed(query), reportingShort: true)
   }
 
-  private func run(_ text: String, reportingShort: Bool) {
+  // A screen read's saved services, or nil after a failed read. Each
+  // result's access is the server's for the services saved when it searched,
+  // so when they change, as in Settings over this tab, the results showing
+  // search again. They stay until the new ones arrive, and a failed search
+  // keeps them.
+  public func receive(savedServices serviceIds: [String]?) {
+    guard let serviceIds else { return }
+    defer { savedServices = serviceIds }
+    guard let previous = savedServices, previous != serviceIds,
+      case .found(let text, _) = search
+    else { return }
+    run(text, reportingShort: false, keepingResults: true)
+  }
+
+  private func run(_ text: String, reportingShort: Bool, keepingResults: Bool = false) {
     searchTask?.cancel()
     searchTask = nil
     generation += 1
@@ -167,7 +183,7 @@ public final class FindModel {
       search = text.isEmpty || !reportingShort ? .none : .tooShort
       return
     }
-    search = .searching(text)
+    if !keepingResults { search = .searching(text) }
     let generation = generation
     let api = api
     let clock = clock
@@ -178,6 +194,8 @@ public final class FindModel {
       switch result {
       case .success(let titles):
         search = .found(text, titles)
+      case .failure where keepingResults:
+        break
       case .failure(let error) where error.kind == .timedOut && error.message == nil:
         search = .failed(text, message: "Search timed out. Please try again.")
       case .failure(let error):

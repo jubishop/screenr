@@ -70,6 +70,36 @@ struct FindSearchTests {
     #expect(model.pauseTask?.isCancelled == true)
   }
 
+  // Each result's access is the server's for the services saved when it
+  // searched, so a read with other saved services searches again. The
+  // results stay until the new ones arrive, and a failed search keeps them.
+  @Test func searchesAgainWhenTheSavedServicesChange() async throws {
+    let found = try JSONDecoder().decode(JSONValue.self, from: results)
+    let api = RecordingAPI(sequences: [
+      "search": [.success(found), .success([]), .failure(.offline)]
+    ])
+    let model = FindModel(api: api, clock: TestClock())
+    model.receive(savedServices: ["service:netflix"])
+    model.edit("night")
+    model.submit()
+    await settle(model)
+    #expect(model.search == .found("night", titles))
+
+    model.receive(savedServices: ["service:netflix"])
+    model.receive(savedServices: nil)
+    #expect(model.searchTask == nil)
+
+    model.receive(savedServices: ["service:hulu"])
+    #expect(model.search == .found("night", titles))
+    await settle(model)
+    #expect(model.search == .found("night", []))
+
+    model.receive(savedServices: [])
+    await settle(model)
+    #expect(model.search == .found("night", []))
+    #expect(api.requests.map(\.query) == Array(repeating: ["q": "night"], count: 3))
+  }
+
   @Test func theSearchKeyAsksForTwoCharacters() async throws {
     let api = FindAPI([:])
     let model = FindModel(api: api, clock: TestClock())
