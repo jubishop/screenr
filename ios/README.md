@@ -301,6 +301,59 @@ clones the new files.
   runs within commands checkouts already run, needs no new job or dependency,
   and leaves every file's contents and modification time as they were.
 
+In ScreenrKit's files, SourceKit-LSP resolves Foundation's and ScreenrKit's
+types but none of sentry-cocoa's, so language tools give no type, hover, or
+definition for `Event`, `SentrySDK`, or `SentryFeedback`
+([#513](https://github.com/jubishop/screenr/issues/513)). On 2026-11-05 a
+private SourceKit-LSP from Xcode 27.2, driven over its protocol in a fresh
+index build, showed why:
+
+- **Cause:** SourceKit-LSP prepares each target with
+  `swift build --build-system native --experimental-prepare-for-indexing`.
+  The compiler arguments, the editor's and preparation's alike, look for a
+  binary target's framework only in the build's products directory,
+  `-F .build/index-build/arm64-apple-macosx/debug`. They name the
+  xcframework's macOS slice, which holds `Sentry.framework`, only with `-I`,
+  which finds no module inside a framework. A full build copies
+  `Sentry.framework` into the products directory; preparation doesn't, so
+  `import Sentry` fails. Preparation printed `error: no such module 'Sentry'`
+  for `SentryPrivacy.swift` and `SentryEnvelopeCapture.swift`, yet exited with
+  status 0 and wrote `ScreenrKit.swiftmodule`, since it carries on past
+  compiler errors. SourceKit-LSP then reported no diagnostics for either file,
+  so an editor shows unresolved names, such as `let event: _`, and no error.
+- **Not the clone pass:** the fresh index build failed the same way before
+  any pass reached it, and the pass only replaces regular files under
+  `artifacts/`.
+- **Upstream:** SwiftPM closed the bug,
+  [swiftlang/swift-package-manager#9567](https://github.com/swiftlang/swift-package-manager/issues/9567),
+  as fixed by Swift Build, its newer build system, and
+  [getsentry/sentry-cocoa#7472](https://github.com/getsentry/sentry-cocoa/issues/7472)
+  points there. SourceKit-LSP still prepares with the native build system
+  [on purpose](https://github.com/swiftlang/swift-package-manager/issues/9567#issuecomment-5090847059)
+  while Swift Build's issues are worked out. Once it prepares with Swift Build
+  by default, Sentry's types resolve with no change here.
+- **Swift Build:** with `"swiftPM": {"buildSystem": "swiftbuild"}` in its
+  configuration, SourceKit-LSP copied the framework while preparing and
+  resolved every Sentry type, with go-to-definition into Sentry's headers and
+  no diagnostics. It also indexed 10 batches of files instead of 217: 207 of
+  the native build's come from sentry-cocoa targets that ScreenrKit never
+  builds, such as `SentrySwift` and `SentryObjCInternal`. Its build and index
+  took 0.3 GB instead of 0.8 GB, in `ios/ScreenrKit/.build` unless
+  `scratchPath` names `.build/index-build`.
+- **Choice:** no repository change. A workspace
+  `ios/ScreenrKit/.sourcekit-lsp/config.json` choosing Swift Build takes effect
+  only after the trust prompt above. A clone of the slice's framework in the
+  products directory resolved Sentry's types in ScreenrKit's files, but test
+  files kept the `ScreenrKit.swiftmodule` built without them, with false
+  errors such as "Extra arguments" on `Telemetry(...)`, because preparation
+  found ScreenrKit up to date. A pass in `share_artifacts()` would also reach
+  an index build only at the checkout's next check or `bin/ios-packages`
+  command. A user-level configuration file, such as
+  `~/.sourcekit-lsp/config.json`, needs no prompt, but it applies to every
+  Swift package on the Mac and departs from SourceKit-LSP's default, so it is
+  the Mac owner's choice
+  ([#516](https://github.com/jubishop/screenr/issues/516)).
+
 ## Run one test
 
 ScreenrKit on the Mac, by suite or by test:
