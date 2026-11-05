@@ -959,11 +959,14 @@ JSON line with an `"event"` field that `logFailure` prints
 - **Application tests:** `npm test` and `npm run test:coverage` load
   `tests/app/failure-guard.ts` into every test file's process. It fails a
   test that prints a failure line it didn't capture, and fails the file for
-  a line printed outside any test. A test that fails something on purpose
-  reads its lines with `captureFailures()` from `tests/app/social-fixture.ts`,
-  passing its test context for a capture that ends with the test, and
-  asserts them, for example with `failureEvents()`. An iPhone fixture case
-  lists its lines in `failures`.
+  a line printed outside any test. It checks a test after the test's
+  `afterEach` hooks and `t.after()` cleanups, which count as part of the
+  test, so a test it fails still closes its servers and restores its mocks
+  ([#474](https://github.com/jubishop/screenr/issues/474)). A test that
+  fails something on purpose reads its lines with `captureFailures()` from
+  `tests/app/social-fixture.ts`, passing its test context for a capture that
+  ends with the test, and asserts them, for example with `failureEvents()`.
+  An iPhone fixture case lists its lines in `failures`.
 - **Browser runs:** `scripts/browser-server.ts` writes the application's
   failure lines, with when each printed, to
   `.cache/browser-failure-lines.jsonl`, which each run starts over, instead

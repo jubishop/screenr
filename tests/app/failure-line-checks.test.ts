@@ -90,6 +90,41 @@ test("uncaptured", () => {
   assert.match(output, /^# fail 1$/m);
 });
 
+test("a test the guard fails still runs its file's afterEach hooks and its own cleanup", async (t) => {
+  const { code, output } = await runGuarded(
+    t,
+    `import { afterEach, test } from "node:test";
+import { createServer, type Server } from "node:net";
+// An open server keeps the file running, so end it if a cleanup never ran.
+setTimeout(() => {
+  console.log("a server stayed open");
+  process.exit(2);
+}, 20_000).unref();
+let server: Server | undefined;
+afterEach((t) => {
+  server?.close();
+  console.log(\`the file's afterEach ran for \${t.name}\`);
+});
+test("uncaptured", (t) => {
+  server = createServer().listen(0, "127.0.0.1");
+  const own = createServer().listen(0, "127.0.0.1");
+  t.after(() => {
+    own.close();
+    console.log("the test's own cleanup ran");
+  });
+  console.error(${JSON.stringify(line)});
+});
+`,
+  );
+  assert.equal(code, 1, output);
+  assert.match(output, /^not ok \d+ - uncaptured$/m);
+  assert.match(output, /The test printed failure lines it didn't capture/);
+  assert.match(output, /the file's afterEach ran for uncaptured/);
+  assert.match(output, /the test's own cleanup ran/);
+  assert.doesNotMatch(output, /a server stayed open/);
+  assert.match(output, /^# fail 1$/m);
+});
+
 test("a failure line printed outside any test fails its file", async (t) => {
   const { code, output } = await runGuarded(
     t,

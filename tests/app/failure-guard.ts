@@ -1,4 +1,4 @@
-import { afterEach, beforeEach } from "node:test";
+import { afterEach, beforeEach, type TestContext } from "node:test";
 import { format } from "node:util";
 import { failureRecord } from "../../scripts/failure-lines";
 
@@ -33,7 +33,8 @@ beforeEach((context) => {
   running.push(context.fullName);
 });
 
-afterEach((context) => {
+// Fails the test for the lines it printed, its hooks and cleanups included.
+function check(context: TestContext) {
   const index = running.lastIndexOf(context.fullName);
   if (index >= 0) running.splice(index, 1);
   const lines = take(context.fullName);
@@ -41,6 +42,17 @@ afterEach((context) => {
     throw new Error(
       `The test printed failure lines it didn't capture. Capture them with captureFailures() and assert them:\n${lines.join("\n")}`,
     );
+}
+
+// node:test stops running a test's afterEach hooks at the first one that
+// throws, and its t.after() hooks likewise, so a check among either would skip
+// the cleanup after it, such as closing servers or restoring mocks (#474). A
+// test's afterEach hooks all run before its after hooks, which run in the
+// order they were added, so adding the check from this afterEach puts it after
+// every hook the test body added. afterEach hooks run only for tests, so the
+// context is a test's.
+afterEach((context) => {
+  (context as TestContext).after(check);
 });
 
 process.on("exit", () => {
