@@ -20,12 +20,8 @@ import { anySignal, api, useInteractive } from "./client";
 import { Poster } from "./poster";
 import { TitleCard } from "./title-card";
 import { TitleStatus } from "./title-status";
-import {
-  FriendsRecommend,
-  ofKind,
-  withFinished,
-  type TitleKind,
-} from "./friends-recommend";
+import { FriendsRecommend, withFinished } from "./friends-recommend";
+import { ofKind, type TitleKindFilter } from "./title-kind-filter";
 
 type ReasonAction = "recommended" | "want_to_watch" | "watching";
 
@@ -153,8 +149,8 @@ export function TitleSearch({
   // with finished titles hidden on each visit. The lists arrive filtered and
   // capped; filtering them here too also covers search results and the lists
   // read before a filter changed, until the screen reads them again.
-  const kind: TitleKind = filters.type ?? "all";
-  const setKind = (kind: TitleKind) =>
+  const kind: TitleKindFilter = filters.type ?? "all";
+  const setKind = (kind: TitleKindFilter) =>
     setFilters((filters) => ({
       ...filters,
       type: kind === "all" ? undefined : kind,

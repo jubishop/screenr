@@ -4,13 +4,13 @@ import datetime
 import fcntl
 import hashlib
 import hmac
+import importlib.util
 import json
 import os
 from pathlib import Path
 import sys
 import tempfile
 import time
-import urllib.error
 import urllib.parse
 import urllib.request
 import uuid
@@ -21,14 +21,16 @@ THRESHOLD = 1_000_000_000
 RETRY_WINDOW = 23 * 3600
 
 
-def setting(name):
-    value = os.environ.get(name, '').strip()
-    if not value:
-        raise ValueError(f'Missing {name} in backup environment')
-    return value
+def failure_alert():
+    """Load the settings and Resend delivery of failure-alert.py from the same release."""
+    spec = importlib.util.spec_from_file_location(
+        'failure_alert', Path(__file__).resolve().with_name('failure-alert.py'))
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
-def bucket_url():
+def bucket_url(setting):
     repository = setting('RESTIC_REPOSITORY')
     if not repository.startswith('s3:https://'):
         raise ValueError('Backup size monitoring requires an HTTPS R2 repository')
@@ -105,55 +107,47 @@ def save(path, state):
         Path(temporary).unlink(missing_ok=True)
 
 
-def send_warning(path, state, api_key):
+def send_warning(alert, path, state, api_key):
     warning = state['warning']
     if warning['sent_at'] is not None:
         return
-    for attempt in range(3):
+    # Whether the current attempt is the warning's first, with no earlier request whose
+    # response may have been lost.
+    first = False
+
+    def before_attempt():
+        nonlocal first
         now = time.time()
         previous_attempt = warning['attempted_at']
         if previous_attempt is not None and not 0 <= now - previous_attempt < RETRY_WINDOW:
             raise ValueError('Email delivery uncertain; reconcile size.json with Resend before retrying')
-        if previous_attempt is None:
+        first = previous_attempt is None
+        if first:
             warning['attempted_at'] = now
             save(path, state)
-        request = urllib.request.Request('https://api.resend.com/emails',
-            data=json.dumps(warning['message']).encode(), headers={
-                'Authorization': 'Bearer ' + api_key,
-                'Content-Type': 'application/json',
-                'User-Agent': 'Screenr-backup-monitor/1',
-                'Idempotency-Key': warning['key'],
-            }, method='POST')
-        try:
-            with urllib.request.urlopen(request, timeout=30) as response:
-                receipt = json.load(response)
-            if not isinstance(receipt, dict) or not isinstance(receipt.get('id'), str) or not receipt['id']:
-                raise ValueError('Missing Resend acceptance receipt')
-        except urllib.error.HTTPError as error:
-            # A definite rejection of the first attempt permits a later retry.
-            # A rejection cannot resolve an earlier request with a lost response.
-            if error.code in (400, 401, 403, 404, 422, 429) and previous_attempt is None:
-                warning['attempted_at'] = None
-                save(path, state)
-            error.close()
-            if attempt == 2 or error.code in (400, 401, 403, 404, 422):
-                raise ValueError(f'Resend rejected backup warning (HTTP {error.code})') from None
-        except (OSError, ValueError):
-            if attempt == 2:
-                raise ValueError('Backup warning delivery failed; saved for safe retry') from None
-        else:
-            warning['sent_at'] = time.time()
-            warning['email_id'] = receipt['id']
+
+    def on_http_error(status):
+        # A definite rejection of the first attempt permits a later retry.
+        # A rejection cannot resolve an earlier request with a lost response.
+        if status in alert.REJECTIONS + (429,) and first:
+            warning['attempted_at'] = None
             save(path, state)
-            print('Backup storage warning accepted by Resend')
-            return
-        time.sleep(2 ** attempt)
+
+    email_id = alert.deliver(warning['message'], api_key, warning['key'],
+                             'Screenr-backup-monitor/1', 'the backup warning',
+                             before_attempt, on_http_error)
+    warning['sent_at'] = time.time()
+    warning['email_id'] = email_id
+    save(path, state)
+    print('Backup storage warning accepted by Resend')
 
 
 def main():
     if sys.version_info < (3, 10):
         raise ValueError('Python 3.10 or newer is required')
-    url = bucket_url()
+    alert = failure_alert()
+    setting = alert.setting
+    url = bucket_url(setting)
     access, secret = setting('AWS_ACCESS_KEY_ID'), setting('AWS_SECRET_ACCESS_KEY')
     api_key = setting('RESEND_API_KEY')
     sender, recipient = setting('EMAIL_FROM'), setting('BACKUP_ALERT_TO')
@@ -191,7 +185,7 @@ def main():
         save(path, state)
         print(f'Screenr backup storage: {total} bytes in {count} objects; threshold {THRESHOLD} bytes')
         if state.get('warning'):
-            send_warning(path, state, api_key)
+            send_warning(alert, path, state, api_key)
 
 
 if __name__ == '__main__':

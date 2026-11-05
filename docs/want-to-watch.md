@@ -77,7 +77,9 @@ shows the title's
 as "In theaters", from the `release` field. Selecting a title
 opens its title page; the page has no inline title actions. The All, Movies,
 and TV filter in `src/components/title-kind-filter.tsx`, shared with Watch
-together, keeps the server's order and resets to All on reload. **Ready to
+together and Friends recommend, keeps the server's order and resets to All on
+reload. It is a group labeled "Title type", and its buttons wait for the page
+to be interactive. **Ready to
 watch** lists the available titles, and **Availability unknown** follows it.
 The [At home and In theaters switch](#in-theaters) sits between the page
 heading and the filter.

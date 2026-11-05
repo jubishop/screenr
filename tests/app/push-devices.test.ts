@@ -13,7 +13,7 @@ import {
 const { POST } = await import("../../src/app/api/screenr/[action]/route");
 const { auth } = await import("../../src/server/auth");
 const { loadScreen } = await import("../../src/server/screens");
-const { pushDevices, removePushDevice } = await import("../../src/server/push");
+const { removePushDevice } = await import("../../src/server/push");
 useDatabase();
 
 // iPhone push devices and per-kind push settings
@@ -89,9 +89,6 @@ test("registering stores the device for the member's session", async () => {
       seen: true,
     },
   ]);
-  assert.deepEqual(await pushDevices(alice), [
-    { token: tokenA, environment: "sandbox", topic: dev, build: 42 },
-  ]);
   // The web's cookie session registers the same way.
   const web = await POST(
     new Request(`${origin}/api/screenr/push-device`, {
@@ -112,7 +109,17 @@ test("registering stores the device for the member's session", async () => {
     { params: Promise.resolve({ action: "push-device" }) },
   );
   assert.equal(web.status, 200);
-  assert.equal((await pushDevices(alice)).length, 2);
+  assert.deepEqual(
+    (await stored()).map(({ token, user_id, environment }) => ({
+      token,
+      user_id,
+      environment,
+    })),
+    [
+      { token: tokenA, user_id: alice, environment: "sandbox" },
+      { token: tokenB, user_id: alice, environment: "production" },
+    ],
+  );
 });
 
 test("registration rejects invalid tokens, environments, bundle IDs, builds, and actions", async () => {
@@ -194,7 +201,6 @@ test("re-registering a token moves it to the current member and session", async 
       seen: true,
     },
   ]);
-  assert.deepEqual(await pushDevices(alice), []);
 });
 
 test("a new token from the same session and app replaces the old one", async () => {
@@ -248,7 +254,10 @@ test("removing a device and signing out delete only that member's devices", asyn
   });
   assert.equal(removed.status, 200);
   assert.deepEqual(await removed.json(), { ok: true });
-  assert.deepEqual(await pushDevices(alice), []);
+  assert.deepEqual(
+    (await stored()).map(({ token }) => token),
+    [tokenB],
+  );
 
   // Signing out deletes the session's devices, even if the app never calls
   // the API again. Other sessions keep theirs.
@@ -262,43 +271,41 @@ test("removing a device and signing out delete only that member's devices", asyn
   );
   assert.equal(signedOut.status, 200);
   assert.deepEqual(
-    (await pushDevices(alice)).map(({ token }) => token),
-    ["d4".repeat(32)],
-  );
-  assert.deepEqual(
-    (await pushDevices(ben)).map(({ token }) => token),
-    [tokenB],
+    (await stored()).map(({ token, user_id }) => ({ token, user_id })),
+    [
+      { token: tokenB, user_id: ben },
+      { token: "d4".repeat(32), user_id: alice },
+    ],
   );
 });
 
-test("devices of expired sessions receive nothing, and APNs rejections delete them", async () => {
+test("devices of expired sessions stay stored, and APNs rejections delete only their token", async () => {
   const alice = await person("alice");
   const phone = await bearerFor(alice);
   const tablet = await bearerFor(alice);
   await register(phone, tokenA);
   await register(tablet, tokenB);
+  // Delivery skips the expired session's device (push-delivery.test.ts).
   await db.query(
     `UPDATE session SET "expiresAt"=now()-interval '1 second' WHERE token=$1`,
     [sessionOf(tablet)],
   );
   assert.deepEqual(
-    (await pushDevices(alice)).map(({ token }) => token),
-    [tokenA],
+    (await stored()).map(({ token }) => token),
+    [tokenA, tokenB],
   );
   // APNs answered 410 for the token.
   await removePushDevice(tokenA);
-  assert.deepEqual(await pushDevices(alice), []);
   assert.deepEqual(
     (await stored()).map(({ token }) => token),
     [tokenB],
   );
 });
 
-test("push settings default to on, save per kind, and filter devices", async () => {
+test("push settings default to on and save per kind", async () => {
   const alice = await person("alice");
   const ben = await person("ben");
   const session = await bearerFor(alice);
-  await register(session, tokenA);
   const on = {
     friendRequest: true,
     friendAccepted: true,
@@ -333,10 +340,4 @@ test("push settings default to on, save per kind, and filter devices", async () 
       message: "Choose whether to receive each kind of push notification.",
     });
   assert.deepEqual(await accountSettings(alice), { ...off, reply: true });
-
-  // Devices receive only the kinds their member allows.
-  assert.equal((await pushDevices(alice, "comment")).length, 0);
-  for (const kind of ["friend_request", "friend_accepted", "reply"] as const)
-    assert.equal((await pushDevices(alice, kind)).length, 1, kind);
-  assert.equal((await pushDevices(alice)).length, 1);
 });

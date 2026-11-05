@@ -87,8 +87,10 @@ struct LogFileTests {
       log.info("Numbered", .int("number", number))
     }
 
-    let tail = try await file.recentTail(maximumBytes: 1_200)
+    let tails = try await file.recentTails(maximumBytes: 1_200)
 
+    #expect(tails.map(\.name) == ["app"])
+    let tail = try #require(tails.first).data
     #expect(tail.count <= 1_200)
     #expect(tail.last == 0x0A)
     let lines = tail.split(separator: 0x0A)
@@ -109,7 +111,7 @@ struct LogFileTests {
     defer { directory.remove() }
     let file = LogFile(directory: directory.url, name: "app", launchID: launch)
 
-    #expect(try await file.recentTail(maximumBytes: 1_000).isEmpty)
+    #expect(try await file.recentTails(maximumBytes: 1_000) == [LogTail(name: "app", data: Data())])
   }
 
   @Test func readsEachProcesssTailEndingAtItsLastCompleteLine() async throws {

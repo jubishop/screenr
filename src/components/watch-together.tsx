@@ -69,7 +69,7 @@ export function WatchTogether({
 
 function AtHome({ data: { titles, viewerHasServices } }: { data: AtHomePage }) {
   const [filter, setFilter] = useState<TitleKindFilter>("all");
-  const visible = ofKind(titles, filter);
+  const visible = titles.filter(ofKind(filter));
   return (
     <>
       <TitleKindButtons value={filter} onChange={setFilter} />

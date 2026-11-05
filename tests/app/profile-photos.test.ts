@@ -28,13 +28,8 @@ const { addComment } = await import("../../src/server/comments");
 const { updateTitleActivity } = await import("../../src/server/title-actions");
 const { notifications } = await import("../../src/server/notifications");
 const { watchTogether } = await import("../../src/server/watch-together");
-const {
-  backfillGooglePhotos,
-  chooseGooglePhoto,
-  googlePictureURL,
-  photoBackfill,
-  runPhotoBackfill,
-} = await import("../../src/server/photos");
+const { chooseGooglePhoto, googlePictureURL } =
+  await import("../../src/server/photos");
 
 useDatabase();
 afterEach(() => mock.restoreAll());
@@ -559,11 +554,9 @@ test("a Google signup copies the 512-pixel picture once, and a removed photo is 
 
   await change(cookie, "remove-photo");
   assert.equal((await member(user)).photo, null);
-  assert.deepEqual(await backfillGooglePhotos(fetcher), {
-    copied: 0,
-    kept: 0,
-    "no picture": 0,
-    failed: 0,
+  await post("sign-in/social", {
+    provider: "google",
+    idToken: { token: idToken({}) },
   });
   assert.equal(fetcher.requests.length, 1);
   assert.equal((await member(user)).photo, null);
@@ -574,11 +567,11 @@ test("a Google signup copies the 512-pixel picture once, and a removed photo is 
   assert.equal((await member(user)).photo, copied.version);
 });
 
-test("linking Google after an email-code signup copies the ID token picture unless a photo was chosen", async () => {
+test("linking Google after an email-code signup copies the ID token picture unless a photo was chosen or removed", async () => {
   const image = jpeg(6000, 6);
   const fetcher = google({ [`${lh3("linked")}=s512-c`]: picture(image) });
   const { codes, identity, post, sessionCookie } = await googleAuth(fetcher);
-  const { token } = await createInvitation(null, 2);
+  const { token } = await createInvitation(null, 3);
   async function emailMember(email: string, username: string) {
     await post(
       "email-otp/send-verification-otp",
@@ -627,6 +620,14 @@ test("linking Google after an email-code signup copies the ID token picture unle
   assert.equal((await link(chooser.cookie)).status, 200);
   assert.equal(fetcher.requests.length, 1, "a chosen photo needs no fetch");
   assert.equal((await member(chooser.user)).photo, chosen);
+
+  const remover = await emailMember("remover@example.test", "remover");
+  await change(remover.cookie, "remove-photo");
+  identity.id = "remover-google";
+  identity.email = "remover@example.test";
+  assert.equal((await link(remover.cookie)).status, 200);
+  assert.equal(fetcher.requests.length, 1, "a removed photo needs no fetch");
+  assert.equal((await stored(remover.user)).image, null);
 });
 
 test("Use my Google photo replaces an upload, needs a Google picture, and reports failed copies", async () => {
@@ -642,7 +643,11 @@ test("Use my Google photo replaces an upload, needs a Google picture, and report
     message: "Your Google account has no photo to use.",
   });
   await db.query('DELETE FROM account WHERE "userId"=$1', [alice]);
-  await googleAccount(alice, { picture: lh3("alice") });
+  // A changed user.image outside Google falls back to the ID token picture.
+  await googleAccount(alice, {
+    image: "http://127.0.0.1:5439/private",
+    picture: lh3("alice"),
+  });
   const uploaded = (await (await upload(cookie, jpeg())).json()).photo;
 
   const printed = captureFailures();
@@ -708,45 +713,9 @@ test("Use my Google photo replaces an upload, needs a Google picture, and report
   assert.equal((await stored(alice)).source, "google");
 });
 
-test("the one-time backfill copies each eligible Google member, logs failures, and can run again safely", async () => {
-  await db.query("DELETE FROM screenr_backfill");
-  const signup = await person("signup");
-  const linked = await person("linked");
-  const uploader = await person("uploader");
-  const remover = await person("remover");
-  const emailOnly = await person("emailonly");
-  const missing = await person("missing");
-  const broken = await person("broken");
-  const huge = await person("huge");
-  const redirected = await person("redirected");
-  const outsider = await person("outsider");
-  await googleAccount(signup, { image: `${lh3("signup")}=s96-c` });
-  await googleAccount(linked, { picture: `${lh3("linked")}=s96-c` });
-  await googleAccount(uploader, { image: lh3("uploader") });
-  await googleAccount(remover, { image: lh3("remover") });
-  await googleAccount(missing);
-  await googleAccount(broken, { image: lh3("broken") });
-  await googleAccount(huge, { image: lh3("huge") });
-  await googleAccount(redirected, { image: lh3("redirected") });
-  // A changed user.image outside Google falls back to the ID token picture.
-  await googleAccount(outsider, {
-    image: "http://127.0.0.1:5439/private",
-    picture: lh3("outsider"),
-  });
-  const uploaded = (
-    await (await upload(await cookieFor(uploader), jpeg(700, 1))).json()
-  ).photo;
-  await change(await cookieFor(remover), "remove-photo");
-
-  let brokenWorks = false;
+test("a failed automatic copy keeps the initial and logs why without failing the signup", async () => {
   const fetcher = google({
-    [`${lh3("signup")}=s512-c`]: picture(jpeg(1000, 1)),
-    [`${lh3("linked")}=s512-c`]: picture(jpeg(1000, 2)),
-    [`${lh3("outsider")}=s512-c`]: picture(jpeg(1000, 3)),
-    [`${lh3("broken")}=s512-c`]: () =>
-      brokenWorks
-        ? picture(jpeg(1000, 4))()
-        : new Response(null, { status: 503 }),
+    [`${lh3("unavailable")}=s512-c`]: () => new Response(null, { status: 503 }),
     [`${lh3("huge")}=s512-c`]: picture(jpeg(200 * 1024 + 1)),
     [`${lh3("redirected")}=s512-c`]: () =>
       new Response(null, {
@@ -754,81 +723,38 @@ test("the one-time backfill copies each eligible Google member, logs failures, a
         headers: { Location: "https://evil.example/photo.jpg" },
       }),
   });
-
+  const { identity, post } = await googleAuth(fetcher);
+  const { token } = await createInvitation(await person("inviter"), 3);
   const printed = captureFailures();
-  const log = mock.method(console, "log", () => {});
-  const counts = await runPhotoBackfill(fetcher);
-  assert.deepEqual(counts, {
-    copied: 3,
-    kept: 0,
-    "no picture": 1,
-    failed: 3,
-  });
-  for (const [user, fill] of [
-    [signup, 1],
-    [linked, 2],
-    [outsider, 3],
+  for (const [name, fields] of [
+    ["unavailable", { reason: "status", status: 503 }],
+    ["huge", { reason: "too large" }],
+    ["redirected", { reason: "redirect", status: 302 }],
   ] as const) {
-    assert.deepEqual((await stored(user)).image, jpeg(1000, fill));
-    assert.equal((await stored(user)).source, "google");
+    identity.id = `${name}-google`;
+    identity.email = `${name}@example.test`;
+    identity.image = lh3(name);
+    const signup = await post(
+      "sign-in/social",
+      { provider: "google", idToken: { token: idToken({}) } },
+      `screenr-invite=${token}`,
+    );
+    assert.equal(signup.status, 200, await signup.clone().text());
+    const user = (await signup.json()).user.id;
+    assert.equal(await stored(user), undefined, name);
+    assert.deepEqual(
+      printed.splice(0).map((line) => JSON.parse(line)),
+      [
+        {
+          event: "google photo copy failed",
+          user,
+          trigger: "account",
+          ...fields,
+        },
+      ],
+      name,
+    );
   }
-  assert.equal((await member(uploader)).photo, uploaded);
-  assert.equal((await stored(remover)).image, null);
-  for (const user of [emailOnly, missing, broken, huge, redirected])
-    assert.equal((await member(user)).photo, null);
+  // The redirect away from Google's image hosts is never followed.
   assert.ok(!fetcher.requests.some((url) => !url.startsWith("https://lh3.")));
-  assert.deepEqual(
-    printed
-      .map((line) => JSON.parse(line))
-      .sort((a, b) => (a.user < b.user ? -1 : 1)),
-    [
-      { user: broken, reason: "status", status: 503 },
-      { user: huge, reason: "too large" },
-      { user: redirected, reason: "redirect", status: 302 },
-    ]
-      .map((fields) => ({
-        event: "google photo copy failed",
-        trigger: "backfill",
-        ...fields,
-      }))
-      .sort((a, b) => (a.user < b.user ? -1 : 1)),
-  );
-  assert.deepEqual(
-    log.mock.calls.map((call) => JSON.parse(call.arguments[0])),
-    [
-      {
-        event: "google photo backfill finished",
-        copied: 3,
-        kept: 0,
-        "no picture": 1,
-        failed: 3,
-      },
-    ],
-  );
-  assert.equal(
-    (
-      await db.query("SELECT 1 FROM screenr_backfill WHERE name=$1", [
-        photoBackfill,
-      ])
-    ).rowCount,
-    1,
-  );
-
-  // The marker stops later worker starts.
-  const before = fetcher.requests.length;
-  assert.equal(await runPhotoBackfill(fetcher), null);
-  assert.equal(fetcher.requests.length, before);
-
-  // A retry fetches only for those still without a photo or removal.
-  brokenWorks = true;
-  const retry = await backfillGooglePhotos(fetcher);
-  assert.deepEqual(retry, { copied: 1, kept: 0, "no picture": 1, failed: 2 });
-  assert.deepEqual(fetcher.requests.slice(before).sort(), [
-    `${lh3("broken")}=s512-c`,
-    `${lh3("huge")}=s512-c`,
-    `${lh3("redirected")}=s512-c`,
-  ]);
-  assert.deepEqual((await stored(broken)).image, jpeg(1000, 4));
-  assert.equal((await member(uploader)).photo, uploaded);
-  await db.query("DELETE FROM screenr_backfill");
 });
