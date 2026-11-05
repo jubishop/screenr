@@ -298,7 +298,7 @@ other applications that it checks to be running.
    systemctl enable screenr-web screenr-worker
    systemctl enable --now screenr-backup.timer screenr-restore-check.timer \
      screenr-backup-age.timer screenr-backup-size.timer \
-     screenr-postgresql-updates.timer
+     screenr-postgresql-updates.timer screenr-memory-check.timer
    systemctl start screenr-restore-check.service
    ```
 

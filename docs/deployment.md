@@ -49,13 +49,24 @@ checks on the host found:
   deploy at 19:22 PST, had peaked at 52 MiB, with `NRestarts` 0 and zeros
   for `max`, `oom`, and `oom_kill` in its cgroup's `memory.events`. That
   covers only two minutes, so the history comes from the journal, where
-  systemd logs each run's memory peak when the run stops. The highest of
+  systemd logs a memory peak for each run when it stops. The highest of
   the 58 runs it recorded since 2026-10-24 was 82.4 MiB (64%), for a run
   that ended on 2026-10-25. Every other run, including a 59-hour run that
   ended at that deploy, peaked between 45 and 71 MiB. The journal keeps 14
   days, back to 2026-10-22, and has no OOM kill, `code=killed` line, or
   abnormal exit for the unit; the kernel log has no OOM kill. For
   comparison, `screenr-web` peaked at most at 200 MiB of its 384 MiB limit.
+
+Those logged peaks are lower bounds. Trials on the host on 2026-11-05
+([#486](https://github.com/jubishop/screenr/issues/486)) showed that
+systemd 255 logs the `MemoryPeak` it last read for the unit, for any
+`systemctl show` or `systemctl status`, rather than the run's real peak. A
+probe that allocated 96 MiB after its last read logged a 4.2M peak, and a run
+that nothing read logged none. The last read of a run that ended at a deploy
+is often the previous deployment's checks, seconds after the run started. The
+[daily memory check](#daily-memory-check) therefore also reads each running
+service's `MemoryPeak`, which systemd reads from the service's cgroup at that
+moment.
 
 **Decision — 2026-11-01:** change nothing. Keep `MemoryMax=128M` and the
 `tsx` start in `ops/screenr-worker.service`. Answered from evidence by an
@@ -67,13 +78,17 @@ with no kill on record.
 
 **Revisit when:** a run peaks above 75% of the limit (96 MiB) or the unit has
 an OOM kill. Then run the worker from a bundled script, without `tsx`'s
-resident esbuild service, rather than raising the limit.
+resident esbuild service, rather than raising the limit. The
+[daily memory check](#daily-memory-check) emails the owner when either
+happens; its journal names the run.
 
 `MemoryPeak` covers only the current run, and each deploy and Node update
-restarts the worker. Read earlier runs' peaks from the journal:
+restarts the worker. Read the check's findings, and earlier runs' logged
+peaks, from the journal:
 
 ```sh
 systemctl show screenr-worker -p MemoryPeak -p MemoryMax -p NRestarts -p ActiveEnterTimestamp
+journalctl -u screenr-memory-check --no-pager
 journalctl -u screenr-worker --no-pager | grep 'memory peak'
 journalctl -u screenr-worker --no-pager | grep -iE 'oom|code=killed|Main process exited'
 journalctl _TRANSPORT=kernel --no-pager | grep -i 'out of memory'
@@ -186,10 +201,12 @@ Release code also runs outside the two units, and the same sandbox covers it
   ```
 
 - The backup, restore check, stale-backup check, backup storage check,
-  PostgreSQL update check, and failure alert units run kit scripts and system
-  programs as `screenr-db` or a dynamic user, never release code. They have
-  the worker's sandbox too, which leaves them restic and its cache, the
-  database socket, systemd's D-Bus API, and HTTPS to R2 and Resend. Only
+  PostgreSQL update check, memory check, and failure alert units run kit
+  scripts and system programs as `screenr-db` or a dynamic user, never
+  release code. They have the worker's sandbox too, which leaves them restic
+  and its cache, the database socket, systemd's D-Bus API, the journal, and
+  HTTPS to R2 and Resend. Only the memory check joins the `systemd-journal`
+  group, without which `screenr-db` opens no journal files. Only
   `screenr-db.service`, the PostgreSQL server itself, keeps its own settings.
 
 systemd units cannot include shared settings, so each of these units and the
@@ -510,8 +527,8 @@ UptimeRobot's free plan has no heartbeat monitors.
 backups.
 
 The backup, restore check, stale-backup check, backup storage check,
-PostgreSQL update check, web, worker, and database units each set
-`OnFailure=screenr-alert@%n.service`.
+PostgreSQL update check, memory check, web, worker, and database units each
+set `OnFailure=screenr-alert@%n.service`.
 That template runs `ops/failure-alert.py` with the failed unit's name. It
 sends through the Resend settings in `/etc/screenr/backup.env` described
 under [backup storage warning](#backup-storage-warning). It runs as the backup
@@ -557,6 +574,9 @@ around 09:00 PDT / 08:00 PST. It sends its own one-time notice through
 `failure-alert.py`'s Resend delivery when an update has been pending for three
 days, and its failure starts the alert.
 
+`screenr-memory-check.timer` runs the [daily memory check](#daily-memory-check)
+around 10:00 PDT / 09:00 PST, and its failure starts the alert.
+
 Deployment installs changed and new units, and enables new timers, as
 described under [host configuration drift](#host-configuration-drift).
 
@@ -571,6 +591,9 @@ Verify the alert path without sending email:
   size. Below 1 GB it sends nothing.
 - `systemctl start screenr-postgresql-updates.service` passes. Its first run
   only records pending versions, so it sends nothing.
+- `systemctl start screenr-memory-check.service` passes while no service is
+  near its limit, and its journal lists each service's current run and
+  logged peaks.
 - For a deliberately failed transient unit, `failure-alert.py --dry-run`
   prints the email instead of sending it:
 
@@ -595,6 +618,92 @@ systemd-run --unit=screenr-alert-probe -p Restart=on-failure -p RestartSec=3 \
 Then run `systemctl reset-failed screenr-alert-probe.service`. This check
 passed on 2026-10-12: Resend accepted one email after two `no alert`
 entries.
+
+#### Daily memory check
+
+**Decision — 2026-11-05:** A daily check emails the owner, through the
+failure alert, when a run of `screenr-web`, `screenr-worker`, or `screenr-db`
+peaks above 75% of its unit's `MemoryMax`, or the OOM killer kills one of
+their processes. It sends at most one email a day.
+[Issue #486](https://github.com/jubishop/screenr/issues/486) tracks the work.
+
+**Why:** These are the [worker's](#worker-memory-headroom) triggers for
+revisiting its limit, and nothing watched for them. A single OOM kill
+restarts a service with no email, since the alert waits for the restart
+limit, and `MemoryPeak` resets at every restart. The owner chose the daily
+check because it covers both triggers with at most one email a day, as one
+more source for the 2026-10-12 alert.
+
+**Rejected alternative:** Having `failure-alert.py` also email when a
+service's result is `oom-kill`, even while it restarts. It misses a rising
+peak.
+
+`screenr-memory-check.service` runs `ops/check-memory.py` with the three
+services' names. The check fails when it finds any of these:
+
+- **A current run above the limit:** `systemctl show` gives each service's
+  `MemoryMax`, and its current run's `MemoryPeak`, which systemd reads from
+  the service's cgroup at that moment.
+- **A logged peak above the limit:** systemd's line for each run that
+  stopped, with the memory peak it logged. That peak is a
+  [lower bound](#worker-memory-headroom): systemd 255 logs the value it last
+  read, if anything read one. Each check's own reading refreshes that value.
+- **An OOM kill:** systemd's message when the OOM killer kills a process of
+  the unit, and the kernel's `oom-kill:` line, whose `task_memcg` names the
+  service's cgroup.
+
+It reads the journal from where the previous check stopped, or the last day
+on its first run, so the timer's random delay and missed runs leave no gap.
+It counts only systemd's entries from PID 1, since any local process can log
+the same fields. `/var/lib/screenr-memory-check/state.json` records where it
+stopped and the runs it reported while they were still running, so each
+problem is reported once: neither that run's next check nor its line when it
+stops sends another email. When reading fails, the check fails and alerts
+without saving, and the next check covers the same time again. A damaged
+state file also fails the check; delete it to start again from the last day.
+
+The check needs no secrets. It runs as `screenr-db`, because `systemctl`
+needs systemd's D-Bus API, and joins the `systemd-journal` group, without
+which `journalctl` opens no journal files. It reads the kernel's lines with a
+`_TRANSPORT=kernel` match: `journalctl -k` and `-b` fail in the sandbox with
+`Failed to get boot id`, because `ProcSubset=pid` hides the boot ID. It also
+requires the journal to show an entry from PID 1, since `journalctl` with
+partial access can show nothing and still succeed.
+
+For the worker, follow its [memory headroom](#worker-memory-headroom)
+decision. The web's and database's `MemoryHigh` sit above 75% of their
+`MemoryMax`, and a peak includes file cache that the kernel reclaims at
+`MemoryHigh`. Before raising either limit, compare the `anon` and `file`
+lines of the service's `memory.stat` under
+`/sys/fs/cgroup/system.slice/`.
+
+Show the findings without saving state:
+
+```sh
+systemd-run --quiet --wait --pipe --collect -p User=screenr-db -p Group=screenr-db \
+    -p SupplementaryGroups=systemd-journal -p StateDirectory=screenr-memory-check \
+    /usr/bin/python3 /usr/local/lib/screenr-deploy/check-memory.py --dry-run \
+    screenr-web.service screenr-worker.service screenr-db.service
+```
+
+On 2026-11-05, before rollout, transient units with the unit's settings ran
+the check against the three services and two probe units on the host:
+
+- Without the `systemd-journal` group, `journalctl` reported `No journal
+  files were opened due to insufficient permissions.`, and the check failed.
+- A probe run holding 100.3 MiB under a 128 MiB limit (78%) failed the check
+  as a current run, and a probe killed at a 32 MiB limit failed it through
+  both systemd's message and the kernel's line. That check, named
+  `screenr-memory-check.service` with the real `screenr-alert@` unit as its
+  `OnFailure=`, started the alert, and Resend accepted one email.
+- The next check reported a later probe run's logged 100.2 MiB peak, but not
+  the reported run's line when it stopped. A third check found nothing new
+  and passed.
+- The services' current runs stood at 93 MiB (24%) for the web, 58 MiB
+  (45%) for the worker, and 120 MiB (47%) for the database. Over the last
+  day, 13 runs each of the web and worker logged peaks of at most 117.5 MiB
+  (31%) and 59.2 MiB (46%).
+- `systemd-analyze security` rated the unit 1.5 (OK).
 
 ## Build and activate a release
 
@@ -788,8 +897,9 @@ every `ops/screenr-*.service` and `.timer`, and the
 also holds the scripts that the units run as `screenr-db` or with
 `/etc/screenr/backup.env`: `ops/backup.sh`, `ops/restore-check.sh`,
 `ops/failure-alert.py`, `ops/check-backup-age.py`, `ops/check-backup-size.py`,
-and `ops/check-postgresql-updates.py`. Those units run them from
-`/usr/local/lib/screenr-deploy`, and the release archive leaves out `ops/`.
+`ops/check-postgresql-updates.py`, and `ops/check-memory.py`. Those units run
+them from `/usr/local/lib/screenr-deploy`, and the release archive leaves out
+`ops/`.
 [`bin/_deploy_kit.py`](../bin/_deploy_kit.py) lists the kit. The receiver
 goes to `/usr/local/sbin`, and the rest to `/usr/local/lib/screenr-deploy`,
 all root-owned. Nothing that arrives over the deploy key is run or installed

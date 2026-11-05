@@ -1,0 +1,45 @@
+[Unit]
+Description=Screenr daily memory check
+OnFailure=screenr-alert@%n.service
+
+[Service]
+Type=oneshot
+# A dynamic user cannot reach systemd's D-Bus API on the host, which
+# systemctl uses to read each service's MemoryMax.
+User=screenr-db
+Group=screenr-db
+# Reading other units' journal entries and the kernel's needs the journal group.
+SupplementaryGroups=systemd-journal
+ExecStart=/usr/bin/python3 /usr/local/lib/screenr-deploy/check-memory.py screenr-web.service screenr-worker.service screenr-db.service
+StateDirectory=screenr-memory-check
+StateDirectoryMode=0700
+MemoryMax=128M
+CPUQuota=25%
+Nice=10
+# The worker's sandbox; tests/test_app_sandbox.py keeps every copy the same.
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+ProtectProc=invisible
+ProcSubset=pid
+# D-Bus for systemctl needs only AF_UNIX; the copy keeps the worker's families.
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+SystemCallFilter=@system-service
+SystemCallArchitectures=native
+SystemCallErrorNumber=EPERM
+CapabilityBoundingSet=
+# Other applications on the shared host. '-' ignores a path that is missing.
+InaccessiblePaths=-/etc/caddy -/var/log/caddy -/opt/health -/opt/health-site -/opt/kidsbank -/opt/news -/opt/trading
+UMask=0077

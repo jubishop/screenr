@@ -25,7 +25,8 @@ APPS = ('screenr-web.service', 'screenr-worker.service')
 SOURCE = 'screenr-worker.service'
 # The PostgreSQL server runs no Screenr scripts and keeps its own settings.
 DATABASE = 'screenr-db.service'
-# The backup, restore check, backup checks, PostgreSQL update check, and alerts.
+# The backup, restore check, backup checks, PostgreSQL update check, memory
+# check, and alerts.
 JOBS = sorted(path.name for path in (ROOT / 'ops').glob('screenr-*.service')
               if path.name not in APPS + (DATABASE,))
 RUNNER = ROOT / 'ops' / 'run-release-script.sh'
@@ -63,12 +64,13 @@ SANDBOX = set(DECIDED) | {'RestrictAddressFamilies', 'RestrictRealtime', 'System
 NETWORK_LIMITS = ('PrivateNetwork', 'IPAddressDeny', 'IPAddressAllow', 'RestrictNetworkInterfaces')
 # Paths that the services, release scripts, and jobs read or write at run time:
 # the release and Node runtime, settings, TLS roots and DNS, the deploy kit and
-# restic, the backup workspace, the database socket, D-Bus for the alert's
-# systemctl, and apt's package lists and the dynamic user's state for the
-# update check.
+# restic, the backup workspace, the database socket, D-Bus for the alert's and
+# the memory check's systemctl, apt's package lists and the dynamic user's
+# state for the update check, and the journal and state of the memory check.
 NEEDED = ('/opt/screenr', '/opt/node', '/etc/screenr', '/usr', '/etc/ssl', '/etc/resolv.conf',
           '/var/lib/screenr-backup', '/run/screenr-db', '/run/dbus', '/run/systemd', '/var/lib/apt',
-          '/var/lib/dpkg', '/etc/apt', '/var/lib/private')
+          '/var/lib/dpkg', '/etc/apt', '/var/lib/private', '/var/log/journal', '/run/log/journal',
+          '/var/lib/screenr-memory-check')
 # Other applications' directories on the shared host.
 OTHER_APPLICATIONS = ('/opt/health', '/opt/kidsbank', '/opt/news', '/opt/trading', '/etc/caddy')
 # The Markdown that the runbook test scans.
@@ -212,12 +214,13 @@ class JobSandboxTests(unittest.TestCase):
     """The job units run root-installed kit scripts and system programs as
     screenr-db or a dynamic user, with the backup secrets. The worker's sandbox
     leaves them what they need: restic and its cache, HTTPS to R2 and Resend,
-    the database socket, and systemd's D-Bus API for the alert."""
+    the database socket, systemd's D-Bus API for the alert and the memory
+    check, and the journal for the memory check."""
 
     def test_jobs_cover_every_unit_but_the_application_and_database(self):
         self.assertLessEqual({'screenr-alert@.service', 'screenr-backup-age.service', 'screenr-backup-size.service',
-                              'screenr-backup.service', 'screenr-postgresql-updates.service',
-                              'screenr-restore-check.service'}, set(JOBS))
+                              'screenr-backup.service', 'screenr-memory-check.service',
+                              'screenr-postgresql-updates.service', 'screenr-restore-check.service'}, set(JOBS))
 
     def test_jobs_apply_the_worker_sandbox(self):
         expected = sandbox(service(SOURCE))
