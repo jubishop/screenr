@@ -33,6 +33,52 @@ documented limits protect a small shared host; they are not measured capacity
 guarantees. Inspect memory peaks, restart counts, CPU and disk use before
 deciding whether more capacity is needed.
 
+### Worker memory headroom
+
+The worker runs well inside its 128 MiB `MemoryMax`
+([#382](https://github.com/jubishop/screenr/issues/382)). On a Mac, the
+worker and the esbuild service that `tsx` keeps running measured about
+116 MB together, which suggested little headroom. macOS counts more resident
+memory than Linux does, and the host's numbers are much lower. Read-only
+checks on the host found:
+
+- **2026-11-01, 14:05 PST:** a peak of 55 MiB (43%) since that day's deploy
+  at 09:04 PST, and no OOM kill in the journal, which then went back to
+  2026-10-19.
+- **2026-11-04, 19:24 PST:** the current run, started by that evening's
+  deploy at 19:22 PST, had peaked at 52 MiB, with `NRestarts` 0 and zeros
+  for `max`, `oom`, and `oom_kill` in its cgroup's `memory.events`. That
+  covers only two minutes, so the history comes from the journal, where
+  systemd logs each run's memory peak when the run stops. The highest of
+  the 58 runs it recorded since 2026-10-24 was 82.4 MiB (64%), for a run
+  that ended on 2026-10-25. Every other run, including a 59-hour run that
+  ended at that deploy, peaked between 45 and 71 MiB. The journal keeps 14
+  days, back to 2026-10-22, and has no OOM kill, `code=killed` line, or
+  abnormal exit for the unit; the kernel log has no OOM kill. For
+  comparison, `screenr-web` peaked at most at 200 MiB of its 384 MiB limit.
+
+**Decision — 2026-11-01:** change nothing. Keep `MemoryMax=128M` and the
+`tsx` start in `ops/screenr-worker.service`. Answered from evidence by an
+agent in [#382](https://github.com/jubishop/screenr/issues/382) and
+confirmed by the 2026-11-04 re-read.
+
+**Why:** the highest peak measured on Linux is under two thirds of the limit,
+with no kill on record.
+
+**Revisit when:** a run peaks above 75% of the limit (96 MiB) or the unit has
+an OOM kill. Then run the worker from a bundled script, without `tsx`'s
+resident esbuild service, rather than raising the limit.
+
+`MemoryPeak` covers only the current run, and each deploy and Node update
+restarts the worker. Read earlier runs' peaks from the journal:
+
+```sh
+systemctl show screenr-worker -p MemoryPeak -p MemoryMax -p NRestarts -p ActiveEnterTimestamp
+journalctl -u screenr-worker --no-pager | grep 'memory peak'
+journalctl -u screenr-worker --no-pager | grep -iE 'oom|code=killed|Main process exited'
+journalctl _TRANSPORT=kernel --no-pager | grep -i 'out of memory'
+```
+
 ## Node runtime
 
 Production follows the latest Node LTS release, under the
