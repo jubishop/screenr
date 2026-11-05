@@ -24,7 +24,7 @@ struct MainTabView: View {
       }
     }
     .tabBarMinimizeBehavior(.onScrollDown)
-    .sheet(item: $router.sheet) { sheet in
+    .keyboardSafeSheet(item: $router.sheet) { sheet in
       switch sheet {
       case .notifications: NotificationsSheet()
       case .settings: SettingsSheet()

@@ -681,6 +681,7 @@ the account forget it. [Settings](#settings) ends with `SignOutButton`.
 | `.livePolling(_:)` | `Screenr/Shell/` | Connects any `LiveRead` to its view's visibility, the app's activity, pull-to-refresh, and pushes. |
 | `IncomingActivityButton` | `Screenr/Shell/` | The New activity control; `.incomingActivity(_:count:show:)` floats it over a screen, and only the control animates. `show` must keep the reader's place, as `FeedList` does. The control's identifier is `incoming-activity`; `performShellAudit()` treats its glass like a bar's, so a test checks its label with `labelContrast()`. |
 | `ShareButton` | `Screenr/Shell/` | A `ShareLink` for a destination's screenr.club link. |
+| `.keyboardSafeSheet(item:content:)` | `Screenr/Shared/` | Presents every sheet in the app. It ends text editing before the sheet opens, so UIKit has no keyboard to bring back as the sheet closes; see the [keyboard deadlock](#toolchain-notes). |
 | Feature screens | `Screenr/Screens/` | One file per screen. Each starts as a `PlaceholderScreen` that shows what the screen holds and its path. |
 
 ### Links
@@ -856,7 +857,9 @@ over the page. Its behavior is ScreenrKit's `NotificationsModel`
 
 One action runs at a time. A failed one shows an alert with the server's
 message, and the page reads again. Closing the sheet leaves the screen
-beneath and its state, such as an unsent draft, untouched.
+beneath and its state, such as an unsent draft, untouched. The keyboard
+stays down until the reader taps the draft's field again, as for every
+sheet that `.keyboardSafeSheet(item:content:)` presents.
 
 ## Push notifications
 
@@ -2099,3 +2102,19 @@ accent.
 - **`Info.plist`:** Xcode runs the C preprocessor in traditional mode over
   `Screenr/Info.plist`. Use `#if` only for variant differences that build
   settings cannot express.
+- **Keyboard deadlock:** iOS 26 and 27 can deadlock an app whose keyboard
+  lays out for a text field inside a SwiftUI `ScrollView` while SwiftUI's
+  `AsyncRenderer` thread animates. The main thread, holding Core Animation's
+  transaction lock, walks the responder chain for the keyboard's input
+  assistant into the scroll view, which waits for SwiftUI's update lock; the
+  renderer holds that lock and waits in `-[CALayer addPresentationModifier:]`
+  for Core Animation's. It is reported to Apple as FB22832280
+  ([Open Radar](http://openradar.appspot.com/FB22832280)). In Screenr it
+  struck when a sheet closed over a feed's open composer: UIKit brings the
+  keyboard back as the closing sheet animates. On 2026-11-05 it froze the
+  app in 1 of 100 runs of `testKeepsAnUnsentCommentBeneathTheSheet` beside
+  other Simulators' UI tests.
+  `.keyboardSafeSheet(item:content:)` ends editing before every sheet opens,
+  so nothing comes back. A UI test that logs "App event loop idle
+  notification not received" may be such a hang: run `sample` on the app's
+  process in its Simulator while the test waits, and read the main thread.

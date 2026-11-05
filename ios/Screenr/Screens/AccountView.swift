@@ -65,7 +65,7 @@ private struct SettingsScreen: View {
         }
       }
     }
-    .sheet(item: $editor) { editor in
+    .keyboardSafeSheet(item: $editor) { editor in
       switch editor {
       case .profile(let model): ProfileEditorSheet(model: model)
       case .streamingServices(let model): StreamingServicesSheet(model: model)
