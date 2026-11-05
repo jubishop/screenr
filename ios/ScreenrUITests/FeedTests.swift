@@ -258,6 +258,44 @@ final class FeedTests: XCTestCase {
     wait(for: [log.wrote("remove-comment", #"{"id":"4"}"#)], timeout: 10)
   }
 
+  // A failed read beneath a confirmation, as during a deploy, leaves it open
+  // to confirm once reads succeed again.
+  @MainActor
+  func testKeepsAConfirmationThroughAFailedRead() throws {
+    let log = RequestLog.temporary()
+    let outage = FixtureOutage()
+    let app = XCUIApplication()
+    app.launch(with: FixtureLaunch(requestLog: log.file, outage: outage))
+    let entry = app.entry(FeedFixture.benRecommend)
+    XCTAssertTrue(entry.waitForExistence(timeout: 10))
+    // Night Crossing is #1 in Alice's top 10, so withdrawing asks first.
+    entry.buttons["Recommended"].tap()
+    let question = app.staticTexts[
+      "Remove your recommendation? Night Crossing also leaves your top 10 at #1."
+    ]
+    XCTAssertTrue(question.waitForExistence(timeout: 5))
+
+    // The first failed read has replaced the feed beneath with the error by
+    // the time the app polls again.
+    outage.begin()
+    let reads = try log.screenPaths().count
+    wait(for: [log.screenReads(atLeast: reads + 2)], timeout: 15)
+    let failure = app.staticTexts["Screenr didn't load"]
+    XCTAssertTrue(failure.exists)
+    XCTAssertTrue(question.exists)
+
+    outage.end()
+    XCTAssertTrue(failure.waitForNonExistence(timeout: 10))
+    XCTAssertTrue(question.exists)
+    app.buttons["Remove recommendation"].tap()
+    wait(
+      for: [
+        log.wrote("activity", #"{"field":"recommended","title":"movie:101","value":false}"#)
+      ],
+      timeout: 10
+    )
+  }
+
   // Ben posts while the reader is a little way down the feed, reading the
   // second entry. The post waits behind New activity, and showing it puts the
   // post above that entry without moving the entry.

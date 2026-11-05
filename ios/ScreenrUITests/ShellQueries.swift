@@ -15,6 +15,41 @@ extension XCUIApplication {
     tabBars.buttons[name]
   }
 
+  // The open confirmation dialog. iOS 27 shows one as a popover without
+  // Cancel, at the control that asked or at the top of the screen, or, for a
+  // dialog that a whole screen presents, sometimes as a sheet with Cancel in
+  // the middle of the screen. Runs of the same test have seen all three.
+  // Use it once the dialog shows.
+  var openDialog: XCUIElement {
+    popovers.firstMatch.exists ? popovers.firstMatch : sheets.firstMatch
+  }
+
+  // A button in the open confirmation dialog, such as "Decline".
+  func confirmationButton(_ label: String) -> XCUIElement {
+    openDialog.buttons[label]
+  }
+
+  // Closes the open confirmation dialog without its action: with Cancel when
+  // it has one, or else with a tap outside it, above or below it, wherever
+  // there is more room.
+  func cancelConfirmation() {
+    let dialog = openDialog
+    let cancel = dialog.buttons["Cancel"]
+    if cancel.exists {
+      cancel.tap()
+      return
+    }
+    let region = otherElements["PopoverDismissRegion"]
+    let screen = region.frame
+    let frame = dialog.frame
+    let y =
+      frame.minY - screen.minY > screen.maxY - frame.maxY
+      ? (screen.minY + frame.minY) / 2 : (frame.maxY + screen.maxY) / 2
+    region.coordinate(withNormalizedOffset: .zero)
+      .withOffset(CGVector(dx: screen.width / 2, dy: y - screen.minY))
+      .tap()
+  }
+
   // Runs the accessibility audit one check at a time, passing over the
   // issues that `handler` accepts. In the iOS 27 Simulator, while another
   // Simulator ran UI tests, an audit of several checks at once sometimes

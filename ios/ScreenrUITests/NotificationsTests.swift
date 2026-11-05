@@ -114,14 +114,12 @@ final class NotificationsTests: XCTestCase {
     app.buttons["bell"].tap()
     XCTAssertTrue(app.buttons["Accept"].waitForExistence(timeout: 10))
 
-    // The confirmation is a popover; tapping outside it cancels.
+    // Closing the confirmation changes nothing.
     app.buttons["Decline"].tap()
     let confirmation = app.staticTexts["Decline Fay Chen’s friend request?"]
     XCTAssertTrue(confirmation.waitForExistence(timeout: 10))
     XCTAssertTrue(app.staticTexts["The request will be removed."].exists)
-    app.otherElements["PopoverDismissRegion"]
-      .coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.1))
-      .tap()
+    app.cancelConfirmation()
     XCTAssertTrue(confirmation.waitForNonExistence(timeout: 10))
 
     app.buttons["Accept"].tap()
@@ -169,9 +167,10 @@ final class NotificationsTests: XCTestCase {
     XCTAssertTrue(app.buttons["Decline"].waitForExistence(timeout: 10))
 
     app.buttons["Decline"].tap()
-    let confirm = app.popovers.buttons["Decline"]
-    XCTAssertTrue(confirm.waitForExistence(timeout: 10))
-    confirm.tap()
+    XCTAssertTrue(
+      app.staticTexts["Decline Fay Chen’s friend request?"].waitForExistence(timeout: 10)
+    )
+    app.confirmationButton("Decline").tap()
 
     wait(
       for: [
@@ -185,6 +184,49 @@ final class NotificationsTests: XCTestCase {
     )
     XCTAssertTrue(app.staticTexts["Friend request declined."].waitForExistence(timeout: 10))
     XCTAssertFalse(app.buttons["Accept"].exists)
+  }
+
+  // A failed read beneath Decline's confirmation, as during a deploy, leaves
+  // it open to confirm once reads succeed again.
+  @MainActor
+  func testKeepsTheDeclineConfirmationThroughAFailedRead() throws {
+    let log = RequestLog.temporary()
+    let outage = FixtureOutage()
+    let app = XCUIApplication()
+    app.launch(with: FixtureLaunch(requestLog: log.file, outage: outage))
+    XCTAssertTrue(app.navigationBars["Your circle"].waitForExistence(timeout: 10))
+    app.buttons["bell"].tap()
+    XCTAssertTrue(app.buttons["Decline"].waitForExistence(timeout: 10))
+    app.buttons["Decline"].tap()
+    let question = app.staticTexts["Decline Fay Chen’s friend request?"]
+    XCTAssertTrue(question.waitForExistence(timeout: 10))
+
+    // The first failed read has replaced the list beneath with the error by
+    // the time the sheet polls again.
+    outage.begin()
+    let reads = try log.lines().filter(Self.isNotificationsRead).count
+    wait(
+      for: [log.requests { $0.filter(Self.isNotificationsRead).count >= reads + 2 }],
+      timeout: 15
+    )
+    let failure = app.staticTexts["Screenr didn't load"]
+    XCTAssertTrue(failure.exists)
+    XCTAssertTrue(question.exists)
+
+    outage.end()
+    XCTAssertTrue(failure.waitForNonExistence(timeout: 10))
+    XCTAssertTrue(question.exists)
+    app.confirmationButton("Decline").tap()
+    wait(
+      for: [
+        log.requests {
+          $0.contains(
+            "POST /api/screenr/respond-friend-request {\"action\":\"decline\",\"id\":\"14\"}"
+          )
+        }
+      ],
+      timeout: 10
+    )
   }
 
   // An unsent comment on the screen beneath survives opening and closing the

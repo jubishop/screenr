@@ -27,9 +27,10 @@ struct TitleView: View {
   }
 }
 
-// The models, the trailer's player, and the sheets live here, outside the
-// screen's content, so drafts, the reader's place, an open player, and an
-// open sheet survive reads, including failed ones.
+// The models, the trailer's player, the sheets, and the confirmations live
+// here, outside the screen's content, so drafts, the reader's place, an open
+// player, and an open sheet or confirmation survive reads, including failed
+// ones.
 private struct TitleScreen: View {
   let model: ScreenModel
   @State private var page: TitlePageModel
@@ -90,6 +91,8 @@ private struct TitleScreen: View {
         TitleSheet(sheet: sheet, header: header, model: page)
       }
     }
+    .leavingConfirmation(page)
+    .feedConfirmation(feed)
     // The header names the title, so the bar's title stays small.
     .toolbarTitleDisplayMode(.inline)
   }

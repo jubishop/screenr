@@ -4,33 +4,40 @@ import SwiftUI
 // A member screen's states: a spinner while it first loads, the error with
 // Try again after a failed read, and the loaded screen. A feature screen keeps
 // state that must outlive a failed read, such as a draft, outside this view,
-// since a failed read replaces the content.
+// and presents its sheets and confirmations outside it too, since a failed
+// read replaces the content and closes what the content presents.
 struct ScreenContent<Content: View>: View {
   let model: ScreenModel
   @ViewBuilder let content: (Screen) -> Content
 
   var body: some View {
-    switch model.phase {
-    case .loading:
-      ProgressView("Loading")
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-    case .failed(let error):
-      ReadFailureView(error: error) {
-        await model.refresh()
-      }
-    case .loaded(let screen):
-      switch screen.content {
-      case .redirect:
+    // The states share one container, so the screen's root stays the same
+    // view as they change. When the root itself changed, a confirmation
+    // dialog attached outside this view stayed on screen through a failed
+    // read but closed in SwiftUI's eyes, and its buttons did nothing.
+    VStack(spacing: 0) {
+      switch model.phase {
+      case .loading:
         ProgressView("Loading")
           .frame(maxWidth: .infinity, maxHeight: .infinity)
-      case .unknown:
-        MessageView(
-          title: "Update Screenr",
-          systemImage: "arrow.down.app",
-          message: "This page needs a newer version of Screenr."
-        )
-      default:
-        content(screen)
+      case .failed(let error):
+        ReadFailureView(error: error) {
+          await model.refresh()
+        }
+      case .loaded(let screen):
+        switch screen.content {
+        case .redirect:
+          ProgressView("Loading")
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        case .unknown:
+          MessageView(
+            title: "Update Screenr",
+            systemImage: "arrow.down.app",
+            message: "This page needs a newer version of Screenr."
+          )
+        default:
+          content(screen)
+        }
       }
     }
   }

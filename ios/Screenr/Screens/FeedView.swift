@@ -23,8 +23,9 @@ struct FeedView: View {
   }
 }
 
-// The models live here, outside the screen's content, so the reader's
-// drafts and place survive a failed read.
+// The models and the feed's confirmation live here, outside the screen's
+// content, so the reader's drafts and place and an open confirmation survive
+// a failed read.
 private struct FeedScreen: View {
   let model: ScreenModel
   @State private var feed: FeedModel
@@ -67,5 +68,6 @@ private struct FeedScreen: View {
         }
       }
     }
+    .feedConfirmation(feed)
   }
 }

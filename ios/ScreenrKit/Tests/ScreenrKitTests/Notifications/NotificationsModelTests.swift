@@ -170,6 +170,30 @@ struct NotificationsModelTests {
     #expect(model.rows.first { $0.id == "14" }?.answer == .decline)
   }
 
+  // Decline's confirmation stays open while the shown page offers an answer
+  // to its request, or fails to read, and closes once a read no longer
+  // offers one, such as after an answer elsewhere.
+  @Test func declineClosesOnceTheRequestIsGone() async throws {
+    let api = try NotificationsAPI()
+    let (model, _) = sheet(api)
+    await model.live.refresh()
+    let request = try #require(model.rows.first { $0.id == "14" })
+    model.askToDecline(request.item)
+    model.reconcile()
+    #expect(model.declining == request.item)
+
+    api.failures["notifications"] = APIError(kind: .server(status: 502), requestID: "request-1")
+    await model.live.refresh()
+    model.reconcile()
+    #expect(model.declining == request.item)
+
+    api.failures = [:]
+    api.pages = [try NotificationsAPI.page(ids: ["23", "20", "18", "5", "3", "1"], through: "23")]
+    await model.live.refresh()
+    model.reconcile()
+    #expect(model.declining == nil)
+  }
+
   @Test func reportsAFailedActionAndReadsAgain() async throws {
     let api = try NotificationsAPI()
     let (model, shell) = sheet(api)

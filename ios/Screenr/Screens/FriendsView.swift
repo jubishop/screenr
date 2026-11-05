@@ -14,8 +14,9 @@ struct FriendsView: View {
   }
 }
 
-// The model lives here, outside the screen's content, so the search draft
-// and an action's result survive a failed read.
+// The model and Decline's confirmation live here, outside the screen's
+// content, so the search draft, an action's result, and an open confirmation
+// survive a failed read.
 private struct FriendsScreen: View {
   let model: ScreenModel
   @State private var friends: FriendsModel
@@ -28,8 +29,13 @@ private struct FriendsScreen: View {
   var body: some View {
     ScreenContent(model: model) { screen in
       if case .people(let page) = screen.content {
-        FriendsList(friends: friends, sections: FriendsSections(page, viewer: screen.user.userId))
+        let sections = FriendsSections(page, viewer: screen.user.userId)
+        FriendsList(friends: friends, sections: sections)
+          .onChange(of: sections, initial: true) { _, sections in
+            friends.reconcile(with: sections)
+          }
       }
     }
+    .declineConfirmation(friends)
   }
 }

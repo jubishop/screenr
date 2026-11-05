@@ -206,6 +206,48 @@ final class TitleTests: XCTestCase {
     )
   }
 
+  // A failed read beneath the confirmation that withdrawing a top 10 title's
+  // Recommend asks for leaves it open to confirm once reads succeed again.
+  @MainActor
+  func testKeepsTheRecommendConfirmationThroughAFailedRead() throws {
+    let log = RequestLog.temporary()
+    let outage = FixtureOutage()
+    let app = XCUIApplication()
+    app.launch(
+      with: FixtureLaunch(
+        link: "screenr-dev://titles/movie/101",
+        requestLog: log.file,
+        outage: outage
+      )
+    )
+    XCTAssertTrue(app.buttons["watch-status"].waitForExistence(timeout: 10))
+    app.buttons["Recommended"].tap()
+    let question = app.staticTexts[
+      "Remove your recommendation? Night Crossing also leaves your top 10 at #1."
+    ]
+    XCTAssertTrue(question.waitForExistence(timeout: 5))
+
+    // The first failed read has replaced the page beneath with the error by
+    // the time the app polls again.
+    outage.begin()
+    let reads = try log.screenPaths().count
+    wait(for: [log.screenReads(atLeast: reads + 2)], timeout: 15)
+    let failure = app.staticTexts["Screenr didn't load"]
+    XCTAssertTrue(failure.exists)
+    XCTAssertTrue(question.exists)
+
+    outage.end()
+    XCTAssertTrue(failure.waitForNonExistence(timeout: 10))
+    XCTAssertTrue(question.exists)
+    app.buttons["Remove recommendation"].tap()
+    wait(
+      for: [
+        log.wrote("activity", #"{"field":"recommended","title":"movie:101","value":false}"#)
+      ],
+      timeout: 10
+    )
+  }
+
   // Nothing loads from YouTube until Play trailer, which opens the player and
   // asks for the embed.
   @MainActor

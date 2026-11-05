@@ -148,6 +148,16 @@ public final class NotificationsModel {
     declining = nil
   }
 
+  // Takes each change in the rows. Decline's confirmation closes once the
+  // shown page no longer offers its request an answer, such as after one
+  // elsewhere. A failed read leaves it open.
+  public func reconcile() {
+    guard let declining, live.value != nil,
+      !rows.contains(where: { $0.id == declining.id && $0.offersAnswer })
+    else { return }
+    self.declining = nil
+  }
+
   // Marks every notification read through the newest in the shown page, or
   // the boundary an earlier page keeps.
   public func markAllRead() async {

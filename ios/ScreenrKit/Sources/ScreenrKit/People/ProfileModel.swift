@@ -152,7 +152,8 @@ public final class ProfileModel {
 
   public private(set) var activity = Activity.idle
   public private(set) var failure: String?
-  private var confirming: ProfileConfirmation?
+  // Unfriend or Block, waiting for the viewer to confirm.
+  public private(set) var confirmation: ProfileConfirmation?
 
   @ObservationIgnored private let shell: ShellModel
   @ObservationIgnored private let refresh: @MainActor () async -> Void
@@ -164,16 +165,16 @@ public final class ProfileModel {
     self.refresh = refresh
   }
 
-  // The open confirmation, while it still applies: a friendship that ended
-  // elsewhere no longer offers Unfriend.
-  public func confirmation(for relationship: Relationship) -> ProfileConfirmation? {
-    if case .unfriend = confirming, relationship != .friend { return nil }
-    return confirming
+  // Takes each relationship the profile reads. The open confirmation closes
+  // once it no longer applies: a friendship that ended elsewhere no longer
+  // offers Unfriend.
+  public func reconcile(with relationship: Relationship) {
+    if case .unfriend = confirmation, relationship != .friend { confirmation = nil }
   }
 
   public func ask(_ item: ProfileMenuItem, about person: Person, _ relationship: Relationship) {
     guard activity == .idle, relationship.menu.contains(item) else { return }
-    confirming =
+    confirmation =
       switch item {
       case .unfriend: .unfriend(person)
       case .block: .block(person, relationship)
@@ -181,7 +182,7 @@ public final class ProfileModel {
   }
 
   public func cancelConfirmation() {
-    confirming = nil
+    confirmation = nil
   }
 
   // Sends the visible action's friend request change. Watch together is a
@@ -192,7 +193,7 @@ public final class ProfileModel {
   }
 
   public func confirm(_ confirmation: ProfileConfirmation) async {
-    confirming = nil
+    self.confirmation = nil
     switch confirmation {
     case .unfriend(let person):
       await send(.remove, to: person)

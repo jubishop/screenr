@@ -7,8 +7,9 @@ import SwiftUI
 // which shows it without moving the entry at the top of the screen; a
 // permalink's entry or reply scrolls into view highlighted; a reply that a
 // notification's Reply did not post opens in its composer; and destructive
-// actions ask first. The screen keeps `feed` across reads, since a failed
-// read replaces this view.
+// actions ask first, in `feedConfirmation(_:)`. The screen keeps `feed` and
+// presents its confirmation across reads, since a failed read replaces this
+// view.
 struct FeedList<Header: View>: View {
   let feed: FeedModel
   let snapshot: [FeedItem]
@@ -147,20 +148,6 @@ struct FeedList<Header: View>: View {
         }
       }
     }
-    .confirmationDialog(
-      feed.confirmation?.message ?? "",
-      isPresented: Binding(
-        get: { feed.confirmation != nil },
-        set: { presented in if !presented { feed.confirmation = nil } }
-      ),
-      titleVisibility: .visible,
-      presenting: feed.confirmation
-    ) { confirmation in
-      Button(confirmation.action, role: .destructive) {
-        Task { await feed.confirm(confirmation) }
-      }
-      Button("Cancel", role: .cancel) {}
-    }
   }
 
   // Names the reader's place in `position` just before New activity shows.
@@ -226,6 +213,36 @@ extension FeedList where Header == EmptyView {
       emptyMessage: emptyMessage,
       headerRequests: 0
     ) { EmptyView() }
+  }
+}
+
+extension View {
+  // The feed's confirmation of a destructive action. A screen presents it
+  // outside its content, so a failed read beneath leaves it open.
+  func feedConfirmation(_ feed: FeedModel) -> some View {
+    modifier(FeedConfirmationDialog(feed: feed))
+  }
+}
+
+private struct FeedConfirmationDialog: ViewModifier {
+  let feed: FeedModel
+
+  func body(content: Content) -> some View {
+    content
+      .confirmationDialog(
+        feed.confirmation?.message ?? "",
+        isPresented: Binding(
+          get: { feed.confirmation != nil },
+          set: { presented in if !presented { feed.confirmation = nil } }
+        ),
+        titleVisibility: .visible,
+        presenting: feed.confirmation
+      ) { confirmation in
+        Button(confirmation.action, role: .destructive) {
+          Task { await feed.confirm(confirmation) }
+        }
+        Button("Cancel", role: .cancel) {}
+      }
   }
 }
 

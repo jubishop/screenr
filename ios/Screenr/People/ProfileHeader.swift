@@ -63,15 +63,13 @@ struct ProfileHeader: View {
 }
 
 // More actions in the toolbar: Unfriend for a friend, and Block. Each asks
-// first, in a confirmation that closes if the friendship ends elsewhere.
+// first, in `profileConfirmation(_:)`.
 struct ProfileMenu: View {
   let person: Person
   let relationship: Relationship
   let actions: ProfileModel
 
   var body: some View {
-    // Read while rendering, so asking presents the confirmation.
-    let confirmation = actions.confirmation(for: relationship)
     Menu {
       ForEach(relationship.menu, id: \.self) { item in
         Button(item.label, role: .destructive) {
@@ -83,22 +81,39 @@ struct ProfileMenu: View {
     }
     .accessibilityLabel("More actions for \(person.displayName)")
     .disabled(actions.activity != .idle)
-    .confirmationDialog(
-      confirmation?.title ?? "",
-      isPresented: Binding(
-        get: { confirmation != nil },
-        set: { if !$0 { actions.cancelConfirmation() } }
-      ),
-      titleVisibility: .visible,
-      presenting: confirmation
-    ) { confirmation in
-      Button(confirmation.action, role: .destructive) {
-        Task { await actions.confirm(confirmation) }
+  }
+}
+
+extension View {
+  // Unfriend's or Block's confirmation, which closes if the friendship ends
+  // elsewhere. The profile presents it outside its content, so a failed read
+  // beneath leaves it open.
+  func profileConfirmation(_ actions: ProfileModel) -> some View {
+    modifier(ProfileConfirmationDialog(actions: actions))
+  }
+}
+
+private struct ProfileConfirmationDialog: ViewModifier {
+  let actions: ProfileModel
+
+  func body(content: Content) -> some View {
+    content
+      .confirmationDialog(
+        actions.confirmation?.title ?? "",
+        isPresented: Binding(
+          get: { actions.confirmation != nil },
+          set: { if !$0 { actions.cancelConfirmation() } }
+        ),
+        titleVisibility: .visible,
+        presenting: actions.confirmation
+      ) { confirmation in
+        Button(confirmation.action, role: .destructive) {
+          Task { await actions.confirm(confirmation) }
+        }
+        Button("Cancel", role: .cancel) { actions.cancelConfirmation() }
+      } message: { confirmation in
+        Text(confirmation.message)
       }
-      Button("Cancel", role: .cancel) { actions.cancelConfirmation() }
-    } message: { confirmation in
-      Text(confirmation.message)
-    }
   }
 }
 
