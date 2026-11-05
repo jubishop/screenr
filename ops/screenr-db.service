@@ -18,6 +18,11 @@ RuntimeDirectory=screenr-db
 RuntimeDirectoryMode=0750
 ExecStart=/usr/lib/postgresql/18/bin/postgres -D /var/lib/screenr/postgres
 ExecReload=/bin/kill -HUP $MAINPID
+# When a run ends, systemd 255 logs the memory peak it last read, not the
+# run's real one. This read, while the run's cgroup remains, makes the
+# logged peak real, after a crash too, for the daily memory check. '-'
+# ignores a failed read.
+ExecStopPost=-/usr/bin/systemctl show %n --property=MemoryPeak
 # Stopping sends SIGINT, PostgreSQL's fast shutdown, only to the postmaster,
 # which stops its child processes in order. systemd kills any that remain
 # after the stop timeout.

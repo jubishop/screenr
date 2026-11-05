@@ -17,6 +17,11 @@ Environment=HOSTNAME=127.0.0.1
 Environment=PORT=3060
 Environment=NODE_OPTIONS=--max-old-space-size=256
 ExecStart=/opt/screenr/node/bin/node server.js
+# When a run ends, systemd 255 logs the memory peak it last read, not the
+# run's real one. This read, while the run's cgroup remains, makes the
+# logged peak real, after a crash too, for the daily memory check. '-'
+# ignores a failed read.
+ExecStopPost=-/usr/bin/systemctl show %n --property=MemoryPeak
 # Next reports a graceful SIGTERM shutdown as exit code 143.
 SuccessExitStatus=143
 Restart=on-failure

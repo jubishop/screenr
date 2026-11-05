@@ -15,6 +15,11 @@ EnvironmentFile=/etc/screenr/app.env
 Environment=NODE_ENV=production
 Environment=NODE_OPTIONS=--max-old-space-size=96
 ExecStart=/opt/screenr/node/bin/node --import tsx scripts/worker.ts
+# When a run ends, systemd 255 logs the memory peak it last read, not the
+# run's real one. This read, while the run's cgroup remains, makes the
+# logged peak real, after a crash too, for the daily memory check. '-'
+# ignores a failed read.
+ExecStopPost=-/usr/bin/systemctl show %n --property=MemoryPeak
 Restart=on-failure
 RestartSec=5
 MemoryMax=128M

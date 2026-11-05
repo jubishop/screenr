@@ -63,10 +63,15 @@ systemd 255 logs the `MemoryPeak` it last read for the unit, for any
 `systemctl show` or `systemctl status`, rather than the run's real peak. A
 probe that allocated 96 MiB after its last read logged a 4.2M peak, and a run
 that nothing read logged none. The last read of a run that ended at a deploy
-is often the previous deployment's checks, seconds after the run started. The
-[daily memory check](#daily-memory-check) therefore also reads each running
-service's `MemoryPeak`, which systemd reads from the service's cgroup at that
-moment.
+was often the previous deployment's checks, seconds after the run started.
+
+Each service now reads its own `MemoryPeak` in `ExecStopPost=` as a run
+ends, while the run's cgroup remains, so systemd logs the run's real peak,
+after a crash too ([#535](https://github.com/jubishop/screenr/issues/535)).
+Peaks logged before that change reached production remain lower bounds. The
+[daily memory check](#daily-memory-check) also reads each running service's
+`MemoryPeak`, which systemd reads from the service's cgroup at that moment,
+so it sees a run's peak before the run ends.
 
 **Decision — 2026-11-01:** change nothing. Keep `MemoryMax=128M` and the
 `tsx` start in `ops/screenr-worker.service`. Answered from evidence by an
@@ -493,7 +498,8 @@ systemd applies timer changes when it reloads, but a running service keeps
 its old settings until it restarts. Activation restarts `screenr-web` and
 `screenr-worker`, and services that timers start use their new unit at the
 next run. A changed `screenr-db.service` applies after a manual
-`systemctl restart screenr-db`, and a new long-running service needs enabling
+`systemctl restart screenr-db`, except a new `ExecStopPost=`, which systemd
+runs when the current run stops. A new long-running service needs enabling
 by hand. Rollback after a failed activation restores the previous release but
 not its units, so keep unit changes compatible with the previous release, as
 with migrations. A unit change that stops the services also stops the
@@ -645,9 +651,9 @@ services' names. The check fails when it finds any of these:
   `MemoryMax`, and its current run's `MemoryPeak`, which systemd reads from
   the service's cgroup at that moment.
 - **A logged peak above the limit:** systemd's line for each run that
-  stopped, with the memory peak it logged. That peak is a
-  [lower bound](#worker-memory-headroom): systemd 255 logs the value it last
-  read, if anything read one. Each check's own reading refreshes that value.
+  stopped, with the memory peak it logged. systemd 255 logs the value it last
+  read, if anything read one, so each service's `ExecStopPost=` reads it as
+  the run ends, and the line holds the run's real peak.
 - **An OOM kill:** systemd's message when the OOM killer kills a process of
   the unit, and the kernel's `oom-kill:` line, whose `task_memcg` names the
   service's cgroup.
@@ -661,6 +667,21 @@ problem is reported once: neither that run's next check nor its line when it
 stops sends another email. When reading fails, the check fails and alerts
 without saving, and the next check covers the same time again. A damaged
 state file also fails the check; delete it to start again from the last day.
+
+Each service's read, `systemctl show %n --property=MemoryPeak`, runs after
+the run's processes end, as the service's user in its sandbox, and reaches
+systemd's D-Bus API ([#535](https://github.com/jubishop/screenr/issues/535)).
+Its `-` prefix keeps a failed read, such as one while D-Bus is unavailable,
+from failing the stop; that run's line then holds the value read before.
+systemd 255 logs a run's line only when the run used more than a second of
+CPU time. Every web and worker run in the journal on 2026-11-05 did, the
+least 1.16 seconds. systemd 256 and later cache a run's peak before they
+remove its cgroup, so they log the real peak without the read.
+
+Deployment installs the units with the read, and activation restarts the web
+and worker under them. systemd applies a new `ExecStopPost=` to a running
+service at the reload, so the database needs no restart: its current run
+logs its real peak when it next stops.
 
 The check needs no secrets. It runs as `screenr-db`, because `systemctl`
 needs systemd's D-Bus API, and joins the `systemd-journal` group, without
@@ -704,6 +725,29 @@ the check against the three services and two probe units on the host:
   day, 13 runs each of the web and worker logged peaks of at most 117.5 MiB
   (31%) and 59.2 MiB (46%).
 - `systemd-analyze security` rated the unit 1.5 (OK).
+
+Also on 2026-11-05, before rollout of the services' read, transient units
+with each service's settings ran probes on the host. `systemctl show` read
+each probe a second after it started, at 4.6 to 9.6 MiB, as deployment's
+checks read a new run. The probe then used 1.5 seconds of CPU time and
+allocated memory:
+
+- With the worker's settings but no read, a probe that held 96 MiB until
+  stopped logged 9.3 MiB, the outside read's value, while its cgroup peaked
+  at 106.8 MiB.
+- With the read, such probes logged their cgroups' real peaks: 106.9 MiB
+  with the worker's settings, 107.7 MiB with the web's, and 100.9 MiB with
+  the database's.
+- Probes that crashed with `SIGABRT` logged real peaks too: 73.0 MiB and
+  106.6 MiB after V8's `JavaScript heap out of memory` with the worker's and
+  web's settings, and 100.7 MiB after an abort with the database's.
+- Each read ran as `screenr` or `screenr-db` in the sandbox and reached
+  systemd's D-Bus API.
+
+On a local Ubuntu 24.04 machine with systemd 255.4, a service whose unit file
+gained the read during its run, followed by `systemctl daemon-reload`, logged
+that run's real peak of 99.2 MiB when it stopped. Without the read, the same
+probe logged 3.0 MiB, the value an outside read had found.
 
 ## Build and activate a release
 
