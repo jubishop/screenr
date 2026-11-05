@@ -15,6 +15,8 @@ public typealias ScreenModel = LiveRead<Screen>
 //   with the error until a read succeeds. Passing failures, such as timeouts,
 //   rate limits, server errors, and network loss, keep polling. A permanent
 //   error stops polling until `refresh()` or the view's return reads again.
+// - A screen's path can change, such as Find a title's with its filters. The
+//   new path reads at once, and the content stays until it answers.
 //
 // The shell's views report visibility, the app's activity, and pull-to-refresh;
 // a feature view renders `phase` and calls `refresh()` after a write. Screens
@@ -29,7 +31,7 @@ public final class LiveRead<Value: Decodable & Hashable & Sendable> {
     case failed(APIError)
   }
 
-  public let request: APIRequest<Value>
+  public private(set) var request: APIRequest<Value>
   public private(set) var phase: Phase = .loading
 
   @ObservationIgnored private let api: any ScreenrAPI
@@ -96,6 +98,19 @@ public final class LiveRead<Value: Decodable & Hashable & Sendable> {
   // or a write elsewhere changes the screen. A read already in flight may
   // have started too early, so it is replaced.
   public func refreshIfLive() {
+    restart(.replacing)
+  }
+
+  // Reads `request` from now on, keeping the content until it answers. A
+  // read in flight asked for the old one, so its result never applies.
+  fileprivate func change(to request: APIRequest<Value>) {
+    self.request = request
+    guard isLive else {
+      readTask?.cancel()
+      readTask = nil
+      readGeneration += 1
+      return
+    }
     restart(.replacing)
   }
 
@@ -257,6 +272,14 @@ extension LiveRead where Value == Screen {
 
   // The member path the screen API reads.
   public var path: String? { request.query["path"] }
+
+  // Reads the screen at `path` from now on, such as Find a title's with
+  // changed filters: at once while its view is live, and otherwise when the
+  // view returns. The screen shown stays until that read answers.
+  public func change(path: String) {
+    guard path != self.path else { return }
+    change(to: .screen(path: path, visit: request.visit))
+  }
 
   // The loaded screen, or nil while loading or after a failed read.
   public var screen: Screen? { value }

@@ -4,8 +4,9 @@ import SwiftUI
 // Find a title, `/search`, at the root of the search-role tab. Selecting the
 // tab activates the search field. Below it are the My services filter, then
 // search results, or Suggestions and Friends recommend. A link's search and
-// tab arrive as the router's `findSearch`. The search stays usable when the
-// screen's read fails.
+// tab arrive as the router's `findSearch`. The screen reads with the filters,
+// so changing one reads it again. The search stays usable when the screen's
+// read fails.
 struct FindView: View {
   let model: ScreenModel
   let destination: Destination
@@ -48,6 +49,9 @@ private struct FindScreen: View {
     }
     .onChange(of: shell.router.findSearch, initial: true) { _, link in
       find.apply(link)
+    }
+    .onChange(of: find.screenPath, initial: true) { _, path in
+      screen.change(path: path)
     }
     .alert(
       "Could not update Want to watch",

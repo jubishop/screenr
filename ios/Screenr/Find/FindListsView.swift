@@ -51,26 +51,24 @@ private struct SuggestionsView: View {
   let page: SearchScreen
 
   var body: some View {
-    if page.suggestions.isEmpty {
+    switch find.suggestions(page) {
+    case .nothingYet:
       Section {
         EmptyListMessage(
           title: "No suggestions yet.",
           message: "Search for a title. New choices from your circle will appear here."
         )
       }
-    } else {
-      let visible = find.visibleSuggestions(page)
+    case .listed(let suggestions, let emptyMessage):
       Section {
         ListHeader("From your circle")
-        ForEach(visible) { suggestion in
+        ForEach(suggestions) { suggestion in
           NavigationLink(value: suggestion.destination) {
             SuggestionRow(suggestion: suggestion, serviceIds: page.serviceIds)
           }
         }
-        if visible.isEmpty {
-          Text(
-            "No suggestions on your services or free. Turn off My services to see all suggestions."
-          )
+        if let emptyMessage {
+          Text(emptyMessage)
         }
       }
     }

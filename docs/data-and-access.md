@@ -593,13 +593,16 @@ friends' usernames, display names, and top 10 ranks, top 10 recommenders
 first by rank and then the most recent Recommend first, with the viewer's
 current status and whether the viewer recommends it. The
 response holds no scores, feed item IDs, or account IDs. Without filters, as
-installed iPhone builds read it, the viewer's statuses do not remove titles,
-and the app hides titles the viewer marked Finished from that status for its
-Show finished switch ([#172](https://github.com/jubishop/screenr/issues/172)).
-The web reads with `finished=hidden` while the switch is off, so finished
-titles leave the list before the cap, and the screen adds
+iPhone builds from before
+[#448](https://github.com/jubishop/screenr/issues/448) read it, the viewer's
+statuses do not remove titles, and the app hides titles the viewer marked
+Finished from that status for its Show finished switch
+([#172](https://github.com/jubishop/screenr/issues/172)). The web and later
+iPhone builds read with `finished=hidden` while the switch is off, so
+finished titles leave the list before the cap, and the screen adds
 `finishedRecommendations`, how many it left out, for the empty message.
-Turning the switch on reads again.
+Turning the switch on reads again. The iPhone's Friends recommend shortcuts
+read the same way.
 
 ## Write lock and refresh behavior
 

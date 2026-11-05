@@ -20,7 +20,10 @@ public enum FindList: Hashable, Sendable, CaseIterable {
 // - Lists: Suggestions or Friends recommend, as a link's `tab` chooses.
 // - Filters: My services applies to search results and both lists, as on the
 //   web; Friends recommend adds its Movies/TV and Show finished filters.
-//   Finished titles start hidden.
+//   Finished titles start hidden. The screen read sends them in its path, so
+//   the server applies them before capping each list, and changing one reads
+//   the screen again. Until that read answers, the lists shown are filtered
+//   here.
 // - Want to watch: Friends recommend's one-tap save, which reports the
 //   `friends_recommend` surface.
 @MainActor
@@ -69,6 +72,35 @@ public final class FindModel {
   public var kindFilter = KindFilter.all
   public var finishedFilter = FinishedFilter.hidden
   public private(set) var saving = Saving.idle
+
+  // The screen read's path: `/search` with the filters, such as
+  // `/search?services=mine&type=movie&finished=hidden`, in the web's order.
+  public var screenPath: String {
+    Self.screenPath(services: serviceFilter, kind: kindFilter, finished: finishedFilter)
+  }
+
+  // Find a title's first read, with the filters each visit starts with.
+  nonisolated public static let initialScreenPath = screenPath(
+    services: .allServices,
+    kind: .all,
+    finished: .hidden
+  )
+
+  nonisolated private static func screenPath(
+    services: ServiceFilter,
+    kind: KindFilter,
+    finished: FinishedFilter
+  ) -> String {
+    var parameters: [String] = []
+    if services == .myServices { parameters.append("services=mine") }
+    switch kind {
+    case .all: break
+    case .movies: parameters.append("type=movie")
+    case .tv: parameters.append("type=tv")
+    }
+    if finished == .hidden { parameters.append("finished=hidden") }
+    return parameters.isEmpty ? "/search" : "/search?" + parameters.joined(separator: "&")
+  }
 
   @ObservationIgnored private let api: any ScreenrAPI
   @ObservationIgnored private let clock: any Clock<Duration>
@@ -204,22 +236,34 @@ public final class FindModel {
     titles.filter { includes($0.viewing, serviceIds: serviceIds) }
   }
 
-  public func visibleSuggestions(_ page: SearchScreen) -> [TitleSuggestion] {
-    page.suggestions.filter { includes($0.viewing, serviceIds: page.serviceIds) }
+  // Suggestions after My services, and why they are empty when they are. A
+  // read with My services on lists only matching suggestions, so an empty
+  // one explains the filter.
+  public func suggestions(_ page: SearchScreen) -> FindListContent<TitleSuggestion> {
+    let visible = page.suggestions.filter { includes($0.viewing, serviceIds: page.serviceIds) }
+    guard visible.isEmpty else { return .listed(visible, emptyMessage: nil) }
+    if serviceFilter == .allServices { return .nothingYet }
+    return .listed([], emptyMessage: FindWording.noSuggestions)
   }
 
-  // Friends recommend after its filters, and why it is empty when it is.
-  public func friendsRecommend(_ page: SearchScreen) -> FriendsRecommendList {
+  // Friends recommend after its filters, and why it is empty when it is. The
+  // finished titles it counts are those hidden here and, while Show finished
+  // is off, those the read left out. Only an empty list that no filter
+  // narrows means friends recommend nothing.
+  public func friendsRecommend(_ page: SearchScreen) -> FindListContent<FriendsRecommendation> {
     let matching = page.recommendations.filter {
       kindFilter.includes($0.title) && includes($0.viewing, serviceIds: page.serviceIds)
     }
     let visible = matching.filter(finishedFilter.includes)
-    guard visible.isEmpty else { return FriendsRecommendList(titles: visible, emptyMessage: nil) }
-    return FriendsRecommendList(
-      titles: [],
+    guard visible.isEmpty else { return .listed(visible, emptyMessage: nil) }
+    let leftOut = finishedFilter == .hidden ? page.finishedRecommendations ?? 0 : 0
+    let finished = matching.count + leftOut
+    if finished == 0, kindFilter == .all, serviceFilter == .allServices { return .nothingYet }
+    return .listed(
+      [],
       emptyMessage: FindWording.noRecommendations(
         kind: kindFilter,
-        finished: matching.count,
+        finished: finished,
         myServices: serviceFilter == .myServices
       )
     )
@@ -255,10 +299,12 @@ public final class FindModel {
   }
 }
 
-// Friends recommend after its filters.
-public struct FriendsRecommendList: Hashable, Sendable {
-  public let titles: [FriendsRecommendation]
-  public let emptyMessage: String?
+// Suggestions or Friends recommend after the filters.
+public enum FindListContent<Item: Hashable & Sendable>: Hashable, Sendable {
+  // The circle has nothing for the list yet, and no filter narrows it.
+  case nothingYet
+  // The titles the filters keep, and why they keep none when they keep none.
+  case listed([Item], emptyMessage: String?)
 }
 
 extension FindModel.KindFilter {

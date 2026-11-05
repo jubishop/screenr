@@ -363,9 +363,13 @@ titles narrow Friends recommend. The screen read names them in its path as
 address: `src/components/screen.tsx` holds them for the visit, starting with
 finished titles hidden, and `screenPath` adds them to each read, including
 the page load's, so changing one reads the screen again. The lists already
-shown stay filtered in the browser until that read arrives. A read without
-filters lists every title, finished ones included, as installed iPhone
-builds expect; they filter the capped lists themselves. On the server, My
+shown stay filtered in the browser until that read arrives. The iPhone app
+sends the same filters from its `FindModel`, starting with finished titles
+hidden, and its Siri shortcuts read with finished titles hidden
+([iPhone guide](../ios/README.md#find-a-title),
+[issue #448](https://github.com/jubishop/screenr/issues/448)). A read without
+filters lists every title, finished ones included, as iPhone builds from
+before #448 expect; they filter the capped lists themselves. On the server, My
 services leaves out titles whose stored viewing options, current or stale,
 list neither a subscription from one of the viewer's services nor a free
 option, as `viewingAccess` decides in the browser; titles with unknown

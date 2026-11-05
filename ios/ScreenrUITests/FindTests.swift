@@ -3,9 +3,9 @@ import XCTest
 import os
 
 // Find a title, the search-role tab: searching, opening a result, Friends
-// recommend, and each Find fixture. ScreenrKit's FindSearchTests and
-// FindListsTests cover the search timing, short searches, filters, and
-// wording.
+// recommend, the filters its reads send, and each Find fixture. ScreenrKit's
+// FindSearchTests and FindListsTests cover the search timing, short
+// searches, filters, and wording.
 final class FindTests: XCTestCase {
   override func setUp() {
     continueAfterFailure = false
@@ -123,6 +123,44 @@ final class FindTests: XCTestCase {
     XCTAssertTrue(
       app.staticTexts["No matches. Try a different title."].waitForExistence(timeout: 10)
     )
+  }
+
+  // The screen reads with the filters, so the server applies them before
+  // capping each list, and changing one reads it again. After Alice finishes
+  // both movies her friends recommend, Movies with finished titles hidden
+  // lists none and counts them (screen/search/finished-hidden), and Show
+  // finished lists them (screen/search/finished-shown).
+  @MainActor
+  func testReadsTheListsWithTheirFilters() throws {
+    let log = RequestLog.temporary()
+    let app = try openFind(FixtureLaunch(requestLog: log.file))
+    wait(for: [log.read("/search?finished=hidden")], timeout: 10)
+    app.buttons["Friends recommend"].tap()
+    XCTAssertTrue(app.staticTexts["Recommended by Ben Ortiz (#1)"].waitForExistence(timeout: 10))
+
+    let myServices = app.switches["My services"].switches.firstMatch
+    myServices.tap()
+    wait(for: [log.read("/search?services=mine&finished=hidden")], timeout: 10)
+    let reads = try log.screenPaths().count
+    myServices.tap()
+    wait(for: [log.read("/search?finished=hidden", after: reads)], timeout: 10)
+
+    app.buttons["Movies"].tap()
+    let finished = app.staticTexts[
+      "You finished all 2 movie recommendations. Turn on Show finished to see them."
+    ]
+    XCTAssertTrue(finished.waitForExistence(timeout: 10))
+    wait(for: [log.read("/search?type=movie&finished=hidden")], timeout: 10)
+    // Find's first read already had the filters.
+    XCTAssertFalse(try log.screenPaths().contains("/search"))
+    try audit(app)
+
+    app.switches["Show finished"].switches.firstMatch.tap()
+    XCTAssertTrue(app.buttons["Finished, Night Crossing"].waitForExistence(timeout: 10))
+    XCTAssertFalse(finished.exists)
+    wait(for: [log.read("/search?type=movie")], timeout: 10)
+    XCTAssertTrue(scroll(app, to: app.buttons["Finished, Winter Garden"]))
+    try audit(app)
   }
 
   // A title's initial shows only until its poster loads, so it never sits
