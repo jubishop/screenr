@@ -78,6 +78,9 @@ public struct FeedScreen: Codable, Hashable, Sendable {
   public let target: LinkTarget?
   // Whether the linked entry or reply is missing or not visible to the viewer.
   public let targetUnavailable: Bool
+  // A paged read's window; see `HistoryPage`.
+  public let since: String?
+  public let older: Bool?
 }
 
 // Find a title, at `/search`: both of its tabs.
@@ -186,4 +189,7 @@ public struct ProfileScreen: Decodable, Hashable, Sendable {
   public let profile: Profile
   public let topTen: [TopTenEntry]
   public let conversations: [FeedItem]
+  // A paged read's window; see `HistoryPage`.
+  public let since: String?
+  public let older: Bool?
 }

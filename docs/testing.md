@@ -287,7 +287,8 @@ import these helpers instead of defining their own copies.
 - [Journey helpers](../tests/browser/journey-helpers.ts) retain complete
   email signup and browser friendship setup for scenarios that test those
   journeys. [Refresh helpers](../tests/browser/refresh-helpers.ts) wait for
-  screen responses. A scenario that waits for the read it starts opens the
+  screen responses, matching a feed's or profile's reads by their member
+  path without the window each one names. A scenario that waits for the read it starts opens the
   page with polling paused, then returns to the page until it reads once. A
   refresh aborts any read still in flight, and Playwright never finishes a
   response whose request then fails, so waiting for a poll's response could
@@ -668,7 +669,17 @@ recipients. A full run checks:
   The page load isn't read again. Changes still arrive, and relative times
   advance each minute. `tests/app/screen-refresh.test.ts` covers every
   screen kind, the page's first version, each visible change, and versions
-  sent by other members or for unreadable screens.
+  sent by other members or for unreadable screens. It also checks that an
+  unchanged feed or profile poll reads none of those screens' tables, that
+  each change a paged feed or profile shows reaches a held version, and that
+  every table those screens read has the change mark's trigger.
+- The friends feed and profiles show 50 entries and Show older; the older
+  page shows at once, polls keep the longer window, other people's new
+  activity still waits behind New activity, and a link to an entry older
+  than the page opens it. `tests/app/feed-pages.test.ts` covers the windows,
+  ties at a page's end, link targets, profiles, unreadable and empty
+  histories, access changes, and the whole-history read for installed
+  iPhone builds.
 - A failed notification Accept, Decline, selection, or Mark all as read
   keeps the panel's list and focus and shows its message beside that
   control. A notifications read past its deadline says "Refresh timed out.

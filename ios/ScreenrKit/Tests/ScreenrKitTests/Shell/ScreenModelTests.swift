@@ -39,6 +39,52 @@ struct ScreenModelTests {
     #expect(model.phase == .loaded(emptyFeed))
   }
 
+  // A paged feed reads its newest page, then polls the window that page
+  // named; Show older reads the window extended by the page before it, and
+  // later polls keep that window.
+  @Test func pollsAPagedFeedsWindowAndShowsOlder() async throws {
+    let newest = try screen("screen/feed/newest-page")
+    let older = try screen("screen/feed/older-page")
+    let api = ScriptedAPI([.screen(newest), .screen(newest), .screen(older), .screen(older)])
+    let clock = TestClock()
+    let model = ScreenModel(path: "/", paged: true, api: api, clock: clock)
+    let since = "/?since=2026-10-13T12%3A00%3A00.000Z"
+
+    model.appeared(appActive: true)
+    await clock.waitForSleep(until: .seconds(3))
+    #expect(api.reads == ["/?before=now"])
+    #expect(model.path == since)
+    clock.advance(by: .seconds(3))
+    await clock.waitForSleep(until: .seconds(6))
+    #expect(api.reads == ["/?before=now", since])
+
+    await model.showOlder()
+    #expect(api.reads.last == "/?before=2026-10-13T12%3A00%3A00.000Z")
+    #expect(model.screen == older)
+    #expect(model.path == since)
+    clock.advance(by: .seconds(3))
+    await clock.waitForSleep(until: .seconds(9))
+    #expect(api.reads.count == 4)
+    #expect(api.reads.last == since)
+    #expect(model.screen == older)
+  }
+
+  // A screen that does not page, or a paged read answered by a server that
+  // sends the whole history, keeps reading its own path.
+  @Test func keepsTheSamePathWithoutAPage() async throws {
+    let api = ScriptedAPI([.screen(feed)])
+    let clock = TestClock()
+    let model = ScreenModel(path: "/", paged: true, api: api, clock: clock)
+
+    model.appeared(appActive: true)
+    await clock.waitForSleep(until: .seconds(3))
+    clock.advance(by: .seconds(3))
+    await clock.waitForSleep(until: .seconds(6))
+    await model.showOlder()
+
+    #expect(api.reads == ["/?before=now", "/?before=now"])
+  }
+
   @Test func stopsPollingInTheBackgroundAndRefreshesOnReturning() async throws {
     let api = ScriptedAPI([.screen(feed)])
     let clock = TestClock()

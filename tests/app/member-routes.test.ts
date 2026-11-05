@@ -23,6 +23,11 @@ test("member routes name each screen and its parameters", () => {
       "/?item=post&reply=answer",
       { kind: "feed", item: "post", reply: "answer" },
     ],
+    ["/?before=now", { kind: "feed", before: "now" }],
+    [
+      "/?item=post&since=2026-11-01T12%3A00%3A00.000Z",
+      { kind: "feed", item: "post", since: "2026-11-01T12:00:00.000Z" },
+    ],
     ["/search", { kind: "search" }],
     ["/search?q=Severance", { kind: "search", q: "Severance" }],
     ["/search?q=+The%20Office+", { kind: "search", q: "The Office" }],
@@ -57,6 +62,14 @@ test("member routes name each screen and its parameters", () => {
       { kind: "title", id: "tv:7", item: "post", reply: "answer" },
     ],
     ["/people/Alice", { kind: "profile", username: "Alice" }],
+    [
+      "/people/Alice?before=2026-11-01T12%3A00%3A00.000Z",
+      {
+        kind: "profile",
+        username: "Alice",
+        before: "2026-11-01T12:00:00.000Z",
+      },
+    ],
     ["/people/a%20b", { kind: "profile", username: "a b" }],
     [
       "/people/Alice/want-to-watch",
@@ -158,6 +171,10 @@ const canonicalPaths = [
   ["/?q=Lost", "/"],
   ["/account?error=access_denied", "/account"],
   ["/people/alice?item=post", "/people/alice"],
+  ["/people/alice?since=x&before=now", "/people/alice?since=x&before=now"],
+  ["/?before=now&reply=a&item=b", "/?item=b&reply=a&before=now"],
+  ["/search?before=now&since=x", "/search"],
+  ["/titles/movie/42?since=x", "/titles/movie/42"],
   ["/people/a%20b", "/people/a%20b"],
   ["/people/alice/want-to-watch?q=x", "/people/alice/want-to-watch"],
   ["/people/a%20b/want-to-watch", "/people/a%20b/want-to-watch"],
@@ -233,6 +250,26 @@ test("Find a title reads with its current filters, and other screens read their 
     ],
   ] as const)
     assert.equal(screenPath(path, filters), read, `${path} ${read}`);
+});
+
+// The web keeps a paged feed's or profile's window out of its address too
+// (docs/title-feed.md#paged-histories).
+test("the friends feed and profiles read with their current window, and other screens ignore it", () => {
+  for (const [path, history, read] of [
+    ["/", {}, "/"],
+    ["/", { before: "now" }, "/?before=now"],
+    ["/?item=post&before=x", { since: "y" }, "/?item=post&since=y"],
+    ["/people/alice?since=x", { before: "y" }, "/people/alice?before=y"],
+    ["/people/alice", {}, "/people/alice"],
+    [
+      "/people/alice/want-to-watch",
+      { since: "y" },
+      "/people/alice/want-to-watch",
+    ],
+    ["/titles/movie/42", { before: "now" }, "/titles/movie/42"],
+    ["/search", { before: "now" }, "/search"],
+  ] as const)
+    assert.equal(screenPath(path, {}, history), read, `${path} ${read}`);
 });
 
 test("return paths keep same-origin member pages in canonical form", () => {

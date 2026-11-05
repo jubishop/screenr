@@ -18,7 +18,11 @@ struct ProfileView: View {
   var body: some View {
     ProfilePage(
       model: model,
-      feed: FeedModel(api: api) { await model.refresh() },
+      feed: FeedModel(
+        api: api,
+        refresh: { await model.refresh() },
+        showOlder: { await model.showOlder() }
+      ),
       actions: ProfileModel(shell: shell) { await model.refresh() },
       editTopTen: editTopTen
     )
@@ -56,7 +60,8 @@ private struct ProfilePage: View {
           viewer: screen.user,
           emptyMessage: profile.canRead
             ? "Your entries and friends’ discussions will appear here." : nil,
-          headerRequests: 0
+          headerRequests: 0,
+          history: screen.historyPage
         ) {
           VStack(alignment: .leading, spacing: 20) {
             ProfileHeader(profile: profile, relationship: relationship, actions: actions)

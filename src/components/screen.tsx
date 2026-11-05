@@ -12,9 +12,11 @@ import {
   initialFindFilters,
   memberPath,
   memberTitle,
+  newestHistory,
   parseMemberRoute,
   screenPath,
   type FindFilters,
+  type HistoryWindow,
   type MemberRoute,
 } from "../member-routes";
 import {
@@ -98,6 +100,15 @@ function focusOnce(target: HTMLElement, options?: FocusOptions) {
 // browser's focus; later ones come from client navigation.
 let screensShown = 0;
 
+// The window that later reads of a paged feed or profile send: every entry
+// since the time the last read named, or the newest page again while the
+// history had no entries (docs/title-feed.md#paged-histories).
+function historyAfter(data: ScreenData | null): HistoryWindow {
+  return data && "since" in data && data.since
+    ? { since: data.since }
+    : newestHistory;
+}
+
 export function Screen({
   user: initialUser,
   path,
@@ -158,7 +169,13 @@ export function Screen({
   // read them, and changing one reads the screen again.
   const [findFilters, setFindFilters] =
     useState<FindFilters>(initialFindFilters);
-  const readPath = useRef(screenPath(path, findFilters));
+  // The friends feed's or a profile's window, which each successful read
+  // moves to the one it names, and Show older extends.
+  const history = useRef(historyAfter(initialData));
+  const readPath = useRef(screenPath(path, findFilters, history.current));
+  // Entries this old or older arrived through Show older, not as new
+  // activity, so the feed shows them at once.
+  const [olderThan, setOlderThan] = useState<string | null>(null);
   const refresh = useCallback(async () => {
     if (leaving.current) return;
     pending.current?.abort();
@@ -178,6 +195,11 @@ export function Screen({
         }
         stopped.current = false;
         if (!latest) return;
+        // A paged read names the window that later reads send.
+        if ("older" in latest.data) {
+          history.current = historyAfter(latest.data);
+          readPath.current = screenPath(path, {}, history.current);
+        }
         version.current = latest.version;
         setData(latest.data);
         setPageTitle(memberTitle(parseMemberRoute(path), latest.data));
@@ -202,7 +224,7 @@ export function Screen({
   }, [path]);
   // A changed filter reads at once, not at the next poll.
   useEffect(() => {
-    const filtered = screenPath(path, findFilters);
+    const filtered = screenPath(path, findFilters, history.current);
     if (readPath.current === filtered) return;
     readPath.current = filtered;
     void refresh();
@@ -309,6 +331,16 @@ export function Screen({
     setData((current) =>
       current?.kind === "account" ? { ...current, ...saved } : current,
     );
+    await refresh();
+  }
+  // Show older reads the page before the oldest entry shown, with every newer
+  // one, and later reads keep that longer window.
+  async function showOlder() {
+    const since = history.current.since;
+    if (!since) return;
+    history.current = { before: since };
+    readPath.current = screenPath(path, findFilters, history.current);
+    setOlderThan(since);
     await refresh();
   }
   // The title page friend line asks the feed to show a friend's entry. Each
@@ -520,6 +552,9 @@ export function Screen({
             showEmpty={data?.kind !== "profile" || data.profile.can_read}
             compact={route.kind === "title"}
             shownEntry={route.kind === "title" ? shownEntry : null}
+            older={!!data && "older" in data && !!data.older}
+            showOlder={showOlder}
+            olderThan={olderThan}
           />
         )}
         {route.kind === "invites" && (
