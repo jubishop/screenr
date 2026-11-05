@@ -2,6 +2,7 @@
 import { Link } from "./pending-navigation";
 import { useState } from "react";
 import type { ScreenData } from "../server/screens";
+import { memberPath } from "../member-routes";
 import { TitleCard } from "./title-card";
 import {
   ofKind,
@@ -35,7 +36,13 @@ export function WatchTogether({
               {index > 0 && " & "}
               <span className="participant">
                 <Avatar person={person} />
-                <Link href={`/people/${person.username}`} prefetch={false}>
+                <Link
+                  href={memberPath({
+                    kind: "profile",
+                    username: person.username,
+                  })}
+                  prefetch={false}
+                >
                   {person.display_name}
                 </Link>
               </span>

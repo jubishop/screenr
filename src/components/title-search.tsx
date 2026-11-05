@@ -406,11 +406,13 @@ export function TitleSearch({
                 <Link
                   className="suggestion-tile"
                   key={title.id}
-                  href={`/titles/${title.id.replace(":", "/")}?from=${
-                    title.recommended_by.length
+                  href={memberPath({
+                    kind: "title",
+                    id: title.id,
+                    from: title.recommended_by.length
                       ? "suggestion_recommendation"
-                      : "suggestion"
-                  }`}
+                      : "suggestion",
+                  })}
                   prefetch={false}
                 >
                   <Poster

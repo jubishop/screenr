@@ -6,6 +6,7 @@ import type {
   FriendsRecommendation,
   SaveSurface,
 } from "../shared";
+import { memberPath } from "../member-routes";
 import { ActionButton } from "./action-button";
 import { useActionError } from "./action-error";
 import { useInteractive } from "./client";
@@ -72,7 +73,7 @@ function Action({
   const interactive = useInteractive();
   const failure = useActionError();
   const status = title.viewer_status;
-  const href = `/titles/${title.id.replace(":", "/")}?from=${surface}`;
+  const href = memberPath({ kind: "title", id: title.id, from: surface });
   return (
     <>
       <div className="title-actions" role="group" aria-label={title.name}>

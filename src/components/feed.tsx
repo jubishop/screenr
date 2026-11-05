@@ -433,7 +433,10 @@ function FeedEntry({
           photo: item.photo,
         }}
       />
-      <Link href={`/people/${item.username}`} prefetch={false}>
+      <Link
+        href={memberPath({ kind: "profile", username: item.username })}
+        prefetch={false}
+      >
         {item.display_name}
       </Link>{" "}
       <span className="muted">

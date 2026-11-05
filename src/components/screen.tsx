@@ -419,7 +419,7 @@ export function Screen({
             />
             {/* Phones hide the sidebar link, so the header links the profile. */}
             <Link
-              href={`/people/${user.username}`}
+              href={memberPath({ kind: "profile", username: user.username })}
               className="header-profile"
               aria-label="Your profile"
               prefetch={false}
@@ -451,7 +451,10 @@ export function Screen({
           ))}
         </nav>
         <div className="sidebar-bottom">
-          <Link href={`/people/${user.username}`} prefetch={false}>
+          <Link
+            href={memberPath({ kind: "profile", username: user.username })}
+            prefetch={false}
+          >
             <Avatar person={user} />
             <span>
               {user.display_name}
@@ -484,6 +487,7 @@ export function Screen({
         {route.kind === "title" && (
           <TitleView
             data={data?.kind === "title" ? data : null}
+            from={route.from}
             user={user}
             busy={busy}
             activity={activity}

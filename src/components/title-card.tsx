@@ -1,6 +1,7 @@
 import { Link } from "./pending-navigation";
 import type { ReactNode } from "react";
-import type { AccessTitle, ReleaseTitle, SaveSurface, Title } from "../shared";
+import type { AccessTitle, ReleaseTitle, Title } from "../shared";
+import { memberPath, type TitleOrigin } from "../member-routes";
 import { Poster } from "./poster";
 import { TitleServices } from "./title-services";
 import { TitleStatus } from "./title-status";
@@ -30,13 +31,13 @@ export function TitleCard({
   title: AccessTitle | ReleaseTitle;
   heading: "h2" | "h3";
   shared?: boolean;
-  from?: SaveSurface;
+  from?: TitleOrigin;
   children?: ReactNode;
 }) {
   const link = (
     <Link
       className="search-result"
-      href={`/titles/${title.id.replace(":", "/")}${from ? `?from=${from}` : ""}`}
+      href={memberPath({ kind: "title", id: title.id, from })}
       prefetch={false}
     >
       <Poster path={title.poster_path} name={title.name} />

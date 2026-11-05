@@ -15,6 +15,7 @@ import { Icon } from "./icons";
 import { ActionButton } from "./action-button";
 import { useActionError } from "./action-error";
 import { Link } from "./pending-navigation";
+import { memberPath } from "../member-routes";
 
 // The profile top 10 (docs/profile-top-ten.md): a ranked list of up to 10
 // titles each member recommends, shown on their profile and changed from
@@ -27,8 +28,6 @@ export type ChangeTopTen = (
   change: TopTenChange,
   options?: { replace?: string; rank?: number },
 ) => Promise<unknown>;
-
-const titlePath = (id: string) => `/titles/${id.replace(":", "/")}`;
 
 // The confirmation before a top 10 title loses its Recommend, by withdrawing
 // it or by switching to Want to watch, wherever those actions appear.
@@ -449,7 +448,10 @@ export function TopTenSection({
                     : undefined
                 }
               >
-                <Link href={titlePath(entry.id)} prefetch={false}>
+                <Link
+                  href={memberPath({ kind: "title", id: entry.id })}
+                  prefetch={false}
+                >
                   <span className="top-ten-poster">
                     <Poster
                       path={entry.poster_path}

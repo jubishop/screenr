@@ -4,6 +4,7 @@ import { useId, useRef, useState } from "react";
 import type { WriteAction } from "../server/actions";
 import type { ScreenData } from "../server/screens";
 import type { Person } from "../shared";
+import { memberPath } from "../member-routes";
 import { dateLabel, useInteractive } from "./client";
 import { InvitationLink } from "./invitation-link";
 import { useActionError } from "./action-error";
@@ -186,7 +187,7 @@ function InvitationCard({
               <Link
                 className="joined-person"
                 key={p.username}
-                href={`/people/${p.username}`}
+                href={memberPath({ kind: "profile", username: p.username })}
                 prefetch={false}
               >
                 {p.display_name} (@{p.username})

@@ -46,6 +46,24 @@ struct RoutePatternTests {
     #expect(RoutePattern(path: path).value == pattern)
   }
 
+  // Each shared member path, and its canonical path, reduces to the route that
+  // the web's routes and Destination read it as. A path that names no member
+  // screen keeps none of its segments.
+  @Test func reducesEverySharedMemberPathToItsRoute() throws {
+    let cases = try SharedMemberRoutes.cases()
+    #expect(!cases.isEmpty)
+    for example in cases {
+      for path in [example.path, example.canonical] {
+        let pattern = RoutePattern(path: path).value
+        if let route = example.route {
+          #expect(pattern == route, "\(path)")
+        } else {
+          #expect(pattern.split(separator: "/").allSatisfy { $0 == ":segment" }, "\(path)")
+        }
+      }
+    }
+  }
+
   @Test func keepsTheOriginOfAnAbsoluteURLAndDropsItsCredentials() throws {
     let url = try #require(
       URL(string: "https://alice:secret@screenr.club:8443/people/alice?q=x#top")

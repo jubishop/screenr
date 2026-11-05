@@ -1,7 +1,7 @@
 "use client";
-import { useSearchParams } from "next/navigation";
 import { useRef, useState, type RefObject } from "react";
 import type { ScreenData } from "../server/screens";
+import type { TitleOrigin } from "../member-routes";
 import type { Person, SaveSurface, WatchStatus } from "../shared";
 import { topTenLimit } from "../shared";
 import { useInteractive } from "./client";
@@ -16,18 +16,13 @@ import { localToday, WatchStatusMenu } from "./watch-status";
 import { useReviewEditor } from "./review";
 import { ConfirmAction } from "./confirmation";
 import { leavingTopTen, TopTenReplace, type ChangeTopTen } from "./top-ten";
-// Suggestion tiles, Friends recommend, and Watch together open title pages
-// with ?from=<surface>, so a Want to watch status chosen here reports where
-// the member found the title.
-const origins: SaveSurface[] = [
-  "friends_recommend",
-  "suggestion_recommendation",
-  "suggestion",
-  "watch_together",
-];
 
+// Suggestion tiles, Friends recommend, and Watch together open title pages
+// with the route's `from`, so a Want to watch status chosen here reports
+// where the member found the title.
 export function TitleView({
   data,
+  from,
   user,
   busy,
   activity,
@@ -38,6 +33,7 @@ export function TitleView({
   showEntry,
 }: {
   data: Extract<ScreenData, { kind: "title" }> | null;
+  from?: TitleOrigin;
   user: Person;
   busy: boolean;
   activity: (
@@ -58,8 +54,7 @@ export function TitleView({
   showEntry: (item: string) => void;
 }) {
   const interactive = useInteractive();
-  const from = useSearchParams().get("from") as SaveSurface | null;
-  const surface = from && origins.includes(from) ? from : "title";
+  const surface: SaveSurface = from ?? "title";
   const failure = useActionError();
   // A failed read clears `data` and hides the title. Its prompts and the
   // review's Remove confirmation keep the last title, so an open one stays,

@@ -4,7 +4,9 @@ import Foundation
 // to one: `Destination(path:)` reads a member path as the web does, and `path`
 // is the web's canonical path, keeping only the parameters a screen uses.
 // Universal links, the Dev `screenr-dev://` scheme, notification links, and
-// the screen API all use the same paths.
+// the screen API all use the same paths. The web's routes also hold Find a
+// title's filters and a paged history's window for its screen reads, which
+// `FindModel` and `HistoryWindow` add to the app's.
 public enum Destination: Hashable, Sendable {
   // The friends feed, `/`, optionally at an entry and one of its replies.
   case feed(item: String? = nil, reply: String? = nil)

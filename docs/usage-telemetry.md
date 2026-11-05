@@ -208,11 +208,12 @@ Suggestion tiles and Watch together have no inline title actions, so their
 links add `?from=<surface>` to the title page address. Friends recommend
 sends its surface with its own Want to watch action, and its title links add
 `?from=friends_recommend`. The title page sends that surface with its Want to
-watch action. The member route parser ignores
-the parameter, so it does not change which screen loads; a copied address
-keeps it. A save without a surface, from a page loaded before this release,
-stores no surface and can count only as inferred. An unknown surface is
-rejected.
+watch action. The title route holds the parameter, as the iPhone app's
+`Destination.title` does, and keeps only these four surfaces, so a page opened
+with any other `from` reports `title`. The screen read leaves it out, so it
+does not change which screen loads; a copied address keeps it. A save without
+a surface, from a page loaded before this release, stores no surface and can
+count only as inferred. An unknown surface is rejected.
 
 ### Save follow-through
 

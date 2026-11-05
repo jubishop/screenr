@@ -2,6 +2,7 @@
 import { Link } from "./pending-navigation";
 import { useEffect, useRef, useState } from "react";
 import type { Comment, Person, Thread } from "../shared";
+import { memberPath } from "../member-routes";
 import { api, useInteractive } from "./client";
 import { ActivityTime } from "./activity-time";
 import { preservePosition } from "./position";
@@ -259,7 +260,13 @@ export function ThreadView({
               <span className="comment-author" id={`author-${comment.id}`}>
                 <Avatar person={author} />
                 {author ? (
-                  <Link href={`/people/${comment.username}`} prefetch={false}>
+                  <Link
+                    href={memberPath({
+                      kind: "profile",
+                      username: comment.username ?? "",
+                    })}
+                    prefetch={false}
+                  >
                     <strong>{comment.display_name}</strong>{" "}
                     <span className="muted">@{comment.username}</span>
                   </Link>

@@ -2,9 +2,42 @@ import Foundation
 import ScreenrKit
 import Testing
 
-// The same cases as the web's member route tests, so a destination and the
-// web's route agree on every path.
+// The shared member paths, which the web's routes read too, and the same
+// cases as the web's member route tests, so a destination and the web's route
+// agree on every path.
 struct DestinationTests {
+  // Each shared path reads as the web reads it: the same canonical path, which
+  // reads back as the same destination, and the same route.
+  @Test func readsTheSharedMemberPathsAsTheWebDoes() throws {
+    let cases = try SharedMemberRoutes.cases()
+    #expect(!cases.isEmpty)
+    for example in cases {
+      let destination = Destination(path: example.path)
+      #expect(destination.path == example.canonical, "\(example.path)")
+      #expect(Destination(path: example.canonical) == destination, "\(example.canonical)")
+      #expect(route(of: destination) == example.route, "\(example.path)")
+    }
+  }
+
+  // The route pattern of each destination's path, or nil for a path that names
+  // no screen.
+  private func route(of destination: Destination) -> String? {
+    switch destination {
+    case .feed: "/"
+    case .search: "/search"
+    case .people: "/people"
+    case .invites: "/invites"
+    case .account: "/account"
+    case .watchTogether: "/watch-together"
+    case .title: "/titles/:kind/:id"
+    case .profile: "/people/:username"
+    case .wantToWatch: "/people/:username/want-to-watch"
+    case .conversation: "/conversations/:id"
+    case .join: "/join/:token"
+    case .notFound: nil
+    }
+  }
+
   @Test(
     arguments: [
       ("/", Destination.feed()),
@@ -83,48 +116,12 @@ struct DestinationTests {
     #expect(Destination(path: "/%E0%A4%A") == .notFound(path: "/%E0%A4%A"))
   }
 
-  @Test(
-    arguments: [
-      ("/?item=post&reply=answer&utm=x", "/?item=post&reply=answer"),
-      ("/?item=", "/"),
-      ("/search?item=post", "/search"),
-      ("/search?item=post&q=The%20Office", "/search?q=The+Office"),
-      ("/search?q=+Lost+", "/search?q=Lost"),
-      ("/search?q=", "/search"),
-      ("/search?tab=friends-recommend", "/search?tab=friends-recommend"),
-      ("/search?q=Lost&tab=friends-recommend", "/search?tab=friends-recommend&q=Lost"),
-      ("/search?tab=other&q=Lost", "/search?q=Lost"),
-      ("/?tab=friends-recommend", "/"),
-      ("/?q=Lost", "/"),
-      ("/account?error=access_denied", "/account"),
-      ("/people/alice?item=post", "/people/alice"),
-      ("/people/a%20b", "/people/a%20b"),
-      ("/people/alice/want-to-watch?q=x", "/people/alice/want-to-watch"),
-      ("/people/a%20b/want-to-watch", "/people/a%20b/want-to-watch"),
-      (
-        "/people/alice/want-to-watch?mode=theaters&item=x",
-        "/people/alice/want-to-watch?mode=theaters"
-      ),
-      ("/people/alice/want-to-watch?mode=home", "/people/alice/want-to-watch"),
-      ("/people/alice?mode=theaters", "/people/alice"),
-      ("/search?mode=theaters", "/search"),
-      ("/titles/movie/42?reply=answer&item=post", "/titles/movie/42?item=post&reply=answer"),
-      ("/titles/movie/1%3Fitem%3Dx", "/titles/movie/1%3Fitem%3Dx"),
-      ("/watch-together?with=ben&with=&x=1", "/watch-together?with=ben&with="),
-      ("/watch-together?mode=theaters&with=ben", "/watch-together?with=ben&mode=theaters"),
-      ("/watch-together?with=ben&mode=other", "/watch-together?with=ben"),
-      ("/conversations/legacy?reply=old&item=x", "/conversations/legacy?reply=old"),
-      ("/unknown?item=post", "/unknown"),
-      ("/join/AbC_123-xyz", "/join/AbC_123-xyz"),
-      ("/people/%2F%2Fevil.example", "/people/%2F%2Fevil.example"),
-      ("/search?q=caf%C3%A9%20%26%20tea", "/search?q=caf%C3%A9+%26+tea"),
-      ("/people/it's(me)!", "/people/it's(me)!"),
-    ]
-  )
-  func keepsOnlyEachScreensParametersAndRoundTrips(path: String, canonical: String) {
-    let destination = Destination(path: path)
-    #expect(destination.path == canonical)
-    #expect(Destination(path: canonical) == destination)
+  // An invitation link is not a member route, so the shared paths leave it
+  // out.
+  @Test func keepsOnlyAnInvitationLinksToken() {
+    let invitation = Destination(path: "/join/AbC_123-xyz?source=friend")
+    #expect(invitation.path == "/join/AbC_123-xyz")
+    #expect(Destination(path: invitation.path) == invitation)
   }
 
   @Test(

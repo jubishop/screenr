@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
 import { AppError, db, isBigintId, transaction } from "./db";
 import { queueBadgePush, trackRelationshipBadges } from "./push";
-import { entryPath } from "../member-routes";
+import { entryPath, memberPath } from "../member-routes";
 
 type NotificationRow = {
   id: string;
@@ -46,7 +46,7 @@ function present(row: NotificationRow) {
           { id: row.item_id, title_id: row.title_id },
           row.comment_id ?? undefined,
         )
-      : `/people/${row.username}`,
+      : memberPath({ kind: "profile", username: row.username }),
     createdAt: row.created_at,
     read: row.read_at !== null,
   };

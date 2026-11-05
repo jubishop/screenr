@@ -1,7 +1,11 @@
 "use client";
 import { Link } from "./pending-navigation";
-import type { ReleaseTitle, SaveSurface } from "../shared";
-import { memberPath, type MemberRoute } from "../member-routes";
+import type { ReleaseTitle } from "../shared";
+import {
+  memberPath,
+  type MemberRoute,
+  type TitleOrigin,
+} from "../member-routes";
 import { TitleCard } from "./title-card";
 
 export type ListRoute = Extract<
@@ -49,7 +53,7 @@ export function InTheatersList({
   // What the count names, such as "movie" or "shared movie".
   noun: string;
   empty: { heading: string; message: string; findTitle?: boolean };
-  from?: SaveSurface;
+  from?: TitleOrigin;
 }) {
   const showing = titles.filter((title) => title.release.in_theaters);
   const unknown = titles.filter(

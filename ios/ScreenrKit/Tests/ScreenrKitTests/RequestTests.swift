@@ -225,6 +225,7 @@ struct RequestTests {
     )
   }
 
+  // A screen read names its path's route pattern, as RoutePattern reduces it.
   @Test(arguments: [
     ("/", "/"),
     ("/?item=1&reply=2", "/"),
@@ -235,7 +236,7 @@ struct RequestTests {
     ("/titles/tv/201?item=1", "/titles/:kind/:id"),
     ("/conversations/abc?reply=3", "/conversations/:id"),
     ("/watch-together?with=ben", "/watch-together"),
-    ("/nothing/here", "/:unknown"),
+    ("/nothing/here", "/:segment/:segment"),
   ])
   func reducesScreenPathsToRoutePatterns(path: String, pattern: String) {
     #expect(APIRequest.screen(path: path).route == "/api/screenr/screen?path=\(pattern)")

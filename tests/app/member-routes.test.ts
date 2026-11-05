@@ -1,5 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import {
   loginPath,
   memberPath,
@@ -8,6 +9,7 @@ import {
   returnPath,
   screenPath,
   setupPath,
+  type MemberRoute,
 } from "../../src/member-routes";
 
 // Absent and empty parameters both parse as missing.
@@ -60,6 +62,14 @@ test("member routes name each screen and its parameters", () => {
     [
       "/titles/tv/7?item=post&reply=answer",
       { kind: "title", id: "tv:7", item: "post", reply: "answer" },
+    ],
+    [
+      "/titles/movie/42?from=suggestion",
+      { kind: "title", id: "movie:42", from: "suggestion" },
+    ],
+    [
+      "/titles/tv/7?item=post&from=watch_together",
+      { kind: "title", id: "tv:7", item: "post", from: "watch_together" },
     ],
     ["/people/Alice", { kind: "profile", username: "Alice" }],
     [
@@ -147,57 +157,54 @@ test("member routes reject unknown paths and extra segments", () => {
     assert.equal(parseMemberRoute(path).kind, "not-found", path);
 });
 
-// Requested paths and their canonical member paths.
+// The member paths that the iPhone app's Destination and RoutePattern read
+// too, so the clients name the same screen for every path.
+const shared: {
+  cases: { path: string; canonical: string; route: string | null }[];
+} = JSON.parse(
+  readFileSync(
+    new URL(
+      "../../ios/ScreenrKit/SharedCases/member-routes.json",
+      import.meta.url,
+    ),
+    "utf8",
+  ),
+);
+
+// The route pattern of each kind of route, as the app's RoutePattern reduces
+// its paths, or null for a path that names no member screen.
+const routePatterns: Record<MemberRoute["kind"], string | null> = {
+  feed: "/",
+  search: "/search",
+  people: "/people",
+  invites: "/invites",
+  account: "/account",
+  "watch-together": "/watch-together",
+  title: "/titles/:kind/:id",
+  profile: "/people/:username",
+  "want-to-watch": "/people/:username/want-to-watch",
+  conversation: "/conversations/:id",
+  "not-found": null,
+};
+
+test("member routes read the paths the iPhone app shares as the app does", () => {
+  assert.ok(shared.cases.length);
+  for (const { path, route } of shared.cases)
+    assert.equal(routePatterns[parseMemberRoute(path).kind], route, path);
+});
+
+// Requested paths and their canonical member paths: the shared cases, and
+// Find a title's filters and a paged history's window, which only the web's
+// routes hold. The app adds them to its screen reads itself.
 const canonicalPaths = [
-  ["/?item=post&reply=answer&utm=x", "/?item=post&reply=answer"],
-  ["/?item=", "/"],
-  ["/search?item=post", "/search"],
-  ["/search?item=post&q=The%20Office", "/search?q=The+Office"],
-  ["/search?q=+Lost+", "/search?q=Lost"],
-  ["/search?q=", "/search"],
-  ["/search?tab=friends-recommend", "/search?tab=friends-recommend"],
-  [
-    "/search?q=Lost&tab=friends-recommend",
-    "/search?tab=friends-recommend&q=Lost",
-  ],
-  ["/search?tab=other&q=Lost", "/search?q=Lost"],
+  ...shared.cases.map(({ path, canonical }) => [path, canonical]),
   [
     "/search?finished=hidden&type=movie&q=Lost&services=mine",
     "/search?q=Lost&services=mine&type=movie&finished=hidden",
   ],
   ["/search?type=all&finished=shown", "/search"],
-  ["/?tab=friends-recommend", "/"],
-  ["/?services=mine&type=tv&finished=hidden", "/"],
-  ["/?q=Lost", "/"],
-  ["/account?error=access_denied", "/account"],
-  ["/people/alice?item=post", "/people/alice"],
   ["/people/alice?since=x&before=now", "/people/alice?since=x&before=now"],
   ["/?before=now&reply=a&item=b", "/?item=b&reply=a&before=now"],
-  ["/search?before=now&since=x", "/search"],
-  ["/titles/movie/42?since=x", "/titles/movie/42"],
-  ["/people/a%20b", "/people/a%20b"],
-  ["/people/alice/want-to-watch?q=x", "/people/alice/want-to-watch"],
-  ["/people/a%20b/want-to-watch", "/people/a%20b/want-to-watch"],
-  [
-    "/people/alice/want-to-watch?mode=theaters&item=x",
-    "/people/alice/want-to-watch?mode=theaters",
-  ],
-  ["/people/alice/want-to-watch?mode=home", "/people/alice/want-to-watch"],
-  ["/people/alice?mode=theaters", "/people/alice"],
-  ["/search?mode=theaters", "/search"],
-  [
-    "/titles/movie/42?reply=answer&item=post",
-    "/titles/movie/42?item=post&reply=answer",
-  ],
-  ["/titles/movie/1%3Fitem%3Dx", "/titles/movie/1%3Fitem%3Dx"],
-  ["/watch-together?with=ben&with=&x=1", "/watch-together?with=ben&with="],
-  [
-    "/watch-together?mode=theaters&with=ben",
-    "/watch-together?with=ben&mode=theaters",
-  ],
-  ["/watch-together?with=ben&mode=other", "/watch-together?with=ben"],
-  ["/conversations/legacy?reply=old&item=x", "/conversations/legacy?reply=old"],
-  ["/unknown?item=post", "/unknown"],
 ];
 
 function assertCanonicalPaths() {
@@ -248,6 +255,12 @@ test("Find a title reads with its current filters, and other screens read their 
       { type: "tv" },
       "/titles/movie/42?item=post",
     ],
+    // The list that opened a title doesn't change its screen.
+    [
+      "/titles/movie/42?item=post&from=suggestion",
+      {},
+      "/titles/movie/42?item=post",
+    ],
   ] as const)
     assert.equal(screenPath(path, filters), read, `${path} ${read}`);
 });
@@ -280,6 +293,7 @@ test("return paths keep same-origin member pages in canonical form", () => {
       "/titles/movie/42?item=post&reply=answer&utm=x",
       "/titles/movie/42?item=post&reply=answer",
     ],
+    ["/titles/tv/7?from=suggestion&utm=x", "/titles/tv/7?from=suggestion"],
     ["/search?q=The%20Office", "/search?q=The+Office"],
     ["/search?tab=friends-recommend", "/search?tab=friends-recommend"],
     ["/people/alice#friends", "/people/alice"],
