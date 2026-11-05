@@ -410,8 +410,17 @@ Its `.p8` file stays on the owner's Mac at the path in `ASC_KEY_PATH`, and
 the owner's shell exports `ASC_KEY_ID` and `ASC_ISSUER_ID`.
 [TestFlight releases](development-workflow.md#testflight-releases) add each
 build to "Public testers" and create the group, without a public link, if it
-is missing. [#250](https://github.com/jubishop/screenr/issues/250) enables
-the link after the first build passes Beta App Review.
+is missing.
+
+**Public link:** "Public testers" has had its public link on since
+2026-11-04, after build 1.0 (2) passed Beta App Review
+([#250](https://github.com/jubishop/screenr/issues/250)). The link itself
+stays out of the repository. In App Store Connect, open Screenr's TestFlight
+tab and select "Public testers" under External Testing; the group's page
+shows the link. The API returns it as the `publicLink` attribute of
+`GET /v1/betaGroups/34f3f27c-157a-4567-add5-5e34c2a03843`. The link has no
+tester limit of its own, and anyone who installs from it still needs an
+invitation to join Screenr.
 
 ### Google
 
