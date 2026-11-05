@@ -1,8 +1,7 @@
-import { test, before, beforeEach, after, afterEach, mock } from "node:test";
+import { test, before, beforeEach, after } from "node:test";
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
-import { setTimeout as sleep } from "node:timers/promises";
 import { db, cookieFor, captureFailures } from "./social-fixture";
 
 const { migrate } = await import("../../scripts/migrate");
@@ -81,31 +80,44 @@ before(async () => {
   process.env.SCREENR_TEST_TMDB_URL = `http://127.0.0.1:${(catalog.address() as AddressInfo).port}`;
   process.env.TMDB_READ_TOKEN = "catalog-test-token";
 });
-// What each test's failures print. Lines from Better Auth are not JSON.
-let printed: string[] = [];
-const failureLines = () =>
-  printed
-    .filter((line) => line.startsWith("{"))
-    .map((line) => {
-      const { stack, ...fields } = JSON.parse(line);
-      return fields;
-    });
+// The fields of the failure lines a test captured with captureFailures(t),
+// without their stacks. Any other captured line, such as Better Auth's own,
+// fails to parse, so no test leaves one unasserted.
+const failureLines = (printed: string[]) =>
+  printed.map((line) => {
+    const { stack, ...fields } = JSON.parse(line);
+    return fields;
+  });
 // A TMDB answer without the shape Screenr reads logs the lookup it answered.
 const invalidAnswer = (lookup: string, error = "AppError") => ({
   event: "catalog response invalid",
   lookup,
   error,
 });
-afterEach(() => mock.restoreAll());
+// A failed TMDB request logs its status, or the error of one never answered.
+const transient = "catalog request failed";
+const outage = { event: transient, status: 503 };
+const timedOut = {
+  event: transient,
+  error: "DOMException",
+  name: "TimeoutError",
+};
+// Movie details carry their release dates. Unless a test reads them, TMDB
+// lists none, a valid answer, so storing the details logs nothing.
+const releaseDates = { results: [] };
 beforeEach(async () => {
-  printed = captureFailures();
   videos = { results: [official] };
   status = 200;
   slow = false;
   details = {
     status: 200,
     slow: false,
-    body: { id: 42, title: "Renamed Movie", name: "Renamed Show" },
+    body: {
+      id: 42,
+      title: "Renamed Movie",
+      name: "Renamed Show",
+      release_dates: releaseDates,
+    },
     delay: 0,
   };
   search = { status: 200, slow: false, body: { results: [] }, delay: 0 };
@@ -199,7 +211,8 @@ for (const unavailable of [
     ],
   },
 ]) {
-  test(`unavailable or invalid metadata does not remove title details or conversations: ${JSON.stringify(unavailable)}`, async () => {
+  test(`unavailable or invalid metadata does not remove title details or conversations: ${JSON.stringify(unavailable)}`, async (t) => {
+    const printed = captureFailures(t);
     videos = unavailable;
     const result = await screen();
     assert.equal(result.trailer, null);
@@ -207,7 +220,7 @@ for (const unavailable of [
     assert.equal(result.conversations.length, 1);
     // A video list with no usable trailer is a valid answer.
     assert.deepEqual(
-      failureLines(),
+      failureLines(printed),
       Array.isArray(unavailable?.results)
         ? []
         : [invalidAnswer("videos", "Error")],
@@ -231,8 +244,14 @@ test("caches an absent trailer and refreshes expired public metadata", async () 
   assert.equal(requests.length, 2);
 });
 
-for (const failure of ["http", "timeout", "configuration"]) {
-  test(`a trailer ${failure} failure preserves the title and conversations`, async () => {
+// An unconfigured catalog sends no request, so it logs nothing.
+for (const [failure, logged] of [
+  ["http", [outage]],
+  ["timeout", [timedOut]],
+  ["configuration", []],
+] as const) {
+  test(`a trailer ${failure} failure preserves the title and conversations`, async (t) => {
+    const printed = captureFailures(t);
     status = failure === "http" ? 503 : 200;
     slow = failure === "timeout";
     const testURL = process.env.SCREENR_TEST_TMDB_URL;
@@ -252,6 +271,7 @@ for (const failure of ["http", "timeout", "configuration"]) {
         count,
         "failed requests must not repeat on each page refresh",
       );
+      assert.deepEqual(failureLines(printed), logged);
     } finally {
       process.env.SCREENR_TEST_TMDB_URL = testURL;
       process.env.TMDB_READ_TOKEN = "catalog-test-token";
@@ -267,14 +287,17 @@ const detailRequests = (kind = "movie") =>
   requests.filter((request) => request.path === detailPath(`${kind}:42`))
     .length;
 
-for (const failure of [
-  "http",
-  "timeout",
-  "not found",
-  "invalid",
-  "mismatched ID",
-]) {
-  test(`a stale stored title renders during a TMDB ${failure} failure and backs off`, async () => {
+// Each kind's failed refresh logs once, except TMDB's 404 for a title it no
+// longer has.
+for (const [failure, logged] of [
+  ["http", [outage, outage]],
+  ["timeout", [timedOut, timedOut]],
+  ["not found", []],
+  ["invalid", [invalidAnswer("details"), invalidAnswer("details")]],
+  ["mismatched ID", [invalidAnswer("details"), invalidAnswer("details")]],
+] as const) {
+  test(`a stale stored title renders during a TMDB ${failure} failure and backs off`, async (t) => {
+    const printed = captureFailures(t);
     await db.query("UPDATE title SET fetched_at=now()-interval '2 days'");
     details.status =
       failure === "http" ? 503 : failure === "not found" ? 404 : 200;
@@ -311,15 +334,12 @@ for (const failure of [
       (await db.query("SELECT id FROM title ORDER BY id")).rows,
       [{ id: "movie:42" }, { id: "tv:42" }],
     );
-    if (failure === "invalid" || failure === "mismatched ID")
-      assert.deepEqual(failureLines(), [
-        invalidAnswer("details"),
-        invalidAnswer("details"),
-      ]);
+    assert.deepEqual(failureLines(printed), logged);
   });
 }
 
-test("a failed title refresh retries after its delay and recovers fresh details", async () => {
+test("a failed title refresh retries after its delay and recovers fresh details", async (t) => {
+  const printed = captureFailures(t);
   await db.query("UPDATE title SET fetched_at=now()-interval '2 days'");
   details.status = 503;
   assert.equal((await screen()).title.name, "Test Movie");
@@ -329,6 +349,7 @@ test("a failed title refresh retries after its delay and recovers fresh details"
   assert.equal(detailRequests(), 2);
   assert.equal((await screen()).title.name, "Renamed Movie");
   assert.equal(detailRequests(), 2);
+  assert.deepEqual(failureLines(printed), [outage]);
 });
 
 const unavailable = {
@@ -343,12 +364,9 @@ const invalidResults = {
   status: 502,
   message: "The catalog returned invalid search results.",
 };
-// A title page that fails on details can leave optional metadata requests in
-// flight, so these assertions read only title-detail and search requests.
-const lookups = () =>
-  requests
-    .map((request) => request.path)
-    .filter((path) => /^\/(movie|tv)\/\d+(\?|$)|^\/search\//.test(path));
+// The TMDB paths the test requested. A title page answers only once its
+// lookups finish (#469), so none arrives during a later test.
+const lookups = () => requests.map((request) => request.path);
 const storedTitle = async (id: string) =>
   (
     await db.query(
@@ -357,7 +375,8 @@ const storedTitle = async (id: string) =>
     )
   ).rows[0];
 
-test("a title missing from storage still needs the catalog", async () => {
+test("a title missing from storage still needs the catalog", async (t) => {
+  const printed = captureFailures(t);
   details.status = 404;
   await assert.rejects(loadScreen("viewer", "/titles/movie/43"), {
     status: 404,
@@ -365,12 +384,13 @@ test("a title missing from storage still needs the catalog", async () => {
   });
   details.status = 503;
   await assert.rejects(loadScreen("viewer", "/titles/movie/43"), unavailable);
+  // Only the outage logs; TMDB's 404 is an answer.
+  assert.deepEqual(failureLines(printed), [outage]);
 });
 
 // Every TMDB failure except a 404 means the catalog is unavailable. Each
 // logs its TMDB status or error class; a rejected token is a configuration
 // failure, and the rest may pass on their own.
-const transient = "catalog request failed";
 const rejected = "catalog token rejected";
 const failures: Record<
   string,
@@ -391,7 +411,8 @@ const failures: Record<
   ],
 };
 for (const [failure, [reply, logged]] of Object.entries(failures)) {
-  test(`a TMDB ${failure} makes a cold title and search unavailable and logs each failure`, async () => {
+  test(`a TMDB ${failure} makes a cold title and search unavailable and logs each failure`, async (t) => {
+    const printed = captureFailures(t);
     Object.assign(details, reply);
     Object.assign(search, reply);
     await assert.rejects(getTitle("movie:43"), unavailable);
@@ -403,7 +424,7 @@ for (const [failure, [reply, logged]] of Object.entries(failures)) {
     assert.equal(await storedTitle("movie:43"), undefined);
     const expected = { status: undefined, error: undefined, ...logged };
     assert.deepEqual(
-      failureLines().map(({ event, status, error }) => ({
+      failureLines(printed).map(({ event, status, error }) => ({
         event,
         status,
         error,
@@ -413,7 +434,8 @@ for (const [failure, [reply, logged]] of Object.entries(failures)) {
   });
 }
 
-test("a rejected TMDB token logs one failure for each request, with its status", async () => {
+test("a rejected TMDB token logs one failure for each request, with its status", async (t) => {
+  const printed = captureFailures(t);
   const cookie = await cookieFor("viewer");
   const get = (action: string, query: Record<string, string>) =>
     GET(
@@ -436,15 +458,15 @@ test("a rejected TMDB token logs one failure for each request, with its status",
   // A server-rendered page counts as one request too.
   assert.equal((await initialScreen("viewer", "/titles/tv/42")).status, 200);
   assert.ok(requests.some(({ path }) => path === "/tv/42/videos"));
-  // A cold title fails. Its trailer and availability requests finish after
-  // the response, and the title they would be stored under never was.
+  // A cold title fails only once its trailer and availability requests
+  // finish (#469), so they print nothing after this test ends. The title they
+  // would be stored under never was.
   const cold = await get("screen", { path: "/titles/movie/43" });
   assert.equal(cold.status, 502);
-  while (active > 0 || providerRequests < 3) await sleep(5);
-  await sleep(50);
+  assert.equal(providerRequests, 3);
   const requestId = (response: Response) =>
     response.headers.get("Screenr-Request-Id");
-  assert.deepEqual(failureLines(), [
+  assert.deepEqual(failureLines(printed), [
     { event: rejected, requestId: requestId(searched), status: 401 },
     { event: rejected, requestId: requestId(page), status: 401 },
     { event: rejected, status: 401 },
@@ -452,7 +474,8 @@ test("a rejected TMDB token logs one failure for each request, with its status",
   ]);
 });
 
-test("invalid TMDB answers log one failure for each request, without their values", async () => {
+test("invalid TMDB answers log one failure for each request, without their values", async (t) => {
+  const printed = captureFailures(t);
   const cookie = await cookieFor("viewer");
   const get = (action: string, query: Record<string, string>) =>
     GET(
@@ -478,7 +501,7 @@ test("invalid TMDB answers log one failure for each request, without their value
   assert.ok(requests.some(({ path }) => path === "/movie/42/videos"));
   const requestId = (response: Response) =>
     response.headers.get("Screenr-Request-Id");
-  const [found, shown, ...rest] = failureLines();
+  const [found, shown, ...rest] = failureLines(printed);
   assert.deepEqual(found, {
     ...invalidAnswer("search"),
     requestId: requestId(searched),
@@ -499,7 +522,8 @@ test("invalid TMDB answers log one failure for each request, without their value
     assert.ok(!printed.join("\n").includes(value), `Logged ${value}`);
 });
 
-test("movie details without usable release dates are stored and log one failure for each request, without their values", async () => {
+test("movie details without usable release dates are stored and log one failure for each request, without their values", async (t) => {
+  const printed = captureFailures(t);
   const cookie = await cookieFor("viewer");
   const page = async () => {
     const response = await GET(
@@ -548,7 +572,7 @@ test("movie details without usable release dates are stored and log one failure 
     );
   }
   assert.deepEqual(
-    failureLines(),
+    failureLines(printed),
     requestIds.map((requestId) => ({
       event: "catalog response invalid",
       requestId,
@@ -573,14 +597,15 @@ for (const [cache, table, read] of [
     () => getTitleAvailability("movie:42"),
   ],
 ] as const) {
-  test(`an unreadable ${cache} cache logs its database error`, async () => {
+  test(`an unreadable ${cache} cache logs its database error`, async (t) => {
+    const printed = captureFailures(t);
     await db.query(`ALTER TABLE ${table} RENAME TO ${table}_hidden`);
     try {
       await read();
     } finally {
       await db.query(`ALTER TABLE ${table}_hidden RENAME TO ${table}`);
     }
-    assert.deepEqual(failureLines(), [
+    assert.deepEqual(failureLines(printed), [
       {
         event: "catalog cache failed",
         cache,
@@ -625,15 +650,17 @@ for (const [kind, body] of [
   ["movie", { id: 43, name: "Show name only" }],
   ["tv", { id: 43, title: "Movie title only" }],
 ] as const) {
-  test(`a cold ${kind} rejects and logs invalid TMDB details: ${JSON.stringify(body)}`, async () => {
+  test(`a cold ${kind} rejects and logs invalid TMDB details: ${JSON.stringify(body)}`, async (t) => {
+    const printed = captureFailures(t);
     details.body = body;
     await assert.rejects(getTitle(`${kind}:43`), invalidTitle);
     assert.equal(await storedTitle(`${kind}:43`), undefined);
-    assert.deepEqual(failureLines(), [invalidAnswer("details")]);
+    assert.deepEqual(failureLines(printed), [invalidAnswer("details")]);
   });
 }
 
-test("cold title details for another TMDB ID store and update nothing", async () => {
+test("cold title details for another TMDB ID store and update nothing", async (t) => {
+  const printed = captureFailures(t);
   const titles = async () =>
     (await db.query("SELECT * FROM title ORDER BY id")).rows;
   const existing = await titles();
@@ -641,6 +668,10 @@ test("cold title details for another TMDB ID store and update nothing", async ()
   for (const kind of ["movie", "tv"])
     await assert.rejects(getTitle(`${kind}:43`), invalidTitle);
   assert.deepEqual(await titles(), existing);
+  assert.deepEqual(failureLines(printed), [
+    invalidAnswer("details"),
+    invalidAnswer("details"),
+  ]);
 });
 
 test("cold title details keep each kind's fields and only text values", async () => {
@@ -651,6 +682,7 @@ test("cold title details keep each kind's fields and only text values", async ()
     overview: 7,
     release_date: 2024,
     first_air_date: "2001-01-01",
+    release_dates: releaseDates,
   };
   const movie = {
     id: "movie:43",
@@ -700,7 +732,12 @@ test("cold title details keep only a single-segment TMDB poster path", async () 
   ];
   for (const [index, [poster_path, expected]] of posters.entries()) {
     const id = 100 + index;
-    details.body = { id, title: "Poster", poster_path };
+    details.body = {
+      id,
+      title: "Poster",
+      poster_path,
+      release_dates: releaseDates,
+    };
     assert.equal(
       (await getTitle(`movie:${id}`)).poster_path,
       expected,
@@ -788,14 +825,16 @@ for (const body of [
   { results: {} },
   { results: "movie" },
 ]) {
-  test(`search rejects and logs invalid TMDB results: ${JSON.stringify(body)}`, async () => {
+  test(`search rejects and logs invalid TMDB results: ${JSON.stringify(body)}`, async (t) => {
+    const printed = captureFailures(t);
     search.body = body;
     await assert.rejects(searchTitles("night"), invalidResults);
-    assert.deepEqual(failureLines(), [invalidAnswer("search")]);
+    assert.deepEqual(failureLines(printed), [invalidAnswer("search")]);
   });
 }
 
-test("search rejects and logs an invalid movie or TV result", async () => {
+test("search rejects and logs an invalid movie or TV result", async (t) => {
+  const printed = captureFailures(t);
   for (const result of [
     { media_type: "movie", id: 0, title: "Zero ID" },
     { media_type: "tv", id: 44, title: "Movie title only" },
@@ -805,13 +844,14 @@ test("search rejects and logs an invalid movie or TV result", async () => {
     };
     await assert.rejects(searchTitles("night"), invalidTitle);
   }
-  assert.deepEqual(failureLines(), [
+  assert.deepEqual(failureLines(printed), [
     invalidAnswer("search"),
     invalidAnswer("search"),
   ]);
 });
 
-test("the search API returns catalog errors with their statuses", async () => {
+test("the search API returns catalog errors with their statuses", async (t) => {
+  const printed = captureFailures(t);
   const cookie = await cookieFor("viewer");
   const find = async (q: string) => {
     const response = await GET(
@@ -839,12 +879,17 @@ test("the search API returns catalog errors with their statuses", async () => {
     status: 502,
     body: { error: invalidResults.message },
   });
+  // Only the outage and the invalid results log.
+  assert.deepEqual(
+    failureLines(printed).map(({ requestId, ...fields }) => fields),
+    [outage, invalidAnswer("search")],
+  );
 });
 
 test("a cold title page requests details, trailer, and availability together", async () => {
   delay = 100;
   details.delay = 300; // Optional metadata arrives before the title is stored.
-  details.body = { id: 43, title: "Cold Movie" };
+  details.body = { id: 43, title: "Cold Movie", release_dates: releaseDates };
   const result = await loadScreen("viewer", "/titles/movie/43");
   if (result.kind !== "title") throw new Error("Expected a title screen");
   assert.equal(result.title.name, "Cold Movie");
