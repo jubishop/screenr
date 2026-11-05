@@ -391,11 +391,10 @@ the account forget it. [Settings](#settings) ends with `SignOutButton`.
 | `Router` | ScreenrKit `Navigation/` | `@Observable`: the selected tab, each tab's stack, and the sheet. `open(_:)` takes links from outside the app, and puts an invitation link's token in `PendingInvitation`. The last link waits until `screenLoaded(_:)` reports the screen that shows it, so `sessionEnded(_:)` can keep it across an expired session. |
 | `ShellModel` | ScreenrKit `Shell/` | `@Observable`: the account check, the viewer, the bell's unread count, the app's activity, `screenModel(for:)`, `pushArrived()`, `refreshLiveReads()`, and `onUnreadCount(_:)`, which reports each unread count, such as for the app icon's badge. Views read it with `@Environment(ShellModel.self)`. |
 | `LiveRead`, `ScreenModel` | ScreenrKit `Shell/` | A GET request's `phase` (`loading`, `loaded`, or `failed`) and its polling. `ScreenModel` is `LiveRead<Screen>`; other live reads, such as the notifications sheet's, use `LiveRead(.notifications(), api:)`. |
-| `IncomingActivity` | ScreenrKit `Shell/` | Which activity the reader accepted; the rest waits behind a control. |
 | `DestinationView` | `Screenr/Shell/` | Maps each destination to its screen, owns its `ScreenModel`, and adds polling, the navigation title, and redirects. |
 | `ScreenContent`, `MessageView` | `Screenr/Shell/` | Render a model's phase: a spinner, the error with Try again, or the loaded screen; and a full-screen message. |
 | `.livePolling(_:)` | `Screenr/Shell/` | Connects any `LiveRead` to its view's visibility, the app's activity, pull-to-refresh, and pushes. |
-| `IncomingActivityButton` | `Screenr/Shell/` | The "New activity" and "New replies" controls; `.incomingActivity(_:count:show:)` floats one over a screen, and only the control animates. `show` must keep the reader's place, as `FeedList` does. The control's identifier is `incoming-activity`; `performShellAudit()` treats its glass like a bar's, so a test checks its label with `labelContrast()`. |
+| `IncomingActivityButton` | `Screenr/Shell/` | The New activity control; `.incomingActivity(_:count:show:)` floats it over a screen, and only the control animates. `show` must keep the reader's place, as `FeedList` does. The control's identifier is `incoming-activity`; `performShellAudit()` treats its glass like a bar's, so a test checks its label with `labelContrast()`. |
 | `ShareButton` | `Screenr/Shell/` | A `ShareLink` for a destination's screenr.club link. |
 | Feature screens | `Screenr/Screens/` | One file per screen. Each starts as a `PlaceholderScreen` that shows what the screen holds and its path. |
 
@@ -488,9 +487,10 @@ marks the visit for `ShellTests`.
    the tab's stack shows it. Use `shell.router.open(_:)` only for links from
    outside the current screen, such as a notification.
 4. **Shared controls:** share with `ShareButton(destination:subject:)`. For
-   incoming activity, keep an `IncomingActivity<Key>` in the view model and
-   float `.incomingActivity(.activity, count: waiting.count) { … }` over the
-   screen.
+   other people's incoming activity, build on the feed's: `FeedModel` keeps
+   an `AcceptedActivity`, `FeedLayout` counts what waits in `incoming`, and
+   `FeedList` floats `.incomingActivity(.activity, count: layout.incoming)`
+   over the screen, as [Conversations](#conversations) describes.
 5. **Tests:** test the view model with `swift test`, against `ScriptedAPI` and
    `TestClock` in `Tests/ScreenrKitTests/Support/` or against
    `FixtureTransport`. Write UI journeys with
@@ -1492,12 +1492,11 @@ holds one JSON object per line: `time`, `level`, `category`, `message`,
 `launch` (an ID for each launch), and `fields`. One task writes the file in
 order, so logging never waits on the disk. When the file would pass 256 KB it
 becomes `app.1.ndjson`, so the log keeps at most two files.
-`LogFile.recentTail(maximumBytes:)` returns the newest complete lines.
 Another process writes a file of its own name in the same directory, such
 as the [share extension](#share-extension)'s `share.ndjson` and the
 [notification extension](#push-content)'s `notifications.ndjson`, and
-`recentTails(maximumBytes:)` returns each file's newest lines for the
-[feedback form](#feedback).
+`LogFile.recentTails(maximumBytes:)` returns each file's newest complete
+lines for the [feedback form](#feedback).
 
 To read the Dev app's log in your Simulator:
 

@@ -15,7 +15,6 @@ public final class LogFile: LogSink {
   private enum Command: Sendable {
     case append(LogEntry)
     case flush(CheckedContinuation<Void, Never>)
-    case tail(maximumBytes: Int, CheckedContinuation<Data, any Error>)
     case tails(maximumBytes: Int, CheckedContinuation<[LogTail], any Error>)
   }
 
@@ -51,8 +50,6 @@ public final class LogFile: LogSink {
         switch command {
         case .append(let entry): file.append(entry)
         case .flush(let done): done.resume()
-        case .tail(let maximumBytes, let done):
-          done.resume(with: Result { try file.tail(maximumBytes) })
         case .tails(let maximumBytes, let done):
           done.resume(with: Result { try file.tails(maximumBytes) })
         }
@@ -74,16 +71,6 @@ public final class LogFile: LogSink {
   public func flush() async {
     await withCheckedContinuation { done in
       if case .terminated = commands.yield(.flush(done)) { done.resume() }
-    }
-  }
-
-  // The newest complete lines, at most maximumBytes of them, from the previous file and the
-  // current one, after every entry recorded before the call.
-  public func recentTail(maximumBytes: Int) async throws -> Data {
-    try await withCheckedThrowingContinuation { done in
-      if case .terminated = commands.yield(.tail(maximumBytes: maximumBytes, done)) {
-        done.resume(throwing: CancellationError())
-      }
     }
   }
 

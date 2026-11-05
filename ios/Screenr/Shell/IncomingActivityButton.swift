@@ -1,18 +1,15 @@
 import SwiftUI
 
-// The "New activity" and "New replies" controls. While other people's
-// activity waits behind one, the screen does not move; choosing it shows the
-// activity. Track what waits with ScreenrKit's `IncomingActivity`.
+// The "New activity" control. While other people's activity waits behind
+// it, the screen does not move; choosing it shows the activity. A feed counts
+// what waits with ScreenrKit's `FeedLayout`.
 enum IncomingActivityKind {
   // New entries or activity in a feed.
   case activity
-  // New replies in an open discussion.
-  case replies
 
   fileprivate var title: String {
     switch self {
     case .activity: "New activity"
-    case .replies: "New replies"
     }
   }
 }
