@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { db, captureFailures, assertNotLogged } from "./social-fixture";
+import type { WatchProviders } from "../../src/server/watch-sources";
 
 const { migrate } = await import("../../scripts/migrate");
 const { loadScreen } = await import("../../src/server/screens");
@@ -57,6 +58,19 @@ function options(kind = "movie") {
       CA: { flatrate: [{ ...provider, provider_name: "Canada only" }] },
     },
   };
+}
+// What a title screen shows for options(): its one provider under both Subs
+// and Free.
+const harbor = [
+  { label: "Subs", services: [["Harbor Stream", null]] },
+  { label: "Free", services: [["Harbor Stream", null]] },
+];
+// TMDB's provider lists for a title, as the cache keeps them.
+async function cachedProviders(id = "movie:42") {
+  const { rows } = await db.query<{
+    availability: { providers: WatchProviders };
+  }>("SELECT availability FROM title_availability WHERE title_id=$1", [id]);
+  return rows[0].availability.providers;
 }
 before(async () => {
   await migrate();
@@ -124,12 +138,12 @@ for (const kind of ["movie", "tv"]) {
     payload = options(kind);
     const availability = await screen(kind);
     assert.equal(availability?.status, "ok");
-    assert.equal(availability.country, "US");
     assert.equal(availability.link, options(kind).results.US.link);
     assert.ok(availability.checked_at);
     assert.ok(Date.now() - Date.parse(availability.checked_at) < 10_000);
+    assert.deepEqual(displayed(availability), harbor);
     assert.deepEqual(
-      availability.providers,
+      await cachedProviders(`${kind}:42`),
       Object.fromEntries(
         categories.map((category) => [
           category,
@@ -155,17 +169,23 @@ for (const kind of ["movie", "tv"]) {
   });
 }
 
+// Clients show only the sections, so TMDB's raw provider lists, rentals and
+// purchases included, stay in the cache, and every result is for the US.
+test("title screens send no provider lists or country", async () => {
+  const availability = await screen();
+  assert.equal(availability.status, "ok");
+  assert.equal("providers" in availability, false);
+  assert.equal("country" in availability, false);
+});
+
 test("movie and TV with the same TMDB number have independent availability", async () => {
   await screen();
   payload = { id: 42, results: {} };
   const tv = await screen("tv");
   assert.equal(tv.status, "ok");
-  assert.deepEqual(tv.providers, {});
+  assert.deepEqual(tv.sections, []);
   assert.equal(requests.length, 2);
-  assert.equal(
-    (await screen()).providers.flatrate?.[0].provider_name,
-    "Harbor Stream",
-  );
+  assert.deepEqual(displayed(await screen()), harbor);
 });
 
 for (const results of [
@@ -177,7 +197,7 @@ for (const results of [
     payload = { id: 42, results };
     const empty = await screen();
     assert.equal(empty.status, "ok");
-    assert.deepEqual(empty.providers, {});
+    assert.deepEqual(empty.sections, []);
     assert.ok(empty.checked_at);
     payload = options();
     assert.deepEqual(await screen(), empty);
@@ -185,7 +205,7 @@ for (const results of [
     await db.query(
       "UPDATE title_availability SET refresh_after=now()-interval '1 second', fetched_at=now()-interval '25 hours'",
     );
-    assert.equal((await screen()).providers.buy?.[0].provider_id, 101);
+    assert.deepEqual(displayed(await screen()), harbor);
     assert.equal(requests.length, 2);
   });
 }
@@ -196,14 +216,14 @@ test("successful availability stays cached for 24 hours and then refreshes on de
   await db.query(
     "UPDATE title_availability SET fetched_at=fetched_at-interval '23 hours', refresh_after=refresh_after-interval '23 hours'",
   );
-  assert.equal((await screen()).providers.flatrate?.[0].provider_id, 101);
+  assert.deepEqual(displayed(await screen()), harbor);
   assert.equal(requests.length, 1);
   await db.query(
     "UPDATE title_availability SET fetched_at=fetched_at-interval '2 hours', refresh_after=refresh_after-interval '2 hours'",
   );
   const refreshed = await screen();
   assert.equal(refreshed.status, "ok");
-  assert.deepEqual(refreshed.providers, {});
+  assert.deepEqual(refreshed.sections, []);
   assert.equal(requests.length, 2);
 });
 
@@ -215,7 +235,7 @@ test("a successful refresh removes offers which are no longer listed", async () 
   payload = { id: 42, results: {} };
   const refreshed = await screen();
   assert.equal(refreshed.status, "ok");
-  assert.deepEqual(refreshed.providers, {});
+  assert.deepEqual(refreshed.sections, []);
   assert.ok(Date.now() - Date.parse(refreshed.checked_at!) < 10_000);
 });
 
@@ -248,7 +268,7 @@ for (const [failure, logged] of [
       const stale = await screen();
       assert.equal(stale.status, "stale");
       assert.equal(stale.checked_at, age);
-      assert.deepEqual(stale.providers, initial.providers);
+      assert.deepEqual(stale.sections, initial.sections);
       assert.equal(stale.link, initial.link);
       const count = requests.length;
       assert.deepEqual(await screen(), stale);
@@ -265,7 +285,7 @@ for (const [failure, logged] of [
     );
     const recovered = await screen();
     assert.equal(recovered.status, "ok");
-    assert.deepEqual(recovered.providers, {});
+    assert.deepEqual(recovered.sections, []);
     assert.notEqual(recovered.checked_at, age);
     assert.deepEqual(failureLines(printed), logged);
   });
@@ -290,7 +310,7 @@ for (const invalid of [
     assert.equal(unavailable.status, "unavailable");
     assert.equal(unavailable.checked_at, null);
     assert.equal(unavailable.link, null);
-    assert.deepEqual(unavailable.providers, {});
+    assert.deepEqual(unavailable.sections, []);
     payload = options();
     assert.deepEqual(await screen(), unavailable);
     assert.equal(requests.length, 1);
@@ -329,10 +349,10 @@ test("unsafe or absent logos do not remove otherwise usable providers", async ()
       },
     },
   };
-  const result = await screen();
-  assert.equal(result.status, "ok");
-  assert.equal(result.providers.rent?.[0].logo_path, null);
-  assert.equal(result.providers.buy?.[0].logo_path, null);
+  assert.equal((await screen()).status, "ok");
+  const cached = await cachedProviders();
+  assert.equal(cached.rent?.[0].logo_path, null);
+  assert.equal(cached.buy?.[0].logo_path, null);
 });
 
 // These assertions exercise the public title-screen response, with only TMDB
@@ -364,7 +384,7 @@ function displayed(result: Awaited<ReturnType<typeof screen>>) {
 
 for (const kind of ["movie", "tv"]) {
   test(`${kind} groups eligible offers into alphabetical Subs and Free services`, async () => {
-    reported({
+    const providers = {
       flatrate: [
         offer(1796),
         offer(2243),
@@ -377,7 +397,8 @@ for (const kind of ["movie", "tv"]) {
       ads: [offer(192), offer(188), offer(43)],
       rent: [offer(15)],
       buy: [offer(9)],
-    });
+    };
+    reported(providers);
     // Keep the title-specific link valid for either title kind.
     if (kind === "tv")
       (payload as ReturnType<typeof options>).results.US.link =
@@ -400,13 +421,7 @@ for (const kind of ["movie", "tv"]) {
         ],
       },
     ]);
-    const { rows } = await db.query(
-      "SELECT availability FROM title_availability WHERE title_id=$1",
-      [`${kind}:42`],
-    );
-    assert.deepEqual(rows[0].availability.providers, result.providers);
-    assert.equal(rows[0].availability.providers.rent[0].provider_id, 15);
-    assert.equal(rows[0].availability.providers.flatrate.length, 6);
+    assert.deepEqual(await cachedProviders(`${kind}:42`), providers);
   });
 }
 

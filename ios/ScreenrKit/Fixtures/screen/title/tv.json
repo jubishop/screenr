@@ -11,7 +11,7 @@
   },
   "response": {
     "status": 200,
-    "etag": "W/\"Oeo_WBPPHV0OWjNhx14I5MQyaI_brkevldgsLpN2dUE\"",
+    "etag": "W/\"Zcavtf5hzJ9iINxUIz48Kj_PyomErw5VyBBN2_L8GL4\"",
     "body": {
       "kind": "title",
       "title": {
@@ -28,24 +28,9 @@
         "name": "Official Trailer"
       },
       "availability": {
-        "country": "US",
         "status": "ok",
         "checked_at": "2026-10-13T12:00:00.000Z",
         "link": "https://www.themoviedb.org/tv/201-harbor-lights/watch",
-        "providers": {
-          "flatrate": [
-            {
-              "logo_path": null,
-              "provider_id": 1899,
-              "provider_name": "HBO Max"
-            },
-            {
-              "logo_path": null,
-              "provider_id": 196,
-              "provider_name": "Acorn TV Amazon Channel"
-            }
-          ]
-        },
         "sections": [
           {
             "key": "subs",

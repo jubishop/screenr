@@ -359,6 +359,13 @@ title. `src/components/title-availability.tsx` shows Subs and Free,
 US region, last-checked time, attribution, and watch-page link. It distinguishes
 empty, failed, and older cached data, including older empty results.
 
+A title screen's `availability`, typed `WatchAvailability` in
+`src/shared.ts`, holds only what clients show: the status, last-checked
+time, watch-page link, and sections. TMDB's raw provider lists, rentals and
+purchases included, stay in the cache for the server to build the sections
+from, and the screen sends no country, since every result is for the US
+([issue #510](https://github.com/jubishop/screenr/issues/510)).
+
 `src/server/title-viewing.ts` adds this same availability to catalog results,
 circle suggestions, shared Want to watch titles, and Want to watch pages. Each
 list reads its cache rows in one query, then requests only missing or expired

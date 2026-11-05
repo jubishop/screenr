@@ -95,30 +95,12 @@ public struct WatchSection: Codable, Hashable, Sendable {
   public let services: [WatchService]
 }
 
-// TMDB's providers for one title, by how they offer it.
-public struct WatchProvider: Codable, Hashable, Sendable {
-  public let providerId: Int
-  public let providerName: String
-  public let logoPath: String?
-}
-
-public struct WatchProviders: Codable, Hashable, Sendable {
-  public let flatrate: [WatchProvider]?
-  public let free: [WatchProvider]?
-  public let ads: [WatchProvider]?
-  public let rent: [WatchProvider]?
-  public let buy: [WatchProvider]?
-}
-
-// Where a title streams in the US, on its title page. The app reads
-// `sections`; the server may stop sending `country` and the raw `providers`.
+// Where a title streams in the US, on its title page.
 public struct WatchAvailability: Codable, Hashable, Sendable {
-  public let country: String?
   public let status: AvailabilityStatus
   public let checkedAt: Date?
   // TMDB's watch page for the title.
   public let link: String?
-  public let providers: WatchProviders?
   public let sections: [WatchSection]
 }
 

@@ -192,7 +192,11 @@ restarts `screenr-web`, so both take effect together.
 3 is the first that pages the friends feed and profiles, so the server
 stopped sending their whole history to reads without a window
 ([paged histories](title-feed.md#paged-histories),
-[issue #502](https://github.com/jubishop/screenr/issues/502)). A later
+[issue #502](https://github.com/jubishop/screenr/issues/502)). Build 3 also
+reads a title's availability without TMDB's raw `providers` lists and
+`country`, so title screens stopped sending them
+([title availability](title-availability.md#current-implementation),
+[issue #510](https://github.com/jubishop/screenr/issues/510)). A later
 breaking change raises it to the first build that reads the new shape.
 
 ## Native client sessions
