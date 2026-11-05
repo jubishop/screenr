@@ -92,6 +92,33 @@ struct ShareServicesTests {
     )
   }
 
+  // Under the fixture API, how the extension ended each request goes to the
+  // request log, where UI tests read it.
+  @Test func fixtureServicesLogHowSharesEnded() throws {
+    let log = FileManager.default.temporaryDirectory
+      .appending(path: "share-endings-\(UUID().uuidString).log")
+    defer {
+      do {
+        try FileManager.default.removeItem(at: log)
+      } catch {
+        Issue.record("Could not remove \(log.path()): \(error)")
+      }
+    }
+    let services = try AppServices(
+      configuration: configuration(),
+      arguments: [
+        "ScreenrShare", "-ScreenrFixtures", TestFixtures.directory.path(), "-ScreenrFixtureLog",
+        log.path(),
+      ],
+      host: .shareExtension
+    )
+
+    services.shareEndings.report(.completed)
+    services.shareEndings.report(.cancelled)
+
+    #expect(try String(contentsOf: log, encoding: .utf8) == "SHARE completed\nSHARE cancelled\n")
+  }
+
   // The extension handles no notifications, so it has no push system, even
   // when the app's fixture arguments choose a permission.
   @Test func theExtensionHasNoPushSystem() throws {

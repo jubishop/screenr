@@ -247,6 +247,12 @@ public struct FixtureTransport: HTTPTransport {
     try log?.record(webLoad: url)
   }
 
+  // Logs how the share extension ended its host's request, as
+  // `SHARE completed` or `SHARE cancelled`. See `ShareEndings`.
+  func recordShareEnding(_ ending: ShareEnding) throws {
+    try log?.record("SHARE " + ending.rawValue)
+  }
+
   public func send(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {
     guard let url = request.url else { throw URLError(.badURL) }
     if url.host() == GoogleSignIn.tokenHost { return try googleToken(request, url: url) }

@@ -35,6 +35,8 @@ public struct AppServices: Sendable {
   public let feedback: FeedbackService
   // Where trailers' players load from.
   public let trailers: TrailerLoading
+  // Where the share extension reports how it ended its host's request.
+  public let shareEndings: ShareEndings
   // iOS's notification permission, APNs registration, and badge, or nil in
   // the extensions, which leave them to the app.
   public let push: (any PushSystem)?
@@ -54,6 +56,7 @@ public struct AppServices: Sendable {
     images: ImageSource = .none,
     feedback: FeedbackService = .none,
     trailers: TrailerLoading = .network,
+    shareEndings: ShareEndings = .none,
     push: (any PushSystem)? = nil
   ) {
     self.api = api
@@ -66,6 +69,7 @@ public struct AppServices: Sendable {
     self.images = images
     self.feedback = feedback
     self.trailers = trailers
+    self.shareEndings = shareEndings
     self.push = push
     client = api as? ScreenrClient
     let imageSession = URLSession(configuration: Self.imageConfiguration(cache: imageCache))
@@ -91,9 +95,10 @@ public struct AppServices: Sendable {
   // fixture API also stands in for Apple's and Google's authorization and
   // iOS's push permission, keeps the invitation in memory, and writes
   // feedback to its request log rather than to `feedback`, the build's
-  // sender, which Screenr Dev lacks. Only the app's client marks visits; the
-  // extensions' send none. `push` is iOS's own push system, which the app
-  // target provides; the extensions have none. At the app's first launch
+  // sender, which Screenr Dev lacks. Its request log also shows how the
+  // share extension ended its requests. Only the app's client marks visits;
+  // the extensions' send none. `push` is iOS's own push system, which the
+  // app target provides; the extensions have none. At the app's first launch
   // after an install, `launch` ends the session a deleted install left in
   // the Keychain, which the fixture API never reads.
   @MainActor
@@ -116,6 +121,7 @@ public struct AppServices: Sendable {
     let imageCache: URLCache
     let feedbackSender: (any FeedbackSender)?
     let trailers: TrailerLoading
+    let shareEndings: ShareEndings
     let push: (any PushSystem)?
     switch source {
     case .network:
@@ -140,6 +146,7 @@ public struct AppServices: Sendable {
       )
       feedbackSender = feedback
       trailers = .network
+      shareEndings = .none
     case .fixtures(let directory, let scenario):
       let token: String? =
         switch scenario.session {
@@ -157,6 +164,8 @@ public struct AppServices: Sendable {
       imageCache = URLCache(memoryCapacity: 16 << 20, diskCapacity: 0)
       // Trailers load nothing; the request log shows what they asked for.
       trailers = .recording(fixtures.recordWebLoad)
+      // The request log shows how the share extension ended its request.
+      shareEndings = .recording(fixtures.recordShareEnding)
       if system != nil, let permission = scenario.push.permission {
         push = FixturePushSystem(permission: permission)
       } else {
@@ -202,6 +211,7 @@ public struct AppServices: Sendable {
       images: images,
       feedback: FeedbackService(sender: feedbackSender, logFile: logFile),
       trailers: trailers,
+      shareEndings: shareEndings,
       push: push
     )
   }

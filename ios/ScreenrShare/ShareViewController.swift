@@ -17,6 +17,7 @@ final class ShareViewController: UIViewController {
   private var sheet = Sheet.open
   // The share, once its services have started.
   private var share: ShareModel?
+  private var endings = ShareEndings.none
   private var resolving: Task<Void, Never>?
 
   override func viewDidLoad() {
@@ -44,10 +45,13 @@ final class ShareViewController: UIViewController {
     }
   }
 
-  // The sheet went away, as a swipe down takes it without Close.
+  // The sheet went away without Close, as a swipe down takes it. iOS then
+  // shows the host's share sheet again, so the request ends as cancelled.
+  // Until a request ends, iOS keeps its controller in the extension's
+  // process, even after the sheet has gone.
   override func viewDidDisappear(_ animated: Bool) {
     super.viewDidDisappear(animated)
-    closeShare()
+    end(.cancelled)
   }
 
   private func show(_ share: ShareModel, services: AppServices, items: [NSExtensionItem]) {
@@ -56,8 +60,9 @@ final class ShareViewController: UIViewController {
       return
     }
     self.share = share
+    endings = services.shareEndings
     let host = UIHostingController(
-      rootView: ShareView(model: share) { [weak self] in self?.finish() }
+      rootView: ShareView(model: share) { [weak self] in self?.end(.completed) }
         .screenrServices(services)
     )
     addChild(host)
@@ -68,17 +73,22 @@ final class ShareViewController: UIViewController {
     resolving = Task { await share.resolve(await SharedContent.load(from: items)) }
   }
 
-  private func finish() {
-    closeShare()
-    extensionContext?.completeRequest(returningItems: nil)
-  }
-
-  // The share sends nothing more, and its services stay until its requests
-  // in flight, such as a save, answer.
-  private func closeShare() {
+  // Ends the host's request, once. The share sends nothing more, and its
+  // services stay until its requests in flight answer. A save among them
+  // still finishes after the request ends, since the client keeps the
+  // process running for a write.
+  private func end(_ ending: ShareEnding) {
+    guard sheet == .open else { return }
     sheet = .closed
     resolving?.cancel()
     share?.close()
+    endings.report(ending)
+    switch ending {
+    case .completed:
+      extensionContext?.completeRequest(returningItems: nil)
+    case .cancelled:
+      extensionContext?.cancelRequest(withError: CocoaError(.userCancelled))
+    }
   }
 }
 
