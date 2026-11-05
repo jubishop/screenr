@@ -75,6 +75,13 @@ public final class SessionStore {
     try keychain.delete()
   }
 
+  // Whether the Keychain still holds this session's token. Another process,
+  // such as the app while an extension waits for its next request, may have
+  // signed in or out since this read it.
+  func isCurrent() throws(KeychainError) -> Bool {
+    try keychain.read() == token
+  }
+
   func requireUpdate(minimumBuild: Int?) {
     phase = .updateRequired(minimumBuild: minimumBuild)
   }

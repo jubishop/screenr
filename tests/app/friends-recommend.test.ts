@@ -485,8 +485,10 @@ test("the view hides titles the viewer marked Finished until its switch shows th
 });
 
 // Find a title lists the top 50 of each list, filtered first
-// (docs/title-suggestions.md#show-all-eligible-titles--2026-09-07).
-test("Friends recommend lists the 50 highest-ranked titles that pass its filters", async () => {
+// (docs/title-suggestions.md#show-all-eligible-titles--2026-09-07), and
+// counts every title that passes the filters, so Siri's answer can say how
+// many remain past the cap.
+test("Friends recommend lists the 50 highest-ranked titles that pass its filters and counts them all", async () => {
   await titles(60);
   const [viewer, maya] = await people("viewer", "maya");
   await friend(viewer, maya);
@@ -523,41 +525,50 @@ test("Friends recommend lists the 50 highest-ranked titles that pass its filters
       (_, n) => from + n * step,
     );
 
-  // Installed iPhone builds read without filters: the top 50, finished
-  // titles included, and no finished count.
+  // Installed iPhone builds read without filters: the top 50 of all 120,
+  // finished titles included, and no finished count.
   const unfiltered = await screen(viewer);
   assert.deepEqual(
     ids(unfiltered.recommendations),
     titlesFrom(["movie", "tv"], range(1, 25)),
   );
+  assert.equal(unfiltered.recommendationCount, 120);
   assert.equal("finishedRecommendations" in unfiltered, false);
 
-  // Each filter applies before the cap, so the list still fills to 50.
+  // Each filter applies before the cap, so the list still fills to 50, and
+  // before the count.
+  const shows = await screen(viewer, { type: "tv" });
   assert.deepEqual(
-    ids(await recommendations(viewer, { type: "tv" })),
+    ids(shows.recommendations),
     titlesFrom(["tv"], range(1, 50)),
   );
+  assert.equal(shows.recommendationCount, 60);
   const unfinished = await screen(viewer, { finished: "hidden" });
   assert.deepEqual(ids(unfinished.recommendations), [
     ...titlesFrom(["tv"], range(1, 10)),
     ...titlesFrom(["movie", "tv"], range(11, 30)),
   ]);
+  assert.equal(unfinished.recommendationCount, 110);
   assert.equal(unfinished.finishedRecommendations, 10);
   const movies = await screen(viewer, {
     type: "movie",
     services: "mine",
     finished: "hidden",
   });
+  // Below the cap, the list holds every title the count counts.
   assert.deepEqual(
     ids(movies.recommendations),
     titlesFrom(["movie"], range(12, 60, 2)),
   );
+  assert.equal(movies.recommendationCount, 25);
   // Five of the finished movies are on Netflix.
   assert.equal(movies.finishedRecommendations, 5);
+  const mine = await screen(viewer, { services: "mine" });
   assert.deepEqual(
-    ids(await recommendations(viewer, { services: "mine" })),
+    ids(mine.recommendations),
     titlesFrom(["movie", "tv"], range(2, 50, 2)),
   );
+  assert.equal(mine.recommendationCount, 60);
 });
 
 test("Friends recommend data names friends without entry or account IDs", async () => {

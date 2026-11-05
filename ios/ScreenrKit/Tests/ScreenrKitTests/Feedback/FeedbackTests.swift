@@ -224,6 +224,10 @@ struct FeedbackTests {
       #expect(image.height == 2048)
       #expect(abs(image.width - 943) <= 1)
       #expect(screenshot.jpeg.count <= ScreenshotPreparation.limit)
+      // The form's preview is decoded small, once.
+      let thumbnail = try #require(screenshot.thumbnail)
+      #expect(thumbnail.height == ScreenshotPreparation.thumbnailSide)
+      #expect(abs(thumbnail.width - 236) <= 1)
     }
 
     let first = try #require(model.screenshots.first)

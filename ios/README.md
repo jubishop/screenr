@@ -259,7 +259,7 @@ try await api.send(.comment(conversation: item.id, body: text, spoiler: false))
 | `APIError` | `API/APIError.swift` | `kind`, the server's `message`, Better Auth's `code`, and the `requestID` the request sent. `isPermanent` says whether polling should stop, and `explanation(otherwise:)` words the failure for the member. |
 | `APIRequestObserver` | `API/APIRequestObserver.swift` | Sees every finished request: route pattern, request ID, status, duration, and error. The app's observer is `Telemetry`; see [Sentry](#sentry). |
 | Models | `Models/` | `Screens.swift`, `Feed.swift`, `Titles.swift`, `People.swift` (members and notifications), and `Results.swift` (other actions and `ErrorBody`). |
-| `AppServices` | `AppServices.swift` | The client, session, pending invitation, identity providers, image session, and visit tracker together, injected with `.screenrServices(_:)`. |
+| `AppServices` | `AppServices.swift` | The client, session, pending invitation, identity providers, image session, avatars, and visit tracker together, injected with `.screenrServices(_:)`. |
 
 - **Headers:** every request sends `Screenr-Client: ios/<version>/<build>`
   and a new `Screenr-Request-Id`, plus `Authorization: Bearer <token>` while
@@ -280,7 +280,10 @@ try await api.send(.comment(conversation: item.id, body: text, spoiler: false))
   `UNAUTHORIZED` code ends it.
 - **Caching:** each GET's response is kept in memory with its ETag. Reading
   the same path again sends `If-None-Match`, and a 304 returns the cached
-  value. Signing in or out clears the cache.
+  value. The cache keeps the 32 most recently used reads, and at most 8 MB
+  of their bodies, though always the newest, so notification links, each
+  with its own query, never pile up copies of a long feed. Signing in or
+  out, and iOS's memory warning, clear it.
 - **Late responses:** a successful or unchanged response to a request that
   carried a token, arriving after that session ended or another replaced it,
   belongs to the earlier member. The client neither caches nor returns it
@@ -391,6 +394,10 @@ cache, clears the badge and Notification Center, and removes the Spotlight
 titles. Posters and profile photos load through `AppServices.imageSession`,
 which `.screenrServices(_:)` sets as the `AsyncImage` session, with requests
 from `AppServices.images`, an `ImageSource`; see [Conversations](#conversations).
+Avatars decode profile photos through `AppServices.avatars`, an
+`AvatarImages`, which loads them through the same session and decodes each
+at the avatar's size with ImageIO. It keeps up to 8 MB of decoded photos,
+which it forgets when the session ends or iOS warns that memory is low.
 
 Against the fixture API, which only Screenr Dev runs,
 `IdentityProviders.authorization` is `.fixture`, so UI tests reach the
@@ -504,7 +511,10 @@ read that answers after its screen stopped never applies. Each read gives up
 after ten seconds. A failed read replaces the content with the
 error; passing failures keep polling, and a permanent error stops it until a
 read succeeds. An unchanged screen keeps its `phase`, so nothing renders
-again. Each read after the three-second wait is a poll, sent as
+again, and the model's `onLoad` hears it was `.unchanged`: the shell then
+passes on only its unread count, for the badge, and that a link to it
+arrived, and skips the rest, such as Spotlight's scan of the screen. Each
+read after the three-second wait is a poll, sent as
 `RequestTrigger.poll`, which [Telemetry](#sentry) records quietly when it
 succeeds; every other read is `.demand`. `ScreenModel.change(path:)` reads a
 new path from then on, such as Find a title's with changed
@@ -706,10 +716,12 @@ notification's actor before iOS shows it
 
 1. **Reading:** `PushTap(userInfo:)` reads the payload's `notificationId`,
    and `PushContentLoader` reads that notification with
-   `GET /api/screenr/notification`. Each push builds its own
-   `AppServices(…, host: .notificationExtension)`, so it reads the session
-   the app last stored in the shared Keychain group, even when iOS shows
-   several pushes in one process.
+   `GET /api/screenr/notification`. iOS may show several pushes in one
+   process, which share one `AppServices(…, host: .notificationExtension)`
+   through `ExtensionServices`, so later pushes reuse its connections. A
+   push whose Keychain token differs from the one those services read,
+   after the member signed in again or out in the app, gets new services,
+   and the old ones close once no push uses them.
 2. **Wording:** `PushContent` holds the sender and the body. iOS shows a
    direct message's sender in place of the alert's title and subtitle, so
    the body leads with the action, such as "Replied to your comment about
@@ -931,7 +943,8 @@ whose behavior is ScreenrKit's `FeedbackModel`, in `Feedback/`. It follows the
   from the library's screenshots, through `PhotosPicker`.
   `ScreenshotPreparation` redraws each one as a JPEG at most 2048 pixels on
   its long side and under 1 MB, without the original's metadata, such as a
-  location. Send needs a message. A swipe cannot close the sheet while it
+  location, and decodes its 512-pixel preview once, so typing never decodes
+  the screenshots again. Send needs a message. A swipe cannot close the sheet while it
   holds a draft, and once the feedback is sent the sheet thanks the member.
 - **Length:** Sentry discards feedback whose message is over 4,096 Unicode
   code points: ingestion rejects it, and sentry-cocoa drops it before
@@ -1062,7 +1075,7 @@ ScreenContent(model: model) { screen in
 | `EntryView`, `ThreadView`, `CommentView` | `Screenr/Conversation/` | An entry, its discussion, and one comment, following the web's `feed.tsx` and `thread.tsx`. Each entry and comment carries the accessibility identifier `entry-<id>` or `comment-<id>`. |
 | `CommentComposer`, `DiscussionComposer`, `StartConversationComposer` | `Screenr/Conversation/` | The one composer form, bound to a reply or comment target, or to a `ConversationStarter` with Season and Episode pickers on a TV title. |
 | `ReactionControls`, `ReactionPicker`, `FeedActionStyle`, `WriteFailure` | `Screenr/Conversation/` | Reaction counts and React, which opens the seven reactions beneath its line, as on the web (a SwiftUI `Menu` label does not follow Dynamic Type); the compact actions with 44-point hit areas; and a failed write's message beneath its control. |
-| `Avatar`, `PosterImage`, `FlowLayout`, `.muted`, `.danger`, `.onAccent` | `Screenr/Shared/` | A member's photo or initial on the web's colors; a TMDB poster, or the title's initial only while no poster shows, so an audit never measures an initial beneath a poster; a row that wraps; and text colors that keep 4.5:1 contrast, which the system's secondary label and red miss at small sizes, and the system's white misses on the dark theme's lime accent. |
+| `Avatar`, `PosterImage`, `FlowLayout`, `.muted`, `.danger`, `.onAccent` | `Screenr/Shared/` | A member's photo, decoded at the avatar's size, or initial on the web's colors; a TMDB poster, or the title's initial only while no poster shows, so an audit never measures an initial beneath a poster; a row that wraps; and text colors that keep 4.5:1 contrast, which the system's secondary label and red miss at small sizes, and the system's white misses on the dark theme's lime accent. |
 | `.buttonStyle(.accent)` | `Screenr/Shared/AccentButtonStyle.swift` | The prominent accent-filled button, such as Accept, Send sign-in code, or Join Screenr, with its label in `.onAccent`. Use it in place of `.borderedProminent`. |
 | `FeedModel` | ScreenrKit `Conversation/` | `@Observable` page state: accepted activity (`layout(_:viewer:)`, `receive`, `showIncoming`, and `show(entry:in:viewer:)` for a title page's friend line), Show older (`showOlder(_:)`, through its `showOlder` closure), revealed spoilers, each discussion's preview and groups, composers and their drafts, reactions, removals through `confirmation`, and Want to watch and Recommend with the top 10 confirmations. Every write reads the screen again through its `refresh` closure. |
 | `HistoryWindow`, `HistoryPage` | ScreenrKit `Conversation/` | A paged friends feed's or profile's window in its screen path (`before=now`, `since=<time>`, or `before=<time>`), and what a paged read sent besides its entries: `since` and `older`, as `screen.historyPage`. |
@@ -1443,7 +1456,7 @@ the member can Recommend it or mark it Want to watch:
 
 | Piece | Where | What it does |
 | --- | --- | --- |
-| `ShareViewController` | `ScreenrShare/` | The principal class. It builds `AppServices(…, host: .shareExtension)`, whose client marks no [visits](#visits), with `Telemetry.localOnly()`, logs to `share.ndjson` in the app group's log directory, hosts `ShareView`, and closes the sheet. |
+| `ShareViewController` | `ScreenrShare/` | The principal class. It builds `AppServices(…, host: .shareExtension)`, whose client marks no [visits](#visits), with `Telemetry.localOnly()`, logs to `share.ndjson` in the app group's log directory through one writer per process, hosts `ShareView`, and closes the sheet. |
 | `ShareView`, `ShareSearchView`, `ShareTitleView` | `ScreenrShare/` | The views, in a navigation stack with the system Close button. Large text stacks posters above names. |
 | `SharedContent`, `ShareModel`, `ShareTitleModel` | ScreenrKit `Share/` | The behavior above. |
 | `FixtureHandoff` | ScreenrKit `FakeAPI/` | Screenr Dev keeps its fixture launch arguments in the app group, so the extension, which the system starts without arguments, answers from the same fixtures. A launch without fixtures forgets them; Release builds neither keep nor read them. |
@@ -1509,7 +1522,10 @@ Intents are in `Screenr/Shortcuts/`.
 - **Friends recommend:** "What do my friends recommend?" names the first
   three titles that are not finished, as the tab first shows them, such as
   "Your friends recommend Night Crossing, Harbor Lights, and Winter Garden.",
-  and returns them to the shortcut. Open Friends recommend opens the app at
+  and returns them to the shortcut. When more remain, it adds how many, as
+  in "and 61 more", from the read's `recommendationCount`, which counts
+  every unfinished title, not only the 50 listed, or from the list's length
+  when an older server omits it. Open Friends recommend opens the app at
   Find a title's Friends recommend. Both it and Add to Want to watch's
   suggestions read Find's first read, `/search?finished=hidden`, so finished
   titles, which neither offers, leave room for others in the capped list,
@@ -1523,18 +1539,22 @@ Intents are in `Screenr/Shortcuts/`.
   status, and top 10 rank for its title, and the viewer's own review counts
   too; Friends recommend names their status and Recommend; and the viewer's
   own Want to watch page names each of its titles. A title page without any
-  of these removes its title. Each title is indexed once per
-  launch until it changes, so polls write nothing, and the writes run in
-  order. An item's identifier is the title ID, with its name, "Movie · 2024",
-  and the poster when the image cache already holds it, so indexing
-  downloads nothing. Nothing leaves the device.
+  of these removes its title. Finding the titles and writing them, poster
+  lookups included, run in order off the main actor. Each title is indexed
+  once until it changes, and `TitleSpotlight.record`, a file in Caches,
+  keeps the indexed titles across launches, so a launch writes only what
+  changed. iOS neither backs up nor restores Caches or the index, so a
+  restored iPhone indexes every title again. An unchanged poll never
+  reaches Spotlight. An item's identifier is the title ID, with its name,
+  "Movie · 2024", and the poster when the image cache already holds it, so
+  indexing downloads nothing. Nothing leaves the device.
 - **Opening a result:** selecting a result continues
   `CSSearchableItemActionType`, and `AppRootView` opens the title with
   `router.open(_:)`, as a link would.
 - **Clearing:** when the session ends, by signing out, the server ending it,
-  or deleting the account, `SessionStore.onEnd` removes every item. A launch
-  without a session removes them too, since the session may have ended in
-  another process.
+  or deleting the account, `SessionStore.onEnd` removes every item and the
+  record. A launch without a session removes them too, since the session
+  may have ended in another process.
 
 `ShortcutActionsTests` runs the actions against the fixture API and checks
 the request log; `actions/search/winter` finds Winter Garden, which Alice has
@@ -1607,7 +1627,10 @@ Another process writes a file of its own name in the same directory, such
 as the [share extension](#share-extension)'s `share.ndjson` and the
 [notification extension](#push-content)'s `notifications.ndjson`, and
 `LogFile.recentTails(maximumBytes:)` returns each file's newest complete
-lines for the [feedback form](#feedback).
+lines for the [feedback form](#feedback). Each file has one writer per
+process: an extension that iOS keeps running between requests installs its
+file once, as `LogRouter.file(_:in:)` does, since two writers would each
+write every line and rotate away each other's files.
 
 To read the Dev app's log in your Simulator:
 

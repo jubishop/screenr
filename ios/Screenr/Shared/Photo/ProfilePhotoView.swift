@@ -10,6 +10,9 @@ struct ProfilePhotoView: View {
   // The name whose first character is the initial.
   let name: String
   var size: CGFloat = 44
+  // Each JPEG decodes once, not on every redraw, such as for each keystroke
+  // in the name field beside it.
+  @State private var decoded = DecodedPhoto()
 
   var body: some View {
     ZStack {
@@ -33,8 +36,22 @@ struct ProfilePhotoView: View {
     return String(first)
   }
 
-  private var image: UIImage? {
-    guard let jpeg else { return nil }
-    return UIImage(data: jpeg)
+  private var image: UIImage? { decoded.image(jpeg) }
+}
+
+// The last JPEG a photo view showed, and its image.
+private final class DecodedPhoto {
+  private var jpeg: Data?
+  private var image: UIImage?
+
+  func image(_ jpeg: Data?) -> UIImage? {
+    guard jpeg != self.jpeg else { return image }
+    self.jpeg = jpeg
+    if let jpeg {
+      image = UIImage(data: jpeg)
+    } else {
+      image = nil
+    }
+    return image
   }
 }

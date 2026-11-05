@@ -11,7 +11,7 @@
   },
   "response": {
     "status": 200,
-    "etag": "W/\"rxzXXKNVJuDyoWXl-XCfJWB0lJS2dfoszTZUgGIBFpM\"",
+    "etag": "W/\"En7NUrELqcDEXchN4Wk-t1ifGNvH0XDrVP5FL94kST8\"",
     "body": {
       "kind": "search",
       "suggestions": [
@@ -75,6 +75,7 @@
         "service:hulu",
         "service:netflix"
       ],
+      "recommendationCount": 0,
       "finishedRecommendations": 2,
       "unreadNotifications": 6,
       "user": {

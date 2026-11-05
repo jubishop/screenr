@@ -19,8 +19,9 @@ final class ShareViewController: UIViewController {
     } catch {
       fatalError("The extension's Screenr settings are invalid: \(error)")
     }
+    // iOS may run several shares in one process, which share one log writer.
     if let directory = LogFile.directory(appGroup: configuration.appGroup) {
-      LogRouter.shared.add(LogFile(directory: directory, name: "share"))
+      _ = LogRouter.shared.file("share", in: directory)
     }
     // Screenr Dev's extension answers from the fixtures the app last
     // launched with, as UI tests and Simulator checks need.

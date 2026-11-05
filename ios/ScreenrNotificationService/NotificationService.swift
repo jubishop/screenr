@@ -23,21 +23,19 @@ final class NotificationService: UNNotificationServiceExtension {
     let tap = PushTap(userInfo: request.content.userInfo)
     Task { @MainActor in
       let log = NotificationExtension.logFile
-      // A new session for each push, since the member may have signed in
-      // again since the last one this process showed.
-      let services: AppServices
       do {
-        services = try NotificationExtension.services()
+        try await NotificationExtension.services.run(
+          arguments: NotificationExtension.arguments()
+        ) { services in
+          await loader.load(
+            tap,
+            api: services.api,
+            avatars: .network(images: services.images, session: services.imageSession)
+          )
+        }
       } catch {
         loader.unavailable(error)
-        await log?.flush()
-        return
       }
-      await loader.load(
-        tap,
-        api: services.api,
-        avatars: .network(images: services.images, session: services.imageSession)
-      )
       await log?.flush()
     }
   }
@@ -91,15 +89,21 @@ private enum NotificationExtension {
 
   static let telemetry = Telemetry.localOnly()
 
-  // Screenr Dev's extension answers from the fixtures the app last launched
-  // with, as Simulator checks need.
-  static func services() throws -> AppServices {
-    let arguments = ProcessInfo.processInfo.arguments
-    return try AppServices(
+  // The client and image connections, which pushes share while the member's
+  // session stays the same, since the member may sign in again between them.
+  static let services = ExtensionServices { arguments in
+    try AppServices(
       configuration: configuration,
-      arguments: FixtureHandoff(configuration: configuration)?.arguments(arguments) ?? arguments,
+      arguments: arguments,
       observer: telemetry,
       host: .notificationExtension
     )
+  }
+
+  // Screenr Dev's extension answers from the fixtures the app last launched
+  // with, as Simulator checks need.
+  static func arguments() -> [String] {
+    let arguments = ProcessInfo.processInfo.arguments
+    return FixtureHandoff(configuration: configuration)?.arguments(arguments) ?? arguments
   }
 }

@@ -89,6 +89,9 @@ public struct SearchScreen: Decodable, Hashable, Sendable {
   public let recommendations: [FriendsRecommendation]
   // The viewer's saved streaming services.
   public let serviceIds: [String]
+  // How many Friends recommend titles pass the read's filters, including
+  // those past the list's cap, or nil from a server without the count.
+  public let recommendationCount: Int?
   // How many Friends recommend titles a read with finished titles hidden
   // left out because the viewer finished them, or nil for a read that keeps
   // them.

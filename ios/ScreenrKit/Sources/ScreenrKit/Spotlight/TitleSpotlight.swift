@@ -18,23 +18,25 @@ public protocol TitleIndex: Sendable {
 // The index belongs to one member: when the session ends, by signing out, the
 // server ending it, or deleting the account, every title is removed. A launch
 // without a session removes them too, in case the session ended in another
-// process, such as the notification extension. Polls of an unchanged screen
-// write nothing, and writes reach the index in order.
+// process, such as the notification extension. Finding a screen's titles and
+// writing them happen off the main actor, in order. A screen whose titles
+// are indexed already writes nothing, and with a `record`, neither does a
+// later launch's.
 @MainActor
 public final class TitleSpotlight {
-  private enum Entry: Hashable {
-    case indexed(TitleSummary)
-    case removed
-  }
+  // Where the app keeps the record of what the index holds. iOS neither backs
+  // up nor restores Caches, or the index, so a restored iPhone indexes every
+  // title again, as one whose Caches iOS emptied does.
+  public static let record = URL.cachesDirectory.appending(path: "Spotlight/titles.json")
 
-  private let index: any TitleIndex
+  private let titles: IndexedTitles
   private let session: SessionStore
-  // What this launch wrote for each title.
-  private var known: [String: Entry] = [:]
   private var writes: Task<Void, Never>?
 
-  public init(index: any TitleIndex, session: SessionStore) {
-    self.index = index
+  // `record` is the file that keeps what the index holds across launches;
+  // without one, each launch indexes every title again.
+  public init(index: any TitleIndex, session: SessionStore, record: URL? = nil) {
+    titles = IndexedTitles(index: index, record: record)
     self.session = session
     session.onEnd { [weak self] _ in self?.clear() }
     if session.phase == .signedOut { clear() }
@@ -43,13 +45,15 @@ public final class TitleSpotlight {
   // A screen loaded: its interacted titles join the index, and a title page
   // without any interaction leaves it.
   public func screenLoaded(_ screen: Screen) {
-    let found = InteractedTitles(screen)
-    update(adding: found.titles, removing: found.cleared)
+    // A read that finishes after the session ended indexes nothing.
+    guard session.phase == .signedIn else { return }
+    write { titles in await titles.screenLoaded(screen) }
   }
 
   // The member saved a title to Want to watch from Siri or the Shortcuts app.
   public func saved(_ title: TitleSummary) {
-    update(adding: [title], removing: [])
+    guard session.phase == .signedIn else { return }
+    write { titles in await titles.update(adding: [title], removing: []) }
   }
 
   // The activity the app continues when the member selects a result.
@@ -70,35 +74,17 @@ public final class TitleSpotlight {
     await writes?.value
   }
 
-  private func update(adding titles: [TitleSummary], removing ids: [String]) {
-    // A read that finishes after the session ended indexes nothing.
-    guard session.phase == .signedIn else { return }
-    let added = titles.filter { known[$0.id] != .indexed($0) }
-    let removed = ids.filter { known[$0] != .removed }
-    guard !added.isEmpty || !removed.isEmpty else { return }
-    for title in added { known[title.id] = .indexed(title) }
-    for id in removed { known[id] = .removed }
-    write { index in
-      if !added.isEmpty { try await index.index(added) }
-      if !removed.isEmpty { try await index.remove(removed) }
-    }
-  }
-
   private func clear() {
-    known = [:]
-    write { index in try await index.removeAll() }
+    write { titles in await titles.clear() }
   }
 
-  private func write(_ change: @escaping @Sendable (any TitleIndex) async throws -> Void) {
+  // Each change starts once the one before it finishes.
+  private func write(_ change: @escaping @Sendable (IndexedTitles) async -> Void) {
     let previous = writes
-    let index = index
+    let titles = titles
     writes = Task {
       await previous?.value
-      do {
-        try await change(index)
-      } catch {
-        Log.spotlight.error("Spotlight update failed", .error(error))
-      }
+      await change(titles)
     }
   }
 }

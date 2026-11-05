@@ -216,6 +216,7 @@ struct FixtureDecodingTests {
     #expect(search.suggestions.map(\.id) == ["movie:105", "tv:204"])
     #expect(search.recommendations.map(\.id) == ["movie:101", "tv:201", "movie:105"])
     #expect(search.recommendations.first?.recommendedBy.first?.rank == 1)
+    #expect(search.recommendationCount == 3)
     #expect(search.finishedRecommendations == nil)
     // A read that hides finished titles counts the ones it left out.
     guard case .search(let hidden) = try Self.screen("screen/search/finished-hidden").content,
@@ -225,8 +226,10 @@ struct FixtureDecodingTests {
       return
     }
     #expect(hidden.recommendations.isEmpty)
+    #expect(hidden.recommendationCount == 0)
     #expect(hidden.finishedRecommendations == 2)
     #expect(shown.recommendations.map(\.viewerStatus) == [.finished, .finished])
+    #expect(shown.recommendationCount == 2)
     #expect(shown.finishedRecommendations == nil)
 
     guard case .account(let account) = try Self.screen("screen/account/default").content else {
