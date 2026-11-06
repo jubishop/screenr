@@ -39,11 +39,10 @@ three Simulators at once.
 that checkout's hook files for every worktree. Each hook then runs the
 worktree's own code
 ([#380](https://github.com/jubishop/screenr/issues/380)): the knowledge hooks
-call the worktree's `bin/knowledge-hook`, and the iOS `pre-push` gate hands
-the push to the worktree's `bin/hooks/pre-push` when the worktree's `HEAD`
-has the primary checkout's last change to the gate. A worktree that lacks
-that change, or has no copy, gets the primary checkout's gate, and the hook
-says so; rebase onto `origin/main` to run the branch's own copy. See
+call the worktree's `bin/knowledge-hook`, and so does Project Starter's
+managed `pre-push`, which then runs the worktree's own iOS gate,
+`bin/pre-push-application`. A worktree whose branch predates that move runs
+no pre-push checks until it merges `origin/main`. See
 [hook location](../docs/development-workflow.md#ios-checks-before-a-push).
 
 Fast-forward the primary checkout to `main` before relying on a new kind of

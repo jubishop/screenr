@@ -1,4 +1,4 @@
-"""Verify the pre-push hook with real pushes to a local remote and a simulated bin/check-ios."""
+"""Verify bin/pre-push-application with real pushes to a local remote and a simulated bin/check-ios."""
 
 from datetime import datetime, timedelta, timezone
 import json
@@ -32,11 +32,14 @@ if sys.argv[1:] != ['-version']:
     sys.exit('unexpected xcodebuild ' + ' '.join(sys.argv[1:]))
 print(os.environ.get('FAKE_XCODE_VERSION', 'Xcode 27.0\\nBuild version 27A266a'))
 """
-# A checkout's own hook that records its arguments and the refs on its standard
-# input, and lets every push through.
-OWN_HOOK = """import json, os, sys
-with open(os.environ['CHECK_EVENTS'], 'a') as stream:
-    stream.write(json.dumps(['own-hook', os.getcwd(), *sys.argv[1:], sys.stdin.read()]) + '\\n')
+# Stands in for Project Starter's managed bin/hooks/pre-push, which runs the pushing checkout's
+# bin/pre-push-application from its root, with Git's arguments, standard input, and environment, once
+# its document checks pass.
+MANAGED_HOOK = """import pathlib, subprocess, sys
+root = pathlib.Path(subprocess.run(['git', 'rev-parse', '--show-toplevel'], check=True,
+                                   capture_output=True, text=True).stdout.strip())
+sys.exit(subprocess.run([str(root / 'bin/pre-push-application'), *sys.argv[1:]], cwd=root,
+                        input=sys.stdin.read(), text=True).returncode)
 """
 
 
@@ -58,7 +61,8 @@ class PrePushTests(unittest.TestCase):
         self.remote = base / "remote.git"
         self.repo = base / "checkout"
         (self.repo / "bin/hooks").mkdir(parents=True)
-        shutil.copy2(SOURCE / "bin/hooks/pre-push", self.repo / "bin/hooks/pre-push")
+        shutil.copy2(SOURCE / "bin/pre-push-application", self.repo / "bin/pre-push-application")
+        self.tool(self.repo / "bin/hooks/pre-push", MANAGED_HOOK)
         shutil.copy2(SOURCE / "bin/_ios_check_records.py", self.repo / "bin/_ios_check_records.py")
         self.tool(self.repo / "bin/check-ios", CHECK_IOS)
         (self.repo / "bin/format-swift").write_text("#!/bin/sh\n")
@@ -88,12 +92,9 @@ class PrePushTests(unittest.TestCase):
                               capture_output=True, text=True).stdout.strip()
 
     def commit(self, message, *changes, cwd=None):
-        """Commit every change in the checkout, after writing each named file, or removing it for None."""
+        """Commit every change in the checkout, after writing each named file."""
         for name, text in changes:
-            if text is None:
-                (cwd or self.repo).joinpath(name).unlink()
-            else:
-                self.write(name, text, cwd)
+            self.write(name, text, cwd)
         self.git("add", "--all", cwd=cwd)
         self.git("-c", "core.hooksPath=/dev/null", "commit", "--quiet", "--message", message, cwd=cwd)
         return self.git("rev-parse", "HEAD", cwd=cwd)
@@ -144,22 +145,8 @@ class PrePushTests(unittest.TestCase):
         self.assertTrue(self.remote_has("refs/heads/feature"))
         self.assertEqual(len(self.records()), 1)
 
-    def test_a_worktree_runs_its_own_copy_of_the_hook_and_says_when_it_differs(self):
-        self.hooks_from_this_checkout()
-        worktree = self.worktree()
-        self.tool(worktree / "bin/hooks/pre-push", OWN_HOOK)
-        self.commit("Change the hook", cwd=worktree)
-        result = self.push("HEAD:refs/heads/feature", cwd=worktree)
-        self.assertEqual(result.returncode, 0, result.stderr)
-        # It gets Git's arguments and the pushed refs unchanged.
-        [[name, directory, remote, url, refs]] = self.checks()
-        self.assertEqual([name, directory, remote, url], ["own-hook", str(worktree), "origin", str(self.remote)])
-        self.assertEqual(refs.split()[2], "refs/heads/feature")
-        self.assertIn("pre-push: running this checkout's bin/hooks/pre-push; its bin/hooks/pre-push differs "
-                      f"from {self.repo}'s.", result.stderr)
-
-    def test_a_worktree_copy_uses_its_own_modules_and_names_those_that_differ(self):
-        # The hook imports bin/_ios_check_records.py from beside itself, so only the
+    def test_a_worktree_uses_its_own_modules_when_hooks_come_from_this_checkout(self):
+        # The hook imports bin/_ios_check_records.py from beside itself, so the
         # worktree's copy stores the pass where the worktree's own module says.
         self.hooks_from_this_checkout()
         worktree = self.worktree()
@@ -174,52 +161,6 @@ class PrePushTests(unittest.TestCase):
         self.assertEqual(self.checks(), [["check-ios", str(worktree)]])
         self.assertEqual(self.records(), [])
         self.assertEqual(len(list((self.repo / ".git/screenr-ios-checks-v2").glob("*.json"))), 1)
-        self.assertIn("pre-push: running this checkout's bin/hooks/pre-push; its bin/_ios_check_records.py "
-                      f"differs from {self.repo}'s.", result.stderr)
-
-    def test_a_worktree_with_the_same_gate_runs_it_quietly(self):
-        self.hooks_from_this_checkout()
-        worktree = self.worktree()
-        self.commit("Edit the app", ("ios/App.swift", "struct App { let edited = true }\n"), cwd=worktree)
-        result = self.push("HEAD:refs/heads/feature", cwd=worktree)
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(self.checks(), [["check-ios", str(worktree)]])
-        self.assertEqual([line for line in result.stderr.splitlines() if line.startswith("pre-push:")],
-                         ["pre-push: feature changes the iOS files; running bin/check-ios before the push."])
-
-    def test_a_worktree_without_the_hook_gets_the_configured_gate(self):
-        self.hooks_from_this_checkout()
-        worktree = self.worktree()
-        self.commit("Drop the hook", ("bin/hooks/pre-push", None),
-                    ("ios/App.swift", "struct App { let edited = true }\n"), cwd=worktree)
-        result = self.push("HEAD:refs/heads/feature", cwd=worktree, FAIL_CHECK="1")
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn(f"pre-push: this checkout has no bin/hooks/pre-push, so {self.repo / 'bin/hooks/pre-push'} "
-                      "runs.", result.stderr)
-        self.assertIn("bin/check-ios failed with status 1, so the push stopped", result.stderr)
-        self.assertEqual(self.checks(), [["check-ios", str(worktree)]])
-        self.assertFalse(self.remote_has("refs/heads/feature"))
-
-    def test_an_older_copy_in_a_worktree_never_replaces_a_newer_gate(self):
-        self.hooks_from_this_checkout()
-        worktree = self.worktree()
-        # The branch's copy lets every push through, and main then changes the gate.
-        self.tool(worktree / "bin/hooks/pre-push", OWN_HOOK)
-        self.commit("Weaken the hook", ("ios/App.swift", "struct App { let edited = true }\n"), cwd=worktree)
-        module = (self.repo / "bin/_ios_check_records.py").read_text()
-        gate = self.commit("Change the gate", ("bin/_ios_check_records.py", module + "# Newer.\n"))
-        result = self.push("HEAD:refs/heads/feature", cwd=worktree, FAIL_CHECK="1")
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn(f"pre-push: this checkout lacks {gate[:12]}, the last change to the gate in {self.repo}, "
-                      f"so {self.repo / 'bin/hooks/pre-push'} runs instead of this checkout's copy.",
-                      result.stderr)
-        self.assertEqual(self.checks(), [["check-ios", str(worktree)]])
-        self.assertFalse(self.remote_has("refs/heads/feature"))
-        # Once the branch has that change, its own copy runs.
-        self.git("-c", "core.hooksPath=/dev/null", "rebase", "--quiet", "main", cwd=worktree)
-        result = self.push("HEAD:refs/heads/feature", cwd=worktree, FAIL_CHECK="1")
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(self.checks()[-1][0], "own-hook")
 
     def test_bin_format_swift_counts_as_an_ios_file_but_bin_check_ios_does_not(self):
         # The simulated check keeps working when its file changes.

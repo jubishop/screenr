@@ -235,9 +235,9 @@ for requirements. GitHub issues track work.
 
 GitHub Actions runs no iOS checks
 ([decision](ios-app.md#local-ios-checks-instead-of-ios-ci--2026-10-14)).
-Instead, [`bin/hooks/pre-push`](../bin/hooks/pre-push) runs `bin/check-ios`
-on the Mac before a push that changes the iOS files, and refuses the push
-when the check fails. Run `bin/check-ios` before pushing iOS changes, so the
+Instead, [`bin/pre-push-application`](../bin/pre-push-application) runs
+`bin/check-ios` on the Mac before a push that changes the iOS files, and
+refuses the push when the check fails. Run `bin/check-ios` before pushing iOS changes, so the
 push finds a recorded pass. Never bypass the hook with `git push --no-verify`.
 
 - **iOS files:** `ios/` and `bin/format-swift`, which the app's build runs.
@@ -305,22 +305,22 @@ push finds a recorded pass. Never bypass the hook with `git push --no-verify`.
   runs the primary checkout's hook files for every worktree. Each one then
   runs the pushing or committing checkout's own code
   ([#380](https://github.com/jubishop/screenr/issues/380)). The four
-  knowledge hooks call that checkout's `bin/knowledge-hook`. `pre-push` hands
-  the push to that checkout's `bin/hooks/pre-push`, but only when the
-  checkout's `HEAD` has the last commit that changed the gate,
-  `bin/hooks/pre-push` or `bin/_ios_check_records.py`, in the checkout that
-  `core.hooksPath` names. So a branch's older copy never replaces a newer
-  gate. Without that commit, or without an executable copy, the configured
-  copy checks the push itself and says why; rebase onto `origin/main` to run
-  the branch's own copy. A copy whose gate files differ from the configured
-  ones names them before it runs, so a branch's changes to the gate run
-  visibly, as its own `bin/check-ios` always has. A new kind of hook still applies only once the
-  checkout that `core.hooksPath` names has it. `pre-push` belongs to this
-  project; Project Starter manages only the four knowledge hooks.
+  knowledge hooks and `pre-push` call that checkout's `bin/knowledge-hook`.
+  Project Starter manages `bin/hooks/pre-push`: it runs the document checks
+  when a push changes Markdown, then that checkout's
+  `bin/pre-push-application` with Git's arguments, standard input, and
+  environment. So a branch's changes to the gate, `bin/pre-push-application`
+  or `bin/_ios_check_records.py`, run for its own pushes, as its own
+  `bin/check-ios` always has. A worktree whose branch predates the move to
+  `bin/pre-push-application` runs no pre-push checks: its older
+  `bin/knowledge-hook` rejects the event, says the knowledge hook failed, and
+  lets Git push. Merge `origin/main` into it first. A
+  new kind of hook still applies only once the checkout that
+  `core.hooksPath` names has it.
 - **Tests:** `tests/test_pre_push.py` pushes to a local remote, from the
-  checkout and from linked worktrees, with a simulated `bin/check-ios`,
-  including the hand-off to a worktree's copy and its fallbacks, and
-  `tests/test_check_ios.py` covers the records and the check's environment.
+  checkout and from linked worktrees, with a simulated `bin/check-ios` and a
+  stand-in for the managed hook, and `tests/test_check_ios.py` covers the
+  records and the check's environment.
 
 ### iOS release gate
 
