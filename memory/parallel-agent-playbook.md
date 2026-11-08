@@ -69,8 +69,11 @@ any issue-specific notes. The shared brief covers:
 - **Production steps:** some issues need host work after the merge, such as
   installing the deploy kit. Have the agent verify on the host before the
   merge, read-only, and then roll out with the documented checks and rollback.
-- **Device checks:** items that need the owner's iPhone, TestFlight, or Apple
-  stay open with one comment listing exactly what remains.
+- **Device checks:** don't hold an issue open for a check only the owner's
+  iPhone can make. Once the automated and production checks pass, close it
+  with a note saying what no real device has shown yet. The owner files an
+  issue if something fails in use (the owner's choice, 2026-11-08, after
+  test plans for #340, #540, and #250 grew too heavy).
 - **Dependabot:** when `@dependabot rebase` stalls, `gh pr update-branch
   <pr> --rebase` restarts its CI.
 

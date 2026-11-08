@@ -488,8 +488,9 @@ built it:
   you’re new, tap your invitation link again to open it here."
 
 The app side is in the [iPhone app guide](../ios/README.md#invitation-pickup).
-The setting stays off until a real iPhone shows the pickup working
-([#540](https://github.com/jubishop/screenr/issues/540)).
+Production has set it since 2026-11-08. The user chose to rely on the pickup
+without first checking it on a real iPhone, and to file an issue if it fails
+in use ([#540](https://github.com/jubishop/screenr/issues/540)).
 
 **Why:** The user wants a new member to tap the invitation link and go
 straight to the TestFlight build, without ever having to sign up or use a
