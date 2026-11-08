@@ -13,6 +13,7 @@
   <key>com.apple.developer.associated-domains</key>
   <array>
     <string>applinks:screenr.club</string>
+    <string>webcredentials:screenr.club</string>
   </array>
   <key>com.apple.security.application-groups</key>
   <array>

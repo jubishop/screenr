@@ -466,8 +466,30 @@ link again, which then opens the app. With the app installed, the
 [universal link](#universal-links-for-member-routes-and-invitations--2026-10-13)
 opens it directly, as before. Other devices keep the web's join.
 
-Not built yet; [#539](https://github.com/jubishop/screenr/issues/539)
-tracks it, starting with a real-iPhone check that the pickup works.
+**Implementation:** [#539](https://github.com/jubishop/screenr/issues/539)
+built it:
+
+- **The link:** `/join/<token>` keeps setting the `screenr-invite` cookie.
+  For an iPhone browser without a session and a valid invitation, it
+  redirects to `SCREENR_IPHONE_INSTALL_URL` instead of `/login`. Without that
+  production setting, every device keeps the web's join.
+- **The pickup:** before a person without an invitation first signs in, the
+  app opens `/api/invitation-pickup` in a shared web authentication session,
+  which sees Safari's persistent cookies. The page redirects to an https
+  callback with the token and clears the cookie. Only the app this domain
+  names for its web credentials can receive that callback
+  ([invitation pickup](data-and-access.md#invitation-pickup)).
+- **When it runs:** once a launch, and never on an iPhone where a member has
+  signed in, which a Keychain item that outlives the app records. A sign-in
+  goes on whatever the pickup finds, since an existing member on a new
+  iPhone needs no invitation.
+- **The fallback:** when Safari has none, or the person declines iOS's
+  prompt, the sign-in screen says "Screenr couldn’t find your invitation. If
+  you’re new, tap your invitation link again to open it here."
+
+The app side is in the [iPhone app guide](../ios/README.md#invitation-pickup).
+The setting stays off until a real iPhone shows the pickup working
+([#540](https://github.com/jubishop/screenr/issues/540)).
 
 **Why:** The user wants a new member to tap the invitation link and go
 straight to the TestFlight build, without ever having to sign up or use a

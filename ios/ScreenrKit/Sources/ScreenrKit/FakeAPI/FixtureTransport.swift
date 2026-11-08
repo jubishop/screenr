@@ -68,6 +68,19 @@ public struct FixtureScenario: Hashable, Sendable {
     case solid
   }
 
+  // What the invitation pickup finds before the first sign-in; see
+  // `FixtureInvitationPickup`. Nil, the default, leaves the pickup out.
+  public var pickup: Pickup?
+
+  public enum Pickup: String, Hashable, Sendable {
+    // Alice's invitation, as if a link had saved it in Safari.
+    case found
+    // Safari saved no invitation.
+    case missing
+    // The person declined iOS's prompt.
+    case declined
+  }
+
   public init(
     viewer: String = "alice",
     session: Session = .signedIn,
@@ -80,7 +93,8 @@ public struct FixtureScenario: Hashable, Sendable {
     updateSignal: URL? = nil,
     outageSignal: URL? = nil,
     holds: URL? = nil,
-    posters: Posters = .placeholders
+    posters: Posters = .placeholders,
+    pickup: Pickup? = nil
   ) {
     self.viewer = viewer
     self.session = session
@@ -94,6 +108,7 @@ public struct FixtureScenario: Hashable, Sendable {
     self.outageSignal = outageSignal
     self.holds = holds
     self.posters = posters
+    self.pickup = pickup
   }
 }
 

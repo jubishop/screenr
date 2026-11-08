@@ -389,6 +389,35 @@ the account, such as Google's or Apple's, or empty; `photo` is the photo
 version, such as a Google signup's copy, or `null`; and `google` says
 whether a Google account can supply a photo.
 
+### Invitation pickup
+
+On an iPhone without the app, an invitation link goes to install it
+([decision](ios-app.md#invitation-links-install-the-app-on-iphone--2026-11-07)),
+and an install carries no link into the app. So the app picks up the
+invitation that `/join` saved in Safari's `screenr-invite` cookie:
+
+- **The link:** for a valid invitation and no session, `/join/<token>` sets
+  the cookie as on any device. When the request's User-Agent names an iPhone
+  and production sets `SCREENR_IPHONE_INSTALL_URL` to an https URL, it then
+  redirects there instead of to `/login`. An iPad's Safari presents itself as
+  a Mac, so it keeps the web's join, as do invalid or used-up invitations and
+  signed-in visitors.
+- **The pickup:** `GET /api/invitation-pickup`, in
+  `src/app/api/invitation-pickup/route.ts`, reads the cookie and redirects to
+  `/api/invitation-pickup/done?token=<token>`, or to the bare callback when
+  there is no well-formed token. It clears any cookie it found, so an
+  invitation is picked up once, and answers with
+  `Cache-Control: private, no-store` and `Referrer-Policy: no-referrer`. It
+  checks nothing in the database; the app checks the token with
+  `GET /api/auth/invitation` like a link's.
+- **Only Screenr receives it:** the app opens the pickup in a shared
+  `ASWebAuthenticationSession`, which sees Safari's persistent cookies, with
+  an https callback on screenr.club. iOS hands that callback, without loading
+  it, only to an app the domain's `apple-app-site-association` lists under
+  `webcredentials`: the Release app. A custom URL scheme would let another
+  app claim the callback. A browser that loads the callback itself is sent on
+  to `/`.
+
 ## Push devices and settings
 
 The iPhone app registers its APNs device token and saves the member's

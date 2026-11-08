@@ -2,6 +2,7 @@
 // docs/ios-app.md#universal-links-for-member-routes-and-invitations--2026-10-13
 // Apple applies the first matching component, so exclusions come first. Only
 // the Release app is listed; Screenr Dev uses its screenr-dev:// scheme.
+const releaseApp = "34TKMKM889.com.artisanalsoftware.Screenr";
 const excluded = ["/api/*", "/login", "/setup", "/credits", "/privacy"];
 // Member routes, as src/member-routes.ts parses them, and invitations. Item
 // permalinks are title or feed paths with query parameters, which match too.
@@ -23,7 +24,7 @@ export function GET() {
     applinks: {
       details: [
         {
-          appIDs: ["34TKMKM889.com.artisanalsoftware.Screenr"],
+          appIDs: [releaseApp],
           components: [
             ...excluded.map((path) => ({ "/": path, exclude: true })),
             ...claimed.map((path) => ({ "/": path })),
@@ -31,5 +32,9 @@ export function GET() {
         },
       ],
     },
+    // Web credentials let the invitation pickup's web authentication session
+    // end at an https callback here, which iOS hands only to this app:
+    // docs/data-and-access.md#invitation-pickup
+    webcredentials: { apps: [releaseApp] },
   });
 }

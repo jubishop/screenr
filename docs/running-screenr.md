@@ -434,6 +434,17 @@ shows the link. The API returns it as the `publicLink` attribute of
 tester limit of its own, and anyone who installs from it still needs an
 invitation to join Screenr.
 
+**Install link for invitations:** production's `SCREENR_IPHONE_INSTALL_URL`
+in `app.env` holds this public link, so an invitation link opened on an
+iPhone without Screenr goes straight to TestFlight
+([invitation pickup](data-and-access.md#invitation-pickup)). It moves to the
+App Store link later ([#251](https://github.com/jubishop/screenr/issues/251)).
+Set it only after a build with the invitation pickup is available to external
+testers, so no invitee installs a build that can't pick up their invitation.
+It stays unset until a real iPhone shows the pickup working
+([#540](https://github.com/jubishop/screenr/issues/540)). Like any `app.env`
+change, update its [off-server copies](restore-and-patching.md#production-secrets).
+
 ### Google
 
 The iOS OAuth client "Screenr iOS" is in Google Cloud project
