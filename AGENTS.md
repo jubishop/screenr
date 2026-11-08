@@ -101,6 +101,12 @@ adds no distinct evidence. Preserve coverage for each moved case and retain
 browser-specific behavior and complete user journeys. Follow the
 [coverage placement decision](docs/development-workflow.md#test-coverage-placement).
 
+Never ask the owner to test by hand, and never make an owner device check a
+done condition or blocker. Test everything possible automatically, rely on
+Apple's and other vendors' documentation for what only a real device shows,
+and note that gap when closing. See
+[no manual testing by the owner](docs/development-workflow.md#no-manual-testing-by-the-owner).
+
 ## Product Context
 
 Screenr is a social app for TV and movies. Read

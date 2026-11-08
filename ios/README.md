@@ -698,7 +698,8 @@ network boundary without an Apple ID or Google account:
   Sign-in accepts the token only with that nonce.
 
 Real Apple and Google sign-in need a device or Simulator with an Apple ID or
-Google account, so they are checked on TestFlight builds.
+Google account, so tests use the fixture API's stand-ins, and the real
+services rest on Apple's and Google's documented behavior.
 
 ## App shell
 
@@ -1663,8 +1664,8 @@ page reads again. Nothing loads before Play trailer.
 - **Full screen:** `.webViewElementFullscreenBehavior(.enabled)` lets the
   player go full screen. The app delegate keeps every screen in portrait;
   while a player is on screen, `TrailerOrientation` lets other windows, such
-  as full-screen video, turn to landscape. Check it on a device, since the
-  Simulator's tests load no video.
+  as full-screen video, turn to landscape. The Simulator's tests load no
+  video, so this rests on WebKit's documented behavior.
 - **Tests:** against the fixture API, `AppServices.trailers` is
   `TrailerLoading.recording`, which writes `WEB <url>` to the request log and
   loads nothing, so `TitleTests` checks that the embed is asked for only

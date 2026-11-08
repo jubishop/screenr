@@ -532,6 +532,25 @@ without necessarily proving additional behavior.
 application or database coverage. Do not simply delete slow assertions or
 assume a server-side test proves the corresponding browser behavior.
 
+### No manual testing by the owner
+
+**Decision — 2026-11-08:** Never make the owner test by hand. Agents test
+everything they can: unit, application, browser, and Simulator UI tests,
+fixtures, and read-only production checks. What only a real device or a live
+Apple or Google service could show rests on those vendors' documentation.
+Don't add an owner device check to a plan, a done condition, or a blocker.
+Close the work once the automated and production checks pass, and say in the
+pull request or closing comment what no real device has shown. The owner
+files an issue if something fails in use.
+
+**Why:** Screenr is an early hobby app. The user wants thorough automated
+testing but doesn't want to get bogged down testing by hand. Owner-only
+device checks had kept #340, #540, and #250 open for weeks.
+
+**Tradeoff:** Some behavior, such as a push reaching a locked iPhone or the
+invitation pickup sharing Safari's cookies, is first seen when members use
+it. Where possible, cover such a gap with an automated test, not a manual one.
+
 ### Browser runtime optimization sequence
 
 **Decision — 2026-09-08:** First optimize setup and redistribute coverage with
