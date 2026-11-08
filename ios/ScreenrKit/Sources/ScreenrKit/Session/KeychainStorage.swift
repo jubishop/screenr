@@ -39,6 +39,12 @@ public struct SystemKeychain: KeychainStorage {
     SystemKeychain(accessGroup: accessGroup, service: "Screenr invitation", account: "token")
   }
 
+  // The mark that a member signed in on this iPhone, which outlives the app,
+  // so the app never asks Safari for an invitation here again.
+  public static func member(accessGroup: String) -> SystemKeychain {
+    SystemKeychain(accessGroup: accessGroup, service: "Screenr member", account: "signed-in")
+  }
+
   private var item: [String: Any] {
     [
       kSecClass as String: kSecClassGenericPassword,

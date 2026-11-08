@@ -101,7 +101,10 @@ public struct AppServices: Sendable {
   // the extensions' send none. `push` is iOS's own push system, which the
   // app target provides; the extensions have none. At the app's first launch
   // after an install, `launch` ends the session a deleted install left in
-  // the Keychain, which the fixture API never reads.
+  // the Keychain, which the fixture API never reads. The app asks Safari for
+  // an invitation before a new person's first sign-in only on an iPhone
+  // where no member has signed in: one with a session now, or whose deleted
+  // install left one.
   @MainActor
   public init(
     configuration: AppConfiguration,
@@ -124,6 +127,9 @@ public struct AppServices: Sendable {
     let trailers: TrailerLoading
     let shareEndings: ShareEndings
     let push: (any PushSystem)?
+    let pickup: InvitationPickup?
+    // Whether a member signed in on this iPhone before this launch.
+    var member = false
     switch source {
     case .network:
       push = system
@@ -132,12 +138,24 @@ public struct AppServices: Sendable {
         storage: SystemKeychain.invitation(accessGroup: configuration.appGroup)
       )
       transport = URLSessionTransport()
-      _ = try launch.endEarlierSession(
-        keychain: keychain,
-        serverURL: configuration.serverURL,
-        clientHeader: configuration.clientHeader,
-        transport: transport
-      )
+      member =
+        try launch.endEarlierSession(
+          keychain: keychain,
+          serverURL: configuration.serverURL,
+          clientHeader: configuration.clientHeader,
+          transport: transport
+        ) != nil
+      // Only the Release app is associated with screenr.club, whose pickup
+      // callback iOS hands to no other app.
+      if host == .app, configuration.variant == .release {
+        pickup = InvitationPickup(
+          serverURL: configuration.serverURL,
+          browser: .system,
+          members: SystemKeychain.member(accessGroup: configuration.appGroup)
+        )
+      } else {
+        pickup = nil
+      }
       authorization = .system
       photoLibrary = .system
       imageCache = URLCache(
@@ -172,8 +190,18 @@ public struct AppServices: Sendable {
       } else {
         push = system
       }
+      if host == .app, let outcome = scenario.pickup {
+        pickup = InvitationPickup(
+          serverURL: configuration.serverURL,
+          browser: .fixture(FixtureInvitationPickup(outcome: outcome)),
+          members: InMemoryKeychain()
+        )
+      } else {
+        pickup = nil
+      }
     }
     let session = try SessionStore(keychain: keychain)
+    if member || session.phase == .signedIn { pickup?.memberSignedIn() }
     let visits = VisitTracker()
     let images: ImageSource =
       switch source {
@@ -204,7 +232,8 @@ public struct AppServices: Sendable {
       invitation: invitation,
       identity: IdentityProviders(
         authorization: authorization,
-        google: GoogleSignIn(clientID: configuration.googleClientID, transport: transport)
+        google: GoogleSignIn(clientID: configuration.googleClientID, transport: transport),
+        pickup: pickup
       ),
       photoLibrary: photoLibrary,
       imageCache: imageCache,
@@ -252,6 +281,7 @@ public struct AppServices: Sendable {
 //   -ScreenrFixtureHolds <directory where a file at a request's path holds it>
 //   -ScreenrFixturePush undecided|allowed|denied|system (default undecided)
 //   -ScreenrFixturePosters placeholders|solid (default placeholders)
+//   -ScreenrFixturePickup found|missing|declined (default: no pickup)
 //
 // Release builds ignore them.
 public enum APISource: Hashable, Sendable {
@@ -294,6 +324,13 @@ public enum APISource: Hashable, Sendable {
           throw ArgumentError(description: "\(argument) is placeholders or solid, not \(value)")
         }
         scenario.posters = posters
+      case "-ScreenrFixturePickup":
+        guard let pickup = FixtureScenario.Pickup(rawValue: value) else {
+          throw ArgumentError(
+            description: "\(argument) is found, missing, or declined, not \(value)"
+          )
+        }
+        scenario.pickup = pickup
       case "-ScreenrFixtureSession":
         guard let session = FixtureScenario.Session(rawValue: value) else {
           throw ArgumentError(

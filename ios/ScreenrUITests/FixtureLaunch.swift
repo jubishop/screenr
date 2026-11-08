@@ -43,6 +43,17 @@ struct FixtureLaunch {
     case solid
   }
 
+  // What asking Safari for a saved invitation finds before the first
+  // sign-in.
+  enum Pickup: String {
+    // Alice's invitation.
+    case found
+    // No invitation.
+    case missing
+    // The person declines iOS's prompt.
+    case declined
+  }
+
   // The member whose fixtures answer first, such as alice, nora, or pat.
   var viewer = "alice"
   var session = Session.signedIn
@@ -74,6 +85,8 @@ struct FixtureLaunch {
   // Requests that wait while the test holds them, such as a photo upload.
   var holds: FixtureHolds?
   var posters = Posters.placeholders
+  // Without one, the app never asks Safari for an invitation.
+  var pickup: Pickup?
   // Text over every screen that the audit must fail.
   var auditProbe: AuditProbe?
 
@@ -103,6 +116,7 @@ struct FixtureLaunch {
     }
     if let outage { arguments += ["-ScreenrFixtureOutageSignal", outage.signal.path()] }
     if let holds { arguments += ["-ScreenrFixtureHolds", holds.directory.path()] }
+    if let pickup { arguments += ["-ScreenrFixturePickup", pickup.rawValue] }
     return arguments
   }
 }

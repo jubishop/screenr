@@ -2,6 +2,11 @@ import { NextResponse } from "next/server";
 import { activeInvitation, invitationHash } from "../../../server/invitations";
 import { auth } from "../../../server/auth";
 import { db } from "../../../server/db";
+import {
+  invitationCookie,
+  iphoneBrowser,
+  iphoneInstallURL,
+} from "../../../server/invitation-pickup";
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ token: string }> },
@@ -23,10 +28,16 @@ export async function GET(
     return NextResponse.redirect(new URL("/login?invitation=unavailable", url));
   // Setup validates and consumes this invitation in its signup transaction,
   // whether the pending account follows the link before or after signing in.
+  // An iPhone without the app, since the app opens this link when installed,
+  // goes to install it instead and picks the invitation up from this cookie:
+  // docs/ios-app.md#invitation-links-install-the-app-on-iphone--2026-11-07
+  const install = session ? undefined : iphoneInstallURL();
   const response = NextResponse.redirect(
-    new URL(session ? "/setup" : "/login", url),
+    install && iphoneBrowser(request.headers)
+      ? install
+      : new URL(session ? "/setup" : "/login", url),
   );
-  response.cookies.set("screenr-invite", token, {
+  response.cookies.set(invitationCookie, token, {
     httpOnly: true,
     secure: url.protocol === "https:",
     sameSite: "lax",

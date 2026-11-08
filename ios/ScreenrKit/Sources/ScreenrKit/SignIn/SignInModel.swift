@@ -5,7 +5,9 @@ import Observation
 // The sign-in screen: an email code in two steps, Sign in with Apple, and
 // Google. A sign-in that succeeds stores the session, which moves
 // `SessionStore.phase` to signed in, so the app leaves this screen. Every
-// request carries the pending invitation, which a new member needs.
+// request carries the pending invitation, which a new member needs. Before a
+// person without one first signs in, the model asks Safari for the invitation
+// a link saved there before the app was installed; see `InvitationPickup`.
 //
 // The same model confirms it's the signed-in member again, such as before
 // deleting the account: with an email code to the account's own address or a
@@ -54,8 +56,9 @@ public final class SignInModel {
   public private(set) var failure: String?
 
   private enum Purpose {
-    // Signing in, or joining with the pending invitation.
-    case signIn(PendingInvitation)
+    // Signing in, or joining with the pending invitation. `browser` is the
+    // web authentication session that picks up an invitation from Safari.
+    case signIn(PendingInvitation, browser: any WebAuthenticator)
     // Confirming it's the signed-in member.
     case confirm(MemberConfirmation)
   }
@@ -66,9 +69,14 @@ public final class SignInModel {
   @ObservationIgnored private var appleNonce: AppleNonce?
   @ObservationIgnored private var confirmed: @MainActor () -> Void = {}
 
-  public init(api: any ScreenrAPI, invitation: PendingInvitation, providers: IdentityProviders) {
+  public init(
+    api: any ScreenrAPI,
+    invitation: PendingInvitation,
+    providers: IdentityProviders,
+    browser: any WebAuthenticator
+  ) {
     self.api = api
-    purpose = .signIn(invitation)
+    purpose = .signIn(invitation, browser: browser)
     self.providers = providers
   }
 
@@ -107,12 +115,19 @@ public final class SignInModel {
   }
   // Whether the person opened an invitation link that may still be used.
   public var isInvited: Bool { invitationToken != nil }
-  // The web's words for an invitation link the server no longer accepts.
+  // The web's words for an invitation link the server no longer accepts, or
+  // what to do when Safari had no invitation to pick up.
   public var invitationNotice: String? {
-    guard case .signIn(let invitation) = purpose, invitation.status == .unavailable else {
+    guard case .signIn(let invitation, _) = purpose else { return nil }
+    switch invitation.status {
+    case .unavailable:
+      return "That invitation is no longer available. Existing members can still sign in."
+    case .none where providers.pickup?.phase == .missed:
+      return
+        "Screenr couldn’t find your invitation. If you’re new, tap your invitation link again to open it here."
+    default:
       return nil
     }
-    return "That invitation is no longer available. Existing members can still sign in."
   }
   public var canSendCode: Bool { activity == .idle && Self.isAddress(trimmedEmail) }
   public var canCheckCode: Bool { activity == .idle && code.count == Self.codeLength }
@@ -127,6 +142,7 @@ public final class SignInModel {
     guard activity == .idle, Self.isAddress(address) else { return }
     begin(.sendingCode)
     defer { activity = .idle }
+    await pickUpInvitation()
     do {
       _ = try await api.send(.sendCode(email: address, invitation: invitationToken))
       email = address
@@ -211,6 +227,7 @@ public final class SignInModel {
     appleNonce = nil
     begin(.apple)
     defer { activity = .idle }
+    await pickUpInvitation()
     do {
       _ = try await api.send(
         session(
@@ -244,6 +261,7 @@ public final class SignInModel {
     guard activity == .idle else { return }
     begin(.google)
     defer { activity = .idle }
+    await pickUpInvitation()
     let authenticator: any WebAuthenticator =
       switch providers.authorization {
       case .system: system
@@ -281,8 +299,18 @@ public final class SignInModel {
   // The invitation each request sends while signing in. Confirming the
   // member never joins, so it sends none.
   private var invitationToken: String? {
-    guard case .signIn(let invitation) = purpose else { return nil }
+    guard case .signIn(let invitation, _) = purpose else { return nil }
     return invitation.token
+  }
+
+  // Asks Safari for the invitation a link saved there, while the pickup is
+  // due and no invitation waits. Whatever it finds, the sign-in goes on: an
+  // existing member needs none, and a new person without one gets the
+  // server's answer and the notice to tap their link again.
+  private func pickUpInvitation() async {
+    guard case .signIn(let invitation, let browser) = purpose, let pickup = providers.pickup
+    else { return }
+    await pickup.pickUp(into: invitation, using: browser)
   }
 
   // A sign-in request for this model's purpose.
@@ -292,8 +320,10 @@ public final class SignInModel {
   }
 
   private func succeeded() {
-    guard case .confirm = purpose else { return }
-    confirmed()
+    switch purpose {
+    case .signIn: providers.pickup?.memberSignedIn()
+    case .confirm: confirmed()
+    }
   }
 
   private func begin(_ activity: Activity) {

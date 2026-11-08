@@ -20,12 +20,130 @@ struct SignInModelTests {
       providers: IdentityProviders(
         authorization: .system,
         google: GoogleSignIn(clientID: GoogleSignInTests.clientID, transport: google)
-      )
+      ),
+      browser: FailingAuthenticator(error: URLError(.badURL))
     )
   }
 
   private static func signedIn() throws -> RecordingTransport.Reply {
     try .json(200, ["token": "unsigned"], headers: ["set-auth-token": "signed-token"])
+  }
+
+  static let pickupMissed =
+    "Screenr couldn’t find your invitation. If you’re new, tap your invitation link again to open it here."
+
+  // A model whose pickup asks `safari` for the invitation a link saved.
+  private func pickupModel(
+    _ test: TestClient,
+    safari: PickupAuthenticator,
+    members: InMemoryKeychain = InMemoryKeychain(),
+    google: RecordingTransport = RecordingTransport([])
+  ) throws -> (SignInModel, InvitationPickup) {
+    let pickup = try InvitationPickupTests.pickup(members: members)
+    let model = SignInModel(
+      api: test.client,
+      invitation: PendingInvitation(storage: InMemoryKeychain()),
+      providers: IdentityProviders(
+        authorization: .system,
+        google: GoogleSignIn(clientID: GoogleSignInTests.clientID, transport: google),
+        pickup: pickup
+      ),
+      browser: safari
+    )
+    return (model, pickup)
+  }
+
+  @Test func picksUpTheInvitationSafariSavedBeforeTheFirstSignIn() async throws {
+    let test = try TestClient(replies: [try .json(200, ["success": true]), try Self.signedIn()])
+    let safari = PickupAuthenticator(.token(InvitationPickupTests.token))
+    let members = InMemoryKeychain()
+    let (model, pickup) = try pickupModel(test, safari: safari, members: members)
+    model.email = "pat@example.com"
+    #expect(!model.isInvited)
+
+    await model.sendCode()
+    model.enterCode("123456")
+    await model.checkCode()
+
+    #expect(model.isInvited)
+    #expect(model.invitationNotice == nil)
+    #expect(test.header("Screenr-Invitation", request: 0) == InvitationPickupTests.token)
+    #expect(test.header("Screenr-Invitation", request: 1) == InvitationPickupTests.token)
+    #expect(test.session.phase == .signedIn)
+    // A member signed in, so the app never asks Safari on this iPhone again.
+    #expect(safari.opened.count == 1)
+    #expect(pickup.phase == .done)
+    #expect(try members.read() == InvitationPickup.memberMark)
+  }
+
+  @Test func asksForTheLinkAgainWhenNoInvitationTurnsUp() async throws {
+    let test = try TestClient(replies: [
+      try .json(200, ["success": true]), try .json(200, ["success": true]),
+    ])
+    let safari = PickupAuthenticator(.error(ASWebAuthenticationSessionError(.canceledLogin)))
+    let (model, pickup) = try pickupModel(test, safari: safari)
+    model.email = "new@example.com"
+
+    await model.sendCode()
+
+    // The sign-in goes on, since an existing member needs no invitation.
+    #expect(model.step == .code(email: "new@example.com"))
+    #expect(test.header("Screenr-Invitation") == nil)
+    #expect(pickup.phase == .missed)
+    #expect(model.invitationNotice == Self.pickupMissed)
+    // It asks once a launch.
+    model.useAnotherEmail()
+    await model.sendCode()
+    #expect(safari.opened.count == 1)
+    #expect(test.transport.requests.count == 2)
+  }
+
+  @Test func picksUpTheInvitationBeforeAppleAndGoogleSignIns() async throws {
+    let apple = try TestClient(replies: [try Self.signedIn()])
+    let appleSafari = PickupAuthenticator(.token(InvitationPickupTests.token))
+    let (appleModel, _) = try pickupModel(apple, safari: appleSafari)
+    _ = appleModel.startApple()
+    await appleModel.signInWithApple(
+      AppleCredential(identityToken: "identity", authorizationCode: "code", name: nil)
+    )
+    #expect(appleSafari.opened.count == 1)
+    #expect(apple.header("Screenr-Invitation") == InvitationPickupTests.token)
+
+    let google = try TestClient(replies: [try Self.signedIn()])
+    let googleSafari = PickupAuthenticator(.token(InvitationPickupTests.token))
+    let (googleModel, _) = try pickupModel(
+      google,
+      safari: googleSafari,
+      google: RecordingTransport([try .json(200, ["id_token": "google-id-token"])])
+    )
+    let googlePage = RedirectingAuthenticator()
+    await googleModel.signInWithGoogle(using: googlePage)
+    #expect(googleSafari.opened.count == 1)
+    #expect(googlePage.opened != nil)
+    #expect(google.header("Screenr-Invitation") == InvitationPickupTests.token)
+  }
+
+  @Test func confirmingTheMemberNeverPicksUpAnInvitation() async throws {
+    let test = try TestClient(replies: [try .json(200, ["success": true])])
+    let pickup = try InvitationPickupTests.pickup()
+    let model = SignInModel(
+      api: test.client,
+      confirming: MemberConfirmation(userId: "u1", email: "pat@example.com", methods: [.emailCode]),
+      providers: IdentityProviders(
+        authorization: .system,
+        google: GoogleSignIn(
+          clientID: GoogleSignInTests.clientID,
+          transport: RecordingTransport([])
+        ),
+        pickup: pickup
+      )
+    )
+
+    await model.sendCode()
+
+    #expect(pickup.phase == .due)
+    #expect(model.invitationNotice == nil)
+    #expect(test.transport.requests.count == 1)
   }
 
   @Test func requestsACodeAndSignsInWithIt() async throws {
@@ -68,7 +186,8 @@ struct SignInModelTests {
           clientID: GoogleSignInTests.clientID,
           transport: RecordingTransport([])
         )
-      )
+      ),
+      browser: FailingAuthenticator(error: URLError(.badURL))
     )
     #expect(model.isInvited)
     #expect(model.invitationNotice == nil)

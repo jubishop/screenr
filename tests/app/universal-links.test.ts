@@ -15,6 +15,7 @@ async function association() {
   assert.equal(response.headers.get("Content-Type"), "application/json");
   return (await response.json()) as {
     applinks: { details: { appIDs: string[]; components: Component[] }[] };
+    webcredentials: { apps: string[] };
   };
 }
 
@@ -58,6 +59,15 @@ test("the association claims member routes and invitations for the Release app",
         ],
       },
     ],
+  });
+});
+
+// The invitation pickup's web authentication session ends at an https
+// callback on screenr.club, which iOS hands only to an app listed here.
+test("the association lists only the Release app for web credentials", async () => {
+  const { webcredentials } = await association();
+  assert.deepEqual(webcredentials, {
+    apps: ["34TKMKM889.com.artisanalsoftware.Screenr"],
   });
 });
 

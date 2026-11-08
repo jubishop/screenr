@@ -174,7 +174,7 @@ struct GoogleSignInTests {
     let credential = try await google.signIn(with: authenticator)
 
     let opened = try #require(authenticator.opened)
-    #expect(opened.callbackScheme == "com.googleusercontent.apps.1083-abc")
+    #expect(opened.callback == .customScheme("com.googleusercontent.apps.1083-abc"))
     var query: [String: String] = [:]
     for item in URLComponents(url: opened.url, resolvingAgainstBaseURL: false)?.queryItems ?? [] {
       query[item.name] = item.value
@@ -213,15 +213,16 @@ struct GoogleSignInTests {
 final class RedirectingAuthenticator: WebAuthenticator {
   struct Opened {
     let url: URL
-    let callbackScheme: String
+    let callback: WebCallback
   }
 
   private(set) var opened: Opened?
 
   nonisolated init() {}
 
-  func authenticate(url: URL, callbackScheme: String) async throws -> URL {
-    opened = Opened(url: url, callbackScheme: callbackScheme)
+  func authenticate(url: URL, callback: WebCallback) async throws -> URL {
+    opened = Opened(url: url, callback: callback)
+    guard case .customScheme(let callbackScheme) = callback else { throw URLError(.badURL) }
     var state = ""
     for item in URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
     where item.name == "state" {
@@ -239,7 +240,7 @@ final class RedirectingAuthenticator: WebAuthenticator {
 struct FailingAuthenticator: WebAuthenticator {
   let error: any Error
 
-  func authenticate(url: URL, callbackScheme: String) async throws -> URL {
+  func authenticate(url: URL, callback: WebCallback) async throws -> URL {
     throw error
   }
 }

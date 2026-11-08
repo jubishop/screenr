@@ -369,9 +369,12 @@ struct FixtureTransportTests {
     let model = SignInModel(
       api: services.api,
       invitation: services.invitation,
-      providers: services.identity
+      providers: services.identity,
+      browser: FailingAuthenticator(error: URLError(.badURL))
     )
     #expect(services.identity.authorization == .fixture)
+    // Without a pickup scenario, the fixture API leaves the pickup out.
+    #expect(services.identity.pickup == nil)
 
     await model.signInWithFixtureApple()
     #expect(model.failure == nil)
@@ -417,7 +420,7 @@ struct FixtureTransportTests {
     let callback = try await FixtureWebAuthenticator()
       .authenticate(
         url: try google.authorizationURL(for: attempt),
-        callbackScheme: google.callbackScheme
+        callback: .customScheme(google.callbackScheme)
       )
     let code = try google.code(from: callback, for: attempt)
 

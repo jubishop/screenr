@@ -657,6 +657,7 @@ Their behavior lives in ScreenrKit's `SignIn/` folder:
 | --- | --- |
 | `SignInModel` | The screen's `@Observable` model. The email code takes two steps, and the second offers a new code. It shows the server's messages, such as the code limits, as the server words them. |
 | `PendingInvitation` | The token of the invitation link a new member opened, which every sign-in request sends as `Screenr-Invitation`. See [invitations and setup](#invitations-and-setup). |
+| `InvitationPickup` | Before a person without an invitation first signs in, asks Safari for the one an invitation link saved there before the app was installed. See [invitations and setup](#invitations-and-setup). |
 | `AppleNonce`, `AppleCredential` | Sign in with Apple's request gets the SHA-256 hex digest of a new nonce. The server gets the raw nonce, the identity token, the authorization code, and on the first sign-in the person's name. |
 | `GoogleSignIn` | Google's authorization code flow with PKCE (S256) for the iOS client, without Google's SDK. A `WebAuthenticator` opens Google's page; the app's is SwiftUI's web authentication session. It redeems the code at Google's token endpoint with no client secret and returns the ID token and nonce. |
 | `SignOutModel` | Signs out on the server. If the server does not confirm, the session stays and an alert says why, as on the web. |
@@ -1184,6 +1185,38 @@ email address. Apple and Google report verified addresses, and an email code
 verifies its address, so the app leaves that step out; if setup ever answers
 "Verify your email before joining.", signing in again with an email code
 verifies the address.
+
+### Invitation pickup
+
+On an iPhone without the app, an invitation link saves the invitation in
+Safari and goes to install the app
+([decision](../docs/ios-app.md#invitation-links-install-the-app-on-iphone--2026-11-07)).
+`InvitationPickup` brings it into the app:
+
+- **When:** `SignInModel` runs it as a sign-in starts, while no invitation
+  waits: before requesting a code, before Google's page, and after Apple's
+  sheet but before posting its credential. It runs once a launch, and never
+  once a member has signed in on this iPhone. `memberSignedIn()` records that
+  in the Keychain item `SystemKeychain.member(accessGroup:)`, which outlives
+  the app; a sign-in, a launch with a session, and a session a deleted
+  install left all set it.
+- **How:** `SignInView` passes SwiftUI's web authentication session as the
+  model's `browser`. It opens `https://screenr.club/api/invitation-pickup`
+  with the https callback `/api/invitation-pickup/done` on the same host, and
+  shares Safari's cookies
+  ([invitation pickup](../docs/data-and-access.md#invitation-pickup)). A token
+  in the callback goes to `PendingInvitation.open(_:)`, exactly as a tapped
+  link's does, so the screen says "You’re invited" and the sign-in sends it.
+- **Fallback:** when the callback has no token, the person declines iOS's
+  prompt, or the session fails, the phase is `missed` and the screen says
+  "Screenr couldn’t find your invitation. If you’re new, tap your invitation
+  link again to open it here." The sign-in goes on either way, since an
+  existing member on a new iPhone needs no invitation.
+- **Where:** only the Release app, whose bundle the site names for its web
+  credentials (`webcredentials:screenr.club` in `Config/Screenr.entitlements`).
+  Screenr Dev against a server never runs it. Against the fixture API,
+  `-ScreenrFixturePickup found|missing|declined` sets what
+  `FixtureInvitationPickup` answers; without it there is no pickup.
 
 ### Profile photos
 

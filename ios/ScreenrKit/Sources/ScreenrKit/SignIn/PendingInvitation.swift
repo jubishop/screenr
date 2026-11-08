@@ -106,7 +106,7 @@ public final class PendingInvitation {
 }
 
 // How the app authorizes with Apple and Google before it posts their tokens
-// to the server.
+// to the server, and finds a new person's invitation.
 public struct IdentityProviders: Sendable {
   public enum Authorization: Hashable, Sendable {
     // The system's Sign in with Apple sheet, and Google in a web
@@ -119,9 +119,13 @@ public struct IdentityProviders: Sendable {
 
   public let authorization: Authorization
   public let google: GoogleSignIn
+  // Picks up an invitation from Safari before a new person's first sign-in,
+  // or nil where the app cannot ask, as in Screenr Dev against a server.
+  public let pickup: InvitationPickup?
 
-  public init(authorization: Authorization, google: GoogleSignIn) {
+  public init(authorization: Authorization, google: GoogleSignIn, pickup: InvitationPickup? = nil) {
     self.authorization = authorization
     self.google = google
+    self.pickup = pickup
   }
 }

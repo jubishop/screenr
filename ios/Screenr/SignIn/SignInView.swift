@@ -1,19 +1,27 @@
+import AuthenticationServices
 import ScreenrKit
 import SwiftUI
 
 // The signed-out screen: Sign in with Apple, Google, and an email code. A
 // sign-in that succeeds moves the session to signed in, and the app shell
 // replaces this screen. After the member deletes their account, it says so,
-// as the web's sign-in page does.
+// as the web's sign-in page does. The web authentication session also picks
+// up a new person's invitation from Safari before their first sign-in.
 struct SignInView: View {
   @Environment(\.screenrAPI) private var api
   @Environment(PendingInvitation.self) private var invitation
   @Environment(SessionStore.self) private var session
   @Environment(\.identityProviders) private var providers
+  @Environment(\.webAuthenticationSession) private var webAuthenticationSession
 
   var body: some View {
     SignInForm(
-      model: SignInModel(api: api, invitation: invitation, providers: injectedProviders),
+      model: SignInModel(
+        api: api,
+        invitation: invitation,
+        providers: injectedProviders,
+        browser: SystemWebAuthenticator(session: webAuthenticationSession)
+      ),
       ending: session.ending
     )
   }

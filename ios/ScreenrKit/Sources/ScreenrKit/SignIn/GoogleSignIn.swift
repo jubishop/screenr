@@ -2,13 +2,6 @@ import AuthenticationServices
 import CryptoKit
 import Foundation
 
-// Opens a sign-in page in a browser session and returns the URL that the page
-// finally redirects to. The app uses SwiftUI's web authentication session;
-// Screenr Dev's fixture API answers at once.
-public protocol WebAuthenticator: Sendable {
-  @MainActor func authenticate(url: URL, callbackScheme: String) async throws -> URL
-}
-
 // Google sign-in for the iOS OAuth client, without Google's SDK. It runs the
 // authorization code flow with PKCE in a web authentication session, then
 // redeems the code at Google's token endpoint for an ID token. An iOS client
@@ -73,7 +66,10 @@ public struct GoogleSignIn: Sendable {
     let url = try authorizationURL(for: attempt)
     let callback: URL
     do {
-      callback = try await authenticator.authenticate(url: url, callbackScheme: callbackScheme)
+      callback = try await authenticator.authenticate(
+        url: url,
+        callback: .customScheme(callbackScheme)
+      )
     } catch let error as ASWebAuthenticationSessionError where error.code == .canceledLogin {
       throw .cancelled
     } catch is CancellationError {

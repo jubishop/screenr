@@ -25,6 +25,13 @@ if (minimumBuild && !/^\d{1,15}$/.test(minimumBuild))
   throw new Error(
     "SCREENR_IOS_MINIMUM_BUILD must be a whole number of at most 15 digits.",
   );
+// Optional: docs/deployment.md#provisioning
+const install = process.env.SCREENR_IPHONE_INSTALL_URL?.trim();
+if (
+  install &&
+  !(URL.canParse(install) && new URL(install).protocol === "https:")
+)
+  throw new Error("SCREENR_IPHONE_INSTALL_URL must be an https URL.");
 if (process.env.SCREENR_TEST_TMDB_URL)
   throw new Error("Remove the test catalog override from production.");
 console.log(
