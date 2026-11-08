@@ -453,6 +453,42 @@ member paths map directly onto app destinations.
 - Claiming only invitation and title links.
 - No universal links.
 
+### Invitation links install the app on iPhone — 2026-11-07
+
+**Decision:** On an iPhone without Screenr, an invitation link saves the
+invitation in Safari and goes straight to Screenr's install link: TestFlight
+now, the App Store later. When a person with no pending invitation first
+signs in, the app picks up the invitation Safari saved, through iOS's
+"wants to use screenr.club to sign in" prompt, and continues as if they had
+followed the link. If nothing turns up, such as when the link opened in
+another app's built-in browser, the app tells them to tap their invitation
+link again, which then opens the app. With the app installed, the
+[universal link](#universal-links-for-member-routes-and-invitations--2026-10-13)
+opens it directly, as before. Other devices keep the web's join.
+
+Not built yet; [#539](https://github.com/jubishop/screenr/issues/539)
+tracks it, starting with a real-iPhone check that the pickup works.
+
+**Why:** The user wants a new member to tap the invitation link and go
+straight to the TestFlight build, without ever having to sign up or use a
+web page. The earlier flow, sending the TestFlight link and then the
+invitation in the right order, was too convoluted. A plain redirect alone
+would strand people: an install carries no link into the app, and the
+server creates an account only for a sign-in that carries a valid
+invitation. Picking the invitation up from Safari works for
+[group-chat invitations](product-brief.md#group-chat-invitations--2026-09-05)
+too and asks nothing of the inviter.
+
+**Rejected alternatives:**
+
+- A Screenr page with an install button and an "Open invitation in Screenr"
+  button. The user doesn't want invitees to interact with a web page.
+- Tapping the link again after installing as the main path. It stays only as
+  the fallback.
+- Inviting by email address, matched at sign-in. It doesn't cover
+  group-chat invitations or Sign in with Apple's Hide My Email, and it stores
+  the address of someone who hasn't joined.
+
 ### System look with Screenr colors and logo — 2026-10-13
 
 **Decision:** The app uses the standard iOS 27 look rather than reproducing
