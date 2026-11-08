@@ -162,6 +162,28 @@ class PrePushTests(unittest.TestCase):
         self.assertEqual(self.records(), [])
         self.assertEqual(len(list((self.repo / ".git/screenr-ios-checks-v2").glob("*.json"))), 1)
 
+    def test_a_refspec_with_spaces_still_runs_the_check(self):
+        # Git passes the local side as typed, so this line has more than four words.
+        self.commit("Edit the app", ("ios/App.swift", "struct App { let edited = true }\n"))
+        result = self.push(":/Edit the app:refs/heads/feature", FAIL_CHECK="1")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("feature changes the iOS files; running bin/check-ios", result.stderr)
+        self.assertEqual(self.checks(), [["check-ios", str(self.repo)]])
+        self.assertFalse(self.remote_has("refs/heads/feature"))
+
+    def test_unreadable_input_refuses_the_push(self):
+        head = self.git("rev-parse", "HEAD")
+        for line in ("garbage", f"HEAD {head} refs/heads/main", f"HEAD abc refs/heads/main {head}",
+                     f"HEAD {head} refs/heads/main {head.upper()}"):
+            with self.subTest(line=line):
+                result = subprocess.run([str(self.repo / "bin/pre-push-application"), "origin", str(self.remote)],
+                                        cwd=self.repo, env=self.env, input=line + "\n", capture_output=True,
+                                        text=True, timeout=60)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn(f"cannot read the pushed refs from {line!r}", result.stderr)
+                self.assertIn("Never bypass this check with git push --no-verify.", result.stderr)
+        self.assertEqual(self.checks(), [])
+
     def test_bin_format_swift_counts_as_an_ios_file_but_bin_check_ios_does_not(self):
         # The simulated check keeps working when its file changes.
         self.commit("Check differently", ("bin/check-ios", "#!" + sys.executable + "\n# v2\n" + CHECK_IOS))

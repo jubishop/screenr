@@ -253,7 +253,10 @@ push finds a recorded pass. Never bypass the hook with `git push --no-verify`.
 - **Trigger:** a pushed branch whose iOS files differ from the remote
   branch's commit or, for a new branch, from where it left `origin/main`.
   Pushes that leave them alone, tag pushes, and branch deletions skip the
-  check, as does any host without `xcodebuild`, such as Linux and CI.
+  check, as does any host without `xcodebuild`, such as Linux and CI. A
+  local side named by a commit message, such as
+  `git push origin ':/Fix the layout:refs/heads/x'`, counts like a branch
+  name, and push input the hook cannot read refuses the push.
 - **Checkout:** `bin/check-ios` tests the checkout's files, so the pushed
   commit must be checked out with no uncommitted changes to the iOS files.
   Otherwise the hook refuses the push and says why.
