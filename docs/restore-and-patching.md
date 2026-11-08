@@ -25,19 +25,18 @@ holds `RESTIC_PASSWORD`, without which the backups cannot be decrypted. The
 [accepted decision](deployment.md#encrypted-backups-and-restore-check) keeps
 copies of both files off the VPS:
 
-| Server file | Mac copy | 1Password document |
-| --- | --- | --- |
-| `/etc/screenr/app.env` | `~/.config/screenr/production.env` | "Screenr production.env" |
-| `/etc/screenr/backup.env` | `~/.config/screenr/backup.env` | "Screenr backup.env" |
+| Server file | Mac copy |
+| --- | --- |
+| `/etc/screenr/app.env` | `~/.config/screenr/production.env` |
+| `/etc/screenr/backup.env` | `~/.config/screenr/backup.env` |
 
-The documents are in the owner's Private vault, tagged `screenr`. The owner's
-private home repository tracks the Mac copies, so its remote holds a third
-copy.
+The owner's private home repository tracks the Mac copies, so its GitHub
+remote holds a second copy.
 
 `app.env` also holds the Apple keys for Sign in with Apple and APNs, in
 `APPLE_PRIVATE_KEY` and `APNS_PRIVATE_KEY`. Restoring `app.env` restores
 them. Their original `.p8` files cannot be downloaded from Apple again and
-have the same three copies; [Apple key files](running-screenr.md#apple-key-files)
+have the same two copies; [Apple key files](running-screenr.md#apple-key-files)
 lists them.
 
 ### Check the copies
@@ -50,17 +49,14 @@ means the files match:
 ```sh
 ssh root@YOUR_SSH_HOST cat /etc/screenr/app.env | cmp - ~/.config/screenr/production.env
 ssh root@YOUR_SSH_HOST cat /etc/screenr/backup.env | cmp - ~/.config/screenr/backup.env
-op document get "Screenr production.env" --vault Private | cmp - ~/.config/screenr/production.env
-op document get "Screenr backup.env" --vault Private | cmp - ~/.config/screenr/backup.env
 ```
 
 The server holds the live values. When a copy differs, confirm that the
-server file is correct, refresh the Mac copy from it, commit the change in the
-home repository, and replace the 1Password document. For `app.env`:
+server file is correct, refresh the Mac copy from it, and commit and push the
+change in the home repository. For `app.env`:
 
 ```sh
 ssh root@YOUR_SSH_HOST cat /etc/screenr/app.env > ~/.config/screenr/production.env
-op document edit "Screenr production.env" ~/.config/screenr/production.env --vault Private
 ```
 
 An outdated `backup.env` copy can break backups, failure alerts, or the

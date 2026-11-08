@@ -398,11 +398,9 @@ Apple allows each `.p8` key to be downloaded only once. The original files
 have the same off-server copies as the
 [production secrets](restore-and-patching.md#production-secrets):
 
-- **Mac:** `~/.config/screenr/keys/AuthKey_<key ID>.p8`, which the owner's
-  private home repository tracks.
-- **1Password:** documents "Screenr APNs key YP5RTHDXQR" and "Screenr Sign
-  in with Apple key 738SADC362" in the owner's Private vault, tagged
-  `screenr`.
+- **Mac:** `~/.config/screenr/keys/AuthKey_<key ID>.p8`.
+- **Home repository:** the owner's private home repository tracks those
+  files, so its GitHub remote holds a second copy.
 
 `app.env` stores each key on one line: the base64 body of the `.p8` file,
 without its PEM header, footer, or line breaks. That is the key's PKCS#8 DER
@@ -441,7 +439,7 @@ iPhone without Screenr goes straight to TestFlight
 App Store link later ([#251](https://github.com/jubishop/screenr/issues/251)).
 Set it only after a build with the invitation pickup is available to external
 testers, so no invitee installs a build that can't pick up their invitation.
-It stays unset until a real iPhone shows the pickup working
+Production has set it since 2026-11-08
 ([#540](https://github.com/jubishop/screenr/issues/540)). Like any `app.env`
 change, update its [off-server copies](restore-and-patching.md#production-secrets).
 

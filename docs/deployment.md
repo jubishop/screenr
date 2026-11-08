@@ -1558,8 +1558,8 @@ not be copied to this server. Configure the values in `ops/backup.env.example`.
 Store a recoverable copy of the random `RESTIC_PASSWORD` outside the VPS
 before initializing the repository. Losing this password loses the backups.
 
-**Decision — 2026-10-12:** Keep copies of the production secrets off the
-VPS in three places:
+**Decision — 2026-10-12, changed 2026-11-08:** Keep copies of the
+production secrets off the VPS in two places:
 
 - **Working copy:** `~/.config/screenr/` on the owner's Mac, in two files.
   `production.env` mirrors `/etc/screenr/app.env`, including
@@ -1568,9 +1568,7 @@ VPS in three places:
   `backup.env` mirrors `/etc/screenr/backup.env`, including the restic
   repository, `RESTIC_PASSWORD`, and the R2 keys. Both files are mode 0600.
 - **Home repository:** the owner's private home repository already tracks
-  `~/.config/screenr/`, so its remote also holds both files.
-- **1Password:** documents "Screenr production.env" and "Screenr
-  backup.env" in the owner's Private vault, tagged `screenr`.
+  `~/.config/screenr/`, so its GitHub remote also holds both files.
 
 The [restore runbook](restore-and-patching.md#production-secrets) restores
 secrets from these copies. Whenever a production secret changes, update the
@@ -1580,8 +1578,10 @@ before relying on them.
 
 **Why:** The owner already kept the files in `~/.config/screenr/`, which
 the private home repository tracks, matching other projects on the same Mac.
-The user approved adding a 1Password copy on 2026-10-12 as one more copy
-independent of the Mac and the home repository.
+On 2026-11-08 the user dropped the 1Password copy that was added on
+2026-10-12: the home repository's GitHub remote already holds a copy apart
+from the Mac. The Screenr documents left in 1Password are no longer updated,
+and restores don't use them.
 
 Initialize the Restic repository once, using the backup service's user and
 environment. Start `screenr-backup.service`, then `screenr-restore-check.service`,
