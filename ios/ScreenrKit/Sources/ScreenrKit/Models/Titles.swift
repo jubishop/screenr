@@ -20,11 +20,12 @@ public enum WatchStatus: String, ServerEnum {
 }
 
 // A movie or show. `id` is `<kind>:<TMDB ID>`, such as `tv:201`, and
-// `releaseDate` is `YYYY-MM-DD`, or empty when TMDB has none.
+// `releaseDate` is `YYYY-MM-DD`, or empty when TMDB has none. Nothing reads
+// `tmdbId`, which is optional so that the server can stop sending it.
 public struct Title: Codable, Hashable, Sendable, Identifiable {
   public let id: String
   public let kind: TitleKind
-  public let tmdbId: Int
+  public let tmdbId: Int?
   public let name: String
   public let overview: String
   public let posterPath: String?
@@ -80,13 +81,11 @@ public enum WatchSectionKey: String, ServerEnum {
   case unknown
 }
 
-// One service in a "where to watch" section, such as Netflix or a channel
-// reached through another service (`routeNote`, such as "via Amazon").
+// One service in a "where to watch" section, such as Netflix.
 public struct WatchService: Codable, Hashable, Sendable, Identifiable {
   public let id: String
   public let name: String
   public let logoPath: String?
-  public let routeNote: String?
 }
 
 public struct WatchSection: Codable, Hashable, Sendable {

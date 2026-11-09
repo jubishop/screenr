@@ -11,7 +11,7 @@
   },
   "response": {
     "status": 200,
-    "etag": "W/\"6Nmg349Bnno0xpIoKkclIkE965Uy_ty0Fj4R3E4ubds\"",
+    "etag": "W/\"6sZY7hgsXUYRPemojpEdEKbdbI3xnWkayUMcKL3KP8k\"",
     "body": {
       "kind": "watch-together",
       "participants": [
@@ -71,8 +71,7 @@
                   {
                     "id": "service:hulu",
                     "name": "Hulu",
-                    "logo_path": "/44uAnmSqvA4yBOdbPWN8YgQHjWm.png",
-                    "route_note": null
+                    "logo_path": "/44uAnmSqvA4yBOdbPWN8YgQHjWm.png"
                   }
                 ]
               }

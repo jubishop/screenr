@@ -11,7 +11,7 @@
   },
   "response": {
     "status": 200,
-    "etag": "W/\"cm5hNEPJCcRpQww8ATV_ddBdHAuYHDUdEf2U8aIoWfk\"",
+    "etag": "W/\"6ZZWlYMMQ4c17Oem6GTqS0_feGxW96Wadxel_ap6X80\"",
     "body": {
       "kind": "want-to-watch",
       "owner": {
@@ -64,8 +64,7 @@
                   {
                     "id": "service:hulu",
                     "name": "Hulu",
-                    "logo_path": "/44uAnmSqvA4yBOdbPWN8YgQHjWm.png",
-                    "route_note": null
+                    "logo_path": "/44uAnmSqvA4yBOdbPWN8YgQHjWm.png"
                   }
                 ]
               }
@@ -107,8 +106,7 @@
                   {
                     "id": "service:netflix",
                     "name": "Netflix",
-                    "logo_path": "/rK1KljqmbvO9HQa1PBFLILWah72.png",
-                    "route_note": null
+                    "logo_path": "/rK1KljqmbvO9HQa1PBFLILWah72.png"
                   }
                 ]
               }

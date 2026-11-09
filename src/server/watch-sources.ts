@@ -19,9 +19,7 @@ const safeLogo = (path: string | null) =>
   path && /^\/[a-zA-Z0-9._-]+$/.test(path) ? path : null;
 const members = new Map(
   registry.flatMap((service) =>
-    service.members.map(
-      (member) => [member.id, { service, via: member.via }] as const,
-    ),
+    service.members.map((member) => [member.id, service] as const),
   ),
 );
 
@@ -55,9 +53,9 @@ export function watchSections(providers: WatchProviders): WatchSection[] {
     const groups = new Map<string, WatchProvider[]>();
     for (const category of categories) {
       for (const provider of providers[category] ?? []) {
-        const member = members.get(provider.provider_id);
-        const id = member
-          ? `service:${member.service.key}`
+        const service = members.get(provider.provider_id);
+        const id = service
+          ? `service:${service.key}`
           : `provider:${provider.provider_id}`;
         const group = groups.get(id) ?? [];
         group.push(provider);
@@ -77,13 +75,7 @@ export function watchSections(providers: WatchProviders): WatchSection[] {
               safeLogo(b.logo_path) ?? "~",
             ),
         );
-        const service = members.get(offers[0].provider_id)?.service;
-        const routes = offers.map(
-          (offer) => members.get(offer.provider_id)?.via ?? null,
-        );
-        const resellers = [
-          ...new Set(routes.filter((route): route is string => route !== null)),
-        ].sort(byName);
+        const service = members.get(offers[0].provider_id);
         return {
           id,
           name: service?.name ?? offers[0].provider_name,
@@ -91,9 +83,6 @@ export function watchSections(providers: WatchProviders): WatchSection[] {
             safeLogo(service?.logo_path ?? null) ??
             offers.map((offer) => safeLogo(offer.logo_path)).find(Boolean) ??
             null,
-          route_note: routes.includes(null)
-            ? null
-            : `via ${resellers.join(", ")}`,
         };
       })
       .sort(

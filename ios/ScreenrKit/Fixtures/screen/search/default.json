@@ -11,7 +11,7 @@
   },
   "response": {
     "status": 200,
-    "etag": "W/\"uUv6V9qtdIneuu9rN1UML9aBamoRZnKICWZGAYjpb4k\"",
+    "etag": "W/\"D0D7TZALVRk30afyTbA74EGOxipx3Px0r8ha4-oxK5Y\"",
     "body": {
       "kind": "search",
       "suggestions": [
@@ -51,8 +51,7 @@
                   {
                     "id": "service:netflix",
                     "name": "Netflix",
-                    "logo_path": "/rK1KljqmbvO9HQa1PBFLILWah72.png",
-                    "route_note": null
+                    "logo_path": "/rK1KljqmbvO9HQa1PBFLILWah72.png"
                   }
                 ]
               }
@@ -99,8 +98,7 @@
                   {
                     "id": "service:hulu",
                     "name": "Hulu",
-                    "logo_path": "/44uAnmSqvA4yBOdbPWN8YgQHjWm.png",
-                    "route_note": null
+                    "logo_path": "/44uAnmSqvA4yBOdbPWN8YgQHjWm.png"
                   }
                 ]
               }
@@ -153,8 +151,7 @@
                   {
                     "id": "service:netflix",
                     "name": "Netflix",
-                    "logo_path": "/rK1KljqmbvO9HQa1PBFLILWah72.png",
-                    "route_note": null
+                    "logo_path": "/rK1KljqmbvO9HQa1PBFLILWah72.png"
                   }
                 ]
               }
@@ -199,14 +196,12 @@
                   {
                     "id": "service:acorn-tv",
                     "name": "Acorn TV",
-                    "logo_path": "/3aWmgZsNAqdOt8ClxIFT4pnmHrM.png",
-                    "route_note": "via Amazon"
+                    "logo_path": "/3aWmgZsNAqdOt8ClxIFT4pnmHrM.png"
                   },
                   {
                     "id": "service:hbo-max",
                     "name": "HBO Max",
-                    "logo_path": "/skypuy7SXuugIQeYg0IglmzoKaS.png",
-                    "route_note": null
+                    "logo_path": "/skypuy7SXuugIQeYg0IglmzoKaS.png"
                   }
                 ]
               }
@@ -249,8 +244,7 @@
                   {
                     "id": "service:netflix",
                     "name": "Netflix",
-                    "logo_path": "/rK1KljqmbvO9HQa1PBFLILWah72.png",
-                    "route_note": null
+                    "logo_path": "/rK1KljqmbvO9HQa1PBFLILWah72.png"
                   }
                 ]
               }

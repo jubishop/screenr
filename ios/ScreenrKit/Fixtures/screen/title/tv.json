@@ -11,7 +11,7 @@
   },
   "response": {
     "status": 200,
-    "etag": "W/\"ZfUdKTTIomX9y5jcqJgD6rm6_U3Ndn0HlKNHZFV9VVc\"",
+    "etag": "W/\"_-rXjWwjs3To4-8A5oDjKJ5vLMdNhqAIW6qOmyyZbSQ\"",
     "body": {
       "kind": "title",
       "title": {
@@ -39,14 +39,12 @@
               {
                 "id": "service:acorn-tv",
                 "name": "Acorn TV",
-                "logo_path": "/3aWmgZsNAqdOt8ClxIFT4pnmHrM.png",
-                "route_note": "via Amazon"
+                "logo_path": "/3aWmgZsNAqdOt8ClxIFT4pnmHrM.png"
               },
               {
                 "id": "service:hbo-max",
                 "name": "HBO Max",
-                "logo_path": "/skypuy7SXuugIQeYg0IglmzoKaS.png",
-                "route_note": null
+                "logo_path": "/skypuy7SXuugIQeYg0IglmzoKaS.png"
               }
             ]
           }

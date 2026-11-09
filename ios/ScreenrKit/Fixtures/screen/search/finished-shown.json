@@ -11,7 +11,7 @@
   },
   "response": {
     "status": 200,
-    "etag": "W/\"QJcx2GePMI5kwN5EIm0uS4-yHT7lhHTSIJ9d5uboNIg\"",
+    "etag": "W/\"7t-_KEYcWsU_d7FE58s0W_2RmxkYX-oFChub5BCvMec\"",
     "body": {
       "kind": "search",
       "suggestions": [
@@ -45,8 +45,7 @@
                   {
                     "id": "service:hulu",
                     "name": "Hulu",
-                    "logo_path": "/44uAnmSqvA4yBOdbPWN8YgQHjWm.png",
-                    "route_note": null
+                    "logo_path": "/44uAnmSqvA4yBOdbPWN8YgQHjWm.png"
                   }
                 ]
               }
@@ -99,8 +98,7 @@
                   {
                     "id": "service:netflix",
                     "name": "Netflix",
-                    "logo_path": "/rK1KljqmbvO9HQa1PBFLILWah72.png",
-                    "route_note": null
+                    "logo_path": "/rK1KljqmbvO9HQa1PBFLILWah72.png"
                   }
                 ]
               }
@@ -145,8 +143,7 @@
                   {
                     "id": "service:netflix",
                     "name": "Netflix",
-                    "logo_path": "/rK1KljqmbvO9HQa1PBFLILWah72.png",
-                    "route_note": null
+                    "logo_path": "/rK1KljqmbvO9HQa1PBFLILWah72.png"
                   }
                 ]
               }

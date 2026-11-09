@@ -201,6 +201,18 @@ reads a title's availability without TMDB's raw `providers` lists and
 [issue #510](https://github.com/jubishop/screenr/issues/510)). A later
 breaking change raises it to the first build that reads the new shape.
 
+**Next raise — 2026-11-09:** neither client reads a title's `tmdb_id`, but
+every released build requires it. The app now reads a title without it, and the
+owner chose to drop it at the minimum-build raise that
+[issue #554](https://github.com/jubishop/screenr/issues/554) already needs,
+so issue #554's build is the first that must not require it
+([issue #594](https://github.com/jubishop/screenr/issues/594)). The server
+keeps sending `tmdb_id` until that build is the minimum
+([issue #607](https://github.com/jubishop/screenr/issues/607)). Rejected:
+making it optional without holding issue #554 and dropping it at some later
+raise, and keeping it for good. A service's `route_note` needed no raise:
+every build decoded it as optional.
+
 ## Native client sessions
 
 The iPhone app signs in with Better Auth's bearer plugin instead of the

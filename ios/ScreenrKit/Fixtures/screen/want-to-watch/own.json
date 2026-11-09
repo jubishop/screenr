@@ -11,7 +11,7 @@
   },
   "response": {
     "status": 200,
-    "etag": "W/\"S_0uDG9Xbt4mEtRmvcvQtliN4ykcjC1jgykymwgq7Fs\"",
+    "etag": "W/\"Kjl197MwPkxV1Lub0wsSWkkP1phuML8vvvxkNLeqk0k\"",
     "body": {
       "kind": "want-to-watch",
       "owner": {
@@ -64,8 +64,7 @@
                   {
                     "id": "service:hulu",
                     "name": "Hulu",
-                    "logo_path": "/44uAnmSqvA4yBOdbPWN8YgQHjWm.png",
-                    "route_note": null
+                    "logo_path": "/44uAnmSqvA4yBOdbPWN8YgQHjWm.png"
                   }
                 ]
               }

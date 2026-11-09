@@ -11,7 +11,7 @@
   },
   "response": {
     "status": 200,
-    "etag": "W/\"rDrjVXLLTEzkR84-0e7A9ODW37jGc89mHQu-xWovfcE\"",
+    "etag": "W/\"JnRPNcW77os96h6mJ6tUiu-5BSI6gBGXqP7Fak8JBQI\"",
     "body": {
       "kind": "search",
       "suggestions": [
@@ -114,14 +114,12 @@
                   {
                     "id": "service:pluto-tv",
                     "name": "Pluto TV",
-                    "logo_path": "/fN4czqaMQNLeF6sSSIjGbAWzvwK.png",
-                    "route_note": null
+                    "logo_path": "/fN4czqaMQNLeF6sSSIjGbAWzvwK.png"
                   },
                   {
                     "id": "service:tubi-tv",
                     "name": "Tubi TV",
-                    "logo_path": "/9dEuvA8wg5TSeFBZlPxSVxFdimJ.png",
-                    "route_note": null
+                    "logo_path": "/9dEuvA8wg5TSeFBZlPxSVxFdimJ.png"
                   }
                 ]
               }
@@ -479,8 +477,7 @@
                   {
                     "id": "service:hulu",
                     "name": "Hulu",
-                    "logo_path": "/44uAnmSqvA4yBOdbPWN8YgQHjWm.png",
-                    "route_note": null
+                    "logo_path": "/44uAnmSqvA4yBOdbPWN8YgQHjWm.png"
                   }
                 ]
               }
@@ -569,8 +566,7 @@
                   {
                     "id": "service:netflix",
                     "name": "Netflix",
-                    "logo_path": "/rK1KljqmbvO9HQa1PBFLILWah72.png",
-                    "route_note": null
+                    "logo_path": "/rK1KljqmbvO9HQa1PBFLILWah72.png"
                   }
                 ]
               }
@@ -618,14 +614,12 @@
                   {
                     "id": "service:acorn-tv",
                     "name": "Acorn TV",
-                    "logo_path": "/3aWmgZsNAqdOt8ClxIFT4pnmHrM.png",
-                    "route_note": "via Amazon"
+                    "logo_path": "/3aWmgZsNAqdOt8ClxIFT4pnmHrM.png"
                   },
                   {
                     "id": "service:hbo-max",
                     "name": "HBO Max",
-                    "logo_path": "/skypuy7SXuugIQeYg0IglmzoKaS.png",
-                    "route_note": null
+                    "logo_path": "/skypuy7SXuugIQeYg0IglmzoKaS.png"
                   }
                 ]
               }
@@ -730,14 +724,12 @@
                   {
                     "id": "service:pluto-tv",
                     "name": "Pluto TV",
-                    "logo_path": "/fN4czqaMQNLeF6sSSIjGbAWzvwK.png",
-                    "route_note": null
+                    "logo_path": "/fN4czqaMQNLeF6sSSIjGbAWzvwK.png"
                   },
                   {
                     "id": "service:tubi-tv",
                     "name": "Tubi TV",
-                    "logo_path": "/9dEuvA8wg5TSeFBZlPxSVxFdimJ.png",
-                    "route_note": null
+                    "logo_path": "/9dEuvA8wg5TSeFBZlPxSVxFdimJ.png"
                   }
                 ]
               }

@@ -162,10 +162,7 @@ enum FindData {
               "services": .array(
                 (sections[key] ?? [])
                   .map { id in
-                    [
-                      "id": .string(id), "name": .string(id), "logo_path": .null,
-                      "route_note": .null,
-                    ]
+                    ["id": .string(id), "name": .string(id), "logo_path": .null]
                   }
               ),
             ])
