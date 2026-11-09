@@ -271,8 +271,8 @@ The entry reads, for example, "Theo Park is watching" or "Theo Park finished
 Finished entry reads "Theo Park finished · 2h" without the last-finished
 date. The date stays stored and editable in the person's status control.
 See [combined title actions](#combine-one-persons-close-together-title-actions--2026-11-08);
-[issue #543](https://github.com/jubishop/screenr/issues/543) tracks the
-change.
+[issue #543](https://github.com/jubishop/screenr/issues/543) made the
+change on the web and iPhone.
 
 When the person clears their status or moves back to Want to watch, the
 progress entry follows the
@@ -829,9 +829,10 @@ are calendar dates from 1900 through today in the earliest time zone. The
 one-tap Want to watch action also replaces a progress status; turning it off
 leaves a progress status alone.
 
-Entries read "is watching", "is caught up", "finished · Oct 12", or "stopped
-watching". The finished date shows its year outside the current year, and no
-date appears when none is set. A cleared entry kept for its replies reads
+Entries read "is watching", "is caught up", "finished", or "stopped
+watching", followed only by the entry's own time. The last-finished date
+stays in the feed response but no feed entry shows it; it appears only in the
+person's status control. A cleared entry kept for its replies reads
 "removed their watch status". Replies and reactions use their
 `watch_progress_id` columns, and comment notifications link to the entry.
 Status changes create no notifications. Each entry's `viewer_status` is the

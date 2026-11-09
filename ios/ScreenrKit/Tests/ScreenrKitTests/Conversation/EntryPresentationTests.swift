@@ -29,13 +29,13 @@ struct EntryPresentationTests {
   }
 
   @Test func namesWhatTheAuthorDid() throws {
-    let now = try Self.date("2026-10-13T12:00:00.000Z")
     func action(_ id: String, _ style: EntryStyle = .full) throws -> String {
-      try entry(id).action(style: style, now: now, calendar: Self.pacific)
+      try entry(id).action(style: style)
     }
     #expect(try action("0601645c-005d-450f-8b22-ae05a508119d") == "recommends")
     #expect(try action("d96511cd-0569-4f0c-8c20-402a2422ce98") == "wants to watch")
-    #expect(try action("e1989f51-e93f-414c-8ae3-30f8ac20f409") == "finished · Sep 20")
+    // A finished entry with a last-finished date shows only its own time.
+    #expect(try action("e1989f51-e93f-414c-8ae3-30f8ac20f409") == "finished")
     #expect(try action("398a02bb-53fa-4ee7-826e-9aa009db3b58") == "is watching")
     #expect(try action("dda3a8e1-76d2-4624-8d8e-211af6b405ea") == "is caught up")
     #expect(try action("b8a80276-c289-41c6-8ffa-ea874e9628bb") == "reviewed")
@@ -108,27 +108,6 @@ struct EntryPresentationTests {
     #expect(try label("2026-10-06T19:00:01.000Z") == "6d")
     #expect(try label("2026-09-12T19:00:00.000Z") == "Sep 12")
     #expect(try label("2025-12-31T12:00:00.000Z") == "Dec 31, 2025")
-  }
-
-  @Test func showsFinishedDatesWithTheYearOutsideThisYear() throws {
-    let now = try Self.date("2026-10-13T12:00:00.000Z")
-    #expect(FinishedDate.label("2026-09-20", now: now, calendar: Self.pacific) == "Sep 20")
-    #expect(FinishedDate.label("2025-01-02", now: now, calendar: Self.pacific) == "Jan 2, 2025")
-    #expect(FinishedDate.label("not a date", now: now, calendar: Self.pacific) == nil)
-  }
-
-  // The server's days are Gregorian, so this year is the Gregorian year even
-  // when the phone uses another calendar.
-  @Test(arguments: [Calendar.Identifier.buddhist, .japanese, .hebrew, .islamic, .republicOfChina])
-  func comparesFinishedDatesWithTheGregorianYear(_ identifier: Calendar.Identifier) throws {
-    var calendar = Calendar(identifier: identifier)
-    calendar.timeZone = Self.pacific.timeZone
-    let now = try Self.date("2026-10-13T12:00:00.000Z")
-    #expect(FinishedDate.label("2026-09-20", now: now, calendar: calendar) == "Sep 20")
-    #expect(FinishedDate.label("2025-01-02", now: now, calendar: calendar) == "Jan 2, 2025")
-    // 4 AM UTC on Jan 1 is still Dec 31 in Pacific time.
-    let newYear = try Self.date("2027-01-01T04:00:00.000Z")
-    #expect(FinishedDate.label("2026-12-31", now: newYear, calendar: calendar) == "Dec 31")
   }
 
   @Test func namesReactionsAndStars() {

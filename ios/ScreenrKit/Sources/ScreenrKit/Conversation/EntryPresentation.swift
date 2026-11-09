@@ -41,13 +41,9 @@ extension FeedItem {
   public var isErased: Bool { (isDeletable || itemType == .review) && !active }
 
   // What the author did, after their name: "recommends", "is watching",
-  // "finished · Oct 12", or "removed their review" for a withdrawn entry kept
-  // for its replies.
-  public func action(
-    style: EntryStyle,
-    now: Date = .now,
-    calendar: Calendar = .current
-  ) -> String {
+  // "finished", or "removed their review" for a withdrawn entry kept for its
+  // replies. An entry shows only its own time, never the last-finished date.
+  public func action(style: EntryStyle) -> String {
     switch itemType {
     case .comment: return style == .compact ? "commented" : "commented on"
     case .post: return "posted"
@@ -56,11 +52,7 @@ extension FeedItem {
     case .progress:
       guard active else { return "removed their watch status" }
       switch status {
-      case .finished:
-        guard let finishedOn,
-          let date = FinishedDate.label(finishedOn, now: now, calendar: calendar)
-        else { return "finished" }
-        return "finished · \(date)"
+      case .finished: return "finished"
       case .watching: return "is watching"
       case .caughtUp: return "is caught up"
       default: return "stopped watching"
@@ -210,25 +202,5 @@ public enum RelativeTime {
       timeZone: calendar.timeZone
     )
     .month(.abbreviated).day()
-  }
-}
-
-// A last-finished date is a Gregorian calendar day, `YYYY-MM-DD`, shown without
-// time zone conversion, such as "Oct 12", with the year outside the reader's
-// current Gregorian year, whatever calendar their phone uses.
-public enum FinishedDate {
-  private static let months = "Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec"
-    .split(separator: " ")
-
-  public static func label(_ value: String, now: Date = .now, calendar: Calendar = .current)
-    -> String?
-  {
-    let parts = value.split(separator: "-")
-    guard parts.count == 3, let year = Int(parts[0]), let month = Int(parts[1]),
-      let day = Int(parts[2]), months.indices.contains(month - 1)
-    else { return nil }
-    let label = "\(months[month - 1]) \(day)"
-    let thisYear = CalendarDay.gregorian(calendar).component(.year, from: now)
-    return year == thisYear ? label : "\(label), \(year)"
   }
 }
