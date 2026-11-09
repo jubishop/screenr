@@ -781,7 +781,7 @@ catalog cache failures, once for each request;
 `tests/app/availability.test.ts`, `tests/app/discussion-labels.test.ts`, and
 `tests/app/shared-links.test.ts` capture invalid watch-provider, season,
 episode, and find answers; and
-`tests/app/authentication.test.ts` the Screenr-wide code cap's refusals.
+`tests/app/authentication.test.ts` the code email budgets' refusals.
 They compare the logged fields exactly, check that comment text, search terms, addresses, codes, cookies, keys, and error messages stay
 out, and confirm that permanent Resend rejections are not retried. The Better
 Auth failure tests check everything printed, Better Auth's own lines included.

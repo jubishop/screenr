@@ -746,6 +746,21 @@ code keep guessing negligible. The user chose these limits for
 [issue #106](https://github.com/jubishop/screenr/issues/106) over looser
 paid-plan limits.
 
+**Updated — 2026-11-09:** Keep the cap of 40 code emails a day and split it:
+30 for addresses that already have an account and 10 for new addresses, which
+only invitation signups reach, with at most 3 sends to new addresses per IP a
+day. The per-address limits stay. One invitation link could otherwise send
+codes to 40 throwaway addresses and stop email-code sign-in for every member
+for a day. The per-IP budget covers only new addresses, since mobile carriers
+put many members behind one IP. An account that has not finished setup
+counts as a new address, a detail settled while implementing: otherwise an
+invitation holder could turn throwaway addresses into accounts that draw on
+the members' 30. The user chose this for
+[issue #575](https://github.com/jubishop/screenr/issues/575); rejected:
+splitting without a per-IP limit, and keeping the single cap.
+[How the budgets apply](running-screenr.md#provider-configuration) is in the
+running guide.
+
 ### One account across sign-in methods — 2026-09-05
 
 **Decision:** Google sign-in and email-code sign-in for the same email
