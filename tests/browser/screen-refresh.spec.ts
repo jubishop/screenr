@@ -1,6 +1,7 @@
 import { expect, type Response } from "@playwright/test";
 import { browserConfig } from "../../scripts/browser-config";
 import { test } from "./monitored-test";
+import { db } from "./database-fixture";
 import { prepareFriendship } from "./member-fixture";
 import { commits, countCommits, nextPoll } from "./refresh-helpers";
 import { chooseStatus, statusButton } from "./watch-status";
@@ -27,14 +28,21 @@ test("unchanged refreshes send no body and render nothing, while changes and tim
     field: "recommended",
     value: true,
   });
+  // Relative times last only until the reader's midnight, so the entry and
+  // the viewer's clock share a fixed noon, ahead of the reply's real time.
+  const noon = Date.parse(`${new Date().getUTCFullYear() + 1}-06-15T19:00:00Z`);
+  await db.query("UPDATE feed_item SET activity_at=$1 WHERE id=$2", [
+    new Date(noon).toISOString(),
+    entry,
+  ]);
   const reads: Response[] = [];
   viewer.on("response", (response) => {
     if (isScreenRead(response)) reads.push(response);
   });
   await countCommits(viewer);
   // Paused timers poll only when the test advances the viewer's clock.
-  await viewer.clock.install();
-  await viewer.clock.pauseAt(Date.now() + 1000);
+  await viewer.clock.install({ time: noon });
+  await viewer.clock.pauseAt(noon + 1000);
   await viewer.goto("/");
   const item = viewer.locator(`[data-item-id="${entry}"]`);
   const time = item.locator("time").first();

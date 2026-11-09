@@ -189,8 +189,8 @@ private struct NotificationRow: View {
           .fontWeight(row.isUnread ? .semibold : .regular)
           .multilineTextAlignment(.leading)
         // A shown time follows the clock, as the web's do.
-        TimelineView(.everyMinute) { _ in
-          Text(row.item.createdAt.formatted(.relative(presentation: .named)))
+        TimelineView(.everyMinute) { context in
+          Text(RelativeTime.label(row.item.createdAt, now: context.date))
         }
         .font(.subheadline)
         .foregroundStyle(.muted)

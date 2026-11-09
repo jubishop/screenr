@@ -226,15 +226,14 @@ test("a minute renders shown times again only when their text changes", async ({
 }) => {
   const page = await member("minuteviewer");
   const owner = await userId(page);
-  const week = 7 * 24 * 60 * 60_000;
   const year = new Date().getUTCFullYear() + 1;
   // One minute before midnight on New Year's Eve in Los Angeles, the
   // member's time zone, which is 08:00 UTC on January 1.
   const start = Date.parse(`${year + 1}-01-01T07:59:00.000Z`);
-  // One entry turns a week old at midnight, and one is older.
+  // One entry is from today until midnight, and one is older.
   const entries: string[] = [];
   for (const [index, activity] of [
-    start - week + 30_000,
+    start - 10 * 60_000,
     Date.parse(`${year}-10-05T19:00:00.000Z`),
   ].entries()) {
     const title = `movie:${998870 + index}`;
@@ -249,7 +248,7 @@ test("a minute renders shown times again only when their text changes", async ({
     ]);
     entries.push(item);
   }
-  const [weekOld, older] = entries.map((item) =>
+  const [today, older] = entries.map((item) =>
     page.locator(`[data-item-id="${item}"] .activity-by time`),
   );
   await countCommits(page);
@@ -267,20 +266,20 @@ test("a minute renders shown times again only when their text changes", async ({
     await (await read)?.finished();
   };
   await page.goto("/");
-  await expect(weekOld).toHaveText("6d");
+  await expect(today).toHaveText("10m");
   await expect(older).toHaveText("Oct 5");
 
-  // At midnight the week-old time becomes a date, and both dates gain the
-  // year that just ended.
+  // At midnight today's time becomes a date, and both dates gain the year
+  // that just ended.
   await advance();
-  await expect(weekOld).toHaveText(`Dec 24, ${year}`);
+  await expect(today).toHaveText(`Dec 31, ${year}`);
   await expect(older).toHaveText(`Oct 5, ${year}`);
 
   // A minute later neither text changes, so nothing renders.
   const rendered = await commits(page);
   await advance();
   expect(await commits(page)).toBe(rendered);
-  await expect(weekOld).toHaveText(`Dec 24, ${year}`);
+  await expect(today).toHaveText(`Dec 31, ${year}`);
   await expect(older).toHaveText(`Oct 5, ${year}`);
 });
 
@@ -296,6 +295,14 @@ test("a screen reached by client navigation shows local dates and enabled contro
   });
   expect(recommended.status()).toBe(200);
   const item = (await recommended.json()).id as string;
+  // Relative times last only until the reader's midnight, so the entry and
+  // the viewer's clock share a fixed noon.
+  const noon = Date.parse(`${new Date().getUTCFullYear() + 1}-06-15T19:00:00Z`);
+  await db.query("UPDATE feed_item SET activity_at=$1 WHERE id=$2", [
+    new Date(noon).toISOString(),
+    item,
+  ]);
+  await viewer.clock.setFixedTime(noon + 1000);
   await viewer.goto("/");
   const entry = viewer.locator(`[data-item-id="${item}"]`);
   await expect(entry.locator(".activity-by time")).toHaveText("now");

@@ -1,6 +1,6 @@
 "use client";
 import { useSyncExternalStore } from "react";
-import { dateLabel, readerCalendar } from "./client";
+import { changesEachMinute, dateLabel, readerCalendar } from "./client";
 
 const fullDate: Intl.DateTimeFormatOptions = {
   month: "short",
@@ -9,13 +9,13 @@ const fullDate: Intl.DateTimeFormatOptions = {
   hour: "numeric",
   minute: "2-digit",
 };
-const week = 7 * 24 * 60 * 60_000;
 
 // Unchanged screen refreshes don't render again, so one shared timer renders
-// shown times again when their text can change. Times under a week old, or
-// ahead of the reader's clock, change each minute, the format's smallest
-// step. Older times show a date, which changes only with the reader's time
-// zone or current year, so a feed's many older times render again only then.
+// shown times again when their text can change. Times from the reader's
+// current day, or ahead of their clock, change each minute, the format's
+// smallest step, and a time from today becomes a date at midnight. Earlier
+// times show a date, which changes only with the reader's time zone or
+// current year, so a feed's many earlier times render again only then.
 const recent = new Set<() => void>();
 const dated = new Set<() => void>();
 let minutes = 0;
@@ -62,7 +62,7 @@ export function ActivityTime({
   className?: string;
 }) {
   // UTC fields don't change with time.
-  const ticking = interactive && Date.now() - Date.parse(value) < week;
+  const ticking = interactive && changesEachMinute(value, Date.now());
   useSyncExternalStore(
     ticking ? subscribeRecent : subscribeDated,
     ticking ? minuteCount : calendarCount,
