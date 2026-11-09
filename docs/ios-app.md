@@ -1278,6 +1278,59 @@ macOS runners. The
 [local iOS checks decision](#local-ios-checks-instead-of-ios-ci--2026-10-14)
 replaced that CI.
 
+### Sentry triage as in PodHaven — 2026-11-09
+
+**Decision:** Screenr adopts PodHaven's Sentry triage workflow
+([issue #565](https://github.com/jubishop/screenr/issues/565)):
+
+- **Error intake:** the daily workflow that files feedback also files one
+  GitHub issue per unresolved Sentry error issue in both `screenr-ios` and
+  `screenr-server`. When an error comes back after every issue that tracked
+  it closed, the workflow files a recurrence issue that links them instead
+  of reopening them.
+- **Error issue contents:** as in PodHaven, the title is
+  `Triage Sentry issue <short ID>`. The body holds only a hidden marker, the
+  short ID linked to Sentry, and a note that event details stay in Sentry.
+  No Sentry title or message is copied. Feedback issues keep the contents
+  [above](#public-repository-with-feedback-issues-that-link-to-sentry--2026-10-13).
+- **Labels:** intake issues also carry PodHaven's `sentry-feedback` or
+  `sentry-issue` label.
+- **Priority:** every intake issue starts at `p2`, and the analysis sets its
+  priority from the findings.
+- **Analysis:** project skills `analyze-sentry-issue` and
+  `analyze-sentry-feedback` diagnose one item and write sanitized findings to
+  its tracking issue. Each intake issue gets a comment that makes its skill a
+  `fix-issue` prerequisite. For a server issue, the error skill also reads the
+  production journal, read-only over SSH, by request ID and time.
+- **Pickers:** `bin/snissue` and `bin/snfeedback` list unresolved items with
+  their tracking state and start the analysis of the one picked.
+
+**Why:** The user asked to match PodHaven's workflow. On the other choices:
+
+- **Both projects:** the user accepted the recommendation. Server failures
+  already reach Sentry at most once an hour per kind
+  ([failure reports](deployment.md#failure-reports-in-sentry)), which bounds
+  the number of intake issues.
+- **Labels:** the user chose PodHaven's two labels; no further reason was
+  given.
+- **Priority:** `fix-all-issues` with a priority level skips issues that have
+  no priority label. The user asked for `p2` at intake to become PodHaven's
+  standard too
+  ([jubishop/podhaven#983](https://github.com/jubishop/podhaven/issues/983)).
+- **Issue contents:** the user chose to match PodHaven, which copies no
+  Sentry title because an error description could contain member text.
+- **Journal:** the user accepted the recommendation. The journal keeps every
+  failure, including those folded out of Sentry.
+
+**Rejected alternatives:**
+
+- Intake for `screenr-ios` errors only.
+- One intake issue for the server issues of one outage.
+- Only the existing type and area labels, or one shared `sentry` label.
+- No priority until analysis, or priority by error level at intake.
+- Copying the date and release into error intake issues.
+- Analysis from Sentry alone, without the journal.
+
 ### An `area: ios` label — 2026-10-13
 
 **Decision:** The repository has an `area: ios` label, described as "Native
