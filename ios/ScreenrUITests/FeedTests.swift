@@ -2,11 +2,12 @@ import Foundation
 import XCTest
 
 // The Circle feed and its conversations against the fixture API: reading
-// entries and discussions, posting, reacting, revealing spoilers, removing a
-// comment, permalinks, and every feed fixture. Writes are checked in the
-// fixture API's request log, which records each write's body. Entries with
-// the same time sort by ID, so tests that reach Alice's later entries start
-// from Hana's permalink to Alice's post, part way down, to scroll less.
+// entries and discussions, combined cards, posting, reacting, revealing
+// spoilers, removing a comment, permalinks, and every feed fixture. Writes
+// are checked in the fixture API's request log, which records each write's
+// body. Entries with the same time sort by ID, so tests that reach Alice's
+// later entries start from Hana's permalink to Alice's post, part way down,
+// to scroll less.
 final class FeedTests: XCTestCase {
   override func setUp() {
     continueAfterFailure = false
@@ -226,6 +227,48 @@ final class FeedTests: XCTestCase {
     reply.buttons["Contains spoilers · Reveal comment"].tap()
     XCTAssertTrue(reply.staticTexts["The fog is a person."].exists)
     XCTAssertTrue(reply.buttons["React"].exists)
+  }
+
+  // One person's close-together actions for a title read as one card in the
+  // friends feed, on the title page, and on their profile: one author line,
+  // the card's one time, Edited from its review, and the review's stars and
+  // text, which a spoiler review covers.
+  @MainActor
+  func testShowsCloseTogetherActionsAsOneCard() throws {
+    let app = XCUIApplication()
+    app.launch(with: FixtureLaunch())
+    XCTAssertTrue(app.entry(FeedFixture.benRecommend).waitForExistence(timeout: 10))
+    let alice = app.entry(FeedFixture.aliceCard)
+    app.scrollTo(alice)
+    let line = alice.buttons(starting: "Alice Park, finished, reviewed, and recommends · ")
+    XCTAssertTrue(line.exists)
+    XCTAssertFalse(line.label.contains("Edited"))
+    XCTAssertTrue(alice.staticTexts["★★★☆☆"].exists)
+    XCTAssertTrue(alice.staticTexts["Lovely score, slow middle."].exists)
+    try app.performShellAudit()
+
+    XCUIDevice.shared.system.open(try XCTUnwrap(URL(string: "screenr-dev://titles/movie/102")))
+    XCTAssertTrue(app.navigationBars["Paper Lanterns"].waitForExistence(timeout: 10))
+    let compact = app.entry(FeedFixture.aliceCard)
+    app.scrollTo(compact)
+    XCTAssertTrue(
+      compact.buttons(starting: "Alice Park, finished, reviewed, and recommends · ").exists
+    )
+    XCTAssertTrue(compact.staticTexts["Lovely score, slow middle."].exists)
+
+    XCUIDevice.shared.system.open(try XCTUnwrap(URL(string: "screenr-dev://people/ben")))
+    XCTAssertTrue(app.navigationBars["Ben Ortiz"].waitForExistence(timeout: 10))
+    let ben = app.entry(FeedFixture.benCard)
+    app.scrollTo(ben)
+    let edited = ben.buttons(starting: "Ben Ortiz, reviewed and recommends · ")
+    XCTAssertTrue(edited.exists)
+    XCTAssertTrue(edited.label.hasSuffix(" · Edited"))
+    XCTAssertTrue(ben.staticTexts["★★★★★"].exists)
+    let finale = "The finale reveals that the lighthouse keeper narrated every episode."
+    XCTAssertFalse(ben.staticTexts[finale].exists)
+    ben.buttons["Contains spoilers · Reveal discussion"].tap()
+    XCTAssertTrue(ben.staticTexts[finale].exists)
+    try app.performShellAudit()
   }
 
   @MainActor
