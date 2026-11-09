@@ -11,7 +11,7 @@ import {
   releaseTags,
   testerNotes,
   type Exec,
-} from "../../scripts/ios-testflight";
+} from "../../scripts/testflight";
 import type { Environment } from "../../scripts/app-store-connect";
 
 const head = "c".repeat(40);
@@ -198,7 +198,7 @@ test("a release archives and uploads the next build, then tags and pushes the co
       release({ distributeOnly: false, submitReview: false }, fixture.io),
       {
         message:
-          /No App Store Connect app has the bundle ID com\.artisanalsoftware\.Screenr\.\nios-v1\.0b4 is uploaded and tagged\. Run bin\/ios-testflight --distribute-only to retry\./,
+          /No App Store Connect app has the bundle ID com\.artisanalsoftware\.Screenr\.\nios-v1\.0b4 is uploaded and tagged\. Run bin\/testflight --distribute-only to retry\./,
       },
     );
     // The gate runs bin/check-ios in the terminal before anything is built.
@@ -332,7 +332,7 @@ test("a release stops before distribution when GitHub refuses the tag", async ()
       release({ distributeOnly: false, submitReview: false }, fixture.io),
       {
         message:
-          /^ios-v1\.0b4 is uploaded but could not be pushed\. Run git push origin refs\/tags\/ios-v1\.0b4, then bin\/ios-testflight --distribute-only\.$/,
+          /^ios-v1\.0b4 is uploaded but could not be pushed\. Run git push origin refs\/tags\/ios-v1\.0b4, then bin\/testflight --distribute-only\.$/,
       },
     );
     assert.deepEqual(fixture.requests, []);
@@ -356,7 +356,7 @@ test("a release refuses a dirty, stale, released, or failing checkout and tags n
     [
       "released",
       [[/^git tag --points-at HEAD/, { stdout: "ios-v1.0b3\n" }]],
-      /already released as ios-v1\.0b3\. Run bin\/ios-testflight --distribute-only/,
+      /already released as ios-v1\.0b3\. Run bin\/testflight --distribute-only/,
     ],
     [
       "iOS checks",

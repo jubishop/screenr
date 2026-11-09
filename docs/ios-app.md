@@ -869,12 +869,17 @@ ScreenrKit.
 replaces the CI job and the release script's CI requirement. The local
 TestFlight releases stand.
 
+**Updated — 2026-11-08:** The user renamed the release script from
+`bin/ios-testflight` to `bin/testflight`, matching PodHaven's `bin/testflight`
+and the `bin/appstore` planned for App Store releases. Tags keep the
+`ios-v<version>b<build>` form, so build numbers keep counting.
+
 **Decision:**
 
 - **CI:** a path-filtered GitHub Actions job builds and tests `ios/**` on a
   GitHub-hosted macOS runner, which is free for this public repository. It
   runs when `ios/**` or the server payload fixtures change.
-- **Releases:** `bin/ios-testflight` produces TestFlight builds on the user's
+- **Releases:** `bin/testflight` produces TestFlight builds on the user's
   Mac. The user or an agent can run it.
 
 The release script works in this order:
@@ -905,7 +910,7 @@ Mac before iOS changes leave it:
   Agents run `bin/check-ios` before pushing iOS changes and never bypass the
   hook with `--no-verify`.
 - **Remote CI:** only the Linux check job, which must stay under 10 minutes.
-- **Releases:** `bin/ios-testflight` runs `bin/check-ios` on the clean
+- **Releases:** `bin/testflight` runs `bin/check-ios` on the clean
   `main` commit before archiving instead of looking for a CI run.
 
 **Why:** iOS CI ran on GitHub's preview macOS runners, where runs queued for

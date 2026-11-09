@@ -407,7 +407,7 @@ test("distribution stops when Apple rejects or never finishes the build", async 
   const waiting = fakeConnect({ processing: [undefined] });
   await assert.rejects(distributeWith(waiting), {
     message:
-      "1.0 (4) did not finish processing in 5 minutes. Run bin/ios-testflight --distribute-only to keep waiting.",
+      "1.0 (4) did not finish processing in 5 minutes. Run bin/testflight --distribute-only to keep waiting.",
   });
   assert.ok(!waiting.requests.some(({ method }) => method !== "GET"));
 });
@@ -428,7 +428,7 @@ test("distribution reports why App Store Connect refused the external group", as
   });
   await assert.rejects(distributeWith(connect), {
     message:
-      'Could not create the external group "Public testers": App Store Connect POST /v1/betaGroups failed with 409: The request entity is not valid.: External groups need a build first. Create it in TestFlight in App Store Connect, then run bin/ios-testflight --distribute-only.',
+      'Could not create the external group "Public testers": App Store Connect POST /v1/betaGroups failed with 409: The request entity is not valid.: External groups need a build first. Create it in TestFlight in App Store Connect, then run bin/testflight --distribute-only.',
   });
   // What to Test is already set, so internal testers see the notes.
   assert.equal(connect.localizations[0]?.whatsNew, "- Add the You tab");
