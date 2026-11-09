@@ -418,6 +418,10 @@ button keeps focus and does not open. The panel opens from the button and
 shifts left to stay on a phone screen. A feed entry keeps its
 one-tap "+ Want to watch"; a reader with another status for the title sees
 that status instead, for example "✓ Watching", linked to the title page.
+The button's chevron is the `expand` icon at 24px with a 2.5px stroke in the
+label's color, larger and heavier than the app's other icons, and it flips
+while the menu is open
+([issue #570](https://github.com/jubishop/screenr/issues/570)).
 
 ### Icon actions on feed entries — 2026-11-09
 

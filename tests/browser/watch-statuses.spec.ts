@@ -183,3 +183,88 @@ test("members choose, date, and clear watch statuses from the title page, and fr
     "Stopped watching",
   ]);
 });
+
+// The chevron marks the button as a menu, not a one-tap action like
+// Recommend: docs/interface-design.md#watch-status-button-on-title-pages--2026-10-12
+test("the status button shows a menu chevron after its label on phone and desktop in both themes", async ({
+  member,
+}) => {
+  await db.query(`INSERT INTO title(id,kind,tmdb_id,name,overview,release_date) VALUES
+    ('tv:998203','tv',998203,'Lantern Street','A fictional show.','2024-02-02')
+    ON CONFLICT DO NOTHING`);
+  const viewer = await member(`chevron_${randomUUID().slice(0, 8)}`);
+  await viewer.goto("/titles/tv/998203");
+  const button = statusButton(viewer);
+  const chevron = button.locator(".icon");
+  async function expectChevron(label: string, screenshot: string) {
+    await expect(button).toHaveText(label);
+    await expect(button).toHaveAttribute("aria-haspopup", "menu");
+    await expect(chevron).toBeVisible();
+    const measured = await button.evaluate((element) => {
+      const range = document.createRange();
+      range.selectNodeContents(element.firstChild!);
+      const icon = element.querySelector(".icon")!;
+      const style = getComputedStyle(icon);
+      const rect = (box: DOMRect) => ({
+        left: box.left,
+        right: box.right,
+        top: box.top,
+        bottom: box.bottom,
+      });
+      return {
+        button: rect(element.getBoundingClientRect()),
+        label: rect(range.getBoundingClientRect()),
+        icon: rect(icon.getBoundingClientRect()),
+        neighborHeight: document
+          .querySelector(".title-hero button.secondary:not([aria-haspopup])")!
+          .getBoundingClientRect().height,
+        ink: getComputedStyle(element).color,
+        stroke: style.stroke,
+        strokeWidth: parseFloat(style.strokeWidth),
+      };
+    });
+    const { icon, label: text, button: bounds } = measured;
+    // Larger than the app's other icons, with a heavier stroke in the
+    // label's own color, without making the button taller than its
+    // neighbors.
+    expect(icon.right - icon.left).toBeGreaterThan(20);
+    expect(icon.bottom - icon.top).toBeGreaterThan(20);
+    expect(bounds.bottom - bounds.top).toBe(measured.neighborHeight);
+    expect(measured.strokeWidth).toBeGreaterThan(2);
+    expect(measured.stroke).toBe(measured.ink);
+    // On the label's line, just after it, inside the button.
+    expect(icon.left).toBeGreaterThanOrEqual(text.right);
+    expect(icon.left - text.right).toBeLessThanOrEqual(12);
+    expect(icon.right).toBeLessThanOrEqual(bounds.right);
+    expect(
+      Math.abs(icon.top + icon.bottom - (text.top + text.bottom)) / 2,
+    ).toBeLessThanOrEqual(2);
+    const { width } = viewer.viewportSize()!;
+    for (const colorScheme of ["light", "dark"] as const) {
+      await viewer.emulateMedia({ colorScheme });
+      await viewer.locator(".title-hero").screenshot({
+        path: `.cache/${screenshot}-${colorScheme}-${width}.png`,
+      });
+    }
+    await viewer.emulateMedia({ colorScheme: "light" });
+  }
+  // The chevron points down while closed and up while open.
+  const flipped = () =>
+    chevron.evaluate((element) => getComputedStyle(element).transform);
+  for (const [width, height] of [
+    [390, 844],
+    [1366, 768],
+  ]) {
+    await viewer.setViewportSize({ width, height });
+    await expectChevron("+ Want to watch", "watch-status-chevron-none");
+    expect(await flipped()).toBe("none");
+    await button.click();
+    await expect(button).toHaveAttribute("aria-expanded", "true");
+    expect(await flipped()).toBe("matrix(-1, 0, 0, -1, 0, 0)");
+    await viewer.keyboard.press("Escape");
+    await expect(button).toHaveAttribute("aria-expanded", "false");
+    await chooseStatus(viewer, "Watching");
+    await expectChevron("✓ Watching", "watch-status-chevron-watching");
+    await chooseStatus(viewer, "Clear status");
+  }
+});
