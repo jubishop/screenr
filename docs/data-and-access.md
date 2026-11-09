@@ -190,9 +190,12 @@ the new shape. Then set `SCREENR_IOS_MINIMUM_BUILD` in `/etc/screenr/app.env`
 to that build and deploy the change: activation checks the value and
 restarts `screenr-web`, so both take effect together.
 
-**Minimum build:** production has required build 3 since 2026-11-05. Build
-3 is the first that pages the friends feed and profiles, so the server
-stopped sending their whole history to reads without a window
+**Minimum build:** production has required build 5 since 2026-11-09
+([issue #554](https://github.com/jubishop/screenr/issues/554)). Build 5 is
+the first that shows [combined title-action cards](title-feed.md#combined-title-actions)
+and reads a title without `tmdb_id`. It replaced build 3, required since
+2026-11-05. Build 3 is the first that pages the friends feed and profiles, so
+the server stopped sending their whole history to reads without a window
 ([paged histories](title-feed.md#paged-histories),
 [issue #502](https://github.com/jubishop/screenr/issues/502)). Build 3 also
 reads a title's availability without TMDB's raw `providers` lists and
@@ -201,15 +204,23 @@ reads a title's availability without TMDB's raw `providers` lists and
 [issue #510](https://github.com/jubishop/screenr/issues/510)). A later
 breaking change raises it to the first build that reads the new shape.
 
-**Next raise — 2026-11-09:** neither client reads a title's `tmdb_id`, but
-every released build requires it. The app now reads a title without it, and the
-owner chose to drop it at the minimum-build raise that
-[issue #554](https://github.com/jubishop/screenr/issues/554) already needs,
-so issue #554's build is the first that must not require it
+**Raise for combined cards — 2026-11-09, by the owner:** the cards'
+payload was additive, so the rule above didn't require this raise. The owner
+chose it because older builds put members' reviews at risk. They show only a
+card's holding entry, so when another entry holds the card with the viewer's
+review, the title header finds no review and offers **Rate or review** with
+an empty form. Each member has one review per title, and saving updates it
+in place, so rating from that form replaced the review's text. A forced
+TestFlight update costs the small invited circle one tap. Rejected: leaving
+older builds allowed until TestFlight updates them.
+
+**`tmdb_id` — 2026-11-09:** neither client reads a title's `tmdb_id`, but
+builds before 5 require it. The owner chose to drop it at this raise, so
+build 5 is the first that reads a title without it
 ([issue #594](https://github.com/jubishop/screenr/issues/594)). The server
-keeps sending `tmdb_id` until that build is the minimum
+can now stop sending it
 ([issue #607](https://github.com/jubishop/screenr/issues/607)). Rejected:
-making it optional without holding issue #554 and dropping it at some later
+making it optional without holding the raise and dropping it at some later
 raise, and keeping it for good. A service's `route_note` needed no raise:
 every build decoded it as optional.
 

@@ -780,8 +780,9 @@ in the iPhone app. The stored entries are unchanged, so nothing migrates.
 - **Title page header:** the web and the iPhone app read the viewer's own
   Recommend from those flags and their review from `combined` when another
   entry holds the card. iPhone builds from before this change find no review
-  inside such a card, so their header offers **Rate or review** with an empty
-  form for it until they update.
+  inside such a card, so their header offered **Rate or review** with an
+  empty form for it. Production therefore requires build 5, the first that
+  reads cards ([minimum build](data-and-access.md#changes-that-app-builds-depend-on)).
 - **Paging:** a paged read places a card once, through its holder, by its
   newest action or the holder's replies, so it counts as one entry.
 - **Links and writes:** `?item=` for any entry in a card opens the card on
