@@ -981,8 +981,9 @@ Screenr-Deploy-Reason: Instructions only; production contains all material chang
 Replace the example reason with the actual assessment and deployed revision.
 Every line of that final paragraph must be a `Key: value` trailer, such as
 `Co-Authored-By:`, so put a reference such as `Refs #12` in an earlier
-paragraph. Git reads no trailers from a final paragraph with any other line,
-and the run then deploys; `git interpret-trailers --parse` shows what it reads.
+paragraph. Any other line there can stop Git from reading the paragraph's
+trailers, and the run then deploys; `git interpret-trailers --parse` shows
+what it reads.
 The workflow reads the trailers on the push's final commit, then finds the
 newest successful `production` deployment in GitHub. It skips only when every
 commit after that deployment, including the final one, carries valid skip

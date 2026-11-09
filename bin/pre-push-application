@@ -10,9 +10,9 @@ Xcode, and otherwise refuses the push at once, saying how to record one. It
 never runs the check itself: Git connects to the remote before it runs this
 hook, and GitHub closes an idle SSH connection long before a full check
 finishes, so a push that waited for the check failed after the check passed
-(#549). Tag
-pushes, branch deletions, and hosts without xcodebuild, such as Linux and CI,
-skip it. See docs/development-workflow.md#ios-checks-before-a-push.
+(#549). Tag pushes, branch deletions, and hosts without xcodebuild, such as
+Linux and CI, skip it. See
+docs/development-workflow.md#ios-checks-before-a-push.
 
 Project Starter's managed bin/hooks/pre-push runs this file from the pushing
 checkout, after its document checks pass, with Git's arguments, standard
