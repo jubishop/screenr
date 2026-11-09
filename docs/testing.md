@@ -799,7 +799,10 @@ delete expired sessions with their push devices and pending pushes, read
 notifications more than a year old but no unread ones, and the
 [catalog rows](title-catalog.md#catalog-retention) of titles nothing
 references once they have been expired for 30 days, keeping new search
-results, recent refreshes, and every referenced title's rows.
+results, recent refreshes, and every referenced title's rows. When its first
+step's delete fails, the pass must still succeed and the later steps run,
+and two failing runs must print two `worker cleanup failed` lines but reach
+Sentry once.
 `tests/app/google-client-check.test.ts` runs that cleanup's
 [Google client check](deployment.md#google-client-check) against the fake
 Google token endpoint: it logs `google client rejected` with only the status
@@ -810,7 +813,8 @@ hour.
 worker refuses to start without the Resend settings, deletes expired jobs on its
 first pass, says once that push delivery is off without APNs settings, and
 exits cleanly on SIGTERM. With PostgreSQL unreachable, it keeps running, logs
-each loop's failure once, and stops during its backoff.
+the email loop's failure and the push loop's cleanup failure once each, and
+stops during its backoff.
 [Database failures](https://github.com/jubishop/screenr/issues/358) have their
 own tests. `tests/app/database-connections.test.ts` ends an idle pooled
 connection and a transaction's connection from another one, and checks that
@@ -837,7 +841,10 @@ which must leave the job stale and never retried
 ([issue #359](https://github.com/jubishop/screenr/issues/359)).
 `tests/app/worker-loop.test.ts` runs a worker loop on a fake clock and checks
 its backoff, its one line per kind of failure, the hourly repeat, and its
-recovery line, and that each line it logs goes to Sentry unfolded.
+recovery line, and that each line it logs goes to Sentry unfolded. Over an
+hour of passes whose cleanup has a step that always fails, the loop must keep
+its one-second pause and run the other step every minute, and the failing
+step must log every minute but reach Sentry once.
 `tests/app/push-delivery.test.ts` sends
 [pushes](notifications.md#push-delivery) to two fake APNs servers, one per
 environment, that speak HTTP/2 without TLS on loopback. It checks each kind's
@@ -847,14 +854,15 @@ including badge-only updates for kinds turned off, and visibility, read
 state, expired sessions, and moved tokens at send time. It also checks that
 rejected tokens delete their device, that other rejections and retryable
 failures are logged without tokens, badge-only updates, and reconnection
-after GOAWAY or a lost connection. Its fake host sends GOAWAY ahead of the
-answer to a push in flight, so the test needs no fixed wait: that push
-finishes on its connection and the next one connects again. Each read
-action, friendship change, reply removal, and account deletion, from the
-web or the app, sends a badge-only update with the new count to each member
-whose count it changed, including people sent a reply on the changed
-friends' entries. Changes that leave every count unchanged, and failed ones,
-queue none.
+after GOAWAY or a lost connection, and that a failing delete of expired
+jobs logs `worker cleanup failed` while the pass still sends. Its fake host
+sends GOAWAY ahead of the answer to a push in flight, so the test needs no
+fixed wait: that push finishes on its connection and the next one connects
+again. Each read action, friendship change, reply removal, and account
+deletion, from the web or the app, sends a badge-only update with the new
+count to each member whose count it changed, including people sent a reply
+on the changed friends' entries. Changes that leave every count unchanged,
+and failed ones, queue none.
 Operational tests check activation rollback after a stalled health request, a
 failed signed-out session request, or a web or worker service that crashes on
 startup. They also check a production-down report when the restored release

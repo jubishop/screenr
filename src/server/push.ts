@@ -2,6 +2,7 @@ import type { PoolClient } from "pg";
 import type { Apns } from "./apns";
 import { AppError, db, settleAll } from "./db";
 import { logFailure } from "./log";
+import { runCleanup } from "./worker-loop";
 
 // iPhone push devices and per-kind push settings
 // (docs/data-and-access.md#push-devices-and-settings), and the worker's
@@ -342,9 +343,13 @@ export async function deliverPushes(apns: Apns, limit = 50) {
 }
 
 // One pass of the worker's push loop, which sends only with APNs settings.
-// The first pass and every 60th also delete expired jobs.
+// The first pass and every 60th also delete expired jobs, as a cleanup step
+// whose failure never stops the send (see runCleanup).
 export async function runPushPass(apns: Apns | null, pass: number) {
   if (pass % 60 === 0)
-    await db.query("DELETE FROM push_job WHERE expires_at<=now()");
+    await runCleanup({
+      "push jobs": () =>
+        db.query("DELETE FROM push_job WHERE expires_at<=now()"),
+    });
   if (apns) await deliverPushes(apns);
 }

@@ -438,7 +438,7 @@ test("the worker deletes expired jobs on its first pass and exits cleanly on SIG
   }
 });
 
-test("the worker keeps running while PostgreSQL is unreachable, logs each loop's failure once, and stops during its backoff", async () => {
+test("the worker keeps running while PostgreSQL is unreachable, logs the email loop's failure and the push loop's cleanup failure once, and stops during its backoff", async () => {
   // A loopback port that nothing listens on.
   const closed = createServer();
   await new Promise<void>((resolve) => closed.listen(0, "127.0.0.1", resolve));
@@ -460,15 +460,19 @@ test("the worker keeps running while PostgreSQL is unreachable, logs each loop's
       .filter(Boolean)
       .map((line) => JSON.parse(line));
   try {
-    // Each loop's first pass fails at once and waits two seconds. Without
-    // APNs settings, the push loop's second pass needs no database, so it
-    // recovers. The email loop's second pass fails again without a line, and
-    // it then waits four seconds.
+    // The email loop's first pass fails at once and waits two seconds; its
+    // second fails again without a line, and it then waits four seconds.
+    // Without APNs settings, the push loop's first pass only runs its
+    // cleanup, whose failure never fails the pass, and the passes after it
+    // need no database. Stopping half a second into the email loop's
+    // four-second pause shows that SIGTERM ends it early.
+    const logged = (event: string) =>
+      lines().some((line) => line.event === event);
     await until(
-      () => lines().some((line) => line.event === "worker recovered"),
+      () => logged("worker failed") && logged("worker cleanup failed"),
       10_000,
     );
-    await setTimeout(300);
+    await setTimeout(2_500);
     assert.equal(child.exitCode, null, output);
     child.kill("SIGTERM");
     // A stopping worker ends its pause early.
@@ -487,9 +491,8 @@ test("the worker keeps running while PostgreSQL is unreachable, logs each loop's
         .sort((a, b) => a.event.localeCompare(b.event)),
       [
         { event: "push delivery off", reason: "no APNs settings" },
+        { event: "worker cleanup failed", step: "push jobs", ...failed },
         { event: "worker failed", failures: 1, ...failed },
-        { event: "worker failed", failures: 1, ...failed },
-        { event: "worker recovered", failures: 1 },
       ],
     );
   } finally {

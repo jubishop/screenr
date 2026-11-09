@@ -1189,6 +1189,7 @@ journalctl -u screenr-worker --since '1 day ago' --no-pager | grep '"event":"ema
 | `apple settings missing` | web | No fields: account deletion found a Sign in with Apple token but the [Apple settings](running-screenr.md#iphone-app-accounts-and-keys) are missing, so the account was not deleted |
 | `apple token replaced` | web | No fields: Apple sign-ins kept storing new tokens through three rounds of revocation, so the account was not deleted |
 | `worker failed` | worker | `failures`, the loop's failed passes in a row; see [worker outages](#worker-outages) |
+| `worker cleanup failed` | worker | `step`, the periodic cleanup step that failed: `email jobs`, `usage`, `sessions`, `notifications`, `catalog`, `google client`, or `push jobs`; the other steps still run ([worker outages](#worker-outages)) |
 | `email delivery failed` | worker | `job` ID, `kind` (`code` or `activity`), `attempt`, `final`, and `stale` when a block or opt-out committed during the send ([stale sends](notifications.md#activity-email)) |
 | `push delivery failed` | worker | `job` ID, `kind` (`alert` or `badge`), `environment` (`sandbox` or `production`), `attempt`, `final`, and `status` and `reason` for an APNs reply |
 | `push delivery off` | worker | `missing` setting names, or `reason` `invalid key` with error fields; see [push settings](#provisioning) |
@@ -1429,6 +1430,21 @@ journalctl -u screenr-worker --since '1 day ago' --no-pager | grep '"event":"wor
 ```json
 {"event":"worker recovered","failures":14}
 ```
+
+Each loop's periodic cleanup, which runs on its first pass and every 60th,
+about once a minute, stays outside that count
+([issue #577](https://github.com/jubishop/screenr/issues/577)): the email
+loop's [cleanup steps](running-screenr.md#email-worker) and the push loop's
+delete of expired jobs. Each step runs on its own: one that fails, such as a
+delete that a schema change broke, logs `worker cleanup failed` with its
+`step` name, and the next step still runs. The pass doesn't fail, so
+delivery and the one-second pause go on. That line is
+[folded](#failure-reports-in-sentry) like other lines, so a step that fails
+every minute reaches Sentry once an hour while the journal keeps every line.
+Before, such a step started a new run of failures every minute and stopped
+the steps after it. The email loop cleans up after it delivers, so during an
+outage its failed passes skip the cleanup; the push loop deletes expired jobs
+before it sends, so an outage also logs that step's failure.
 
 When PostgreSQL ends a pooled connection, the web and the worker log
 `database connection failed` instead of stopping, and the pool opens a new

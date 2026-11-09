@@ -13,6 +13,7 @@ import {
 } from "./notifications";
 import { seal, unseal } from "./sealing";
 import { pruneUsage } from "./usage";
+import { runCleanup } from "./worker-loop";
 
 type Mail = { to: string; subject: string; text: string };
 const encrypt = (mail: Mail) => seal("screenr-email", JSON.stringify(mail));
@@ -287,20 +288,25 @@ async function recordFailure(
   }
 }
 
+// The periodic cleanup's steps, by the name a failure logs (see runCleanup):
+// it deletes expired jobs and sessions, old usage telemetry and read
+// notifications, and unused catalog data, and checks Google's web client, at
+// most once an hour.
+const cleanup = {
+  "email jobs": () =>
+    db.query("DELETE FROM email_job WHERE expires_at < now()"),
+  usage: pruneUsage,
+  // Better Auth deletes an expired session only when someone presents it.
+  // The push devices it registered, and their pending pushes, cascade.
+  sessions: () => db.query(`DELETE FROM session WHERE "expiresAt" < now()`),
+  notifications: pruneNotifications,
+  catalog: pruneCatalog,
+  "google client": checkGoogleClient,
+};
+
 // One pass of screenr-worker's email loop: send at most one due email. The
-// first pass and every 60th also run the periodic cleanup: expired jobs and
-// sessions, old usage telemetry and read notifications, and unused catalog
-// data. It also checks Google's web client, at most once an hour.
+// first pass and every 60th also run the periodic cleanup.
 export async function runWorkerPass(pass: number) {
   await deliverOne();
-  if (pass % 60 === 0) {
-    await db.query("DELETE FROM email_job WHERE expires_at < now()");
-    await pruneUsage();
-    // Better Auth deletes an expired session only when someone presents it.
-    // The push devices it registered, and their pending pushes, cascade.
-    await db.query(`DELETE FROM session WHERE "expiresAt" < now()`);
-    await pruneNotifications();
-    await pruneCatalog();
-    await checkGoogleClient();
-  }
+  if (pass % 60 === 0) await runCleanup(cleanup);
 }

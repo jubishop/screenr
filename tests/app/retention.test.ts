@@ -1,4 +1,4 @@
-import { test } from "node:test";
+import { test, mock } from "node:test";
 import assert from "node:assert/strict";
 import {
   useDatabase,
@@ -7,7 +7,11 @@ import {
   friend,
   person,
   bearerFor,
+  captureFailures,
+  assertNotLogged,
+  withFailingDeletes,
 } from "./social-fixture";
+import { acceptReports } from "./failure-fixture";
 
 const { POST } = await import("../../src/app/api/screenr/[action]/route");
 const { runWorkerPass } = await import("../../src/server/email");
@@ -145,4 +149,40 @@ test("worker cleanup deletes catalog data for titles nothing references once it 
     availability: ["movie:1", "movie:3"],
     trailers: ["movie:1"],
   });
+});
+
+test("a failing cleanup step logs worker cleanup failed on each run but reaches Sentry once, and neither fails the pass nor stops the later steps", async (t) => {
+  const reports = acceptReports();
+  t.after(() => {
+    mock.restoreAll();
+    delete process.env.SENTRY_DSN;
+  });
+  const printed = captureFailures(t);
+  await bearerFor(await person("alice"));
+  await db.query(`UPDATE session SET "expiresAt"=now()-interval '1 second'`);
+  // The first step, deleting expired email jobs, fails on every run.
+  await withFailingDeletes("email_job", undefined, async () => {
+    await cleanup();
+    await runWorkerPass(60);
+  });
+  assert.equal((await db.query("SELECT 1 FROM session")).rowCount, 0);
+  const failure = {
+    event: "worker cleanup failed",
+    step: "email jobs",
+    error: "DatabaseError",
+    code: "23503",
+  };
+  assert.deepEqual(
+    printed.map((line) => {
+      const { stack, ...fields } = JSON.parse(line);
+      assert.ok(stack.length > 0, line);
+      return fields;
+    }),
+    [failure, failure],
+  );
+  assert.deepEqual(
+    reports().map(({ contexts }) => contexts.failure),
+    [failure],
+  );
+  assertNotLogged(printed, ["Private detail"]);
 });

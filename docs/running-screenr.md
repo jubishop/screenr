@@ -191,6 +191,9 @@ more than a year old, and
 [unused catalog data](title-catalog.md#catalog-retention). At most once an
 hour, with `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` set, it also
 [checks that Google accepts the web client](deployment.md#google-client-check).
+Each of these cleanup steps runs on its own: one that fails logs
+`worker cleanup failed` and the rest still run
+([worker outages](deployment.md#worker-outages)).
 Local development does not need it.
 With `EMAIL_TRANSPORT=file`, Next writes sign-in codes directly to
 `.cache/mail` without queueing them, and `npm run worker` refuses to start
