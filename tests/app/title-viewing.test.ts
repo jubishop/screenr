@@ -84,7 +84,6 @@ before(async () => {
   process.env.TMDB_READ_TOKEN = "streaming-test-token";
 });
 beforeEach(async () => {
-  await db.query("TRUNCATE title CASCADE");
   items = [
     {
       id: 93901,

@@ -250,7 +250,11 @@ import these helpers instead of defining their own copies.
   and Google's key, token, and revoke endpoints with keys generated per run.
   `tests/app/social-fixture.test.ts` covers the clearing.
 - Suites call `useDatabase()` once at file scope to register the migration,
-  per-test user/verification reset, and final pool shutdown. The reset first
+  per-test reset of users, verifications, and titles, and final pool
+  shutdown. Truncating those tables cascades to everything that references
+  them, such as activity and a title's cached availability, so no member,
+  title, or row that depends on one reaches the next test or file, and each
+  test inserts the titles it names. The reset first
   waits for the pool to go idle, so a query that an earlier test left running
   cannot deadlock with it; after 10 seconds it fails the test instead. A
   suite that resets other tables imports `db` and registers its own hooks

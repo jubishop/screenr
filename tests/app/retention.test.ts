@@ -102,7 +102,6 @@ test("worker cleanup deletes read notifications more than a year old and keeps u
 });
 
 test("worker cleanup deletes catalog data for titles nothing references once it has been expired for 30 days", async () => {
-  await db.query("TRUNCATE title CASCADE");
   // Alice's Recommend references movie:1.
   await setup();
   // Details expire a day after they are fetched, or at a failed refresh's

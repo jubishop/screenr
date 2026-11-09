@@ -97,7 +97,6 @@ before(async () => {
 });
 let viewer: string;
 beforeEach(async () => {
-  await db.query("TRUNCATE title CASCADE");
   catalog = {};
   results = [];
   failing = false;

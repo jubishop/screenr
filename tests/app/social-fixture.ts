@@ -55,7 +55,9 @@ export function useDatabase() {
 
   beforeEach(async () => {
     await idle();
-    await db.query('TRUNCATE "user", verification RESTART IDENTITY CASCADE');
+    await db.query(
+      'TRUNCATE "user", verification, title RESTART IDENTITY CASCADE',
+    );
   });
 
   after(async () => {
