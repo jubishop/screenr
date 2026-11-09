@@ -140,6 +140,31 @@ export function assertNotLogged(printed: string[], values: string[]) {
     assert.ok(!text.includes(value), `Logged ${value}`);
 }
 
+// Runs `run` while deletes from `table` fail with a foreign key violation, as
+// after a schema change that breaks a delete: every delete, or only those of
+// the rows that `when` selects. Its message is a private detail that must
+// never be logged.
+export async function withFailingDeletes(
+  table: string,
+  when: string | undefined,
+  run: () => Promise<void>,
+) {
+  await db.query(`CREATE FUNCTION fail_delete() RETURNS trigger
+    LANGUAGE plpgsql AS $$BEGIN
+      RAISE EXCEPTION 'Private detail 271828' USING ERRCODE='23503';
+    END$$`);
+  await db.query(
+    `CREATE TRIGGER fail_delete BEFORE DELETE ON ${table}
+    ${when ? `FOR EACH ROW WHEN (${when})` : ""} EXECUTE FUNCTION fail_delete()`,
+  );
+  try {
+    await run();
+  } finally {
+    await db.query(`DROP TRIGGER fail_delete ON ${table}`);
+    await db.query("DROP FUNCTION fail_delete()");
+  }
+}
+
 // In production Caddy forwards each client's address in X-Forwarded-For, and
 // Better Auth's rate limits key on it. Test requests to a rate-limited auth
 // instance send this one; without an address Better Auth warns and counts

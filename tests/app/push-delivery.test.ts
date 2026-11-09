@@ -19,6 +19,7 @@ import {
   captureFailures,
   assertNotLogged,
   captureLog,
+  withFailingDeletes,
 } from "./social-fixture";
 
 const { POST } = await import("../../src/app/api/screenr/[action]/route");
@@ -928,6 +929,40 @@ test("the worker's push pass deletes expired pushes and sends only with APNs set
     [tokenB],
   );
   assert.equal(await jobs(), 0);
+});
+
+test("a failing expired push delete logs worker cleanup failed and the push pass still sends", async (t) => {
+  const { alice } = await setup();
+  await device(alice, tokenA);
+  await queueBadgePush(alice);
+  await db.query("UPDATE push_job SET expires_at=now()-interval '1 second'");
+  await device(alice, tokenB);
+  await queueBadgePush(alice);
+  const printed = captureFailures(t);
+  await withFailingDeletes("push_job", "OLD.expires_at<=now()", () =>
+    runPushPass(apns, 0),
+  );
+  assert.deepEqual(
+    sandbox.received.map(({ token }) => token),
+    [tokenB],
+  );
+  assert.equal(await jobs(), 1);
+  assert.deepEqual(
+    printed.map((line) => {
+      const { stack, ...fields } = JSON.parse(line);
+      assert.ok(stack.length > 0, line);
+      return fields;
+    }),
+    [
+      {
+        event: "worker cleanup failed",
+        step: "push jobs",
+        error: "DatabaseError",
+        code: "23503",
+      },
+    ],
+  );
+  assertNotLogged(printed, ["Private detail"]);
 });
 
 test("without APNs settings the worker skips push delivery and says so once", () => {
