@@ -451,12 +451,7 @@ function FeedEntry({
               : item.item_type === "review"
                 ? reviewPhrase(item)
                 : item.item_type === "progress"
-                  ? progressPhrase(
-                      item.status!,
-                      item.finished_on,
-                      item.active,
-                      interactive,
-                    )
+                  ? progressPhrase(item.status!, item.active)
                   : item.item_type === "recommended"
                     ? item.active
                       ? "recommends"

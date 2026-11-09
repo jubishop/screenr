@@ -19,38 +19,19 @@ export const statusLabels: Record<WatchStatus, string> = {
   stopped: "Stopped watching",
 };
 
-const months = "Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec".split(" ");
-
-// A last-finished date is a calendar day, so it is shown without time zone
-// conversion. The year is omitted for the reader's current year, which only
-// the browser knows; the server's render always includes it.
-export function finishedDate(value: string, interactive: boolean) {
-  const [year, month, day] = value.split("-").map(Number);
-  const label = `${months[month - 1]} ${day}`;
-  return interactive && year === new Date().getFullYear()
-    ? label
-    : `${label}, ${year}`;
-}
-
 // The author line of a progress entry, such as "Theo Park is watching" or
-// "Theo Park finished · Oct 12". A cleared entry kept for its replies says
-// the status is no longer current.
-export function progressPhrase(
-  status: ProgressStatus,
-  finishedOn: string | null,
-  active: boolean,
-  interactive: boolean,
-) {
+// "Theo Park finished". The entry shows only its own time, never the
+// last-finished date. A cleared entry kept for its replies says the status is
+// no longer current.
+export function progressPhrase(status: ProgressStatus, active: boolean) {
   if (!active) return "removed their watch status";
-  if (status === "finished")
-    return finishedOn
-      ? `finished · ${finishedDate(finishedOn, interactive)}`
-      : "finished";
   return status === "watching"
     ? "is watching"
     : status === "caught_up"
       ? "is caught up"
-      : "stopped watching";
+      : status === "finished"
+        ? "finished"
+        : "stopped watching";
 }
 
 // Today in the reader's time zone, as YYYY-MM-DD.
