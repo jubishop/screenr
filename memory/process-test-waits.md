@@ -32,7 +32,10 @@ Load alone can still stretch a short process tenfold. On 2026-11-09, while
 second idle ran past its 5-second bound
 ([#552](https://github.com/jubishop/screenr/issues/552)). Holding each `sh`
 start for 6 seconds reproduced the error; the case passes that way under the
-shared Python bound below.
+shared Python bound below. The same day, a nested Playwright run in
+`tests/app/browser-script-guard.test.ts` that took 1.25 seconds at a load
+average near 80 ran past its 20-second bound at one near 100
+([#615](https://github.com/jubishop/screenr/issues/615)).
 
 **Evidence:** Dropping an empty database at 17:10 PST waited 6.0 seconds for
 a checkpoint that synced 73,941 files. Holding each harness start for 11
@@ -51,6 +54,9 @@ from 28 to 411, and in 18 runs six at a time at load averages from 5 to 7.
 - Give a failure that must come promptly its own signal. The test reports a
   failed build that keeps serving as soon as the harness announces its
   fixture, not after a deadline.
+- A nested test runner's per-test timeout is a wait too. Size it to end a
+  hang, and check promptness by asserting that no test timed out, as
+  `tests/app/browser-script-guard.test.ts` does.
 - Wait for the `close` event, not `exit`, before you assert on a process's
   output. `exit` can come before the output streams end.
 - In the Python tests, pass `HANG_SECONDS` from `tests/_process_waits.py` as

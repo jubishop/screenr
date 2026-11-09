@@ -10,6 +10,17 @@ import { createBrowserProxy } from "../../scripts/browser-proxy";
 
 const execute = promisify(execFile);
 
+// A nested Playwright run takes a few seconds idle, but load from parallel
+// checks once stretched one past a 20-second bound (#615). Its bound only ends
+// a hang. See memory/process-test-waits.md.
+const hang = 180_000;
+
+// A nested test's timeout only ends a test that its guard failed to stop. The
+// runs that check promptness assert that no test timed out, so a guarded
+// failure must still come at once, and the two tests that would time out
+// without the guard still finish within the hang bound.
+const nestedTimeout = 60_000;
+
 test("a failed script in a manually created context fails promptly and keeps the browser error and trace", async (t) => {
   await mkdir(resolve(".cache"), { recursive: true });
   const directory = await mkdtemp(resolve(".cache/script-guard-test-"));
@@ -46,19 +57,20 @@ test("a failed script in a manually created context fails promptly and keeps the
   await writeFile(
     join(directory, "playwright.config.ts"),
     `import config from ${JSON.stringify(resolve("playwright.config.ts"))};
-export default {...config, testDir: '.', outputDir: './results', webServer: undefined,
+export default {...config, testDir: '.', outputDir: './results', webServer: undefined, timeout: ${nestedTimeout},
   use: {...config.use, baseURL: 'http://127.0.0.1:${proxyAddress.port}'}};`,
   );
+  // The assertion outlasts the test, so only the guard or the test's timeout
+  // can end it.
   await writeFile(
     join(directory, "script.spec.ts"),
     `import {expect} from '@playwright/test';
 import {test} from ${JSON.stringify(resolve("scripts/browser-test.ts"))};
 test('broken script', async ({browser}) => {
-  test.setTimeout(3000);
   const context=await browser.newContext();
   const page=await context.newPage();
   await page.goto('http://127.0.0.1:${proxyAddress.port}');
-  await expect(page.locator('body')).toHaveText('script loaded', {timeout: 20000});
+  await expect(page.locator('body')).toHaveText('script loaded', {timeout: ${2 * nestedTimeout}});
 });
 test('successful page', async ({page}) => { await page.setContent('<p>ok</p>'); });`,
   );
@@ -71,7 +83,7 @@ test('successful page', async ({page}) => { await page.setContent('<p>ok</p>'); 
         "--config",
         join(directory, "playwright.config.ts"),
       ],
-      { timeout: 30_000, env: { ...process.env, CI: "" } },
+      { timeout: hang, env: { ...process.env, CI: "" } },
     ),
     (error: Error & { stdout?: string }) => {
       assert.match(error.stdout ?? "", /1 failed/);
@@ -131,7 +143,7 @@ test("script guards cover default contexts and ignore cancellation, teardown, AP
     join(directory, "playwright.config.ts"),
     `import config from ${JSON.stringify(resolve("playwright.config.ts"))};
 export default {...config, testDir: '.', outputDir: './results', webServer: undefined, workers: 1,
-  reporter: [['list']], timeout: 3000, use: {...config.use, baseURL:'http://127.0.0.1:${address.port}'}};`,
+  reporter: [['list']], timeout: ${nestedTimeout}, use: {...config.use, baseURL:'http://127.0.0.1:${address.port}'}};`,
   );
   await writeFile(
     join(directory, "guard.spec.ts"),
@@ -165,7 +177,7 @@ test('subsequent test remains monitored', async ({page}) => { await page.goto('/
         "--config",
         join(directory, "playwright.config.ts"),
       ],
-      { timeout: 20_000, env: { ...process.env, CI: "" } },
+      { timeout: hang, env: { ...process.env, CI: "" } },
     ),
     (error: Error & { stdout?: string }) => {
       assert.match(error.stdout!, /2 failed/);
@@ -204,7 +216,7 @@ test("browser policy reports fail the test in default and manual contexts", asyn
     join(directory, "playwright.config.ts"),
     `import config from ${JSON.stringify(resolve("playwright.config.ts"))};
 export default {...config, testDir: '.', outputDir: './results', webServer: undefined, workers: 1,
-  reporter: [['list']], timeout: 3000, use: {...config.use, baseURL:'http://127.0.0.1:${address.port}'}};`,
+  reporter: [['list']], timeout: ${nestedTimeout}, use: {...config.use, baseURL:'http://127.0.0.1:${address.port}'}};`,
   );
   await writeFile(
     join(directory, "policy.spec.ts"),
@@ -226,7 +238,7 @@ test('clean page', async ({page}) => { await page.goto('/clean'); await expect(p
         "--config",
         join(directory, "playwright.config.ts"),
       ],
-      { timeout: 20_000, env: { ...process.env, CI: "" } },
+      { timeout: hang, env: { ...process.env, CI: "" } },
     ),
     (error: Error & { stdout?: string }) => {
       assert.match(error.stdout!, /2 failed/);
