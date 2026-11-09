@@ -11,7 +11,7 @@
   },
   "response": {
     "status": 200,
-    "etag": "W/\"DAEazI9PU3Y1XmOdqdllx6Nfydheb75e-buCNwv0OOc\"",
+    "etag": "W/\"w4Ky18jFpwodhgbZfuSBxIkIrn142fFIFNnidtlrCCc\"",
     "body": {
       "kind": "title",
       "title": {
@@ -92,6 +92,7 @@
           "edited": false,
           "season": null,
           "episode": null,
+          "combined": [],
           "username": "alice",
           "display_name": "Alice Park",
           "photo": "486e0212c15728ee",
@@ -124,6 +125,7 @@
           "edited": false,
           "season": null,
           "episode": null,
+          "combined": [],
           "username": "ben",
           "display_name": "Ben Ortiz",
           "photo": "8fc275dfeaca5cf8",
@@ -204,6 +206,7 @@
           "edited": false,
           "season": null,
           "episode": null,
+          "combined": [],
           "username": "cam",
           "display_name": "Cam Rivera",
           "photo": null,

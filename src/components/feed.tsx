@@ -31,6 +31,41 @@ function discussionLabel(season: number, episode: number | null) {
   return `Season ${season}${episode === null ? "" : `, Episode ${episode}`}`;
 }
 
+// The order a card names its actions in: status, review, then Recommend or
+// Want to watch.
+const cardOrder: Partial<Record<FeedItem["item_type"], number>> = {
+  progress: 0,
+  review: 1,
+  recommended: 2,
+  want_to_watch: 2,
+};
+
+// The author line of a card that combines one person's close-together
+// actions for a title, joined like a sentence, such as "finished, reviewed,
+// and recommends" (docs/title-feed.md#combined-title-actions). The card has
+// one date, so no action names its own.
+export function cardPhrase(item: FeedItem) {
+  const phrases = [item, ...item.combined]
+    .sort((a, b) => cardOrder[a.item_type]! - cardOrder[b.item_type]!)
+    .map((entry) =>
+      entry.item_type === "progress"
+        ? progressPhrase(entry.status!, null, true, false)
+        : entry.item_type === "review"
+          ? reviewPhrase({ active: true, body: entry.body })
+          : entry.item_type === "recommended"
+            ? "recommends"
+            : "wants to watch",
+    );
+  return phrases.length > 2
+    ? `${phrases.slice(0, -1).join(", ")}, and ${phrases.at(-1)}`
+    : phrases.join(" and ");
+}
+
+// The entry whose review a card shows, or the entry itself.
+const reviewOf = (item: FeedItem) =>
+  [item, ...item.combined].find((entry) => entry.item_type === "review") ??
+  item;
+
 export function FeedView({
   snapshot,
   user,
@@ -82,7 +117,9 @@ export function FeedView({
   const [olderAfter, setOlderAfter] = useState<{ last?: string } | null>(null);
   const interactive = useInteractive();
   // Keep only identities when access is unavailable. The current authorized
-  // snapshot is always the source of rendered server content.
+  // snapshot is always the source of rendered server content. A card keeps
+  // the place, drafts, and other state of the first of its entries shown, so
+  // another of its entries coming to hold it changes none of them.
   const [slots, setSlots] = useState(() => snapshot?.map((c) => c.id) ?? []);
   const accepted = known ?? acceptActivity(snapshot ?? []);
   if (!known && snapshot) setKnown(accepted);
@@ -93,8 +130,12 @@ export function FeedView({
   // Large feeds hold thousands of entries, so lookups use sets and maps
   // built once per render instead of scanning the list for each entry.
   const slotted = new Set(slots);
+  const slotOf = (c: FeedItem) =>
+    slotted.has(c.id)
+      ? c.id
+      : (c.combined.find((other) => slotted.has(other.id))?.id ?? c.id);
   const newSlots =
-    snapshot?.filter((c) => !slotted.has(c.id)).map((c) => c.id) ?? [];
+    snapshot?.filter((c) => !slotted.has(slotOf(c))).map((c) => c.id) ?? [];
   if (newSlots.length) setSlots([...slots, ...newSlots]);
   const { entries: visible, incoming } = feedLayout(
     snapshot ?? [],
@@ -102,15 +143,19 @@ export function FeedView({
     user.user_id,
   );
   const visibleById = new Map(visible.map((c) => [c.id, c]));
+  const visibleBySlot = new Map(visible.map((c) => [slotOf(c), c]));
   const order = [
-    ...visible.map((c) => c.id),
-    ...slots.filter((id) => !visibleById.has(id)),
+    ...visibleBySlot.keys(),
+    ...slots.filter((id) => !visibleBySlot.has(id)),
   ];
   // Show older keeps focus while older entries remain. When it leaves with
   // the last of them, focus moves to the first entry it added, so keyboard
   // users continue from there.
-  const firstAdded =
+  const lastShown = visible.at(-1);
+  const addedSlot =
     olderAfter && order[order.indexOf(olderAfter.last ?? "") + 1];
+  const firstAdded =
+    addedSlot && (visibleBySlot.get(addedSlot)?.id ?? addedSlot);
   useEffect(() => {
     if (!olderAfter || loadingOlder) return;
     setOlderAfter(null);
@@ -151,20 +196,24 @@ export function FeedView({
         )}
       </div>
       <div className="feed-list">
-        {order.map((id) => (
-          <FeedEntry
-            key={id}
-            item={visibleById.get(id) ?? null}
-            available={available}
-            user={user}
-            refresh={refresh}
-            activity={activity}
-            busy={busy}
-            target={target?.item === id ? target : null}
-            compact={compact}
-            shown={shownEntry?.item === id ? shownEntry : null}
-          />
-        ))}
+        {order.map((slot) => {
+          const item = visibleBySlot.get(slot) ?? null;
+          const id = item?.id ?? slot;
+          return (
+            <FeedEntry
+              key={slot}
+              item={item}
+              available={available}
+              user={user}
+              refresh={refresh}
+              activity={activity}
+              busy={busy}
+              target={target?.item === id ? target : null}
+              compact={compact}
+              shown={shownEntry?.item === id ? shownEntry : null}
+            />
+          );
+        })}
       </div>
       {snapshot && !visible.length && showEmpty && (
         <p className="empty">
@@ -178,7 +227,7 @@ export function FeedView({
           unavailable={loadingOlder}
           onClick={() => {
             setLoadingOlder(true);
-            setOlderAfter({ last: visible.at(-1)?.id });
+            setOlderAfter({ last: lastShown && slotOf(lastShown) });
             void showOlder().finally(() => setLoadingOlder(false));
           }}
         >
@@ -440,36 +489,38 @@ function FeedEntry({
         {item.display_name}
       </Link>{" "}
       <span className="muted">
-        {item.item_type === "comment"
-          ? compact
-            ? "commented"
-            : "commented on"
-          : item.item_type === "post"
-            ? "posted"
-            : item.item_type === "earlier"
-              ? "· Earlier discussion"
-              : item.item_type === "review"
-                ? reviewPhrase(item)
-                : item.item_type === "progress"
-                  ? progressPhrase(
-                      item.status!,
-                      item.finished_on,
-                      item.active,
-                      interactive,
-                    )
-                  : item.item_type === "recommended"
-                    ? item.active
-                      ? "recommends"
-                      : "removed their recommendation"
-                    : item.active
-                      ? "wants to watch"
-                      : "removed Want to watch"}
+        {item.combined.length
+          ? cardPhrase(item)
+          : item.item_type === "comment"
+            ? compact
+              ? "commented"
+              : "commented on"
+            : item.item_type === "post"
+              ? "posted"
+              : item.item_type === "earlier"
+                ? "· Earlier discussion"
+                : item.item_type === "review"
+                  ? reviewPhrase(item)
+                  : item.item_type === "progress"
+                    ? progressPhrase(
+                        item.status!,
+                        item.finished_on,
+                        item.active,
+                        interactive,
+                      )
+                    : item.item_type === "recommended"
+                      ? item.active
+                        ? "recommends"
+                        : "removed their recommendation"
+                      : item.active
+                        ? "wants to watch"
+                        : "removed Want to watch"}
       </span>
       {/* Non-breaking spaces keep the time beside the action. */}
       <span className="muted">
         {"\u00a0·\u00a0"}
         <ActivityTime value={item.visible_activity} interactive={interactive} />
-        {item.edited && "\u00a0·\u00a0Edited"}
+        {reviewOf(item).edited && "\u00a0·\u00a0Edited"}
       </span>
     </p>
   );
@@ -546,8 +597,11 @@ function FeedEntry({
                         : "Comment removed"}
                     </p>
                   )}
-                  {/* A spoiler flag covers the text, not the rating. */}
-                  {item.rating != null && <ReviewStars rating={item.rating} />}
+                  {/* A spoiler flag covers the text, not the rating. A card
+                      shows its review's, whichever entry holds the card. */}
+                  {reviewOf(item).rating != null && (
+                    <ReviewStars rating={reviewOf(item).rating!} />
+                  )}
                   {hiddenSpoiler ? (
                     <button
                       className="spoiler"
@@ -556,7 +610,9 @@ function FeedEntry({
                       Contains spoilers · Reveal discussion
                     </button>
                   ) : (
-                    item.body && <p className="comment-body">{item.body}</p>
+                    reviewOf(item).body && (
+                      <p className="comment-body">{reviewOf(item).body}</p>
+                    )
                   )}
                 </div>
               </div>

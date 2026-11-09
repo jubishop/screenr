@@ -201,6 +201,7 @@ const entryFields = Object.keys({
   activity_at: field,
   visible_activity: field,
   reactions: field,
+  combined: field,
   comments: field,
 } satisfies Record<keyof FeedItem, true>).sort();
 const commentFields = Object.keys({

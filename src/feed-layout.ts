@@ -8,21 +8,29 @@ import type { Comment, FeedItem } from "./shared";
 // The activity a reader has accepted: each entry's activity time and reply
 // IDs when they last took in the feed. The first snapshot is accepted as a
 // whole; later, other people's new entries, moved entries, and new replies
-// wait behind New activity.
+// wait behind New activity. A card's activity is accepted under each of its
+// entries, so it stays the same card when another of them comes to hold it
+// (docs/title-feed.md#combined-title-actions).
 type AcceptedEntry = { activity: string; comments: ReadonlySet<string> };
 export type AcceptedActivity = ReadonlyMap<string, AcceptedEntry>;
 
 export function acceptActivity(snapshot: FeedItem[]): AcceptedActivity {
   return new Map(
-    snapshot.map((item) => [
-      item.id,
-      {
+    snapshot.flatMap((item) => {
+      const entry = {
         activity: item.activity_at,
         comments: new Set(item.comments.map((comment) => comment.id)),
-      },
-    ]),
+      };
+      return [item, ...item.combined].map(({ id }) => [id, entry] as const);
+    }),
   );
 }
+
+// The activity the reader accepted for an entry or card, under any of its
+// entries.
+const acceptedFor = (accepted: AcceptedActivity, item: FeedItem) =>
+  accepted.get(item.id) ??
+  item.combined.map(({ id }) => accepted.get(id)).find(Boolean);
 
 // `accepted` with every entry of `snapshot` placed no later than `through`
 // that it lacks, as Show older brings them: every newer entry was already in
@@ -35,7 +43,7 @@ export function withOlder(
   const time = Date.parse(through);
   const older = snapshot.filter(
     (item) =>
-      !accepted.has(item.id) && Date.parse(item.visible_activity) <= time,
+      !acceptedFor(accepted, item) && Date.parse(item.visible_activity) <= time,
   );
   return older.length
     ? new Map([...accepted, ...acceptActivity(older)])
@@ -69,7 +77,7 @@ export function feedLayout(
   let incoming = 0;
   const placed: Placed[] = [];
   for (const item of snapshot) {
-    const previous = known.get(item.id);
+    const previous = acceptedFor(known, item);
     const own = item.owner_id === viewer;
     const moved = !own && previous?.activity !== item.activity_at;
     const replied = item.comments.some(

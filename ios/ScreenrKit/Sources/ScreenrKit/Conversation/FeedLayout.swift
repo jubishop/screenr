@@ -3,7 +3,9 @@ import Foundation
 // The activity a reader has accepted in a feed: each entry's activity time
 // and reply IDs when they last took in the feed. The first snapshot is
 // accepted as a whole; later, other people's new entries, moved entries, and
-// new replies wait behind New activity.
+// new replies wait behind New activity. A card's activity is accepted under
+// each of its entries, so it stays the same card when another of them comes
+// to hold it.
 public struct AcceptedActivity: Hashable, Sendable {
   struct Entry: Hashable, Sendable {
     let activity: Date
@@ -13,27 +15,33 @@ public struct AcceptedActivity: Hashable, Sendable {
   var entries: [String: Entry]
 
   public init(_ snapshot: [FeedItem]) {
-    entries = Dictionary(
-      snapshot.map { item in
-        (item.id, Entry(activity: item.activityAt, comments: Set(item.comments.map(\.id))))
-      }
-    ) { first, _ in first }
+    entries = [:]
+    for item in snapshot { accept(item) }
   }
 
   public func contains(entry: String) -> Bool { entries[entry] != nil }
+
+  // The activity accepted for an entry or card, under any of its entries.
+  func entry(for item: FeedItem) -> Entry? {
+    entries[item.id] ?? item.combined.lazy.compactMap { entries[$0.id] }.first
+  }
 
   // This activity with every entry of `snapshot` no newer than `date` that
   // it lacks, as Show older brings them: every newer entry was already in
   // the window that read extended.
   func including(_ snapshot: [FeedItem], through date: Date) -> AcceptedActivity {
     var activity = self
-    for item in snapshot where entries[item.id] == nil && item.visibleActivity <= date {
-      activity.entries[item.id] = Entry(
-        activity: item.activityAt,
-        comments: Set(item.comments.map(\.id))
-      )
+    for item in snapshot where entry(for: item) == nil && item.visibleActivity <= date {
+      activity.accept(item)
     }
     return activity
+  }
+
+  private mutating func accept(_ item: FeedItem) {
+    let entry = Entry(activity: item.activityAt, comments: Set(item.comments.map(\.id)))
+    for id in [item.id] + item.combined.map(\.id) where entries[id] == nil {
+      entries[id] = entry
+    }
   }
 }
 
@@ -62,7 +70,7 @@ public struct FeedLayout: Hashable, Sendable {
   public init(snapshot: [FeedItem], accepted: AcceptedActivity?, viewer: String) {
     let accepted = accepted ?? AcceptedActivity(snapshot)
     incoming = snapshot.count { item in
-      let previous = accepted.entries[item.id]
+      let previous = accepted.entry(for: item)
       if item.ownerId != viewer, previous?.activity != item.activityAt { return true }
       return item.comments.contains { comment in
         comment.isLive && comment.authorId != viewer
@@ -71,7 +79,7 @@ public struct FeedLayout: Hashable, Sendable {
     }
     entries =
       snapshot.compactMap { item in
-        Self.entry(item, previous: accepted.entries[item.id], viewer: viewer)
+        Self.entry(item, previous: accepted.entry(for: item), viewer: viewer)
       }
       .sorted { left, right in
         left.visibleActivity == right.visibleActivity

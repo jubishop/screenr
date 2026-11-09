@@ -31,10 +31,11 @@ async function setEntry(...args: Parameters<typeof updateWatchStatus>) {
   assert.ok(id);
   return id;
 }
+// The viewer's own entries for a title, with those a card combines after it.
 const own = async (viewer: string, title = "movie:1") =>
-  (await conversations(viewer, { title, owner: viewer })).map((entry) => [
-    entry.item_type,
-    entry.active,
+  (await conversations(viewer, { title, owner: viewer })).flatMap((entry) => [
+    [entry.item_type, entry.active],
+    ...entry.combined.map((other) => [other.item_type, true]),
   ]);
 
 test("members set and clear each status, with Caught up only for TV shows", async () => {

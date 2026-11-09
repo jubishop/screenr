@@ -68,7 +68,7 @@ struct FeedFixtureTests {
     let feed = FeedModel(api: RecordingAPI(), refresh: {}, showOlder: { reads += 1 })
     feed.receive(newest, viewer: viewer)
     let added = older.filter { item in !newest.contains { $0.id == item.id } }
-    #expect(added.count == 7)
+    #expect(added.count == 6)
     #expect(feed.layout(older, viewer: viewer).incoming == added.count)
 
     // One of the added entries moved past the newest page's start since.

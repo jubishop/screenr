@@ -37,7 +37,7 @@ struct FixtureTransportTests {
 
     #expect(services.session.phase == .signedIn)
     #expect(feed.user.username == "alice")
-    #expect(feed.feed?.conversations.count == 22)
+    #expect(feed.feed?.conversations.count == 19)
     guard case .title(let page) = title.content else {
       Issue.record("Expected a title page, not \(title.content)")
       return
@@ -119,7 +119,7 @@ struct FixtureTransportTests {
     let people = try await services.api.send(.screen(path: "/people"))
 
     #expect(before.feed?.conversations.isEmpty == true)
-    #expect(after.feed?.conversations.count == 23)
+    #expect(after.feed?.conversations.count == 20)
     #expect(
       after.feed?.conversations.first?.body
         == "Who wants to rewatch the Harbor Lights finale on Sunday?"
@@ -245,7 +245,7 @@ struct FixtureTransportTests {
     for path in ["/?before=now", since, before, since] {
       counts.append(try await services.api.send(.screen(path: path)).feed?.conversations.count)
     }
-    #expect(counts == [50, 50, 57, 57])
+    #expect(counts == [50, 50, 56, 56])
   }
 
   @Test func answersAnUnknownPathWithNotFound() async throws {

@@ -87,7 +87,24 @@ public struct FeedItem: Codable, Hashable, Sendable, Identifiable {
   public let activityAt: Date
   public let visibleActivity: Date
   public let reactions: [ReactionSummary]
+  // A card's other entries, when one person's close-together actions for a
+  // title combine. This entry holds the card's discussion and reactions, its
+  // `activityAt` is the card's newest action, and its `spoiler` covers a
+  // spoiler-flagged review in the card.
+  public let combined: [CombinedEntry]
   public let comments: [Comment]
+}
+
+// What another entry in a card contributes: its action, a progress status, a
+// review's rating, text, and spoiler flag, and whether it was edited.
+public struct CombinedEntry: Codable, Hashable, Sendable, Identifiable {
+  public let id: String
+  public let itemType: ItemType
+  public let status: WatchStatus?
+  public let rating: Int?
+  public let body: String?
+  public let spoiler: Bool
+  public let edited: Bool
 }
 
 // The entry, and optionally the reply, that a permalink opened.

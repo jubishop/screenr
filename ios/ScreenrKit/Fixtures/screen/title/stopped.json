@@ -11,7 +11,7 @@
   },
   "response": {
     "status": 200,
-    "etag": "W/\"YJGjoFtnLXErROGx1ANQaIfvqvl3MN8Eo202Wyb9j7Q\"",
+    "etag": "W/\"qCLIbYd5A8H3zFMqyHYDjoXRjssgpz1VdlbWXr3Wqz0\"",
     "body": {
       "kind": "title",
       "title": {
@@ -76,6 +76,7 @@
           "edited": false,
           "season": null,
           "episode": null,
+          "combined": [],
           "username": "alice",
           "display_name": "Alice Park",
           "photo": "486e0212c15728ee",

@@ -673,6 +673,10 @@ checked-in cases in `ios/ScreenrKit/SharedCases/feed-layout.json`, through
 a change to one that the other lacks fails a test
 ([shared cases](../ios/README.md#shared-cases)).
 
+A [combined card](#combined-title-actions)'s activity is accepted under
+each of its entries, so it stays the same card when another of its entries
+comes to hold it.
+
 On the web, an entry with nothing waiting keeps the object and
 `visible_activity` the server sent, which equal the layout's own with every
 reply accepted, so a large feed rebuilds only the entries whose activity
@@ -722,7 +726,8 @@ web and in the iPhone app
 - **The read:** one statement places every readable entry by its latest
   visible activity, reading only entry times and reply authors, and then
   builds discussions, reactions, and the reader's own state for just the
-  entries it sends.
+  entries it sends. It places a
+  [combined card](#combined-title-actions) once, through its holder.
 - **iPhone builds before paging:** builds 1 and 2 read without a window
   and expected the whole history. Since 2026-11-05 the server's
   [minimum build](data-and-access.md#changes-that-app-builds-depend-on) is
@@ -739,6 +744,59 @@ comments, a page of the friends feed is about 107 KB and builds in about
 poll takes about 1 ms, where it took as long as a full read. One load of
 the friends feed peaked the web process at 161 MB, against about 400 MB for
 the whole history and the service's 384 MB limit.
+
+### Combined title actions
+
+[Issue #542](https://github.com/jubishop/screenr/issues/542) shows one
+person's close-together structured entries for a title as one card, under
+the [decision](#combine-one-persons-close-together-title-actions--2026-11-08);
+[issue #545](https://github.com/jubishop/screenr/issues/545) shows the cards
+in the iPhone app. The stored entries are unchanged, so nothing migrates.
+
+- **Grouping:** `src/server/feed.ts` groups the entries a reader can see
+  before paging. A person's active progress entry, review, and Recommend or
+  Want to watch for a title can combine; standalone comments, posts, Earlier
+  discussion items, and withdrawn entries never do. Newest first, each entry
+  joins the first card whose newest entry's action time (`activity_at`) is
+  at most 24 hours later, when at most one entry in the card would have a
+  stored reply or reaction, removed or not. Otherwise it starts its own card,
+  so a person's newest entry anchors a card, and entries that card leaves out
+  can still combine with each other. The entry with discussion holds the
+  card; without one, the review does, then the status, then Recommend or Want
+  to watch. Replies never change an action time, so every reader sees the
+  same cards.
+- **Response:** the holding entry stands for the card. Its `combined` field
+  lists the card's other entries in the author line's order, each with its
+  type, status, rating, text, spoiler flag, and Edited flag; other entries
+  send an empty list. The card's `activity_at` is its newest action, its
+  `spoiler` flag also covers a spoiler-flagged review in it, and its other
+  entries are left out of the list. Installed iPhone builds that ignore
+  `combined` show the holding entry alone, ordered and covered like the card
+  ([additive payloads](data-and-access.md#changes-that-app-builds-depend-on)).
+- **Paging:** a paged read places a card once, through its holder, by its
+  newest action or the holder's replies, so it counts as one entry.
+- **Links and writes:** `?item=` for any entry in a card opens the card on
+  the title page and the friends feed, and so do old conversation links. A
+  reply or reaction to any entry in a card goes to its holder, so the card
+  keeps one discussion. The title page friend line names a friend's action
+  inside a card by the card.
+- **Web:** `src/components/feed.tsx` names a card's actions in one author
+  line, such as "finished, reviewed, and recommends", with no finished date,
+  followed by the card's one time and Edited when its review was edited. The
+  body shows the review's stars and text, whichever entry holds the card.
+- **New activity:** `src/feed-layout.ts` and the iPhone `FeedLayout` accept a
+  card's activity under each of its entries. When another entry comes to hold
+  a card, such as a review joining an untouched Finished entry, the card keeps
+  the place the reader accepted and waits behind **New activity** like a
+  moved entry ([shared cases](../ios/README.md#shared-cases)). The web keeps
+  the card in the same slot, so its reply drafts and other state stay.
+- **Cost:** one sorted pass of window functions groups the entries, without
+  joins, and checks discussion only for entries with another within 24 hours.
+  On 2026-11-08, at the one-year synthetic size in
+  [paged histories](#paged-histories), with production's `work_mem` on an
+  Apple-silicon Mac, a friends-feed page took a median of 33 ms with
+  grouping against 22 ms without it, and a title page's entries 5 ms against
+  3 ms.
 
 ### Standalone title comments
 
