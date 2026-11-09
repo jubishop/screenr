@@ -687,6 +687,16 @@ app without reversing the moderation deferral.
 - Staying on TestFlight indefinitely. Builds expire after 90 days, and
   external testing is capped at 10,000 testers.
 
+**Updated — 2026-11-08:** The TestFlight release
+([#250](https://github.com/jubishop/screenr/issues/250)) is done, which is
+when the user planned to revisit moderation. The reviewer demo account
+already exists: the
+[demo circle](#isolated-demo-circle-for-apple-review--2026-10-13) served Beta
+App Review and serves App Store review too.
+[Issue #251](https://github.com/jubishop/screenr/issues/251) lists what else
+the milestone needs, such as terms of use, an in-app privacy policy link, and
+age-assurance obligations.
+
 ### App identity — 2026-10-13
 
 **Decision:** The app's App Store identity is:
