@@ -80,6 +80,11 @@ activity types remain deferred.
 **Why:** The user accepted keeping the context of each discussion clear.
 The tradeoff is that one person can have several items in a title's feed.
 
+**Updated — 2026-11-08:** One person's structured entries for a title
+whose actions fall within 24 hours now show as one
+[combined card](#combine-one-persons-close-together-title-actions--2026-11-08).
+Contributions further apart still get their own items.
+
 ### Freeform comments are independent entries — 2026-09-06
 
 **Decision:** A person can write a freeform top-level comment about a
@@ -262,6 +267,13 @@ replies and reactions, and moves it up using the change date, like a
 The entry reads, for example, "Theo Park is watching" or "Theo Park finished
 · Oct 12", using the optional last-finished date when one is set.
 
+**Updated — 2026-11-08:** Every feed entry shows one date, its time, so a
+Finished entry reads "Theo Park finished · 2h" without the last-finished
+date. The date stays stored and editable in the person's status control.
+See [combined title actions](#combine-one-persons-close-together-title-actions--2026-11-08);
+[issue #543](https://github.com/jubishop/screenr/issues/543) tracks the
+change.
+
 When the person clears their status or moves back to Want to watch, the
 progress entry follows the
 [removal rule](#removing-an-action-does-not-move-it-up--2026-09-06): it is
@@ -439,6 +451,95 @@ server's memory limit
 
 **Rejected:** keeping full histories, with only cheaper unchanged polls,
 until production grows.
+
+### Combine one person's close-together title actions — 2026-11-08
+
+**Decision:** When one person's structured entries for a title land close
+together, the feed shows them as one combined entry, such as "finished and
+reviewed". The stored entries stay as they are: each status, review,
+Recommend, and Want to watch entry keeps its own
+[lifecycle](#one-progress-entry-per-person-and-title--2026-10-12), replies,
+and reactions. The server's shared feed read groups them into one card, so
+the web and iPhone app, paging, links, and counts all see the same cards.
+An entry whose later activity moves it away from the others, such as a
+review edited days later, shows on its own again.
+
+Every structured action can combine: each watch status (watching, caught
+up, finished, and stopped watching), reviews and ratings, Recommend, and
+Want to watch. Only active entries combine; a withdrawn entry kept for its
+replies shows on its own. Standalone title comments and posts stay
+[independent entries](#freeform-comments-are-independent-entries--2026-09-06).
+
+Entries are close together when their own action times, such as a status
+change, a review save or edit, or a Recommend, fall within 24 hours. Reply
+activity never counts, so every reader sees the same grouping. An entry
+joins the card of the person's newest entry for the title when its action
+time is within 24 hours before that newest one. A card holds at most one
+status, one review, and one Recommend or Want to watch.
+
+One entry holds each card's discussion. Entries combine only when at most
+one of them has any stored replies or reactions; that entry's discussion
+and reactions show on the card, and new replies and reactions go to it, so
+the others stay empty and the card holds together. When none has any, the
+review holds the discussion, then the status, then Recommend or Want to
+watch. When two entries already have discussion, they show as separate
+entries. Links to any entry in a card open the card.
+
+The card's author line names its actions in a fixed order, status first,
+then the review, then Recommend or Want to watch, joined like a sentence.
+The card shows one date for the whole card, the newest action's time, and
+no date inline for any one action. Every feed entry, combined or not,
+follows this one-date rule, so the last-finished date no longer appears in
+feeds; it stays stored and editable in the person's status control. The
+date uses the shared
+[activity time format](interface-design.md#relative-activity-times-and-release-years--2026-10-12),
+relative today and only the date before today. Edited follows when the
+card's review was edited:
+
+- "Theo Park finished and reviewed · 2h"
+- "Theo Park finished, reviewed, and recommends · 2h"
+- "Theo Park is watching and recommends · 5m"
+- "Theo Park rated and wants to watch · Nov 7 · Edited"
+
+This builds the
+[grouped-update rule](product-brief.md#friends-feed--2026-09-04) that was
+deferred, and narrows
+[separate items for later contributions](#separate-items-for-later-contributions--2026-09-06)
+to contributions that are not close together.
+[Issue #542](https://github.com/jubishop/screenr/issues/542) tracks the
+server and web, and [issue #545](https://github.com/jubishop/screenr/issues/545)
+the iPhone app.
+
+**Why:** The user found the friends feed full of duplicate back-to-back
+entries for one show, such as finishing it and then reviewing it right
+away. The user accepted grouping at read time, which keeps each action's
+one-entry lifecycle and needs no migration. The user accepted the 24-hour
+window, which covers finishing at night and reviewing the next morning,
+which in a small circle still lands back to back. On 2026-11-08, 7 of the
+9 same-person, same-title pairs of current entries in production fell
+within 24 hours, and 5 within the same minute. The user accepted letting
+one entry hold the discussion, which keeps each reply under the action it
+answered and keeps the card stable without merging threads. The user
+chose one date per card, for single entries too, because an inline
+finished date beside the card's time is clutter.
+
+**Rejected:**
+
+- Storing a combined entry that owns the replies and reactions, which
+  conflicts with entries that keep their replies across changes and needs
+  a migration.
+- Combining entries only in the web and iPhone layouts, which leaves
+  paging, links, and counts treating them separately.
+- A one-hour window, a Pacific calendar day, and a one-week window.
+- Merging every entry's replies and reactions into one thread, and
+  combining only entries without discussion.
+- Combining standalone title comments too, and combining only Finished,
+  reviews, and Recommend.
+- Listing actions in the order they happened, which reads oddly when the
+  review came first, and naming only the discussion's entry with the other
+  actions as tags.
+- Keeping the last-finished date beside "finished", in combined cards or
+  in single entries.
 
 ## Existing rules that continue to apply
 
@@ -999,10 +1100,5 @@ no manual step is needed.
 
 - How edits to freeform comments affect existing items. Standalone comments
   shipped in #8 without editing.
-- Combinations of review, rating, or watch changes saved together. The
-  existing
-  [grouped-update rule](product-brief.md#friends-feed--2026-09-04) for those
-  other future features is unchanged. Recommend and Want to watch each
-  have their own item and reply group.
 - Posting directly to a friend's profile, like a profile wall, is a future
   idea. It is not an accepted feature requirement or part of #5 or #8.

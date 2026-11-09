@@ -1174,6 +1174,11 @@ for other future features: changes saved together by one person for a
 title form one update, such as finishing and rating a movie together.
 Implementing those features is outside issue #5.
 
+**Updated — 2026-11-08:** The
+[combined title actions decision](title-feed.md#combine-one-persons-close-together-title-actions--2026-11-08)
+applies this grouping rule: one person's structured entries for a title
+whose actions fall within 24 hours show as one card.
+
 **Why:** The user initially accepted automatic activity updates. The newer
 decisions make each contribution independently discussable in every feed.
 

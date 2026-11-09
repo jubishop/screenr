@@ -275,6 +275,20 @@ read like a release date. Activity times also used three formats:
 **Rejected alternative:** Absolute dates in one format would fix the
 placement and consistency but make recent activity less obvious.
 
+**Updated — 2026-11-08:** Only times from the reader's current local
+calendar day stay relative ("now", "5m", "2h"). Any earlier time shows just
+its date ("Nov 7"), with the year when it is not the current year, and no
+hour. This replaces the day counts ("3d") under a week, so activity from
+yesterday evening reads "Nov 7", not "20h". Feed entries, comments, and
+notifications keep sharing the one format, and hovering still shows the
+full date and time. Each feed entry also shows only this one date, without
+the last-finished date; see
+[combined title actions](title-feed.md#combine-one-persons-close-together-title-actions--2026-11-08).
+The user chose a date for anything before today and applied it to every
+shared time, over changing feed entries alone.
+[Issue #544](https://github.com/jubishop/screenr/issues/544) tracks the
+change.
+
 **Implementation note:** [Issue #168](https://github.com/jubishop/screenr/issues/168)
 renders these times with `ActivityTime` in
 `src/components/activity-time.tsx`, using `relativeTime` in
