@@ -90,8 +90,9 @@ public struct FeedItem: Codable, Hashable, Sendable, Identifiable {
   // A card's other entries, when one person's close-together actions for a
   // title combine. This entry holds the card's discussion and reactions, its
   // `activityAt` is the card's newest action, and its `spoiler` covers a
-  // spoiler-flagged review in the card.
-  public let combined: [CombinedEntry]
+  // spoiler-flagged review in the card. Like every new field it is optional,
+  // and a server without cards sends none.
+  public let combined: [CombinedEntry]?
   public let comments: [Comment]
 }
 

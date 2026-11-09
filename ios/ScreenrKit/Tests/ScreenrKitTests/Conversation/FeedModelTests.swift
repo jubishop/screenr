@@ -298,7 +298,7 @@ struct FeedModelTests {
     let feed = model(api, RefreshCounter())
     let card = try entry(benReviewCard).item
     #expect(card.itemType == .review)
-    #expect(card.combined.map(\.itemType) == [.recommended])
+    #expect(card.combined?.map(\.itemType) == [.recommended])
 
     // Alice ranks the title, so saving it to Want to watch asks first.
     await feed.toggleWantToWatch(card)

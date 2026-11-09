@@ -23,7 +23,7 @@ public struct AcceptedActivity: Hashable, Sendable {
 
   // The activity accepted for an entry or card, under any of its entries.
   func entry(for item: FeedItem) -> Entry? {
-    entries[item.id] ?? item.combined.lazy.compactMap { entries[$0.id] }.first
+    entries[item.id] ?? item.combined?.lazy.compactMap { entries[$0.id] }.first
   }
 
   // This activity with every entry of `snapshot` no newer than `date` that
@@ -39,7 +39,7 @@ public struct AcceptedActivity: Hashable, Sendable {
 
   private mutating func accept(_ item: FeedItem) {
     let entry = Entry(activity: item.activityAt, comments: Set(item.comments.map(\.id)))
-    for id in [item.id] + item.combined.map(\.id) where entries[id] == nil {
+    for id in [item.id] + (item.combined ?? []).map(\.id) where entries[id] == nil {
       entries[id] = entry
     }
   }

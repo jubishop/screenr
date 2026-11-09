@@ -775,6 +775,8 @@ in the iPhone app. The stored entries are unchanged, so nothing migrates.
   ignore `combined` show the holding entry alone, ordered and covered like
   the card
   ([additive payloads](data-and-access.md#changes-that-app-builds-depend-on)).
+  ScreenrKit decodes `combined` as optional, like every new field, so later
+  builds still read a server without cards.
 - **Title page header:** the web and the iPhone app read the viewer's own
   Recommend from those flags and their review from `combined` when another
   entry holds the card. iPhone builds from before this change find no review

@@ -31,7 +31,7 @@ public struct TitleHeader: Hashable, Sendable {
     // The review may be inside a card that another entry holds.
     if let saved = own.first(where: { $0.itemType == .review && $0.active }) {
       review = ReviewDraft(rating: saved.rating, body: saved.body ?? "", spoiler: saved.spoiler)
-    } else if let saved = own.lazy.filter(\.active).flatMap(\.combined)
+    } else if let saved = own.lazy.filter(\.active).flatMap({ $0.combined ?? [] })
       .first(where: { $0.itemType == .review })
     {
       review = ReviewDraft(rating: saved.rating, body: saved.body ?? "", spoiler: saved.spoiler)
