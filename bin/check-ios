@@ -45,7 +45,8 @@ that reason.
 
 A pass on a checkout whose iOS files match HEAD is recorded for those exact
 files and this Xcode. With --reuse, the check skips itself when such a pass
-is recent; the pre-push hook and bin/testflight rely on the same records.
+is recent. The pre-push hook refuses a push of iOS files without one, and
+bin/testflight relies on the same records.
 """
 
 import argparse
@@ -506,8 +507,8 @@ def main():
         except (OSError, subprocess.CalledProcessError) as error:
             print(f"This pass could not be recorded for reuse: {error}", flush=True)
             return
-        print("Recorded this pass for these iOS files; bin/check-ios --reuse and pushes of them "
-              "will not run the check again.", flush=True)
+        print("Recorded this pass for these iOS files, so the pre-push hook accepts pushes of them, "
+              "and bin/check-ios --reuse will not run the check again.", flush=True)
     else:
         print("This pass is not recorded for reuse, since ios/ or bin/format-swift differs from HEAD "
               "or is not in Git.", flush=True)

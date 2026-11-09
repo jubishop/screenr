@@ -11,21 +11,22 @@ import tempfile
 import unittest
 
 SOURCE = Path(__file__).resolve().parents[1]
-# The simulated check records where it ran and fails when FAIL_CHECK is set. Like
-# SwiftPM's package checkouts, it also runs Git in a new repository of its own, and
-# fails when it inherits a variable that ties Git to the pushing checkout instead.
-CHECK_IOS = """import json, os, subprocess, sys, tempfile
-def git(*args):
-    return subprocess.run(['git', *args], check=True, capture_output=True, text=True).stdout.strip()
-inherited = sorted(set(git('rev-parse', '--local-env-vars').split()) & set(os.environ))
-package = os.path.join(tempfile.mkdtemp(dir=os.path.dirname(os.environ['CHECK_EVENTS'])), 'package')
-git('init', '--quiet', package)
-used = git('-C', package, 'rev-parse', '--absolute-git-dir')
-if inherited or used != os.path.join(package, '.git'):
-    sys.exit(f'check-ios inherited {inherited}, so its nested Git command used {used}')
+# The simulated check records where it ran, and, like the real one, records a pass with the
+# checkout's own bin/_ios_check_records.py when the checkout's iOS files match HEAD. It fails
+# when FAIL_CHECK is set.
+CHECK_IOS = """import json, os, sys
+from pathlib import Path
+sys.dont_write_bytecode = True
+root = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(root / 'bin'))
+import _ios_check_records as records
 with open(os.environ['CHECK_EVENTS'], 'a') as stream:
     stream.write(json.dumps(['check-ios', os.getcwd(), *sys.argv[1:]]) + '\\n')
-sys.exit(int(os.environ.get('FAIL_CHECK', '0')))
+status = int(os.environ.get('FAIL_CHECK', '0'))
+key = records.working_key(root)
+if not status and key:
+    records.record(root, key, records.xcode_version())
+sys.exit(status)
 """
 XCODEBUILD = """import os, sys
 if sys.argv[1:] != ['-version']:
@@ -41,6 +42,9 @@ root = pathlib.Path(subprocess.run(['git', 'rev-parse', '--show-toplevel'], chec
 sys.exit(subprocess.run([str(root / 'bin/pre-push-application'), *sys.argv[1:]], cwd=root,
                         input=sys.stdin.read(), text=True).returncode)
 """
+
+
+ADVICE = "Never bypass this check with git push --no-verify."
 
 
 class PrePushTests(unittest.TestCase):
@@ -113,6 +117,12 @@ class PrePushTests(unittest.TestCase):
         return subprocess.run(["git", "push", "origin", *args], cwd=cwd or self.repo,
                               env=self.env | extra, capture_output=True, text=True, timeout=60)
 
+    def check_ios(self, cwd=None, **extra):
+        """Run the simulated bin/check-ios from a shell, as an agent does before pushing."""
+        root = cwd or self.repo
+        return subprocess.run([str(root / "bin/check-ios")], cwd=root, env=self.env | extra,
+                              capture_output=True, text=True, timeout=60)
+
     def remote_has(self, ref):
         return bool(self.git("ls-remote", str(self.remote), ref))
 
@@ -122,32 +132,51 @@ class PrePushTests(unittest.TestCase):
     def records(self):
         return sorted((self.repo / ".git/screenr-ios-checks").glob("*.json"))
 
-    def test_a_push_that_changes_ios_runs_the_check_at_the_checkout_root_first(self):
+    def test_a_push_without_a_recorded_pass_stops_at_once_without_running_the_check(self):
+        # Git connects to the remote before it runs the hook, and GitHub closes an idle SSH
+        # connection before a full check finishes, so the hook never runs the check itself.
         self.commit("Edit the app", ("ios/App.swift", "struct App { let edited = true }\n"))
         result = self.push("HEAD:refs/heads/feature")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("feature changes the iOS files", result.stderr)
+        self.assertIn("Run bin/check-ios in this checkout, which records its pass, then push again.",
+                      result.stderr)
+        self.assertIn(ADVICE, result.stderr)
+        self.assertEqual(self.checks(), [])
+        self.assertFalse(self.remote_has("refs/heads/feature"))
+        self.assertEqual(self.check_ios().returncode, 0)
+        result = self.push("HEAD:refs/heads/feature")
         self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("the iOS files in feature passed bin/check-ios with Xcode 27.0 Build version 27A266a",
+                      result.stderr)
         self.assertEqual(self.checks(), [["check-ios", str(self.repo)]])
-        self.assertIn("feature changes the iOS files; running bin/check-ios", result.stderr)
         self.assertTrue(self.remote_has("refs/heads/feature"))
-        self.assertEqual(len(self.records()), 1)
 
-    def test_a_push_from_a_linked_worktree_runs_the_check_as_a_shell_would(self):
-        # Git exports GIT_DIR to hooks in a linked worktree. Passed on, it sends the check's
-        # own Git commands, such as SwiftPM's package checkouts, to this clone instead.
-        worktree = self.repo.parent / "worktree"
-        self.git("worktree", "add", "--quiet", "-b", "feature", str(worktree))
-        (worktree / "ios/App.swift").write_text("struct App { let edited = true }\n")
-        self.git("-c", "core.hooksPath=/dev/null", "commit", "--quiet", "--all", "--message", "Edit the app",
-                 cwd=worktree)
+    def refused(self, result, branch):
+        """Assert that the hook refused a push of the branch's iOS files before sending anything."""
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn(f"{branch} changes the iOS files", result.stderr)
+        self.assertIn("so the push stopped before sending anything", result.stderr)
+        self.assertIn(ADVICE, result.stderr)
+        self.assertFalse(self.remote_has(f"refs/heads/{branch}"))
+
+    def test_a_push_from_a_linked_worktree_uses_the_passes_every_worktree_shares(self):
+        worktree = self.worktree()
+        self.commit("Edit the app", ("ios/App.swift", "struct App { let edited = true }\n"), cwd=worktree)
+        self.refused(self.push("HEAD:refs/heads/feature", cwd=worktree), "feature")
+        self.assertEqual(self.check_ios(cwd=worktree).returncode, 0)
         result = self.push("HEAD:refs/heads/feature", cwd=worktree)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(self.checks(), [["check-ios", str(worktree)]])
         self.assertTrue(self.remote_has("refs/heads/feature"))
+        # The pass lives in the clone's Git directory, so this checkout reuses it.
         self.assertEqual(len(self.records()), 1)
+        result = self.push("feature:refs/heads/copy")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.checks(), [["check-ios", str(worktree)]])
 
     def test_a_worktree_uses_its_own_modules_when_hooks_come_from_this_checkout(self):
         # The hook imports bin/_ios_check_records.py from beside itself, so the
-        # worktree's copy stores the pass where the worktree's own module says.
+        # worktree's copy reads the pass where the worktree's own module stores it.
         self.hooks_from_this_checkout()
         worktree = self.worktree()
         module = (worktree / "bin/_ios_check_records.py").read_text()
@@ -156,20 +185,20 @@ class PrePushTests(unittest.TestCase):
                     ("bin/_ios_check_records.py", module.replace('STORE = "screenr-ios-checks"',
                                                                  'STORE = "screenr-ios-checks-v2"')),
                     ("ios/App.swift", "struct App { let edited = true }\n"), cwd=worktree)
+        self.assertEqual(self.check_ios(cwd=worktree).returncode, 0)
         result = self.push("HEAD:refs/heads/feature", cwd=worktree)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(self.checks(), [["check-ios", str(worktree)]])
         self.assertEqual(self.records(), [])
         self.assertEqual(len(list((self.repo / ".git/screenr-ios-checks-v2").glob("*.json"))), 1)
 
-    def test_a_refspec_with_spaces_still_runs_the_check(self):
+    def test_a_refspec_with_spaces_still_needs_a_pass(self):
         # Git passes the local side as typed, so this line has more than four words.
         self.commit("Edit the app", ("ios/App.swift", "struct App { let edited = true }\n"))
-        result = self.push(":/Edit the app:refs/heads/feature", FAIL_CHECK="1")
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn("feature changes the iOS files; running bin/check-ios", result.stderr)
-        self.assertEqual(self.checks(), [["check-ios", str(self.repo)]])
-        self.assertFalse(self.remote_has("refs/heads/feature"))
+        self.refused(self.push(":/Edit the app:refs/heads/feature"), "feature")
+        self.assertEqual(self.check_ios().returncode, 0)
+        result = self.push(":/Edit the app:refs/heads/feature")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue(self.remote_has("refs/heads/feature"))
 
     def test_unreadable_input_refuses_the_push(self):
         head = self.git("rev-parse", "HEAD")
@@ -181,29 +210,24 @@ class PrePushTests(unittest.TestCase):
                                         text=True, timeout=60)
                 self.assertNotEqual(result.returncode, 0)
                 self.assertIn(f"cannot read the pushed refs from {line!r}", result.stderr)
-                self.assertIn("Never bypass this check with git push --no-verify.", result.stderr)
+                self.assertIn(ADVICE, result.stderr)
         self.assertEqual(self.checks(), [])
 
     def test_bin_format_swift_counts_as_an_ios_file_but_bin_check_ios_does_not(self):
         # The simulated check keeps working when its file changes.
         self.commit("Check differently", ("bin/check-ios", "#!" + sys.executable + "\n# v2\n" + CHECK_IOS))
-        result = self.push("HEAD:refs/heads/check", FAIL_CHECK="1")
+        result = self.push("HEAD:refs/heads/check")
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(self.checks(), [])
         self.commit("Format differently", ("bin/format-swift", "#!/bin/sh\n# stricter\n"))
-        result = self.push("HEAD:refs/heads/format")
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(len(self.checks()), 1)
+        self.refused(self.push("HEAD:refs/heads/format"), "format")
+        self.assertEqual(self.checks(), [])
 
-    def test_a_failing_check_refuses_the_push(self):
+    def test_a_failing_check_records_no_pass_so_the_push_stays_refused(self):
         self.commit("Break the app", ("ios/App.swift", "struct App { broken }\n"))
-        result = self.push("HEAD:refs/heads/feature", FAIL_CHECK="1")
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn("bin/check-ios failed with status 1, so the push stopped", result.stderr)
-        self.assertIn("Never bypass this check with git push --no-verify.", result.stderr)
-        self.assertFalse(self.remote_has("refs/heads/feature"))
+        self.assertNotEqual(self.check_ios(FAIL_CHECK="1").returncode, 0)
         self.assertEqual(self.records(), [])
-        result = self.push("HEAD:refs/heads/main", FAIL_CHECK="1")
+        self.refused(self.push("HEAD:refs/heads/feature"), "feature")
+        result = self.push("HEAD:refs/heads/main")
         self.assertNotEqual(result.returncode, 0)
         self.assertNotEqual(self.git("ls-remote", str(self.remote), "refs/heads/main").split()[0],
                             self.git("rev-parse", "HEAD"))
@@ -221,12 +245,15 @@ class PrePushTests(unittest.TestCase):
     def test_markdown_directly_in_ios_is_not_an_ios_file(self):
         self.commit("Document the app", ("ios/README.md", "# The iPhone app\n"),
                     ("ios/AGENTS.md", "# Rules\n"))
-        result = self.push("HEAD:refs/heads/docs", FAIL_CHECK="1")
+        result = self.push("HEAD:refs/heads/docs")
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(self.checks(), [])
-        # Uncommitted Markdown does not stop a check of the pushed commit.
+        # Uncommitted Markdown there does not stop this checkout from checking the pushed commit.
         self.commit("Edit the app", ("ios/App.swift", "struct App { let edited = true }\n"))
         self.write("ios/README.md", "# Draft\n")
+        result = self.push("HEAD:refs/heads/feature")
+        self.refused(result, "feature")
+        self.assertIn("Run bin/check-ios in this checkout", result.stderr)
+        self.assertEqual(self.check_ios().returncode, 0)
         result = self.push("HEAD:refs/heads/feature")
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(len(self.checks()), 1)
@@ -239,21 +266,17 @@ class PrePushTests(unittest.TestCase):
             with self.subTest(name=name):
                 (self.repo / name).parent.mkdir(parents=True, exist_ok=True)
                 self.commit("Add notes", (name, "Notes.\n"))
-                result = self.push("HEAD:refs/heads/notes", FAIL_CHECK="1")
-                self.assertNotEqual(result.returncode, 0)
-                self.assertIn("notes changes the iOS files; running bin/check-ios", result.stderr)
-                self.assertFalse(self.remote_has("refs/heads/notes"))
+                self.refused(self.push("HEAD:refs/heads/notes"), "notes")
                 self.git("reset", "--quiet", "--hard", "HEAD~1")
-        self.assertEqual(len(self.checks()), 2)
 
     def test_an_existing_branch_compares_with_its_remote_commit(self):
         self.commit("Edit the app", ("ios/App.swift", "struct App { let edited = true }\n"))
+        self.assertEqual(self.check_ios().returncode, 0)
         self.assertEqual(self.push("HEAD:refs/heads/feature").returncode, 0)
         shutil.rmtree(self.repo / ".git/screenr-ios-checks")
         self.commit("Edit the web", ("src/page.ts", "export const page = 2;\n"))
         result = self.push("HEAD:refs/heads/feature")
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(len(self.checks()), 1)
 
     def test_tags_and_branch_deletions_skip_the_check(self):
         self.commit("Edit the app", ("ios/App.swift", "struct App { let edited = true }\n"))
@@ -265,17 +288,16 @@ class PrePushTests(unittest.TestCase):
                 self.assertEqual(result.returncode, 0, result.stderr)
         self.assertTrue(self.remote_has("refs/tags/ios-v1.0b9"))
         self.assertFalse(self.remote_has("refs/heads/feature"))
-        self.assertEqual(self.checks(), [])
 
     def test_hosts_without_xcodebuild_skip_the_check(self):
         (self.tools / "xcodebuild").unlink()
         self.commit("Edit the app", ("ios/App.swift", "struct App { let edited = true }\n"))
-        result = self.push("HEAD:refs/heads/feature", FAIL_CHECK="1")
+        result = self.push("HEAD:refs/heads/feature")
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(self.checks(), [])
 
-    def test_a_recorded_pass_for_the_same_files_and_xcode_skips_the_check(self):
+    def test_a_recorded_pass_for_the_same_files_and_xcode_counts(self):
         self.commit("Edit the app", ("ios/App.swift", "struct App { let edited = true }\n"))
+        self.assertEqual(self.check_ios().returncode, 0)
         self.assertEqual(self.push("HEAD:refs/heads/feature").returncode, 0)
         # Another branch, and a rewritten commit with the same files, reuse the pass.
         result = self.push("HEAD:refs/heads/copy")
@@ -283,40 +305,50 @@ class PrePushTests(unittest.TestCase):
         self.assertIn("the iOS files in copy passed bin/check-ios with Xcode 27.0 Build version 27A266a",
                       result.stderr)
         self.git("-c", "core.hooksPath=/dev/null", "commit", "--quiet", "--amend", "--message", "Reworded")
-        result = self.push("--force", "HEAD:refs/heads/feature", FAIL_CHECK="1")
+        result = self.push("--force", "HEAD:refs/heads/feature")
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(len(self.checks()), 1)
-        # A different Xcode checks again.
-        result = self.push("HEAD:refs/heads/newer", FAKE_XCODE_VERSION="Xcode 27.1\nBuild version 27B5")
+        # A different Xcode needs its own pass.
+        newer = "Xcode 27.1\nBuild version 27B5"
+        result = self.push("HEAD:refs/heads/newer", FAKE_XCODE_VERSION=newer)
+        self.refused(result, "newer")
+        self.assertIn("no bin/check-ios pass with Xcode 27.1 Build version 27B5 in the last 7 days", result.stderr)
+        self.assertEqual(self.check_ios(FAKE_XCODE_VERSION=newer).returncode, 0)
+        result = self.push("HEAD:refs/heads/newer", FAKE_XCODE_VERSION=newer)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(len(self.checks()), 2)
 
     def test_a_pass_older_than_seven_days_does_not_count(self):
         self.commit("Edit the app", ("ios/App.swift", "struct App { let edited = true }\n"))
+        self.assertEqual(self.check_ios().returncode, 0)
         self.assertEqual(self.push("HEAD:refs/heads/feature").returncode, 0)
         [path] = self.records()
         entry = json.loads(path.read_text())
         entry["passedAt"] = (datetime.now(timezone.utc) - timedelta(days=7, minutes=1)).isoformat()
         path.write_text(json.dumps(entry))
-        result = self.push("HEAD:refs/heads/copy")
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(len(self.checks()), 2)
+        self.refused(self.push("HEAD:refs/heads/copy"), "copy")
 
-    def test_refuses_a_push_the_checkout_cannot_test(self):
+    def test_the_refusal_says_to_check_out_a_commit_the_checkout_does_not_match(self):
         self.commit("Edit the app", ("ios/App.swift", "struct App { let edited = true }\n"))
         self.write("ios/App.swift", "struct App { let draft = true }\n")
         result = self.push("HEAD:refs/heads/feature")
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn("this checkout's copies differ from the pushed commit", result.stderr)
-        self.assertFalse(self.remote_has("refs/heads/feature"))
-        # A branch that is not checked out cannot be tested either.
+        self.refused(result, "feature")
+        self.assertIn("This checkout's iOS files differ from the pushed commit, so check out the commit you are "
+                      "pushing with no uncommitted iOS changes, run bin/check-ios there", result.stderr)
+        # A branch that is not checked out cannot be checked here either.
         self.git("checkout", "--quiet", "--", "ios/App.swift")
         self.git("branch", "other")
         self.commit("Edit the app again", ("ios/App.swift", "struct App { let again = true }\n"))
         result = self.push("other:refs/heads/other")
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn("other changes the iOS files", result.stderr)
-        self.assertEqual(self.checks(), [])
+        self.refused(result, "other")
+        self.assertIn("This checkout's iOS files differ from the pushed commit", result.stderr)
+        # Once a commit's iOS files passed, the checkout's state no longer matters.
+        self.git("checkout", "--quiet", "other")
+        self.assertEqual(self.check_ios().returncode, 0)
+        self.git("checkout", "--quiet", "main")
+        self.write("ios/App.swift", "struct App { let draft = true }\n")
+        result = self.push("other:refs/heads/other")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(len(self.checks()), 1)
 
 
 if __name__ == "__main__":
