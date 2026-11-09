@@ -146,6 +146,18 @@ class CheckApplicationTests(unittest.TestCase):
                                            *[["npm", "run", script] for script in SCRIPTS]])
         self.assertIn("Application checks passed", result.stdout)
 
+    def test_lints_agent_helper_scripts_as_bash_that_follows_sources(self):
+        helpers = self.repo / ".agents/scripts/sentry-cli"
+        helpers.mkdir(parents=True)
+        for name in ("lib.sh", "fetch.sh", "README.md", "find.py"):
+            (helpers / name).write_text("#!/bin/bash\n")
+        result = self.check("--part", "static")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.recorded()[:3], [
+            ["shellcheck", "--shell=sh", "deploy.sh"],
+            ["shellcheck", "--shell=bash", "--external-sources", "--source-path=SCRIPTDIR", "fetch.sh", "lib.sh"],
+            ["first"]])
+
     def test_newer_node_majors_run_the_checks(self):
         for version in ("v25.8.0", "v26.8.1", "v28.0.0"):
             with self.subTest(version=version):

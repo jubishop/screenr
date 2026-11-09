@@ -198,7 +198,8 @@ script in `bin/` and `bin/hooks/` whose shebang names `sh`, `bash`, `dash`,
 or `ksh`.
 `bin/check-application`, which `bin/check --full` runs after the foundation
 checks, verifies the Node runtime and the installed packages, lints the POSIX
-shell scripts in `ops/`, runs the Python tests, and then runs formatting,
+shell scripts in `ops/` and the [Sentry helpers](#sentry-triage)' Bash
+scripts, runs the Python tests, and then runs formatting,
 typechecking, application and PostgreSQL tests, and browser tests against the
 production build.
 `tests/test_check_application.py` covers its order and failure handling.
@@ -663,7 +664,7 @@ together they run everything `bin/check --full` runs on Linux:
 
 | Job | Work |
 | --- | --- |
-| `static` | `bin/check`, with its shell lint for `.envrc`, `bin/`, and `bin/hooks/`, then `bin/check-application --part static`: shell lint for `ops/`, Python tests, formatting, and typechecking. |
+| `static` | `bin/check`, with its shell lint for `.envrc`, `bin/`, and `bin/hooks/`, then `bin/check-application --part static`: shell lint for `ops/` and `.agents/scripts/`, Python tests, formatting, and typechecking. |
 | `app (I/N)` | `bin/check-application --part app --shard I/N`: one shard of the application and PostgreSQL test files, with the [pinned Caddy](#ci-caddy) and Playwright's headless Chromium for the browser harness tests. |
 | `browser (I/N)` | `bin/check-application --part browser --shard I/N`: one Playwright shard against a production build. |
 | `release` | Runs [`bin/deployment-decision`](#main-branch-delivery), then builds the release and runs the [packaging check](deployment.md#build-and-activate-a-release) on every run, pull requests included. It uploads the release only when the run deploys. |
@@ -1030,6 +1031,63 @@ fails or runs, such as `BLOCKED` in `gh pr view --json mergeStateStatus`.
 [check workflow](#ci-jobs) runs every check job for every pull request, a
 Markdown-only one included
 ([#470](https://github.com/jubishop/screenr/issues/470)).
+
+## Sentry triage
+
+Screenr follows PodHaven's Sentry triage workflow, under the
+[Sentry triage decision](ios-app.md#sentry-triage-as-in-podhaven--2026-11-09)
+([#565](https://github.com/jubishop/screenr/issues/565)). Project skills live
+in `.agents/skills/`, and `.claude/skills` links to that folder so any agent
+harness finds them.
+
+Run the `analyze-sentry-issue` skill with a Sentry issue URL, a short ID such
+as `SCREENR-IOS-2` or `SCREENR-SERVER-1`, or a numeric ID, to diagnose one
+error issue from `screenr-ios` or `screenr-server`
+([#566](https://github.com/jubishop/screenr/issues/566)). With no reference,
+it lists the unresolved error issues in both projects with their GitHub
+tracking state and asks which to analyze. It reads the tracking issue's
+history, then the Sentry events, the matching errors in the other project by
+request ID, and, for a server issue, the production journal over SSH,
+read-only, by request ID and time window. It writes sanitized findings, a
+Sentry record, a proposed resolution, and closeout steps between
+`<!-- analyze-sentry-issue-findings:start -->` and
+`<!-- analyze-sentry-issue-findings:end -->` in the tracking issue, creating
+one with `create-issue` when none exists, and sets the issue's priority from
+the findings. It changes no code and no Sentry status. An issue holding
+`<!-- fix-issue-prerequisite: analyze-sentry-issue <numeric-id> -->` from
+`github-actions[bot]` makes `fix-issue` run the skill first. The repository is
+public, so the findings never hold member IDs, request IDs, what members acted
+on, error messages, or journal lines.
+
+The skill finds a tracking issue by its `<!-- sentry-issue:<numeric-id> -->`
+marker or a Sentry link in its body, and trusts only issues that the intake's
+`github-actions` bot or the owner opened, as the intake does.
+
+The Sentry helpers in `.agents/scripts/sentry-cli/`, adapted from PodHaven's,
+serve this skill and `analyze-sentry-feedback`. They need the installed,
+authenticated `sentry` CLI, `gh`, and for the journal the owner's SSH access;
+their [README](../.agents/scripts/sentry-cli/README.md) gives each one's
+output. `tests/test_sentry_cli_helpers.py` runs them against fake `sentry`,
+`gh`, and `ssh` commands, and the `static` part of `bin/check-application`
+runs those tests and ShellCheck on the Bash helpers.
+
+**Decision — 2026-11-09:** once a tracking issue's work is done, the
+closeout resolves its Sentry issue plainly, with `sentry issue resolve`, not
+in a commit or the next release as PodHaven does. Settled by the agent that
+implemented [#566](https://github.com/jubishop/screenr/issues/566) as routine;
+the user may override it.
+
+**Why:** Sentry marks a commit-resolved issue as regressed only when an event
+comes from a release newer than one that contains the fixing commit, and
+never for an event with no release
+([Sentry help](https://www.sentry.help/en/articles/13964417-why-isn-t-an-issue-resolved-via-commit-message-marked-as-regressed)).
+Screenr's app releases name no commits, and its server events name no
+release, so a commit resolution would hide every recurrence from the daily
+intake. A next-release resolution depends on Sentry ordering builds such as
+`1.0+3` and `1.0+4`, which share a version.
+
+**Tradeoff:** an event from an app build that predates the fix reopens the
+issue, and the next analysis closes its recurrence issue as a stale build.
 
 ## Scheduled memory audit
 

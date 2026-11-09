@@ -83,6 +83,10 @@ def main():
                    if path.is_file() and path.read_bytes().startswith(b"#!/bin/sh")]
         if scripts:
             run("shellcheck", "--shell=sh", *scripts)
+        # The Sentry skills' Bash helpers source lib.sh beside them.
+        helpers = [str(path) for path in sorted((ROOT / ".agents/scripts").rglob("*.sh"))]
+        if helpers:
+            run("shellcheck", "--shell=bash", "--external-sources", "--source-path=SCRIPTDIR", *helpers)
         run(sys.executable, "-B", "-m", "unittest", "discover", "-s", "tests", "-p", "test_*.py", "-v")
         for script in ("format:check", "typecheck"):
             run("npm", "run", script)
