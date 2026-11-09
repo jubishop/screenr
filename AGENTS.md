@@ -88,6 +88,9 @@ development code may be pushed directly, under the
 skip deployment after checking the complete change since the last successful
 release. Keep CI enabled and record the skip reason in the commit trailers.
 Follow the [release workflow](docs/development-workflow.md#main-branch-delivery).
+The iPhone release commands may push their own version-file bump to `main`
+directly, under the
+[shared release behavior decision](docs/ios-app.md#release-commands-shared-with-podhaven--2026-11-09).
 
 ## Testing
 

@@ -1017,6 +1017,59 @@ fastlane to a Node repository.
 - fastlane for distribution only, as in PodHaven.
 - fastlane `gym` and `pilot` for the whole release.
 
+**Updated — 2026-11-09:** The in-house client stands. The
+[shared release behavior decision](#release-commands-shared-with-podhaven--2026-11-09)
+changes what the commands do and adds the `llm` CLI for drafting notes.
+
+### Release commands shared with PodHaven — 2026-11-09
+
+**Decision:** Screenr's and PodHaven's iPhone release commands look and
+behave the same, while each repository keeps its own App Store Connect
+client for now.
+
+- **Commands:** `bin/testflight`, with `bin/shipit` as an alias, and
+  `bin/appstore` ([issue #548](https://github.com/jubishop/screenr/issues/548)),
+  with the same flags in both repositories.
+- **Versions:** App Store versions have one dot, such as 1.1, and TestFlight
+  versions two, such as 1.1.1. `bin/testflight` moves an App Store version to
+  its first TestFlight version, and `bin/appstore` moves to the next minor
+  version, uploads a fresh build, and submits it for automatic release after
+  approval, without phased release. Before that, it reports app commits the
+  newest TestFlight build lacks. Build numbers and `ios-v<version>b<build>`
+  tags keep counting.
+- **Version bumps:** the release commands commit a change to
+  `ios/Config/Version.xcconfig` alone and push it straight to `main` after
+  `bin/check-ios` passes, with `Screenr-Deploy: skip`. This is the one
+  exception to production code reaching `main` through a pull request.
+- **Behavior:** every TestFlight build is submitted for Beta App Review. A
+  rerun resumes a release that already has its tag. Notes start from the
+  build testers already have, are drafted with `llm` and shown to confirm,
+  and `--notes` replaces them; the tag message is the notes. A release fails
+  without Sentry symbols, holds a lock against concurrent runs, and uses one
+  processing timeout that can be overridden. App Store Connect requests use
+  the API key only.
+- **Where they converge:** each difference takes the better side. Mostly
+  that is PodHaven's behavior, but Screenr's API-key-only auth, bounded
+  archive folder, and notes as the tag message go to PodHaven.
+- **Plumbing:** Screenr keeps its in-house client and never adds fastlane.
+  PodHaven pins fastlane, then replaces it with a small direct client once
+  Screenr's `bin/appstore` works, so both repositories end up without Ruby.
+
+**Why:** The user wants one release system to remember across both apps: "I'd
+like the approaches to match between podhaven and screenr so i dont have to
+remember two different systems." A comparison on 2026-11-09 found most
+differences had no recorded reason. The user accepted the recommendations
+for the plumbing and the direct version-bump pushes. Without automatic
+bumps, Apple would refuse every TestFlight upload of 1.0 once the App Store
+approves 1.0.
+
+**Rejected alternatives:**
+
+- Adopting fastlane in Screenr, or keeping it in PodHaven indefinitely.
+- Moving PodHaven off fastlane before Screenr's App Store submission code
+  exists.
+- Sending each version bump through a pull request.
+
 ### Sentry for the app and the server — 2026-10-13
 
 **Decision:** Sentry covers both the app and the server.
