@@ -5,6 +5,7 @@ import {
   db,
   denied,
   person,
+  pending,
   assertAuthError,
   invitationRequired,
   captureFailures,
@@ -129,7 +130,7 @@ function codeRequests(auth: ReturnType<typeof createAuth>) {
             "Content-Type": "application/json",
             Origin: "http://localhost:3000",
             // A new client address per request isolates the per-recipient
-            // and Screenr-wide caps from the per-IP limit.
+            // limits and the daily budgets from the per-IP ones.
             "X-Forwarded-For":
               ip ??
               `10.0.${Math.floor(requests / 250)}.${(requests % 250) + 1}`,
@@ -213,7 +214,64 @@ test("login codes are limited to three per address each 15 minutes and ten each 
   assert.equal(sent.length, 11);
 });
 
-test("the Screenr-wide cap allows 40 login-code emails a day across addresses and IPs", async () => {
+// The lines the code email budgets logged, as parsed JSON.
+function cappedLines(printed: string[]) {
+  return printed
+    .filter((line) => line.startsWith("{"))
+    .map((line) => JSON.parse(line));
+}
+
+test("members share 30 login-code emails a day across addresses and IPs", async () => {
+  await db.query('TRUNCATE "rateLimit", login_code_request');
+  const sent: string[] = [];
+  const request = codeRequests(
+    createAuth({
+      sendCode: async ({ email }) => {
+        sent.push(email);
+      },
+    }),
+  );
+  for (let index = 0; index < 16; index++) await person(`member${index}`);
+  const member = (index: number) => `member${index}@example.test`;
+  // Requests that send nothing leave the budget unchanged.
+  for (let index = 0; index < 5; index++)
+    assert.equal((await request(`uninvited${index}@example.test`)).status, 200);
+  for (let index = 0; index < 27; index++)
+    assert.equal((await request(member(index % 9))).status, 200);
+  assert.equal(sent.length, 27);
+  // Each request the budget refuses logs one line, whether it is refused
+  // before a code is stored or, after losing a race, when the code would be
+  // sent.
+  const printed = captureFailures();
+  const capped = (count: number) =>
+    assert.deepEqual(
+      cappedLines(printed),
+      Array.from({ length: count }, () => ({
+        event: "code email cap reached",
+        budget: "members",
+      })),
+    );
+  const racing = await Promise.all(
+    Array.from({ length: 6 }, (_, index) => request(member(9 + index))),
+  );
+  for (const response of racing)
+    if (response.status !== 200) await assertCodeLimited(response);
+  assert.equal(sent.length, 30, "Concurrent requests must not exceed the cap");
+  capped(3);
+  await assertCodeLimited(await request(member(15)));
+  capped(4);
+  // Every request is refused alike, so the answer never reveals membership.
+  await assertCodeLimited(await request("stranger@example.test"));
+  const { token } = await createInvitation(null);
+  await assertCodeLimited(await request("guest@example.test", { token }));
+  assert.equal(sent.length, 30);
+  capped(6);
+  await moveCodeRequestsBack("1 day");
+  assert.equal((await request(member(15))).status, 200);
+  assert.equal(sent.length, 31);
+});
+
+test("new addresses share 10 login-code emails a day, three per IP, apart from members' budget", async () => {
   await db.query('TRUNCATE "rateLimit", login_code_request');
   const sent: string[] = [];
   const request = codeRequests(
@@ -224,45 +282,68 @@ test("the Screenr-wide cap allows 40 login-code emails a day across addresses an
     }),
   );
   const { token } = await createInvitation(null);
-  // Requests that send nothing leave the shared allowance unchanged.
-  for (let index = 0; index < 5; index++)
-    assert.equal((await request(`uninvited${index}@example.test`)).status, 200);
-  for (let index = 0; index < 37; index++)
+  await person("member");
+  // An account that has not finished setup is still a new address.
+  await pending("unfinished", token);
+  const ip = "192.0.2.10";
+  // Better Auth separately allows each IP three requests a minute.
+  const fromOneIP = async (email: string, invitation?: string) => {
+    await db.query('TRUNCATE "rateLimit"');
+    return request(email, { token: invitation, ip });
+  };
+  const printed = captureFailures();
+  for (let index = 0; index < 3; index++)
+    assert.equal(
+      (await fromOneIP(`guest${index}@example.test`, token)).status,
+      200,
+    );
+  assert.equal(sent.length, 3);
+  // Past an IP's budget a request answers the same and sends nothing, so it
+  // never reveals whether the address has an account.
+  assert.equal((await fromOneIP("guest3@example.test", token)).status, 200);
+  assert.equal((await fromOneIP("unfinished@example.test")).status, 200);
+  assert.equal(sent.length, 3, "An IP sends three new addresses a code a day");
+  assert.deepEqual(cappedLines(printed), []);
+  // Members' codes have no IP budget.
+  assert.equal((await fromOneIP("member@example.test")).status, 200);
+  assert.deepEqual(sent.slice(3), ["member@example.test"]);
+  assert.equal((await request("unfinished@example.test")).status, 200);
+  for (let index = 4; index < 7; index++)
     assert.equal(
       (await request(`guest${index}@example.test`, { token })).status,
       200,
     );
-  assert.equal(sent.length, 37);
-  // Each request the cap refuses logs one line, whether it is refused before
-  // a code is stored or, after losing a race, when the code would be sent.
-  const printed = captureFailures();
-  const capped = (count: number) =>
-    assert.deepEqual(
-      printed
-        .filter((line) => line.startsWith("{"))
-        .map((line) => JSON.parse(line)),
-      Array.from({ length: count }, () => ({
-        event: "code email cap reached",
-      })),
-    );
+  assert.equal(sent.length, 8);
   const racing = await Promise.all(
     Array.from({ length: 6 }, (_, index) =>
       request(`racing${index}@example.test`, { token }),
     ),
   );
-  for (const response of racing)
-    if (response.status !== 200) await assertCodeLimited(response);
-  assert.equal(sent.length, 40, "Concurrent requests must not exceed the cap");
-  capped(3);
-  await assertCodeLimited(await request("late@example.test", { token }));
-  capped(4);
-  await person("member");
-  await assertCodeLimited(await request("member@example.test"));
-  assert.equal(sent.length, 40);
-  capped(5);
-  await moveCodeRequestsBack("1 day");
+  for (const response of racing) assert.equal(response.status, 200);
+  assert.equal(sent.length, 11, "Concurrent requests must not exceed the cap");
+  assert.equal((await request("late@example.test", { token })).status, 200);
+  assert.equal(sent.length, 11, "New addresses get 10 codes a day");
+  assert.deepEqual(
+    cappedLines(printed),
+    Array.from({ length: 4 }, () => ({
+      event: "code email cap reached",
+      budget: "new addresses",
+    })),
+  );
+  // Using up the new addresses' budget leaves members their codes.
   assert.equal((await request("member@example.test")).status, 200);
-  assert.equal(sent.length, 41);
+  assert.equal(sent.length, 12);
+  assert.equal(sent.at(-1), "member@example.test");
+  // Client addresses are stored hashed, and only for new addresses.
+  const { rows } = await db.query(
+    "SELECT ip_hash FROM login_code_request WHERE sent ORDER BY id",
+  );
+  assert.equal(rows.filter((row) => row.ip_hash === null).length, 2);
+  for (const row of rows)
+    if (row.ip_hash !== null) assert.match(row.ip_hash, /^[0-9a-f]{64}$/);
+  await moveCodeRequestsBack("1 day");
+  assert.equal((await fromOneIP("late@example.test", token)).status, 200);
+  assert.equal(sent.at(-1), "late@example.test");
 });
 
 test("Better Auth password, code-check, and token routes are disabled", async () => {

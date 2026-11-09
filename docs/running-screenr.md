@@ -300,13 +300,44 @@ windows: 3 requests per address in 15 minutes, 10 per address in a day, and 40
 code emails across Screenr in a day. The per-address limits count every
 request, including those that send nothing, so a limited response does not
 reveal membership. Requests that send nothing do not use the Screenr-wide
-allowance. Each request the Screenr-wide cap refuses is
-[logged](deployment.md#failure-logs) as `code email cap reached`, since
-reaching it blocks email-code sign-in for everyone. Better Auth separately
+allowance.
+
+The 40 a day split into two budgets, so that someone holding an invitation,
+who alone can have codes sent to new addresses, cannot use up members' codes
+([issue #575](https://github.com/jubishop/screenr/issues/575)):
+
+| Budget | Code emails a day | Draws on it |
+| --- | --- | --- |
+| Members | 30 | A code sent to a member, who has finished setup |
+| New addresses | 10 | A code sent to any other address: one with no account, which gets a code only with a valid invitation, or one whose account has not finished setup |
+| Each IP | 3 of the new addresses' 10 | A code to a new address, counted for the client IP that requested it |
+
+- **Members' budget used up:** every code request is refused with the limit
+  message, whatever its address, so the answer does not reveal membership.
+  New addresses get no codes either until it frees up.
+- **New addresses' or an IP's budget used up:** the request answers with the
+  usual success and sends nothing, as an uninvited request does, because
+  refusing only new addresses would reveal which addresses are members'.
+  Members still get their codes. A person joining can continue with Google
+  or Apple.
+- **IP:** the client IP is the one Better Auth's limit reads, which Caddy
+  forwards. Members' codes have no IP budget, since mobile carriers put many
+  members behind one IP.
+
+The figures are the constants in `codeLimits` in `src/server/auth.ts`; a
+larger Resend plan only means raising them. Each request the members' or the
+new addresses' budget refuses is [logged](deployment.md#failure-logs) as
+`code email cap reached` with its `budget`, since a used-up budget blocks
+email-code sign-in for every member or for everyone joining. A used-up IP
+budget is not logged. Someone who knows three members' addresses can still
+use up the members' budget with 10 requests for each.
+
+Better Auth separately
 allows 3 code requests per IP each minute and five attempts per code. A limited request leaves the last delivered code
 usable, and the sign-in page shows "Too many codes requested. Try again later,
 or continue with Google." Migration `011-login-code-limits.sql` stores hashed
-recipients for a day. Because Screenr has no passwords, it sends no
+recipients for a day, and `041-login-code-budgets.sql` adds the hashed client
+IP of each code sent to a new address. Because Screenr has no passwords, it sends no
 password-reset codes, and Better Auth's password routes, such as
 `/api/auth/email-otp/reset-password`, return 404. So does
 `/api/auth/email-otp/check-verification-otp`, which Screenr never calls: it
