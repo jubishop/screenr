@@ -44,7 +44,6 @@ export type WatchSection = {
     id: string;
     name: string;
     logo_path: string | null;
-    route_note: string | null;
   }[];
 };
 // A title's US viewing options, as title lists send them.

@@ -81,6 +81,16 @@ struct DecodingTests {
     #expect(title.posterPath == nil)
   }
 
+  @Test func decodesATitleWithoutATMDBID() throws {
+    let json = #"""
+      {"id": "movie:101", "kind": "movie", "name": "Night Crossing", "overview": "",
+      "poster_path": null, "release_date": "2024-03-08"}
+      """#
+    let title = try ScreenrJSON.decoder().decode(Title.self, from: Data(json.utf8))
+    #expect(title.id == "movie:101")
+    #expect(title.tmdbId == nil)
+  }
+
   @Test func roundTripsJSONValues() throws {
     let value: JSONValue = [
       "text": "a/b", "count": 3, "ratio": .number(0.5), "on": true, "none": .null,

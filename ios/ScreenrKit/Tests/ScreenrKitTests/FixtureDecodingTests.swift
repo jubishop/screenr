@@ -187,7 +187,6 @@ struct FixtureDecodingTests {
     #expect(tv.availability.status == .ok)
     #expect(tv.availability.checkedAt == Self.instant)
     #expect(tv.availability.sections.first?.key == .subs)
-    #expect(tv.availability.sections.first?.services.first?.routeNote == "via Amazon")
     #expect(tv.topTen.map(\.rank) == [1, 2, 3])
 
     guard case .title(let unknown) = try Self.screen("screen/title/unknown-availability").content

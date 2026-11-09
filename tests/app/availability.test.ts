@@ -62,8 +62,8 @@ function options(kind = "movie") {
 // What a title screen shows for options(): its one provider under both Subs
 // and Free.
 const harbor = [
-  { label: "Subs", services: [["Harbor Stream", null]] },
-  { label: "Free", services: [["Harbor Stream", null]] },
+  { label: "Subs", services: ["Harbor Stream"] },
+  { label: "Free", services: ["Harbor Stream"] },
 ];
 // TMDB's provider lists for a title, as the cache keeps them.
 async function cachedProviders(id = "movie:42") {
@@ -375,10 +375,7 @@ function reported(providers: Record<string, ReturnType<typeof offer>[]>) {
 function displayed(result: Awaited<ReturnType<typeof screen>>) {
   return result.sections.map((section) => ({
     label: section.label,
-    services: section.services.map(({ name, route_note }) => [
-      name,
-      route_note,
-    ]),
+    services: section.services.map(({ name }) => name),
   }));
 }
 
@@ -407,25 +404,18 @@ for (const kind of ["movie", "tv"]) {
     assert.deepEqual(displayed(result), [
       {
         label: "Subs",
-        services: [
-          ["Apple TV", null],
-          ["Netflix", null],
-          ["Starz", null],
-        ],
+        services: ["Apple TV", "Netflix", "Starz"],
       },
       {
         label: "Free",
-        services: [
-          ["Starz", null],
-          ["YouTube", null],
-        ],
+        services: ["Starz", "YouTube"],
       },
     ]);
     assert.deepEqual(await cachedProviders(`${kind}:42`), providers);
   });
 }
 
-test("route notes use only eligible reported routes in each section", async () => {
+test("reseller listings group under their service without a route note", async () => {
   reported({
     flatrate: [
       offer(2243),
@@ -448,27 +438,26 @@ test("route notes use only eligible reported routes in each section", async () =
     {
       label: "Subs",
       services: [
-        ["AMC+", "via Amazon, Apple TV, Roku"],
-        ["Apple TV", "via Amazon"],
-        ["BritBox", "via Amazon"],
-        ["Fandor", "via Amazon"],
-        ["Here TV", "via Amazon"],
-        ["IFC Films Unlimited", "via Apple TV"],
+        "AMC+",
+        "Apple TV",
+        "BritBox",
+        "Fandor",
+        "Here TV",
+        "IFC Films Unlimited",
       ],
     },
     {
       label: "Free",
-      services: [
-        ["AMC+", null],
-        ["Apple TV", null],
-        ["BritBox", null],
-      ],
+      services: ["AMC+", "Apple TV", "BritBox"],
     },
   ]);
   // The canonical icon is metadata, not a reported standalone offer.
   assert.ok(
     result.sections[0].services.find((s) => s.name === "Apple TV")?.logo_path,
   );
+  for (const section of result.sections)
+    for (const service of section.services)
+      assert.deepEqual(Object.keys(service), ["id", "name", "logo_path"]);
 });
 
 test("distinct products and unknown IDs retain independent identities and safe logos", async () => {
@@ -509,7 +498,6 @@ test("distinct products and unknown IDs retain independent identities and safe l
   assert.equal(result.sections[0].services[1].logo_path, null);
   assert.equal(result.sections[0].services.at(-1)?.logo_path, "/z.jpg");
   assert.equal(result.sections[0].services[5].logo_path, "/unknown.jpg");
-  assert.equal(result.sections[0].services[5].route_note, null);
 });
 
 test("reported logo fallback and unknown duplicate identity are deterministic across free and ads", async () => {
@@ -529,10 +517,7 @@ test("reported logo fallback and unknown duplicate identity are deterministic ac
   assert.deepEqual(displayed(first), [
     {
       label: "Free",
-      services: [
-        ["Cinemax", "via Amazon, Apple TV"],
-        ["Unknown", null],
-      ],
+      services: ["Cinemax", "Unknown"],
     },
   ]);
   assert.deepEqual(
@@ -571,8 +556,8 @@ for (const stale of [false, true]) {
     assert.equal(result.checked_at, age);
     assert.equal(requests.length, 0);
     assert.deepEqual(displayed(result), [
-      { label: "Subs", services: [["Apple TV", "via Amazon"]] },
-      { label: "Free", services: [["Apple TV", null]] },
+      { label: "Subs", services: ["Apple TV"] },
+      { label: "Free", services: ["Apple TV"] },
     ]);
     status = 503;
     await db.query(
@@ -636,17 +621,17 @@ test("the registry groups plans and smaller services beyond the initial examples
     {
       label: "Subs",
       services: [
-        ["BBC Select", "via Apple TV"],
-        ["BroadwayHD", null],
-        ["Carnegie Hall+", "via Amazon, Apple TV"],
-        ["Cineverse", null],
-        ["FOX One", null],
-        ["MHz Choice", null],
-        ["MUBI", null],
-        ["MyOutdoorTV", null],
-        ["NBC", null],
-        ["Sling TV", null],
-        ["ViX", null],
+        "BBC Select",
+        "BroadwayHD",
+        "Carnegie Hall+",
+        "Cineverse",
+        "FOX One",
+        "MHz Choice",
+        "MUBI",
+        "MyOutdoorTV",
+        "NBC",
+        "Sling TV",
+        "ViX",
       ],
     },
   ]);
@@ -665,14 +650,14 @@ test("subscription plans including ad-supported brands keep the reported categor
     {
       label: "Subs",
       services: [
-        ["Acorn TV", null],
-        ["Amazon Prime Video", null],
-        ["Crunchyroll", null],
-        ["HBO Max", null],
-        ["MGM+", null],
-        ["Paramount+", null],
-        ["Peacock", null],
-        ["Shudder", null],
+        "Acorn TV",
+        "Amazon Prime Video",
+        "Crunchyroll",
+        "HBO Max",
+        "MGM+",
+        "Paramount+",
+        "Peacock",
+        "Shudder",
       ],
     },
   ]);

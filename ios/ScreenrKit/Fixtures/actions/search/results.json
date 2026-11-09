@@ -11,7 +11,7 @@
   },
   "response": {
     "status": 200,
-    "etag": "W/\"C83xwCmnZPd7Z-d59Q8I_C4-ZavMsbX8LXpj0TMakeM\"",
+    "etag": "W/\"Sgq4IGeZk4BC44kWQH_Z2HI6xSApKRnxWMt-jkFf6JA\"",
     "body": [
       {
         "id": "movie:101",
@@ -32,8 +32,7 @@
                 {
                   "id": "service:netflix",
                   "name": "Netflix",
-                  "logo_path": "/rK1KljqmbvO9HQa1PBFLILWah72.png",
-                  "route_note": null
+                  "logo_path": "/rK1KljqmbvO9HQa1PBFLILWah72.png"
                 }
               ]
             }
@@ -69,8 +68,7 @@
                 {
                   "id": "provider:9999",
                   "name": "Harbor Cinema Club",
-                  "logo_path": null,
-                  "route_note": null
+                  "logo_path": null
                 }
               ]
             }

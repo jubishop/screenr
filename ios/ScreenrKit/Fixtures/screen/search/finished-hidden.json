@@ -11,7 +11,7 @@
   },
   "response": {
     "status": 200,
-    "etag": "W/\"En7NUrELqcDEXchN4Wk-t1ifGNvH0XDrVP5FL94kST8\"",
+    "etag": "W/\"eYU9msIkRFyCRyZU44ZSyqJjFGNT4Y6Rp1HZ4Kq_Xzo\"",
     "body": {
       "kind": "search",
       "suggestions": [
@@ -45,8 +45,7 @@
                   {
                     "id": "service:hulu",
                     "name": "Hulu",
-                    "logo_path": "/44uAnmSqvA4yBOdbPWN8YgQHjWm.png",
-                    "route_note": null
+                    "logo_path": "/44uAnmSqvA4yBOdbPWN8YgQHjWm.png"
                   }
                 ]
               }

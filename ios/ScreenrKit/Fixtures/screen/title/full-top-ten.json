@@ -11,7 +11,7 @@
   },
   "response": {
     "status": 200,
-    "etag": "W/\"q4u09WP0yRGwbniSSUxLDgip5aQIJ4o9PCdQWx9YW30\"",
+    "etag": "W/\"nYOMpHKz2-FZXMjzJefYpzIUz3IzoVmEfQhnov-OTtQ\"",
     "body": {
       "kind": "title",
       "title": {
@@ -36,8 +36,7 @@
               {
                 "id": "service:netflix",
                 "name": "Netflix",
-                "logo_path": "/rK1KljqmbvO9HQa1PBFLILWah72.png",
-                "route_note": null
+                "logo_path": "/rK1KljqmbvO9HQa1PBFLILWah72.png"
               }
             ]
           }

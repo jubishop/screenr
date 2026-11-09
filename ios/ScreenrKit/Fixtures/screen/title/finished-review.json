@@ -11,7 +11,7 @@
   },
   "response": {
     "status": 200,
-    "etag": "W/\"GIFv6MaCKiQY7qDF-sn8JuFVAAeayKxtiN-ZjURFBM8\"",
+    "etag": "W/\"MmPgMpgj_0A7WuDZuu7BauQ8L2mLK8koUZfJXbXRsS4\"",
     "body": {
       "kind": "title",
       "title": {
@@ -36,14 +36,12 @@
               {
                 "id": "service:pluto-tv",
                 "name": "Pluto TV",
-                "logo_path": "/fN4czqaMQNLeF6sSSIjGbAWzvwK.png",
-                "route_note": null
+                "logo_path": "/fN4czqaMQNLeF6sSSIjGbAWzvwK.png"
               },
               {
                 "id": "service:tubi-tv",
                 "name": "Tubi TV",
-                "logo_path": "/9dEuvA8wg5TSeFBZlPxSVxFdimJ.png",
-                "route_note": null
+                "logo_path": "/9dEuvA8wg5TSeFBZlPxSVxFdimJ.png"
               }
             ]
           }

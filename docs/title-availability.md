@@ -302,7 +302,7 @@ state, last-checked time, and TV season caveat.
 
 Sort by the service display name with consistent English alphabetical
 comparison on the server and client, ignoring case. Use the stable service
-identity to break ties. Route notes do not affect service ordering.
+identity to break ties.
 Acceptance criteria and mapping examples are in issue #62.
 
 ## Current implementation
@@ -349,8 +349,11 @@ result path. The provider-ID lookup is built once from the checked-in
 registry. No catalog request or name inference runs during grouping. The
 server sorts services with an English, case-insensitive comparison and a
 stable identity tie-breaker; the client renders that same ordered result.
-Unknown providers use separate `provider:<id>` identities. Source route
-metadata is retained but is not rendered. Canonical logos take precedence;
+Unknown providers use separate `provider:<id>` identities. The registry
+keeps each member's route, but a service's payload holds only its identity,
+name, and logo: the `route_note` that no client showed is no longer sent
+([issue #594](https://github.com/jubishop/screenr/issues/594)). Canonical
+logos take precedence;
 fallbacks use eligible member ID, reported name, then safe logo path in
 deterministic order.
 
@@ -581,7 +584,7 @@ service and the real database, following the existing catalog tests. Cover
 movies and TV, all viewing categories, missing US data, empty results,
 fresh and expired caches, and failed or malformed provider responses.
 Cover both display sections, same-service plans and channels, distinct
-products, unknown IDs, eligible logo fallback, retained route metadata,
+products, unknown IDs, eligible logo fallback, the absence of route notes,
 and deterministic sorting. Include fresh and stale pre-existing cache rows
 with all five original categories. Verify that successful data survives a
 failed refresh and that failure does not break the title or its conversations.
