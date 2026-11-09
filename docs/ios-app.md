@@ -905,10 +905,10 @@ signing secrets out of GitHub.
 **Decision:** GitHub Actions runs no iOS checks. `bin/check-ios` runs on a
 Mac before iOS changes leave it:
 
-- **Before every push:** a Git `pre-push` hook runs `bin/check-ios` when the
-  pushed commits change the iOS files, and refuses the push when it fails.
-  Agents run `bin/check-ios` before pushing iOS changes and never bypass the
-  hook with `--no-verify`.
+- **Before every push:** a Git `pre-push` hook refuses a push that changes
+  the iOS files unless `bin/check-ios` passed for them. Agents run
+  `bin/check-ios` before pushing iOS changes and never bypass the hook with
+  `--no-verify`.
 - **Remote CI:** only the Linux check job, which must stay under 10 minutes.
 - **Releases:** `bin/testflight` runs `bin/check-ios` on the clean
   `main` commit before archiving instead of looking for a CI run.
@@ -922,10 +922,19 @@ level if thats a thing."
 
 **Tradeoffs:**
 
-- A push from a Mac that changes iOS files waits for `bin/check-ios`, unless
-  the same files already passed it with the same Xcode in the last week.
+- A push from a Mac that changes iOS files needs a `bin/check-ios` pass for
+  them with the same Xcode in the last week, so a push without one stops
+  until the check runs.
 - Nothing remote catches iOS changes pushed with `--no-verify`, from a
   checkout without the hook, or from Linux, where the hook skips.
+
+**Changed 2026-11-09:** the hook ran `bin/check-ios` itself when no pass
+covered the pushed files. Git had already connected to GitHub, which closed
+the idle SSH connection during the check, so a push failed after its check
+passed ([#549](https://github.com/jubishop/screenr/issues/549)). The hook
+now refuses such a push at once and says to run the check first. The
+guarantee is unchanged: the hook lets no iOS change through without a
+passing check.
 
 **Supersedes:** the CI part of
 [CI checks and local TestFlight releases](#ci-checks-and-local-testflight-releases--2026-10-13).

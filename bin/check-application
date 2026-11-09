@@ -96,7 +96,7 @@ def main():
               flush=True)
         return
     if ios_checks_needed():
-        # A recent pass for these exact iOS files, such as the pre-push hook's, counts.
+        # A recent pass for these exact iOS files counts, and this run's pass satisfies the pre-push hook.
         run(str(ROOT / "bin/check-ios"), "--reuse")
     print("Application checks passed.", flush=True)
 

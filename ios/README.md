@@ -150,8 +150,8 @@ version. With `--reuse`, the check skips itself when those files passed with
 the same Xcode in the last 7 days.
 
 There is no iOS CI. Run `bin/check-ios` before every push that changes
-`ios/`. The `pre-push` hook runs it for such a push unless a recorded pass
-covers the pushed files, and refuses the push when it fails; never bypass
+`ios/`. The `pre-push` hook refuses such a push at once unless a recorded
+pass covers the pushed files, and never runs the check itself; never bypass
 it with `--no-verify`. See
 [iOS checks before a push](../docs/development-workflow.md#ios-checks-before-a-push).
 On a Mac, `bin/check --full` runs `bin/check-ios --reuse` when the iOS files

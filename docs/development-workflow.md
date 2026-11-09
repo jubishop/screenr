@@ -227,7 +227,7 @@ GitHub Actions runs the same checks on pull requests and pushes to `main`
 through [the check workflow](../.github/workflows/check.yml), split into
 [parallel jobs](#ci-jobs) that keep CI under 10 minutes. Those Linux jobs skip
 the iOS checks, and no other job runs them; a
-[pre-push hook](#ios-checks-before-a-push) runs them on a Mac. See
+[pre-push hook](#ios-checks-before-a-push) requires them on a Mac. See
 [running checks](testing.md#running-checks)
 for requirements. GitHub issues track work.
 
@@ -235,10 +235,11 @@ for requirements. GitHub issues track work.
 
 GitHub Actions runs no iOS checks
 ([decision](ios-app.md#local-ios-checks-instead-of-ios-ci--2026-10-14)).
-Instead, [`bin/pre-push-application`](../bin/pre-push-application) runs
-`bin/check-ios` on the Mac before a push that changes the iOS files, and
-refuses the push when the check fails. Run `bin/check-ios` before pushing iOS changes, so the
-push finds a recorded pass. Never bypass the hook with `git push --no-verify`.
+Instead, [`bin/pre-push-application`](../bin/pre-push-application) refuses
+a push from the Mac that changes the iOS files unless a recorded
+`bin/check-ios` pass covers them. Run `bin/check-ios` before pushing iOS
+changes, so the push finds that pass. Never bypass the hook with
+`git push --no-verify`.
 
 - **iOS files:** `ios/` and `bin/format-swift`, which the app's build runs.
   The server's payload fixtures live in `ios/ScreenrKit/Fixtures/`, so a
@@ -257,25 +258,39 @@ push finds a recorded pass. Never bypass the hook with `git push --no-verify`.
   local side named by a commit message, such as
   `git push origin ':/Fix the layout:refs/heads/x'`, counts like a branch
   name, and push input the hook cannot read refuses the push.
-- **Checkout:** `bin/check-ios` tests the checkout's files, so the pushed
-  commit must be checked out with no uncommitted changes to the iOS files.
-  Otherwise the hook refuses the push and says why.
+- **Without a pass:** the hook refuses the push at once, before Git sends
+  anything, and says to run `bin/check-ios`, which records a pass, and then
+  push again. It never runs the check itself. Git connects to the remote
+  before it runs a `pre-push` hook and sends the push over that connection
+  afterward, and GitHub closes an idle SSH connection long before a check
+  finishes. When the hook ran the check, a push on 2026-11-08 failed after
+  the check passed, with "Connection to github.com closed by remote host."
+  and no branch on GitHub
+  ([#549](https://github.com/jubishop/screenr/issues/549)). GitHub
+  documents no idle limit; an idle `git-upload-pack` connection from the
+  user's Mac closed after 6 minutes on 2026-11-09. SSH's
+  `ServerAliveInterval` would keep the connection open, but that is each
+  Mac's own configuration, outside the repository.
+- **Checkout:** `bin/check-ios` tests the checkout's files and records a
+  pass only when they match `HEAD`, so run it with the pushed commit checked
+  out and no uncommitted changes to the iOS files. When they differ from a
+  pushed commit without a pass, the hook's refusal says so.
 - **Git environment:** Git exports the repository variables that
   `git rev-parse --local-env-vars` lists to hooks and to `git rebase --exec`;
-  in a linked worktree they include `GIT_DIR`. The hook runs `bin/check-ios`
-  without them, and the check runs its tools and its records without them
-  too. Every Git command inside the check, such as SwiftPM's package
+  in a linked worktree they include `GIT_DIR`. The hook reads the records
+  without them, and `bin/check-ios`, such as under `git rebase --exec`, runs
+  its tools and its records without them too. Every Git command inside the
+  check, such as SwiftPM's package
   checkouts, then finds its repository from its directory, as when the check
   runs from a shell.
 - **Recorded passes:** `bin/check-ios` records each pass on a checkout whose
   iOS files match `HEAD`. The record holds those files' Git object IDs and
   the Xcode version, in `.git/screenr-ios-checks/`, which all worktrees of
-  the clone share. The hook skips the check when the pushed iOS files passed
-  with the same Xcode in the last 7 days, and records its own passes. A
-  re-push, a rebase that leaves the iOS files alone, or a push right after
-  `bin/check-ios` or `bin/check --full` does not run the check again.
-  `bin/check-ios --reuse` skips itself the same way. Delete the directory to
-  forget every pass.
+  the clone share. The hook accepts a push when the pushed iOS files passed
+  with the same Xcode in the last 7 days. So a re-push, a rebase that leaves
+  the iOS files alone, or a push right after `bin/check-ios` or
+  `bin/check --full` goes ahead. `bin/check-ios --reuse` skips itself the
+  same way. Delete the directory to forget every pass.
 - **Duration:** a full `bin/check-ios` took 16 minutes on the user's Mac on
   2026-10-14, while other checkouts ran checks, and most of it was the
   Simulator tests. Auditing one check at a time made it about 31 minutes on
@@ -321,9 +336,11 @@ push finds a recorded pass. Never bypass the hook with `git push --no-verify`.
   new kind of hook still applies only once the checkout that
   `core.hooksPath` names has it.
 - **Tests:** `tests/test_pre_push.py` pushes to a local remote, from the
-  checkout and from linked worktrees, with a simulated `bin/check-ios` and a
-  stand-in for the managed hook, and `tests/test_check_ios.py` covers the
-  records and the check's environment.
+  checkout and from linked worktrees, with a simulated `bin/check-ios` that
+  records passes and a stand-in for the managed hook. It covers the
+  refusal without a pass and the push after one.
+  `tests/test_check_ios.py` covers the records and the check's
+  environment.
 
 ### iOS release gate
 
@@ -962,6 +979,11 @@ Screenr-Deploy-Reason: Instructions only; production contains all material chang
 ```
 
 Replace the example reason with the actual assessment and deployed revision.
+Every line of that final paragraph must be a `Key: value` trailer, such as
+`Co-Authored-By:`, so put a reference such as `Refs #12` in an earlier
+paragraph. Any other line there can stop Git from reading the paragraph's
+trailers, and the run then deploys; `git interpret-trailers --parse` shows
+what it reads.
 The workflow reads the trailers on the push's final commit, then finds the
 newest successful `production` deployment in GitHub. It skips only when every
 commit after that deployment, including the final one, carries valid skip

@@ -1,10 +1,11 @@
 """Record passing bin/check-ios runs by the exact iOS files they tested.
 
-bin/check-ios records a pass when the checkout's iOS files match HEAD, and
-bin/check-ios --reuse, the pre-push hook, and the TestFlight release skip a
-run when the same files already passed with the same Xcode within
-LIFETIME. The records live in the clone's Git directory, so every worktree
-of the clone shares them; see docs/development-workflow.md#ios-checks-before-a-push.
+bin/check-ios records a pass when the checkout's iOS files match HEAD.
+bin/check-ios --reuse and the TestFlight release skip a run when the same
+files already passed with the same Xcode within LIFETIME, and the pre-push
+hook accepts a push of them only then. The records live in the clone's Git
+directory, so every worktree of the clone shares them; see
+docs/development-workflow.md#ios-checks-before-a-push.
 It also gives the check and the hook an environment without Git's repository
 variables, which Git exports to hooks.
 """
