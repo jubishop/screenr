@@ -378,8 +378,9 @@ with a status button that shows the viewer's current status, or "+ Want to
 watch" when there is none. It opens a menu with Want to watch, Watching,
 Caught up (TV only), Finished, Stopped watching, and Clear status, marking
 the current choice. Choosing Finished sets the last-finished date to today,
-which the viewer can change or clear in the menu. Feed entries, suggestion
-tiles, and other surfaces keep their one-tap "+ Want to watch" action.
+which the viewer can change or clear in the menu. Suggestion tiles and other
+surfaces keep their one-tap "+ Want to watch" action. Feed entries now use
+[icon actions](#icon-actions-on-feed-entries--2026-11-09) instead.
 [Issue #100](https://github.com/jubishop/screenr/issues/100) tracks the work.
 
 **Why:** The user chose a single status control that fits beside Recommend
@@ -387,6 +388,21 @@ and the profile top 10 control without taking more header space.
 
 **Rejected alternative:** A row of status chips, which takes more room,
 especially on phone.
+
+**Clarified — 2026-11-09:** On the web and in the iPhone app, the status
+button shows a clear down chevron after its label, so it reads as a menu
+rather than a one-tap action like "+ Recommend". The label stays "+ Want to
+watch" or the current status, and tapping anywhere on the button opens the
+menu.
+
+**Why:** The user found the button looked like a single option, not a menu
+of statuses. The web chevron is small and the iPhone button has none, so it
+matched the one-tap Recommend and top 10 buttons beside it.
+
+**Rejected alternatives:** A split button, where "+ Want to watch" saves at
+once and a separate chevron opens the menu, gives two small tap targets. A
+neutral label such as "Watch status" when no status is set drops the direct
+Want to watch prompt.
 
 **Implementation note:** `src/components/watch-status.tsx` holds the status
 button ([issue #100](https://github.com/jubishop/screenr/issues/100)). It
@@ -401,6 +417,43 @@ button keeps focus and does not open. The panel opens from the button and
 shifts left to stay on a phone screen. A feed entry keeps its
 one-tap "+ Want to watch"; a reader with another status for the title sees
 that status instead, for example "✓ Watching", linked to the title page.
+
+### Icon actions on feed entries — 2026-11-09
+
+**Decision:** Feed entry actions become icon buttons, so entries take less
+room:
+
+- A full feed entry, including the viewer's own, offers the title page's
+  actions except the top 10: Recommend, the watch status menu, and Rate or
+  review. Changing a status or Recommend from the viewer's own entry
+  follows the same entry rules as the title page.
+- The watch status icon shows a down chevron and opens the title page's full
+  menu: every status, Clear status, and the Last finished date. It replaces
+  the one-tap "+ Want to watch" and the "✓ Watching" link to the title page,
+  so saving Want to watch from a feed takes two taps.
+- React and Comment become icon buttons too. Each comment shows Reply and
+  React as icons.
+- This applies to the friends, profile, and title feeds, on the web and in
+  the iPhone app. Compact entries on title pages still omit the title
+  actions.
+- Each icon keeps its action's name as its accessible name and hover
+  tooltip, and shows the viewer's current choice, such as Recommended or
+  Watching.
+
+This supersedes the text labels in
+[full-width feed entry actions](#full-width-feed-entry-actions--2026-10-12)
+and the feed's one-tap Want to watch in the
+[watch status button](#watch-status-button-on-title-pages--2026-10-12)
+decision.
+
+**Why:** The user wanted every title option in the feed while making entries
+tighter. They accepted icons without text because people learn what the
+icons mean over time. They chose one status menu everywhere, even at the
+cost of a second tap. The reason for leaving out the top 10 is not recorded.
+
+**Rejected alternatives:** Text buttons for every title action would add
+rows on phone. A menu that leaves out the Last finished date would give
+feeds and title pages two versions of the control.
 
 ### Trailer collapsed until played — 2026-10-12
 

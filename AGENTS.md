@@ -75,6 +75,10 @@ over must cut it back in the same change, or file an issue at once. See
 The native iPhone app lives in `ios/`. For work there, also follow
 [`ios/AGENTS.md`](ios/AGENTS.md).
 
+Keep the web and iPhone interfaces at parity: carry an interface change on
+either one to the other unless a native iOS interaction works better. See
+[interface parity](docs/ios-app.md#system-look-with-screenr-colors-and-logo--2026-10-13).
+
 Use the latest Node.js LTS release, with a minimum of Node 24, for
 application commands, CI, and production. See the
 [runtime decision](docs/development-workflow.md#node-runtime).

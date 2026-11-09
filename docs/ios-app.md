@@ -536,6 +536,18 @@ icon/logo of screenr is enough."
 - Native components styled with Screenr's paper surfaces and Avenir Next.
 - A faithful port of the web's look.
 
+**Clarified — 2026-11-09:** The look stays native, but the interface design
+stays at parity. Which controls a screen offers, how they are arranged, and
+choices such as using icons instead of text apply to both the web and the
+app. An interface change on either one goes to the other where that is
+reasonable. The app differs only where a native iOS interaction works
+better, such as taps, swipes, or another iOS design pattern.
+
+**Why:** The user said: "where reasonable we want UI parity. we only diverge
+where theres some cool native iOS interface action that is better because we
+have taps and swipes or iOS design paradigms etc." They said it while
+deciding on [icon actions on feed entries](interface-design.md#icon-actions-on-feed-entries--2026-11-09).
+
 ### A You tab instead of Account — 2026-10-13
 
 **Decision:** The app's fourth tab is You. It shows the member's own profile,

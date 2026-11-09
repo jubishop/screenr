@@ -59,6 +59,10 @@ layout, commands, and toolchain notes, and the
 
 - **Look:** use standard iOS 27 components, system fonts with Dynamic Type,
   and the `AccentColor` tint. Do not copy the web's custom components.
+- **Parity:** offer the web's controls, arrangement, and interface choices,
+  and carry an interface change to the web too. Differ only where a native iOS
+  interaction, such as a swipe, works better. See
+  [interface parity](../docs/ios-app.md#system-look-with-screenr-colors-and-logo--2026-10-13).
 - **Icons:** SF Symbols only, through `Image(systemName:)` or
   `Label(_:systemImage:)`. Add no icon images or icon catalogs.
 - **Accessibility:** required for every UI change. Keep text contrast,
