@@ -292,18 +292,25 @@ change.
 **Implementation note:** [Issue #168](https://github.com/jubishop/screenr/issues/168)
 renders these times with `ActivityTime` in
 `src/components/activity-time.tsx`, using `relativeTime` in
-`src/components/client.ts`. Units count elapsed time, so daylight saving
-changes don't shift them; dates and the current year follow the reader's
-time zone. A reader's clock running up to a week behind shows new activity
-as "now". Like other dates since
+`src/components/client.ts`. The iPhone app uses `RelativeTime` in ScreenrKit's
+`EntryPresentation.swift` for feed entries, comments, and, since
+[issue #544](https://github.com/jubishop/screenr/issues/544), notifications.
+Minutes and hours count elapsed time, so daylight saving changes don't shift
+them, and late on a 25-hour day a time from just after midnight reads "24h".
+The current day, dates, and the current year follow the reader's time zone.
+A reader's clock running up to a week behind shows new activity as "now".
+Like other dates since
 [issue #86](https://github.com/jubishop/screenr/issues/86), the server and
 hydration render the UTC date and a UTC hover time, then localize once the
 page is interactive. Unchanged screen refreshes don't render again, so a
 shared timer renders shown times again
-([issue #138](https://github.com/jubishop/screenr/issues/138)): times under a
-week old each minute, and older dates only when the reader's time zone or
-current year changes. Dates with the same options share one formatter, rebuilt
-when the reader's time zone changes, so a large feed's times stay cheap
+([issue #138](https://github.com/jubishop/screenr/issues/138)): times from the
+reader's current day, or ahead of their clock, each minute, so a time from
+today becomes a date within a minute of midnight, and earlier dates only when
+the reader's time zone or current year changes. The iPhone feed and
+notification sheet read the clock each minute. Dates with the same options
+share one formatter, rebuilt when the reader's time zone changes, so a large
+feed's times stay cheap
 ([issue #376](https://github.com/jubishop/screenr/issues/376)).
 
 ### Compact entries on title pages — 2026-10-12

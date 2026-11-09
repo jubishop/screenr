@@ -618,8 +618,8 @@ recipients. A full run checks:
   punctuation in UTC and Los Angeles. Feed entries show the release year, or
   only the kind without a release date. Each minute renders only the times
   whose text changes: at the reader's midnight on New Year's Eve, a time
-  turning a week old becomes a date and older dates gain the ended year,
-  and the next minute renders nothing.
+  from the day that just ended becomes a date and older dates gain the
+  ended year, and the next minute renders nothing.
 - Title pages show compact entries with the copy link ending the author
   line, and Start a conversation on the "Around this title" heading row at
   phone and desktop widths. The friend line follows the header buttons, names
