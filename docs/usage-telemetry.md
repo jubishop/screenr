@@ -195,7 +195,7 @@ The client sends one of these surfaces with the Want to watch action:
 
 | Surface | Save made from | Observed |
 | --- | --- | --- |
-| `friend_recommendation` | A friend's active Recommend entry in any feed | Yes |
+| `friend_recommendation` | A friend's active Recommend entry, or a [combined card](title-feed.md#combined-title-actions) with one, in any feed | Yes |
 | `friend_entry` | Any other friend's entry, such as Want to watch, a review, or a comment | No |
 | `suggestion_recommendation` | A title page opened from a suggestion tile naming a recommending friend | Yes |
 | `suggestion` | A title page opened from another suggestion tile | No |

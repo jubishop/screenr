@@ -100,8 +100,10 @@ fields (`id`, `kind`, `actor`, `actorId`, `actorPhoto`, `message`, `href`,
 - `excerpt`: the comment's text on one line, at most 160 characters, ending
   at a word with "…" when cut. It is `null` for friendships and spoilers.
 - `spoiler`: whether the comment or its entry is marked as a spoiler. A flag
-  on a post or review covers its whole thread. The server omits a spoiler's
-  text, so it never reaches the device before the reader reveals it.
+  on a post or review covers its whole thread, and a review's flag covers the
+  [combined card](title-feed.md#combined-title-actions) it is in. The server
+  omits a spoiler's text, so it never reaches the device before the reader
+  reveals it.
 - `thread`: the entry's ID, or `null` for friendships. It groups an entry's
   notifications and is the `conversation` of a reply.
 - `comment`: the comment's ID, or `null`; a reply's `replyTo`.

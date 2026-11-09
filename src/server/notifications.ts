@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
 import { AppError, db, isBigintId, transaction } from "./db";
+import { spoilerCovered } from "./feed";
 import { queueBadgePush, trackRelationshipBadges } from "./push";
 import { entryPath, memberPath } from "../member-routes";
 
@@ -171,11 +172,16 @@ export async function notification(viewer: string, id: unknown) {
   const row = (
     await db.query<{
       content:
-        | (NotificationRow & { body: string | null; spoiler: boolean | null })
+        | (NotificationRow & {
+            body: string | null;
+            spoiler: boolean | null;
+            carded: boolean;
+          })
         | null;
     }>(
       `SELECT to_jsonb(content) AS content FROM (
-         SELECT n.*,cm.body,cm.spoiler OR coalesce(tc.spoiler,r.spoiler,dp.spoiler,false) AS spoiler
+         SELECT n.*,cm.body,cm.spoiler OR coalesce(tc.spoiler,r.spoiler,dp.spoiler,false) AS spoiler,
+           cm.watch_progress_id IS NOT NULL OR cm.feed_item_id IS NOT NULL AS carded
          FROM (SELECT ${columns} FROM visible_notification
            WHERE recipient_id=$1 AND id=$2) n
          LEFT JOIN comment cm ON cm.id=n.comment_id::bigint
@@ -187,7 +193,11 @@ export async function notification(viewer: string, id: unknown) {
     )
   ).rows[0]?.content;
   if (!row) return { visible: false } as const;
-  const spoiler = row.spoiler ?? false;
+  // A status or Recommend entry can hold a card, which a spoiler-flagged
+  // review in it covers too (docs/title-feed.md#combined-title-actions).
+  const spoiler =
+    (row.spoiler ?? false) ||
+    (row.carded && (await spoilerCovered(viewer, row.item_id!)));
   return {
     visible: true,
     notification: {

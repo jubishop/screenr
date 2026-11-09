@@ -12,6 +12,8 @@ struct FeedModelTests {
   private let aliceComment = "e22cb5a7-a2dd-4582-8f62-db3e31f2761b"
   private let alicePost = "872a205a-bab2-48f8-8c27-b737397eb469"
   private let benWantToWatch = "4300d142-345c-4077-8450-5146cef8a125"
+  // Ben's review holds his card for Harbor Lights, with his Recommend.
+  private let benReviewCard = "f0a222c0-d2f9-45e6-8f45-53413b726eed"
   private let snapshot: [FeedItem]
 
   init() throws {
@@ -288,6 +290,28 @@ struct FeedModelTests {
     )
     #expect(refreshes.count == 2)
     #expect(feed.titleActions == .idle)
+  }
+
+  // A card with a friend's Recommend counts as one, whichever entry holds it.
+  @Test func savesFromACardWithAFriendsRecommendation() async throws {
+    let api = RecordingAPI(["activity": .success(["id": "new"])])
+    let feed = model(api, RefreshCounter())
+    let card = try entry(benReviewCard).item
+    #expect(card.itemType == .review)
+    #expect(card.combined.map(\.itemType) == [.recommended])
+
+    // Alice ranks the title, so saving it to Want to watch asks first.
+    await feed.toggleWantToWatch(card)
+    await feed.confirm(try #require(feed.confirmation))
+
+    #expect(
+      api.requests.map(\.body) == [
+        [
+          "title": "tv:201", "field": "want_to_watch", "value": true,
+          "surface": "friend_recommendation",
+        ]
+      ]
+    )
   }
 
   @Test func asksBeforeATitleLeavesTheTop10() async throws {

@@ -785,8 +785,11 @@ in the iPhone app. The stored entries are unchanged, so nothing migrates.
 - **Links and writes:** `?item=` for any entry in a card opens the card on
   the title page and the friends feed, and so do old conversation links. A
   reply or reaction to any entry in a card goes to its holder, so the card
-  keeps one discussion. The title page friend line names a friend's action
-  inside a card by the card.
+  keeps one discussion, while a lookup of an entry outside the card never
+  reaches it. The title page friend line names a friend's action inside a
+  card by the card, and the push extension's
+  [notification read](data-and-access.md#single-notification-read) omits the
+  excerpt of a reply in a card that a spoiler-flagged review covers.
 - **Web:** `src/components/feed.tsx` names a card's actions in one author
   line, such as "finished, reviewed, and recommends", with no finished date,
   followed by the card's one time and Edited when its review was edited. The

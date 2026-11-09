@@ -319,6 +319,60 @@ test("links to any entry in a card open the card, and its own fields come from i
   }
 });
 
+test("an entry alone beside the person's card for the title reads, and takes replies and reactions, as itself", async () => {
+  const { alice, ben, cam, conversation: recommend } = await setup();
+  await friend(alice, ben);
+  await friend(alice, cam);
+  const progress = await updateWatchStatus(alice, "movie:1", "finished");
+  assert.ok(progress);
+  await back("progress", progress, "3 days");
+  const comment = await createTitleComment(alice, "movie:1", "Hmm.", false);
+  await db.query(
+    "UPDATE title_comment SET created_at=created_at-interval '2 days' WHERE id=$1",
+    [comment],
+  );
+  const review = await saveReview(alice, "movie:1", 4, null, false);
+  assert.deepEqual(cards(await conversations(ben, { owner: alice })), [
+    [review, recommend],
+    [comment],
+    [progress],
+  ]);
+  // Each lookup names only the entry asked for, or its card, never the
+  // person's other card for the title.
+  assert.equal((await thread(ben, progress)).conversation.id, progress);
+  assert.equal((await thread(ben, comment)).conversation.id, comment);
+  assert.equal((await thread(ben, recommend)).conversation.id, review);
+  const reply = await addComment(ben, progress, "Took you long enough.", false);
+  const note = await addComment(ben, comment, "Same.", false);
+  await setReaction(cam, progress, null, "like");
+  await setReaction(cam, comment, null, "wow");
+  const shown = await conversations(ben, { owner: alice });
+  const lone = shown.find((entry) => entry.id === progress)!;
+  assert.deepEqual(
+    lone.comments.map((entry) => entry.id),
+    [reply],
+  );
+  assert.deepEqual(lone.reactions, [
+    { kind: "like", count: 1, reacted: false },
+  ]);
+  const own = shown.find((entry) => entry.id === comment)!;
+  assert.deepEqual(
+    own.comments.map((entry) => entry.id),
+    [note],
+  );
+  assert.deepEqual(own.reactions, [{ kind: "wow", count: 1, reacted: false }]);
+  assert.equal(
+    (
+      await db.query(
+        `SELECT (SELECT count(*) FROM comment WHERE review_id=$1 OR feed_item_id=$2)
+          + (SELECT count(*) FROM reaction WHERE review_id=$1 OR feed_item_id=$2) AS n`,
+        [review, recommend],
+      )
+    ).rows[0].n.toString(),
+    "0",
+  );
+});
+
 test("paging places and counts each card once, by its latest activity across its entries", async () => {
   const { alice, ben, conversation: recommend } = await setup();
   await friend(alice, ben);

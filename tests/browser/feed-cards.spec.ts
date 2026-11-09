@@ -79,6 +79,22 @@ test("a card names its actions in one author line with one date, shows its revie
       ])
     ).rows,
   ).toEqual([{ review_id: review }]);
+  // A save from the card is one from a friend's Recommend, though the review
+  // holds it (docs/usage-telemetry.md#save-attribution).
+  await card
+    .getByRole("button", { name: "+ Want to watch", exact: true })
+    .click();
+  await expect
+    .poll(
+      async () =>
+        (
+          await db.query(
+            "SELECT surface FROM want_to_watch_save WHERE user_id=$1",
+            [await userId(reader)],
+          )
+        ).rows,
+    )
+    .toEqual([{ surface: "friend_recommendation" }]);
 
   // An edit marks the card Edited. A spoiler flag covers the review's text
   // and the card's discussion, but not its stars.

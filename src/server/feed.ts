@@ -262,20 +262,22 @@ const items = (
 // The cards of every entry the reader ($1) can see that meets `scope`, a
 // condition on c such as `c.id=$2::uuid`. An entry in a card reads as the
 // card, so a link, reply, or reaction to any of its entries reaches the
-// holder. The lateral join, which its OFFSET keeps PostgreSQL from
-// flattening, reads each person's entries for a title through their owner
-// and title indexes, and the holders through their ID indexes.
+// holder; the person's other cards for the title stay out. The lateral
+// join, which its OFFSET keeps PostgreSQL from flattening, reads each
+// person's entries for a title through their owner and title indexes, and
+// the holders through their ID indexes.
 export const itemQuery = (
   scope: string,
 ) => `WITH ${access}, scoped AS MATERIALIZED (
-    SELECT DISTINCT c.owner_id,c.title_id FROM ${readableEntries} WHERE ${scope}
+    SELECT c.id,c.owner_id,c.title_id FROM ${readableEntries} WHERE ${scope}
   ), cards AS MATERIALIZED (
     SELECT id,holder FROM (${cardsOf(
-      `SELECT c.* FROM scoped s CROSS JOIN LATERAL (SELECT * FROM ${feedEntries} c
+      `SELECT c.* FROM (SELECT DISTINCT owner_id,title_id FROM scoped) s CROSS JOIN LATERAL (SELECT * FROM ${feedEntries} c
         WHERE c.owner_id=s.owner_id AND c.title_id=s.title_id AND ${combinable("c")} OFFSET 0) c`,
     )}) k WHERE holder IS NOT NULL
   )
-  ${items(readableEntries)} AND (${scope} OR c.id=ANY(ARRAY(SELECT holder FROM cards)))`;
+  ${items(readableEntries)} AND (${scope}
+    OR c.id=ANY(ARRAY(SELECT k.holder FROM cards k JOIN scoped s ON s.id=k.id)))`;
 
 export async function conversations(
   viewer: string,
@@ -426,6 +428,16 @@ export async function thread(viewer: string, id: string): Promise<Thread> {
   if (!rows[0]) throw new AppError("Conversation not found.", 404);
   const { comments, ...conversation } = rows[0];
   return { conversation, comments };
+}
+
+// Whether a spoiler flag covers entry `id` for the reader ($1): its own, or
+// that of a review in the card it holds.
+export async function spoilerCovered(viewer: string, id: string) {
+  const { rows } = await db.query<{ spoiler: boolean }>(
+    `SELECT i.spoiler FROM (${itemQuery("c.id=$2::uuid")}) i`,
+    [viewer, id],
+  );
+  return rows[0]?.spoiler ?? false;
 }
 
 // Old /conversations/<id> links open the eligible entry on its title page,

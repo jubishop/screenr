@@ -398,16 +398,15 @@ function FeedEntry({
         removable(comment, thread, user),
     );
   if (confirmingComment && !commentConfirmable) setConfirmingComment(null);
-  // Saving to Want to watch, or removing it, from a friend's entry.
+  // Saving to Want to watch, or removing it, from a friend's entry. A card
+  // with an active Recommend counts as one, whichever entry holds it.
   const saveWantToWatch = async () => {
     if (held && title)
       await activity(
         title.id,
         "want_to_watch",
         !held.viewer_want_to_watch,
-        held.item_type === "recommended" && held.active
-          ? "friend_recommendation"
-          : "friend_entry",
+        held.recommended ? "friend_recommendation" : "friend_entry",
       );
   };
   // Compact title page entries leave the title actions to the page header
