@@ -100,6 +100,10 @@ export function marketingVersion(xcconfig: string) {
 const conventional =
   /^(?:\S+\s+)?(feat|fix|perf|refactor|docs|test|build|ci|chore|style)(?:\([^)]*\))?!?:\s*(.+)$/u;
 const forTesters = new Set(["feat", "fix", "perf"]);
+// App Store Connect rejects What to Test text that contains emoji, so notes
+// drop pictographs and the characters that join or modify them.
+const emoji =
+  /[\p{Extended_Pictographic}\p{Emoji_Modifier}\p{Regional_Indicator}\u200d\u20e3\ufe0f]/gu;
 
 export function testerNotes(
   subjects: readonly string[],
@@ -110,10 +114,11 @@ export function testerNotes(
   for (const subject of subjects) {
     const match = subject.trim().match(conventional);
     if (match && !forTesters.has(match[1]!)) continue;
-    const summary = (match ? match[2]! : subject.trim()).replace(
-      /\s+\(#\d+\)$/,
-      "",
-    );
+    const summary = (match ? match[2]! : subject)
+      .replace(emoji, "")
+      .replace(/\s+/g, " ")
+      .trim()
+      .replace(/\s+\(#\d+\)$/, "");
     if (summary) lines.add(`- ${summary}`);
   }
   if (!lines.size)

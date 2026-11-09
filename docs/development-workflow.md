@@ -404,8 +404,11 @@ long as an archive plus Apple's processing, often 15 to 30 minutes, plus
 **What to Test** lists the subjects of the commits since the previous tag
 that touch `ios/`, `src/server/`, or `src/app/api/`, newest first. It keeps
 features, fixes, performance work, and subjects without a type, such as
-reverts, and drops the emoji, type, scope, and pull request number. It never
-reads commit bodies. The list stops before App Store Connect's 4,000-character
+reverts, and drops the type, scope, and pull request number. It also drops
+every emoji, typed subject or not: App Store Connect refused 1.0 (5)'s notes
+over a `✨` left on two subjects without a type
+([#554](https://github.com/jubishop/screenr/issues/554)). It never reads
+commit bodies. The list stops before App Store Connect's 4,000-character
 limit with a count of the rest. The first build says "The first TestFlight
 build of Screenr for iPhone.", and a release with no such commits says
 "Behind-the-scenes changes only; nothing new to test."

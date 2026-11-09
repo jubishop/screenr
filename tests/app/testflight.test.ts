@@ -129,6 +129,28 @@ test("What to Test lists the app and server API changes testers can see", () => 
   assert.match(notes, new RegExp(`\\n- And ${200 - shown} more changes\\.$`));
 });
 
+// App Store Connect refused 1.0 (5)'s notes with "Text for whatsNew contains
+// invalid characters:'[✨]'": two subjects had an emoji but no type.
+test("What to Test leaves out emoji, which App Store Connect rejects", () => {
+  assert.equal(
+    testerNotes(
+      [
+        "✨ Show activity times before today as dates (#547)",
+        '♻️ Revert "Add the You tab"',
+        "🐛 fix(ios): Show the 🎬 trailer badge 👍🏽 again",
+        "🇺🇸 Add US streaming services",
+      ],
+      "ios-v1.0b4",
+    ),
+    [
+      "- Show activity times before today as dates",
+      '- Revert "Add the You tab"',
+      "- Show the trailer badge again",
+      "- Add US streaming services",
+    ].join("\n"),
+  );
+});
+
 // A checkout with Version.xcconfig and an API key, a clean main at c, and
 // tags through build 3 on commit b. Rules added first override the defaults.
 async function releaseFixture(
