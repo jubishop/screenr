@@ -266,6 +266,45 @@ on the Google Auth Platform Branding page. TestFlight external testing and
 the App Store listing need a privacy policy URL too
 ([issue #263](https://github.com/jubishop/screenr/issues/263)).
 
+### Terms of use and adults only — 2026-11-09
+
+**Decision:** Screenr is for adults and publishes terms of use:
+
+- **Terms:** a public page at `/terms`, served signed out like `/privacy`,
+  says Screenr has zero tolerance for objectionable content and abusive
+  members.
+- **Agreement:** new members agree to the terms during signup on the web and
+  in the iPhone app, and confirm in the same step that they are 18 or older.
+  Existing members agree once, on their next visit. Screenr records when each
+  member agreed.
+- **Minimum age:** 18. The terms, the privacy policy, and the App Store age
+  rating say so. Where the law requires it, the iPhone app checks the age
+  category through Apple's
+  [Declared Age Range API](https://developer.apple.com/support/age-assurance/)
+  and refuses minors.
+- **Invitations:** the invitation page shows a permanent line beside the
+  Create button, such as "Only invite people 18 or older", and the join page
+  says Screenr is for people 18 or older. Creating a link shows no dialog.
+
+**Why:** Apple's guideline 1.2 rejections commonly require that members agree
+to terms with zero tolerance for objectionable content. Utah, Louisiana, and
+Texas require App Store apps to check each account's age category, and a
+minor needs a parent's consent before each significant update. Apple says an
+18+ app must still make the check, but refusing minors avoids the recurring
+consent flow. The user accepted the recommendations for the terms and the
+minimum age. The user proposed the invitation warning and chose the inline
+line over a dialog. No lawyer has reviewed this; Apple directs developers to
+legal counsel for compliance questions.
+
+**Rejected alternatives:**
+
+- A "By continuing, you agree" notice without a tap to agree, which Apple
+  sometimes rejects as not being agreement.
+- A minimum age of 13, which keeps the parental-consent flow for each
+  significant update.
+- A confirmation dialog each time, or only the first time, a member creates
+  an invitation link.
+
 ### Mutual friendships — 2026-09-04
 
 **Decision:** A friendship exists only after one user requests it and the
@@ -1056,6 +1095,54 @@ requires a report action and prompt responses. Revisit after the TestFlight
 release. Rejected for now: a minimal Report action that emails the owner, with
 operator scripts for removal, and an in-app administrator review queue. No
 reason was given.
+
+**Superseded — 2026-11-09:** The user ended the deferral to list the iPhone
+app on the App Store. The
+[moderation decision](#reports-review-and-suspension--2026-11-09) replaces
+this one.
+
+### Reports, review, and suspension — 2026-11-09
+
+**Decision:** Screenr adds administrator moderation for the
+[App Store listing](ios-app.md#app-store-listing--2026-11-09), on the web and
+in the iPhone app, under
+[full parity](ios-app.md#full-parity-including-signup--2026-10-13):
+
+- **Reports:** members can report posts, reviews, comments, and profiles,
+  which cover the display name and photo. Each of these is content another
+  member wrote or chose, which App Store
+  [guideline 1.2](https://developer.apple.com/app-store/review/guidelines/#user-generated-content)
+  requires a way to report.
+- **Owner review:** reports go to an owner-only review page on the website.
+  Each new report sends the owner an email and a Pushover alert, so the
+  owner can act within the 24 hours Apple expects.
+- **Actions:** from the review page, the owner can remove the reported
+  content, suspend its author, or dismiss the report.
+- **Suspension:** suspending a member ends all their sessions, refuses their
+  sign-in on both clients, hides their posts, reviews, comments, and profile
+  from everyone, and stops their email address from signing up again. Their
+  data stays intact, and the owner can lift the suspension.
+- **Filtering:** the server refuses posts, reviews, comments, and display
+  names that contain a word from a blocked-word list kept in the repository,
+  with a plain message on both clients. Profile photos rely on reporting and
+  removal.
+
+**Why:** The user wants Screenr on the App Store ("first we have to get it
+released in the app store", 2026-11-08), and guideline 1.2 requires
+reporting, filtering, blocking, and timely action on reports. Blocking
+already exists. The user chose the review page with an email and a Pushover
+alert for each report. The user accepted the recommendations for suspension
+and the blocked-word filter.
+
+**Rejected alternatives:**
+
+- Ejecting a member by deleting their account. That can't be undone, and any
+  member could invite the same email address again.
+- Screening profile photos with Apple's SensitiveContentAnalysis. It runs
+  only for people who turned on Sensitive Content Warning, and the web has
+  no equivalent.
+- No filter beyond the invite-only circle, which risks a guideline 1.2
+  rejection.
 
 ### Discussions without an attached title — 2026-09-04
 

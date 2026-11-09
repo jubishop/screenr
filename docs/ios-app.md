@@ -697,6 +697,58 @@ App Review and serves App Store review too.
 the milestone needs, such as terms of use, an in-app privacy policy link, and
 age-assurance obligations.
 
+**Superseded in part — 2026-11-09:** The
+[App Store listing decision](#app-store-listing--2026-11-09) starts the App
+Store milestone now and replaces the public TestFlight link after launch.
+
+### App Store listing — 2026-11-09
+
+**Decision:** Screenr goes to the App Store now, tracked in
+[issue #251](https://github.com/jubishop/screenr/issues/251) and its
+sub-issues. The moderation, terms, and minimum age it needs are in the
+[moderation decision](product-brief.md#reports-review-and-suspension--2026-11-09)
+and the [terms decision](product-brief.md#terms-of-use-and-adults-only--2026-11-09).
+
+- **Availability:** the United States only, on iPhone only. Availability on
+  Apple silicon Macs and Apple Vision Pro, which App Store Connect enables by
+  default, is turned off.
+- **TestFlight after launch:** the public TestFlight link is turned off. The
+  external group keeps getting every build, and the owner adds or removes
+  friends by email through a command that calls the App Store Connect API.
+  Testers who joined through the link stay until the owner removes them.
+  Everyone else installs from the App Store, and the required-update screen
+  sends TestFlight installs to TestFlight and App Store installs to the App
+  Store.
+- **First submission:** the listing text lives in the repository, and the
+  owner approves it in its pull request. UI tests generate the screenshots
+  from demo data. A script uploads the listing, screenshots, age rating,
+  availability, and content-rights declaration through the App Store Connect
+  API, and `bin/appstore` reuses it
+  ([issue #548](https://github.com/jubishop/screenr/issues/548)). An agent
+  enters the App Privacy label, which has no API, on the website in the
+  owner's signed-in Chrome. The first version is released manually after
+  approval, together with the switch of the install link and the TestFlight
+  link.
+
+**Why:** The user wants Screenr on the App Store ("first we have to get it
+released in the app store", 2026-11-08). Streaming availability covers only
+the United States, and listing only there avoids the EU's Digital Services
+Act trader declaration and other countries' age rules. The app is portrait
+iPhone only and never tested on a Mac or Vision Pro. The user wants close
+friends to keep TestFlight builds without joining the internal group, which
+requires App Store Connect team accounts. The user accepted the
+recommendations for availability, the TestFlight group, and the submission
+script.
+
+**Rejected alternatives:**
+
+- Listing worldwide, or keeping the Mac and Vision Pro defaults.
+- Keeping the public TestFlight link as a beta channel, with or without a
+  tester limit.
+- Removing every current tester at launch and re-adding close friends by
+  email.
+- Entering the first submission's details on the App Store Connect website.
+
 ### App identity — 2026-10-13
 
 **Decision:** The app's App Store identity is:
@@ -1215,6 +1267,6 @@ the command, its environment variable, and the reset
 
 ## Open questions
 
-None remain from the planning interview. The App Store milestone stays blocked
-until the user revisits the
-[deferred administrator moderation](product-brief.md#administrator-moderation-deferred--2026-09-04).
+None remain from the planning interview. The user started the App Store
+milestone on 2026-11-09 under the
+[App Store listing decision](#app-store-listing--2026-11-09).
