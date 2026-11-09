@@ -1182,13 +1182,14 @@ journalctl -u screenr-worker --since '1 day ago' --no-pager | grep '"event":"ema
 | `auth endpoint failed` | web | `endpoint`, Better Auth's route pattern, such as `/sign-in/email-otp` or `/callback/:id`, when known, for an unexpected error from Better Auth's handler, such as a database error in its adapter or rate limit or a schema mismatch, which Screenr answers with a bare 500 |
 | `auth failure caught` | web | `endpoint`, as for `auth endpoint failed`, when known, for an unexpected error that Better Auth caught and answered itself, such as a database error while Google or Apple sign-in creates the account or while it reads a session |
 | `google client rejected` | web, worker | `status` and Google's `reason`, `invalid_client` or `unauthorized_client`: Google's token endpoint rejected Screenr's web client when a web Google sign-in exchanged its code, or in the worker's [hourly check](#google-client-check), as after `GOOGLE_CLIENT_SECRET` is rotated or deleted, so every web Google sign-in fails until `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` are fixed |
-| `code email cap reached` | web | No fields: the Screenr-wide limit of 40 [code emails a day](running-screenr.md#provider-configuration) refused a code request |
+| `code email cap reached` | web | `budget`, `members` or `new addresses`: that daily budget of [code emails](running-screenr.md#provider-configuration) was used up, so a code request was refused or, for new addresses, answered without sending a code |
 | `apple_token_failed` | web | `status` and Apple's `reason` for an HTTP reply from Apple's token endpoint, or error fields |
 | `apple token unreadable` | web | Error fields only: account deletion skipped a Sign in with Apple token sealed under an earlier `BETTER_AUTH_SECRET` |
 | `apple revoke failed` | web | Error fields only: Apple did not confirm revoking a token, so the account was not deleted |
 | `apple settings missing` | web | No fields: account deletion found a Sign in with Apple token but the [Apple settings](running-screenr.md#iphone-app-accounts-and-keys) are missing, so the account was not deleted |
 | `apple token replaced` | web | No fields: Apple sign-ins kept storing new tokens through three rounds of revocation, so the account was not deleted |
 | `worker failed` | worker | `failures`, the loop's failed passes in a row; see [worker outages](#worker-outages) |
+| `worker cleanup failed` | worker | `step`, the periodic cleanup step that failed: `email jobs`, `usage`, `sessions`, `notifications`, `catalog`, `google client`, or `push jobs`; the other steps still run ([worker outages](#worker-outages)) |
 | `email delivery failed` | worker | `job` ID, `kind` (`code` or `activity`), `attempt`, `final`, and `stale` when a block or opt-out committed during the send ([stale sends](notifications.md#activity-email)) |
 | `push delivery failed` | worker | `job` ID, `kind` (`alert` or `badge`), `environment` (`sandbox` or `production`), `attempt`, `final`, and `status` and `reason` for an APNs reply |
 | `push delivery off` | worker | `missing` setting names, or `reason` `invalid key` with error fields; see [push settings](#provisioning) |
@@ -1429,6 +1430,21 @@ journalctl -u screenr-worker --since '1 day ago' --no-pager | grep '"event":"wor
 ```json
 {"event":"worker recovered","failures":14}
 ```
+
+Each loop's periodic cleanup, which runs on its first pass and every 60th,
+about once a minute, stays outside that count
+([issue #577](https://github.com/jubishop/screenr/issues/577)): the email
+loop's [cleanup steps](running-screenr.md#email-worker) and the push loop's
+delete of expired jobs. Each step runs on its own: one that fails, such as a
+delete that a schema change broke, logs `worker cleanup failed` with its
+`step` name, and the next step still runs. The pass doesn't fail, so
+delivery and the one-second pause go on. That line is
+[folded](#failure-reports-in-sentry) like other lines, so a step that fails
+every minute reaches Sentry once an hour while the journal keeps every line.
+Before, such a step started a new run of failures every minute and stopped
+the steps after it. The email loop cleans up after it delivers, so during an
+outage its failed passes skip the cleanup; the push loop deletes expired jobs
+before it sends, so an outage also logs that step's failure.
 
 When PostgreSQL ends a pooled connection, the web and the worker log
 `database connection failed` instead of stopping, and the pool opens a new

@@ -48,3 +48,21 @@ export async function runWorkerLoop(
     await setTimeout(wait, undefined, { signal }).catch(() => {});
   }
 }
+
+// Runs a loop's periodic cleanup: each step in turn, by the name a failure
+// logs. A step that fails logs `worker cleanup failed` with that name as
+// `step`, folded in Sentry like other failures, and the next step still runs.
+// The cleanup never fails its pass, so a step that keeps failing reports once
+// an hour instead of starting a new run of failures every time it runs, and
+// never slows the loop. docs/deployment.md#worker-outages
+export async function runCleanup(
+  steps: Record<string, () => Promise<unknown>>,
+) {
+  for (const [step, run] of Object.entries(steps)) {
+    try {
+      await run();
+    } catch (error) {
+      logFailure("worker cleanup failed", { step }, error);
+    }
+  }
+}

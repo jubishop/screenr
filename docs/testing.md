@@ -250,7 +250,11 @@ import these helpers instead of defining their own copies.
   and Google's key, token, and revoke endpoints with keys generated per run.
   `tests/app/social-fixture.test.ts` covers the clearing.
 - Suites call `useDatabase()` once at file scope to register the migration,
-  per-test user/verification reset, and final pool shutdown. The reset first
+  per-test reset of users, verifications, and titles, and final pool
+  shutdown. Truncating those tables cascades to everything that references
+  them, such as activity and a title's cached availability, so no member,
+  title, or row that depends on one reaches the next test or file, and each
+  test inserts the titles it names. The reset first
   waits for the pool to go idle, so a query that an earlier test left running
   cannot deadlock with it; after 10 seconds it fails the test instead. A
   suite that resets other tables imports `db` and registers its own hooks
@@ -732,7 +736,9 @@ recipients. A full run checks:
   and keyboard, lists Caught up only for TV shows, and stays on screen at
   phone and desktop widths. A friend sees one progress entry, saves its title
   with one tap, and then sees their own status as a link. Clearing keeps an
-  entry with replies, marked as removed.
+  entry with replies, marked as removed. The status button shows its menu
+  chevron after the label, with and without a status, at phone and desktop
+  widths, and flips it while open.
 - The title page's review form rates by pointer and keyboard, saves text, and
   fits phone and desktop widths. A failed save keeps the draft. A friend reads
   the review in the friends, profile, and title feeds, replies, and reacts, and
@@ -781,7 +787,7 @@ catalog cache failures, once for each request;
 `tests/app/availability.test.ts`, `tests/app/discussion-labels.test.ts`, and
 `tests/app/shared-links.test.ts` capture invalid watch-provider, season,
 episode, and find answers; and
-`tests/app/authentication.test.ts` the Screenr-wide code cap's refusals.
+`tests/app/authentication.test.ts` the code email budgets' refusals.
 They compare the logged fields exactly, check that comment text, search terms, addresses, codes, cookies, keys, and error messages stay
 out, and confirm that permanent Resend rejections are not retried. The Better
 Auth failure tests check everything printed, Better Auth's own lines included.
@@ -793,7 +799,10 @@ delete expired sessions with their push devices and pending pushes, read
 notifications more than a year old but no unread ones, and the
 [catalog rows](title-catalog.md#catalog-retention) of titles nothing
 references once they have been expired for 30 days, keeping new search
-results, recent refreshes, and every referenced title's rows.
+results, recent refreshes, and every referenced title's rows. When its first
+step's delete fails, the pass must still succeed and the later steps run,
+and two failing runs must print two `worker cleanup failed` lines but reach
+Sentry once.
 `tests/app/google-client-check.test.ts` runs that cleanup's
 [Google client check](deployment.md#google-client-check) against the fake
 Google token endpoint: it logs `google client rejected` with only the status
@@ -804,7 +813,8 @@ hour.
 worker refuses to start without the Resend settings, deletes expired jobs on its
 first pass, says once that push delivery is off without APNs settings, and
 exits cleanly on SIGTERM. With PostgreSQL unreachable, it keeps running, logs
-each loop's failure once, and stops during its backoff.
+the email loop's failure and the push loop's cleanup failure once each, and
+stops during its backoff.
 [Database failures](https://github.com/jubishop/screenr/issues/358) have their
 own tests. `tests/app/database-connections.test.ts` ends an idle pooled
 connection and a transaction's connection from another one, and checks that
@@ -831,7 +841,10 @@ which must leave the job stale and never retried
 ([issue #359](https://github.com/jubishop/screenr/issues/359)).
 `tests/app/worker-loop.test.ts` runs a worker loop on a fake clock and checks
 its backoff, its one line per kind of failure, the hourly repeat, and its
-recovery line, and that each line it logs goes to Sentry unfolded.
+recovery line, and that each line it logs goes to Sentry unfolded. Over an
+hour of passes whose cleanup has a step that always fails, the loop must keep
+its one-second pause and run the other step every minute, and the failing
+step must log every minute but reach Sentry once.
 `tests/app/push-delivery.test.ts` sends
 [pushes](notifications.md#push-delivery) to two fake APNs servers, one per
 environment, that speak HTTP/2 without TLS on loopback. It checks each kind's
@@ -841,14 +854,15 @@ including badge-only updates for kinds turned off, and visibility, read
 state, expired sessions, and moved tokens at send time. It also checks that
 rejected tokens delete their device, that other rejections and retryable
 failures are logged without tokens, badge-only updates, and reconnection
-after GOAWAY or a lost connection. Its fake host sends GOAWAY ahead of the
-answer to a push in flight, so the test needs no fixed wait: that push
-finishes on its connection and the next one connects again. Each read
-action, friendship change, reply removal, and account deletion, from the
-web or the app, sends a badge-only update with the new count to each member
-whose count it changed, including people sent a reply on the changed
-friends' entries. Changes that leave every count unchanged, and failed ones,
-queue none.
+after GOAWAY or a lost connection, and that a failing delete of expired
+jobs logs `worker cleanup failed` while the pass still sends. Its fake host
+sends GOAWAY ahead of the answer to a push in flight, so the test needs no
+fixed wait: that push finishes on its connection and the next one connects
+again. Each read action, friendship change, reply removal, and account
+deletion, from the web or the app, sends a badge-only update with the new
+count to each member whose count it changed, including people sent a reply
+on the changed friends' entries. Changes that leave every count unchanged,
+and failed ones, queue none.
 Operational tests check activation rollback after a stalled health request, a
 failed signed-out session request, or a web or worker service that crashes on
 startup. They also check a production-down report when the restored release

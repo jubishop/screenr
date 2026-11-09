@@ -1,28 +1,24 @@
-import { test, before, beforeEach, after } from "node:test";
+import { test, beforeEach } from "node:test";
 import assert from "node:assert/strict";
-import { db } from "./social-fixture";
+import { db, useDatabase } from "./social-fixture";
 
-const { migrate } = await import("../../scripts/migrate");
 const { changeRelationship } = await import("../../src/server/relationships");
 const { thread, conversations } = await import("../../src/server/feed");
 const { updateTitleActivity } = await import("../../src/server/title-actions");
 const { addComment } = await import("../../src/server/comments");
 const { setReaction } = await import("../../src/server/reactions");
 
-before(migrate);
+useDatabase();
 beforeEach(async () => {
-  await db.query('TRUNCATE "user", verification RESTART IDENTITY CASCADE');
   await db.query(`INSERT INTO "user"(id,name,email,"emailVerified","createdAt","updatedAt")
     VALUES ('owner','Owner','owner@example.test',true,now(),now()),
            ('friend','Friend','friend@example.test',true,now(),now());
     INSERT INTO profile(user_id,username,display_name)
     VALUES ('owner','owner','Owner'),('friend','friend','Friend');
-    INSERT INTO title(id,kind,tmdb_id,name) VALUES ('movie:78','movie',78,'Switching')
-    ON CONFLICT DO NOTHING`);
+    INSERT INTO title(id,kind,tmdb_id,name) VALUES ('movie:78','movie',78,'Switching')`);
   await changeRelationship("owner", "friend", "request");
   await changeRelationship("friend", "owner", "accept");
 });
-after(() => db.end());
 
 for (const first of ["recommended", "want_to_watch"] as const) {
   const second = first === "recommended" ? "want_to_watch" : "recommended";

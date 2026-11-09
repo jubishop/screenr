@@ -57,7 +57,6 @@ before(async () => {
   process.env.TMDB_READ_TOKEN = "in-theaters-test-token";
 });
 beforeEach(async () => {
-  await db.query("TRUNCATE title CASCADE");
   today = "2026-10-25";
   details = {};
   failing = false;

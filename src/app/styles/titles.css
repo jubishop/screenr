@@ -39,9 +39,15 @@
   align-items: center;
   gap: 6px;
 }
+/* The chevron marks the button as a menu, unlike the one-tap buttons beside
+   it, so it is larger and heavier than other icons. The margins trim the
+   empty space its own box leaves around the glyph. */
 .status-button .icon {
-  width: 16px;
-  height: 16px;
+  flex: none;
+  width: 24px;
+  height: 24px;
+  margin: 0 -7px 0 -3px;
+  stroke-width: 2.5;
 }
 .status-button[aria-expanded="true"] .icon {
   transform: rotate(180deg);

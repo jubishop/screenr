@@ -49,7 +49,6 @@ before(async () => {
   process.env.TMDB_READ_TOKEN = "want-to-watch-test-token";
 });
 beforeEach(async () => {
-  await db.query("TRUNCATE title CASCADE");
   offers = {};
   providerRequests = [];
 });

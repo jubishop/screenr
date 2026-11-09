@@ -157,9 +157,8 @@ async function printed(work: () => Promise<void>) {
 }
 
 test("the seed command creates a closed demo circle with real activity, and reseeding resets it", async () => {
-  // Other suites leave stored titles behind. Without them, the seed must
-  // resolve every title through the catalog.
-  await db.query("TRUNCATE title CASCADE");
+  // No title is stored yet, so the seed must resolve every title through
+  // the catalog.
   const alice = await person("alice");
   const ben = await person("ben");
   await friend(alice, ben);

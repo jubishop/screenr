@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import { syncBuiltinESMExports } from "node:module";
 import { captureFailures } from "./social-fixture";
 
-const { runWorkerLoop } = await import("../../src/server/worker-loop");
+const { runWorkerLoop, runCleanup } =
+  await import("../../src/server/worker-loop");
 
 // The fake clock and timers replace the node:timers/promises functions too.
 // Modules that imported them by name see the change only after a sync.
@@ -37,9 +38,9 @@ const startingUp = () =>
     code: "57P03",
   });
 
-// A loop whose passes record when they start and fail with `failure`'s
-// error for their pass number, if any.
-function start(failure: (pass: number) => Error | undefined) {
+// A loop whose passes record when they start, then run `run` for their pass
+// number and fail with the error it returns, if any.
+function start(run: (pass: number) => Error | undefined | Promise<void>) {
   fakeTime();
   const printed = captureFailures();
   const recovered: string[] = [];
@@ -48,7 +49,7 @@ function start(failure: (pass: number) => Error | undefined) {
   const stop = new AbortController();
   const loop = runWorkerLoop(async (pass) => {
     starts.push(Date.now());
-    const error = failure(pass);
+    const error = await run(pass);
     if (error) throw error;
   }, stop.signal);
   return {
@@ -130,4 +131,50 @@ test("each failure a worker loop logs also goes to Sentry, even a new run's firs
     return event.contexts.failure;
   });
   assert.deepEqual(reported, loop.failed());
+});
+
+test("a cleanup step that keeps failing logs each run and reaches Sentry once an hour, while the loop keeps its one-second pause and the other steps run", async () => {
+  process.env.SENTRY_DSN = "https://public-key@sentry.example.test/42";
+  const fetch = mock.method(
+    globalThis,
+    "fetch",
+    async () => new Response(null, { status: 200 }),
+  );
+  const cleaned: number[] = [];
+  const steps = {
+    broken: async () => {
+      throw startingUp();
+    },
+    working: async () => {
+      cleaned.push(Date.now());
+    },
+  };
+  // As in production, the first pass and every 60th run the cleanup.
+  const loop = start((pass) =>
+    pass % 60 === 0 ? runCleanup(steps) : undefined,
+  );
+  await runUntil(3_599_000);
+  await loop.stop();
+  const minutes = Array.from({ length: 60 }, (_, minute) => minute * 60_000);
+  assert.deepEqual(
+    loop.starts,
+    Array.from({ length: 3_600 }, (_, pass) => pass * 1_000),
+  );
+  assert.deepEqual(cleaned, minutes);
+  const failure = {
+    event: "worker cleanup failed",
+    step: "broken",
+    error: "Error",
+    code: "57P03",
+  };
+  assert.deepEqual(
+    loop.failed(),
+    minutes.map(() => failure),
+  );
+  assert.deepEqual(loop.recovered, []);
+  const reported = fetch.mock.calls.map(({ arguments: [, init] }) => {
+    const event = JSON.parse(String(init?.body).trimEnd().split("\n")[2]);
+    return event.contexts.failure;
+  });
+  assert.deepEqual(reported, [failure]);
 });

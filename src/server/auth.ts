@@ -5,6 +5,7 @@ import {
   APIError,
   createAuthEndpoint,
   createAuthMiddleware,
+  getIP,
   isAPIError,
 } from "better-auth/api";
 import { bearer, emailOTP } from "better-auth/plugins";
@@ -67,24 +68,45 @@ const seededDemoAddress = (email: string) =>
   email.toLowerCase() === reviewerEmail ||
   email.toLowerCase().endsWith(`@${demoFriendDomain}`);
 
-// Login-code email limits over rolling windows. They keep most of the shared
-// Resend allowance for activity email and other applications.
-const codeLimits = { recipient15Minutes: 3, recipientDay: 10, screenrDay: 40 };
+// Login-code email limits over rolling windows. Screenr sends at most 40 code
+// emails a day, which keeps most of the shared Resend allowance for activity
+// email and other applications. The 40 split into two budgets, so that an
+// invitation holder, who alone can have codes sent to new addresses, can't
+// use up members' codes (docs/running-screenr.md#provider-configuration):
+// members, who have finished setup, share one, and every other address
+// shares the other, of which each client IP may use only a part. A larger
+// Resend plan only needs larger numbers here.
+const codeLimits = {
+  recipient15Minutes: 3,
+  recipientDay: 10,
+  membersDay: 30,
+  newAddressesDay: 10,
+  newAddressesIPDay: 3,
+};
 const codeLock = 713934203;
 const codeRecipient = (email: string) =>
   createHash("sha256")
     .update(`login-code:${email.toLowerCase()}`)
     .digest("hex");
+// Requests without a client IP share one budget, as in Better Auth's limit.
+const codeIP = (ip: string | null) =>
+  createHash("sha256")
+    .update(`login-code-ip:${ip ?? ""}`)
+    .digest("hex");
 
-// Reaching the Screenr-wide cap blocks email-code sign-in for everyone until
-// the day's oldest sends age out, so each request it refuses is logged.
-function codeEmailCapped() {
-  logFailure("code email cap reached", {});
+// A used-up members' budget blocks email-code sign-in for every member, and a
+// used-up new addresses' budget blocks it for everyone still joining, until
+// the day's oldest sends age out, so each request either refuses is logged.
+function codeEmailCapped(budget: "members" | "new addresses") {
+  logFailure("code email cap reached", { budget });
   return false;
 }
 
 // Count every request for an address, sent or not, so a limited response
-// never reveals whether the address belongs to a member.
+// never reveals whether the address belongs to a member. For the same reason
+// a used-up members' budget refuses every request, whatever its address,
+// while the new addresses' budgets refuse none here: reserveCodeEmail leaves
+// a code unsent instead.
 async function acceptCodeRequest(email: string) {
   const recipient = codeRecipient(email);
   return transaction(async (client) => {
@@ -92,7 +114,7 @@ async function acceptCodeRequest(email: string) {
       `SELECT count(*) FILTER (WHERE recipient_hash=$1
           AND created_at>now()-interval '15 minutes') AS recent,
         count(*) FILTER (WHERE recipient_hash=$1) AS today,
-        count(*) FILTER (WHERE sent) AS sent
+        count(*) FILTER (WHERE sent AND ip_hash IS NULL) AS members
       FROM login_code_request WHERE created_at>now()-interval '1 day'`,
       [recipient],
     );
@@ -101,7 +123,8 @@ async function acceptCodeRequest(email: string) {
       rows[0].today >= codeLimits.recipientDay
     )
       return false;
-    if (rows[0].sent >= codeLimits.screenrDay) return codeEmailCapped();
+    if (rows[0].members >= codeLimits.membersDay)
+      return codeEmailCapped("members");
     await client.query(
       "DELETE FROM login_code_request WHERE created_at<=now()-interval '1 day'",
     );
@@ -113,25 +136,41 @@ async function acceptCodeRequest(email: string) {
   }, codeLock);
 }
 
-// Recheck the Screenr-wide cap at send time; concurrent requests may all have
-// been accepted before any of them sent.
-async function reserveCodeEmail(email: string) {
+// Check the budget the email draws on at send time: concurrent requests may
+// all have been accepted before any of them sent, and only here is it known
+// whether the address is a member's. A member's email passes no IP. Any
+// other passes the client IP it was requested from, or null when unknown,
+// and is stored with that IP's hash.
+async function reserveCodeEmail(email: string, newAddressIP?: string | null) {
   const recipient = codeRecipient(email);
+  const ip = newAddressIP === undefined ? null : codeIP(newAddressIP);
   return transaction(async (client) => {
     const { rows } = await client.query(
-      "SELECT count(*) AS sent FROM login_code_request WHERE sent AND created_at>now()-interval '1 day'",
+      `SELECT count(*) FILTER (WHERE ip_hash IS NULL) AS members,
+        count(ip_hash) AS new_addresses,
+        count(*) FILTER (WHERE ip_hash=$1) AS from_ip
+      FROM login_code_request WHERE sent AND created_at>now()-interval '1 day'`,
+      [ip],
     );
-    if (rows[0].sent >= codeLimits.screenrDay) return codeEmailCapped();
+    if (ip === null) {
+      if (rows[0].members >= codeLimits.membersDay)
+        return codeEmailCapped("members");
+    } else {
+      // One IP's own limit is routine, like an address's, and is not logged.
+      if (rows[0].from_ip >= codeLimits.newAddressesIPDay) return false;
+      if (rows[0].new_addresses >= codeLimits.newAddressesDay)
+        return codeEmailCapped("new addresses");
+    }
     const marked = await client.query(
-      `UPDATE login_code_request SET sent=true WHERE id=(SELECT id
+      `UPDATE login_code_request SET sent=true, ip_hash=$2 WHERE id=(SELECT id
         FROM login_code_request WHERE recipient_hash=$1 AND NOT sent
         ORDER BY id DESC LIMIT 1)`,
-      [recipient],
+      [recipient, ip],
     );
     if (!marked.rowCount)
       await client.query(
-        "INSERT INTO login_code_request(recipient_hash,sent) VALUES($1,true)",
-        [recipient],
+        "INSERT INTO login_code_request(recipient_hash,sent,ip_hash) VALUES($1,true,$2)",
+        [recipient, ip],
       );
     return true;
   }, codeLock);
@@ -558,11 +597,15 @@ export function createAuth(
             // Password reset codes would be unusable.
             if (data.type === "forget-password") return;
             if (seededDemoAddress(data.email)) return;
-            const token = invitationToken(
-              context?.headers ?? context?.request?.headers,
-            );
+            const headers = context?.headers ?? context?.request?.headers;
+            const token = invitationToken(headers);
+            // A member has finished setup. An account without a profile is
+            // still joining, so an invitation holder can't turn new addresses
+            // into ones that draw on members' budget.
             const existing = await db.query(
-              'SELECT 1 FROM "user" WHERE email=$1',
+              `SELECT EXISTS(SELECT 1 FROM profile
+                WHERE user_id="user".id) AS member
+              FROM "user" WHERE email=$1`,
               [data.email],
             );
             // Preserve the same response for unknown addresses without
@@ -572,9 +615,17 @@ export function createAuth(
               (!token || !(await activeInvitation(invitationHash(token))))
             )
               return;
-            // Better Auth ignores this callback's errors, so a request that
-            // loses a race for the last daily slot returns success unsent.
-            if (limited && !(await reserveCodeEmail(data.email))) return;
+            // Better Auth ignores this callback's errors, so a request past
+            // a new addresses' budget, or one that loses a race for the last
+            // daily slot, returns success unsent. The client IP is the one
+            // Better Auth's own per-IP limit reads.
+            const newAddressIP = existing.rows[0]?.member
+              ? undefined
+              : headers && context
+                ? getIP(headers, context.context.options)
+                : null;
+            if (limited && !(await reserveCodeEmail(data.email, newAddressIP)))
+              return;
             await (options.sendCode ?? queueCode)(data);
           }),
       }),

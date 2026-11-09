@@ -149,7 +149,6 @@ before(async () => {
 });
 let viewer: string;
 beforeEach(async () => {
-  await db.query("TRUNCATE title CASCADE");
   today = "2026-10-25";
   catalog = {};
   results = [];

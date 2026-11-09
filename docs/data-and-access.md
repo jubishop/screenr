@@ -371,7 +371,9 @@ remaining and must be neither expired nor revoked.
 - **Code request:** an address without an account gets a code only with a
   valid invitation. Otherwise nothing is sent, and the response is the same
   `200` with `{"success": true}` that a member's address gets, so it never
-  reveals which addresses have accounts.
+  reveals which addresses have accounts. A request past the new addresses'
+  [daily budgets](running-screenr.md#provider-configuration) gets that same
+  answer and no code.
 - **New account:** with any sign-in method, creating an account without a
   valid invitation fails with 403 and
   `{"message": "A valid invitation is required to join Screenr."}`. Existing
