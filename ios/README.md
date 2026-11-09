@@ -475,9 +475,12 @@ local server that `npm run dev` starts on port 3000.
 
 ## Releases
 
-`bin/testflight` archives the Release app from a clean `main`, uploads it
-to App Store Connect, tags the commit `ios-v<version>b<build>`, and adds the
-build to the TestFlight groups with What to Test notes. See
+`bin/testflight`, or its alias `bin/shipit`, archives the Release app from
+a clean `main`, uploads it to App Store Connect, tags the commit
+`ios-v<version>b<build>`, adds the build to the TestFlight groups with What
+to Test notes, and submits it for Beta App Review. When
+`ios/Config/Version.xcconfig` holds an App Store version, such as 1.0, it
+first pushes the first TestFlight version, 1.0.1, to `main`. See
 [TestFlight releases](../docs/development-workflow.md#testflight-releases).
 
 ## Formatting
@@ -2144,8 +2147,10 @@ The Screenr target's last build phase runs only when archiving. It calls
 `bin/upload-ios-symbols`, which uploads a Release device archive's dSYMs to
 `screenr-ios` with `sentry-cli`. sentry-cli reads its auth token from
 `SENTRY_AUTH_TOKEN` or `~/.sentryclirc`. Without sentry-cli or a token, the
-script prints a warning and skips the upload; a failed upload fails the
-archive. To confirm that Sentry has an archive's symbols:
+script prints a warning and skips the upload, except in `bin/testflight`'s
+archives, which set `SCREENR_REQUIRE_SENTRY_SYMBOLS=YES` so that the archive
+fails instead. A failed upload always fails the archive. To confirm that
+Sentry has an archive's symbols:
 
 ```sh
 sentry-cli debug-files upload --org artisanal-software --project screenr-ios \

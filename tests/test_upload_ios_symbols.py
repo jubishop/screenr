@@ -26,6 +26,8 @@ print(os.environ.get('FAKE_OUTPUT', ''))
 sys.exit(int(os.environ.get('FAKE_STATUS', '0')))
 """
 ARCHIVE = {"ACTION": "install", "CONFIGURATION": "Release", "PLATFORM_NAME": "iphoneos"}
+# bin/testflight's archives require the upload.
+RELEASE = ARCHIVE | {"SCREENR_REQUIRE_SENTRY_SYMBOLS": "YES"}
 
 
 class UploadIOSSymbolsTests(unittest.TestCase):
@@ -85,6 +87,24 @@ class UploadIOSSymbolsTests(unittest.TestCase):
         result = self.upload(**ARCHIVE, FAKE_AUTH="")
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("warning: No Sentry auth token", result.stdout)
+        self.assertEqual(self.recorded(), [["info", "--config-status-json"]])
+
+    def test_a_release_archive_uploads_its_symbols_as_usual(self):
+        result = self.upload(**RELEASE)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(self.recorded()[-1][:2], ["debug-files", "upload"])
+
+    def test_fails_a_release_archive_without_sentry_cli(self):
+        (self.tools / "sentry-cli").unlink()
+        result = self.upload(**RELEASE)
+        self.assertEqual(result.returncode, 1, result.stderr)
+        self.assertIn("error: sentry-cli is not installed", result.stdout)
+        self.assertIn("A release archive must upload its symbols to Sentry.", result.stdout)
+
+    def test_fails_a_release_archive_without_an_auth_token(self):
+        result = self.upload(**RELEASE, FAKE_AUTH="")
+        self.assertEqual(result.returncode, 1, result.stderr)
+        self.assertIn("error: No Sentry auth token", result.stdout)
         self.assertEqual(self.recorded(), [["info", "--config-status-json"]])
 
     def test_fails_the_archive_when_an_upload_fails(self):

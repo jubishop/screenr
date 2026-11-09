@@ -1,6 +1,7 @@
 #!/bin/sh
 # Release the iPhone app to TestFlight from this Mac: check, archive, upload,
-# tag, and distribute. scripts/testflight.ts does the work; see
+# tag, distribute, and submit for Beta App Review. bin/shipit links here and
+# runs the same command. scripts/testflight.ts does the work; see
 # docs/development-workflow.md#testflight-releases. Run with --help for options.
 set -eu
 root=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)

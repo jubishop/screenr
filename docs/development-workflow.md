@@ -345,20 +345,24 @@ changes, so the push finds that pass. Never bypass the hook with
 
 ### iOS release gate
 
-`bin/testflight` runs `bin/check-ios --reuse` in the terminal on the
-clean `main` commit it releases, before archiving, and stops when it fails.
-The check skips itself when the same iOS files passed with the same Xcode in
-the last 7 days, such as before the push that brought them to `main`, and
+`bin/testflight` runs `bin/check-ios --reuse` in the terminal on the clean
+commit it releases, before archiving, and stops when it fails. A version
+change that the command commits passes the same check before its push. The
+check skips itself when the same iOS files passed with the same Xcode in the
+last 7 days, such as before the push that brought them to `main`, and
 otherwise runs in full.
 
 ### TestFlight releases
 
-`bin/testflight` builds the iPhone app on the owner's Mac and brings it
-to TestFlight testers. It follows the
+`bin/testflight`, or its alias `bin/shipit`, builds the iPhone app on the
+owner's Mac, brings it to TestFlight testers, and submits it for Beta App
+Review. It follows the
 [release decision](ios-app.md#ci-checks-and-local-testflight-releases--2026-10-13),
 the [local iOS checks decision](ios-app.md#local-ios-checks-instead-of-ios-ci--2026-10-14),
-and the [tooling decision](ios-app.md#in-house-release-tooling-without-fastlane--2026-10-13).
-The owner or an agent runs it from a clean checkout of `main`:
+the [tooling decision](ios-app.md#in-house-release-tooling-without-fastlane--2026-10-13),
+and the [shared release behavior decision](ios-app.md#release-commands-shared-with-podhaven--2026-11-09),
+which keeps it in step with PodHaven's command. The owner or an agent runs it
+from a clean checkout of `main`:
 
 ```sh
 git switch main
@@ -367,73 +371,131 @@ bin/testflight
 ```
 
 It needs `npm ci`, Xcode 27 with an iOS 27 Simulator runtime, Git access to
-push tags to `origin`, and the
+push tags and version changes to `origin`, `sentry-cli` with an auth token,
+the `llm` CLI unless `--notes` gives the notes, and the
 [App Store Connect API key](running-screenr.md#app-store-connect) in
 `ASC_KEY_PATH`, `ASC_KEY_ID`, and `ASC_ISSUER_ID`. One run takes about as
 long as an archive plus Apple's processing, often 15 to 30 minutes, plus
 `bin/check-ios` when no recorded pass covers the commit.
 
-1. **Checks:** it fetches `main` and the tags. `HEAD` must be
-   `origin/main`'s commit, with no changed or untracked files; a linked
-   worktree can check that commit out detached. The commit must not already
-   have a release tag, and it must pass the [release gate](#ios-release-gate).
-2. **Version:** the marketing version is `MARKETING_VERSION` in
-   `ios/Config/Version.xcconfig`. The build number is the highest
-   `ios-v<version>b<build>` tag's build plus one, starting at 1, and reaches
-   Xcode as `CURRENT_PROJECT_VERSION`. Raise the marketing version in a
-   normal commit; build numbers keep counting across versions.
-3. **Archive:** `xcodebuild archive` builds the Release configuration without
+1. **Lock:** one release runs at a time across all checkouts of the clone,
+   since two would pick the same build number. A lock file in the clone's
+   Git directory names the running process. A second run stops at once, and
+   a lock whose process has ended, left by a killed run, is taken over.
+2. **Checks:** it fetches `main` and the tags. `sentry-cli` must be installed
+   and signed in. `HEAD` must be `origin/main`'s commit, with no changed or
+   untracked files; a linked worktree can check that commit out detached. A
+   commit that already has a release tag resumes instead; see **Recovery**.
+3. **Notes:** it settles [What to Test](#what-to-test) before it changes
+   anything.
+4. **Version:** the marketing version is `MARKETING_VERSION` in
+   `ios/Config/Version.xcconfig`. App Store versions have zero or one dot,
+   such as 1.0, and TestFlight versions two, such as 1.0.1. When the file
+   holds an App Store version, the command first commits that file alone
+   with the first TestFlight version (1.0 becomes 1.0.1, and 2 becomes
+   2.0.1), runs the [release gate](#ios-release-gate) on it, and pushes it
+   straight to `main`. The commit, `🔧 chore(ios): Set the iPhone app version
+   to 1.0.1`, ends with `Screenr-Deploy: skip` and its reason, so
+   [main branch delivery](#main-branch-delivery) does not redeploy production
+   for it. The build number is the highest `ios-v<version>b<build>` tag's
+   build plus one, starting at 1, and reaches Xcode as
+   `CURRENT_PROJECT_VERSION`. Build numbers keep counting across versions.
+5. **Beta App Review:** Apple reviews one build of a version at a time.
+   Before the gate, the command looks in App Store Connect for another
+   unexpired build of the version that waits for or is in review. After the
+   gate, it expires an older one that still only waits, so that the new build
+   replaces its submission. Testers lose that build, which never passed
+   review. When Apple is already reviewing the older build, the command keeps
+   that review and moves to the next patch version instead, such as 1.0.1 to
+   1.0.2, with the same kind of commit and push. Two such builds, or a newer
+   one, stop the command.
+6. **Archive:** `xcodebuild archive` builds the Release configuration without
    the Xcode interface, through `bin/ios-packages`, against the Mac's
    [shared package cache](../ios/README.md#package-cache).
    `-allowProvisioningUpdates` with the API key signs it automatically for
    team `34TKMKM889`. Its last build phase uploads the
-   [symbols to Sentry](../ios/README.md#symbols).
-4. **Upload:** `xcodebuild -exportArchive` with
+   [symbols to Sentry](../ios/README.md#symbols), and
+   `SCREENR_REQUIRE_SENTRY_SYMBOLS=YES` makes that phase fail the archive
+   when it cannot.
+7. **Upload:** it first checks that `HEAD` is still the gated commit and that
+   no files changed during the archive. Then `xcodebuild -exportArchive` with
    `ios/Config/ExportOptions.plist` (`app-store-connect` method, `upload`
-   destination) sends the build to App Store Connect, with its symbols.
-5. **Tag:** it tags the commit `ios-v<version>b<build>`, with the What to
-   Test notes as the tag message, and pushes the tag to `origin`.
-6. **Distribute:** `scripts/app-store-connect.ts` calls the App Store
-   Connect API. It waits up to an hour for processing, sets What to Test for
-   the app's primary locale, and adds the build to the external group
-   "Public testers", creating the group without a public link if it is
-   missing. The internal group "Screenr team" has access to every build, so
-   its testers get each build once it is processed. If that setting is off,
-   the script adds the build to it too.
+   destination) sends the build to App Store Connect.
+8. **Tag:** it tags the commit `ios-v<version>b<build>`, with the What to
+   Test notes as the whole tag message, and pushes the tag to `origin`.
+9. **Distribute:** `scripts/app-store-connect.ts` calls the App Store Connect
+   API. It checks every 30 seconds whether Apple has processed the build,
+   including TestFlight's own processing for external testers, for up to two
+   hours; `SCREENR_TESTFLIGHT_TIMEOUT_SECONDS` sets another wait in whole
+   seconds. It sets What to Test for the app's primary locale and adds
+   the build to the external group "Public testers", creating the group
+   without a public link if it is missing. The internal group "Screenr team"
+   has access to every build, so its testers get each build once it is
+   processed; if that setting is off, the script adds the build to it too.
+   Then it repeats step 5's review check and submits the build for Beta App
+   Review. It stops unless the build then waits for review, is in review, or
+   is approved or in testing.
 
-**What to Test** lists the subjects of the commits since the previous tag
-that touch `ios/`, `src/server/`, or `src/app/api/`, newest first. It keeps
-features, fixes, performance work, and subjects without a type, such as
-reverts, and drops the type, scope, and pull request number. It also drops
-every emoji, typed subject or not: App Store Connect refused 1.0 (5)'s notes
-over a `✨` left on two subjects without a type
-([#554](https://github.com/jubishop/screenr/issues/554)). It never reads
-commit bodies. The list stops before App Store Connect's 4,000-character
-limit with a count of the rest. The first build says "The first TestFlight
-build of Screenr for iPhone.", and a release with no such commits says
-"Behind-the-scenes changes only; nothing new to test."
+When Apple starts reviewing an older build of the version after the upload,
+the uploaded build keeps its version and tag without a submission. The
+command then moves to the next patch version and uploads another build with
+the same notes. A run moves to a next patch version at most once.
 
-**Beta App Review and the public link:** external testers get a build only
-after Beta App Review approves it, and a release does not submit it.
-`--submit-review` submits the build after the distribution steps, once the
-review information in App Store Connect is complete. Apple approved 1.0 (3)
-as soon as it was submitted on 2026-11-05, after approving 1.0 (2) of the
-same version, so a later build of an approved version may not wait for
-review ([#502](https://github.com/jubishop/screenr/issues/502)). The script
-never enables the group's public link. [#250](https://github.com/jubishop/screenr/issues/250)
-submitted the first external build and turned the link on through the API on
-2026-11-04; [App Store Connect records](running-screenr.md#app-store-connect)
-say where the link lives.
+#### What to Test
 
-**Recovery:** a failure before the upload leaves nothing behind, so rerun the
-command. After the upload, the build number is used and the tag exists.
-`bin/testflight --distribute-only` repeats the processing wait, notes,
-and groups for the newest tag without building, and accepts
-`--submit-review`. Each release keeps its archive and its `archive.log` and
-`upload.log` files in `ios/build/release/<tag>/`, which Git ignores. After
-each upload, the script removes all but the newest three tags' directories
-there ([#381](https://github.com/jubishop/screenr/issues/381)): retrying
-needs none of them, and the archive already uploaded its symbols to Sentry.
+The notes cover the changes since the build that testers in "Public testers"
+have: the newest unexpired build that App Store Connect lists in testing
+there. A build that waits for review, or expired before approval, never
+reached them, so its changes stay in the next notes. The command finds that
+build's `ios-v*b<build>` tag, which must be an ancestor of `HEAD`. It gives
+`llm -s` a prompt and the full messages of the commits since that tag that
+touch `ios/`, `src/server/`, or `src/app/api/`, leaving out the version file
+and the Markdown directly in `ios/`. `llm` drafts one or two casual sentences
+for testers. With no such commits, the notes say "Behind-the-scenes changes
+only; nothing new to test."
+
+In a terminal, the command shows the draft and asks whether to use it (`y`
+or Enter), edit it in `$VISUAL` or `$EDITOR` (`e`), or stop with nothing
+changed (`n`). Saving empty notes also stops. Without a terminal, it uses the
+draft. `--notes "What to try"` replaces the draft. With no build in testing,
+or without exactly one tag for it that is an ancestor of `HEAD`, the command
+stops before it changes anything; pass `--notes`.
+
+Notes have 1 to 4,000 characters. Every emoji is dropped, from drafts,
+edits, and `--notes` alike: App Store Connect refused 1.0 (5)'s notes over a
+`✨` ([#554](https://github.com/jubishop/screenr/issues/554)).
+
+#### Beta App Review and the public link
+
+External testers get a build only after Beta App Review approves it. Apple
+approved 1.0 (3) as soon as it was submitted on 2026-11-05, after approving
+1.0 (2) of the same version, so a later build of an approved version may not
+wait for review ([#502](https://github.com/jubishop/screenr/issues/502)). The
+first build of a new version, such as 1.0.1, may wait longer. The script
+never enables the group's public link.
+[#250](https://github.com/jubishop/screenr/issues/250) submitted the first
+external build and turned the link on through the API on 2026-11-04;
+[App Store Connect records](running-screenr.md#app-store-connect) say where
+the link lives.
+
+#### Recovery
+
+A failure before the upload leaves no tag behind, so rerun the command. A
+version change that it could not check or push stays committed, and the rerun
+checks and pushes it. After the upload, the build number is used and the tag
+exists. Running `bin/testflight` again on that commit resumes: it pushes the
+tag if `origin` lacks it, then repeats the processing wait, notes, groups,
+and review submission. The tag message gives the notes unless `--notes`
+replaces them. `bin/testflight --distribute-only` resumes the newest tag the
+same way from any checkout, without building. When Apple is reviewing an
+older build of that tag's version, it stops and asks for a normal run, which
+can move to the next patch version.
+
+Each release keeps its archive and its `archive.log` and `upload.log` files
+in `ios/build/release/<tag>/`, which Git ignores. After each upload, the
+script removes all but the newest three tags' directories there
+([#381](https://github.com/jubishop/screenr/issues/381)): retrying needs none
+of them, and the archive already uploaded its symbols to Sentry.
 
 **Signing requests:** App Store Connect accepts ES256 JWTs with the key ID,
 the issuer ID, and the `appstoreconnect-v1` audience, expiring within 20
@@ -441,8 +503,10 @@ minutes. The script signs a new 15-minute token for each request with
 `src/server/apple-jwt.ts`, the same signer as the APNs sender and Sign in
 with Apple, which reads the `.p8` file as PEM. Its tests,
 `tests/app/testflight.test.ts` and `tests/app/app-store-connect.test.ts`,
-fake Git, `bin/check-ios`, `bin/ios-packages`, Xcode, and the App Store
-Connect API.
+fake Git, `llm`, `sentry-cli`, `bin/check-ios`, `bin/ios-packages`, and
+Xcode in `tests/app/testflight-fixture.ts`, and the App Store Connect API in
+`tests/app/app-store-connect-fixture.ts`. `tests/test_upload_ios_symbols.py`
+covers the symbol upload.
 
 ## TypeScript checkout isolation
 

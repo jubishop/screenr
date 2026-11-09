@@ -2,14 +2,15 @@ import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { applePrivateKey, signAppleJWT } from "../src/server/apple-jwt";
 
-// The App Store Connect API calls behind bin/testflight: wait for an
-// uploaded build to finish processing, set its What to Test notes, add it to
-// the tester groups, and, only on request, submit it for Beta App Review.
+// The App Store Connect API calls behind bin/testflight: find the build the
+// external group already tests, clear the way for Beta App Review, wait for
+// an uploaded build to finish processing, set its What to Test notes, add it
+// to the tester groups, and submit it for Beta App Review.
 
 const origin = "https://api.appstoreconnect.apple.com";
 // Apple refuses tokens that expire more than 20 minutes after they are issued.
 const tokenLifetime = 15 * 60;
-const externalGroupName = "Public testers";
+export const externalGroupName = "Public testers";
 const internalGroupName = "Screenr team";
 
 export type Environment = Record<string, string | undefined>;
@@ -30,9 +31,22 @@ export function credentialsFrom(env: Environment): Credentials {
   };
 }
 
-type Resource<Attributes> = { id: string; attributes: Attributes };
-type One<Attributes> = { data: Resource<Attributes> };
-type Many<Attributes> = { data: Resource<Attributes>[] };
+type Link = { data?: { type: string; id: string } };
+type Resource<Attributes> = {
+  type?: string;
+  id: string;
+  attributes: Attributes;
+  relationships?: Record<string, Link>;
+};
+type One<Attributes> = {
+  data: Resource<Attributes>;
+  included?: Resource<Record<string, unknown>>[];
+};
+type Many<Attributes> = {
+  data: Resource<Attributes>[];
+  included?: Resource<Record<string, unknown>>[];
+  links?: { next?: string };
+};
 
 // Apple's error documents list a title and detail for each problem.
 function problem(text: string) {
@@ -50,7 +64,8 @@ function problem(text: string) {
   return text.slice(0, 500) || "no details";
 }
 
-// Each request signs a new token, so a long wait never outlives one.
+// Each request signs a new token, so a long wait never outlives one. A path
+// may also be a full API URL, such as a list's link to its next page.
 export async function appStoreConnect(
   credentials: Credentials,
   fetcher: typeof fetch = fetch,
@@ -58,6 +73,9 @@ export async function appStoreConnect(
 ) {
   const key = applePrivateKey(await readFile(credentials.keyPath, "utf8"));
   async function request<T>(method: string, path: string, body?: unknown) {
+    const url = new URL(path, origin);
+    if (url.origin !== origin)
+      throw new Error(`Refusing to send an App Store Connect token to ${url}.`);
     const issuedAt = Math.floor(now() / 1000);
     const token = signAppleJWT(
       key,
@@ -70,7 +88,7 @@ export async function appStoreConnect(
       },
       { typ: "JWT" },
     );
-    const response = await fetcher(`${origin}${path}`, {
+    const response = await fetcher(url.href, {
       method,
       headers: {
         authorization: `Bearer ${token}`,
@@ -81,7 +99,7 @@ export async function appStoreConnect(
     const text = await response.text();
     if (!response.ok)
       throw new Error(
-        `App Store Connect ${method} ${path.split("?")[0]} failed with ${response.status}: ${problem(text)}`,
+        `App Store Connect ${method} ${url.pathname} failed with ${response.status}: ${problem(text)}`,
       );
     return (text ? JSON.parse(text) : undefined) as T;
   }
@@ -93,55 +111,257 @@ export async function appStoreConnect(
 }
 
 export type AppStoreConnect = Awaited<ReturnType<typeof appStoreConnect>>;
-
-export type Release = {
-  bundleId: string;
-  version: string;
-  build: number;
-  notes: string;
-  submitReview: boolean;
-};
+export type App = { id: string; primaryLocale: string };
+export type Release = { version: string; build: number; notes: string };
 
 export type Waiting = {
   sleep: (milliseconds: number) => Promise<void>;
   log: (line: string) => void;
-  timeout?: number;
+  timeout: number;
   interval?: number;
 };
 
 const query = (path: string, parameters: Record<string, string>) =>
   `${path}?${new URLSearchParams(parameters)}`;
 
+export async function findApp(
+  api: AppStoreConnect,
+  bundleId: string,
+): Promise<App> {
+  const [app] = (
+    await api.get<Many<{ primaryLocale: string }>>(
+      query("/v1/apps", {
+        "filter[bundleId]": bundleId,
+        "fields[apps]": "bundleId,primaryLocale",
+      }),
+    )
+  ).data;
+  if (!app)
+    throw new Error(`No App Store Connect app has the bundle ID ${bundleId}.`);
+  return { id: app.id, primaryLocale: app.attributes.primaryLocale };
+}
+
+type Group = {
+  name: string;
+  isInternalGroup: boolean;
+  hasAccessToAllBuilds: boolean;
+};
+
+async function betaGroups(api: AppStoreConnect, app: string) {
+  return (
+    await api.get<Many<Group>>(
+      query(`/v1/apps/${app}/betaGroups`, {
+        "fields[betaGroups]": "name,isInternalGroup,hasAccessToAllBuilds",
+        limit: "200",
+      }),
+    )
+  ).data;
+}
+
+const isExternal = ({ attributes }: Resource<Group>) =>
+  attributes.name === externalGroupName && !attributes.isInternalGroup;
+
+// A build with its Beta App Review state for external testers.
+type BetaBuild = {
+  id: string;
+  build: number;
+  expired: boolean;
+  externalState: string | undefined;
+};
+
+const betaFields = {
+  include: "buildBetaDetail",
+  "fields[builds]": "version,expired,buildBetaDetail",
+  "fields[buildBetaDetails]": "externalBuildState",
+};
+
+function betaBuild(
+  {
+    id,
+    attributes,
+    relationships,
+  }: Resource<{ version: string; expired: boolean }>,
+  included: Resource<Record<string, unknown>>[] = [],
+): BetaBuild {
+  const detail = relationships?.buildBetaDetail?.data?.id;
+  const state = included.find(
+    (resource) =>
+      resource.type === "buildBetaDetails" && resource.id === detail,
+  )?.attributes.externalBuildState;
+  return {
+    id,
+    build: Number(attributes.version),
+    expired: attributes.expired,
+    externalState: typeof state === "string" ? state : undefined,
+  };
+}
+
+// Every iOS build that matches the filters, following Apple's page links.
+async function* betaBuilds(
+  api: AppStoreConnect,
+  filters: Record<string, string>,
+) {
+  let path: string | undefined = query("/v1/builds", {
+    ...filters,
+    "filter[preReleaseVersion.platform]": "IOS",
+    ...betaFields,
+  });
+  while (path) {
+    const page: Many<{ version: string; expired: boolean }> =
+      await api.get(path);
+    for (const build of page.data) yield betaBuild(build, page.included);
+    path = page.links?.next;
+  }
+}
+
+async function refreshed(api: AppStoreConnect, build: string) {
+  const { data, included } = await api.get<
+    One<{ version: string; expired: boolean }>
+  >(query(`/v1/builds/${build}`, betaFields));
+  return betaBuild(data, included);
+}
+
+// The build number testers in the external group have: the newest build in
+// it that Apple lists as in testing. A build still waiting for Beta App
+// Review, or one that expired before approval, never reached them.
+export async function testedBuild(api: AppStoreConnect, app: string) {
+  const group = (await betaGroups(api, app)).find(isExternal);
+  if (!group) return undefined;
+  for await (const build of betaBuilds(api, {
+    "filter[betaGroups]": group.id,
+    "filter[expired]": "false",
+    sort: "-uploadedDate",
+    limit: "50",
+  }))
+    if (build.externalState === "IN_BETA_TESTING") return build.build;
+  return undefined;
+}
+
+const reviewing = ["WAITING_FOR_BETA_REVIEW", "IN_BETA_REVIEW"];
+
+// Apple reviews one build of a version at a time. "ready" means this build
+// can go to Beta App Review once it is processed; "next-version" means Apple
+// is already reviewing an older build of the version, which the release
+// keeps, so the release has to move to the next patch version. With
+// expireWaiting, an older build that still only waits for review is expired
+// so that this build replaces its submission; without it, such a build is
+// left alone, as a check before the archive.
+export async function prepareReview(
+  api: AppStoreConnect,
+  app: string,
+  { version, build }: { version: string; build: number },
+  {
+    expireWaiting,
+    log,
+  }: { expireWaiting: boolean; log: (line: string) => void },
+): Promise<"ready" | "next-version"> {
+  const builds: BetaBuild[] = [];
+  for await (const found of betaBuilds(api, {
+    "filter[app]": app,
+    "filter[preReleaseVersion.version]": version,
+    "filter[expired]": "false",
+    limit: "200",
+  }))
+    builds.push(found);
+  const target = builds.find((found) => found.build === build);
+  if (target && target.externalState !== "READY_FOR_BETA_SUBMISSION")
+    return "ready";
+  const conflicts = builds.filter(
+    (found) =>
+      found.build !== build && reviewing.includes(found.externalState ?? ""),
+  );
+  if (!conflicts.length) return "ready";
+  const label = (found: BetaBuild) => `${version} (${found.build})`;
+  const older = conflicts[0]!;
+  if (conflicts.length > 1 || older.build > build)
+    throw new Error(
+      `Cannot replace the Beta App Review submissions of ${conflicts
+        .map((found) => `${label(found)}, ${found.externalState}`)
+        .join("; ")}. Expected one older build of ${version}.`,
+    );
+  const nextVersion = () => {
+    log(
+      `==> Apple is reviewing ${label(older)}, so this release keeps that review and moves to the next patch version`,
+    );
+    return "next-version" as const;
+  };
+  if (older.externalState === "IN_BETA_REVIEW") return nextVersion();
+  if (!expireWaiting) return "ready";
+  const current = await refreshed(api, older.id);
+  if (current.expired) return "ready";
+  if (current.externalState === "IN_BETA_REVIEW") return nextVersion();
+  if (current.externalState !== "WAITING_FOR_BETA_REVIEW")
+    throw new Error(
+      `${label(older)} is no longer waiting for Beta App Review but ${current.externalState}. Run bin/testflight again.`,
+    );
+  log(
+    `==> Expiring ${label(older)}, which is waiting for Beta App Review, so that ${version} (${build}) replaces its submission`,
+  );
+  try {
+    await api.patch(`/v1/builds/${older.id}`, {
+      data: { type: "builds", id: older.id, attributes: { expired: true } },
+    });
+  } catch (error) {
+    if ((await refreshed(api, older.id)).externalState === "IN_BETA_REVIEW")
+      return nextVersion();
+    throw error;
+  }
+  const expired = await refreshed(api, older.id);
+  if (!expired.expired) {
+    if (expired.externalState === "IN_BETA_REVIEW") return nextVersion();
+    throw new Error(
+      `App Store Connect has not confirmed that ${label(older)} expired, so nothing was submitted in its place. Run bin/testflight again.`,
+    );
+  }
+  return "ready";
+}
+
+function duration(milliseconds: number) {
+  const seconds = Math.round(milliseconds / 1000);
+  if (seconds % 60) return `${seconds} seconds`;
+  return seconds === 60 ? "1 minute" : `${seconds / 60} minutes`;
+}
+
 async function processedBuild(
   api: AppStoreConnect,
   app: string,
   { version, build }: Release,
-  { sleep, log, timeout = 60 * 60_000, interval = 30_000 }: Waiting,
+  { sleep, log, timeout, interval = 30_000 }: Waiting,
 ) {
   const label = `${version} (${build})`;
   const path = query("/v1/builds", {
     "filter[app]": app,
     "filter[version]": String(build),
     "filter[preReleaseVersion.version]": version,
-    "fields[builds]": "version,processingState,usesNonExemptEncryption",
+    "fields[builds]":
+      "version,processingState,usesNonExemptEncryption,buildBetaDetail",
+    include: "buildBetaDetail",
+    "fields[buildBetaDetails]": "externalBuildState",
     limit: "1",
   });
   log(`==> Waiting for App Store Connect to process ${label}`);
   for (let waited = 0; ; waited += interval) {
-    const [found] = (
-      await api.get<
-        Many<{
-          processingState: string;
-          usesNonExemptEncryption: boolean | null;
-        }>
-      >(path)
-    ).data;
+    const page = await api.get<
+      Many<{
+        processingState: string;
+        usesNonExemptEncryption: boolean | null;
+      }>
+    >(path);
+    const [found] = page.data;
     const state = found?.attributes.processingState;
     if (state === "FAILED" || state === "INVALID")
       throw new Error(
         `App Store Connect marked ${label} ${state}. Check the build's email from Apple and TestFlight's Build Uploads.`,
       );
-    if (found && state === "VALID") {
+    // TestFlight processes a valid build for its testers a little longer.
+    const testing =
+      found &&
+      page.included?.find(
+        ({ type, id }) =>
+          type === "buildBetaDetails" &&
+          id === found.relationships?.buildBetaDetail?.data?.id,
+      )?.attributes.externalBuildState;
+    if (found && state === "VALID" && testing !== "PROCESSING") {
       // Info.plist's ITSAppUsesNonExemptEncryption answers export compliance.
       if (found.attributes.usesNonExemptEncryption === null)
         throw new Error(
@@ -151,7 +371,7 @@ async function processedBuild(
     }
     if (waited + interval > timeout)
       throw new Error(
-        `${label} did not finish processing in ${Math.round(timeout / 60_000)} minutes. Run bin/testflight --distribute-only to keep waiting.`,
+        `${label} did not finish processing in ${duration(timeout)}. Check TestFlight's Build Uploads in App Store Connect; while it is still processing, run bin/testflight --distribute-only to keep waiting. SCREENR_TESTFLIGHT_TIMEOUT_SECONDS sets a longer wait.`,
       );
     await sleep(interval);
   }
@@ -185,12 +405,6 @@ async function setWhatToTest(
     });
 }
 
-type Group = {
-  name: string;
-  isInternalGroup: boolean;
-  hasAccessToAllBuilds: boolean;
-};
-
 // The external group, created if needed, and an internal group that does not
 // already receive every build. Testers in a group see the build once it is
 // processed, or, for an external group, once Beta App Review approves it.
@@ -200,14 +414,7 @@ async function assignGroups(
   build: string,
   log: (line: string) => void,
 ) {
-  const groups = (
-    await api.get<Many<Group>>(
-      query(`/v1/apps/${app}/betaGroups`, {
-        "fields[betaGroups]": "name,isInternalGroup,hasAccessToAllBuilds",
-        limit: "200",
-      }),
-    )
-  ).data;
+  const groups = await betaGroups(api, app);
   const holding = async () =>
     (
       await api.get<Many<{ name: string }>>(
@@ -218,10 +425,7 @@ async function assignGroups(
         }),
       )
     ).data;
-  let external = groups.find(
-    ({ attributes }) =>
-      attributes.name === externalGroupName && !attributes.isInternalGroup,
-  );
+  let external = groups.find(isExternal);
   if (!external) {
     log(`==> Creating the external group "${externalGroupName}"`);
     try {
@@ -275,6 +479,7 @@ async function assignGroups(
   ].sort();
 }
 
+// The states of a build that Beta App Review has, or has passed.
 const submitted = [
   "WAITING_FOR_BETA_REVIEW",
   "IN_BETA_REVIEW",
@@ -292,49 +497,60 @@ const externalState = async (api: AppStoreConnect, build: string) =>
     )
   ).data.attributes.externalBuildState;
 
-async function submitForReview(
-  api: AppStoreConnect,
-  build: string,
-  log: (line: string) => void,
-) {
-  const state = await externalState(api, build);
-  if (submitted.includes(state)) return;
-  if (state !== "READY_FOR_BETA_SUBMISSION")
-    throw new Error(
-      `The build cannot go to Beta App Review while it is ${state}.`,
-    );
-  log("==> Submitting the build for Beta App Review");
-  await api.post("/v1/betaAppReviewSubmissions", {
-    data: {
-      type: "betaAppReviewSubmissions",
-      relationships: { build: { data: { type: "builds", id: build } } },
-    },
-  });
-}
+export type Distribution =
+  | {
+      nextVersion: false;
+      build: string;
+      groups: string[];
+      externalState: string;
+    }
+  | { nextVersion: true };
 
-// Brings an uploaded build to testers. Every step can run again safely, which
-// is how bin/testflight --distribute-only retries.
+// Brings an uploaded build to testers and submits it for Beta App Review.
+// Every step can run again safely, which is how a rerun of bin/testflight
+// resumes. When Apple is already reviewing an older build of the version, the
+// build stays uploaded but unsubmitted, and the result asks for the next
+// patch version.
 export async function distribute(
   api: AppStoreConnect,
+  app: App,
   release: Release,
   waiting: Waiting,
-) {
-  const [app] = (
-    await api.get<Many<{ primaryLocale: string }>>(
-      query("/v1/apps", {
-        "filter[bundleId]": release.bundleId,
-        "fields[apps]": "bundleId,primaryLocale",
-      }),
-    )
-  ).data;
-  if (!app)
-    throw new Error(
-      `No App Store Connect app has the bundle ID ${release.bundleId}.`,
-    );
+): Promise<Distribution> {
+  const { log } = waiting;
   const build = await processedBuild(api, app.id, release, waiting);
-  waiting.log("==> Setting What to Test");
-  await setWhatToTest(api, build, app.attributes.primaryLocale, release.notes);
-  const groups = await assignGroups(api, app.id, build, waiting.log);
-  if (release.submitReview) await submitForReview(api, build, waiting.log);
-  return { build, groups, externalState: await externalState(api, build) };
+  log("==> Setting What to Test");
+  await setWhatToTest(api, build, app.primaryLocale, release.notes);
+  const groups = await assignGroups(api, app.id, build, log);
+  let state = await externalState(api, build);
+  if (state === "READY_FOR_BETA_SUBMISSION") {
+    const review = { expireWaiting: true, log };
+    if ((await prepareReview(api, app.id, release, review)) !== "ready")
+      return { nextVersion: true };
+    log("==> Submitting the build for Beta App Review");
+    try {
+      await api.post("/v1/betaAppReviewSubmissions", {
+        data: {
+          type: "betaAppReviewSubmissions",
+          relationships: { build: { data: { type: "builds", id: build } } },
+        },
+      });
+    } catch (error) {
+      if (!/another build is in review/i.test((error as Error).message))
+        throw error;
+      log(`Apple refused the submission: ${(error as Error).message}`);
+      const recheck = { expireWaiting: false, log };
+      if ((await prepareReview(api, app.id, release, recheck)) !== "ready")
+        return { nextVersion: true };
+      throw new Error(
+        "Apple still reports another build in Beta App Review. Check TestFlight in App Store Connect, then run bin/testflight --distribute-only.",
+      );
+    }
+    state = await externalState(api, build);
+  }
+  if (!submitted.includes(state))
+    throw new Error(
+      `The build is in "${externalGroupName}", but external testing needs attention: it is ${state}. Check TestFlight in App Store Connect.`,
+    );
+  return { nextVersion: false, build, groups, externalState: state };
 }
