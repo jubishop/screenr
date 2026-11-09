@@ -393,7 +393,8 @@ especially on phone.
 button shows a clear down chevron after its label, so it reads as a menu
 rather than a one-tap action like "+ Recommend". The label stays "+ Want to
 watch" or the current status, and tapping anywhere on the button opens the
-menu.
+menu. [Issue #570](https://github.com/jubishop/screenr/issues/570) tracks the
+web and [#571](https://github.com/jubishop/screenr/issues/571) the iPhone app.
 
 **Why:** The user found the button looked like a single option, not a menu
 of statuses. The web chevron is small and the iPhone button has none, so it
@@ -444,7 +445,9 @@ This supersedes the text labels in
 [full-width feed entry actions](#full-width-feed-entry-actions--2026-10-12)
 and the feed's one-tap Want to watch in the
 [watch status button](#watch-status-button-on-title-pages--2026-10-12)
-decision.
+decision. [Issue #572](https://github.com/jubishop/screenr/issues/572) tracks
+the web and [#573](https://github.com/jubishop/screenr/issues/573) the iPhone
+app.
 
 **Why:** The user wanted every title option in the feed while making entries
 tighter. They accepted icons without text because people learn what the
