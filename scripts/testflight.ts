@@ -11,7 +11,7 @@ import {
   type Environment,
 } from "./app-store-connect";
 
-// bin/ios-testflight: release the iPhone app to TestFlight from the owner's
+// bin/testflight: release the iPhone app to TestFlight from the owner's
 // Mac. It requires a clean origin/main that passes bin/check-ios, archives
 // and uploads the Release app with xcodebuild, tags the commit
 // ios-v<version>b<build>, and then brings the build to testers through the
@@ -223,7 +223,7 @@ export async function release(
     );
     if (released)
       throw new Error(
-        `This commit is already released as ${released.split("\n").join(", ")}. Run bin/ios-testflight --distribute-only to retry its distribution.`,
+        `This commit is already released as ${released.split("\n").join(", ")}. Run bin/testflight --distribute-only to retry its distribution.`,
       );
     const version = marketingVersion(
       await readFile(join(root, "ios/Config/Version.xcconfig"), "utf8"),
@@ -266,7 +266,7 @@ export async function release(
   } catch (error) {
     if (options.distributeOnly) throw error;
     throw new Error(
-      `${(error as Error).message}\n${tag.name} is uploaded and tagged. Run bin/ios-testflight --distribute-only to retry.`,
+      `${(error as Error).message}\n${tag.name} is uploaded and tagged. Run bin/testflight --distribute-only to retry.`,
     );
   }
 }
@@ -402,11 +402,11 @@ async function pushTag(exec: Exec, name: string) {
   });
   if (pushed.status)
     throw new Error(
-      `${name} is uploaded but could not be pushed. Run git push origin refs/tags/${name}, then bin/ios-testflight --distribute-only.`,
+      `${name} is uploaded but could not be pushed. Run git push origin refs/tags/${name}, then bin/testflight --distribute-only.`,
     );
 }
 
-const usage = `Usage: bin/ios-testflight [--distribute-only] [--submit-review]
+const usage = `Usage: bin/testflight [--distribute-only] [--submit-review]
 
 Runs bin/check-ios --reuse on a clean origin/main, archives and uploads the
 next TestFlight build of Screenr, tags the commit ios-v<version>b<build>,
@@ -421,7 +421,7 @@ group.
 Needs ASC_KEY_PATH, ASC_KEY_ID, and ASC_ISSUER_ID for the App Store Connect
 API key, and Git access to push tags to origin.`;
 
-if (process.argv[1]?.endsWith("scripts/ios-testflight.ts")) {
+if (process.argv[1]?.endsWith("scripts/testflight.ts")) {
   try {
     const { values } = parseArgs({
       options: {

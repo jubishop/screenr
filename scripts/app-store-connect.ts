@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { applePrivateKey, signAppleJWT } from "../src/server/apple-jwt";
 
-// The App Store Connect API calls behind bin/ios-testflight: wait for an
+// The App Store Connect API calls behind bin/testflight: wait for an
 // uploaded build to finish processing, set its What to Test notes, add it to
 // the tester groups, and, only on request, submit it for Beta App Review.
 
@@ -145,13 +145,13 @@ async function processedBuild(
       // Info.plist's ITSAppUsesNonExemptEncryption answers export compliance.
       if (found.attributes.usesNonExemptEncryption === null)
         throw new Error(
-          `${label} is missing export compliance. Answer it in TestFlight in App Store Connect, then run bin/ios-testflight --distribute-only.`,
+          `${label} is missing export compliance. Answer it in TestFlight in App Store Connect, then run bin/testflight --distribute-only.`,
         );
       return found.id;
     }
     if (waited + interval > timeout)
       throw new Error(
-        `${label} did not finish processing in ${Math.round(timeout / 60_000)} minutes. Run bin/ios-testflight --distribute-only to keep waiting.`,
+        `${label} did not finish processing in ${Math.round(timeout / 60_000)} minutes. Run bin/testflight --distribute-only to keep waiting.`,
       );
     await sleep(interval);
   }
@@ -241,7 +241,7 @@ async function assignGroups(
       ).data;
     } catch (error) {
       throw new Error(
-        `Could not create the external group "${externalGroupName}": ${(error as Error).message} Create it in TestFlight in App Store Connect, then run bin/ios-testflight --distribute-only.`,
+        `Could not create the external group "${externalGroupName}": ${(error as Error).message} Create it in TestFlight in App Store Connect, then run bin/testflight --distribute-only.`,
       );
     }
   }
@@ -262,7 +262,7 @@ async function assignGroups(
   const confirmed = await holding();
   if (!confirmed.some(({ id }) => id === external.id))
     throw new Error(
-      `App Store Connect does not list the build in "${externalGroupName}". Run bin/ios-testflight --distribute-only to retry.`,
+      `App Store Connect does not list the build in "${externalGroupName}". Run bin/testflight --distribute-only to retry.`,
     );
   const automatic = groups.filter(
     ({ attributes }) =>
@@ -313,7 +313,7 @@ async function submitForReview(
 }
 
 // Brings an uploaded build to testers. Every step can run again safely, which
-// is how bin/ios-testflight --distribute-only retries.
+// is how bin/testflight --distribute-only retries.
 export async function distribute(
   api: AppStoreConnect,
   release: Release,

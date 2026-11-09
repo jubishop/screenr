@@ -475,7 +475,7 @@ local server that `npm run dev` starts on port 3000.
 
 ## Releases
 
-`bin/ios-testflight` archives the Release app from a clean `main`, uploads it
+`bin/testflight` archives the Release app from a clean `main`, uploads it
 to App Store Connect, tags the commit `ios-v<version>b<build>`, and adds the
 build to the TestFlight groups with What to Test notes. See
 [TestFlight releases](../docs/development-workflow.md#testflight-releases).
