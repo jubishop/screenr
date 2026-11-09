@@ -93,23 +93,18 @@ test("members choose, date, and clear watch statuses from the title page, and fr
   await viewer.getByRole("heading", { level: 1 }).click();
   await expect(menu).toHaveCount(0);
 
-  // Finished sets today's date, which the member can change or clear.
+  // Finished sets today's date, which the member can change or clear. The
+  // entry shows only its own time, never the last-finished date.
   await button.press("Enter");
   await expect(choice("Watching")).toBeFocused();
   await viewer.keyboard.press("ArrowDown");
   await viewer.keyboard.press("ArrowDown");
   await viewer.keyboard.press("Enter");
   await expect(button).toHaveText("✓ Finished");
-  const now = new Date();
   const today = new Intl.DateTimeFormat("en-CA", {
     timeZone: "America/Los_Angeles",
-  }).format(now);
-  const todayLabel = new Intl.DateTimeFormat("en-US", {
-    timeZone: "America/Los_Angeles",
-    month: "short",
-    day: "numeric",
-  }).format(now);
-  await expect(own).toHaveText(`finished · ${todayLabel}`);
+  }).format(new Date());
+  await expect(own).toHaveText("finished");
   await button.click();
   await expect(menu.getByRole("menuitem")).toHaveText(["Clear status"]);
   const date = viewer.getByLabel("Last finished");
@@ -119,10 +114,10 @@ test("members choose, date, and clear watch statuses from the title page, and fr
   await expect(save).toBeDisabled();
   await date.fill("2024-03-09");
   await save.click();
-  await expect(own).toHaveText("finished · Mar 9, 2024");
   await expect(button).toHaveText("✓ Finished");
   await button.click();
   await expect(viewer.getByLabel("Last finished")).toHaveValue("2024-03-09");
+  await expect(own).toHaveText("finished");
   await viewer.getByRole("button", { name: "Clear date", exact: true }).click();
   await expect(own).toHaveText("finished");
   await chooseStatus(viewer, "Caught up");
