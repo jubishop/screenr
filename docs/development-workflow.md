@@ -327,7 +327,7 @@ push finds a recorded pass. Never bypass the hook with `git push --no-verify`.
 
 ### iOS release gate
 
-`bin/ios-testflight` runs `bin/check-ios --reuse` in the terminal on the
+`bin/testflight` runs `bin/check-ios --reuse` in the terminal on the
 clean `main` commit it releases, before archiving, and stops when it fails.
 The check skips itself when the same iOS files passed with the same Xcode in
 the last 7 days, such as before the push that brought them to `main`, and
@@ -335,7 +335,7 @@ otherwise runs in full.
 
 ### TestFlight releases
 
-`bin/ios-testflight` builds the iPhone app on the owner's Mac and brings it
+`bin/testflight` builds the iPhone app on the owner's Mac and brings it
 to TestFlight testers. It follows the
 [release decision](ios-app.md#ci-checks-and-local-testflight-releases--2026-10-13),
 the [local iOS checks decision](ios-app.md#local-ios-checks-instead-of-ios-ci--2026-10-14),
@@ -345,7 +345,7 @@ The owner or an agent runs it from a clean checkout of `main`:
 ```sh
 git switch main
 git pull --ff-only
-bin/ios-testflight
+bin/testflight
 ```
 
 It needs `npm ci`, Xcode 27 with an iOS 27 Simulator runtime, Git access to
@@ -406,7 +406,7 @@ say where the link lives.
 
 **Recovery:** a failure before the upload leaves nothing behind, so rerun the
 command. After the upload, the build number is used and the tag exists.
-`bin/ios-testflight --distribute-only` repeats the processing wait, notes,
+`bin/testflight --distribute-only` repeats the processing wait, notes,
 and groups for the newest tag without building, and accepts
 `--submit-review`. Each release keeps its archive and its `archive.log` and
 `upload.log` files in `ios/build/release/<tag>/`, which Git ignores. After
@@ -419,7 +419,7 @@ the issuer ID, and the `appstoreconnect-v1` audience, expiring within 20
 minutes. The script signs a new 15-minute token for each request with
 `src/server/apple-jwt.ts`, the same signer as the APNs sender and Sign in
 with Apple, which reads the `.p8` file as PEM. Its tests,
-`tests/app/ios-testflight.test.ts` and `tests/app/app-store-connect.test.ts`,
+`tests/app/testflight.test.ts` and `tests/app/app-store-connect.test.ts`,
 fake Git, `bin/check-ios`, `bin/ios-packages`, Xcode, and the App Store
 Connect API.
 

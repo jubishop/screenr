@@ -45,7 +45,7 @@ that reason.
 
 A pass on a checkout whose iOS files match HEAD is recorded for those exact
 files and this Xcode. With --reuse, the check skips itself when such a pass
-is recent; the pre-push hook and bin/ios-testflight rely on the same records.
+is recent; the pre-push hook and bin/testflight rely on the same records.
 """
 
 import argparse

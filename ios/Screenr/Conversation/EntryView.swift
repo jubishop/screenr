@@ -75,7 +75,7 @@ struct EntryView: View {
           Text(item.displayName)
             .font(.subheadline.weight(.semibold))
             .foregroundStyle(.primary)
-          // One wrapping line, such as "finished · Oct 12 · 2h · Edited".
+          // One wrapping line, such as "finished · 2h · Edited".
           Text(
             activity(at: RelativeTime.label(entry.visibleActivity, now: now))
               .joined(separator: " · ")

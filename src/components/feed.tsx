@@ -49,7 +49,7 @@ export function cardPhrase(item: FeedItem) {
     .sort((a, b) => cardOrder[a.item_type]! - cardOrder[b.item_type]!)
     .map((entry) =>
       entry.item_type === "progress"
-        ? progressPhrase(entry.status!, null, true, false)
+        ? progressPhrase(entry.status!, true)
         : entry.item_type === "review"
           ? reviewPhrase({ active: true, body: entry.body })
           : entry.item_type === "recommended"
@@ -502,12 +502,7 @@ function FeedEntry({
                 : item.item_type === "review"
                   ? reviewPhrase(item)
                   : item.item_type === "progress"
-                    ? progressPhrase(
-                        item.status!,
-                        item.finished_on,
-                        item.active,
-                        interactive,
-                      )
+                    ? progressPhrase(item.status!, item.active)
                     : item.item_type === "recommended"
                       ? item.active
                         ? "recommends"
