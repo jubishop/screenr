@@ -11,6 +11,8 @@ import sys
 import tempfile
 import unittest
 
+from _process_waits import HANG_SECONDS
+
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -43,7 +45,7 @@ class ReleaseRetentionTests(unittest.TestCase):
     def execute(self, active):
         source = (ROOT / 'ops/prune-releases.py').read_text()
         return subprocess.run([sys.executable, '-c', source, str(active)],
-                              text=True, capture_output=True, timeout=5)
+                              text=True, capture_output=True, timeout=HANG_SECONDS)
 
     def test_retry_finishes_deletion_after_dependency_removal_fails(self):
         copies = [self.release(i, success=True) for i in range(1, 5)]
@@ -68,7 +70,7 @@ with patch('os.unlink', interrupted):
 '''
         result = subprocess.run([sys.executable, '-c', driver,
                                  str(ROOT / 'ops/prune-releases.py'), str(active)],
-                                text=True, capture_output=True, timeout=5)
+                                text=True, capture_output=True, timeout=HANG_SECONDS)
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('injected dependency deletion failure', result.stderr)
         self.assertEqual((self.root / 'current').resolve(), active)

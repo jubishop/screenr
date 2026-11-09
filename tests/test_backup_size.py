@@ -13,6 +13,7 @@ from unittest.mock import patch
 from urllib.error import HTTPError, URLError
 from urllib.parse import parse_qs, urlsplit
 
+from _process_waits import HANG_SECONDS
 from test_failure_alert import unit_file
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -244,7 +245,7 @@ failure=$2
 '''
         return subprocess.run(['sh', '-c', wrapper, 'backup-fixture',
                                str(ROOT / 'ops/backup.sh'), failure],
-                              text=True, capture_output=True, timeout=5)
+                              text=True, capture_output=True, timeout=HANG_SECONDS)
 
     def test_backup_succeeds_without_the_size_monitor(self):
         # A failing or pending warning cannot fail the backup that deploys require.

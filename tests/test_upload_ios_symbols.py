@@ -9,6 +9,8 @@ import sys
 import tempfile
 import unittest
 
+from _process_waits import HANG_SECONDS
+
 SOURCE = Path(__file__).resolve().parents[1]
 # The simulated sentry-cli records its arguments, answers `info` with the configured
 # authentication status, and exits as the test configures it.
@@ -46,7 +48,7 @@ class UploadIOSSymbolsTests(unittest.TestCase):
 
     def upload(self, **extra):
         return subprocess.run([str(SOURCE / "bin/upload-ios-symbols")], env=self.env | extra,
-                              text=True, capture_output=True, timeout=60)
+                              text=True, capture_output=True, timeout=HANG_SECONDS)
 
     def recorded(self):
         if not self.events.exists():

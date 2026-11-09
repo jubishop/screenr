@@ -11,6 +11,8 @@ import tempfile
 import threading
 import unittest
 
+from _process_waits import HANG_SECONDS
+
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -109,7 +111,7 @@ class CiAptTests(unittest.TestCase):
     def apt(self, *args):
         return subprocess.run(["apt-get", *args], env=self.environment,
                               cwd=self.base / "downloads", text=True,
-                              stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=30)
+                              stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=HANG_SECONDS)
 
     def assert_success(self, result):
         self.assertEqual(result.returncode, 0, result.stdout)

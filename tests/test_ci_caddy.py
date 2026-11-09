@@ -7,6 +7,8 @@ import tempfile
 import textwrap
 import unittest
 
+from _process_waits import HANG_SECONDS
+
 
 ROOT = Path(__file__).resolve().parents[1]
 IMAGE = re.search(r"^FROM (.+)$", (ROOT / ".github/caddy/Dockerfile").read_text(), re.M)[1]
@@ -75,7 +77,7 @@ class InstallCaddyTests(unittest.TestCase):
         environment = {**os.environ, "PATH": self.path, "FIXTURE": str(fixture), "RUNNER_TEMP": str(runner)}
         # GitHub runs a step that sets no shell with bash -e, as the app job's log shows.
         result = subprocess.run(["bash", "-e", "-c", self.script],
-                                cwd=ROOT, env=environment, capture_output=True, text=True, timeout=30)
+                                cwd=ROOT, env=environment, capture_output=True, text=True, timeout=HANG_SECONDS)
         log = fixture / "log"
         return result, log.read_text().splitlines() if log.exists() else [], runner
 

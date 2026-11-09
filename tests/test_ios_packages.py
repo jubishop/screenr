@@ -14,6 +14,8 @@ import tempfile
 import time
 import unittest
 
+from _process_waits import HANG_SECONDS
+
 SOURCE = Path(__file__).resolve().parents[1]
 GB = 1024 ** 3
 PINS = '{"pins": [{"identity": "sentry-cocoa", "state": {"version": "%s"}}], "version": 3}\n'
@@ -148,7 +150,7 @@ class IOSPackagesTests(unittest.TestCase):
 
     def run_in(self, repo, *args, **extra):
         return subprocess.run([str(repo / "bin/ios-packages"), *args], cwd=repo, env=self.env | extra, text=True,
-                              capture_output=True, timeout=60)
+                              capture_output=True, timeout=HANG_SECONDS)
 
     def recorded(self):
         if not self.events.exists():
@@ -268,7 +270,7 @@ class IOSPackagesTests(unittest.TestCase):
             time.sleep(0.5)
             self.assertIsNone(process.poll())
             self.assertEqual(self.recorded(), [])
-        output, error = process.communicate(timeout=30)
+        output, error = process.communicate(timeout=HANG_SECONDS)
         self.assertEqual(process.returncode, 0, error)
         self.assertEqual(len(self.recorded()), 2)
 

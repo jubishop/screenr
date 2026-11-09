@@ -22,6 +22,8 @@ import time
 import unittest
 from unittest import mock
 
+from _process_waits import HANG_SECONDS
+
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'bin'))
 from _deploy_kit import kit_digest  # noqa: E402
@@ -483,7 +485,7 @@ sys.exit(status)
         with bomb.open('rb') as stdin:
             result = subprocess.run([sys.executable, '-I', '-c', driver, str(ROOT / 'ops/receive-release'),
                                      str(self.screenr), str(self.upload), f'upload {REVISION} {checksum}'],
-                                    stdin=stdin, capture_output=True, text=True, timeout=60)
+                                    stdin=stdin, capture_output=True, text=True, timeout=HANG_SECONDS)
         self.assertEqual(result.returncode, 1, result.stderr)
         self.assertIn('memory', result.stderr)
         self.assertLess(int(result.stdout.split()[-1]), 128 * 1024 * 1024)

@@ -12,6 +12,8 @@ import tempfile
 import textwrap
 import unittest
 
+from _process_waits import HANG_SECONDS
+
 SOURCE = Path(__file__).resolve().parents[1]
 SCRIPTS = ("format:check", "typecheck", "test", "test:browser")
 # A recorded pass for the same iOS files lets bin/check-ios skip itself.
@@ -132,7 +134,7 @@ class CheckApplicationTests(unittest.TestCase):
 
     def check(self, *args, **extra):
         return subprocess.run([str(self.repo / "bin/check-application"), *args], cwd=self.repo,
-                              env=self.env | extra, text=True, capture_output=True, timeout=60)
+                              env=self.env | extra, text=True, capture_output=True, timeout=HANG_SECONDS)
 
     def recorded(self):
         return [json.loads(line) for line in self.events.read_text().splitlines()] if self.events.exists() else []

@@ -20,6 +20,8 @@ import subprocess
 import tempfile
 import unittest
 
+from _process_waits import HANG_SECONDS
+
 ROOT = Path(__file__).resolve().parents[1]
 APPS = ('screenr-web.service', 'screenr-worker.service')
 SOURCE = 'screenr-worker.service'
@@ -123,7 +125,7 @@ def run_release_script(*arguments, status=0):
         fake.chmod(0o755)
         result = subprocess.run(['sh', str(RUNNER), *arguments], capture_output=True, text=True,
                                 env={**os.environ, 'FIXTURE': directory, 'FIXTURE_STATUS': str(status),
-                                     'PATH': directory + os.pathsep + os.environ['PATH']}, timeout=10)
+                                     'PATH': directory + os.pathsep + os.environ['PATH']}, timeout=HANG_SECONDS)
         log = Path(directory) / 'systemd-run.json'
         argv = json.loads(log.read_text()) if log.exists() else []
     command = argv.index(NODE) if NODE in argv else len(argv)

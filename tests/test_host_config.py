@@ -13,6 +13,8 @@ import sys
 import tempfile
 import unittest
 
+from _process_waits import HANG_SECONDS
+
 ROOT = Path(__file__).resolve().parents[1]
 KIT_SCRIPTS = ('receive-release', 'deploy-release.sh', 'activate.sh', 'host-config.py', 'prune-releases.py')
 UNITS = sorted(path.name for path in (ROOT / 'ops').iterdir()
@@ -63,7 +65,7 @@ class HostConfigTests(unittest.TestCase):
         return subprocess.run([sys.executable, str(ROOT / 'ops/host-config.py'), str(kit), str(self.units),
                                str(self.caddyfile), str(self.postgresql)],
                               env={**self.environment, **environment}, text=True,
-                              capture_output=True, timeout=10)
+                              capture_output=True, timeout=HANG_SECONDS)
 
     def systemctl(self):
         path = self.base / 'systemctl'

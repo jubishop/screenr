@@ -17,6 +17,8 @@ import tarfile
 import tempfile
 import unittest
 
+from _process_waits import HANG_SECONDS
+
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'bin'))
 from _deploy_kit import RECEIVER, SCRIPTS, SHARED, checked_kit, kit_digest  # noqa: E402
@@ -97,7 +99,7 @@ class InstallDeployKitTests(unittest.TestCase):
     def execute(self, *args, **environment):
         return subprocess.run([str(self.base / 'bin/install-deploy-kit'), *args], cwd=self.base,
                               env={**self.environment, **environment}, text=True,
-                              capture_output=True, timeout=15)
+                              capture_output=True, timeout=HANG_SECONDS)
 
     def calls(self):
         path = self.base / 'calls'
@@ -189,7 +191,7 @@ class RemoteInstallTests(unittest.TestCase):
         return subprocess.run(['sh', '-c', self.installer.INSTALL, 'install-deploy-kit', str(self.kit),
                                str(self.receiver), str(self.uploads), str(self.lock)],
                               input=self.installer.kit_archive(self.files), capture_output=True,
-                              env={**self.environment, **environment}, timeout=30)
+                              env={**self.environment, **environment}, timeout=HANG_SECONDS)
 
     def test_installs_the_kit_and_reports_its_digest(self):
         result = self.install()

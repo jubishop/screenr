@@ -11,6 +11,8 @@ import threading
 import unittest
 from urllib.parse import parse_qs, urlsplit
 
+from _process_waits import HANG_SECONDS
+
 
 ROOT = Path(__file__).resolve().parents[1]
 API = "/api/0/organizations/artisanal-software"
@@ -166,7 +168,7 @@ class SentryFeedbackIssueTests(unittest.TestCase):
         result = subprocess.run(
             [sys.executable, str(ROOT / "bin/sentry-feedback-issues"), *args],
             env=environment or self.environment, stdin=subprocess.DEVNULL, capture_output=True,
-            text=True, timeout=60,
+            text=True, timeout=HANG_SECONDS,
         )
         self.assertEqual(result.returncode, status, result.stderr)
         return result

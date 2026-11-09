@@ -14,6 +14,8 @@ import tempfile
 import textwrap
 import unittest
 
+from _process_waits import HANG_SECONDS
+
 
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github/workflows/check.yml"
@@ -97,7 +99,7 @@ class FindAddressStepTests(unittest.TestCase):
                            "SCREENR_DEPLOY_HOST": host}
             # GitHub runs a step that sets no shell with bash -e.
             result = subprocess.run(["bash", "-e", "-c", self.script], cwd=ROOT, env=environment,
-                                    capture_output=True, text=True, timeout=10)
+                                    capture_output=True, text=True, timeout=HANG_SECONDS)
             return result, output.read_text()
 
     def test_join_pings_the_address_in_the_deploy_host_secret(self):

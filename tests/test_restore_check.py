@@ -14,6 +14,8 @@ import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from unittest.mock import patch
 
+from _process_waits import HANG_SECONDS
+
 ROOT = Path(__file__).resolve().parents[1]
 AGE_CHECK = ROOT / 'ops/check-backup-age.py'
 
@@ -144,7 +146,7 @@ rm() { echo "rm $*"; }
         environment = {**os.environ, 'SCRIPT': str(ROOT / 'ops/backup.sh'), 'DUMP': dump,
                        'FAIL': fail, 'TIMES': str(times)}
         return subprocess.run(['sh', '-c', wrapper], text=True, capture_output=True,
-                              env=environment, timeout=10, preexec_fn=default_stop_signals)
+                              env=environment, timeout=HANG_SECONDS, preexec_fn=default_stop_signals)
 
     def test_backup_uploads_prunes_and_removes_the_dump(self):
         result = self.execute()
@@ -227,7 +229,7 @@ psql() {
                        'SNAPSHOTS': json.dumps([{'time': stamp.isoformat().replace('+00:00', 'Z'),
                                                  'short_id': 'fixture'}])}
         return subprocess.run(['sh', '-c', wrapper], text=True, capture_output=True,
-                              env=environment, timeout=10, preexec_fn=default_stop_signals)
+                              env=environment, timeout=HANG_SECONDS, preexec_fn=default_stop_signals)
 
     def storage_steps(self, result):
         return [line for line in result.stderr.splitlines() if line.startswith(('restic ', 'sleep '))]

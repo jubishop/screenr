@@ -10,6 +10,8 @@ import sys
 import tempfile
 import unittest
 
+from _process_waits import HANG_SECONDS
+
 SOURCE = Path(__file__).resolve().parents[1]
 # The simulated check records where it ran, and, like the real one, records a pass with the
 # checkout's own bin/_ios_check_records.py when the checkout's iOS files match HEAD. It fails
@@ -115,13 +117,13 @@ class PrePushTests(unittest.TestCase):
 
     def push(self, *args, cwd=None, **extra):
         return subprocess.run(["git", "push", "origin", *args], cwd=cwd or self.repo,
-                              env=self.env | extra, capture_output=True, text=True, timeout=60)
+                              env=self.env | extra, capture_output=True, text=True, timeout=HANG_SECONDS)
 
     def check_ios(self, cwd=None, **extra):
         """Run the simulated bin/check-ios from a shell, as an agent does before pushing."""
         root = cwd or self.repo
         return subprocess.run([str(root / "bin/check-ios")], cwd=root, env=self.env | extra,
-                              capture_output=True, text=True, timeout=60)
+                              capture_output=True, text=True, timeout=HANG_SECONDS)
 
     def remote_has(self, ref):
         return bool(self.git("ls-remote", str(self.remote), ref))
@@ -207,7 +209,7 @@ class PrePushTests(unittest.TestCase):
             with self.subTest(line=line):
                 result = subprocess.run([str(self.repo / "bin/pre-push-application"), "origin", str(self.remote)],
                                         cwd=self.repo, env=self.env, input=line + "\n", capture_output=True,
-                                        text=True, timeout=60)
+                                        text=True, timeout=HANG_SECONDS)
                 self.assertNotEqual(result.returncode, 0)
                 self.assertIn(f"cannot read the pushed refs from {line!r}", result.stderr)
                 self.assertIn(ADVICE, result.stderr)

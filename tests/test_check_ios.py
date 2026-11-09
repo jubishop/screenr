@@ -15,6 +15,7 @@ import tempfile
 import time
 import unittest
 
+from _process_waits import HANG_SECONDS
 from test_ios_packages import EXTRACT, data_id, package_artifacts
 
 SOURCE = Path(__file__).resolve().parents[1]
@@ -196,7 +197,7 @@ class CheckIOSTests(unittest.TestCase):
 
     def check(self, *args, **extra):
         return subprocess.run([str(self.repo / "bin/check-ios"), *args], cwd=self.repo, env=self.env | extra,
-                              text=True, capture_output=True, timeout=60)
+                              text=True, capture_output=True, timeout=HANG_SECONDS)
 
     def recorded(self):
         events = [json.loads(line) for line in self.events.read_text().splitlines()] if self.events.exists() else []
@@ -409,7 +410,7 @@ class CheckIOSTests(unittest.TestCase):
         # While its Simulator tests run, nothing can delete the cache.
         self.assertFalse(deletable())
         check.send_signal(signal.SIGTERM)
-        check.communicate(timeout=30)
+        check.communicate(timeout=HANG_SECONDS)
         self.assertTrue(deletable())
 
     def test_a_package_update_rebuilds_the_package_and_derived_data_from_scratch(self):
@@ -604,7 +605,7 @@ class CheckIOSTests(unittest.TestCase):
                     self.assertLess(time.monotonic(), deadline, "the test run never started")
                     time.sleep(0.05)
                 process.send_signal(stop)
-                _, error = process.communicate(timeout=30)
+                _, error = process.communicate(timeout=HANG_SECONDS)
                 self.assertNotEqual(process.returncode, 0)
                 self.assertIn("bin/check-ios stopped", error)
                 self.assert_stopped(pids)
@@ -619,7 +620,7 @@ class CheckIOSTests(unittest.TestCase):
         def stop():
             if process.poll() is None:
                 process.terminate()
-                process.communicate(timeout=30)
+                process.communicate(timeout=HANG_SECONDS)
         self.addCleanup(stop)
         return process
 
@@ -638,8 +639,8 @@ class CheckIOSTests(unittest.TestCase):
             self.assertEqual(second.stdout.readline(), "Waiting for an iOS check slot: all 3 are in use "
                                                        "by other bin/check-ios runs on this Mac.\n")
             first.send_signal(signal.SIGTERM)
-            first.communicate(timeout=30)
-            output, error = second.communicate(timeout=30)
+            first.communicate(timeout=HANG_SECONDS)
+            output, error = second.communicate(timeout=HANG_SECONDS)
         self.assertEqual(second.returncode, 0, error)
         # It took the first check's slot before it started its first step.
         lines = output.splitlines()

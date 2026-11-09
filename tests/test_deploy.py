@@ -12,6 +12,7 @@ import tarfile
 import tempfile
 import unittest
 
+from _process_waits import HANG_SECONDS
 from test_failure_alert import unit_file
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -167,7 +168,7 @@ class DeploymentFixture(unittest.TestCase):
     def execute(self, *args, **environment):
         return subprocess.run([str(self.base / 'bin' / self.command), *args], cwd=self.base,
                               env={**self.environment, **environment}, text=True,
-                              capture_output=True, timeout=15)
+                              capture_output=True, timeout=HANG_SECONDS)
 
     def calls(self):
         path = self.base / 'calls'
@@ -617,7 +618,8 @@ class RemoteDeploymentTests(unittest.TestCase):
                                          'CHECKSUM': 'b' * 64,
                                          'ACTIVATION_SCRIPT': (ROOT / 'ops/activate.sh').read_text(),
                                          'KIT': KIT, 'ARCHIVE': UPLOAD, 'KIT_DIGEST': 'c' * 64,
-                                         'DEPLOY': str(ROOT / 'ops/deploy-release.sh'), **environment}, timeout=5)
+                                         'DEPLOY': str(ROOT / 'ops/deploy-release.sh'), **environment},
+                                    timeout=HANG_SECONDS)
             log = {name: (base / name).read_text().splitlines() if (base / name).exists() else []
                    for name in ('systemctl', 'sleeps', 'steps')}
             self.systemctl_calls, self.sleeps, self.steps = log['systemctl'], log['sleeps'], log['steps']

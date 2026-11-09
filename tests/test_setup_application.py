@@ -9,6 +9,8 @@ import sys
 import tempfile
 import unittest
 
+from _process_waits import HANG_SECONDS
+
 SOURCE = Path(__file__).resolve().parents[1]
 NEXT = {"version": "16.4.2", "resolved": "https://registry.npmjs.org/next/-/next-16.4.2.tgz",
         "integrity": "sha512-next-16.4.2"}
@@ -78,7 +80,7 @@ class SetupApplicationTests(unittest.TestCase):
 
     def setup_application(self, **extra):
         return subprocess.run([str(self.repo / "bin/setup-application")], cwd=self.repo, env=self.env | extra,
-                              text=True, capture_output=True, timeout=60)
+                              text=True, capture_output=True, timeout=HANG_SECONDS)
 
     def recorded(self):
         return [json.loads(line) for line in self.events.read_text().splitlines()] if self.events.exists() else []

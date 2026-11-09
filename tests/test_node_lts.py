@@ -12,6 +12,8 @@ import tempfile
 import threading
 import unittest
 
+from _process_waits import HANG_SECONDS
+
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "bin/node-lts"
@@ -49,7 +51,7 @@ class NodeLtsTests(unittest.TestCase):
     def run_script(self, *args, index=None, env=None):
         return subprocess.run(
             [sys.executable, str(SCRIPT), "--index", index or self.index.as_uri(), *args],
-            capture_output=True, text=True, timeout=30, env={**os.environ, **(env or {})},
+            capture_output=True, text=True, timeout=HANG_SECONDS, env={**os.environ, **(env or {})},
         )
 
     def fake_node(self, version, lts):

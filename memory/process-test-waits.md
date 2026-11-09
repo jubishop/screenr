@@ -1,6 +1,6 @@
 ---
 name: process-test-waits
-description: Tests that start a process wait for its own ready line or exit, with a bound only a hang reaches, because test-database setup stalled starts for many seconds in parallel runs.
+description: Tests that start a process wait for its own ready line or exit, with a bound only a hang reaches, because test-database setup and load from parallel checks stalled processes for many seconds.
 type: reference
 ---
 
@@ -27,6 +27,13 @@ seconds ([#427](https://github.com/jubishop/screenr/issues/427)). Load average
 alone did not explain the stall. At load averages from 298 to 358, the
 harness finished each of 16 runs within 1.7 seconds.
 
+Load alone can still stretch a short process tenfold. On 2026-11-09, while
+`bin/check` ran in the same checkout, a deploy harness case that takes half a
+second idle ran past its 5-second bound
+([#552](https://github.com/jubishop/screenr/issues/552)). Holding each `sh`
+start for 6 seconds reproduced the error; the case passes that way under the
+shared Python bound below.
+
 **Evidence:** Dropping an empty database at 17:10 PST waited 6.0 seconds for
 a checkpoint that synced 73,941 files. Holding each harness start for 11
 seconds reproduced #427's failure, with its empty logs. Holding only the
@@ -46,3 +53,6 @@ from 28 to 411, and in 18 runs six at a time at load averages from 5 to 7.
   fixture, not after a deadline.
 - Wait for the `close` event, not `exit`, before you assert on a process's
   output. `exit` can come before the output streams end.
+- In the Python tests, pass `HANG_SECONDS` from `tests/_process_waits.py` as
+  the `timeout` of every process wait, such as `subprocess.run` or
+  `communicate`. `tests/test_process_waits.py` refuses any other bound.
