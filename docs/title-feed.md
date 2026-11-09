@@ -796,6 +796,10 @@ in the iPhone app. The stored entries are unchanged, so nothing migrates.
   line, such as "finished, reviewed, and recommends", with no finished date,
   followed by the card's one time and Edited when its review was edited. The
   body shows the review's stars and text, whichever entry holds the card.
+- **iPhone:** ScreenrKit's `EntryPresentation.swift` builds the same author
+  line and takes the stars, text, and Edited from the card's review, and the
+  app's `EntryView` shows them in the friends, title, and profile feeds. An
+  entry without `combined`, from a server without cards, shows alone.
 - **New activity:** `src/feed-layout.ts` and the iPhone `FeedLayout` accept a
   card's activity under each of its entries. When another entry comes to hold
   a card, such as a review joining an untouched Finished entry, the card keeps

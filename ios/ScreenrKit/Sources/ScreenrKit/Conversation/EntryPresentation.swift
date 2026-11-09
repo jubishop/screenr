@@ -42,25 +42,88 @@ extension FeedItem {
 
   // What the author did, after their name: "recommends", "is watching",
   // "finished", or "removed their review" for a withdrawn entry kept for its
-  // replies. An entry shows only its own time, never the last-finished date.
+  // replies. An entry holding a card names every action in it, such as
+  // "finished, reviewed, and recommends". Only the entry's or card's one time
+  // follows, never the last-finished date.
   public func action(style: EntryStyle) -> String {
+    if let combined, !combined.isEmpty { return cardAction(combined) }
     switch itemType {
     case .comment: return style == .compact ? "commented" : "commented on"
     case .post: return "posted"
     case .earlier: return "Earlier discussion"
-    case .review: return !active ? "removed their review" : body == nil ? "rated" : "reviewed"
-    case .progress:
-      guard active else { return "removed their watch status" }
-      switch status {
-      case .finished: return "finished"
-      case .watching: return "is watching"
-      case .caughtUp: return "is caught up"
-      default: return "stopped watching"
-      }
+    case .review: return active ? Self.reviewAction(body: body) : "removed their review"
+    case .progress: return active ? Self.statusAction(status) : "removed their watch status"
     case .recommended: return active ? "recommends" : "removed their recommendation"
     case .wantToWatch: return active ? "wants to watch" : "removed Want to watch"
     case .unknown: return "shared an update"
     }
+  }
+
+  // The rating, text, and Edited flag the entry shows: a card's review's,
+  // whichever of the card's entries holds it, and otherwise the entry's own.
+  public var content: EntryContent {
+    if itemType != .review, let review = combined?.first(where: { $0.itemType == .review }) {
+      return EntryContent(rating: review.rating, body: review.body, edited: review.edited)
+    }
+    return EntryContent(rating: rating, body: body, edited: edited)
+  }
+
+  // The author line after their name: what they did, the entry's one time,
+  // and Edited, such as "finished and reviewed · 2h · Edited".
+  public func activityLine(style: EntryStyle, time: String) -> String {
+    ([action(style: style), time] + (content.edited ? ["Edited"] : [])).joined(separator: " · ")
+  }
+
+  // A card's actions in a fixed order, status first, then the review, then
+  // Recommend or Want to watch, joined like a sentence. Every entry in a card
+  // is active.
+  private func cardAction(_ others: [CombinedEntry]) -> String {
+    let own = CombinedEntry(
+      id: id,
+      itemType: itemType,
+      status: status,
+      rating: rating,
+      body: body,
+      spoiler: spoiler,
+      edited: edited
+    )
+    let actions = ([own] + others)
+      .sorted { Self.cardOrder($0.itemType) < Self.cardOrder($1.itemType) }
+      .map { entry in
+        switch entry.itemType {
+        case .progress: Self.statusAction(entry.status)
+        case .review: Self.reviewAction(body: entry.body)
+        case .recommended: "recommends"
+        case .wantToWatch: "wants to watch"
+        default: "shared an update"
+        }
+      }
+    guard let last = actions.last, actions.count > 2 else {
+      return actions.joined(separator: " and ")
+    }
+    return actions.dropLast().joined(separator: ", ") + ", and " + last
+  }
+
+  private static func cardOrder(_ type: ItemType) -> Int {
+    switch type {
+    case .progress: 0
+    case .review: 1
+    case .recommended, .wantToWatch: 2
+    default: 3
+    }
+  }
+
+  private static func statusAction(_ status: WatchStatus?) -> String {
+    switch status {
+    case .finished: "finished"
+    case .watching: "is watching"
+    case .caughtUp: "is caught up"
+    default: "stopped watching"
+    }
+  }
+
+  private static func reviewAction(body: String?) -> String {
+    body == nil ? "rated" : "reviewed"
   }
 
   // A TV comment's label, such as "Season 2" or "Season 2, Episode 4". It
@@ -87,6 +150,14 @@ extension FeedItem {
   // Whether the viewer's Recommend of this entry's title holds a top 10 rank,
   // so withdrawing it asks first.
   public var isRankedByViewer: Bool { viewerRecommended && viewerTopTenRank != nil }
+}
+
+// What an entry's body and author line show from it, or from its card's
+// review: the stars, the text, and whether a later save changed them.
+public struct EntryContent: Hashable, Sendable {
+  public let rating: Int?
+  public let body: String?
+  public let edited: Bool
 }
 
 extension Comment {

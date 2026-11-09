@@ -17,6 +17,12 @@ enum FeedFixture {
   static let alicePost = "872a205a-bab2-48f8-8c27-b737397eb469"
   // Cam's deleted post, kept for Ben's reply 9.
   static let camPost = "46cdc1d2-e78b-4103-8d5e-2081a05f727b"
+  // Alice's Paper Lanterns card: her Finished entry holds it, with her review
+  // and Recommend.
+  static let aliceCard = "e1989f51-e93f-414c-8ae3-30f8ac20f409"
+  // Ben's Harbor Lights card: his edited spoiler review holds it, with his
+  // Recommend.
+  static let benCard = "f0a222c0-d2f9-45e6-8f45-53413b726eed"
   // Ben's new post in `screen/feed/incoming`, which sorts first.
   static let benNewPost = "00000000-0000-4000-8000-000000000001"
 }

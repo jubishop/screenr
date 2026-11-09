@@ -3,9 +3,11 @@ import SwiftUI
 
 // One feed entry: its poster and title, the author's action and time, any
 // season label, rating, and text, then its actions and its discussion. A
-// spoiler hides the text, reactions, and discussion until the reader reveals
-// them; the label and rating stay outside the cover. Compact entries, on
-// title pages, leave the title's details and actions to the page header.
+// card of one person's close-together actions names them all in its author
+// line and shows its review's rating and text. A spoiler hides the text,
+// reactions, and discussion until the reader reveals them; the label and
+// rating stay outside the cover. Compact entries, on title pages, leave the
+// title's details and actions to the page header.
 struct EntryView: View {
   let feed: FeedModel
   let entry: FeedEntry
@@ -75,10 +77,12 @@ struct EntryView: View {
           Text(item.displayName)
             .font(.subheadline.weight(.semibold))
             .foregroundStyle(.primary)
-          // One wrapping line, such as "finished · 2h · Edited".
+          // One wrapping line, such as "finished and reviewed · 2h · Edited".
           Text(
-            activity(at: RelativeTime.label(entry.visibleActivity, now: now))
-              .joined(separator: " · ")
+            item.activityLine(
+              style: style,
+              time: RelativeTime.label(entry.visibleActivity, now: now)
+            )
           )
           .font(.subheadline)
           .foregroundStyle(.muted)
@@ -89,11 +93,6 @@ struct EntryView: View {
       .contentShape(Rectangle())
     }
     .buttonStyle(.plain)
-  }
-
-  // What the author did, when, and whether they edited it since.
-  private func activity(at time: String) -> [String] {
-    [item.action(style: style), time] + (item.edited ? ["Edited"] : [])
   }
 
   @ViewBuilder private var details: some View {
@@ -108,7 +107,7 @@ struct EntryView: View {
       Text(removed)
         .foregroundStyle(.muted)
     }
-    if let rating = item.rating {
+    if let rating = item.content.rating {
       Text(ReviewStars.symbols(rating))
         .foregroundStyle(.tint)
     }
@@ -119,7 +118,7 @@ struct EntryView: View {
         Label("Contains spoilers · Reveal discussion", systemImage: "eye.slash")
       }
       .buttonStyle(.feedAction)
-    } else if let body = item.body, !body.isEmpty {
+    } else if let body = item.content.body, !body.isEmpty {
       Text(body)
         .textSelection(.enabled)
     }
