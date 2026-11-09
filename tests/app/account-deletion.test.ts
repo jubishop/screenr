@@ -34,6 +34,7 @@ const { updateTitleActivity, updateWatchStatus, updateTopTen } =
   await import("../../src/server/title-actions");
 const { saveReview } = await import("../../src/server/reviews");
 const { setReaction } = await import("../../src/server/reactions");
+const { reportContent } = await import("../../src/server/reports");
 const { uploadPhoto } = await import("../../src/server/photos");
 const { changePushDevice } = await import("../../src/server/push");
 const { saveServices } = await import("../../src/server/streaming-services");
@@ -340,6 +341,18 @@ async function departingMember(t: TestContext) {
   await setReaction(departing, entry, benRoot, "haha");
   await setReaction(alice, entry, kept, "wow");
 
+  // Reports of their post, comment, and profile, which keep what they wrote,
+  // and their own report, with its note, of a friend's comment.
+  await reportContent(ben, { item: post, reason: "spam" });
+  await reportContent(ben, { item: entry, reply: lonely, reason: "other" });
+  await reportContent(cam, { person: departing, reason: "hate" });
+  await reportContent(departing, {
+    item: entry,
+    reply: benRoot,
+    reason: "harassment",
+    note: `A ${marker} note.`,
+  });
+
   // Settings, devices, photo, usage, and pending email.
   const session = await bearerFor(departing);
   // Bytes that start like a JPEG; the server checks only the leading bytes.
@@ -430,6 +443,8 @@ test("deleting an account erases every row that refers to the member, keeping re
     "session.userId",
     "account.userId",
     "profile_photo.user_id",
+    "content_report.reporter_id",
+    "content_report.author_id",
   ])
     assert.ok(columns.includes(column), column);
   assert.notDeepEqual(await references(departing), []);

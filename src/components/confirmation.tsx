@@ -13,6 +13,7 @@ import { useActionError } from "./action-error";
 export function Confirmation({
   message,
   action,
+  cancel = "Cancel",
   busy,
   unavailable = false,
   onConfirm,
@@ -21,6 +22,8 @@ export function Confirmation({
 }: {
   message: string;
   action: string;
+  // The label of the button that closes it, such as "Not now".
+  cancel?: string;
   busy: boolean;
   unavailable?: boolean;
   onConfirm: () => void;
@@ -28,9 +31,9 @@ export function Confirmation({
   children?: ReactNode;
 }) {
   const question = useId();
-  const cancel = useRef<HTMLButtonElement>(null);
+  const cancelButton = useRef<HTMLButtonElement>(null);
   useEffect(() => {
-    cancel.current?.focus();
+    cancelButton.current?.focus();
   }, []);
   return (
     <div className="confirmation" role="group" aria-labelledby={question}>
@@ -47,11 +50,11 @@ export function Confirmation({
         <ActionButton
           type="button"
           className="secondary"
-          ref={cancel}
+          ref={cancelButton}
           unavailable={busy}
           onClick={onCancel}
         >
-          Cancel
+          {cancel}
         </ActionButton>
       </div>
       {children}
@@ -68,6 +71,7 @@ export function Confirmation({
 export function ConfirmAction({
   message,
   action,
+  cancel,
   busy = false,
   unavailable = false,
   run,
@@ -76,6 +80,7 @@ export function ConfirmAction({
 }: {
   message: string;
   action: string;
+  cancel?: string;
   busy?: boolean;
   unavailable?: boolean;
   run: () => Promise<unknown>;
@@ -93,6 +98,7 @@ export function ConfirmAction({
     <Confirmation
       message={message}
       action={action}
+      cancel={cancel}
       busy={busy || pending}
       unavailable={unavailable}
       onConfirm={() => void confirm()}

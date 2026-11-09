@@ -270,7 +270,9 @@ test("phone navigation is a four-item bottom bar below a slim sticky header", as
   expect((await box(update)).y).toBeGreaterThanOrEqual(headerBox.height);
   await expectUncovered(update);
   const last = viewer.locator("[data-item-id]").last();
-  await expectUncovered(last.getByRole("button", { name: "Comment" }));
+  await expectUncovered(
+    last.getByRole("button", { name: "Comment", exact: true }),
+  );
 });
 
 test("navigation moves between the four sections and opens invitations from Friends", async ({

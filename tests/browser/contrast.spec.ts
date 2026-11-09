@@ -198,6 +198,17 @@ for (const width of [390, 1366])
       .getByRole("button", { name: "More actions for Maya Chen", exact: true })
       .click();
     await expectBothThemes(page, `profile-menu-${width}`);
+    // The report form opens beneath the profile's actions.
+    await page.getByRole("menuitem", { name: "Report" }).click();
+    const report = page.getByRole("form", {
+      name: "Report Maya Chen’s profile",
+    });
+    await report.getByRole("radio", { name: "Spam" }).check();
+    await expectBothThemes(page, `report-form-${width}`);
+    await report.getByRole("button", { name: "Cancel", exact: true }).click();
+    await page
+      .getByRole("button", { name: "More actions for Maya Chen", exact: true })
+      .click();
     await page.getByRole("menuitem", { name: "Block" }).click();
     const confirmation = page.getByRole("group", {
       name: /^Block Maya Chen\?/,

@@ -60,6 +60,13 @@ const icons = {
   up: <path d="M12 19V5m-6 6 6-6 6 6" />,
   down: <path d="M12 5v14m-6-6 6 6 6-6" />,
   remove: <path d="M6 6l12 12M18 6 6 18" />,
+  // Report a post, comment, or review.
+  flag: (
+    <>
+      <path d="M5 21V4" />
+      <path d="M5 4h11l-2 4.5 2 4.5H5" />
+    </>
+  ),
   // Placeholder avatar for a person who is not available.
   person: (
     <>

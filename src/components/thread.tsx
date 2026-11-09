@@ -10,6 +10,7 @@ import { Reactions } from "./reactions";
 import { Avatar } from "./avatar";
 import { ConfirmAction } from "./confirmation";
 import { around, useRemovalFocus, type FocusTarget } from "./removal-focus";
+import { ReportForm, type ReportedAuthor } from "./report";
 import {
   CommentComposer,
   type CommentDraft as Draft,
@@ -20,6 +21,9 @@ export const live = (comment: Comment) =>
   !comment.removed && !comment.unavailable;
 // A reader can Delete their own comment and Remove any comment under their
 // entry.
+// Another member's live comment can be reported.
+export const reportableComment = (comment: Comment, user: Person) =>
+  live(comment) && !!comment.author_id && comment.author_id !== user.user_id;
 export const removable = (
   comment: Comment,
   conversation: Thread["conversation"],
@@ -30,12 +34,17 @@ export const removable = (
 // While a failed read hides the conversation, `available` is false and the
 // thread shows only an open Delete or Remove confirmation, from the last
 // snapshot, whose action waits for the next read. The entry owns which
-// comment is `confirming`, so it can show that confirmation alone.
+// comment is `confirming`, so it can show that confirmation alone, and which
+// comment's report form is open, so it can offer to block the author once
+// the report hides the comment.
 export function ThreadView({
   snapshot,
   available,
   confirming,
   setConfirming,
+  reporting,
+  setReporting,
+  onReported,
   user,
   refresh,
   targetReply,
@@ -46,6 +55,10 @@ export function ThreadView({
   // The comment whose Delete or Remove waits for confirmation.
   confirming: string | null;
   setConfirming: (comment: string | null) => void;
+  // The comment whose report form is open, and what a sent report calls.
+  reporting: string | null;
+  setReporting: (comment: string | null) => void;
+  onReported: (author: ReportedAuthor) => void;
   user: Person;
   refresh: () => Promise<void>;
   targetReply?: string;
@@ -111,6 +124,7 @@ export function ThreadView({
   const target = comments.find((c) => c.id === targetReply);
   const targetRoot = target?.root_id ?? target?.id;
   const activeReply = comments.find((c) => c.id === replyTo && live(c));
+  const reportable = (comment: Comment) => reportableComment(comment, user);
   const replyCount = comments.filter(live).length;
 
   async function post(
@@ -218,6 +232,17 @@ export function ThreadView({
         >
           Reply
         </button>
+        {reportable(comment) && (
+          <button
+            className="text-button muted"
+            id={`report-action-${comment.id}`}
+            aria-expanded={reporting === comment.id}
+            disabled={!interactive}
+            onClick={() => setReporting(comment.id)}
+          >
+            Report
+          </button>
+        )}
         {canRemove(comment) && (
           <button
             className="text-button muted"
@@ -351,6 +376,25 @@ export function ThreadView({
               setConfirming(null);
               document.getElementById(`remove-action-${comment.id}`)?.focus();
             }}
+          />
+        )}
+        {available && reporting === comment.id && reportable(comment) && (
+          <ReportForm
+            kind="comment"
+            target={{
+              item: currentSnapshot.conversation.id,
+              reply: comment.id,
+            }}
+            onCancel={() => {
+              setReporting(null);
+              document.getElementById(`report-action-${comment.id}`)?.focus();
+            }}
+            onReported={() =>
+              onReported({
+                user_id: comment.author_id!,
+                display_name: comment.display_name ?? "",
+              })
+            }
           />
         )}
       </article>

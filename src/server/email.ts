@@ -65,6 +65,21 @@ export async function queueCode({
   );
 }
 
+// Queues an alert to the owner, such as a new report
+// (docs/data-and-access.md#content-reports), in the transaction that causes
+// it. Whatever the transport, it waits for the worker, which sends it with
+// Resend before activity email, as it does codes. Its job expires after a
+// day.
+export async function queueOwnerEmail(
+  client: Pick<PoolClient, "query">,
+  mail: Mail,
+) {
+  await client.query(
+    "INSERT INTO email_job(id,payload,expires_at) VALUES($1,$2,now()+interval '1 day')",
+    [randomUUID(), encrypt(mail)],
+  );
+}
+
 // A non-2xx reply from Resend. Its error name, such as
 // `daily_quota_exceeded`, comes from a fixed list; its message can quote the
 // request, so it is not kept.
@@ -101,6 +116,8 @@ type Job = {
   attempts: number;
   generation: number;
   notification_recipient: string | null;
+  // A code's recipient; an owner alert has neither.
+  recipient_hash: string | null;
 };
 
 // Sends at most one due email and reports whether a job was due. Sign-in
@@ -276,7 +293,11 @@ async function recordFailure(
       "email delivery failed",
       {
         job: job.id,
-        kind: job.notification_recipient ? "activity" : "code",
+        kind: job.notification_recipient
+          ? "activity"
+          : job.recipient_hash
+            ? "code"
+            : "alert",
         attempt: job.attempts + 1,
         status: rejection?.status,
         provider: rejection?.provider,

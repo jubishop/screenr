@@ -501,7 +501,7 @@ export async function buildWorld() {
     "The finale reveals that the lighthouse keeper narrated every episode.";
   await step(saveReview(u.ben, "tv:201", 4, spoiler, true));
   // Changing the rating marks the review edited.
-  await step(saveReview(u.ben, "tv:201", 5, spoiler, true));
+  const benReview = await step(saveReview(u.ben, "tv:201", 5, spoiler, true));
   const aliceEpisode = await step(
     createTitleComment(
       u.alice,
@@ -603,6 +603,7 @@ export async function buildWorld() {
   const ids = {
     benNight,
     benAnswer,
+    benReview,
     aliceEpisode,
     aliceAnswer,
     benSpoiler,

@@ -1,0 +1,19 @@
+{
+  "description": "Reporting a profile's display name and photo.",
+  "viewer": "alice",
+  "request": {
+    "method": "POST",
+    "action": "report",
+    "path": "/api/screenr/report",
+    "body": {
+      "person": "user-erin",
+      "reason": "sexual"
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "ok": true
+    }
+  }
+}

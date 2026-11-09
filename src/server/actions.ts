@@ -31,6 +31,7 @@ import { updateDisplayName, updateProfile } from "./profiles";
 import { changePushDevice, savePushSettings } from "./push";
 import { setReaction } from "./reactions";
 import { changeRelationship } from "./relationships";
+import { reportContent } from "./reports";
 import { removeReview, saveReview } from "./reviews";
 import { loadScreen, screenResponse } from "./screens";
 import { screenKey } from "./screen-versions";
@@ -474,6 +475,19 @@ const actions = {
     input: ({ item, reply, kind }) => ({ item: id(item), reply, kind }),
     run: ({ item, reply, kind }, { userId }) =>
       setReaction(userId, item, reply, kind),
+  }),
+  // Reports an entry (`item`), one of its replies (`item` and `reply`), or a
+  // profile (`person`, a user ID) for the owner's review, with a `reason` and
+  // an optional `note`.
+  report: write({
+    input: ({ item, reply, person, reason, note }) => ({
+      item,
+      reply,
+      person,
+      reason,
+      note,
+    }),
+    run: (fields, { userId }) => reportContent(userId, fields),
   }),
 } satisfies Record<string, Action>;
 

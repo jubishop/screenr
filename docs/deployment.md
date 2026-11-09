@@ -291,8 +291,8 @@ Google credentials, and the TMDB read token. The activation command checks all
 required values without printing them. The provider setup and callback URLs
 are in [Running Screenr](running-screenr.md#provider-configuration).
 
-The iPhone app adds these `app.env` settings. Each takes effect once the
-issue in its row ships;
+The iPhone app and later features add these `app.env` settings. Each takes
+effect once the issue in its row ships;
 [iPhone app accounts and keys](running-screenr.md#iphone-app-accounts-and-keys)
 describes the records behind them.
 
@@ -307,6 +307,9 @@ describes the records behind them.
 | `GOOGLE_IOS_CLIENT_ID` | iOS OAuth client ID, accepted as the audience of the app's Google ID tokens | [#216](https://github.com/jubishop/screenr/issues/216) |
 | `REVIEW_SIGN_IN_CODE` | Fixed six-digit sign-in code for the [demo circle](running-screenr.md#demo-circle-for-apple-review)'s reviewer, given in App Store Connect's review notes | [#247](https://github.com/jubishop/screenr/issues/247) |
 | `SCREENR_IPHONE_INSTALL_URL` | Optional https link where an iPhone installs the app, now TestFlight's [public link](running-screenr.md#app-store-connect). Invitation links opened on an iPhone without a session go there after saving the invitation; without it they open the web's sign-in. Activation rejects a value that is not an https URL | [#539](https://github.com/jubishop/screenr/issues/539), [#540](https://github.com/jubishop/screenr/issues/540) |
+| `SCREENR_OWNER_EMAIL` | Optional email address of the account that reviews members' [reports](data-and-access.md#content-reports) at `/reports` and receives an email for each new one. Without it no one can open the review page. Activation rejects a value that is not an email address | [#555](https://github.com/jubishop/screenr/issues/555) |
+| `PUSHOVER_API_KEY` | Optional token of Screenr's Pushover application, for a Pushover alert about each new report. Set it with `PUSHOVER_USER_KEY` or not at all; activation rejects one without the other | [#555](https://github.com/jubishop/screenr/issues/555) |
+| `PUSHOVER_USER_KEY` | Optional Pushover user key of the owner, who receives the alerts | [#555](https://github.com/jubishop/screenr/issues/555) |
 | `SCREENR_IOS_MINIMUM_BUILD` | Optional lowest app build served; older builds get HTTP 426. Raise it only when a [breaking payload change](data-and-access.md#changes-that-app-builds-depend-on) needs it, or when the owner chooses to because older builds put members' data at risk, as with build 5 on 2026-11-09 ([#554](https://github.com/jubishop/screenr/issues/554)); that section records the current value and why. Activation rejects a value that is not a whole number | [#213](https://github.com/jubishop/screenr/issues/213), [#502](https://github.com/jubishop/screenr/issues/502), [#554](https://github.com/jubishop/screenr/issues/554) |
 
 Both private keys use the
@@ -1189,10 +1192,13 @@ journalctl -u screenr-worker --since '1 day ago' --no-pager | grep '"event":"ema
 | `apple settings missing` | web | No fields: account deletion found a Sign in with Apple token but the [Apple settings](running-screenr.md#iphone-app-accounts-and-keys) are missing, so the account was not deleted |
 | `apple token replaced` | web | No fields: Apple sign-ins kept storing new tokens through three rounds of revocation, so the account was not deleted |
 | `worker failed` | worker | `failures`, the loop's failed passes in a row; see [worker outages](#worker-outages) |
-| `worker cleanup failed` | worker | `step`, the periodic cleanup step that failed: `email jobs`, `usage`, `sessions`, `notifications`, `catalog`, `google client`, or `push jobs`; the other steps still run ([worker outages](#worker-outages)) |
-| `email delivery failed` | worker | `job` ID, `kind` (`code` or `activity`), `attempt`, `final`, and `stale` when a block or opt-out committed during the send ([stale sends](notifications.md#activity-email)) |
+| `worker cleanup failed` | worker | `step`, the periodic cleanup step that failed: `email jobs`, `usage`, `sessions`, `notifications`, `catalog`, `google client`, `push jobs`, or `pushover jobs`; the other steps still run ([worker outages](#worker-outages)) |
+| `email delivery failed` | worker | `job` ID, `kind` (`code`, `activity`, or `alert` for an owner's report alert), `attempt`, `final`, and `stale` when a block or opt-out committed during the send ([stale sends](notifications.md#activity-email)) |
 | `push delivery failed` | worker | `job` ID, `kind` (`alert` or `badge`), `environment` (`sandbox` or `production`), `attempt`, `final`, and `status` and `reason` for an APNs reply |
 | `push delivery off` | worker | `missing` setting names, or `reason` `invalid key` with error fields; see [push settings](#provisioning) |
+| `pushover delivery failed` | worker | `job` ID, `attempt`, `final`, and `status` for a Pushover reply or error fields: an owner's [report alert](data-and-access.md#content-reports) was not sent, and is retried unless `final` |
+| `pushover delivery off` | worker | `missing`, the one Pushover setting that is not set, so no report alert goes to Pushover |
+| `review action failed` | web | `status` 500, for an unexpected error in an owner's [review action](data-and-access.md#content-reports) |
 | `google photo copy failed` | web | `user` ID, `trigger` (`account` or `choice`), `reason`, and `status` for an HTTP reply |
 | `database connection failed` | web, worker | Error fields only, once per connection that PostgreSQL ended, such as in a restart |
 | `database rollback failed` | web, worker | Error fields only; the failure that ended the transaction is still reported |
@@ -1412,7 +1418,8 @@ each worker start adds a check, at one request each.
 
 #### Worker outages
 
-The worker's email and push loops each run a pass about once a second
+The worker's email, push, and report alert loops each run a pass about once
+a second
 ([issue #358](https://github.com/jubishop/screenr/issues/358)). During an
 outage, such as a PostgreSQL restart, every pass fails, so each failed pass
 in a row doubles the loop's pause, from 2 seconds up to 30. Each loop logs
@@ -1434,8 +1441,8 @@ journalctl -u screenr-worker --since '1 day ago' --no-pager | grep '"event":"wor
 Each loop's periodic cleanup, which runs on its first pass and every 60th,
 about once a minute, stays outside that count
 ([issue #577](https://github.com/jubishop/screenr/issues/577)): the email
-loop's [cleanup steps](running-screenr.md#email-worker) and the push loop's
-delete of expired jobs. Each step runs on its own: one that fails, such as a
+loop's [cleanup steps](running-screenr.md#email-worker), and the push and
+report alert loops' deletes of their expired jobs. Each step runs on its own: one that fails, such as a
 delete that a schema change broke, logs `worker cleanup failed` with its
 `step` name, and the next step still runs. The pass doesn't fail, so
 delivery and the one-second pause go on. That line is

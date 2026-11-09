@@ -390,10 +390,13 @@ Each file holds one case, named for the state it shows, such as `default`,
 - `push/<case>.json`: the payload the worker sent APNs for one of Alice's
   notifications, with its category and thread, or a badge-only update.
   Each file holds a `description` and the `payload`.
-- `rules/<rule>.json`: a server rule that the fixture API applies, written
-  from the server's own definition, such as `before-profile`, the actions a
-  member can use before setting up a profile. Each file holds a
-  `description` and the rule's `actions`.
+- `rules/<rule>.json`: a server rule that the app or its fixture API
+  applies, written from the server's own definition. Each file holds a
+  `description` and the rule: `before-profile` holds the `actions` a member
+  can use before setting up a profile, and `report-reasons` the `reasons`,
+  each a `reason` and its `label`, that a
+  [report](data-and-access.md#content-reports) can give, in the form's
+  order.
 
 ### Fixture format
 
