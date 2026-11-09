@@ -61,9 +61,13 @@ extension XCUIApplication {
     for types: XCUIAccessibilityAuditType = .screenr,
     _ handler: ((XCUIAccessibilityAuditIssue) throws -> Bool)? = nil
   ) throws {
-    // Dynamic Type goes last: changing the text size can scroll a list,
-    // which would move what the other checks measure.
-    let checks: [XCUIAccessibilityAuditType] = [.hitRegion, .textClipped, .contrast, .dynamicType]
+    // Clipped text and Dynamic Type go last, since both can move what the
+    // other checks measure: the clipped-text check can scroll a scroll view
+    // to bring cut-off text into view, and changing the text size can scroll
+    // a list. On a title page scrolled by hand, a contrast check right after
+    // the clipped-text check's scroll never finished in the iOS 27
+    // Simulator, at any load.
+    let checks: [XCUIAccessibilityAuditType] = [.hitRegion, .contrast, .textClipped, .dynamicType]
     for check in checks where types.contains(check) {
       try performAccessibilityAudit(for: check, handler)
     }
