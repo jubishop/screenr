@@ -131,11 +131,11 @@ struct FeedbackSheet: View {
     case .short:
       EmptyView()
     case .nearLimit(let count):
-      LengthBar {
+      FormNoteBar {
         Text(verbatim: "\(count) / \(limit)")
       }
     case .overLimit(let count):
-      LengthBar {
+      FormNoteBar {
         Text(verbatim: "\(count) / \(limit)")
           .foregroundStyle(.danger)
         FailureLabel("Shorten your message to 4,096 characters or fewer.")
@@ -186,23 +186,6 @@ struct FeedbackSheet: View {
         }
       }
     }
-  }
-}
-
-// A strip below the feedback form, in the form's background, for the message's length.
-private struct LengthBar<Content: View>: View {
-  @ViewBuilder let content: Content
-
-  var body: some View {
-    VStack(alignment: .leading, spacing: 6) {
-      content
-    }
-    .font(.footnote)
-    .foregroundStyle(.muted)
-    .padding(.horizontal, 32)
-    .padding(.vertical, 10)
-    .frame(maxWidth: .infinity, alignment: .leading)
-    .background(Color(uiColor: .systemGroupedBackground))
   }
 }
 

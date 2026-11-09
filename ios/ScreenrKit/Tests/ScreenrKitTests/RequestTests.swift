@@ -117,6 +117,27 @@ struct RequestTests {
     Shape("actions/remove-photo/default", .removePhoto),
     Shape("actions/remove-review/default", .removeReview(title: "movie:102")),
     Shape(
+      "actions/report/not-reportable",
+      .report(.entry("0601645c-005d-450f-8b22-ae05a508119d"), reason: .other)
+    ),
+    Shape(
+      "actions/report/own",
+      .report(.entry("872a205a-bab2-48f8-8c27-b737397eb469"), reason: .spam)
+    ),
+    Shape("actions/report/profile", .report(.profile("user-erin"), reason: .sexual)),
+    Shape(
+      "actions/report/reply",
+      .report(
+        .reply(entry: "872a205a-bab2-48f8-8c27-b737397eb469", comment: "8"),
+        reason: .spam,
+        note: "He posts this link everywhere."
+      )
+    ),
+    Shape(
+      "actions/report/review",
+      .report(.entry("f0a222c0-d2f9-45e6-8f45-53413b726eed"), reason: .harassment)
+    ),
+    Shape(
       "actions/respond-friend-request/accept",
       .respondToFriendRequest(notification: "14", .accept)
     ),

@@ -69,5 +69,6 @@ private struct FeedScreen: View {
       }
     }
     .feedConfirmation(feed)
+    .reporting(feed.reports)
   }
 }

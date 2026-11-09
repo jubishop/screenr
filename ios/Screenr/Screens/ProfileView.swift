@@ -16,16 +16,27 @@ struct ProfileView: View {
   @Environment(ShellModel.self) private var shell
 
   var body: some View {
+    let actions = ProfileModel(shell: shell) { await model.refresh() }
     ProfilePage(
       model: model,
       feed: FeedModel(
         api: api,
         refresh: { await model.refresh() },
-        showOlder: { await model.showOlder() }
+        showOlder: { await model.showOlder() },
+        // Blocking the person from the offer after a report here closes the
+        // profile, as its own Block does.
+        reports: ReportModel(api: api, refresh: { await model.refresh() }) { person in
+          await actions.block(person, onProfileOf: username)
+        }
       ),
-      actions: ProfileModel(shell: shell) { await model.refresh() },
+      actions: actions,
       editTopTen: editTopTen
     )
+  }
+
+  private var username: String {
+    guard case .profile(let username) = destination else { return "" }
+    return username
   }
 }
 
@@ -94,7 +105,12 @@ private struct ProfilePage: View {
           }
           if !relationship.menu.isEmpty {
             ToolbarItem(placement: .topBarTrailing) {
-              ProfileMenu(person: profile.person, relationship: relationship, actions: actions)
+              ProfileMenu(
+                person: profile.person,
+                relationship: relationship,
+                actions: actions,
+                reports: feed.reports
+              )
             }
           }
         }
@@ -102,6 +118,7 @@ private struct ProfilePage: View {
     }
     .profileConfirmation(actions)
     .feedConfirmation(feed)
+    .reporting(feed.reports)
     // The header names the person, so the bar keeps the name small, from
     // the first read on.
     .toolbarTitleDisplayMode(.inline)
