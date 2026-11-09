@@ -736,7 +736,9 @@ recipients. A full run checks:
   and keyboard, lists Caught up only for TV shows, and stays on screen at
   phone and desktop widths. A friend sees one progress entry, saves its title
   with one tap, and then sees their own status as a link. Clearing keeps an
-  entry with replies, marked as removed.
+  entry with replies, marked as removed. The status button shows its menu
+  chevron after the label, with and without a status, at phone and desktop
+  widths, and flips it while open.
 - The title page's review form rates by pointer and keyboard, saves text, and
   fits phone and desktop widths. A failed save keeps the draft. A friend reads
   the review in the friends, profile, and title feeds, replies, and reacts, and
