@@ -11,7 +11,7 @@
   },
   "response": {
     "status": 200,
-    "etag": "W/\"tCPC1dM8rGYNIRtksLSn_AGas8d6XkSQpGUW3jt5sVo\"",
+    "etag": "W/\"82Nzd3Octn6EMfWsgoHkGKgIolYXJO4q_FCOEushShY\"",
     "body": {
       "kind": "title",
       "title": {
@@ -95,6 +95,7 @@
           "edited": false,
           "season": null,
           "episode": null,
+          "combined": [],
           "username": "ben",
           "display_name": "Ben Ortiz",
           "photo": "8fc275dfeaca5cf8",
@@ -127,6 +128,7 @@
           "edited": false,
           "season": null,
           "episode": null,
+          "combined": [],
           "username": "alice",
           "display_name": "Alice Park",
           "photo": "486e0212c15728ee",

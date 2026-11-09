@@ -22,10 +22,7 @@ export async function addComment(
     throw new AppError("Conversation not found.", 404);
   return transaction(async (client) => {
     const conversation = (
-      await client.query(`${itemQuery} AND c.id=$2::uuid`, [
-        viewer,
-        conversationId,
-      ])
+      await client.query(itemQuery("c.id=$2::uuid"), [viewer, conversationId])
     ).rows[0];
     if (!conversation) throw new AppError("Conversation not found.", 404);
     let parent:
@@ -43,8 +40,9 @@ export async function addComment(
         : undefined;
       if (!parent) throw new AppError("Reply target not found.", 404);
     }
-    // A reply repeats its entry's conversation, as the foreign key to its
-    // entry requires. Posts have none.
+    // A reply to any entry in a card goes to the entry that holds it. It
+    // repeats its entry's conversation, as the foreign key to its entry
+    // requires. Posts have none.
     const result = await client.query(
       `INSERT INTO comment(${entryColumn(conversation.item_type)},author_id,body,spoiler,root_id,addressed_id,conversation_id)
       VALUES($1,$2,$3,$4,$5,$6,(SELECT conversation_id FROM ${feedEntries} c WHERE c.id=$1::uuid))

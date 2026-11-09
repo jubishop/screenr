@@ -211,10 +211,11 @@ test("one review per title updates in place with an Edited label, keeps its disc
     restored.conversation.reactions,
     discussion.conversation.reactions,
   );
-  // Reviews are separate from Recommend and other entries.
+  // Reviews are separate from Recommend and other entries, even when a card
+  // shows them together.
   assert.deepEqual(
     (await conversations(alice, { owner: alice }))
-      .map((c) => c.item_type)
+      .flatMap((c) => [c.item_type, ...c.combined.map((o) => o.item_type)])
       .sort(),
     ["recommended", "review"],
   );

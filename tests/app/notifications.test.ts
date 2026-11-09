@@ -628,6 +628,33 @@ test("the push extension's read omits the excerpt of a spoiler reply and of ever
   assert.deepEqual([spoiler.thread, spoiler.comment], [post, marked]);
 });
 
+test("the push extension's read omits the excerpt of every reply in a card that a spoiler review covers", async () => {
+  const { alice, ben, cam, conversation: recommend } = await setup();
+  await friend(alice, ben);
+  await friend(alice, cam);
+  // Ben's reaction makes Recommend hold the card that the spoiler-flagged
+  // review then joins (docs/title-feed.md#combined-title-actions).
+  await setReaction(ben, recommend, null, "like");
+  const review = await saveReview(alice, "movie:1", 4, "Ending reveal", true);
+  const parent = await addComment(cam, review, "The twist is a dream", false);
+  await addComment(ben, recommend, "The twist is a dream", false, parent);
+  const [toAlice] = (await notifications(alice)).items.filter(
+    (item) => item.kind === "comment",
+  );
+  const [toCam] = (await notifications(cam)).items.filter(
+    (item) => item.kind === "reply",
+  );
+  for (const [viewer, item] of [
+    [alice, toAlice],
+    [cam, toCam],
+  ] as const) {
+    const content = await shown(viewer, item.id);
+    assert.equal(content.thread, recommend);
+    assert.equal(content.spoiler, true);
+    assert.equal(content.excerpt, null);
+  }
+});
+
 test("the push extension's read hides notifications from blocked and unfriended actors, of removed comments, and of other members alike", async () => {
   const { alice, ben, cam, outsider, conversation } = await setup();
   await friend(alice, ben);

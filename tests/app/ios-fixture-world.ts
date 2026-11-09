@@ -567,7 +567,12 @@ export async function buildWorld() {
   await step(addComment(u.ben, camPost, "Which book?", false));
   await step(removeComment(u.cam, camPost));
   await step(updateWatchStatus(u.alice, "tv:202", "watching"));
-  await step(updateWatchStatus(u.alice, "movie:102", "finished", "2026-09-20"));
+  const aliceFinished = await step(
+    updateWatchStatus(u.alice, "movie:102", "finished", "2026-09-20"),
+  );
+  // Ben's reaction gives Alice's Finished entry discussion, so it holds her
+  // card when her review and Recommend join it.
+  await setReaction(u.ben, aliceFinished!, null, "like");
   await step(
     saveReview(u.alice, "movie:102", 3, "Lovely score, slow middle.", false),
   );

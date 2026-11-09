@@ -500,9 +500,9 @@ public final class FeedModel {
     await saveWantToWatch(item)
   }
 
+  // A card with an active Recommend counts as one, whichever entry holds it.
   private func saveWantToWatch(_ item: FeedItem) async {
-    let surface: SaveSurface =
-      item.itemType == .recommended && item.active ? .friendRecommendation : .friendEntry
+    let surface: SaveSurface = item.recommended ? .friendRecommendation : .friendEntry
     await saveActivity(item, .wantToWatch, value: !item.viewerWantToWatch, surface: surface)
   }
 

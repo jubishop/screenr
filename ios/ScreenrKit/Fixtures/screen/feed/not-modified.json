@@ -9,12 +9,12 @@
       "path": "/"
     },
     "headers": {
-      "If-None-Match": "W/\"YjgKRRG2PW93pusfrJoRMsVpzwBvGVbjwN7VhsZ-KIk\""
+      "If-None-Match": "W/\"asaI0mBTW5dP4WmIo9nZrbUTyxqOagwKgBG1o7EPbLc\""
     }
   },
   "response": {
     "status": 304,
-    "etag": "W/\"YjgKRRG2PW93pusfrJoRMsVpzwBvGVbjwN7VhsZ-KIk\"",
+    "etag": "W/\"asaI0mBTW5dP4WmIo9nZrbUTyxqOagwKgBG1o7EPbLc\"",
     "body": null
   }
 }

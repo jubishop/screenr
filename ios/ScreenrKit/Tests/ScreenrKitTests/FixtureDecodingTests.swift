@@ -121,7 +121,15 @@ struct FixtureDecodingTests {
     #expect(screen.user.username == "alice")
     #expect(screen.unreadNotifications == 6)
     let feed = try #require(screen.feed)
-    #expect(feed.conversations.count == 22)
+    // Alice's finished, reviewed, and recommended Paper Lanterns, and Ben's
+    // reviewed and recommended Harbor Lights, each show as one card. Ben's
+    // reaction to Alice's Finished entry has it hold her card.
+    #expect(feed.conversations.count == 19)
+    let card = try #require(feed.conversations.first { $0.titleId == "movie:102" })
+    #expect(card.itemType == .progress)
+    #expect(card.recommended)
+    #expect(card.combined?.map(\.itemType) == [.review, .recommended])
+    #expect(card.combined?.first?.rating == 3)
     let first = try #require(feed.conversations.first)
     #expect(first.itemType == .wantToWatch)
     #expect(first.username == "ben")
@@ -135,6 +143,18 @@ struct FixtureDecodingTests {
     #expect(comments.contains { $0.unavailable && $0.authorId == nil })
     #expect(comments.contains { $0.spoiler })
     #expect(feed.target == nil)
+  }
+
+  // A server without combined cards sends no `combined`, which, like every
+  // new field, is optional
+  // (docs/ios-app.md#additive-payloads-and-a-minimum-build--2026-10-13).
+  @Test func readsAnEntryWithoutCombinedEntries() throws {
+    guard case .object(var entry) = try FeedFixtures.json("e1989f51-e93f-414c-8ae3-30f8ac20f409")
+    else { throw FixtureError("Alice's card is not an object") }
+    entry["combined"] = nil
+    let item = try FeedFixtures.decode(.object(entry))
+    #expect(item.itemType == .progress)
+    #expect(item.combined == nil)
   }
 
   @Test func readsALinkedReply() throws {

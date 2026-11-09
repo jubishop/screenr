@@ -19,7 +19,7 @@ export async function setReaction(
   if (!isUuid(itemId)) throw new AppError("Conversation not found.", 404);
   await transaction(async (client) => {
     const item: FeedItem | undefined = (
-      await client.query(`${itemQuery} AND c.id=$2::uuid`, [viewer, itemId])
+      await client.query(itemQuery("c.id=$2::uuid"), [viewer, itemId])
     ).rows[0];
     // Deleted standalone comments and posts and removed reviews accept no
     // reactions.
@@ -33,8 +33,9 @@ export async function setReaction(
       )
     )
       throw new AppError("Reply target not found.", 404);
+    // A reaction to any entry in a card goes to the entry that holds it.
     const column = replyId != null ? "comment_id" : entryColumn(item.item_type);
-    const target = replyId ?? itemId;
+    const target = replyId ?? item.id;
     if (kind === null) {
       await client.query(
         `DELETE FROM reaction WHERE ${column}=$1 AND user_id=$2`,

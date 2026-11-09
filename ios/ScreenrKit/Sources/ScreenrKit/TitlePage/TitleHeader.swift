@@ -22,12 +22,18 @@ public struct TitleHeader: Hashable, Sendable {
   public init(_ page: TitleScreen, viewer: String) {
     title = page.title
     let own = page.conversations.filter { $0.ownerId == viewer }
+    // An entry's `recommended` covers the card it holds.
     recommended = own.contains { $0.recommended }
     rank = page.topTen.first { $0.id == page.title.id }?.rank
     topTen = page.topTen
     status = page.watch.status
     finishedOn = page.watch.finishedOn
+    // The review may be inside a card that another entry holds.
     if let saved = own.first(where: { $0.itemType == .review && $0.active }) {
+      review = ReviewDraft(rating: saved.rating, body: saved.body ?? "", spoiler: saved.spoiler)
+    } else if let saved = own.lazy.filter(\.active).flatMap({ $0.combined ?? [] })
+      .first(where: { $0.itemType == .review })
+    {
       review = ReviewDraft(rating: saved.rating, body: saved.body ?? "", spoiler: saved.spoiler)
     } else {
       review = nil

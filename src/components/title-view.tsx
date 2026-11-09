@@ -65,7 +65,10 @@ export function TitleView({
   const own = (shown?.conversations ?? []).filter(
     (c) => c.owner_id === user.user_id,
   );
-  const ownReview = own.find((c) => c.item_type === "review" && c.active);
+  // The viewer's review, which may be inside a card another entry holds.
+  const ownReview = own
+    .flatMap((c) => (c.active ? [c, ...c.combined] : []))
+    .find((c) => c.item_type === "review");
   const review = useReviewEditor({
     titleId: shown?.title.id ?? null,
     saved: ownReview

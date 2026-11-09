@@ -11,7 +11,7 @@
   },
   "response": {
     "status": 200,
-    "etag": "W/\"Zcavtf5hzJ9iINxUIz48Kj_PyomErw5VyBBN2_L8GL4\"",
+    "etag": "W/\"ZfUdKTTIomX9y5jcqJgD6rm6_U3Ndn0HlKNHZFV9VVc\"",
     "body": {
       "kind": "title",
       "title": {
@@ -98,6 +98,7 @@
           "edited": false,
           "season": null,
           "episode": null,
+          "combined": [],
           "username": "alice",
           "display_name": "Alice Park",
           "photo": "486e0212c15728ee",
@@ -130,6 +131,7 @@
           "edited": false,
           "season": 2,
           "episode": null,
+          "combined": [],
           "username": "alice",
           "display_name": "Alice Park",
           "photo": "486e0212c15728ee",
@@ -162,6 +164,7 @@
           "edited": false,
           "season": 1,
           "episode": 3,
+          "combined": [],
           "username": "alice",
           "display_name": "Alice Park",
           "photo": "486e0212c15728ee",
@@ -270,6 +273,17 @@
           "edited": true,
           "season": null,
           "episode": null,
+          "combined": [
+            {
+              "id": "d4aa3cdf-08c6-4ef3-8d48-401cbb8460f2",
+              "body": null,
+              "edited": false,
+              "rating": null,
+              "status": null,
+              "spoiler": false,
+              "item_type": "recommended"
+            }
+          ],
           "username": "ben",
           "display_name": "Ben Ortiz",
           "photo": "8fc275dfeaca5cf8",
@@ -277,7 +291,7 @@
           "poster_path": "/harbor-lights.jpg",
           "kind": "tv",
           "release_date": "2021-09-30",
-          "recommended": false,
+          "recommended": true,
           "want_to_watch": false,
           "viewer_want_to_watch": false,
           "viewer_recommended": true,
@@ -302,6 +316,7 @@
           "edited": false,
           "season": null,
           "episode": null,
+          "combined": [],
           "username": "cam",
           "display_name": "Cam Rivera",
           "photo": null,
@@ -318,44 +333,12 @@
           "visible_activity": "2026-10-13T12:00:00.000Z",
           "comments": [],
           "reactions": []
-        },
-        {
-          "id": "d4aa3cdf-08c6-4ef3-8d48-401cbb8460f2",
-          "owner_id": "user-ben",
-          "title_id": "tv:201",
-          "item_type": "recommended",
-          "active": true,
-          "activity_at": "2026-10-13T12:00:00.000Z",
-          "body": null,
-          "spoiler": false,
-          "status": null,
-          "finished_on": null,
-          "rating": null,
-          "edited": false,
-          "season": null,
-          "episode": null,
-          "username": "ben",
-          "display_name": "Ben Ortiz",
-          "photo": "8fc275dfeaca5cf8",
-          "title_name": "Harbor Lights",
-          "poster_path": "/harbor-lights.jpg",
-          "kind": "tv",
-          "release_date": "2021-09-30",
-          "recommended": true,
-          "want_to_watch": false,
-          "viewer_want_to_watch": false,
-          "viewer_recommended": true,
-          "viewer_status": null,
-          "viewer_top_ten_rank": 3,
-          "visible_activity": "2026-10-13T12:00:00.000Z",
-          "comments": [],
-          "reactions": []
         }
       ],
       "friends": {
         "recommended": [
           {
-            "item": "d4aa3cdf-08c6-4ef3-8d48-401cbb8460f2",
+            "item": "f0a222c0-d2f9-45e6-8f45-53413b726eed",
             "user_id": "user-ben",
             "display_name": "Ben Ortiz",
             "rank": 2

@@ -36,7 +36,9 @@ struct TitlePageModelTests {
     #expect(movie.statusOptions == [.wantToWatch, .watching, .finished, .stopped])
     #expect(!movie.showsFinishedDate)
 
+    // Alice's Finished entry holds her card, with her review and Recommend.
     let finished = try Self.header("finished-review")
+    #expect(finished.recommended)
     #expect(finished.status == .finished)
     #expect(finished.finishedOn == "2026-09-20")
     #expect(finished.showsFinishedDate)

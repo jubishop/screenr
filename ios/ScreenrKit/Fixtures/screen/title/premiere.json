@@ -11,7 +11,7 @@
   },
   "response": {
     "status": 200,
-    "etag": "W/\"XwqDErnx3jDIE0s4rrIbCRZfvGnmiggTiGYvwHasU5o\"",
+    "etag": "W/\"eQsaTxx1JFw2uYq8A7yhDY5P2q1LYsJiwn2_EFxiDPU\"",
     "body": {
       "kind": "title",
       "title": {
@@ -95,6 +95,7 @@
           "edited": false,
           "season": null,
           "episode": null,
+          "combined": [],
           "username": "cam",
           "display_name": "Cam Rivera",
           "photo": null,

@@ -38,7 +38,7 @@ struct EntryPresentationTests {
     #expect(try action("e1989f51-e93f-414c-8ae3-30f8ac20f409") == "finished")
     #expect(try action("398a02bb-53fa-4ee7-826e-9aa009db3b58") == "is watching")
     #expect(try action("dda3a8e1-76d2-4624-8d8e-211af6b405ea") == "is caught up")
-    #expect(try action("b8a80276-c289-41c6-8ffa-ea874e9628bb") == "reviewed")
+    #expect(try action("f0a222c0-d2f9-45e6-8f45-53413b726eed") == "reviewed")
     #expect(try action("872a205a-bab2-48f8-8c27-b737397eb469") == "posted")
     #expect(try action("e22cb5a7-a2dd-4582-8f62-db3e31f2761b") == "commented on")
     #expect(try action("e22cb5a7-a2dd-4582-8f62-db3e31f2761b", .compact) == "commented")
@@ -76,14 +76,14 @@ struct EntryPresentationTests {
     func withdrawn(_ id: String) throws -> String {
       try FeedFixtures.entry(id, changing: ["active": false]).action(style: .full)
     }
-    #expect(try withdrawn("b8a80276-c289-41c6-8ffa-ea874e9628bb") == "removed their review")
+    #expect(try withdrawn("f0a222c0-d2f9-45e6-8f45-53413b726eed") == "removed their review")
     #expect(
       try withdrawn("0601645c-005d-450f-8b22-ae05a508119d") == "removed their recommendation"
     )
     #expect(try withdrawn("d96511cd-0569-4f0c-8c20-402a2422ce98") == "removed Want to watch")
     #expect(try withdrawn("398a02bb-53fa-4ee7-826e-9aa009db3b58") == "removed their watch status")
     let rated = try FeedFixtures.entry(
-      "b8a80276-c289-41c6-8ffa-ea874e9628bb",
+      "f0a222c0-d2f9-45e6-8f45-53413b726eed",
       changing: ["body": .null]
     )
     #expect(rated.action(style: .full) == "rated")

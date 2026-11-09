@@ -31,6 +31,7 @@
     "activity_at": "2026-10-13T12:00:00.000Z",
     "visible_activity": "2026-10-13T12:00:00.000Z",
     "reactions": [],
+    "combined": [],
     "comments": []
   },
   "comment": {
@@ -817,6 +818,133 @@
           "id": "ben-want",
           "comments": [],
           "visible_activity": "2026-10-13T12:02:00.000Z"
+        }
+      ],
+      "incoming": 1
+    },
+    {
+      "name": "A card whose holder changes keeps the place of the entry the reader accepted until its new activity is accepted",
+      "accepted": [
+        {
+          "id": "ben-progress",
+          "activity_at": "2026-10-13T12:00:00.000Z",
+          "visible_activity": "2026-10-13T12:00:00.000Z",
+          "item_type": "progress",
+          "recommended": false,
+          "status": "finished"
+        }
+      ],
+      "snapshot": [
+        {
+          "id": "ben-review",
+          "activity_at": "2026-10-13T12:05:00.000Z",
+          "visible_activity": "2026-10-13T12:05:00.000Z",
+          "item_type": "review",
+          "recommended": false,
+          "body": "Great.",
+          "combined": [
+            {
+              "id": "ben-progress",
+              "item_type": "progress",
+              "status": "finished",
+              "rating": null,
+              "body": null,
+              "spoiler": false,
+              "edited": false
+            }
+          ]
+        }
+      ],
+      "entries": [
+        {
+          "id": "ben-review",
+          "comments": [],
+          "visible_activity": "2026-10-13T12:00:00.000Z"
+        }
+      ],
+      "incoming": 1
+    },
+    {
+      "name": "An entry left alone when its card's holder leaves keeps the card's place until its new activity is accepted",
+      "accepted": [
+        {
+          "id": "ben-review",
+          "activity_at": "2026-10-13T12:05:00.000Z",
+          "visible_activity": "2026-10-13T12:05:00.000Z",
+          "item_type": "review",
+          "recommended": false,
+          "body": "Great.",
+          "combined": [
+            {
+              "id": "ben-progress",
+              "item_type": "progress",
+              "status": "finished",
+              "rating": null,
+              "body": null,
+              "spoiler": false,
+              "edited": false
+            }
+          ]
+        }
+      ],
+      "snapshot": [
+        {
+          "id": "ben-progress",
+          "activity_at": "2026-10-13T12:00:00.000Z",
+          "visible_activity": "2026-10-13T12:00:00.000Z",
+          "item_type": "progress",
+          "recommended": false,
+          "status": "finished"
+        }
+      ],
+      "entries": [
+        {
+          "id": "ben-progress",
+          "comments": [],
+          "visible_activity": "2026-10-13T12:05:00.000Z"
+        }
+      ],
+      "incoming": 1
+    },
+    {
+      "name": "Show older adds no card the reader accepted through one of its entries",
+      "accepted": [
+        {
+          "id": "ben-progress",
+          "activity_at": "2026-10-13T12:00:00.000Z",
+          "visible_activity": "2026-10-13T12:00:00.000Z",
+          "item_type": "progress",
+          "recommended": false,
+          "status": "finished"
+        }
+      ],
+      "older_than": "2026-10-13T12:10:00.000Z",
+      "snapshot": [
+        {
+          "id": "ben-review",
+          "activity_at": "2026-10-13T12:05:00.000Z",
+          "visible_activity": "2026-10-13T12:05:00.000Z",
+          "item_type": "review",
+          "recommended": false,
+          "body": "Great.",
+          "combined": [
+            {
+              "id": "ben-progress",
+              "item_type": "progress",
+              "status": "finished",
+              "rating": null,
+              "body": null,
+              "spoiler": false,
+              "edited": false
+            }
+          ]
+        }
+      ],
+      "entries": [
+        {
+          "id": "ben-review",
+          "comments": [],
+          "visible_activity": "2026-10-13T12:00:00.000Z"
         }
       ],
       "incoming": 1

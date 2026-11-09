@@ -11,7 +11,7 @@
   },
   "response": {
     "status": 200,
-    "etag": "W/\"0fYrm24RozHqZOFi8W3mSDjwpOWlRKJ_nk8Ziz5UTeA\"",
+    "etag": "W/\"hlJuMBgRa_nYImkBfgUGOYFCWcxRsSOghdyqBrUL3c4\"",
     "body": {
       "kind": "title",
       "title": {
@@ -100,6 +100,7 @@
           "edited": false,
           "season": null,
           "episode": null,
+          "combined": [],
           "username": "ben",
           "display_name": "Ben Ortiz",
           "photo": "8fc275dfeaca5cf8",
@@ -132,6 +133,7 @@
           "edited": false,
           "season": null,
           "episode": null,
+          "combined": [],
           "username": "cam",
           "display_name": "Cam Rivera",
           "photo": null,

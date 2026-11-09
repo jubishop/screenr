@@ -179,6 +179,8 @@ export type Conversation = {
   body: string | null;
   spoiler: boolean;
   active: boolean;
+  // Whether the entry, or the card it holds, is an active Recommend or Want
+  // to watch.
   recommended: boolean;
   want_to_watch: boolean;
   // A progress entry's status and last-finished date (YYYY-MM-DD).
@@ -207,7 +209,19 @@ export type Conversation = {
   activity_at: string;
   visible_activity: string;
   reactions: ReactionSummary[];
+  // A card's other entries, when one person's close-together title actions
+  // combine (docs/title-feed.md#combined-title-actions). The entry itself
+  // holds the card's discussion and reactions, `activity_at` is the card's
+  // newest action, `spoiler` covers a spoiler-flagged review in it, and
+  // `recommended` and `want_to_watch` cover its other entries too.
+  combined: CombinedEntry[];
 };
+// What another entry in a card contributes: its action, a progress status, a
+// review's rating, text, spoiler flag, and whether it was edited.
+export type CombinedEntry = Pick<
+  Conversation,
+  "id" | "item_type" | "status" | "rating" | "body" | "spoiler" | "edited"
+>;
 export type Comment = {
   id: string;
   author_id: string | null;
