@@ -118,7 +118,14 @@ test("members choose, date, and clear watch statuses from the title page, and fr
   await button.click();
   await expect(viewer.getByLabel("Last finished")).toHaveValue("2024-03-09");
   await expect(own).toHaveText("finished");
-  await viewer.getByRole("button", { name: "Clear date", exact: true }).click();
+  const clear = viewer.getByRole("button", { name: "Clear date", exact: true });
+  await clear.click();
+  // Reopening shows the cleared date, which the entry never showed.
+  await button.click();
+  await expect(viewer.getByLabel("Last finished")).toHaveValue("");
+  await expect(clear).toHaveCount(0);
+  await viewer.keyboard.press("Escape");
+  await expect(menu).toHaveCount(0);
   await expect(own).toHaveText("finished");
   await chooseStatus(viewer, "Caught up");
   await expect(own).toHaveText("is caught up");
