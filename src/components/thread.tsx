@@ -19,11 +19,11 @@ import {
 const emptyDraft: Draft = { body: "", spoiler: false };
 export const live = (comment: Comment) =>
   !comment.removed && !comment.unavailable;
-// A reader can Delete their own comment and Remove any comment under their
-// entry.
 // Another member's live comment can be reported.
 export const reportableComment = (comment: Comment, user: Person) =>
   live(comment) && !!comment.author_id && comment.author_id !== user.user_id;
+// A reader can Delete their own comment and Remove any comment under their
+// entry.
 export const removable = (
   comment: Comment,
   conversation: Thread["conversation"],

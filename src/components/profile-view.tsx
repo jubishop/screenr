@@ -141,7 +141,7 @@ export function ProfileView({
 // and Report sit in More actions. Unfriend and Block each need an in-page
 // confirmation, and Report opens its form, then offers to block. A confirmed
 // Block opens the Friends page. While the profile is not `available`, only an
-// open confirmation shows.
+// open confirmation or report form shows.
 function ProfileActions({
   profile,
   user,
@@ -257,7 +257,7 @@ function ProfileActions({
           onCancel={close}
         />
       )}
-      {confirming === "report" && available && (
+      {confirming === "report" && (
         <ReportForm
           kind="profile"
           name={name}
