@@ -280,26 +280,53 @@ function dateFormat(options: Intl.DateTimeFormatOptions) {
 }
 
 // The reader's time zone and current year, which together decide how a date
-// a week or older reads.
+// before their current day reads.
 export function readerCalendar() {
   const now = Date.now();
   return `${readerTimeZone(now)} ${dateFormat({ year: "numeric" }).format(now)}`;
 }
 
+// Whether a time no later than `now` falls on the reader's current local day.
+// No local day lasts two days, so older times need no formatting.
+function fromToday(time: number, now: number, timeZone?: string) {
+  if (!(now - time < 2 * day)) return false;
+  const today = dateFormat({
+    year: "numeric",
+    month: "numeric",
+    day: "numeric",
+    timeZone,
+  });
+  return today.format(time) === today.format(now);
+}
+
+// Whether an activity time's text can change from one minute to the next. A
+// time from the reader's current local day counts up from their clock until
+// midnight, and one ahead of their clock waits to pass it. An earlier time
+// shows a date, which changes only with the reader's time zone or current
+// year.
+export function changesEachMinute(
+  value: string,
+  now: number,
+  timeZone?: string,
+) {
+  const time = Date.parse(value);
+  return now < time || fromToday(time, now, timeZone);
+}
+
 // Feed entries, comments, and notifications share one format: "now", "5m",
-// "2h", or "3d" under a week, then "Oct 12", with the year when it is not the
-// reader's current year. Elapsed time ignores daylight saving changes, and a
-// reader's clock running behind shows new activity as now. `timeZone`
-// defaults to the reader's own.
+// or "2h" from the reader's current local day, then "Oct 12", with the year
+// when it is not the reader's current year. Elapsed time ignores daylight
+// saving changes, and a reader's clock running up to a week behind shows new
+// activity as now. `timeZone` defaults to the reader's own.
 export function relativeTime(value: string, now: number, timeZone?: string) {
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "Invalid Date";
-  const elapsed = now - date.getTime();
-  if (elapsed > -week && elapsed < week) {
+  const time = date.getTime();
+  if (Number.isNaN(time)) return "Invalid Date";
+  const elapsed = now - time;
+  if (elapsed < 0 ? elapsed > -week : fromToday(time, now, timeZone)) {
     if (elapsed < minute) return "now";
     if (elapsed < hour) return `${Math.floor(elapsed / minute)}m`;
-    if (elapsed < day) return `${Math.floor(elapsed / hour)}h`;
-    return `${Math.floor(elapsed / day)}d`;
+    return `${Math.floor(elapsed / hour)}h`;
   }
   const year = dateFormat({ year: "numeric", timeZone });
   return dateFormat({

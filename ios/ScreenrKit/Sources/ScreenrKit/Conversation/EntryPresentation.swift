@@ -182,21 +182,21 @@ public enum TopTenLeaving: Hashable, Sendable {
 }
 
 // Feed entries, comments, and notifications share one time format: "now",
-// "5m", "2h", or "3d" under a week, then "Oct 12", with the year outside the
-// reader's current year. A clock running behind shows new activity as now.
+// "5m", or "2h" from the reader's current day, then "Oct 12", with the year
+// outside the reader's current year. Hours count elapsed time, and a clock
+// running up to a week behind shows new activity as now.
 public enum RelativeTime {
   public static func label(_ date: Date, now: Date = .now, calendar: Calendar = .current) -> String
   {
     let elapsed = now.timeIntervalSince(date)
     let minute = 60.0
     let hour = 60 * minute
-    let day = 24 * hour
-    let week = 7 * day
-    if elapsed > -week, elapsed < week {
+    let week = 7 * 24 * hour
+    let relative = elapsed < 0 ? elapsed > -week : calendar.isDate(date, inSameDayAs: now)
+    if relative {
       if elapsed < minute { return "now" }
       if elapsed < hour { return "\(Int(elapsed / minute))m" }
-      if elapsed < day { return "\(Int(elapsed / hour))h" }
-      return "\(Int(elapsed / day))d"
+      return "\(Int(elapsed / hour))h"
     }
     let sameYear = calendar.component(.year, from: date) == calendar.component(.year, from: now)
     let style = dayStyle(calendar)

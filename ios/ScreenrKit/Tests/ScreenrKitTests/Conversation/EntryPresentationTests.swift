@@ -96,18 +96,45 @@ struct EntryPresentationTests {
   }
 
   @Test func showsRelativeTimesLikeTheWeb() throws {
+    // Noon in Los Angeles, whose midnight was 07:00 UTC.
     let now = try Self.date("2026-10-13T19:00:00.000Z")
     func label(_ text: String) throws -> String {
       RelativeTime.label(try Self.date(text), now: now, calendar: Self.pacific)
     }
     #expect(try label("2026-10-13T18:59:30.000Z") == "now")
     #expect(try label("2026-10-13T19:00:30.000Z") == "now")
+    #expect(try label("2026-10-19T19:00:00.000Z") == "now")
     #expect(try label("2026-10-13T18:55:00.000Z") == "5m")
     #expect(try label("2026-10-13T17:00:00.000Z") == "2h")
-    #expect(try label("2026-10-10T19:00:00.000Z") == "3d")
-    #expect(try label("2026-10-06T19:00:01.000Z") == "6d")
+    #expect(try label("2026-10-13T07:00:00.000Z") == "12h")
+    #expect(try label("2026-10-13T06:59:59.000Z") == "Oct 12")
+    #expect(try label("2026-10-10T19:00:00.000Z") == "Oct 10")
     #expect(try label("2026-09-12T19:00:00.000Z") == "Sep 12")
     #expect(try label("2025-12-31T12:00:00.000Z") == "Dec 31, 2025")
+  }
+
+  @Test func showsTimesBeforeTheReadersDayAsDates() throws {
+    func label(_ text: String, at now: String, in calendar: Calendar = Self.pacific) throws
+      -> String
+    {
+      RelativeTime.label(try Self.date(text), now: try Self.date(now), calendar: calendar)
+    }
+    // At 9 AM, activity from yesterday evening, 20 hours ago, shows its date.
+    #expect(try label("2026-11-07T21:00:00.000Z", at: "2026-11-08T17:00:00.000Z") == "Nov 7")
+    // Thirty seconds after midnight, ten seconds before it was yesterday.
+    #expect(try label("2026-11-08T07:59:50.000Z", at: "2026-11-08T08:00:30.000Z") == "Nov 7")
+    #expect(try label("2026-11-08T08:00:10.000Z", at: "2026-11-08T08:00:30.000Z") == "now")
+    // At 8:30 AM on New Year's Day, 11 PM last night was last year, but in
+    // UTC both are January 1.
+    let morning = "2027-01-01T16:30:00.000Z"
+    #expect(try label("2027-01-01T07:00:00.000Z", at: morning) == "Dec 31, 2026")
+    var utc = Calendar(identifier: .gregorian)
+    utc.timeZone = .gmt
+    #expect(try label("2027-01-01T07:00:00.000Z", at: morning, in: utc) == "9h")
+    // The day daylight saving ended lasted 25 hours, and hours count elapsed
+    // time.
+    #expect(try label("2026-11-01T07:00:00.000Z", at: "2026-11-02T07:30:00.000Z") == "24h")
+    #expect(try label("2026-11-01T06:59:00.000Z", at: "2026-11-02T07:30:00.000Z") == "Oct 31")
   }
 
   @Test func showsFinishedDatesWithTheYearOutsideThisYear() throws {
