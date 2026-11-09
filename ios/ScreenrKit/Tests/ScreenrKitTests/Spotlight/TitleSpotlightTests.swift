@@ -104,15 +104,16 @@ struct TitleSpotlightTests {
       "viewer_recommended": false, "viewer_want_to_watch": false, "viewer_status": .null,
       "viewer_top_ten_rank": .null,
     ]
-    // Alice's review of Paper Lanterns, and Cam's recommendation of Winter
-    // Garden, with none of Alice's other activity.
+    // Ben's review of Harbor Lights as though Alice wrote it, and Cam's
+    // recommendation of Winter Garden, with none of Alice's other activity.
+    let own = none.merging(["owner_id": "user-alice"]) { $1 }
     let reviewed = try feed([
-      ("b8a80276-c289-41c6-8ffa-ea874e9628bb", none),
+      ("f0a222c0-d2f9-45e6-8f45-53413b726eed", own),
       ("deb6f6bf-6172-4420-84a6-8b05a22ddf0b", none.merging(["owner_id": "user-ben"]) { $1 }),
     ])
-    #expect(InteractedTitles(reviewed).titles.map(\.id) == ["movie:102"])
+    #expect(InteractedTitles(reviewed).titles.map(\.id) == ["tv:201"])
     let removed = try feed([
-      ("b8a80276-c289-41c6-8ffa-ea874e9628bb", none.merging(["active": false]) { $1 })
+      ("f0a222c0-d2f9-45e6-8f45-53413b726eed", own.merging(["active": false]) { $1 })
     ])
     #expect(InteractedTitles(removed).titles.isEmpty)
 

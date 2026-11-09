@@ -11,7 +11,7 @@
   },
   "response": {
     "status": 200,
-    "etag": "W/\"C3pUH-Gjj6gu0zdZG31z-Jirp0HCN8QRDk9pS7NLams\"",
+    "etag": "W/\"ZfUdKTTIomX9y5jcqJgD6rm6_U3Ndn0HlKNHZFV9VVc\"",
     "body": {
       "kind": "title",
       "title": {
@@ -291,7 +291,7 @@
           "poster_path": "/harbor-lights.jpg",
           "kind": "tv",
           "release_date": "2021-09-30",
-          "recommended": false,
+          "recommended": true,
           "want_to_watch": false,
           "viewer_want_to_watch": false,
           "viewer_recommended": true,

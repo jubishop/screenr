@@ -11,7 +11,7 @@
   },
   "response": {
     "status": 200,
-    "etag": "W/\"FVV-LvprDkJZ6Xx-RjLiZbliZouFfenbS0HOpIZPasU\"",
+    "etag": "W/\"asaI0mBTW5dP4WmIo9nZrbUTyxqOagwKgBG1o7EPbLc\"",
     "body": {
       "kind": "feed",
       "conversations": [
@@ -181,29 +181,29 @@
           "reactions": []
         },
         {
-          "id": "b8a80276-c289-41c6-8ffa-ea874e9628bb",
+          "id": "e1989f51-e93f-414c-8ae3-30f8ac20f409",
           "owner_id": "user-alice",
           "title_id": "movie:102",
-          "item_type": "review",
+          "item_type": "progress",
           "active": true,
           "activity_at": "2026-10-13T12:00:00.000Z",
-          "body": "Lovely score, slow middle.",
+          "body": null,
           "spoiler": false,
-          "status": null,
-          "finished_on": null,
-          "rating": 3,
+          "status": "finished",
+          "finished_on": "2026-09-20",
+          "rating": null,
           "edited": false,
           "season": null,
           "episode": null,
           "combined": [
             {
-              "id": "e1989f51-e93f-414c-8ae3-30f8ac20f409",
-              "body": null,
+              "id": "b8a80276-c289-41c6-8ffa-ea874e9628bb",
+              "body": "Lovely score, slow middle.",
               "edited": false,
-              "rating": null,
-              "status": "finished",
+              "rating": 3,
+              "status": null,
               "spoiler": false,
-              "item_type": "progress"
+              "item_type": "review"
             },
             {
               "id": "db445b50-ed80-430c-8510-b86482a1787b",
@@ -222,7 +222,7 @@
           "poster_path": "/paper-lanterns.jpg",
           "kind": "movie",
           "release_date": "2023-11-17",
-          "recommended": false,
+          "recommended": true,
           "want_to_watch": false,
           "viewer_want_to_watch": false,
           "viewer_recommended": true,
@@ -230,7 +230,13 @@
           "viewer_top_ten_rank": 2,
           "visible_activity": "2026-10-13T12:00:00.000Z",
           "comments": [],
-          "reactions": []
+          "reactions": [
+            {
+              "kind": "like",
+              "count": 1,
+              "reacted": false
+            }
+          ]
         },
         {
           "id": "deb6f6bf-6172-4420-84a6-8b05a22ddf0b",
@@ -571,7 +577,7 @@
           "poster_path": "/harbor-lights.jpg",
           "kind": "tv",
           "release_date": "2021-09-30",
-          "recommended": false,
+          "recommended": true,
           "want_to_watch": false,
           "viewer_want_to_watch": false,
           "viewer_recommended": true,

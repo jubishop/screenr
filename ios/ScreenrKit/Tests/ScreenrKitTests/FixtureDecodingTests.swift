@@ -122,12 +122,14 @@ struct FixtureDecodingTests {
     #expect(screen.unreadNotifications == 6)
     let feed = try #require(screen.feed)
     // Alice's finished, reviewed, and recommended Paper Lanterns, and Ben's
-    // reviewed and recommended Harbor Lights, each show as one card.
+    // reviewed and recommended Harbor Lights, each show as one card. Ben's
+    // reaction to Alice's Finished entry has it hold her card.
     #expect(feed.conversations.count == 19)
     let card = try #require(feed.conversations.first { $0.titleId == "movie:102" })
-    #expect(card.itemType == .review)
-    #expect(card.combined.map(\.itemType) == [.progress, .recommended])
-    #expect(card.combined.first?.status == .finished)
+    #expect(card.itemType == .progress)
+    #expect(card.recommended)
+    #expect(card.combined.map(\.itemType) == [.review, .recommended])
+    #expect(card.combined.first?.rating == 3)
     let first = try #require(feed.conversations.first)
     #expect(first.itemType == .wantToWatch)
     #expect(first.username == "ben")

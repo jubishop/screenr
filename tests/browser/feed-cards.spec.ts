@@ -5,6 +5,7 @@ import { test } from "./monitored-test";
 import { prepareFriendship, userId } from "./member-fixture";
 
 const { saveReview } = await import("../../src/server/reviews");
+const { setReaction } = await import("../../src/server/reactions");
 const { updateTitleActivity, updateWatchStatus } =
   await import("../../src/server/title-actions");
 
@@ -91,4 +92,42 @@ test("a card names its actions in one author line with one date, shows its revie
   ).toBeVisible();
   await expect(card.getByText("The twist at the end!")).toHaveCount(0);
   await expect(reply).toHaveCount(0);
+});
+
+test("the title page header reads the viewer's own Recommend and review inside a card", async ({
+  member,
+}) => {
+  await db.query(`INSERT INTO title(id,kind,tmdb_id,name,overview,release_date) VALUES
+    ('movie:998502','movie',998502,'Harbor Glass','A fictional film.','2023-04-01')
+    ON CONFLICT DO NOTHING`);
+  const name = `card_${randomUUID().slice(0, 8)}`;
+  const author = await member(name);
+  const reader = await member(`${name}_reader`);
+  await prepareFriendship(author, reader);
+  const id = await userId(author);
+  const progress = await updateWatchStatus(id, "movie:998502", "finished");
+  await updateTitleActivity(id, "movie:998502", "recommended", true);
+  // A reaction gives the Finished entry discussion, so it keeps holding the
+  // card when the review joins.
+  await setReaction(await userId(reader), progress!, null, "love");
+  await saveReview(id, "movie:998502", 4, "Glassy and calm.", false);
+  await author.goto("/titles/movie/998502");
+  const card = author.locator(`[data-item-id="${progress}"]`);
+  await expect(card.locator(".activity-by .muted").first()).toHaveText(
+    "finished, reviewed, and recommends",
+  );
+  await expect(
+    card.getByText("Glassy and calm.", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    author.getByRole("button", { name: "✓ Recommended", exact: true }),
+  ).toBeVisible();
+  await author
+    .getByRole("button", { name: "Edit your review", exact: true })
+    .click();
+  const form = author.getByRole("form", { name: "Your review" });
+  await expect(form.getByRole("radio", { name: "4 stars" })).toBeChecked();
+  await expect(
+    form.getByRole("textbox", { name: "Your review (optional)" }),
+  ).toHaveValue("Glassy and calm.");
 });

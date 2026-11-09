@@ -769,10 +769,17 @@ in the iPhone app. The stored entries are unchanged, so nothing migrates.
   lists the card's other entries in the author line's order, each with its
   type, status, rating, text, spoiler flag, and Edited flag; other entries
   send an empty list. The card's `activity_at` is its newest action, its
-  `spoiler` flag also covers a spoiler-flagged review in it, and its other
-  entries are left out of the list. Installed iPhone builds that ignore
-  `combined` show the holding entry alone, ordered and covered like the card
+  `spoiler` flag also covers a spoiler-flagged review in it, its
+  `recommended` and `want_to_watch` flags cover its other entries too, and
+  those entries are left out of the list. Installed iPhone builds that
+  ignore `combined` show the holding entry alone, ordered and covered like
+  the card
   ([additive payloads](data-and-access.md#changes-that-app-builds-depend-on)).
+- **Title page header:** the web and the iPhone app read the viewer's own
+  Recommend from those flags and their review from `combined` when another
+  entry holds the card. iPhone builds from before this change find no review
+  inside such a card, so their header offers **Rate or review** with an empty
+  form for it until they update.
 - **Paging:** a paged read places a card once, through its holder, by its
   newest action or the holder's replies, so it counts as one entry.
 - **Links and writes:** `?item=` for any entry in a card opens the card on

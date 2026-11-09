@@ -194,16 +194,17 @@ export const viewerStatus = (title: string) => `coalesce(
 // its replies and reactions, if the reader can see it at all. It selects only
 // the fields that FeedItem declares. `cards`, a CTE from cardsOf, names the
 // cards among them: a card's holder stands for it with the card's newest
-// action time, the other entries in `combined`, and the spoiler flag of a
-// review in it, while those other entries are left out.
+// action time, the other entries in `combined`, the spoiler flag of a review
+// in it, and whether it holds an active Recommend or Want to watch, while
+// those other entries are left out.
 const items = (
   entries: string,
 ) => `SELECT c.id,c.owner_id,c.title_id,c.item_type,c.active,greatest(c.activity_at,card.activity) AS activity_at,
   c.body,c.spoiler OR coalesce(card.spoiler,false) AS spoiler,
   c.status,c.finished_on,c.rating,c.edited,c.season,c.episode,coalesce(card.entries,'[]') AS combined,
   p.username,p.display_name,screenr_photo(p.user_id) AS photo,t.name AS title_name,t.poster_path,t.kind,t.release_date,
-  (c.item_type='recommended' AND c.active) AS recommended,
-  (c.item_type='want_to_watch' AND c.active) AS want_to_watch,
+  (c.item_type='recommended' AND c.active) OR coalesce(card.recommended,false) AS recommended,
+  (c.item_type='want_to_watch' AND c.active) OR coalesce(card.want_to_watch,false) AS want_to_watch,
   EXISTS (SELECT 1 FROM feed_item own WHERE own.owner_id=$1 AND own.title_id=c.title_id
     AND own.item_type='want_to_watch' AND own.active) AS viewer_want_to_watch,
   EXISTS (SELECT 1 FROM feed_item own WHERE own.owner_id=$1 AND own.title_id=c.title_id
@@ -221,7 +222,8 @@ const items = (
     SELECT jsonb_agg(jsonb_build_object('id',m.id::text,'item_type',m.item_type,'status',m.status,
         'rating',m.rating,'body',m.body,'spoiler',m.spoiler,'edited',m.edited)
         ORDER BY CASE m.item_type WHEN 'progress' THEN 0 WHEN 'review' THEN 1 ELSE 2 END) AS entries,
-      bool_or(m.spoiler) AS spoiler,max(m.activity_at) AS activity
+      bool_or(m.spoiler) AS spoiler,max(m.activity_at) AS activity,
+      bool_or(m.item_type='recommended') AS recommended,bool_or(m.item_type='want_to_watch') AS want_to_watch
     FROM cards k JOIN ${feedEntries} m ON m.id=k.id WHERE k.holder=c.id AND k.id<>c.id
   ) card ON true
   LEFT JOIN LATERAL (

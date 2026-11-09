@@ -87,6 +87,10 @@ test("close-together entries show as one card in the title, friends, and profile
   assert.equal(card.item_type, "review");
   assert.equal(card.rating, 4);
   assert.equal(card.body, "Loved it.");
+  // The card is an active Recommend, as clients that read only its entry
+  // need to know.
+  assert.equal(card.recommended, true);
+  assert.equal(card.want_to_watch, false);
   const newest = (await activity("review", review)).toISOString();
   assert.equal(card.activity_at, newest);
   assert.equal(card.visible_activity, newest);
