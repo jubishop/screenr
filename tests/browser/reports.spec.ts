@@ -3,6 +3,7 @@ import { browserConfig } from "../../scripts/browser-config";
 import { test } from "./monitored-test";
 import { prepareFriendship, userId } from "./member-fixture";
 import { expectThemedPage } from "./contrast";
+import { failOneRead, openWithoutPolling, readAgain } from "./refresh-helpers";
 
 // Members' reports and the owner's review page
 // (docs/data-and-access.md#content-reports). The browser server names
@@ -150,6 +151,67 @@ test("members report posts, comments, and reviews from the feed, which then leav
   await author.goto("/");
   await expect(author.getByText("A rude post")).toBeVisible();
 });
+
+test("an open report form keeps its choices through a failed read and sends after the next one", async ({
+  member,
+}) => {
+  const reporter = await member("reportkeeper");
+  const author = await member("reportkept", { displayName: "Kim Kept" });
+  await prepareFriendship(reporter, author);
+  const own = await post(reporter, "discussion-post", {
+    body: "Keeper's post",
+    spoiler: false,
+  });
+  const reply = await post(author, "comment", {
+    conversation: own,
+    body: "Kept reply",
+    spoiler: false,
+  });
+  const entry = await post(author, "discussion-post", {
+    body: "Kept post",
+    spoiler: false,
+  });
+  await openWithoutPolling(reporter, "/");
+  for (const [container, open, name] of [
+    [
+      reporter.locator(`[data-comment-id="${reply}"]`),
+      { name: "Report", exact: true },
+      "Report this comment",
+    ],
+    [
+      reporter.locator(`[data-item-heading="${entry}"]`),
+      { name: "Report post", exact: true },
+      "Report this post",
+    ],
+  ] as const) {
+    await container.getByRole("button", open).click();
+    const form = reporter.getByRole("form", { name });
+    await form.getByRole("radio", { name: "Violence or threats" }).check();
+    await form.getByLabel("Add details (optional)").fill("Still here.");
+    await failOneRead(reporter);
+    await expect(reporter.getByText("Kept post")).toHaveCount(0);
+    await expect(
+      form.getByRole("radio", { name: "Violence or threats" }),
+    ).toBeChecked();
+    await expect(form.getByLabel("Add details (optional)")).toHaveValue(
+      "Still here.",
+    );
+    await readAgain(reporter);
+    await form.getByRole("button", { name: "Report", exact: true }).click();
+    const offer = reporter.getByRole("group", {
+      name: /^Thanks for reporting/,
+    });
+    await offer.getByRole("button", { name: "Not now", exact: true }).click();
+    await expect(offer).toHaveCount(0);
+  }
+  await refreshAndCheck(reporter, ["Kept reply", "Kept post"]);
+});
+
+// After a read, none of `texts` shows.
+async function refreshAndCheck(page: Page, texts: string[]) {
+  await readAgain(page);
+  for (const text of texts) await expect(page.getByText(text)).toHaveCount(0);
+}
 
 test("members report a profile from More actions and can block from the offer", async ({
   member,

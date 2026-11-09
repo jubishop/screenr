@@ -287,11 +287,15 @@ function FeedEntry({
   const [reporting, setReporting] = useState(false);
   const [reportingComment, setReportingComment] = useState<string | null>(null);
   const [followUp, setFollowUp] = useState<ReportedAuthor | null>(null);
-  // A failed read hides the entry. While a confirmation is open, the entry
-  // keeps the item from the last read, so the confirmation stays, alone,
+  // A failed read hides the entry. While a confirmation or report form is
+  // open, the entry keeps the item from the last read, so it stays, alone,
   // with its action waiting for the next read.
   const [lastItem, setLastItem] = useState(item);
-  if (available && item !== lastItem && (confirming || confirmingComment))
+  if (
+    available &&
+    item !== lastItem &&
+    (confirming || confirmingComment || reporting || reportingComment)
+  )
     setLastItem(item);
   const held = available ? item : lastItem;
   const hiddenSpoiler = !!held?.spoiler && !revealed;
@@ -422,9 +426,8 @@ function FeedEntry({
   // Another member's post, standalone comment, or review can be reported; a
   // card's report names the review in it.
   const reportable = (() => {
-    if (!item || !available || item.owner_id === user.user_id || !item.active)
-      return null;
-    const content = reviewOf(item);
+    if (!held || held.owner_id === user.user_id || !held.active) return null;
+    const content = reviewOf(held);
     return content.item_type === "post" ||
       content.item_type === "comment" ||
       content.item_type === "review"
@@ -432,10 +435,10 @@ function FeedEntry({
       : null;
   })();
   if (reporting && !reportable) setReporting(false);
-  const reportButton = reportable && (
+  const reportButton = reportable && held && (
     <ActionButton
       type="button"
-      id={`report-action-${item!.id}`}
+      id={`report-action-${held.id}`}
       className="icon-button"
       aria-label={reportLabel(reportable.kind)}
       aria-expanded={reporting}
@@ -590,9 +593,17 @@ function FeedEntry({
   return (
     <article
       ref={entry}
-      // While a failed read hides the entry, an open confirmation still
-      // shows, and so does the offer to block after a report hides it.
-      hidden={!item && !confirmable && !commentConfirmable && !followUp}
+      // While a failed read hides the entry, an open confirmation or report
+      // form still shows, and so does the offer to block after a report
+      // hides it.
+      hidden={
+        !item &&
+        !confirmable &&
+        !commentConfirmable &&
+        !reporting &&
+        !reportingComment &&
+        !followUp
+      }
       className={`feed-entry${compact ? " compact" : ""}`}
       data-item-id={item?.id}
       id={item ? `item-${item.id}` : undefined}
@@ -608,7 +619,7 @@ function FeedEntry({
       }
       tabIndex={-1}
     >
-      {held && (item || confirmable) && (
+      {held && (item || confirmable || reporting) && (
         <header className="activity-card" data-item-heading={held.id}>
           {item && (
             <>

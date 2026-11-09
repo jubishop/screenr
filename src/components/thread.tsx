@@ -91,7 +91,7 @@ export function ThreadView({
   }, [directOpen]);
   // Keep local composition state through failed refreshes. Only the current
   // authorized snapshot supplies rendered conversation content.
-  if (!snapshot || (!available && !confirming)) return null;
+  if (!snapshot || (!available && !confirming && !reporting)) return null;
   const currentSnapshot = snapshot;
   const comments = currentSnapshot.comments;
   const children = new Map<string, Comment[]>();
@@ -257,7 +257,8 @@ export function ThreadView({
     );
   }
   function renderComment(comment: Comment) {
-    if (!available && comment.id !== confirming) return null;
+    if (!available && comment.id !== confirming && comment.id !== reporting)
+      return null;
     // Comments without an available author show a neutral placeholder. A
     // removed comment whose author deleted their account has no author but
     // is not unavailable; its heading alone says it was removed.
@@ -378,7 +379,7 @@ export function ThreadView({
             }}
           />
         )}
-        {available && reporting === comment.id && reportable(comment) && (
+        {reporting === comment.id && reportable(comment) && (
           <ReportForm
             kind="comment"
             target={{
@@ -426,7 +427,8 @@ export function ThreadView({
               const open =
                 (groups.get(parent.id) ?? targetRoot === parent.id) ||
                 replies.some((c) => c.id === replyTo);
-              const holds = (c: Comment) => available || c.id === confirming;
+              const holds = (c: Comment) =>
+                available || c.id === confirming || c.id === reporting;
               if (!holds(parent) && !(open && replies.some(holds))) return null;
               return (
                 <div className="comment-group" key={parent.id}>
