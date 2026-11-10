@@ -465,7 +465,6 @@ test("resolve-title answers the share extension with a title or a search", async
         title: {
           id: "tv:43",
           kind: "tv",
-          tmdb_id: 43,
           name: "Shared Show",
           overview: "",
           poster_path: null,

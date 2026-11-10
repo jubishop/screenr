@@ -144,7 +144,6 @@ function parseTitle(
   return {
     id: `${kind}:${raw.id}`,
     kind,
-    tmdb_id: Number(raw.id),
     name,
     overview: typeof raw.overview === "string" ? raw.overview : "",
     poster_path:
@@ -185,7 +184,6 @@ export async function searchTitles(
 const titleFields = Object.keys({
   id: true,
   kind: true,
-  tmdb_id: true,
   name: true,
   overview: true,
   poster_path: true,
@@ -267,7 +265,7 @@ async function refreshTitle(id: string, stored?: TitleRow): Promise<TitleRow> {
       [
         title.id,
         title.kind,
-        title.tmdb_id,
+        Number(tmdbId),
         title.name,
         title.overview,
         title.poster_path,

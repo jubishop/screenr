@@ -161,11 +161,12 @@ export async function findTitles(query: string, viewer: string) {
     // so a summary-only title fetches its details for its release status.
     // Until those details load, the summary's votes give its TMDB user score.
     // Any unique conflict means the title is stored: a concurrent insert of
-    // the same new title can collide on (kind, tmdb_id) before the ID.
+    // the same new title can collide on (kind, tmdb_id) before the ID. The
+    // TMDB number comes from the ID, `<kind>:<TMDB ID>`.
     await db.query(
       `INSERT INTO title(id,kind,tmdb_id,name,overview,poster_path,release_date,vote_average,vote_count,fetched_at)
-      SELECT id,kind,tmdb_id,name,overview,poster_path,release_date,vote_average,vote_count,'epoch'::timestamptz
-      FROM jsonb_to_recordset($1::jsonb) AS t(id text,kind text,tmdb_id bigint,name text,
+      SELECT id,kind,split_part(id,':',2)::bigint,name,overview,poster_path,release_date,vote_average,vote_count,'epoch'::timestamptz
+      FROM jsonb_to_recordset($1::jsonb) AS t(id text,kind text,name text,
         overview text,poster_path text,release_date text,vote_average double precision,vote_count integer)
       ON CONFLICT DO NOTHING`,
       [JSON.stringify(results)],
