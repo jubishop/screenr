@@ -54,6 +54,19 @@ struct FixtureLaunch {
     case declined
   }
 
+  // What the age check finds where the law requires it, in place of Apple's
+  // Declared Age Range service. Without one, the law doesn't require it.
+  enum Age: String {
+    // 18 or older.
+    case adult
+    // 16 or 17.
+    case minor
+    // The person declines to share their age range.
+    case declined
+    // The service fails.
+    case failing
+  }
+
   // The member whose fixtures answer first, such as alice, nora, or pat.
   var viewer = "alice"
   var session = Session.signedIn
@@ -89,6 +102,7 @@ struct FixtureLaunch {
   var pickup: Pickup?
   // Text over every screen that the audit must fail.
   var auditProbe: AuditProbe?
+  var age: Age?
 
   static let directory = URL(filePath: #filePath)
     .deletingLastPathComponent()  // ScreenrUITests
@@ -117,6 +131,7 @@ struct FixtureLaunch {
     if let outage { arguments += ["-ScreenrFixtureOutageSignal", outage.signal.path()] }
     if let holds { arguments += ["-ScreenrFixtureHolds", holds.directory.path()] }
     if let pickup { arguments += ["-ScreenrFixturePickup", pickup.rawValue] }
+    if let age { arguments += ["-ScreenrFixtureAge", age.rawValue] }
     return arguments
   }
 }

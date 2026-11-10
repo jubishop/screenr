@@ -7,7 +7,8 @@ import SwiftUI
 // `@Environment(PendingInvitation.self)`, `@Environment(\.identityProviders)`,
 // `@Environment(\.visitTracker)`, `@Environment(\.imageSource)`,
 // `@Environment(\.avatarImages)`, `@Environment(\.photoLibrary)`,
-// `@Environment(\.feedbackService)`, and `@Environment(\.trailerLoading)`.
+// `@Environment(\.feedbackService)`, `@Environment(\.trailerLoading)`, and
+// `@Environment(AgeCheck.self)`.
 public struct AppServices: Sendable {
   // The process the services run in: the app, or one of its extensions.
   public enum Host: Hashable, Sendable {
@@ -40,6 +41,8 @@ public struct AppServices: Sendable {
   // iOS's notification permission, APNs registration, and badge, or nil in
   // the extensions, which leave them to the app.
   public let push: (any PushSystem)?
+  // The app's age check at launch, which the extensions leave to the app.
+  public let ageCheck: AgeCheck
   // `api` when it is the Screenr client rather than a fake, whose
   // connections `close()` releases.
   private let client: ScreenrClient?
@@ -57,7 +60,8 @@ public struct AppServices: Sendable {
     feedback: FeedbackService = .none,
     trailers: TrailerLoading = .network,
     shareEndings: ShareEndings = .none,
-    push: (any PushSystem)? = nil
+    push: (any PushSystem)? = nil,
+    ageCheck: AgeCheck = AgeCheck()
   ) {
     self.api = api
     self.session = session
@@ -71,6 +75,7 @@ public struct AppServices: Sendable {
     self.trailers = trailers
     self.shareEndings = shareEndings
     self.push = push
+    self.ageCheck = ageCheck
     client = api as? ScreenrClient
     let imageSession = URLSession(configuration: Self.imageConfiguration(cache: imageCache))
     self.imageSession = imageSession
@@ -99,7 +104,8 @@ public struct AppServices: Sendable {
   // share extension ended its requests. The app's launch starts the request
   // log, and the extensions add to it. Only the app's client marks visits;
   // the extensions' send none. `push` is iOS's own push system, which the
-  // app target provides; the extensions have none. At the app's first launch
+  // app target provides; the extensions have none. The fixture API also
+  // answers the age check with the scenario's age. At the app's first launch
   // after an install, `launch` ends the session a deleted install left in
   // the Keychain, which the fixture API never reads. The app asks Safari for
   // an invitation before a new person's first sign-in only on an iPhone
@@ -128,6 +134,7 @@ public struct AppServices: Sendable {
     let shareEndings: ShareEndings
     let push: (any PushSystem)?
     let pickup: InvitationPickup?
+    let ageCheck: AgeCheck
     // Whether a member signed in on this iPhone before this launch.
     var member = false
     switch source {
@@ -166,6 +173,7 @@ public struct AppServices: Sendable {
       feedbackSender = feedback
       trailers = .network
       shareEndings = .none
+      ageCheck = AgeCheck()
     case .fixtures(let directory, let scenario):
       let token: String? =
         switch scenario.session {
@@ -199,6 +207,9 @@ public struct AppServices: Sendable {
       } else {
         pickup = nil
       }
+      ageCheck = AgeCheck(
+        fixture: FixtureAgeAssurance(age: scenario.age, record: fixtures.recordAgeCheck)
+      )
     }
     let session = try SessionStore(keychain: keychain)
     if member || session.phase == .signedIn { pickup?.memberSignedIn() }
@@ -242,7 +253,8 @@ public struct AppServices: Sendable {
       feedback: FeedbackService(sender: feedbackSender, logFile: logFile),
       trailers: trailers,
       shareEndings: shareEndings,
-      push: push
+      push: push,
+      ageCheck: ageCheck
     )
   }
 
@@ -282,6 +294,8 @@ public struct AppServices: Sendable {
 //   -ScreenrFixturePush undecided|allowed|denied|system (default undecided)
 //   -ScreenrFixturePosters placeholders|solid (default placeholders)
 //   -ScreenrFixturePickup found|missing|declined (default: no pickup)
+//   -ScreenrFixtureAge notRequired|adult|minor|declined|failing
+//                                             (default notRequired)
 //
 // Release builds ignore them.
 public enum APISource: Hashable, Sendable {
@@ -331,6 +345,14 @@ public enum APISource: Hashable, Sendable {
           )
         }
         scenario.pickup = pickup
+      case "-ScreenrFixtureAge":
+        guard let age = FixtureScenario.Age(rawValue: value) else {
+          throw ArgumentError(
+            description:
+              "\(argument) is notRequired, adult, minor, declined, or failing, not \(value)"
+          )
+        }
+        scenario.age = age
       case "-ScreenrFixtureSession":
         guard let session = FixtureScenario.Session(rawValue: value) else {
           throw ArgumentError(
@@ -380,6 +402,7 @@ extension View {
       .environment(\.photoLibrary, services.photoLibrary)
       .environment(\.feedbackService, services.feedback)
       .environment(\.trailerLoading, services.trailers)
+      .environment(services.ageCheck)
       .asyncImageURLSession(services.imageSession)
   }
 }
