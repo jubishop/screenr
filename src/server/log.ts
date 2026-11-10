@@ -198,10 +198,10 @@ function report(
 }
 
 // Waits for the reports still on their way to Sentry, each of which ends
-// within 10 seconds, so a process can send them before it exits, as the
-// worker does after a crash.
+// within 10 seconds and never rejects, so a process can send them before it
+// exits, as the worker does after a crash.
 export async function reportsSent() {
-  await Promise.all(sends);
+  await Promise.allSettled(sends);
 }
 
 async function send(target: { url: string; key: string }, envelope: string) {
