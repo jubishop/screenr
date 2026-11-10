@@ -16,7 +16,7 @@ bin/check --full
 ```
 
 Setup needs Git, Python 3.9 or later, and the latest Node.js LTS release;
-checks also need ShellCheck.
+checks also need ShellCheck and fish.
 QMD and direnv are optional; setup reports skipped features.
 Complete [app setup](running-screenr.md#local-setup) before running
 `bin/check --full`. Review `.envrc` before running `direnv allow`, and add
@@ -199,7 +199,9 @@ or `ksh`.
 `bin/check-application`, which `bin/check --full` runs after the foundation
 checks, verifies the Node runtime and the installed packages, lints the POSIX
 shell scripts in `ops/` and the [Sentry helpers](#sentry-triage)' Bash
-scripts, runs the Python tests, and then runs formatting,
+scripts, checks the syntax of each fish script in `bin/`, such as the
+[Sentry triage commands](#sentry-triage-commands), with
+`fish --no-execute`, runs the Python tests, and then runs formatting,
 typechecking, application and PostgreSQL tests, and browser tests against the
 production build.
 `tests/test_check_application.py` covers its order and failure handling.
@@ -731,7 +733,7 @@ together they run everything `bin/check --full` runs on Linux:
 
 | Job | Work |
 | --- | --- |
-| `static` | `bin/check`, with its shell lint for `.envrc`, `bin/`, and `bin/hooks/`, then `bin/check-application --part static`: shell lint for `ops/` and `.agents/scripts/`, Python tests, formatting, and typechecking. |
+| `static` | `bin/check`, with its shell lint for `.envrc`, `bin/`, and `bin/hooks/`, then `bin/check-application --part static`: shell lint for `ops/` and `.agents/scripts/`, fish syntax checks for `bin/`, Python tests, formatting, and typechecking. |
 | `app (I/N)` | `bin/check-application --part app --shard I/N`: one shard of the application and PostgreSQL test files, with the [pinned Caddy](#ci-caddy) and Playwright's headless Chromium for the browser harness tests. |
 | `browser (I/N)` | `bin/check-application --part browser --shard I/N`: one Playwright shard against a production build. |
 | `release` | Runs [`bin/deployment-decision`](#main-branch-delivery), then builds the release and runs the [packaging check](deployment.md#build-and-activate-a-release) on every run, pull requests included. It uploads the release only when the run deploys. |
@@ -842,6 +844,15 @@ started.
   test names use.
 - **ShellCheck:** the `static` job installs ShellCheck from APT only when the
   runner image lacks it, then prints its version.
+- **fish:** the runner image has no fish, which the
+  [Sentry triage commands](#sentry-triage-commands)' syntax checks and tests
+  need. The `static` job installs the static x86_64 Linux build of fish's
+  newest release, about 3 MB, from the project's GitHub release assets
+  rather than from APT, so it takes nothing from the Ubuntu mirror. It
+  checks the download against the SHA-256 digest that GitHub's release API
+  records for the asset, and prints the version. Taking the newest release
+  on every run follows the
+  [toolchain policy](foundation/engineering-policy.md#runtime-and-toolchain-versions).
 - **PostgreSQL client commands:** the backup round trip in
   `tests/app/backup-restore.test.ts` runs `pg_dump`, `pg_restore`, `psql`,
   `createdb`, and `dropdb` from the image's `/usr/lib/postgresql/18/bin`, the
@@ -1184,6 +1195,55 @@ intake. A next-release resolution depends on Sentry ordering builds such as
 
 **Tradeoff:** an event from an app build that predates the fix reopens the
 issue, and the next analysis closes its recurrence issue as a stale build.
+
+### Sentry triage commands
+
+Run `bin/snissue` to pick an unresolved error issue from `screenr-ios` or
+`screenr-server`, or `bin/snfeedback` to pick unresolved feedback from
+`screenr-ios`, and analyze it
+([#568](https://github.com/jubishop/screenr/issues/568)). Both list the
+newest items first, with activity within the last 90 days, Sentry's
+retention, and use `fzf` when installed and a numbered prompt otherwise. They
+are fish scripts, adapted from PodHaven's, so they need fish. Listing needs
+the authenticated `sentry` and `gh` commands, `jq`, and Python; analysis
+needs Claude Code (`claude`).
+
+`bin/snissue` shows each issue's short ID, numeric ID, title, level, event
+and user counts, and the state of the GitHub issue that tracks it. A Sentry
+issue URL, a short ID such as `SCREENR-IOS-2` or `SCREENR-SERVER-1`, or a
+numeric ID skips the picker. The pick, or the reference, runs
+`claude --dangerously-skip-permissions "/analyze-sentry-issue <reference>"`
+from the checkout root. `bin/snfeedback` shows each item's short ID, slug,
+message, contact, and tracking state, and runs
+`/analyze-sentry-feedback screenr-ios:<numeric-id>` the same way. The
+contact is Sentry's contact email, which the app's
+[feedback form](../ios/README.md#feedback) never sends, so it reads
+`no contact`. A feedback URL, the slug `screenr-ios:<numeric-id>`, or a
+numeric ID skips its picker. When nothing is unresolved, each says so and
+exits.
+
+A tracking state is `#n intake`, `#n analyzed` once the issue holds the
+skill's complete findings block, `#n closed`, or `untracked`. Titles and
+messages appear only in the terminal: the commands write no file and nothing
+to GitHub. Each fails rather than show a partial list, when a Sentry list
+says it has more than 1,000 rows or a Sentry or GitHub response cannot be
+read.
+
+Unlike PodHaven's commands, which match tracking issues with their own `jq`,
+these run the skills' [`find_tracking_issues.py`](../.agents/scripts/sentry-cli/README.md#tracking-issues)
+with `--states`. That keeps one implementation of the markers, the Sentry
+links, the findings block, and the rule that trusts only issues the intake's
+`github-actions` bot or the owner opened, so a picker and a skill's own list
+of unresolved items agree. PodHaven's pickers trust any author. The rest,
+from reference parsing to the launch, follows PodHaven's, so fixes can move
+between the two.
+
+`tests/test_snissue.py` and `tests/test_snfeedback.py`, ported from
+PodHaven's, run the commands with fake `sentry`, `gh`, `fzf`, and `claude`:
+reference parsing, listing and matching, the numbered prompt, and the
+launch. The `static` part of `bin/check-application` checks the syntax of
+every fish script in `bin/` and runs those tests, and CI installs fish for
+them, as [CI dependency sources](#ci-dependency-sources) describes.
 
 ## Scheduled memory audit
 

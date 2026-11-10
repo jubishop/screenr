@@ -20,6 +20,8 @@ import _npm_packages as packages  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 PARTS = ("static", "app", "browser")
+# A shebang naming fish, directly or through env, as bin/_checks.py matches the ShellCheck dialects.
+FISH_SHEBANG = re.compile(rb"#![ \t]*(?:\S*/)?(?:env[ \t]+(?:-\S*[ \t]+)*)?fish(?=\s|$)")
 INSTALL_HELP = "Run npm ci to install the packages that package-lock.json names, then rerun the checks."
 
 
@@ -87,6 +89,11 @@ def main():
         helpers = [str(path) for path in sorted((ROOT / ".agents/scripts").rglob("*.sh"))]
         if helpers:
             run("shellcheck", "--shell=bash", "--external-sources", "--source-path=SCRIPTDIR", *helpers)
+        # The Sentry pickers, bin/snissue and bin/snfeedback, are fish scripts, as in PodHaven.
+        # fish checks only the first script it is given, so each gets its own run.
+        for path in sorted((ROOT / "bin").iterdir()):
+            if path.is_file() and FISH_SHEBANG.match(path.read_bytes()):
+                run("fish", "--no-config", "--no-execute", str(path))
         run(sys.executable, "-B", "-m", "unittest", "discover", "-s", "tests", "-p", "test_*.py", "-v")
         for script in ("format:check", "typecheck"):
             run("npm", "run", script)

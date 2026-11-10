@@ -55,10 +55,10 @@ Label descriptions in the repository define each label. Use only existing
 labels, and change the label set only with the user's approval.
 
 `bin/check --full` runs `bin/check-application`: shell lint for `ops/` and
-`.agents/scripts/`, Python tests, formatting, typechecking, application and
-browser tests, and the build. On a Mac it also runs `bin/check-ios` when
-`ios/` changed. CI runs the same checks, except the iOS checks, in parallel
-jobs. Require successful
+`.agents/scripts/`, fish syntax checks for `bin/`, Python tests, formatting,
+typechecking, application and browser tests, and the build. On a Mac it also
+runs `bin/check-ios` when `ios/` changed. CI runs the same checks, except the
+iOS checks, in parallel jobs. Require successful
 full CI before merge and deployment, and
 follow the
 [validation policy](docs/development-workflow.md#local-and-ci-validation).

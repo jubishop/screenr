@@ -2,8 +2,8 @@
 """List the GitHub issues, open and closed, that track one Sentry issue or feedback item.
 
 Usage:
-  find_tracking_issues.py --issue NUMERIC_ID [NUMERIC_ID ...]
-  find_tracking_issues.py --feedback NUMERIC_ID [NUMERIC_ID ...]
+  find_tracking_issues.py [--states] --issue NUMERIC_ID [NUMERIC_ID ...]
+  find_tracking_issues.py [--states] --feedback NUMERIC_ID [NUMERIC_ID ...]
 
 It reads the repository's issues once, however many IDs it is given.
 
@@ -12,6 +12,12 @@ body, but only when the intake's github-actions bot or the repository's owner
 opened it: in a public repository anyone can open an issue that holds a
 marker or a link. Matches from other authors are listed as untrusted. The
 repository is GH_REPO, or jubishop/screenr.
+
+With --states, it prints one line per ID instead: the ID, a tab, and the
+state that bin/snissue and bin/snfeedback show, `#<n> intake`,
+`#<n> analyzed`, `#<n> closed`, or `untracked`. It names the canonical
+issue: an open one before a closed one, then one with the marker, then the
+newest.
 """
 
 import argparse
@@ -61,6 +67,31 @@ def analyzed(body, block):
     return 0 <= start < end
 
 
+def analysis(kind, body, block):
+    """Describe whether a body holds the skill's findings, or an error issue's closeout from before the marker."""
+    if analyzed(body, block):
+        return "analyzed"
+    if kind == "issue" and "## Sentry closeout" in body:
+        return "analyzed before the marker"
+    return "not analyzed"
+
+
+def matches(kind, numeric_id, found, owner):
+    """Return the trusted issues that track one item, each with whether it holds the marker, and the untrusted ones."""
+    marker, link, _ = patterns(kind, numeric_id)
+    tracking, untrusted = [], []
+    for issue in found:
+        body = issue.get("body") or ""
+        has_marker = marker in body
+        if not (has_marker or link.search(body)):
+            continue
+        if trusted(issue.get("author"), owner):
+            tracking.append((issue, has_marker))
+        else:
+            untrusted.append(issue)
+    return tracking, untrusted
+
+
 def issues(repository):
     owner, _, name = repository.partition("/")
     output = subprocess.run(
@@ -74,7 +105,8 @@ def issues(repository):
         found = [issue for page in pages for issue in page["data"]["repository"]["issues"]["nodes"]]
     except (ValueError, TypeError, KeyError):
         raise RuntimeError("gh returned an unexpected issue list.") from None
-    if any(not isinstance(issue, dict) or not isinstance(issue.get("number"), int) for issue in found):
+    if any(not isinstance(issue, dict) or not isinstance(issue.get("number"), int)
+           or issue.get("state") not in ("OPEN", "CLOSED") for issue in found):
         raise RuntimeError("gh returned an unexpected issue list.")
     return found
 
@@ -82,37 +114,43 @@ def issues(repository):
 def report(kind, numeric_id, found, repository):
     """Print the issues that track one item, and the untrusted ones that only claim to."""
     owner = repository.partition("/")[0]
-    marker, link, block = patterns(kind, numeric_id)
-    tracking, untrusted = [], []
-    for issue in found:
-        body = issue.get("body") or ""
-        has_marker, has_link = marker in body, bool(link.search(body))
-        if not (has_marker or has_link):
-            continue
-        if not trusted(issue.get("author"), owner):
-            untrusted.append(issue)
-            continue
-        state = (issue.get("state") or "").lower()
+    block = patterns(kind, numeric_id)[2]
+    tracking, untrusted = matches(kind, numeric_id, found, owner)
+    lines = []
+    for issue, has_marker in tracking:
+        state = issue["state"].lower()
         if issue.get("stateReason") and state == "closed":
             state += f" ({issue['stateReason'].lower().replace('_', ' ')})"
-        notes = ["marker" if has_marker else "link only"]
-        if analyzed(body, block):
-            notes.append("analyzed")
-        elif kind == "issue" and "## Sentry closeout" in body:
-            notes.append("analyzed before the marker")
-        else:
-            notes.append("not analyzed")
-        tracking.append(f"  #{issue['number']}  {state}  {', '.join(notes)}  {issue.get('title') or ''}")
+        notes = ["marker" if has_marker else "link only", analysis(kind, issue.get("body") or "", block)]
+        lines.append(f"  #{issue['number']}  {state}  {', '.join(notes)}  {issue.get('title') or ''}")
 
     print(f"Tracking issues for Sentry {kind} {numeric_id} in {repository}:")
-    print("\n".join(tracking) if tracking else "  none")
+    print("\n".join(lines) if lines else "  none")
     for issue in untrusted:
         login = (issue.get("author") or {}).get("login", "a deleted account")
         print(f"Ignored #{issue['number']}, opened by {login}, who is neither the intake bot nor {owner}.")
 
 
+def picker_state(kind, numeric_id, found, repository):
+    """Print one item's ID and the state of its canonical tracking issue, as the pickers show it."""
+    tracking, _ = matches(kind, numeric_id, found, repository.partition("/")[0])
+    if not tracking:
+        print(f"{numeric_id}\tuntracked")
+        return
+    issue, _ = min(tracking, key=lambda match: (match[0]["state"] != "OPEN", not match[1], -match[0]["number"]))
+    if issue["state"] != "OPEN":
+        shown = "closed"
+    elif analysis(kind, issue.get("body") or "", patterns(kind, numeric_id)[2]) == "not analyzed":
+        shown = "intake"
+    else:
+        shown = "analyzed"
+    print(f"{numeric_id}\t#{issue['number']} {shown}")
+
+
 def main():
     parser = argparse.ArgumentParser(prog="find_tracking_issues.py", description=__doc__.splitlines()[0])
+    parser.add_argument("--states", action="store_true",
+                        help="print each ID and its canonical issue's state, as bin/snissue and bin/snfeedback show it")
     item = parser.add_mutually_exclusive_group(required=True)
     item.add_argument("--issue", nargs="+", metavar="NUMERIC_ID", help="Sentry error issues' numeric IDs")
     item.add_argument("--feedback", nargs="+", metavar="NUMERIC_ID", help="screenr-ios feedback items' numeric IDs")
@@ -123,7 +161,7 @@ def main():
     repository = os.environ.get("GH_REPO") or "jubishop/screenr"
     found = issues(repository)
     for numeric_id in numeric_ids:
-        report(kind, numeric_id, found, repository)
+        (picker_state if args.states else report)(kind, numeric_id, found, repository)
     return 0
 
 
