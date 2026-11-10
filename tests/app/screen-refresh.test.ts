@@ -244,7 +244,8 @@ test("every table a feed or profile screen reads advances the change mark", asyn
   t.mock.restoreAll();
   // SQL functions that PostgreSQL does not inline read these: screenr_blocked
   // and screenr_photo.
-  for (const table of ["block", "profile_photo"]) read.add(table);
+  for (const table of ["block", "member_suspension", "profile_photo"])
+    read.add(table);
   const { rows } = await db.query<{ table: string }>(
     `SELECT DISTINCT c.relname AS table FROM pg_trigger t
     JOIN pg_class c ON c.oid=t.tgrelid JOIN pg_proc p ON p.oid=t.tgfoid

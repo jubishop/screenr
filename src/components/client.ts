@@ -140,6 +140,18 @@ export async function reviewReport(report: string, action: string) {
   return readReply<{ ok: true }>(response, text);
 }
 
+// The owner's Lift on a suspended member, from the review page
+// (docs/data-and-access.md#member-suspension).
+export async function liftSuspension(member: string) {
+  const { response, text } = await send("/api/reports", {
+    method: "POST",
+    cache: "no-store",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ member, action: "lift" }),
+  });
+  return readReply<{ ok: true }>(response, text);
+}
+
 // Reads with the query in the address.
 export async function read<Name extends ReadAction>(
   action: Name,
