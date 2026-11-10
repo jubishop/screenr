@@ -93,7 +93,8 @@ sentry issue list artisanal-software/<project> \
 
 Stop and report it if either list fails or says it has more rows; never offer
 a partial list. Pass every numeric ID to one
-`find_tracking_issues.py --issue <id> ...` call. Present the entries newest
+`find_tracking_issues.py --states --issue <id> ...` call, which prints each
+one's GitHub state as `bin/snissue` shows it. Present the entries newest
 first, one line each:
 `SCREENR-IOS-2  <numeric-id> — <title> (<level>; <N> events; <N> users;
 GitHub: #N intake|#N analyzed|#N closed|untracked)`. Let the user choose one

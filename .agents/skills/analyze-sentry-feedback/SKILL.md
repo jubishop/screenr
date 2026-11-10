@@ -103,8 +103,9 @@ sentry issue list artisanal-software/screenr-ios \
 Stop and report it if the list fails or says it has more rows; never offer a
 partial list. Feedback that Sentry marked as spam is not unresolved, so it is
 absent here, as the daily intake skips it. Pass every numeric ID to one
-`find_tracking_issues.py --feedback <id> ...` call. Present the entries newest
-first, one line each:
+`find_tracking_issues.py --states --feedback <id> ...` call, which prints
+each one's GitHub state as `bin/snfeedback` shows it. Present the entries
+newest first, one line each:
 `SCREENR-IOS-7  screenr-ios:<id> — "<message, trimmed to one line>" (GitHub:
 #N intake|#N analyzed|#N closed|untracked)`. The message appears only in this
 conversation. Let the user choose one (multiple-choice prompt if supported,

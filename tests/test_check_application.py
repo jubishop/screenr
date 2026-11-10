@@ -158,6 +158,28 @@ class CheckApplicationTests(unittest.TestCase):
             ["shellcheck", "--shell=bash", "--external-sources", "--source-path=SCRIPTDIR", "fetch.sh", "lib.sh"],
             ["first"]])
 
+    def test_checks_the_syntax_of_each_fish_script_in_bin(self):
+        for name, shebang in (("snissue", "#!/usr/bin/env fish"), ("snfeedback", "#!/opt/homebrew/bin/fish -l"),
+                              ("fishy", "#!/usr/bin/env python3"), ("shellfish", "#!/bin/sh")):
+            (self.repo / "bin" / name).write_text(shebang + "\n")
+        self.tool("fish", "import json, os, sys\n"
+                          "open(os.environ['CHECK_EVENTS'], 'a').write(json.dumps(['fish', *[os.path.basename(a) for a in sys.argv[1:]]]) + '\\n')\n"
+                          "sys.exit(127 if sys.argv[-1].endswith(os.environ.get('FAIL_FISH', '-')) else 0)\n")
+        result = self.check("--part", "static")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        # fish checks only the first script it is given, so each gets its own run.
+        self.assertEqual(self.recorded()[:4], [
+            ["shellcheck", "--shell=sh", "deploy.sh"],
+            ["fish", "--no-config", "--no-execute", "snfeedback"],
+            ["fish", "--no-config", "--no-execute", "snissue"],
+            ["first"]])
+
+        self.events.unlink()
+        result = self.check("--part", "static", FAIL_FISH="snfeedback")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(self.recorded(), [["shellcheck", "--shell=sh", "deploy.sh"],
+                                           ["fish", "--no-config", "--no-execute", "snfeedback"]])
+
     def test_newer_node_majors_run_the_checks(self):
         for version in ("v25.8.0", "v26.8.1", "v28.0.0"):
             with self.subTest(version=version):
@@ -440,6 +462,20 @@ class WorkflowTests(unittest.TestCase):
         # tests/test_ci_apt.py exercises the policy that the static job installs.
         self.assertIn("sudo install -m 0644 .github/ci-apt.conf /etc/apt/apt.conf.d/99-screenr-ci\n",
                       static[:guard])
+
+    def test_static_job_installs_the_newest_fish_from_github_before_its_checks(self):
+        # The runner image has no fish, which the fish syntax checks and the Sentry picker tests need.
+        static = self.jobs["static"]
+        steps = re.split(r"^      - ", static, flags=re.M)[1:]
+        install = next(step for step in steps if step.startswith("name: Install fish\n"))
+        self.assertLess(static.index(install), static.index("run: bin/check-application --part static\n"))
+        self.assertNotRegex(install, r"(?m)^        if:")
+        for text in ("gh api repos/fish-shell/fish-shell/releases/latest",
+                     'gh release download "$tag" --repo fish-shell/fish-shell',
+                     "sha256sum --check --strict", "fish --version\n"):
+            with self.subTest(text=text):
+                self.assertIn(text, install)
+        self.assertNotIn("apt", install)
 
 
 if __name__ == "__main__":

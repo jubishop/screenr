@@ -51,6 +51,24 @@ jobs:
             sudo apt-get install --yes shellcheck
           fi
           shellcheck --version
+      - name: Install fish
+        # The newest fish release's static Linux build, from GitHub rather than
+        # the Ubuntu mirror, for the fish scripts' syntax checks and tests.
+        # See docs/development-workflow.md#ci-dependency-sources.
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          asset=$(gh api repos/fish-shell/fish-shell/releases/latest --jq '
+            .tag_name as $tag
+            | [.assets[] | select(.name | test("^fish-[0-9.]+-linux-x86_64[.]tar[.]xz$"))]
+            | if length == 1 then .[0] else error("expected one x86_64 Linux build") end
+            | "\($tag) \(.name) \(.digest)"')
+          read -r tag name digest <<<"$asset"
+          [[ $digest == sha256:* ]]
+          gh release download "$tag" --repo fish-shell/fish-shell --pattern "$name" --dir "$RUNNER_TEMP"
+          echo "${digest#sha256:}  $RUNNER_TEMP/$name" | sha256sum --check --strict
+          sudo tar -xJf "$RUNNER_TEMP/$name" -C /usr/local/bin fish
+          fish --version
       - name: Check foundation
         run: ./bin/check
       - name: Check shell scripts, Python, formatting, and types

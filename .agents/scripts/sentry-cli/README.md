@@ -100,6 +100,14 @@ bot or the repository's owner opened the issue, as the intake does. It lists
 untrusted matches separately. Each issue shows whether its body holds the
 skill's complete findings block.
 
+With `--states`, it prints one line per ID instead, the ID, a tab, and the
+state of its canonical issue: `#<n> intake`, `#<n> analyzed`, `#<n> closed`,
+or `untracked`. The canonical issue is a trusted match, open before closed,
+then with the marker, then the newest. An error issue's `## Sentry closeout`
+from before the marker counts as analysis.
+[`bin/snissue` and `bin/snfeedback`](../../../docs/development-workflow.md#sentry-triage-commands)
+show these states, and each skill's list of unresolved items uses them.
+
 ## Tests
 
 `tests/test_sentry_cli_helpers.py` runs every helper against fake `sentry`,

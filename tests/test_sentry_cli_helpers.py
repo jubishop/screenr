@@ -789,6 +789,69 @@ class TrackingIssueTests(SentryHelperTests):
             "Tracking issues for Sentry issue 789 in jubishop/screenr:\n  none\n"))
         self.assertEqual(len(self.calls("gh")), 1)
 
+    def test_states_name_one_trusted_issue_per_id_as_the_pickers_show_it(self) -> None:
+        def issue(number, state, body, author=OWNER):
+            return {"number": number, "title": f"Issue {number}", "state": state,
+                    "stateReason": "COMPLETED" if state == "CLOSED" else None, "body": body, "author": author}
+
+        link = "https://artisanal-software.sentry.io/issues/{}/"
+        issues = [
+            # An open issue comes before a closed one, even an analyzed one.
+            issue(1, "OPEN", "<!-- sentry-issue:11 -->", ACTIONS_BOT),
+            issue(2, "CLOSED", "<!-- sentry-issue:11 -->\n" + FINDINGS),
+            # Among open issues, the marker comes before a link alone.
+            issue(3, "OPEN", link.format(22) + "\n" + FINDINGS),
+            issue(4, "OPEN", "<!-- sentry-issue:22 -->\n" + FINDINGS, ACTIONS_BOT),
+            # Then the newest, among closed issues too.
+            issue(5, "CLOSED", "<!-- sentry-issue:33 -->"),
+            issue(6, "CLOSED", "<!-- sentry-issue:33 -->"),
+            issue(7, "CLOSED", link.format(33)),
+            # An older closeout counts as analysis; half a findings block does not.
+            issue(8, "OPEN", link.format(44) + "\n## Sentry closeout\n"),
+            issue(9, "OPEN", "<!-- sentry-issue:55 -->\n<!-- analyze-sentry-issue-findings:start -->"),
+            # A stranger's marker tracks nothing.
+            issue(10, "OPEN", "<!-- sentry-issue:66 -->\n" + FINDINGS, STRANGER),
+        ]
+
+        result = self.find("--states", "--issue", "11", "22", "33", "44", "55", "66", "77", issues=issues)
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout, "11\t#1 intake\n22\t#4 analyzed\n33\t#6 closed\n44\t#8 analyzed\n"
+                                        "55\t#9 intake\n66\tuntracked\n77\tuntracked\n")
+        self.assertEqual(len(self.calls("gh")), 1)
+
+    def test_feedback_states_match_the_marker_and_intake_link(self) -> None:
+        link = "https://artisanal-software.sentry.io/feedback/?feedbackSlug=screenr-ios%3A{}&project=1"
+        findings = ("<!-- analyze-sentry-feedback-findings:start -->\n"
+                    "<!-- analyze-sentry-feedback-findings:end -->")
+        issues = [
+            {"number": 7, "title": "Intake", "state": "OPEN", "stateReason": None,
+             "body": "<!-- sentry-feedback:screenr-ios:77 -->\n" + link.format(77), "author": ACTIONS_BOT},
+            {"number": 8, "title": "Linked", "state": "OPEN", "stateReason": None,
+             "body": link.format(88) + "\n" + findings, "author": OWNER},
+            {"number": 9, "title": "Error issue", "state": "OPEN", "stateReason": None,
+             "body": "<!-- sentry-issue:99 -->\n" + findings, "author": OWNER},
+            # An error issue's closeout section is no analysis of feedback.
+            {"number": 10, "title": "Closeout", "state": "OPEN", "stateReason": None,
+             "body": link.format(1010) + "\n## Sentry closeout\n", "author": OWNER},
+        ]
+
+        result = self.find("--states", "--feedback", "77", "88", "99", "1010", issues=issues)
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout, "77\t#7 intake\n88\t#8 analyzed\n99\tuntracked\n1010\t#10 intake\n")
+
+    def test_an_unknown_issue_state_is_unexpected(self) -> None:
+        issues = [{"number": 1, "title": "Odd", "state": "MERGED", "stateReason": None,
+                   "body": "<!-- sentry-issue:123 -->", "author": OWNER}]
+
+        for arguments in (["--issue", "123"], ["--states", "--issue", "123"]):
+            with self.subTest(arguments=arguments):
+                result = self.find(*arguments, issues=issues)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("unexpected issue list", result.stderr)
+                self.assertEqual(result.stdout, "")
+
     def test_no_match_says_none(self) -> None:
         result = self.find("--issue", "123", issues=[])
 
