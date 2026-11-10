@@ -129,6 +129,16 @@ test("people suggestions follow requests, acceptance, and loss of each mutual fr
   assert.deepEqual(await suggestions(), []);
 });
 
+test("relationship actions refuse the member's own account", async () => {
+  const alice = await person("alice");
+  for (const action of ["request", "accept", "remove", "block", "unblock"])
+    await assert.rejects(
+      changeRelationship(alice, alice, action),
+      { status: 400, message: "Choose another person." },
+      action,
+    );
+});
+
 for (const pair of [
   [0, 2],
   [2, 0],

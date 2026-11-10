@@ -415,7 +415,7 @@ test("invited signup notifies only the inviter once, while routine activity and 
   );
 });
 
-test("comments notify the content owner and addressed commenter without self-alerts or duplicate owner alerts", async () => {
+test("comments notify the content owner and an addressed commenter who can read the entry, without self-alerts or duplicate owner alerts", async () => {
   const { alice, ben, cam, conversation } = await setup();
   await friend(alice, ben);
   await friend(alice, cam);
@@ -428,6 +428,26 @@ test("comments notify the content owner and addressed commenter without self-ale
   assert.equal(await unread(alice), 4);
   await addComment(ben, conversation, "Reply to owner", false, own);
   assert.equal(await unread(alice), 5);
+  // The server refuses a reply to someone who can no longer read the entry.
+  // One that reaches the database anyway notifies only the owner.
+  await changeRelationship(alice, ben, "remove");
+  const unreadable = (
+    await db.query(
+      `INSERT INTO comment(feed_item_id,conversation_id,author_id,body,spoiler,root_id,addressed_id)
+      SELECT id,conversation_id,$2,'Reply to a former friend',false,$3::bigint,$4
+      FROM feed_item WHERE id=$1 RETURNING id`,
+      [conversation, cam, direct, ben],
+    )
+  ).rows[0].id;
+  assert.deepEqual(
+    (
+      await db.query(
+        "SELECT recipient_id FROM notification WHERE comment_id=$1",
+        [unreadable],
+      )
+    ).rows,
+    [{ recipient_id: alice }],
+  );
 });
 
 async function friendship(a: string, b: string) {

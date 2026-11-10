@@ -1,7 +1,14 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { useDatabase, db, cookieFor, friend, setup } from "./social-fixture";
+import {
+  useDatabase,
+  db,
+  cookieFor,
+  denied,
+  friend,
+  setup,
+} from "./social-fixture";
 const { loadScreen } = await import("../../src/server/screens");
 const { changeRelationship } = await import("../../src/server/relationships");
 const { thread, conversations } = await import("../../src/server/feed");
@@ -353,7 +360,7 @@ test("one progress entry updates in place, keeps its discussion, and follows the
   assert.deepEqual(cleared.comments, discussion.comments);
   // Without visible replies it is hidden, but kept for reuse.
   await removeComment(ben, reply);
-  await assert.rejects(thread(ben, progress), /not found/);
+  await assert.rejects(thread(ben, progress), denied.conversation);
   for (const viewer of [alice, ben])
     assert.ok(
       !(await conversations(viewer)).some((item) => item.id === progress),
@@ -421,14 +428,15 @@ test("progress entries follow the audience and blocking rules in every feed and 
   for (const viewer of [alice, ben, cam])
     assert.equal(await sees(viewer), true);
   assert.equal(await sees(outsider), false);
-  await assert.rejects(thread(outsider, progress), /not found/);
+  await assert.rejects(thread(outsider, progress), denied.conversation);
   await assert.rejects(
     addComment(outsider, progress, "Not my circle", false),
-    /not found/,
+    denied.conversation,
   );
-  await assert.rejects(setReaction(outsider, progress, null, "like"), {
-    message: "Conversation not found.",
-  });
+  await assert.rejects(
+    setReaction(outsider, progress, null, "like"),
+    denied.conversation,
+  );
 
   // Comments on a progress entry notify its owner like other entries.
   await addComment(ben, progress, "How was it?", false);

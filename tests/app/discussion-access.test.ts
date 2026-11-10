@@ -260,6 +260,21 @@ test("screen reads and legacy links preserve item identity and filter reply targ
       url: `/titles/movie/1?item=${legacy}&reply=${oldReply}`,
     },
   );
+  // A reply whose author lost access stays as an unavailable parent of its
+  // visible replies, and the link leaves it out.
+  await changeRelationship(ben, cam, "unblock");
+  const lost = await addComment(cam, legacy, "Lost access", false);
+  await addComment(alice, legacy, "Visible child", false, lost);
+  await changeRelationship(alice, cam, "remove");
+  assert.equal(
+    (await thread(ben, legacy)).comments.find((c) => c.id === lost)
+      ?.unavailable,
+    true,
+  );
+  assert.deepEqual(
+    await loadScreen(ben, `/conversations/${legacy}?reply=${lost}`),
+    { kind: "redirect", url: `/titles/movie/1?item=${legacy}` },
+  );
   await assert.rejects(
     loadScreen(outsider, `/conversations/${legacy}`),
     denied.conversation,
