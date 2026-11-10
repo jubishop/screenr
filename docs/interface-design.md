@@ -43,7 +43,11 @@ and spacing would keep the vertical stack.
 places the reaction counts and React after the other actions on the same
 line. The reaction picker and errors open beneath the whole line. The copy
 status wraps in the space beside the icon, so it adds no row. Phones narrower
-than 390px can wrap the title actions onto a second line.
+than 390px can wrap the title actions onto a second line. Since
+[issue #572](https://github.com/jubishop/screenr/issues/572), the actions
+are [icons](#icon-actions-on-feed-entries--2026-11-09), and a full entry's
+title actions, React, Comment, the copy link, and Report fit on one line at
+390px; reaction counts can wrap it onto a second.
 
 ### Copy link as an icon button — 2026-10-12
 
@@ -208,7 +212,7 @@ tab content.
 `src/components/friends-recommend.tsx` lists each title in the shared title
 card, with "Recommended by" and the friends' names, each top 10 rank beside
 its name as in "Maya Chen (#1)", then one action beneath
-the card's link. The action is the feed's one-tap **+ Want to watch**, which
+the card's link. The action is a one-tap **+ Want to watch**, which
 reads **✓ Want to watch** and removes it on a second tap. A viewer with
 another status sees it instead, and a viewer who recommends the title sees
 **✓ Recommended**, since Want to watch would withdraw that Recommend; both
@@ -415,9 +419,10 @@ when a status exists. While a progress status or a stored date exists, a
 Last finished date field below the choices offers Save date and Clear date.
 Choosing Finished sends the reader's local date. While a choice saves, the
 button keeps focus and does not open. The panel opens from the button and
-shifts left to stay on a phone screen. A feed entry keeps its
-one-tap "+ Want to watch"; a reader with another status for the title sees
-that status instead, for example "✓ Watching", linked to the title page.
+shifts left to stay on a phone screen. When it would pass the bottom of the
+screen, above a phone's navigation bar, it opens upward if it fits above the
+button, and otherwise scrolls into view. Feed entries show the same menu
+from an [icon](#icon-actions-on-feed-entries--2026-11-09).
 The button's chevron is the `expand` icon at 24px with a 2.5px stroke in the
 label's color, larger and heavier than the app's other icons, and it flips
 while the menu is open
@@ -468,6 +473,41 @@ cost of a second tap. The reason for leaving out the top 10 is not recorded.
 **Rejected alternatives:** Text buttons for every title action would add
 rows on phone. A menu that leaves out the Last finished date would give
 feeds and title pages two versions of the control.
+
+**Implementation note:** [Issue #572](https://github.com/jubishop/screenr/issues/572)
+built the web half. `useEntryTitleActions` in
+`src/components/entry-title-actions.tsx` gives each full entry Recommend,
+the title page's `WatchStatusMenu` in its `icon` form, and the review
+editor's icon, with the icons in `src/components/icons.tsx`. Each icon's
+accessible name is also its tooltip:
+
+| Icon | Name | The reader's choice |
+| --- | --- | --- |
+| Thumbs up | Recommend, a toggle button | Pressed and filled; the tooltip reads "Recommended" |
+| A glyph for the status, then a down chevron | "Watch status", or "Watch status: Watching" with the current status | A bookmark with a plus for none, a filled bookmark for Want to watch, and a play triangle, skip-to-end, check, or stop square in a circle for Watching, Caught up, Finished, and Stopped watching |
+| Star | "Rate or review", or "Edit your review" once a review exists | Filled |
+
+A chosen icon also sits on the pressed background. The action line reads
+Delete, for the reader's own post or comment, then the title actions, the
+reaction counts, React, Comment, the copy link, and Report. React, Comment,
+and a comment's Reply are icons named for their actions: a smiling face, a
+speech bubble, and a curved arrow. Comment opens the composer beneath the
+discussion, as the bottom Comment button did; an entry without comments
+shows no discussion until it opens. The first icon of a line lines its glyph
+up with the text above.
+
+The title actions follow the title page's rules: withdrawing a top 10
+title's Recommend, or switching it to Want to watch, asks first beneath the
+action line, and a failed read keeps the question open. Want to watch chosen
+on a friend's entry reports the `friend_recommendation` or `friend_entry`
+[save surface](usage-telemetry.md#save-attribution); the reader's own entry
+sends none. The review form opens beneath the action line. When a change
+takes the reader's own entry out of the feed, such as withdrawing its
+Recommend, focus moves to the nearest entry. Each feed entry carries the
+reader's own `viewer_finished_on` and `viewer_review` for its title, so the
+menu and the form start from the saved date and review;
+[#573](https://github.com/jubishop/screenr/issues/573) tracks reading them
+in the iPhone app.
 
 ### Trailer collapsed until played — 2026-10-12
 

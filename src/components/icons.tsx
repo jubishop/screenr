@@ -74,17 +74,85 @@ const icons = {
       <path d="M5.5 19.5a6.5 6.5 0 0 1 13 0" />
     </>
   ),
+  // Feed entry actions: Recommend, Rate or review, React, Comment, and Reply.
+  recommend: (
+    <>
+      <rect x="3" y="10.5" width="4" height="9.5" rx="1" />
+      <path d="M7 10.5 10.8 3.6a1.9 1.9 0 0 1 3.4 1.5L13.4 9.5H19a2 2 0 0 1 2 2.4l-1.4 6.5a2 2 0 0 1-2 1.6H7" />
+    </>
+  ),
+  review: (
+    <path d="M12 3l2.3 6.3 6.7.3-5.3 4.1 1.9 6.5L12 16.4l-5.6 3.8 1.9-6.5L3 9.6l6.7-.3Z" />
+  ),
+  react: (
+    <>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M8.5 14.5a4.5 4.5 0 0 0 7 0" />
+      <path d="M9 9.5h.01M15 9.5h.01" />
+    </>
+  ),
+  comment: (
+    <path d="M5 4h14a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-8l-5 4v-4H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z" />
+  ),
+  reply: (
+    <>
+      <path d="m9 15-5-5 5-5" />
+      <path d="M4 10h9a7 7 0 0 1 7 7v2" />
+    </>
+  ),
+  // A feed entry's watch status: none yet, then each status.
+  "no-status": (
+    <>
+      <path d="M7 3.5h10a1 1 0 0 1 1 1v16l-6-4-6 4v-16a1 1 0 0 1 1-1Z" />
+      <path d="M12 7.5v6M9 10.5h6" />
+    </>
+  ),
+  want_to_watch: (
+    <path d="M7 3.5h10a1 1 0 0 1 1 1v16l-6-4-6 4v-16a1 1 0 0 1 1-1Z" />
+  ),
+  watching: (
+    <>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M10 8.8v6.4l5-3.2Z" fill="currentColor" />
+    </>
+  ),
+  caught_up: (
+    <>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M8.8 8.8v6.4l4.6-3.2Z" fill="currentColor" />
+      <path d="M15.6 8.8v6.4" />
+    </>
+  ),
+  finished: (
+    <>
+      <circle cx="12" cy="12" r="9" />
+      <path d="m8 12.3 2.7 2.7L16 9.7" />
+    </>
+  ),
+  stopped: (
+    <>
+      <circle cx="12" cy="12" r="9" />
+      <rect x="9" y="9" width="6" height="6" rx="0.5" fill="currentColor" />
+    </>
+  ),
 } satisfies Record<string, ReactNode>;
 
 export type IconName = keyof typeof icons;
 
-export function Icon({ name }: { name: IconName }) {
+// A filled icon marks a choice the reader has made, such as Recommended.
+export function Icon({
+  name,
+  filled = false,
+}: {
+  name: IconName;
+  filled?: boolean;
+}) {
   return (
     <svg
       className="icon"
       viewBox="0 0 24 24"
       focusable="false"
-      fill="none"
+      fill={filled ? "currentColor" : "none"}
       stroke="currentColor"
       strokeWidth={2}
       strokeLinecap="round"

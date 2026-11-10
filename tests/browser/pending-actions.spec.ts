@@ -107,14 +107,20 @@ test("feed entry and title actions keep keyboard focus while their writes are pe
   });
   await reader.goto("/");
   const header = reader.locator(`[data-item-heading="${id}"]`);
-  const want = header.getByRole("button", { name: /Want to watch$/ });
-  const recommend = header.getByRole("button", { name: /Recommend(ed)?$/ });
-  await expect(want).toHaveText("+ Want to watch");
-  let pending = await pressWhilePending(reader, want, "activity", {
-    screenshot: "pending-entry",
+  // The status menu returns focus to its icon, which keeps it while the
+  // chosen status saves.
+  const status = header.getByRole("button", { name: /^Watch status/ });
+  const recommend = header.getByRole("button", {
+    name: "Recommend",
+    exact: true,
   });
-  await expect(want).toHaveText("✓ Want to watch");
-  await expect(want).toHaveAttribute("aria-disabled", "false");
+  await expect(status).toHaveAccessibleName("Watch status");
+  let pending = await pressWhilePending(reader, status, "watch-status", {
+    screenshot: "pending-entry",
+    choose: "Want to watch",
+  });
+  await expect(status).toHaveAccessibleName("Watch status: Want to watch");
+  await expect(status).toHaveAttribute("aria-disabled", "false");
   await expect(pending.pressed).toBeFocused();
   expect(pending.requests()).toBe(1);
 
@@ -122,8 +128,8 @@ test("feed entry and title actions keep keyboard focus while their writes are pe
   pending = await pressWhilePending(reader, recommend, "activity", {
     screenshot: "pending-entry",
   });
-  await expect(recommend).toHaveText("✓ Recommended");
-  await expect(want).toHaveText("+ Want to watch");
+  await expect(recommend).toHaveAttribute("aria-pressed", "true");
+  await expect(status).toHaveAccessibleName("Watch status");
   await expect(pending.pressed).toBeFocused();
   expect(pending.requests()).toBe(1);
 

@@ -150,7 +150,7 @@ test("unified feeds show separate entries and support inline replies on title, f
   await owner.context().close();
 });
 
-test("feed entries lay out actions in full-width rows with an icon copy link and a reply count", async ({
+test("feed entries lay out icon actions in full-width rows with a reply count", async ({
   member,
 }) => {
   const owner = await member("actionsowner");
@@ -198,12 +198,16 @@ test("feed entries lay out actions in full-width rows with an icon copy link and
       .length;
   const entry = reader.locator(`[data-item-id="${id}"]`);
   const header = reader.locator(`[data-item-heading="${id}"]`);
-  const want = header.getByRole("button", {
-    name: "+ Want to watch",
+  const recommend = header.getByRole("button", {
+    name: "Recommend",
     exact: true,
   });
-  const recommend = header.getByRole("button", {
-    name: "+ Recommend",
+  const status = header.getByRole("button", {
+    name: "Watch status",
+    exact: true,
+  });
+  const review = header.getByRole("button", {
+    name: "Rate or review",
     exact: true,
   });
   const copy = header.getByRole("button", {
@@ -212,6 +216,7 @@ test("feed entries lay out actions in full-width rows with an icon copy link and
   });
   const like = header.getByRole("button", { name: "Like: 1", exact: true });
   const react = header.getByRole("button", { name: "React", exact: true });
+  const comment = header.getByRole("button", { name: "Comment", exact: true });
   const copiedURL = async () => {
     const copied = new URL(
       await reader.evaluate(() => navigator.clipboard.readText()),
@@ -224,7 +229,7 @@ test("feed entries lay out actions in full-width rows with an icon copy link and
   // Title page entries are compact and checked below.
   for (const path of ["/", "/people/actionsowner"]) {
     await reader.goto(path);
-    await expect(want).toBeEnabled();
+    await expect(status).toBeEnabled();
     await entry
       .getByRole("button", { name: "View 1 reply", exact: true })
       .click();
@@ -232,18 +237,17 @@ test("feed entries lay out actions in full-width rows with an icon copy link and
       await reader.setViewportSize({ width, height: 844 });
       const poster = await box(header.locator(".poster-link"));
       const actions = await Promise.all(
-        [want, recommend, copy, like, react].map(box),
+        [recommend, status, review, like, react, comment, copy].map(box),
       );
-      const [wantBox, recommendBox, copyBox, likeBox, reactBox] = actions;
-      // Actions sit beneath the poster block and start at the card's edge.
+      // Actions sit beneath the poster block, in order on one line, and the
+      // first icon lines up with the card's edge.
       for (const action of actions)
         expect(action.y).toBeGreaterThanOrEqual(poster.y + poster.height);
-      expect(Math.abs(wantBox.x - poster.x)).toBeLessThanOrEqual(1);
-      expect(lines(actions)).toBe(width === 390 ? 2 : 1);
-      expect(lines([wantBox, recommendBox, copyBox])).toBe(1);
-      expect(copyBox.x).toBeGreaterThan(recommendBox.x);
-      expect(lines([likeBox, reactBox])).toBe(1);
-      expect(center(likeBox)).toBeGreaterThanOrEqual(center(wantBox));
+      const glyph = await box(recommend.locator("svg"));
+      expect(Math.abs(glyph.x - poster.x)).toBeLessThanOrEqual(1);
+      expect(lines(actions)).toBe(1);
+      for (const [index, action] of actions.slice(1).entries())
+        expect(action.x).toBeGreaterThan(actions[index].x);
       // No empty status line is reserved beneath the actions.
       const card = await box(header);
       const padding = await header.evaluate((element) =>
@@ -285,23 +289,23 @@ test("feed entries lay out actions in full-width rows with an icon copy link and
   await expect(copy).toHaveAttribute("title", "Copy link to discussion");
   await expect(copy).toHaveText("");
   await expect(copy.locator("svg")).toHaveCount(1);
-  // Keyboard order follows the visual order of both rows.
-  await want.focus();
-  for (const next of [recommend, copy, like, react]) {
+  // Keyboard order follows the visual order.
+  await recommend.focus();
+  for (const next of [status, review, like, react, comment, copy]) {
     await reader.keyboard.press("Tab");
     await expect(next).toBeFocused();
   }
   await copy.focus();
   await reader.keyboard.press("Enter");
-  const status = header.locator(".copy-status");
-  await expect(status).toHaveText("Link copied.");
+  const copied = header.locator(".copy-status");
+  await expect(copied).toHaveText("Link copied.");
   await expect(copy).toBeFocused();
   await expect(reader).toHaveURL(/\/people\/actionsowner$/);
   await copiedURL();
-  const statusBox = await box(status);
+  const copiedBox = await box(copied);
   const copyBox = await box(copy);
-  expect(statusBox.x).toBeGreaterThanOrEqual(copyBox.x + copyBox.width);
-  expect(lines([statusBox, copyBox])).toBe(1);
+  expect(copiedBox.x).toBeGreaterThanOrEqual(copyBox.x + copyBox.width);
+  expect(lines([copiedBox, copyBox])).toBe(1);
 
   // On the title page, the copy link ends the compact entry's author line
   // and the reactions keep one row, with no space reserved beneath it.
@@ -310,19 +314,19 @@ test("feed entries lay out actions in full-width rows with an icon copy link and
     name: "actionsowner",
     exact: true,
   });
-  await expect(want).toHaveCount(0);
+  for (const action of [recommend, status, review])
+    await expect(action).toHaveCount(0);
   await entry
     .getByRole("button", { name: "View 1 reply", exact: true })
     .click();
   for (const width of [390, 1366]) {
     await reader.setViewportSize({ width, height: 844 });
-    const [authorBox, copyBox, likeBox, reactBox] = await Promise.all(
-      [author, copy, like, react].map(box),
-    );
+    const [authorBox, copyBox, likeBox, reactBox, commentBox] =
+      await Promise.all([author, copy, like, react, comment].map(box));
     expect(center(copyBox)).toBeGreaterThan(authorBox.y);
     expect(center(copyBox)).toBeLessThan(authorBox.y + authorBox.height);
     expect(copyBox.x).toBeGreaterThan(authorBox.x + authorBox.width);
-    expect(lines([likeBox, reactBox])).toBe(1);
+    expect(lines([likeBox, reactBox, commentBox])).toBe(1);
     expect(likeBox.y).toBeGreaterThanOrEqual(authorBox.y + authorBox.height);
     const card = await box(header);
     const padding = await header.evaluate((element) =>
@@ -336,19 +340,19 @@ test("feed entries lay out actions in full-width rows with an icon copy link and
   }
   await reader.setViewportSize({ width: 390, height: 844 });
   await author.focus();
-  for (const next of [copy, like, react]) {
+  for (const next of [copy, like, react, comment]) {
     await reader.keyboard.press("Tab");
     await expect(next).toBeFocused();
   }
   await reader.evaluate(() => navigator.clipboard.writeText(""));
   await copy.focus();
   await reader.keyboard.press("Enter");
-  await expect(status).toHaveText("Link copied.");
+  await expect(copied).toHaveText("Link copied.");
   await expect(copy).toBeFocused();
   await expect(reader).toHaveURL(/\/titles\/movie\/987654$/);
   await copiedURL();
   // The status shares the author line, just before the icon.
-  const compactStatus = await box(status);
+  const compactStatus = await box(copied);
   const compactCopy = await box(copy);
   expect(compactStatus.x + compactStatus.width).toBeLessThanOrEqual(
     compactCopy.x,
@@ -369,7 +373,11 @@ test("feed entries lay out actions in full-width rows with an icon copy link and
   const replyBox = await box(
     reply.getByRole("button", { name: "Reply", exact: true }),
   );
-  expect(Math.abs(pickerBox.x - replyBox.x)).toBeLessThanOrEqual(1);
+  // The Reply icon's glyph lines up with the comment's text and the picker.
+  const replyGlyph = await box(
+    reply.getByRole("button", { name: "Reply", exact: true }).locator("svg"),
+  );
+  expect(Math.abs(pickerBox.x - replyGlyph.x)).toBeLessThanOrEqual(1);
   expect(pickerBox.y).toBeGreaterThan(replyBox.y + replyBox.height);
   await reader.keyboard.press("Escape");
   await expect(picker).toHaveCount(0);
@@ -409,42 +417,40 @@ test("a failed entry, comment, or title action shows its error beside that contr
   });
   const header = reader.locator(`[data-item-heading="${id}"]`);
   const otherHeader = reader.locator(`[data-item-heading="${otherId}"]`);
-  const want = header.getByRole("button", {
-    name: "+ Want to watch",
+  const recommend = header.getByRole("button", {
+    name: "Recommend",
     exact: true,
   });
-  const recommend = header.getByRole("button", {
-    name: "+ Recommend",
+  const status = header.getByRole("button", {
+    name: "Watch status",
     exact: true,
   });
   const react = header.getByRole("button", { name: "React", exact: true });
   const message = "Could not save. Please try again.";
   await reader.goto("/");
-  await expect(want).toBeEnabled();
+  await expect(recommend).toBeEnabled();
   await failAction(reader, "activity", message);
-  await press(want);
+  await press(recommend);
   for (const width of [390, 1366]) {
     await reader.setViewportSize({ width, height: 844 });
     await expectErrorBeside(reader, {
       container: header,
-      failed: want,
-      controls: [want, recommend, react],
+      failed: recommend,
+      controls: [recommend, status, react],
       message,
       screenshot: "action-error-entry",
     });
   }
   await expect(otherHeader.locator(".error")).toHaveCount(0);
   await expect(
-    otherHeader.getByRole("button", { name: "+ Want to watch", exact: true }),
+    otherHeader.getByRole("button", { name: "Recommend", exact: true }),
   ).toBeEnabled();
   // Refreshes keep the message; the entry's next action replaces it.
   await nextAccountRefreshForPath(reader, "/");
   await expect(header.locator(".error")).toHaveText(message);
   await reader.unroute("**/api/screenr/activity");
   await press(recommend);
-  await expect(
-    header.getByRole("button", { name: "✓ Recommended", exact: true }),
-  ).toBeVisible();
+  await expect(recommend).toHaveAttribute("aria-pressed", "true");
   await expect(header.locator(".error")).toHaveCount(0);
 
   // A comment's removal error stays in its confirmation, inside the comment.

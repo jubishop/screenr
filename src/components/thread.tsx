@@ -11,6 +11,7 @@ import { Avatar } from "./avatar";
 import { ConfirmAction } from "./confirmation";
 import { around, useRemovalFocus, type FocusTarget } from "./removal-focus";
 import { ReportForm, type ReportedAuthor } from "./report";
+import { Icon } from "./icons";
 import {
   CommentComposer,
   type CommentDraft as Draft,
@@ -36,7 +37,9 @@ export const removable = (
 // snapshot, whose action waits for the next read. The entry owns which
 // comment is `confirming`, so it can show that confirmation alone, and which
 // comment's report form is open, so it can offer to block the author once
-// the report hides the comment.
+// the report hides the comment. The entry's Comment button opens the composer
+// that posts directly to the entry, beneath its discussion; the entry owns
+// whether it is `commenting`.
 export function ThreadView({
   snapshot,
   available,
@@ -49,6 +52,8 @@ export function ThreadView({
   refresh,
   targetReply,
   entryFocus,
+  commenting,
+  setCommenting,
 }: {
   snapshot: Thread | null;
   available: boolean;
@@ -64,6 +69,8 @@ export function ThreadView({
   targetReply?: string;
   // Where focus goes when no comment is left to take it.
   entryFocus: () => FocusTarget[];
+  commenting: boolean;
+  setCommenting: (open: boolean) => void;
 }) {
   const interactive = useInteractive();
   const [expanded, setExpanded] = useState(false);
@@ -73,7 +80,6 @@ export function ThreadView({
   // Each destination owns its draft. Switching or cancelling never retargets
   // unsent text, and temporarily losing access never copies server identities.
   const [drafts, setDrafts] = useState<Record<string, Draft>>({});
-  const [directOpen, setDirectOpen] = useState(false);
   const [replyTo, setReplyTo] = useState<string | null>(null);
   const [busy, setBusy] = useState(new Set<string>());
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -87,13 +93,15 @@ export function ThreadView({
     area.current?.focus();
   }, [replyTo]);
   useEffect(() => {
-    if (directOpen) directArea.current?.focus();
-  }, [directOpen]);
+    if (commenting) directArea.current?.focus();
+  }, [commenting]);
   // Keep local composition state through failed refreshes. Only the current
   // authorized snapshot supplies rendered conversation content.
   if (!snapshot || (!available && !confirming && !reporting)) return null;
   const currentSnapshot = snapshot;
   const comments = currentSnapshot.comments;
+  // An entry without comments shows its discussion only while commenting.
+  if (!comments.length && !(available && commenting)) return null;
   const children = new Map<string, Comment[]>();
   for (const comment of comments) {
     if (!comment.root_id || !live(comment)) continue;
@@ -194,7 +202,7 @@ export function ThreadView({
         onSubmit={(event) => post(event, destination)}
         onCancel={() => {
           if (nested) setReplyTo(null);
-          else setDirectOpen(false);
+          else setCommenting(false);
           document
             .getElementById(
               nested
@@ -220,8 +228,10 @@ export function ThreadView({
     return (
       <>
         <button
-          className="text-button"
+          className="icon-button"
           id={`reply-action-${comment.id}`}
+          aria-label="Reply"
+          title="Reply"
           aria-expanded={replyTo === comment.id}
           aria-controls={`reply-${currentSnapshot.conversation.id}-${comment.id}-form`}
           disabled={!interactive}
@@ -230,7 +240,7 @@ export function ThreadView({
             if (replyTo === comment.id) area.current?.focus();
           }}
         >
-          Reply
+          <Icon name="reply" />
         </button>
         {reportable(comment) && (
           <button
@@ -485,23 +495,7 @@ export function ThreadView({
             children.get(c.id)?.some((r) => r.id === replyTo),
         ) &&
         composer(replyTo)}
-      {available && (
-        <button
-          type="button"
-          id={`comment-action-${currentSnapshot.conversation.id}`}
-          className="text-button comment-action"
-          disabled={!interactive}
-          aria-expanded={directOpen}
-          aria-controls={`reply-${currentSnapshot.conversation.id}-direct-form`}
-          onClick={() => {
-            setDirectOpen(true);
-            if (directOpen) directArea.current?.focus();
-          }}
-        >
-          Comment
-        </button>
-      )}
-      {directOpen && composer("direct")}
+      {commenting && composer("direct")}
     </section>
   );
 }

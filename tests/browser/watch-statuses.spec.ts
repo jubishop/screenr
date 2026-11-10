@@ -4,7 +4,12 @@ import { browserConfig } from "../../scripts/browser-config";
 import { db } from "./database-fixture";
 import { test } from "./monitored-test";
 import { prepareFriendship } from "./member-fixture";
-import { chooseStatus, statusButton } from "./watch-status";
+import {
+  chooseStatus,
+  entryStatusButton,
+  entryStatusName,
+  statusButton,
+} from "./watch-status";
 
 async function box(locator: Locator) {
   const bounds = await locator.boundingBox();
@@ -130,28 +135,21 @@ test("members choose, date, and clear watch statuses from the title page, and fr
   await chooseStatus(viewer, "Caught up");
   await expect(own).toHaveText("is caught up");
 
-  // A friend sees the entry and saves the show with one tap.
+  // A friend sees the entry and saves the show from its status menu.
   await friend.goto("/");
   const entry = friend
     .locator(".feed-entry")
     .filter({ hasText: `${name} is caught up` });
   await expect(entry).toHaveCount(1);
-  await entry
-    .getByRole("button", { name: "+ Want to watch", exact: true })
-    .click();
-  await expect(
-    entry.getByRole("button", { name: "✓ Want to watch", exact: true }),
-  ).toBeVisible();
+  await chooseStatus(friend, "Want to watch", entry);
   await friend.goto("/titles/tv/998201");
   await expect(statusButton(friend)).toHaveText("✓ Want to watch");
   await chooseStatus(friend, "Watching");
-  // The friend's own status replaces the one-tap action on others' entries.
+  // Others' entries show the friend's own status on their status icons.
   await friend.goto("/");
-  const status = entry.getByRole("link", { name: "✓ Watching", exact: true });
-  await expect(status).toHaveAttribute("href", "/titles/tv/998201");
-  await expect(
-    entry.getByRole("button", { name: /Want to watch/ }),
-  ).toHaveCount(0);
+  await expect(entryStatusButton(entry)).toHaveAccessibleName(
+    entryStatusName("Watching"),
+  );
   const id = await entry.getAttribute("data-item-id");
   const reply = await friend.request.post("/api/screenr/comment", {
     headers: { Origin: browserConfig.baseURL },

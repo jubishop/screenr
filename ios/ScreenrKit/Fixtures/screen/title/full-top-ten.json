@@ -11,7 +11,7 @@
   },
   "response": {
     "status": 200,
-    "etag": "W/\"VJwPFeRAYtCTYSpadk81kmfZ1loDAT1gHyGpJ3XFMuw\"",
+    "etag": "W/\"3xjO_jFyZIliwCXNtxc2DaQ6hhDX7IWYQ2dRAJjrqVE\"",
     "body": {
       "kind": "title",
       "title": {
@@ -143,6 +143,8 @@
           "viewer_recommended": false,
           "viewer_status": null,
           "viewer_top_ten_rank": null,
+          "viewer_finished_on": null,
+          "viewer_review": null,
           "visible_activity": "2026-10-13T12:00:00.000Z",
           "comments": [],
           "reactions": []
@@ -176,6 +178,8 @@
           "viewer_recommended": false,
           "viewer_status": null,
           "viewer_top_ten_rank": null,
+          "viewer_finished_on": null,
+          "viewer_review": null,
           "visible_activity": "2026-10-13T12:00:00.000Z",
           "comments": [],
           "reactions": []

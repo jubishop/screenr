@@ -5,11 +5,84 @@ import type { Comment, FeedItem } from "../../src/shared";
 const { changeRelationship } = await import("../../src/server/relationships");
 const { thread, conversations, feedPage } =
   await import("../../src/server/feed");
-const { updateTitleActivity } = await import("../../src/server/title-actions");
+const { updateTitleActivity, updateWatchStatus, setFinishedDate } =
+  await import("../../src/server/title-actions");
+const { saveReview, removeReview } = await import("../../src/server/reviews");
 const { addComment, removeComment, createTitleComment, createDiscussionPost } =
   await import("../../src/server/comments");
 
 useDatabase();
+
+// An entry's status menu and review editor start from the reader's own
+// last-finished date and review for its title (issue #572).
+test("feed entries carry the reader's own last-finished date and review for their title", async () => {
+  const { alice, ben, conversation } = await setup();
+  await friend(alice, ben);
+  // The discussion keeps the Recommend holding Alice's card once her status
+  // and review join it.
+  await addComment(ben, conversation, "Worth it?", false);
+  const post = await createDiscussionPost(alice, "A post", false);
+  // Every read of an entry, by `viewer`: the friends feed, title and profile
+  // feeds, a page of history, and the entry itself.
+  const reads = async (viewer: string, id: string) => {
+    const { conversation: entry } = await thread(viewer, id);
+    return [
+      ...(await conversations(viewer)),
+      ...(await conversations(viewer, { title: "movie:1" })),
+      ...(await conversations(viewer, { owner: alice })),
+      ...(await feedPage(viewer, { before: Infinity })).conversations,
+      entry,
+    ].filter((item) => item.id === id);
+  };
+  const expectViewer = async (
+    viewer: string,
+    finishedOn: string | null,
+    review: FeedItem["viewer_review"],
+  ) => {
+    const entries = await reads(viewer, conversation);
+    assert.equal(entries.length, 5);
+    for (const entry of entries) {
+      assert.equal(entry.viewer_finished_on, finishedOn);
+      assert.deepEqual(entry.viewer_review, review);
+    }
+  };
+  await expectViewer(ben, null, null);
+  // A post without a title has neither.
+  for (const item of await reads(ben, post)) {
+    assert.equal(item.viewer_finished_on, null);
+    assert.equal(item.viewer_review, null);
+  }
+
+  // The date stays through later statuses and a cleared status, as the title
+  // page's menu shows it, until the reader clears it.
+  await updateWatchStatus(ben, "movie:1", "finished", "2026-10-01");
+  await expectViewer(ben, "2026-10-01", null);
+  await updateWatchStatus(ben, "movie:1", "watching");
+  await updateWatchStatus(ben, "movie:1", null);
+  await expectViewer(ben, "2026-10-01", null);
+  await setFinishedDate(ben, "movie:1", null);
+  await expectViewer(ben, null, null);
+
+  // A rating alone has no text; a removed review is none.
+  await saveReview(ben, "movie:1", 4, null, false);
+  await expectViewer(ben, null, { rating: 4, body: null, spoiler: false });
+  await saveReview(ben, "movie:1", null, "Moving.", true);
+  await expectViewer(ben, null, {
+    rating: null,
+    body: "Moving.",
+    spoiler: true,
+  });
+  // Each reader sees only their own, on their own entry too.
+  await updateWatchStatus(alice, "movie:1", "finished", "2026-09-30");
+  await saveReview(alice, "movie:1", 2, "Not for me.", false);
+  await expectViewer(alice, "2026-09-30", {
+    rating: 2,
+    body: "Not for me.",
+    spoiler: false,
+  });
+  await removeReview(ben, "movie:1");
+  await expectViewer(ben, null, null);
+});
 
 test("feed action states belong to the viewer across circle, title, and profile reads", async () => {
   const { alice, ben, conversation } = await setup();
@@ -191,6 +264,8 @@ const entryFields = Object.keys({
   viewer_recommended: field,
   viewer_status: field,
   viewer_top_ten_rank: field,
+  viewer_finished_on: field,
+  viewer_review: field,
   username: field,
   display_name: field,
   photo: field,

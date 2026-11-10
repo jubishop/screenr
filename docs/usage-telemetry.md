@@ -204,6 +204,10 @@ The client sends one of these surfaces with the Want to watch action:
 | `friends_recommend` | The Friends recommend tab on Find a title, or a title page opened from it | Yes |
 | `shortcut` | The iPhone app's Add to Want to watch action in Siri or the Shortcuts app | No |
 
+A full feed entry sends `friend_recommendation` or `friend_entry` with Want
+to watch chosen from its status menu; the reader's own entry sends no
+surface.
+
 Suggestion tiles and Watch together have no inline title actions, so their
 links add `?from=<surface>` to the title page address. Friends recommend
 sends its surface with its own Want to watch action, and its title links add
@@ -212,8 +216,9 @@ watch action. The title route holds the parameter, as the iPhone app's
 `Destination.title` does, and keeps only these four surfaces, so a page opened
 with any other `from` reports `title`. The screen read leaves it out, so it
 does not change which screen loads; a copied address keeps it. A save without
-a surface, from a page loaded before this release, stores no surface and can
-count only as inferred. An unknown surface is rejected.
+a surface, from the reader's own feed entry or a page loaded before this
+release, stores no surface and can count only as inferred. An unknown surface
+is rejected.
 
 ### Save follow-through
 

@@ -7,6 +7,7 @@ import {
   confirmAction,
   confirmProfileAction,
 } from "./journey-helpers";
+import { chooseStatus } from "./watch-status";
 
 test("invited friends discover, save, and share inline discussions with live access enforcement", async ({
   browser,
@@ -46,9 +47,7 @@ test("invited friends discover, save, and share inline discussions with live acc
   const id = new URL(conversationURL).searchParams.get("item")!;
   const item = (page: Page) => page.locator(`[data-item-id="${id}"]`);
   await ben.goto("/");
-  await item(ben)
-    .getByRole("button", { name: "+ Want to watch", exact: true })
-    .click();
+  await chooseStatus(ben, "Want to watch", item(ben));
   await expect(ben.locator("[data-item-id]")).toHaveCount(2);
   await item(ben).getByRole("button", { name: "Comment", exact: true }).click();
   await item(ben)

@@ -43,15 +43,16 @@ test flow, and [Testing Screenr](docs/testing.md) for the automated suites.
   add titles, and the profile's edit mode reorders and removes them. Top 10
   picks weigh more in suggestions and Friends recommend, and friends' ranks
   appear beside their names.
-- **Watch statuses:** A title page's status menu sets one current status:
-  Want to watch, Watching, Caught up (TV only), Finished, or Stopped watching,
-  with an optional last-finished date. Watching through Stopped watching share
-  one feed entry per person and title that updates as the status changes.
-  Recommend can go with any status except Want to watch.
-- **Reviews:** A title page's Rate or review button saves one review per
-  title: a rating from 1 to 5 stars, written text, or both, with an optional
-  spoiler flag. The review is a feed entry with replies and reactions; edits
-  update it in place with an Edited label, and removal asks first.
+- **Watch statuses:** A status menu on a title page or a full feed entry sets
+  one current status: Want to watch, Watching, Caught up (TV only), Finished,
+  or Stopped watching, with an optional last-finished date. Watching through
+  Stopped watching share one feed entry per person and title that updates as
+  the status changes. Recommend can go with any status except Want to watch.
+- **Reviews:** Rate or review on a title page or a full feed entry saves one
+  review per title: a rating from 1 to 5 stars, written text, or both, with an
+  optional spoiler flag. The review is a feed entry with replies and
+  reactions; edits update it in place with an Edited label, and removal asks
+  first.
 - **Feeds and conversations:** Members recommend titles or add them to Want to
   watch, which are mutually exclusive, and post standalone comments on title
   pages, where TV comments can name a season or episode. Posts started from
