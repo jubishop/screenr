@@ -14,6 +14,7 @@ verified with version 0.45.0, and accept only Screenr's projects,
 | `search_related_errors.sh` | Error events in both projects that match a query in a time window |
 | `fetch_server_journal.py` | The `screenr-web` and `screenr-worker` journal for a time window, over SSH |
 | `summarize_log_tails.py` | The log tails that feedback attaches, around the time it was sent |
+| `summarize_metrickit_diagnostic.py` | The raw MetricKit diagnostic that a MetricKit event attaches, and Screenr's dSYM for it |
 | `find_tracking_issues.py` | The GitHub issues that track one Sentry issue or feedback item |
 
 Each helper that saves evidence writes it to a fresh path that the caller
@@ -89,6 +90,62 @@ with their request IDs. It counts lines it cannot read without printing them,
 and replaces control characters in what it prints. The lines hold no member
 content by design, but their user and request IDs stay out of GitHub.
 
+## MetricKit diagnostics
+
+`summarize_metrickit_diagnostic.py` reads a downloaded
+`MXDiagnosticPayload.json`, the raw diagnostic that a MetricKit event
+attaches ([MetricKit diagnostics](../../skills/analyze-sentry-issue/references/screenr-correlation.md#metrickit-diagnostics)).
+sentry-cocoa 9.32.0 attaches one diagnostic's `jsonRepresentation()`, with
+its `callStackTree` in Apple's `MXCallStackTree` format; the helper also reads
+a whole `MXDiagnosticPayload`, whose lists, such as `hangDiagnostics`, each
+hold diagnostics, and prints each one. It names a lone diagnostic's kind from
+its metadata's measurement, such as `hangDuration`, without printing it.
+
+Each call stack is one thread, numbered as in the event's threads, when
+`callStackPerThread` is true, and all threads together otherwise.
+`attributed` marks a stack whose `threadAttributed` MetricKit sets, which
+need not be the main thread: in a real PodHaven hang, whose attachment
+sentry-cocoa builds the same way, MetricKit flagged two worker threads and
+not the main thread. The main thread is the stack whose root frame is in
+`dyld`, Thread 0 in every hang seen so far. Root frames are the outermost
+callers, and a frame's samples include its callees', as sentry-cocoa reads
+the tree. For each stack it prints:
+
+- its samples and frames;
+- each binary's samples in its own frames, where the thread was, which add up
+  to the stack's samples, and anywhere on the stack, counted once when the
+  binary calls back into itself;
+- its heaviest path, outermost first: at each level the frame with the most
+  samples, the first one on a tie, with its binary, offset, and samples;
+- every offset in Screenr's binary, `Screenr`, with its samples anywhere on
+  the stack and in the frame itself, most samples first.
+
+Offsets are MetricKit's `offsetIntoBinaryTextSegment`, in hexadecimal. The
+helper skips frames and call stacks it cannot read, counts a frame without a
+sample count as 0 samples, and prints how many of each. It replaces control
+characters in binary names. It prints counts, binary names, offsets, and
+function names, nothing that identifies a member, and none of the
+diagnostic's device metadata.
+
+For each UUID of Screenr's binary, it lists `screenr-ios`'s debug files with
+`sentry api projects/artisanal-software/screenr-ios/files/dsyms/?debug_id=<uuid> --json`,
+downloads the dSYM, or an executable with only its symbol table when Sentry
+holds no dSYM, with `?id=<id>`, and runs `atos -o <file> -offset` on every
+offset. It prints which file it used and how many offsets atos placed, and
+shows each placed offset's function beside it. atos answers an offset that no
+named function covers with its address, which an executable that marks where
+a nameless function starts follows with the distance from it; either answer
+counts as unplaced. The `sentry` CLI's token can list and download debug
+files: on 2026-11-10 it fetched the dSYM of build `1.0+5`, and atos named the
+functions that Sentry showed for the Screenr frames of `SCREENR-IOS-3`, except
+a thunk that the linker had merged with identical code, which atos calls
+`<deduplicated_symbol>`. The download lives in a temporary directory that the
+helper deletes before it exits. With `--offline`, without the `sentry` CLI or
+`atos`, which comes with Xcode, or when Sentry has no debug file or a request
+fails, it says why and shows the offsets alone. Only an unreadable file stops
+it, with exit status 1. `bin/upload-ios-symbols` uploads each archive's dSYMs
+([symbols](../../../ios/README.md#symbols)).
+
 ## Tracking issues
 
 `find_tracking_issues.py` reads every issue in `GH_REPO`, or
@@ -114,6 +171,7 @@ show these states, and each skill's list of unresolved items uses them.
 ## Tests
 
 `tests/test_sentry_cli_helpers.py` runs every helper against fake `sentry`,
-`gh`, and `ssh` commands and synthetic log tails, and `bin/check --full` runs
-it. Never copy real issue fields, feedback, journal lines, log tails, or
-attachment bytes into test fixtures.
+`gh`, `ssh`, and `atos` commands, synthetic log tails, and synthetic MetricKit
+diagnostics, and `bin/check --full` runs it. Never copy real issue fields,
+feedback, journal lines, log tails, or attachment bytes, such as a member's
+MetricKit diagnostic, into test fixtures.
