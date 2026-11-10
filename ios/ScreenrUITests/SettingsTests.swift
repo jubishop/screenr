@@ -39,6 +39,35 @@ final class SettingsTests: XCTestCase {
     XCTAssertFalse(app.navigationBars["Edit profile"].exists)
   }
 
+  // The server refuses a username with a blocked word. Its message shows
+  // beneath the field, and the editor stays open with both names as typed.
+  @MainActor
+  func testShowsABlockedWordRefusalAndKeepsTheNames() throws {
+    let log = RequestLog.temporary()
+    let app = openSettings(log: log)
+
+    app.buttons["Edit profile"].tap()
+    let username = app.textFields["Username"]
+    XCTAssertTrue(username.waitForExistence(timeout: 5))
+    replaceText(in: username, with: "alice_gangbang")
+    app.buttons["Save"].tap()
+
+    wait(
+      for: [
+        log.logged(#"POST /api/screenr/profile {"name":"Alice Park","username":"alice_gangbang"}"#)
+      ],
+      timeout: 10
+    )
+    XCTAssertTrue(
+      app.staticTexts["Username contains a word Screenr doesn’t allow."]
+        .waitForExistence(timeout: 10)
+    )
+    XCTAssertTrue(app.navigationBars["Edit profile"].exists)
+    XCTAssertEqual(app.textFields["Display name"].value as? String, "Alice Park")
+    XCTAssertEqual(username.value as? String, "alice_gangbang")
+    try app.performSettingsAudit()
+  }
+
   // UI tests cannot drive the system photo picker. Under the fixture API,
   // Add and Replace photo choose ScreenrKit's FixturePhoto, a detailed
   // portrait JPEG, which the app crops and compresses as it would a photo

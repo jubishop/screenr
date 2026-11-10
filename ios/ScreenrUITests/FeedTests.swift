@@ -177,6 +177,35 @@ final class FeedTests: XCTestCase {
     )
   }
 
+  // The server refuses a post with a blocked word. Its message shows beneath
+  // the composer, which keeps the text. Comments and replies share the form.
+  @MainActor
+  func testShowsABlockedWordRefusalAndKeepsThePost() throws {
+    let log = RequestLog.temporary()
+    let app = XCUIApplication()
+    app.launch(with: FixtureLaunch(requestLog: log.file))
+    XCTAssertTrue(app.entry(FeedFixture.benRecommend).waitForExistence(timeout: 10))
+
+    app.buttons["Start a conversation"].tap()
+    let field = app.composerField("Your post")
+    XCTAssertTrue(field.waitForExistence(timeout: 5))
+    let text = "Skip the hand job scene in episode two."
+    field.typeText(text)
+    app.buttons["Post"].tap()
+
+    wait(
+      for: [log.logged(#"POST /api/screenr/discussion-post {"body":"\#(text)","spoiler":false}"#)],
+      timeout: 10
+    )
+    XCTAssertTrue(
+      app.staticTexts["Post contains a word Screenr doesn’t allow."]
+        .waitForExistence(timeout: 10)
+    )
+    XCTAssertEqual(field.value as? String, text)
+    XCTAssertTrue(app.buttons["Post"].isEnabled)
+    try app.performShellAudit()
+  }
+
   // A permalink opens the feed at its reply, which shows highlighted, and
   // the reader reacts to it.
   @MainActor

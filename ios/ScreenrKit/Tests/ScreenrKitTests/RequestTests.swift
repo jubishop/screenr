@@ -80,6 +80,10 @@ struct RequestTests {
       "actions/discussion-post/default",
       .discussionPost(body: "Movie night at my place on Friday?", spoiler: false)
     ),
+    Shape(
+      "actions/discussion-post/blocked-word",
+      .discussionPost(body: "Skip the hand job scene in episode two.", spoiler: false)
+    ),
     Shape("actions/display-name/default", .displayName("Alice P.")),
     Shape("actions/episodes/default", .episodes(title: "tv:201", season: 1)),
     Shape("actions/finished-date/default", .finishedDate(title: "movie:102", date: "2026-09-21")),
@@ -91,6 +95,10 @@ struct RequestTests {
     Shape("actions/notifications/next-page", .notifications(before: "25", through: "54")),
     Shape("actions/photo/upload", .uploadPhoto(jpeg: Data(count: 4000))),
     Shape("actions/profile/default", .profile(name: "Alice Park", username: "alicep")),
+    Shape(
+      "actions/profile/blocked-word",
+      .profile(name: "Alice Park", username: "alice_gangbang")
+    ),
     Shape(
       "actions/push-device/register",
       .registerPushDevice(

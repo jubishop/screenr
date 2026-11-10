@@ -1,0 +1,86 @@
+// Why this file holds offensive words: Screenr refuses posts, reviews,
+// comments, display names, and usernames that contain one, as App Store
+// guideline 1.2 asks for "a method for filtering objectionable material".
+// It lists slurs and hateful terms and the most explicit sexual terms, not
+// ordinary swearing (docs/data-and-access.md#blocked-words). Each entry is a
+// lowercase word or a phrase of words separated by spaces. word-filter.ts
+// matches them as whole words, so leave out entries whose ordinary sense or
+// familiar name members are likely to write, such as "dyke" in "Dick Van
+// Dyke"; a slur whose other uses are rare, such as "spic", stays. A phrase
+// also matches its words hyphenated or joined, so write a term that
+// dictionaries spell with a space, such as "gang bang", as a phrase; keep a
+// joined word, such as "creampie", when its spaced form is ordinary text.
+export const blockedWords: readonly string[] = [
+  // Racial, ethnic, and religious slurs.
+  "beaner",
+  "camel jockey",
+  "chinaman",
+  "ching chong",
+  "dago",
+  "darkie",
+  "dothead",
+  "dune coon",
+  "golliwog",
+  "gook",
+  "heeb",
+  "injun",
+  "jap",
+  "jewboy",
+  "jigaboo",
+  "jiggaboo",
+  "jungle bunny",
+  "kike",
+  "kyke",
+  "nig nog",
+  "nigga",
+  "niggaz",
+  "nigger",
+  "niglet",
+  "paki",
+  "pickaninny",
+  "polack",
+  "porch monkey",
+  "raghead",
+  "redskin",
+  "sand nigger",
+  "slant eye",
+  "spear chucker",
+  "spic",
+  "squaw",
+  "towelhead",
+  "wetback",
+  "wigger",
+  "wop",
+  "zipperhead",
+  // Homophobic and transphobic slurs.
+  "batty boy",
+  "carpet muncher",
+  "fag",
+  "faggot",
+  "fudge packer",
+  "poofter",
+  "shemale",
+  "trannie",
+  "tranny",
+  // Ableist slurs.
+  "mongoloid",
+  "retard",
+  "retarded",
+  "spaz",
+  "spazz",
+  // The most explicit sexual terms.
+  "blow job",
+  "bukkake",
+  "creampie",
+  "cum shot",
+  "cum slut",
+  "deepthroat",
+  "felching",
+  "fisting",
+  "foot job",
+  "gang bang",
+  "hand job",
+  "jizz",
+  "rim job",
+  "tit fuck",
+];
