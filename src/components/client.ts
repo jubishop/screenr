@@ -4,6 +4,7 @@ import { createAuthClient } from "better-auth/react";
 import { emailOTPClient } from "better-auth/client/plugins";
 import { loginPath, returnPath } from "../member-routes";
 import type {
+  ActionInput,
   ActionName,
   ActionResult,
   ReadAction,
@@ -102,18 +103,26 @@ export async function signOut() {
     );
   window.location.assign("/login");
 }
-// Each action's address, with a read's query.
-type Query = Record<string, string> | URLSearchParams;
-function address(action: ActionName, query?: Query) {
-  const search = new URLSearchParams(query).toString();
-  return `/api/screenr/${action}${search ? `?${search}` : ""}`;
+// Each action's address, with a read's query. A field without a value stays
+// out of it.
+function address(
+  action: ActionName,
+  query: Record<string, string | undefined> = {},
+) {
+  const search = new URLSearchParams();
+  for (const [name, value] of Object.entries(query))
+    if (value !== undefined) search.set(name, value);
+  const text = search.toString();
+  return `/api/screenr/${action}${text ? `?${text}` : ""}`;
 }
 
 // Sends a write with its data: a Blob, such as a photo, as the raw request
-// body, and other data as JSON.
+// body, and other data as JSON. Name each field in the data rather than
+// spreading another object into it: TypeScript checks a spread's fields only
+// when the action requires them.
 export async function api<Name extends WriteAction>(
   action: Name,
-  data: unknown,
+  data: ActionInput<Name>,
   signal?: AbortSignal,
 ): Promise<ActionResult<Name>> {
   const { response, text } = await send(address(action), {
@@ -155,7 +164,7 @@ export async function liftSuspension(member: string) {
 // Reads with the query in the address.
 export async function read<Name extends ReadAction>(
   action: Name,
-  query: Query,
+  query: ActionInput<Name>,
   signal?: AbortSignal,
 ): Promise<ActionResult<Name>> {
   const { response, text } = await send(address(action, query), {
@@ -170,7 +179,7 @@ export async function read<Name extends ReadAction>(
 // and new version.
 export async function readChanged<Name extends ReadAction>(
   action: Name,
-  query: Query,
+  query: ActionInput<Name>,
   version: string | null,
   signal?: AbortSignal,
 ): Promise<{ data: ActionResult<Name>; version: string | null } | null> {

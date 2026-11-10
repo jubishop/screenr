@@ -50,6 +50,9 @@ function controlDeadlines() {
   return deadlines;
 }
 
+// A complete comment, for requests whose reply the tests choose.
+const comment = { conversation: "1", body: "Hi", spoiler: false };
+
 async function failure(request: Promise<unknown>): Promise<ApiError> {
   const error = await request.then(
     () => assert.fail("request should fail"),
@@ -98,18 +101,24 @@ test("server error messages and statuses reach callers", async () => {
       status,
       headers: { "Content-Type": "application/json" },
     });
-    const error = await failure(api("activity", { title: "movie:1" }));
+    const error = await failure(
+      api("activity", {
+        title: "movie:1",
+        field: "recommended",
+        value: true,
+      }),
+    );
     assert.equal(error.message, message);
     assert.equal(error.status, status);
   }
   reply(JSON.stringify({ id: "comment-1" }), { status: 200 });
-  assert.deepEqual(await api("comment", { body: "Hi" }), { id: "comment-1" });
+  assert.deepEqual(await api("comment", comment), { id: "comment-1" });
 });
 
 test("error replies without a server message use a generic one", async () => {
   reply("<html>Payload Too Large</html>", { status: 413 });
   assert.equal(
-    (await failure(api("comment", { body: "Hi" }))).message,
+    (await failure(api("comment", comment))).message,
     "Request failed. Please try again.",
   );
   reply(JSON.stringify({ message: "Upstream failed" }), { status: 503 });
@@ -164,16 +173,49 @@ test("reads send their query in the address, and writes post to the action", asy
     return Response.json({ ok: true });
   };
   await read("episodes", { title: "tv:1", season: "2" });
-  await read("search", new URLSearchParams({ q: "The Bear" }));
+  await read("search", { q: "The Bear" });
   await readChanged("screen", { path: "/people/alice" }, null);
+  // A read leaves out the fields it has no value for.
+  await read("notifications", {
+    unread: "true",
+    before: undefined,
+    through: undefined,
+  });
   await api("invite", { limit: 1 });
   assert.deepEqual(sent, [
     ["/api/screenr/episodes?title=tv%3A1&season=2", "GET", null],
     ["/api/screenr/search?q=The+Bear", "GET", null],
     ["/api/screenr/screen?path=%2Fpeople%2Falice", "GET", null],
+    ["/api/screenr/notifications?unread=true", "GET", null],
     ["/api/screenr/invite", "POST", '{"limit":1}'],
   ]);
 });
+
+// Each call may name only the fields its action declares, and must name the
+// required ones, so `npm run typecheck` fails on each call below (issue
+// #579). The function never runs.
+function wrongFields(draft: { bdy: string; spoiler: boolean }) {
+  void api("comment", {
+    conversation: "1",
+    body: "Hi",
+    spoiler: false,
+    // @ts-expect-error An optional field, misspelled.
+    reply_to: "2",
+  });
+  // @ts-expect-error A spread that misspells a required field leaves it out.
+  void api("comment", { conversation: "1", ...draft });
+  void read("episodes", {
+    title: "tv:1",
+    // @ts-expect-error A read's query field, misspelled.
+    sesaon: "2",
+  });
+  // @ts-expect-error An action that reads no fields.
+  void api("delete-account", { confirm: true });
+  // @ts-expect-error A photo upload sends the image itself.
+  void api("photo", { upload: new Blob() });
+  // @ts-expect-error A read's query is an object of its fields.
+  void read("search", new URLSearchParams({ q: "The Bear" }));
+}
 
 test("a stalled mutation stops at its deadline with a retryable message", async () => {
   const deadlines = controlDeadlines();
@@ -280,7 +322,7 @@ test("network failures produce a connection message", async () => {
   globalThis.fetch = async () => {
     throw new TypeError("Failed to fetch");
   };
-  const error = await failure(api("reaction", { item: "x" }));
+  const error = await failure(api("reaction", { item: "x", kind: null }));
   assert.equal(
     error.message,
     "Could not reach Screenr. Check your connection and try again.",

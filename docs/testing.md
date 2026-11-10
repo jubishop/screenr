@@ -336,7 +336,9 @@ stand-in for Google's signing keys. The pushes come from the worker's
 delivery, against a stand-in for APNs. The test compares each response with
 its file under `ios/ScreenrKit/Fixtures/`. It runs in `npm test`, so `bin/check --full` and
 CI fail when a response no longer matches its fixture, when a case has no
-file, or when a file has no case. The failure shows the changed fields.
+file, or when a file has no case. The failure shows the changed fields. Each
+action case's request may name only the fields that its action
+[declares](data-and-access.md#api-actions).
 
 On the Swift side, ScreenrKit's `FixtureDecodingTests` decode every file as
 the model its action returns, and `RequestTests` check that ScreenrKit

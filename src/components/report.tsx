@@ -5,9 +5,11 @@ import { api, useInteractive } from "./client";
 import { ActionButton } from "./action-button";
 import { ConfirmAction } from "./confirmation";
 
-// What a report names: an entry, one of its replies, or a profile.
+// What a report names: an entry, one of its replies, or a profile. Each kind
+// names the others' fields as absent, so the report can name all three.
 export type ReportTarget =
-  { item: string; reply?: string } | { person: string };
+  | { item: string; reply?: string; person?: undefined }
+  | { person: string; item?: undefined; reply?: undefined };
 // The member a report's follow-up offers to block.
 export type ReportedAuthor = { user_id: string; display_name: string };
 
@@ -59,7 +61,9 @@ export function ReportForm({
     setError("");
     try {
       await api("report", {
-        ...target,
+        item: target.item,
+        reply: target.reply,
+        person: target.person,
         reason: reason || undefined,
         note: note.trim() || undefined,
       });

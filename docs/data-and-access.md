@@ -43,9 +43,9 @@ hash of each feed and profile screen it sent, as the
 ## API actions
 
 `/api/screenr/[action]` serves the actions declared in
-`src/server/actions.ts`. Each entry names its HTTP method, reads its fields
-from the query or JSON body, and calls the services that validate them. Its
-result becomes the JSON response; an action without one responds
+`src/server/actions.ts`. Each entry names its HTTP method and the fields it
+reads from the query or JSON body, and calls the services that validate them.
+Its result becomes the JSON response; an action without one responds
 `{ ok: true }`. The route applies the shared rules in this order:
 
 1. A `Screenr-Client` header must name an iPhone app build at or above the
@@ -67,11 +67,14 @@ result becomes the JSON response; an action without one responds
 Add an action as one entry, using `read` for a member GET, `write` for a
 member POST, `signup` for a POST that runs before profile setup,
 `signupRead` for a GET that runs before it, `photo`
-for a photo change, which works before and after setup, or `erasure` for
-account deletion, which also works either way and records no usage. Its
-`run` receives the user ID, the request's session ID, and the request
-headers. Give it an [iPhone API fixture](testing.md#iphone-api-fixtures)
-case in the same change.
+for a photo change, which works before and after setup, `photoUpload` for one
+whose body is the image itself, or `erasure` for
+account deletion, which also works either way and records no usage. List
+the `fields` it reads; only those reach its `input`, and a name ending in `?`
+marks one that a request may leave out. Its `run` receives the user ID, the
+request's session ID, and the request headers. Give it an
+[iPhone API fixture](testing.md#iphone-api-fixtures) case in the same
+change.
 
 Each entry keeps its result's type, and `ActionResult<Name>` gives it to the
 web ([issue #387](https://github.com/jubishop/screenr/issues/387)). The web
@@ -81,6 +84,17 @@ Each returns its action's result type, so `npm run typecheck` fails when a
 web reader expects a field that the action no longer returns. Read result
 fields by name rather than spreading a result into state, which would hide
 a renamed field from the check.
+
+Each entry's fields give `ActionInput<Name>` to the web as well
+([issue #579](https://github.com/jubishop/screenr/issues/579)): `api`,
+`read`, `readChanged`, and the screen's `mutate` accept only the action's
+fields and require each one without a `?`, so `npm run typecheck` fails when
+a web call misspells a field. A photo upload sends its image as a `Blob`.
+Values stay loose, since the services validate them. Name each field in the
+call rather than spreading another object into it: TypeScript checks a
+spread's fields only for the ones an action requires. The
+[iPhone fixture suite](testing.md#iphone-api-fixtures) checks the app's
+requests against the same fields.
 
 ### Single notification read
 
