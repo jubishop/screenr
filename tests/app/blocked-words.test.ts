@@ -77,10 +77,12 @@ test("the filter matches whole words and phrases, ignoring case, accents, and hi
     "Queer Eye",
     "a job to blow off",
     // Other punctuation, such as a comma, period, or line break, ends a
-    // phrase.
+    // phrase, and so does an exclamation mark before a space.
     "On the other hand, job hunting is brutal.",
     "It was a low blow. Job done, though.",
     "Give him a hand\nJob well done",
+    "Lend a hand! Job well done.",
+    "This show is batty!! Boy, did I laugh.",
     "porch",
     "monkey",
     "Fuck this shit, it's a shitty finale.",

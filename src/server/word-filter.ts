@@ -8,7 +8,8 @@ import { blockedWords } from "./blocked-words";
 // contains a blocked word, such as "snigger", passes; digits around a word,
 // as in a username such as "name99", don't join it. A phrase matches with
 // spaces, hyphens, or underscores between its words, or none, but not across
-// other punctuation, so "On the other hand, job hunting" passes.
+// other punctuation, so "On the other hand, job hunting" and "Lend a hand!
+// Job well done" pass.
 export function hasBlockedWord(text: string): boolean {
   return fold(text).split(phraseBreak).some(clauseHasBlockedWord);
 }
@@ -52,8 +53,10 @@ const lookAlikes = [
 // A word's letters and digits, with any look-alike symbols in or around it.
 const word = /[\p{L}\p{N}@$!|]+/gu;
 // Anything else but spaces, hyphens, and underscores, such as a comma,
-// period, slash, or line break, ends a phrase.
-const phraseBreak = /[^\p{L}\p{N}@$!|\p{Zs}\t_‐-]+/u;
+// period, slash, or line break, ends a phrase. So does an exclamation mark
+// before a space, as at the end of a sentence; the word before it still
+// reads with the mark as a look-alike.
+const phraseBreak = /[^\p{L}\p{N}@$!|\p{Zs}\t_‐-]+|(?<=!)(?=[\p{Zs}\t])/u;
 
 // Lowercase, without accents or hidden format characters, and with
 // compatibility forms such as full-width letters made plain.
