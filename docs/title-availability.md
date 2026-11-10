@@ -569,8 +569,9 @@ To maintain the registry:
    labels supply reseller evidence; review spelling variants and plans
    before merging them. Keep stable keys when display names change. Record
    uncertain identities separately; never guess their routes at runtime.
-4. Run `npx tsx --test tests/app/watch-provider-registry.test.ts` for coverage,
-   unique membership, and data validation. Update public title-screen tests
+4. Run `tests/app/watch-provider-registry.test.ts` as
+   [one suite](testing.md#running-one-suite) for coverage, unique membership,
+   and data validation. Update public title-screen tests
    for changed identity decisions, then follow the
    [local and CI validation policy](development-workflow.md#local-and-ci-validation).
 

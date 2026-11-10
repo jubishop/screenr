@@ -1,4 +1,5 @@
-"""Verify the Sentry analysis skills' helpers against fake sentry, gh, and ssh commands and synthetic log tails."""
+"""Verify the Sentry analysis skills' helpers against fake sentry, gh, ssh, and atos commands, synthetic log
+tails, and synthetic MetricKit diagnostics."""
 
 import json
 import os
@@ -63,7 +64,15 @@ if args and args[0] == "api":
     if "/attachments/attachment-2/" in endpoint:
         print("escape")
         raise SystemExit(0)
-    if endpoint.endswith("/attachments/"):
+    if "/files/dsyms/?id=" in endpoint:
+        if os.environ.get("FAKE_SENTRY_DSYM_EXIT"):
+            print("synthetic download failure", file=sys.stderr)
+            raise SystemExit(int(os.environ["FAKE_SENTRY_DSYM_EXIT"]))
+        sys.stdout.buffer.write(bytes.fromhex(os.environ.get("FAKE_SENTRY_DSYM_HEX", "cffaedfe")) + b"synthetic dSYM")
+        raise SystemExit(0)
+    if "/files/dsyms/?debug_id=" in endpoint:
+        body = json.loads(os.environ.get("FAKE_SENTRY_DSYMS", "[]"))
+    elif endpoint.endswith("/attachments/"):
         body = [
             {"id": "attachment-1", "name": "app.ndjson", "size": 4},
             {"id": "attachment-2", "name": "../../escape.txt", "size": 6},
@@ -149,6 +158,24 @@ if os.environ.get("FAKE_SSH_EXIT", "0") != "0":
 raise SystemExit(int(os.environ.get("FAKE_SSH_EXIT", "0")))
 '''
 
+# Records its arguments and the offsets it reads, checks that -o names the downloaded Mach-O file, then
+# answers each offset with its answer in FAKE_ATOS_FUNCTIONS, or repeats it, as atos does with one outside the binary.
+FAKE_ATOS = r'''
+import json
+import os
+import sys
+
+offsets = sys.stdin.read().split()
+with open(os.environ["FAKE_CALL_LOG"], "a") as stream:
+    stream.write(json.dumps(["atos", *sys.argv[1:], *offsets]) + "\n")
+with open(sys.argv[sys.argv.index("-o") + 1], "rb") as stream:
+    if stream.read() != bytes.fromhex("cffaedfe") + b"synthetic dSYM":
+        raise SystemExit("atos: not the downloaded debug file")
+functions = json.loads(os.environ.get("FAKE_ATOS_FUNCTIONS", "{}"))
+for offset in offsets:
+    print(functions.get(offset, offset))
+'''
+
 ACTIONS_BOT = {"__typename": "Bot", "login": "github-actions"}
 OWNER = {"__typename": "User", "login": "jubishop"}
 STRANGER = {"__typename": "User", "login": "stranger"}
@@ -175,7 +202,7 @@ class SentryHelperTests(unittest.TestCase):
         self.call_log = self.root / "calls.jsonl"
         self.tools = self.root / "tools"
         self.tools.mkdir()
-        for name, body in (("sentry", FAKE_SENTRY), ("gh", FAKE_GH), ("ssh", FAKE_SSH)):
+        for name, body in (("sentry", FAKE_SENTRY), ("gh", FAKE_GH), ("ssh", FAKE_SSH), ("atos", FAKE_ATOS)):
             path = self.tools / name
             path.write_text("#!" + sys.executable + "\n" + body)
             path.chmod(0o755)
@@ -705,6 +732,240 @@ class LogTailSummaryTests(SentryHelperTests):
                 self.assertNotEqual(result.returncode, 0)
                 self.assertIn(diagnostic, result.stderr)
                 self.assertNotIn("Traceback", result.stderr)
+
+
+SCREENR_UUID = "0A1B2C3D-4E5F-4A6B-8C7D-9E0F1A2B3C4D"
+DEBUG_FILES = [{"id": "exe-1", "data": {"type": "exe", "features": ["symtab", "unwind"]}},
+               {"id": "../escape", "data": {"type": "dbg", "features": ["debug"]}},
+               {"id": "dsym-1", "data": {"type": "dbg", "features": ["unwind", "symtab", "debug"]}}]
+FUNCTIONS = {"0x2000": "main (in Screenr) (ScreenrApp.swift:0)",
+             "0x4000": "FeedView.body.getter (in Screenr) (FeedView.swift:42)"}
+# Device metadata that the summary must never print.
+DEVICE = {"appVersion": "9.9", "appBuildVersion": "99", "deviceType": "iPhone99,9",
+          "osVersion": "iPhone OS 99.0 (99A999)", "regionFormat": "ZZ", "platformArchitecture": "arm64e"}
+
+
+def mx_frame(binary: str, offset: int, samples: int | None, *callees: object) -> dict:
+    """One frame of a synthetic call stack tree, in the format Apple documents for MXCallStackTree."""
+    frame: dict = {"binaryUUID": SCREENR_UUID if binary == "Screenr" else "11111111-2222-4333-8444-555555555555",
+                   "offsetIntoBinaryTextSegment": offset, "binaryName": binary, "address": 0x1_0000_0000 + offset}
+    if samples is not None:
+        frame["sampleCount"] = samples
+    if callees:
+        frame["subFrames"] = list(callees)
+    return frame
+
+
+def mx_diagnostic(*stacks: tuple[bool, list], per_thread: bool = True, **metadata: str) -> dict:
+    """One synthetic diagnostic's jsonRepresentation(), as sentry-cocoa attaches it."""
+    return {"diagnosticMetaData": {**DEVICE, **metadata},
+            "callStackTree": {"callStackPerThread": per_thread,
+                              "callStacks": [{"threadAttributed": attributed, "callStackRootFrames": roots}
+                                             for attributed, roots in stacks]}}
+
+
+# A hang's main thread: Screenr's main calls UIKit, which spends 70 samples in a Screenr view, whose
+# rendering calls back into it for 10, and 30 waiting in the run loop.
+MAIN_THREAD = (True, [mx_frame("dyld", 0x1000, 100, mx_frame("Screenr", 0x2000, 100, mx_frame(
+    "UIKitCore", 0x3000, 100,
+    mx_frame("Screenr", 0x4000, 70, mx_frame("SwiftUI", 0x5000, 70, mx_frame("Screenr", 0x6000, 60),
+                                             mx_frame("Screenr", 0x4000, 10))),
+    mx_frame("CoreFoundation", 0x7000, 30, mx_frame("libsystem_kernel.dylib", 0x8000, 25)))))])
+WAITING_THREAD = (False, [mx_frame("libsystem_pthread.dylib", 0x100, 40,
+                                   mx_frame("libsystem_kernel.dylib", 0x200, 40))])
+MAIN_SUMMARY = (
+    "  Thread 0, attributed: 100 samples, 9 frames\n"
+    "    Samples by binary, in its own frames and anywhere on the stack:\n"
+    "      Screenr  70 own, 100 on the stack\n"
+    "      libsystem_kernel.dylib  25 own, 25 on the stack\n"
+    "      CoreFoundation  5 own, 30 on the stack\n"
+    "      UIKitCore  0 own, 100 on the stack\n"
+    "      dyld  0 own, 100 on the stack\n"
+    "      SwiftUI  0 own, 70 on the stack\n"
+    "    Heaviest path, outermost first, 6 frames:\n"
+    "        0  dyld  0x1000  100\n"
+    "        1  Screenr  0x2000  100{main}\n"
+    "        2  UIKitCore  0x3000  100\n"
+    "        3  Screenr  0x4000  70{body}\n"
+    "        4  SwiftUI  0x5000  70\n"
+    "        5  Screenr  0x6000  60\n"
+    "    Screenr frames, 3 offsets, most samples on the stack first:\n"
+    "      0x2000  100 on the stack, 0 own{main}\n"
+    "      0x4000  70 on the stack, 10 own{body}\n"
+    "      0x6000  60 on the stack, 60 own\n")
+SYMBOLS = {"main": "  main (ScreenrApp.swift:0)", "body": "  FeedView.body.getter (FeedView.swift:42)"}
+OFFSETS_ONLY = {"main": "", "body": ""}
+
+
+class MetricKitDiagnosticTests(SentryHelperTests):
+    def summarize(self, document: object, *arguments: str, **environment: str) -> subprocess.CompletedProcess[str]:
+        path = self.root / "MXDiagnosticPayload.json"
+        path.write_bytes(document if isinstance(document, bytes) else json.dumps(document).encode())
+        environment = {"FAKE_SENTRY_DSYMS": json.dumps(DEBUG_FILES), "FAKE_ATOS_FUNCTIONS": json.dumps(FUNCTIONS),
+                       **environment}
+        return self.run_helper("summarize_metrickit_diagnostic.py", *arguments, str(path),
+                               extra_environment=environment)
+
+    def test_summary_shows_each_thread_its_heaviest_path_and_screenr_frames_with_symbols(self) -> None:
+        result = self.summarize(mx_diagnostic(MAIN_THREAD, WAITING_THREAD, hangDuration="9.9 sec"))
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout, (
+            "MXDiagnosticPayload.json: 1 diagnostic\n"
+            "Symbols for Screenr 0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d: Sentry's debug file dsym-1, a dSYM; "
+            "atos placed 2 of 3 offsets\n"
+            "Diagnostic 1 of 1, hang: 2 call stacks, one per thread\n"
+            + MAIN_SUMMARY.format(**SYMBOLS) +
+            "  Thread 1: 40 samples, 2 frames\n"
+            "    Samples by binary, in its own frames and anywhere on the stack:\n"
+            "      libsystem_kernel.dylib  40 own, 40 on the stack\n"
+            "      libsystem_pthread.dylib  0 own, 40 on the stack\n"
+            "    Heaviest path, outermost first, 2 frames:\n"
+            "        0  libsystem_pthread.dylib  0x100  40\n"
+            "        1  libsystem_kernel.dylib  0x200  40\n"
+            "    Screenr frames: none\n"))
+        endpoint = "projects/artisanal-software/screenr-ios/files/dsyms/"
+        self.assertEqual(self.calls("sentry"), [
+            ["api", f"{endpoint}?debug_id=0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d", "--json"],
+            ["api", f"{endpoint}?id=dsym-1"]])
+        [atos] = self.calls("atos")
+        self.assertEqual(atos[0], "-o")
+        self.assertEqual(atos[2:], ["-offset", "0x2000", "0x4000", "0x6000"])
+        self.assertEqual(Path(atos[1]).name, "Screenr")
+        self.assertFalse(Path(atos[1]).exists(), "the downloaded debug file outlived the run")
+        for value in (*DEVICE.values(), "9.9 sec"):
+            self.assertNotIn(value, result.stdout)
+
+    def test_an_executable_symbolicates_when_sentry_holds_no_dsym(self) -> None:
+        executable = {"id": 7, "data": {"type": "exe", "features": ["symtab"]}}
+        result = self.summarize(mx_diagnostic(MAIN_THREAD), FAKE_SENTRY_DSYMS=json.dumps([executable]))
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("Sentry's debug file 7, an executable with only its symbol table; atos placed 2 of 3 offsets\n",
+                      result.stdout)
+        self.assertIn(MAIN_SUMMARY.format(**SYMBOLS), result.stdout)
+
+    def test_an_offset_that_atos_answers_with_its_address_stays_unplaced(self) -> None:
+        # atos answers an offset that no named function covers with its address: alone, or, from an executable
+        # that marks where a nameless function starts, with its distance from that start.
+        executable = [{"id": "exe-1", "data": {"type": "exe", "features": ["symtab"]}}]
+        for answer, debug_files, source in (
+                ("0x0000000100006000 (in Screenr)", DEBUG_FILES, "dsym-1, a dSYM"),
+                ("0x0000000100006000 (in Screenr) + 24", executable,
+                 "exe-1, an executable with only its symbol table")):
+            with self.subTest(answer=answer):
+                functions = {**FUNCTIONS, "0x6000": answer}
+                result = self.summarize(mx_diagnostic(MAIN_THREAD), FAKE_SENTRY_DSYMS=json.dumps(debug_files),
+                                        FAKE_ATOS_FUNCTIONS=json.dumps(functions))
+
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn(f"Sentry's debug file {source}; atos placed 2 of 3 offsets\n", result.stdout)
+                self.assertIn(MAIN_SUMMARY.format(**SYMBOLS), result.stdout)
+                self.assertNotIn("0x0000000100006000", result.stdout)
+
+    def test_absent_symbols_show_offsets_and_say_why(self) -> None:
+        no_atos = self.root / "no-atos"
+        no_atos.mkdir()
+        cases = (
+            ("no debug file", (), {"FAKE_SENTRY_DSYMS": "[]"}, "Sentry holds no debug file for it", 1),
+            ("unsafe IDs only", (), {"FAKE_SENTRY_DSYMS": json.dumps(DEBUG_FILES[1:2])},
+             "Sentry holds no debug file for it", 1),
+            ("refused list", (), {"FAKE_SENTRY_API_MATCH": "/files/dsyms/", "FAKE_SENTRY_API_MODE": "http"},
+             "Sentry's debug file list is unreadable: Sentry API returned HTTP 403", 1),
+            ("garbled list", (), {"FAKE_SENTRY_API_MATCH": "/files/dsyms/", "FAKE_SENTRY_API_MODE": "json"},
+             "Sentry's debug file list is not JSON", 1),
+            ("failed list", (), {"FAKE_SENTRY_API_MATCH": "/files/dsyms/", "FAKE_SENTRY_API_MODE": "exit"},
+             "listing Sentry's debug files failed with exit status 1: synthetic CLI failure", 1),
+            ("failed download", (), {"FAKE_SENTRY_DSYM_EXIT": "3"},
+             "downloading Sentry's debug file dsym-1 failed with exit status 3: synthetic download failure", 2),
+            ("not Mach-O", (), {"FAKE_SENTRY_DSYM_HEX": b'{"'.hex()},
+             "Sentry's debug file dsym-1 is not a Mach-O file", 2),
+            ("no atos", (), {"PATH": str(no_atos)}, "atos is not on PATH; it comes with Xcode", 0),
+            ("offline", ("--offline",), {}, "not looked up with --offline", 0),
+        )
+        for name, arguments, environment, reason, sentry_calls in cases:
+            with self.subTest(name):
+                self.call_log.unlink(missing_ok=True)
+                result = self.summarize(mx_diagnostic(MAIN_THREAD), *arguments, **environment)
+
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn(f"Symbols for Screenr 0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d: unavailable, {reason}; "
+                              "showing offsets only\n", result.stdout)
+                self.assertIn(MAIN_SUMMARY.format(**OFFSETS_ONLY), result.stdout)
+                self.assertEqual(len(self.calls("sentry")), sentry_calls)
+                self.assertEqual(self.calls("atos"), [])
+                self.assertNotIn("Traceback", result.stderr)
+
+    def test_a_whole_payload_shows_each_diagnostic_and_stacks_that_mix_threads(self) -> None:
+        document = {"timeStampBegin": "2026-11-09 23:00:00", "timeStampEnd": "2026-11-10 23:00:00",
+                    "cpuExceptionDiagnostics": [mx_diagnostic(WAITING_THREAD, per_thread=False, totalCPUTime="9 min")],
+                    "hangDiagnostics": [mx_diagnostic(MAIN_THREAD, hangDuration="9.9 sec")]}
+
+        result = self.summarize(document)
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue(result.stdout.startswith(
+            "MXDiagnosticPayload.json: 2 diagnostics\n"
+            "Symbols for Screenr 0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d: Sentry's debug file dsym-1, a dSYM; "
+            "atos placed 2 of 3 offsets\n"
+            "Diagnostic 1 of 2, hang: 1 call stack, one per thread\n"
+            + MAIN_SUMMARY.format(**SYMBOLS) +
+            "Diagnostic 2 of 2, CPU exception: 1 call stack, all threads together\n"
+            "  Call stack 0: 40 samples, 2 frames\n"), result.stdout)
+        self.assertEqual(len(self.calls("atos")), 1)
+
+    def test_a_lone_diagnostic_names_its_kind_from_its_metadata(self) -> None:
+        for metadata, kind in (({"writesCaused": "1 GB"}, "disk write exception"), ({}, "unknown kind")):
+            with self.subTest(kind=kind):
+                result = self.summarize(mx_diagnostic(WAITING_THREAD, **metadata))
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn(f"Diagnostic 1 of 1, {kind}: 1 call stack, one per thread\n", result.stdout)
+                self.assertIn("Symbols: no Screenr frame has both a binary UUID and an offset.\n", result.stdout)
+                self.assertEqual(self.calls(), [])
+
+    def test_malformed_frames_are_counted_and_untrusted_names_neutralized(self) -> None:
+        hostile = mx_frame("Hostile\x1b[2J", 0x10, 5)
+        uncounted = mx_frame("Screenr", 0x20, None)
+        document = mx_diagnostic((True, [mx_frame("dyld", 0x1, 5, hostile, uncounted, "not a frame",
+                                                  {**mx_frame("Screenr", 0x30, 1), "subFrames": "bad"})]),
+                                 (False, []), WAITING_THREAD)
+        document["callStackTree"]["callStacks"][1] = "not a call stack"
+
+        result = self.summarize(document, "--offline")
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("Diagnostic 1 of 1, unknown kind: 3 call stacks, one per thread\n"
+                      "  Counted as 0 samples, frames without a sample count: 1\n"
+                      "  Skipped unreadable call stacks: 1\n"
+                      "  Skipped unreadable frames and their callees: 2\n"
+                      "  Thread 0, attributed: 5 samples, 3 frames\n", result.stdout)
+        self.assertIn("      Hostile?[2J  5 own, 5 on the stack\n", result.stdout)
+        self.assertIn("      0x20  0 on the stack, 0 own\n", result.stdout)
+        self.assertIn("  Thread 2: 40 samples, 2 frames\n", result.stdout)
+        self.assertNotIn("\x1b", result.stdout)
+        self.assertNotIn("0x30", result.stdout)
+
+    def test_unreadable_files_stop_clearly_before_any_lookup(self) -> None:
+        for document, diagnostic in (
+                (b"not json", "is not readable JSON"),
+                (b"\x80\x81 not UTF-8", "is not readable JSON"),
+                (b"[" * 100_000, "is not readable JSON"),
+                ([], "holds no MetricKit diagnostic"),
+                ({"timeStampBegin": "2026-11-09 23:00:00"}, "holds no MetricKit diagnostic"),
+                ({"hangDiagnostics": "bad"}, "has a hangDiagnostics that is not a list"),
+                ({"hangDiagnostics": ["bad"]}, "has a diagnostic without a readable callStackTree"),
+                ({"callStackTree": {"callStacks": "bad"}}, "has a diagnostic without a readable callStackTree")):
+            with self.subTest(document=repr(document)[:40]):
+                result = self.summarize(document)
+                self.assertEqual(result.returncode, 1)
+                self.assertIn(diagnostic, result.stderr)
+                self.assertNotIn("Traceback", result.stderr)
+                self.assertEqual(result.stdout, "")
+                self.assertEqual(self.calls(), [])
+
+        result = self.run_helper("summarize_metrickit_diagnostic.py", str(self.root / "missing.json"))
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("no such diagnostic", result.stderr)
 
 
 class TrackingIssueTests(SentryHelperTests):

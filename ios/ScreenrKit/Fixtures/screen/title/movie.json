@@ -11,13 +11,12 @@
   },
   "response": {
     "status": 200,
-    "etag": "W/\"RExAxOrP55Gx-PCKKsDsPOVVWqEtPn2yMTVUDDKX5Vk\"",
+    "etag": "W/\"V3u4hi4_C2quVi-yxVDA_aUzXrTQa6nffq9gaxYtFfQ\"",
     "body": {
       "kind": "title",
       "title": {
         "id": "movie:101",
         "kind": "movie",
-        "tmdb_id": 101,
         "name": "Night Crossing",
         "overview": "Two strangers share the last ferry across a frozen strait.",
         "poster_path": "/night-crossing.jpg",

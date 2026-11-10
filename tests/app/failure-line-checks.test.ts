@@ -23,7 +23,8 @@ test("every application test file runs under the failure guard", () => {
   );
 });
 
-// Runs a test file the way npm test runs each application test file.
+// Runs a test file under the failure guard, as npm test runs each application
+// test file.
 async function runGuarded(t: TestContext, source: string) {
   await mkdir(resolve(".cache"), { recursive: true });
   const directory = await mkdtemp(resolve(".cache/failure-guard-test-"));

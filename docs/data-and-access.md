@@ -194,9 +194,12 @@ restarts `screenr-web`, so both take effect together.
 **Minimum build:** production has required build 5 since 2026-11-09
 ([issue #554](https://github.com/jubishop/screenr/issues/554)). Build 5 is
 the first that shows [combined title-action cards](title-feed.md#combined-title-actions)
-and reads a title without `tmdb_id`. It replaced build 3, required since
-2026-11-05. Build 3 is the first that pages the friends feed and profiles, so
-the server stopped sending their whole history to reads without a window
+and reads a title without `tmdb_id`, so screen payloads and action results
+stopped sending it, though the server still stores it
+([issue #607](https://github.com/jubishop/screenr/issues/607)). It replaced
+build 3, required since 2026-11-05. Build 3 is the first that pages the
+friends feed and profiles, so the server stopped sending their whole history
+to reads without a window
 ([paged histories](title-feed.md#paged-histories),
 [issue #502](https://github.com/jubishop/screenr/issues/502)). Build 3 also
 reads a title's availability without TMDB's raw `providers` lists and
@@ -218,9 +221,7 @@ older builds allowed until TestFlight updates them.
 **`tmdb_id` — 2026-11-09:** neither client reads a title's `tmdb_id`, but
 builds before 5 require it. The owner chose to drop it at this raise, so
 build 5 is the first that reads a title without it
-([issue #594](https://github.com/jubishop/screenr/issues/594)). The server
-can now stop sending it
-([issue #607](https://github.com/jubishop/screenr/issues/607)). Rejected:
+([issue #594](https://github.com/jubishop/screenr/issues/594)). Rejected:
 making it optional without holding the raise and dropping it at some later
 raise, and keeping it for good. A service's `route_note` needed no raise:
 every build decoded it as optional.

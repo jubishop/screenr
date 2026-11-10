@@ -11,7 +11,7 @@
   },
   "response": {
     "status": 200,
-    "etag": "W/\"6ZZWlYMMQ4c17Oem6GTqS0_feGxW96Wadxel_ap6X80\"",
+    "etag": "W/\"K0N8R35x3-tgfeG08Ovq7hHthYxjD0AVYkxYzHfnaTQ\"",
     "body": {
       "kind": "want-to-watch",
       "owner": {
@@ -27,7 +27,6 @@
           "id": "movie:104",
           "kind": "movie",
           "name": "Glass Meridian",
-          "tmdb_id": 104,
           "overview": "",
           "poster_path": null,
           "release_date": "2022-08-19",
@@ -49,7 +48,6 @@
           "id": "movie:103",
           "kind": "movie",
           "name": "The Quiet Orchard",
-          "tmdb_id": 103,
           "overview": "An orchard keeper hears the trees whispering.",
           "poster_path": "/quiet-orchard.jpg",
           "release_date": "2025-05-02",
@@ -91,7 +89,6 @@
           "id": "movie:105",
           "kind": "movie",
           "name": "Winter Garden",
-          "tmdb_id": 105,
           "overview": "A botanist tends a greenhouse through the polar night.",
           "poster_path": "/winter-garden.jpg",
           "release_date": "2019-12-06",

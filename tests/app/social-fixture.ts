@@ -89,6 +89,14 @@ async function idle() {
   hung = false;
 }
 
+// The database's current time, which sets the timestamps that tests check.
+// Read it before the work, and check that a timestamp the work writes is no
+// earlier, rather than that it is recent: load can hold the work for many
+// seconds after it writes (#646).
+export async function databaseTime() {
+  return (await db.query<{ now: Date }>("SELECT now()")).rows[0].now;
+}
+
 // Replaces console.error and console.warn until mock.restoreAll(), or until
 // the test ends when given its context, and returns what each call would have
 // printed, in order, so tests can read failure logs and Better Auth's own

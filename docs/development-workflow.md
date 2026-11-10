@@ -1225,12 +1225,17 @@ and typed fields.
 
 The Sentry helpers in `.agents/scripts/sentry-cli/`, adapted from PodHaven's,
 serve both skills; `summarize_log_tails.py` reads feedback's log tails around
-the time it was sent. They need the installed, authenticated `sentry` CLI,
-`gh`, and for the journal the owner's SSH access; their
+the time it was sent, and `summarize_metrickit_diagnostic.py` summarizes the
+raw diagnostic that a MetricKit event attaches, with the functions of
+Screenr's frames from the build's dSYM in Sentry
+([#635](https://github.com/jubishop/screenr/issues/635)). They need the
+installed, authenticated `sentry` CLI, `gh`, Xcode's `atos` for those
+functions, and for the journal the owner's SSH access; their
 [README](../.agents/scripts/sentry-cli/README.md) gives each one's output.
-`tests/test_sentry_cli_helpers.py` runs them against fake `sentry`, `gh`, and
-`ssh` commands and synthetic log tails, and the `static` part of
-`bin/check-application` runs those tests and ShellCheck on the Bash helpers.
+`tests/test_sentry_cli_helpers.py` runs them against fake `sentry`, `gh`,
+`ssh`, and `atos` commands, synthetic log tails, and synthetic MetricKit
+diagnostics, and the `static` part of `bin/check-application` runs those tests
+and ShellCheck on the Bash helpers.
 
 **Decision — 2026-11-09:** once a tracking issue's work is done, the
 closeout resolves its Sentry issue plainly, with `sentry issue resolve`, not

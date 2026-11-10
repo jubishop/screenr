@@ -174,8 +174,7 @@ enum FindData {
   static func title(_ id: String, _ name: String, fields: [String: JSONValue]) -> JSONValue {
     let kind = id.hasPrefix("tv:") ? "tv" : "movie"
     var object: [String: JSONValue] = [
-      "id": .string(id), "kind": .string(kind), "name": .string(name),
-      "tmdb_id": .integer(Int(id.drop { $0 != ":" }.dropFirst()) ?? 0), "overview": "",
+      "id": .string(id), "kind": .string(kind), "name": .string(name), "overview": "",
       "poster_path": .null, "release_date": "2024-01-02", "viewing": viewing(),
     ]
     object.merge(fields) { _, field in field }

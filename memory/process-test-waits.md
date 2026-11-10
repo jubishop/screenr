@@ -1,6 +1,6 @@
 ---
 name: process-test-waits
-description: Tests that start a process wait for its own ready line or exit, browser expects wait for a page's poll, and application tests wait for the database and their own work, with a bound only a hang reaches, because test-database setup, checkpoints, and load from parallel checks stalled them for many seconds.
+description: Tests that start a process wait for its own ready line or exit, browser expects wait for a page's poll, and application tests wait for the database and their own work, with a bound only a hang reaches, and check production deadlines and fresh timestamps without timing them, because test-database setup, checkpoints, and load from parallel checks stalled them for many seconds.
 type: reference
 ---
 
@@ -70,6 +70,15 @@ unread count, or a migration run's first one; a broken connection's error
 event; the pool's `remove` event; and replies from the test's own servers.
 Each passes under the shared bound below with the same hold.
 
+A check that times production work, not a wait, breaks the same way. Until
+[#646](https://github.com/jubishop/screenr/issues/646), four application
+tests required a title list or a locked write to return within 4 to 9.5
+seconds, and three required a timestamp the work had just written to be less
+than 10 seconds or a minute old. On 2026-11-10, holding database statements,
+fake catalog replies, or a read of the result for 3 to 61 seconds failed all
+seven. With the same holds, each passes the checks below, and each still fails
+when its deadline grows or its timestamp is left stale.
+
 **How to apply:**
 
 - Have the process, or the fake it starts, print a line when it is ready.
@@ -119,11 +128,29 @@ Each passes under the shared bound below with the same hold.
   hook, and those three request timeouts. It can't tell a poll's deadline
   from a timestamp, and it doesn't read a request's own options, such as
   `http.get`'s `timeout`, so give those `hang` by hand.
+- `npm test` and `test:coverage` give each application test and hook
+  `testTimeout` from `tests/app/process-waits.ts`, 30 seconds above `hang`,
+  so a wait with no bound still fails its test by name, and
+  `tests/app/exit-guard.ts` ends a file that its tests leave open
+  ([#647](https://github.com/jubishop/screenr/issues/647),
+  [hung tests and open files](../docs/testing.md#hung-tests-and-open-files)).
+  Still bound each wait with `hang`: its failure says what hung, where the
+  timeout says only which test did.
 - A wait that a hook repeats before every test would wait out `hang` again
   for each remaining test once what it waits for hangs, such as a client a
   test never released. After one such wait fails, fail the later ones at once
   while the hang lasts, as `idle()` does, so one hang costs its file one
   bound, not one per test.
+- Don't time a production deadline. Show what it cut off, or read the limit
+  it sets. `catalogClock()` in `tests/app/catalog-clock.ts` runs a title
+  list's refresh budget and request timeouts on a clock that only the test
+  advances, and the shared write lock test in
+  `tests/app/invitations.test.ts` reads the `lock_timeout` its transaction
+  sets. Polls under that clock keep their own time, since `Date.now` reads it.
+- Don't require a timestamp to be recent. Read `databaseTime()` from
+  `tests/app/social-fixture.ts` before the work, and check that the work's
+  timestamp is no earlier, as `tests/app/availability.test.ts` and
+  `tests/app/push-devices.test.ts` do.
 - To show that one operation doesn't wait for another, hold what it would
   wait for, such as the write lock or a provider's reply, until the race ends,
   and race the operation against `hang`. One that wrongly waited would not
