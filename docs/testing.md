@@ -922,10 +922,11 @@ certificate and a fixture upstream that sends the app's security headers from
 `next.config.ts` and `src/proxy.ts`. It verifies the `screenr.club` site,
 client IP forwarding, that each security header reaches the client exactly
 once, and old invitation/title redirects with their paths and queries intact.
-Run it alone with `node --import tsx --test tests/app/proxy.test.ts`. It does not verify public DNS,
-Cloudflare certificates, or real provider configuration. Locally it uses any
-installed Caddy. In CI it also requires `caddy version` to report the release
-pinned to match production; see [CI Caddy](development-workflow.md#ci-caddy).
+Run it alone as [one suite](#running-one-suite) shows. It does not verify
+public DNS, Cloudflare certificates, or real provider configuration. Locally it
+uses any installed Caddy. In CI it also requires `caddy version` to report the
+release pinned to match production; see
+[CI Caddy](development-workflow.md#ci-caddy).
 The browser test writes mobile and desktop screenshots to `.cache/` and
 keeps failure traces in `test-results/`.
 
