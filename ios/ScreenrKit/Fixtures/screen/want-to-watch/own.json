@@ -11,7 +11,7 @@
   },
   "response": {
     "status": 200,
-    "etag": "W/\"Kjl197MwPkxV1Lub0wsSWkkP1phuML8vvvxkNLeqk0k\"",
+    "etag": "W/\"b2XA0uJ_duqV1RQvmzgHs4p3fWIFvRxxJebuz7SaJ88\"",
     "body": {
       "kind": "want-to-watch",
       "owner": {
@@ -27,7 +27,6 @@
           "id": "movie:104",
           "kind": "movie",
           "name": "Glass Meridian",
-          "tmdb_id": 104,
           "overview": "",
           "poster_path": null,
           "release_date": "2022-08-19",
@@ -49,7 +48,6 @@
           "id": "movie:103",
           "kind": "movie",
           "name": "The Quiet Orchard",
-          "tmdb_id": 103,
           "overview": "An orchard keeper hears the trees whispering.",
           "poster_path": "/quiet-orchard.jpg",
           "release_date": "2025-05-02",

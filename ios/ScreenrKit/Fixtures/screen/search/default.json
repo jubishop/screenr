@@ -11,7 +11,7 @@
   },
   "response": {
     "status": 200,
-    "etag": "W/\"D0D7TZALVRk30afyTbA74EGOxipx3Px0r8ha4-oxK5Y\"",
+    "etag": "W/\"aRDl8uLkdNccN2G8UXUc014-9w_3jc10UyHqsljiU3U\"",
     "body": {
       "kind": "search",
       "suggestions": [
@@ -19,7 +19,6 @@
           "id": "movie:105",
           "kind": "movie",
           "name": "Winter Garden",
-          "tmdb_id": 105,
           "overview": "A botanist tends a greenhouse through the polar night.",
           "wanted_by": [
             {
@@ -72,7 +71,6 @@
           "id": "tv:204",
           "kind": "tv",
           "name": "Signal Fire",
-          "tmdb_id": 204,
           "overview": "Radio operators on a remote island hear a distress call.",
           "wanted_by": [],
           "poster_path": "/signal-fire.jpg",
@@ -127,7 +125,6 @@
           "id": "movie:101",
           "kind": "movie",
           "name": "Night Crossing",
-          "tmdb_id": 101,
           "overview": "Two strangers share the last ferry across a frozen strait.",
           "poster_path": "/night-crossing.jpg",
           "release_date": "2024-03-08",
@@ -172,7 +169,6 @@
           "id": "tv:201",
           "kind": "tv",
           "name": "Harbor Lights",
-          "tmdb_id": 201,
           "overview": "A lighthouse town keeps its secrets through the fog.",
           "poster_path": "/harbor-lights.jpg",
           "release_date": "2021-09-30",
@@ -220,7 +216,6 @@
           "id": "movie:105",
           "kind": "movie",
           "name": "Winter Garden",
-          "tmdb_id": 105,
           "overview": "A botanist tends a greenhouse through the polar night.",
           "poster_path": "/winter-garden.jpg",
           "release_date": "2019-12-06",

@@ -11,13 +11,12 @@
   },
   "response": {
     "status": 200,
-    "etag": "W/\"MmPgMpgj_0A7WuDZuu7BauQ8L2mLK8koUZfJXbXRsS4\"",
+    "etag": "W/\"7Dw4fh4fyuHBZ9nYaBOQ_x1c0l3Sl12b5t5EEiwbURg\"",
     "body": {
       "kind": "title",
       "title": {
         "id": "movie:102",
         "kind": "movie",
-        "tmdb_id": 102,
         "name": "Paper Lanterns",
         "overview": "A festival of lights brings a scattered family home.",
         "poster_path": "/paper-lanterns.jpg",

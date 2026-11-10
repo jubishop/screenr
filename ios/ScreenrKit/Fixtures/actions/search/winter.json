@@ -11,12 +11,11 @@
   },
   "response": {
     "status": 200,
-    "etag": "W/\"vhnuSb8xCThtStVOAWd2LkwBkmZCTi5ycqOhrvBQoJo\"",
+    "etag": "W/\"eG62PgGf70i6iR_EoB8zpS_IvJ1Q592f5lSNWPe5hnM\"",
     "body": [
       {
         "id": "movie:105",
         "kind": "movie",
-        "tmdb_id": 105,
         "name": "Winter Garden",
         "overview": "A botanist tends a greenhouse through the polar night.",
         "poster_path": "/winter-garden.jpg",
@@ -52,7 +51,6 @@
       {
         "id": "tv:202",
         "kind": "tv",
-        "tmdb_id": 202,
         "name": "The Long Winter",
         "overview": "A mountain village waits out a winter that will not end.",
         "poster_path": "/long-winter.jpg",

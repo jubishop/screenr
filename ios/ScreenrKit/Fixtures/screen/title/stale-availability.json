@@ -11,13 +11,12 @@
   },
   "response": {
     "status": 200,
-    "etag": "W/\"9rZBuha5eYsaEYAP5QlwGN55_97na-KBK8U0raeQQF0\"",
+    "etag": "W/\"ctzycTI78k0A6sZne1akgi-URLwUUsIql_i9xD4Kor4\"",
     "body": {
       "kind": "title",
       "title": {
         "id": "movie:104",
         "kind": "movie",
-        "tmdb_id": 104,
         "name": "Glass Meridian",
         "overview": "",
         "poster_path": null,

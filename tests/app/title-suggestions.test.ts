@@ -328,7 +328,6 @@ test("top 10 Recommends count 1.5× at #10 up to 1.95× at #1 in groups that mee
       "second_degree_recommended",
       "second_degree_wanted",
       "second_degree_watching",
-      "tmdb_id",
       "tmdb_score",
       "viewing",
       "wanted_by",
@@ -764,7 +763,6 @@ test("suggestions list the 50 highest-ranked eligible titles", async () => {
     result.map((entry) => entry.id),
     Array.from({ length: 50 }, (_, n) => `movie:${n + 1}`),
   );
-  assert.equal(typeof result[0].tmdb_id, "number");
   // Saving a listed title makes room for the next one.
   await updateTitleActivity("alice", "movie:1", "want_to_watch", true);
   assert.deepEqual((await suggestions()).map((entry) => entry.id).slice(-2), [

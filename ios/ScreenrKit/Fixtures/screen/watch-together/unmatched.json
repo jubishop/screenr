@@ -11,7 +11,7 @@
   },
   "response": {
     "status": 200,
-    "etag": "W/\"Ps5YTawYmzxPoG1sexp_XheaPB3q94cWpEskvBJjCzw\"",
+    "etag": "W/\"3Mvz15bKJB1YVxQVtN4KClyg3UHSSUzbtQQEv8oHw-8\"",
     "body": {
       "kind": "watch-together",
       "participants": [
@@ -34,7 +34,6 @@
           "id": "movie:301",
           "kind": "movie",
           "name": "Copper Coast",
-          "tmdb_id": 301,
           "overview": "",
           "poster_path": "/copper-coast.jpg",
           "release_date": "2010-06-01",
@@ -56,7 +55,6 @@
           "id": "movie:104",
           "kind": "movie",
           "name": "Glass Meridian",
-          "tmdb_id": 104,
           "overview": "",
           "poster_path": null,
           "release_date": "2022-08-19",
@@ -78,7 +76,6 @@
           "id": "movie:103",
           "kind": "movie",
           "name": "The Quiet Orchard",
-          "tmdb_id": 103,
           "overview": "An orchard keeper hears the trees whispering.",
           "poster_path": "/quiet-orchard.jpg",
           "release_date": "2025-05-02",

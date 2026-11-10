@@ -325,7 +325,6 @@ for (const [failure, logged] of [
         "overview",
         "poster_path",
         "release_date",
-        "tmdb_id",
       ]);
       assert.equal(result.conversations.length, kind === "movie" ? 1 : 0);
       assert.equal(result.trailer?.key, official.key);
@@ -679,6 +678,8 @@ test("cold title details for another TMDB ID store and update nothing", async (t
   ]);
 });
 
+// Clients identify a title by its ID, so a title carries no TMDB number;
+// only the stored row keeps it.
 test("cold title details keep each kind's fields and only text values", async () => {
   details.body = {
     id: 43,
@@ -692,14 +693,13 @@ test("cold title details keep each kind's fields and only text values", async ()
   const movie = {
     id: "movie:43",
     kind: "movie",
-    tmdb_id: 43,
     name: "Cold Movie",
     overview: "",
     poster_path: null,
     release_date: "",
   };
   assert.deepEqual(await getTitle("movie:43"), movie);
-  assert.deepEqual(await storedTitle("movie:43"), movie);
+  assert.deepEqual(await storedTitle("movie:43"), { ...movie, tmdb_id: 43 });
   details.body = {
     id: 43,
     name: "Cold Show",
@@ -712,14 +712,13 @@ test("cold title details keep each kind's fields and only text values", async ()
   const show = {
     id: "tv:43",
     kind: "tv",
-    tmdb_id: 43,
     name: "Cold Show",
     overview: "Plot",
     poster_path: "/show.jpg",
     release_date: "2024-05-01",
   };
   assert.deepEqual(await getTitle("tv:43"), show);
-  assert.deepEqual(await storedTitle("tv:43"), show);
+  assert.deepEqual(await storedTitle("tv:43"), { ...show, tmdb_id: 43 });
 });
 
 test("cold title details keep only a single-segment TMDB poster path", async () => {
@@ -800,7 +799,6 @@ test("search keeps valid movie and TV results and drops other media", async () =
     {
       id: "movie:43",
       kind: "movie",
-      tmdb_id: 43,
       name: "Found Movie",
       overview: "Plot",
       poster_path: "/movie.jpg",
@@ -811,7 +809,6 @@ test("search keeps valid movie and TV results and drops other media", async () =
     {
       id: "tv:44",
       kind: "tv",
-      tmdb_id: 44,
       name: "Found Show",
       overview: "",
       poster_path: null,
