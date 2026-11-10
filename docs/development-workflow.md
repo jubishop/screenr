@@ -339,12 +339,24 @@ changes, so the push finds that pass. Never bypass the hook with
   slot. The check slots stay, since an interactive run never waits for a
   build slot and a Mac without the wrappers has none.
   `tests/test_check_ios.py` covers this with a simulated wrapper.
-- **Hook location:** Git runs the hooks in `core.hooksPath`. `bin/setup`
-  sets it to the relative `bin/hooks`, so each checkout runs its own copy.
-  On the user's Mac it is the primary checkout's absolute `bin/hooks`, so Git
-  runs the primary checkout's hook files for every worktree. Each one then
-  runs the pushing or committing checkout's own code
-  ([#380](https://github.com/jubishop/screenr/issues/380)). The four
+- **Hook location:** Git runs the hooks in `core.hooksPath`. When it is
+  unset, `bin/setup` sets it to the relative `bin/hooks`, so each checkout
+  runs its own copy. On the user's Mac it is the primary checkout's absolute
+  `bin/hooks`, so Git runs the primary checkout's hook files for every
+  worktree. Each one then runs the pushing or committing checkout's own code
+  ([#380](https://github.com/jubishop/screenr/issues/380)). On 2026-11-09
+  the user kept that path and had Project Starter accept it, rather than
+  return to the relative `bin/hooks`, which would let a branch with older
+  hook files run them
+  ([#580](https://github.com/jubishop/screenr/issues/580)). So `bin/doctor`
+  and `bin/setup` accept it in every worktree while the primary checkout's
+  hook files match the worktree's own, and `bin/setup` leaves it unchanged,
+  in the primary checkout too
+  ([shared hooks](foundation/knowledge-search.md#shared-hooks)). When one
+  differs or is missing, `bin/doctor` names the event. Bring the two
+  checkouts to the same hook files, by fast-forwarding the primary checkout
+  to `main` or merging `origin/main` into the worktree, rather than repoint
+  `core.hooksPath`. The four
   knowledge hooks and `pre-push` call that checkout's `bin/knowledge-hook`.
   Project Starter manages `bin/hooks/pre-push`: it runs the document checks
   when a push changes Markdown, then that checkout's
