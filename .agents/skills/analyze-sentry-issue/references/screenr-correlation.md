@@ -120,7 +120,20 @@ Every build that contains the change from
 [#631](https://github.com/jubishop/screenr/issues/631), as
 [builds and known fixes](#builds-and-known-fixes) tests, also attaches iOS's
 raw diagnostic, `MXDiagnosticPayload.json` in sentry-cocoa 9.32.0, with the
-whole tree. Download it as above and read the main thread's samples by
-binary, its heaviest path, and any frames in Screenr's binary, whose offsets
-the build's dSYM turns into functions. When a MetricKit event from such a
-build lists no raw diagnostic, record that the diagnostic failed to arrive.
+whole tree. Download it as above and summarize it:
+
+```bash
+python3 -I .agents/scripts/sentry-cli/summarize_metrickit_diagnostic.py \
+  <dir>/attachments/MXDiagnosticPayload.json
+```
+
+For each thread it prints the samples by binary, the heaviest path, and every
+frame in Screenr's binary, with the function that the build's dSYM in Sentry
+names for its offset
+([contract](../../../scripts/sentry-cli/README.md#metrickit-diagnostics)).
+For a hang, read the main thread first: the one whose heaviest path starts
+in `dyld`, Thread 0 in every hang seen so far. MetricKit's `attributed` mark
+need not fall on it. When the helper says the symbols are unavailable, it
+shows offsets alone; record why, and never guess a function from an offset.
+When a MetricKit event from such a build lists no raw diagnostic, record that
+the diagnostic failed to arrive.

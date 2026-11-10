@@ -8,6 +8,7 @@ import {
   bearerFor,
   cookieFor,
   clientAddress,
+  databaseTime,
 } from "./social-fixture";
 
 const { POST } = await import("../../src/app/api/screenr/[action]/route");
@@ -54,12 +55,16 @@ const register = (
     ...fields,
   });
 
-async function stored() {
+// The stored devices. Each is `seen` when its last-seen time is no earlier
+// than `since`, a databaseTime() read before the registration that should
+// have set it.
+async function stored(since: Date | null = null) {
   return (
     await db.query(
       `SELECT d.token,d.user_id,s.token AS session,d.environment,d.topic,d.build,
-        d.last_seen_at>now()-interval '1 minute' AS seen
+        d.last_seen_at>=$1 AS seen
       FROM push_device d JOIN session s ON s.id=d.session_id ORDER BY d.token`,
+      [since],
     )
   ).rows;
 }
@@ -75,10 +80,11 @@ async function accountSettings(user: string) {
 test("registering stores the device for the member's session", async () => {
   const alice = await person("alice");
   const session = await bearerFor(alice);
+  const before = await databaseTime();
   const response = await register(session, tokenA.toUpperCase());
   assert.equal(response.status, 200);
   assert.deepEqual(await response.json(), { ok: true });
-  assert.deepEqual(await stored(), [
+  assert.deepEqual(await stored(before), [
     {
       token: tokenA,
       user_id: alice,
@@ -170,9 +176,10 @@ test("re-registering a token moves it to the current member and session", async 
   await db.query("UPDATE push_device SET last_seen_at=now()-interval '1 day'");
 
   // The same app on a later launch refreshes its build and last-seen time.
+  const launched = await databaseTime();
   assert.equal((await register(first, tokenA, { build: 43 })).status, 200);
   assert.deepEqual(
-    (await stored()).map(({ session, build, seen }) => ({
+    (await stored(launched)).map(({ session, build, seen }) => ({
       session,
       build,
       seen,
@@ -189,8 +196,9 @@ test("re-registering a token moves it to the current member and session", async 
 
   // A token belongs to one phone, so another member's sign-in takes it.
   const bens = await bearerFor(ben);
+  const taken = await databaseTime();
   await register(bens, tokenA, { environment: "production", topic: release });
-  assert.deepEqual(await stored(), [
+  assert.deepEqual(await stored(taken), [
     {
       token: tokenA,
       user_id: ben,

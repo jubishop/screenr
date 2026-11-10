@@ -53,6 +53,8 @@ async function fixture(t: TestContext) {
     "scripts/browser-config.ts",
     "scripts/failure-lines.ts",
     "tests/app/failure-guard.ts",
+    "tests/app/exit-guard.ts",
+    "tests/app/process-waits.ts",
     "tests/browser/failure-line-reporter.ts",
     "tests/browser/expected-failure-lines.ts",
   ])

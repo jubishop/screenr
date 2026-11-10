@@ -10,6 +10,7 @@ import {
   captureFailures,
   failureEvents,
 } from "./social-fixture";
+import { catalogClock } from "./catalog-clock";
 import type { TitleViewing } from "../../src/shared";
 const { findTitles } = await import("../../src/server/title-viewing");
 const { getTitle, getTitleAvailability } =
@@ -21,17 +22,17 @@ useDatabase();
 let items: { id: number; title: string; name: string; media_type: string }[];
 let failure = false,
   slow = false,
-  searchDelay = 0,
   active = 0,
   maximum = 0;
+// A search waits to answer until this settles.
+let searchHeld = Promise.resolve();
 let providers: string[] = [],
   details = 0;
 const catalog = createServer((request, response) => {
   response.setHeader("Content-Type", "application/json");
   if (request.url?.startsWith("/search/")) {
     const body = JSON.stringify({ results: items });
-    if (searchDelay) setTimeout(() => response.end(body), searchDelay);
-    else response.end(body);
+    void searchHeld.then(() => response.end(body));
   } else if (request.url?.endsWith("/watch/providers")) {
     providers.push(request.url);
     active++;
@@ -94,7 +95,7 @@ beforeEach(async () => {
     { id: 93901, title: "TV summary", name: "TV summary", media_type: "tv" },
   ];
   failure = slow = false;
-  searchDelay = 0;
+  searchHeld = Promise.resolve();
   providers = [];
   details = 0;
   active = maximum = 0;
@@ -103,6 +104,12 @@ after(async () => {
   catalog.closeAllConnections();
   await new Promise<void>((resolve) => catalog.close(() => resolve()));
 });
+
+// The start time and timeout of each provider request made under `clock`.
+const providerRequests = (clock: ReturnType<typeof catalogClock>) => () =>
+  clock.requests
+    .filter(({ path }) => path.endsWith("/watch/providers"))
+    .map(({ started, timeout }) => ({ started, timeout }));
 
 test("search enriches movie and TV summaries and caches availability without replacing full details", async () => {
   // The movie's full details are current; the show has only its summary.
@@ -193,18 +200,31 @@ test("a cold list bounds concurrent provider requests and returns every title du
     media_type: "movie",
   }));
   slow = true;
-  const start = Date.now();
-  const result = await findTitles("streaming", "viewer");
+  const clock = catalogClock(t);
+  const requests = providerRequests(clock);
+  const finding = findTitles("streaming", "viewer");
+  // Four provider requests start at once, each with a two-second timeout.
+  await clock.until(() => requests().length >= 4, "the first requests");
+  assert.deepEqual(requests(), Array(4).fill({ started: 0, timeout: 2000 }));
+  // When they time out, a second of the list's three-second budget remains,
+  // so four more start.
+  clock.advanceTo(2000);
+  await clock.until(() => requests().length >= 8, "the next requests");
+  assert.deepEqual(
+    requests().slice(4),
+    Array(4).fill({ started: 2000, timeout: 2000 }),
+  );
+  // When those time out, the budget has passed, so the list returns at four
+  // seconds instead of waiting out the sixteen that every title's timeout
+  // would take, four at a time.
+  clock.advanceTo(4000);
+  const result = await clock.finish(finding);
   assert.equal(result.length, 30);
   assert.ok(result.every((t) => t.viewing.status === "unavailable"));
   assert.ok(maximum <= 4, `Observed ${maximum} concurrent provider requests`);
   assert.ok(
     providers.length < items.length,
     "Must stop new provider work when the list's refresh budget expires",
-  );
-  assert.ok(
-    Date.now() - start < 6000,
-    "A provider outage must not hold the list for every per-title timeout",
   );
   assert.deepEqual(
     new Set(failureEvents(printed)),
@@ -222,16 +242,29 @@ test("slow catalog search leaves time to return titles within the browser search
     name: `Delayed title ${i}`,
     media_type: "movie",
   }));
-  searchDelay = 6000;
+  let answer!: () => void;
+  searchHeld = new Promise<void>((resolve) => (answer = resolve));
   slow = true;
-  const start = Date.now();
-  const result = await findTitles("streaming", "viewer");
+  const clock = catalogClock(t);
+  const requests = providerRequests(clock);
+  const finding = findTitles("streaming", "viewer");
+  // The search answers after six seconds, within its own eight-second
+  // timeout.
+  await clock.until(
+    () => clock.requests.some(({ path }) => path === "/search/multi"),
+    "the search",
+  );
+  clock.advanceTo(6000);
+  answer();
+  // Find stops starting provider requests at seven seconds, so the four that
+  // start at six end by eight seconds, and none starts when they time out.
+  // Without that cutoff, four more would start then and run until ten.
+  await clock.until(() => requests().length >= 4, "the provider requests");
+  assert.deepEqual(requests(), Array(4).fill({ started: 6000, timeout: 2000 }));
+  clock.advanceTo(8000);
+  const result = await clock.finish(finding);
   assert.equal(result.length, 12);
   assert.ok(result.every((t) => t.viewing.status === "unavailable"));
-  assert.ok(
-    Date.now() - start < 9500,
-    "Optional providers must not exhaust the ten-second browser deadline",
-  );
   assert.deepEqual(
     new Set(failureEvents(printed)),
     new Set(["catalog request failed"]),

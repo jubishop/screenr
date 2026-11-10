@@ -11,6 +11,7 @@ import {
   captureFailures,
   failureEvents,
 } from "./social-fixture";
+import { catalogClock } from "./catalog-clock";
 import type { TitleRelease } from "../../src/shared";
 const { loadScreen } = await import("../../src/server/screens");
 const { findTitles } = await import("../../src/server/title-viewing");
@@ -657,8 +658,39 @@ test("Find a title bounds release requests and keeps its search deadline during 
     title: `Outage ${i}`,
   }));
   slow = true;
-  const start = Date.now();
-  const found = await findTitles("outage", "viewer");
+  const clock = catalogClock(t);
+  const details = () =>
+    clock.requests
+      .filter((request) => /^\/movie\/\d+$/.test(request.path))
+      .map(({ started, timeout }) => ({ started, timeout }));
+  const finding = findTitles("outage", "viewer");
+  // Four detail requests start at once, each with a two-second timeout.
+  await clock.until(() => details().length >= 4, "the first detail requests");
+  assert.deepEqual(details(), Array(4).fill({ started: 0, timeout: 2000 }));
+  // Every title's viewing options refresh beside them and save before the
+  // clock moves, however long that takes, so none times out.
+  await clock.until(
+    async () =>
+      (
+        await db.query(
+          "SELECT count(*)::int AS saved FROM title_availability WHERE fetched_at IS NOT NULL",
+        )
+      ).rows[0].saved === results.length,
+    "the viewing options",
+  );
+  // When they time out, a second of the list's three-second budget remains,
+  // so four more start.
+  clock.advanceTo(2000);
+  await clock.until(() => details().length >= 8, "the next detail requests");
+  assert.deepEqual(
+    details().slice(4),
+    Array(4).fill({ started: 2000, timeout: 2000 }),
+  );
+  // When those time out, the budget has passed, so the list returns at four
+  // seconds instead of waiting out the six that every title's timeout would
+  // take.
+  clock.advanceTo(4000);
+  const found = await clock.finish(finding);
   assert.equal(found.length, 12);
   assert.ok(found.every((title) => title.release.status === "unavailable"));
   assert.ok(found.every((title) => title.viewing.status === "ok"));
@@ -666,10 +698,6 @@ test("Find a title bounds release requests and keeps its search deadline during 
   assert.ok(
     detailRequests.length < results.length,
     "Must stop new detail requests when the list's refresh budget expires",
-  );
-  assert.ok(
-    Date.now() - start < 6000,
-    "An outage must not hold the list for every per-title timeout",
   );
   assert.deepEqual(
     new Set(failureEvents(printed)),

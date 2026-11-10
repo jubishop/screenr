@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 import type { ParserOptions } from "prettier";
 import { parsers } from "prettier/plugins/typescript";
-import { hang } from "./process-waits";
+import { hang, testTimeout } from "./process-waits";
 
 // Application tests wait for their processes, the database, and work in their
 // own process under one bound that only a hang reaches. Polls that compare
@@ -293,14 +293,35 @@ const waiting = { sleep, timeout: 5 * 60_000 };
   ]);
 });
 
-test("a hung process fails its test before CI cancels the job", async () => {
-  // The app jobs run the application tests. A shard takes under 4 minutes,
-  // so one hang still ends its test, which reports what hung, within the
-  // job's limit.
+test("npm test and test:coverage give each test and hook the shared test timeout", async () => {
+  // node:test has no default timeout, so without one a test that awaits
+  // something with no bound never fails.
+  assert.ok(testTimeout > hang);
+  const scripts = JSON.parse(await readFile("package.json", "utf8")).scripts;
+  const flag = `--test-timeout=${testTimeout}`;
+  assert.ok(scripts.test.split(" ").includes(flag), scripts.test);
+  assert.ok(
+    scripts.test.includes("--import ./tests/app/exit-guard.ts"),
+    scripts.test,
+  );
+  const coverage = await readFile("scripts/test-coverage.ts", "utf8");
+  assert.match(coverage, /`--test-timeout=\$\{testTimeout\}`/);
+  assert.match(coverage, /"--import",\s*"\.\/tests\/app\/exit-guard\.ts"/);
+});
+
+test("a hung test fails, naming itself, before CI cancels the job", async () => {
+  // The app jobs run the application tests, and one takes under 4 minutes,
+  // setup included. One hang then still fails its test, which names what
+  // hung, within the job's limit: a wait bounded by hang, a wait with no
+  // bound at the test timeout, and a file left open by its passing tests
+  // within hang of their end. A test that times out is reported as it fails;
+  // the exit guard ends its file once its after hooks finish.
   const workflow = await readFile(".github/workflows/check.yml", "utf8");
   const job = /^ {2}app:\n(?:(?: {4}.*)?\n)*/m.exec(workflow)?.[0] ?? "";
   assert.match(job, /^ +run: bin\/check-application --part app\b/m);
   const limit = /^ {4}timeout-minutes: (\d+)$/m.exec(job);
   assert.ok(limit, job);
-  assert.ok(hang <= Number(limit[1]) * 60_000 - 5 * 60_000);
+  const usual = 4 * 60_000;
+  for (const bound of [hang, testTimeout])
+    assert.ok(usual + bound <= Number(limit[1]) * 60_000, String(bound));
 });

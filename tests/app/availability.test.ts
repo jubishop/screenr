@@ -2,7 +2,12 @@ import { test, before, beforeEach, after } from "node:test";
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
-import { db, captureFailures, assertNotLogged } from "./social-fixture";
+import {
+  db,
+  captureFailures,
+  assertNotLogged,
+  databaseTime,
+} from "./social-fixture";
 import type { WatchProviders } from "../../src/server/watch-sources";
 
 const { migrate } = await import("../../scripts/migrate");
@@ -136,11 +141,12 @@ async function screen(kind = "movie") {
 for (const kind of ["movie", "tv"]) {
   test(`${kind} title screens include US watch options and cache every viewing category`, async () => {
     payload = options(kind);
+    const before = await databaseTime();
     const availability = await screen(kind);
     assert.equal(availability?.status, "ok");
     assert.equal(availability.link, options(kind).results.US.link);
     assert.ok(availability.checked_at);
-    assert.ok(Date.now() - Date.parse(availability.checked_at) < 10_000);
+    assert.ok(Date.parse(availability.checked_at) >= before.getTime());
     assert.deepEqual(displayed(availability), harbor);
     assert.deepEqual(
       await cachedProviders(`${kind}:42`),
@@ -233,10 +239,11 @@ test("a successful refresh removes offers which are no longer listed", async () 
     "UPDATE title_availability SET refresh_after=now()-interval '1 second', fetched_at=now()-interval '25 hours'",
   );
   payload = { id: 42, results: {} };
+  const before = await databaseTime();
   const refreshed = await screen();
   assert.equal(refreshed.status, "ok");
   assert.deepEqual(refreshed.sections, []);
-  assert.ok(Date.now() - Date.parse(refreshed.checked_at!) < 10_000);
+  assert.ok(Date.parse(refreshed.checked_at!) >= before.getTime());
 });
 
 // Only the failed refresh logs. An unconfigured catalog sends no request, so
