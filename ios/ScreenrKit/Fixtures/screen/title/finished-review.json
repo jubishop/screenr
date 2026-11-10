@@ -11,7 +11,7 @@
   },
   "response": {
     "status": 200,
-    "etag": "W/\"7Dw4fh4fyuHBZ9nYaBOQ_x1c0l3Sl12b5t5EEiwbURg\"",
+    "etag": "W/\"pMEvZyfno1N-xS0RbXfedhl0tew7CtIix_T_6wqIVqA\"",
     "body": {
       "kind": "title",
       "title": {
@@ -125,6 +125,12 @@
           "viewer_recommended": true,
           "viewer_status": "finished",
           "viewer_top_ten_rank": 2,
+          "viewer_finished_on": "2026-09-20",
+          "viewer_review": {
+            "body": "Lovely score, slow middle.",
+            "rating": 3,
+            "spoiler": false
+          },
           "visible_activity": "2026-10-13T12:00:00.000Z",
           "comments": [],
           "reactions": [

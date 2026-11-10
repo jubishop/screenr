@@ -16,7 +16,9 @@ const { initialScreen, loadScreen, readVersion, screenResponse } =
   await import("../../src/server/screens");
 const { member, updateDisplayName } = await import("../../src/server/profiles");
 const { addComment, removeComment } = await import("../../src/server/comments");
-const { updateTopTen } = await import("../../src/server/title-actions");
+const { updateTopTen, updateWatchStatus, setFinishedDate } =
+  await import("../../src/server/title-actions");
+const { saveReview } = await import("../../src/server/reviews");
 const { notifications, readNotification } =
   await import("../../src/server/notifications");
 const { setReaction } = await import("../../src/server/reactions");
@@ -263,8 +265,12 @@ test("each change that a paged feed or profile shows reaches a reader holding it
   await friend(ben, cam);
   await friend(alice, cam);
   const reply = await addComment(cam, conversation, "Cam's reply", false);
+  await updateWatchStatus(ben, "movie:1", "watching");
   const cookie = await cookieFor(ben);
-  for (const path of ["/?before=now", "/people/alice?before=now"]) {
+  for (const [index, path] of [
+    "/?before=now",
+    "/people/alice?before=now",
+  ].entries()) {
     let { version } = await changed(cookie, path);
     const next = async () => {
       const result = await changed(cookie, path, version);
@@ -297,6 +303,16 @@ test("each change that a paged feed or profile shows reaches a reader holding it
     assert.equal((await next()).viewer_top_ten_rank, 1);
     await updateTopTen(ben, "movie:1", "remove");
     assert.equal((await next()).viewer_top_ten_rank, null);
+    // The reader's own last-finished date and review for the entry's title.
+    const date = `2026-10-0${index + 1}`;
+    await setFinishedDate(ben, "movie:1", date);
+    assert.equal((await next()).viewer_finished_on, date);
+    await saveReview(ben, "movie:1", index + 1, null, false);
+    assert.deepEqual((await next()).viewer_review, {
+      rating: index + 1,
+      body: null,
+      spoiler: false,
+    });
     await changeRelationship(ben, cam, "block");
     assert.deepEqual((await next()).comments, []);
     await changeRelationship(ben, cam, "unblock");

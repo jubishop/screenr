@@ -52,8 +52,9 @@
 .status-button[aria-expanded="true"] .icon {
   transform: rotate(180deg);
 }
-/* Opens from the button's start; the menu shifts it left when it would pass
-   the viewport's edge. */
+/* Opens beneath the button from its start; the menu shifts it left when it
+   would pass the viewport's edge, and above the button when it would pass the
+   bottom (watch-status.tsx). */
 .status-panel {
   position: absolute;
   top: calc(100% + 6px);

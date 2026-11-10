@@ -552,6 +552,8 @@ export function Screen({
             user={user}
             refresh={refresh}
             activity={activity}
+            watchStatus={watchStatus}
+            finishedDate={finishedDate}
             busy={busy}
             target={data && "target" in data ? data.target : null}
             targetUnavailable={

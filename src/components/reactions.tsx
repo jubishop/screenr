@@ -7,22 +7,26 @@ import {
 } from "../shared";
 import { api, useInteractive } from "./client";
 import { ActionButton } from "./action-button";
+import { Icon } from "./icons";
 
 // Lay out an entry's or reply's actions on one wrapping line: the caller's
-// actions first, then the reaction counts and React. The picker and any
-// error open beneath the whole line so they can use its full width.
+// actions first, then the reaction counts and React, then the caller's
+// actions `after` them. The picker and any error open beneath the whole line
+// so they can use its full width.
 export function Reactions({
   item,
   reply,
   summary,
   refresh,
   children,
+  after,
 }: {
   item: string;
   reply?: string;
   summary: ReactionSummary[];
   refresh: () => Promise<void>;
   children?: ReactNode;
+  after?: ReactNode;
 }) {
   const interactive = useInteractive();
   const [open, setOpen] = useState(false);
@@ -95,16 +99,19 @@ export function Reactions({
           <ActionButton
             ref={trigger}
             type="button"
-            className="text-button reaction-trigger"
+            className="icon-button reaction-trigger"
+            aria-label="React"
+            title="React"
             aria-expanded={open}
             aria-controls={pickerId}
             disabled={!interactive}
             unavailable={busy}
             onClick={() => setOpen((value) => !value)}
           >
-            React
+            <Icon name="react" />
           </ActionButton>
         </div>
+        {after}
       </div>
       {open && (
         <div

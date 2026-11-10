@@ -1,8 +1,10 @@
 /* Feed entries, discussions, composers, spoilers, and reactions.
    Keep later entry and nested-reply overrides after the general thread rules. */
 /* One wrapping line of actions under an entry or reply: the caller's actions,
-   then reaction counts and React. Groups wrap whole, so a phone entry uses at
-   most two lines: title actions, then reactions. */
+   then reaction counts and React, then an entry's Comment, copy link, and
+   Report. Groups wrap whole. An entry's line holds icon buttons, whose own
+   padding spaces them, so a 390px phone fits its title actions, React,
+   Comment, and copy link on one line. */
 .item-actions,
 .title-actions,
 .reactions {
@@ -14,12 +16,17 @@
 .title-actions {
   gap: 0 18px;
 }
+.activity-card > .item-actions,
+.title-actions {
+  gap: 0 2px;
+}
 .reactions {
   gap: 6px;
 }
-/* A reader's own watch status links to the title page in place of a button. */
-.title-actions a.text-button {
-  display: inline-block;
+/* The first icon of a line lines its glyph up with the text above it. */
+.item-actions > .icon-button:first-child,
+.item-actions > :first-child > .icon-button:first-child {
+  margin-left: -10px;
 }
 .reaction-count {
   min-height: 44px;
@@ -47,6 +54,28 @@
   .icon-button:hover {
     background: var(--tint);
   }
+}
+/* A choice the reader has made, such as Recommended, a watch status, or a
+   review, fills its icon on the pressed background. */
+.icon-button[aria-pressed="true"],
+.icon-button.chosen {
+  background: var(--pressed);
+}
+/* A feed entry's watch status icon ends with the menu's chevron. */
+.status-icon {
+  display: flex;
+  align-items: center;
+  width: auto;
+  padding: 0 5px 0 10px;
+  border-radius: 20px;
+}
+.status-icon .icon + .icon {
+  width: 16px;
+  height: 16px;
+  stroke-width: 2.5;
+}
+.status-icon[aria-expanded="true"] .icon + .icon {
+  transform: rotate(180deg);
 }
 .icon {
   display: block;
@@ -277,12 +306,6 @@
 .composer > label {
   margin-bottom: 8px;
 }
-.comment-action {
-  margin-top: 12px;
-}
-.comment-action:first-child {
-  margin-top: 0;
-}
 .composer-actions {
   display: flex;
   gap: 12px;
@@ -303,8 +326,7 @@
   .activity-summary {
     gap: 15px;
   }
-  .item-actions,
-  .title-actions {
+  .item-actions {
     column-gap: 13px;
   }
   .activity-content h2 {

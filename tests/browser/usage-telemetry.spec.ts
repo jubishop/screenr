@@ -58,12 +58,7 @@ test("page loads and navigation count as active days, background refreshes do no
     const entry = page
       .locator(".feed-entry")
       .filter({ hasText: `usagefriend ${action}` });
-    await entry
-      .getByRole("button", { name: "+ Want to watch", exact: true })
-      .click();
-    await expect(
-      entry.getByRole("button", { name: "✓ Want to watch", exact: true }),
-    ).toBeVisible();
+    await chooseStatus(page, "Want to watch", entry);
   }
   await page.goto("/titles/tv/998001");
   await expect(statusButton(page)).toHaveText("✓ Want to watch");
