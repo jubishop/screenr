@@ -740,10 +740,10 @@ recipients. A full run checks:
 - The title page's status menu sets, dates, and clears statuses by pointer
   and keyboard, lists Caught up only for TV shows, and stays on screen at
   phone and desktop widths. A friend sees one progress entry, saves its title
-  from the entry's status menu, and then sees their own status on its icon. Clearing keeps an
-  entry with replies, marked as removed. The status button shows its menu
-  chevron after the label, with and without a status, at phone and desktop
-  widths, and flips it while open.
+  from the entry's status menu, and then sees their own status on its icon.
+  Clearing keeps an entry with replies, marked as removed. The status button
+  shows its menu chevron after the label, with and without a status, at phone
+  and desktop widths, and flips it while open.
 - Full feed entries in every feed offer Recommend, the watch status menu,
   Rate or review, React, and Comment as icons whose names are also their
   tooltips, with no top 10 action, on one line at 390px with the copy link
@@ -751,7 +751,8 @@ recipients. A full run checks:
   a feed, the status menu sets and clears every status and the
   last-finished date, saves Want to watch with its surface, and moves focus
   on when the reader's own entry leaves; the review editor saves, edits, and
-  removes a review, and a failed read keeps its Remove question
+  removes a review, a failed read keeps its Remove question, and removing it
+  from the reader's own review entry moves focus on too
   (`tests/browser/feed-entry-actions.spec.ts`).
 - The title page's review form rates by pointer and keyboard, saves text, and
   fits phone and desktop widths. A failed save keeps the draft. A friend reads

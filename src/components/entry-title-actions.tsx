@@ -78,6 +78,9 @@ export function useEntryTitleActions({
     available,
     refresh,
     icon: true,
+    // Removing the review can take the reader's own review entry out of the
+    // feed; nothing the reader does to a review removes a friend's entry.
+    leaving: own ? entryFocus : undefined,
   });
   // The title's rank in the reader's top 10, which only a Recommend keeps.
   const rank = held?.viewer_recommended ? held.viewer_top_ten_rank : null;

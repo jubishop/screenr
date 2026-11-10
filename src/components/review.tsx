@@ -5,6 +5,7 @@ import { api, useInteractive } from "./client";
 import { ActionButton } from "./action-button";
 import { ConfirmAction } from "./confirmation";
 import { Icon } from "./icons";
+import { useRemovalFocus, type FocusTarget } from "./removal-focus";
 
 export type ReviewDraft = {
   rating: number | null;
@@ -50,21 +51,26 @@ export function ReviewStars({ rating }: { rating: number }) {
 // because the view stays mounted. `saved` is the viewer's current review, if
 // any. While the page is not `available`, such as while a failed read hides
 // it, the form shows only an open Remove confirmation, whose action waits for
-// the next read; `holding` says one is open.
+// the next read; `holding` says one is open. When removing the review can
+// take the button out of the page, as with the reader's own review entry,
+// `leaving` gives where focus goes instead.
 export function useReviewEditor({
   titleId,
   saved,
   available,
   refresh,
   icon = false,
+  leaving,
 }: {
   titleId: string | null;
   saved: ReviewDraft | null;
   available: boolean;
   refresh: () => Promise<void>;
   icon?: boolean;
+  leaving?: () => FocusTarget[];
 }) {
   const interactive = useInteractive();
+  const removal = useRemovalFocus();
   const id = useId();
   const ids = {
     action: `${id}-action`,
@@ -258,10 +264,15 @@ export function useReviewEditor({
           busy={busy}
           unavailable={!available}
           run={async () => {
+            if (leaving)
+              removal.start(document.getElementById(ids.action), leaving());
             await api("remove-review", { title: titleId });
             await refresh();
           }}
-          onDone={close}
+          onDone={() => {
+            close();
+            removal.done();
+          }}
           onCancel={() => {
             setConfirming(false);
             removeButton.current?.focus();

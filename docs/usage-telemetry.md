@@ -216,8 +216,9 @@ watch action. The title route holds the parameter, as the iPhone app's
 `Destination.title` does, and keeps only these four surfaces, so a page opened
 with any other `from` reports `title`. The screen read leaves it out, so it
 does not change which screen loads; a copied address keeps it. A save without
-a surface, from a page loaded before this release, stores no surface and can
-count only as inferred. An unknown surface is rejected.
+a surface, from the reader's own feed entry or a page loaded before this
+release, stores no surface and can count only as inferred. An unknown surface
+is rejected.
 
 ### Save follow-through
 

@@ -376,4 +376,25 @@ test("a feed entry's review editor saves, edits, and removes the reader's review
   await expect(form).toHaveCount(0);
   await expect(action(entry, "Rate or review")).toBeFocused();
   await expect(ownReview(page)).toHaveCount(0);
+
+  // Removing it from the reader's own review entry, which has no replies,
+  // takes that entry out of the feed, so focus moves to the nearest entry.
+  await action(entry, "Rate or review").click();
+  await star(3).check();
+  await save.click();
+  await expect(ownReview(page)).toHaveCount(1);
+  const mine = ownReview(page);
+  await action(mine, "Edit your review").click();
+  await mine
+    .getByRole("form", { name: "Your review" })
+    .getByRole("button", { name: "Remove review", exact: true })
+    .click();
+  await mine
+    .getByRole("group", { name: /^Remove your review\?/ })
+    .getByRole("button", { name: "Remove", exact: true })
+    .click();
+  await expect(ownReview(page)).toHaveCount(0);
+  await expect(
+    page.locator(`article[data-item-id="${recommendation}"]`),
+  ).toBeFocused();
 });
