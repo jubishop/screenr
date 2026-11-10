@@ -62,12 +62,14 @@ struct ProfileHeader: View {
   }
 }
 
-// More actions in the toolbar: Unfriend for a friend, and Block. Each asks
-// first, in `profileConfirmation(_:)`.
+// More actions in the toolbar: Unfriend for a friend, and Block, which each
+// ask first, in `profileConfirmation(_:)`; then Report, which opens the
+// report form, in `reporting(_:)`.
 struct ProfileMenu: View {
   let person: Person
   let relationship: Relationship
   let actions: ProfileModel
+  let reports: ReportModel
 
   var body: some View {
     Menu {
@@ -75,6 +77,9 @@ struct ProfileMenu: View {
         Button(item.label, role: .destructive) {
           actions.ask(item, about: person, relationship)
         }
+      }
+      if let report = ReportSubject(profile: person, relationship) {
+        Button("Report") { reports.open(report) }
       }
     } label: {
       Label("More actions", systemImage: "ellipsis")

@@ -26,6 +26,12 @@ Run it directly. The `lockf` wrapper that agents used before
 second slot for the same run. If audits still time out with three runs at
 once, lower `SLOTS` in `bin/check-ios`.
 
+Where `xcodebuild` is a build-slot wrapper, a check also takes one Mac build
+slot after resolving its packages and holds it to the end. In an unattended
+run, the wrapper's "waiting for one of ... build slots" lines mean the check
+is queued, not hung; no step's time limit counts that wait
+([build slots](../docs/development-workflow.md#ios-checks-before-a-push)).
+
 Load is not the only cause of audit timeouts. On 2026-11-01 an audit of all
 four checks on the Find screen timed out on both settled attempts in 3 of 30
 runs beside one other Simulator run, at a load average of 7 to 15, and in

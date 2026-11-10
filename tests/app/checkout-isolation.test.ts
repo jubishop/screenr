@@ -22,6 +22,7 @@ import {
   prepareTestDatabase,
   testDatabaseURL,
 } from "../../scripts/checkout";
+import { hang } from "./process-waits";
 
 const execute = promisify(execFile);
 // Fixture test commands share this checkout's test database. Their tests do
@@ -80,7 +81,7 @@ async function fixture(t: TestContext) {
   async function npm(script: string, ...args: string[]) {
     return execute("npm", ["run", script, "--", ...args], {
       cwd: root,
-      timeout: 30_000,
+      timeout: hang,
       maxBuffer: 4 * 1024 * 1024,
       env: fixtureEnv,
     });
@@ -193,7 +194,7 @@ test("application tests run one shard of their files when SCREENR_TEST_SHARD nam
   async function ran(shard?: string) {
     const { stdout } = await execute("npm", ["run", "test"], {
       cwd: project.root,
-      timeout: 30_000,
+      timeout: hang,
       maxBuffer: 4 * 1024 * 1024,
       env: { ...fixtureEnv, SCREENR_TEST_SHARD: shard },
     });
@@ -343,7 +344,7 @@ async function databaseServer(t: TestContext) {
         );
         if (rows.length === 0) return;
         assert.ok(
-          Date.now() - start < 180_000,
+          Date.now() - start < hang,
           `Databases ${rows.map(({ oid }) => oid).join(", ")} were never dropped.`,
         );
         await setTimeout(100);

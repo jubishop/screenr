@@ -16,14 +16,15 @@ const legacyFunctions = `SELECT proname FROM pg_proc
     'screenr_withdraw_progress','screenr_leave_top_ten')`;
 
 // Migrations 017, 023, and 026 dropped every compatibility trigger. Migration
-// 029 queues a push for each new notification, and 040 advances the screen
-// change mark on writes to the tables that feeds and profiles read.
+// 029 queues a push for each new notification, and 040 and 042 advance the
+// screen change mark on writes to the tables that feeds and profiles read.
 const change = (table: string) => ({ table, name: `${table}_screen_change` });
 test("migrated databases keep only the notification and screen change triggers", async () => {
   assert.deepEqual((await db.query(triggers)).rows, [
     change("block"),
     { table: "comment", name: "comment_notify" },
     change("comment"),
+    change("content_report"),
     change("conversation"),
     change("discussion_post"),
     change("feed_item"),

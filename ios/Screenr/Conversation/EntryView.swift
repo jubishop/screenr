@@ -126,7 +126,8 @@ struct EntryView: View {
 
   // Delete for the author's comment or post; Want to watch and Recommend on
   // a friend's entry; reactions unless the spoiler cover or a removal hides
-  // them; and sharing the entry's link.
+  // them; sharing the entry's link; and Report for another member's post,
+  // comment, or review.
   private var actions: some View {
     FlowLayout {
       if feed.canDelete(item, viewer: viewer) {
@@ -148,6 +149,14 @@ struct EntryView: View {
       }
       ShareButton(destination: item.link(), subject: item.title?.name ?? "A post on Screenr")
         .labelStyle(.iconOnly)
+      if let report = ReportSubject(entry: item, viewer: viewer) {
+        Button {
+          feed.reports.open(report)
+        } label: {
+          Label(report.actionLabel, systemImage: "flag")
+        }
+        .labelStyle(.iconOnly)
+      }
     }
     .buttonStyle(.feedAction)
   }

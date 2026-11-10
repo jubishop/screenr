@@ -32,6 +32,17 @@ if (
   !(URL.canParse(install) && new URL(install).protocol === "https:")
 )
   throw new Error("SCREENR_IPHONE_INSTALL_URL must be an https URL.");
+// Optional: docs/data-and-access.md#content-reports
+const owner = process.env.SCREENR_OWNER_EMAIL?.trim();
+if (owner && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(owner))
+  throw new Error("SCREENR_OWNER_EMAIL must be an email address.");
+const pushover = ["PUSHOVER_API_KEY", "PUSHOVER_USER_KEY"].filter((name) =>
+  process.env[name]?.trim(),
+);
+if (pushover.length === 1)
+  throw new Error(
+    "Set both PUSHOVER_API_KEY and PUSHOVER_USER_KEY, or neither.",
+  );
 if (process.env.SCREENR_TEST_TMDB_URL)
   throw new Error("Remove the test catalog override from production.");
 console.log(

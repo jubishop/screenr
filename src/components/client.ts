@@ -128,6 +128,18 @@ export async function api<Name extends WriteAction>(
   return readReply(response, text);
 }
 
+// The owner's review action on a report, from the review page
+// (docs/data-and-access.md#content-reports).
+export async function reviewReport(report: string, action: string) {
+  const { response, text } = await send("/api/reports", {
+    method: "POST",
+    cache: "no-store",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ report, action }),
+  });
+  return readReply<{ ok: true }>(response, text);
+}
+
 // Reads with the query in the address.
 export async function read<Name extends ReadAction>(
   action: Name,

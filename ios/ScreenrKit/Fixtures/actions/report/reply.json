@@ -1,0 +1,21 @@
+{
+  "description": "Reporting a reply with a reason and a note. The reply is then unavailable to the reporter.",
+  "viewer": "alice",
+  "request": {
+    "method": "POST",
+    "action": "report",
+    "path": "/api/screenr/report",
+    "body": {
+      "item": "872a205a-bab2-48f8-8c27-b737397eb469",
+      "reply": "8",
+      "reason": "spam",
+      "note": "He posts this link everywhere."
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "ok": true
+    }
+  }
+}

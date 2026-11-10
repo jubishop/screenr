@@ -21,6 +21,7 @@ import {
   envelope,
   acceptReports,
 } from "./failure-fixture";
+import { hang } from "./process-waits";
 
 // How failures reach Sentry (docs/deployment.md#failure-reports-in-sentry):
 // envelopes, request ID tags, rejected or unreachable endpoints, invalid
@@ -88,10 +89,6 @@ async function fakeSentry() {
     close: () => new Promise((resolve) => server.close(resolve)),
   };
 }
-
-// The bound on a wait for another process, which only a hang reaches:
-// memory/process-test-waits.md
-const hang = 180_000;
 
 // Runs screenr-worker as its own process with the suite's database. Its
 // data: import lets fetch reach only the loopback Sentry endpoint, and makes

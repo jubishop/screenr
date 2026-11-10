@@ -149,18 +149,24 @@ public final class FeedModel {
   public private(set) var titleActions = TitleActions.idle
   // The action waiting for confirmation, which the screen presents.
   public var confirmation: FeedConfirmation?
+  // The reader's reports of the page's entries and replies, and of a
+  // profile's person, whose form and offer the screen presents.
+  public let reports: ReportModel
 
   // `refresh` reads the screen again, such as `ScreenModel.refresh()`, and
   // `showOlder` reads a paged screen's older entries, such as
-  // `ScreenModel.showOlder()`.
+  // `ScreenModel.showOlder()`. Without `reports`, the feed reports through
+  // the same API and reads again with `refresh`.
   public init(
     api: any ScreenrAPI,
     refresh: @escaping @MainActor () async -> Void,
-    showOlder: @escaping @MainActor () async -> Void = {}
+    showOlder: @escaping @MainActor () async -> Void = {},
+    reports: ReportModel? = nil
   ) {
     self.api = api
     self.refresh = refresh
     readOlder = showOlder
+    self.reports = reports ?? ReportModel(api: api, refresh: refresh)
   }
 
   // MARK: - Snapshots

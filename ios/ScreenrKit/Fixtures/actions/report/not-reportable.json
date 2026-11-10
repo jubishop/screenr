@@ -1,0 +1,19 @@
+{
+  "description": "Only posts, reviews, comments, and profiles can be reported, not a recommendation or status.",
+  "viewer": "alice",
+  "request": {
+    "method": "POST",
+    "action": "report",
+    "path": "/api/screenr/report",
+    "body": {
+      "item": "0601645c-005d-450f-8b22-ae05a508119d",
+      "reason": "other"
+    }
+  },
+  "response": {
+    "status": 400,
+    "body": {
+      "error": "Only posts, reviews, comments, and profiles can be reported."
+    }
+  }
+}

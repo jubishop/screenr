@@ -320,6 +320,25 @@ changes, so the push finds that pass. Never bypass the hook with
   both attempts in 3 of 30 runs, and in none of 10 runs alone. Auditing one
   check at a time passed 80 of 80, 20 of them with three Simulators at once
   ([iPhone app guide](../ios/README.md#add-a-feature-screen)).
+- **Build slots:** some Macs limit heavy Xcode and Swift jobs Mac-wide with
+  build-slot wrappers: `xcodebuild` and `swift` on `PATH` link to a script
+  named `build-slots`, and a heavy call takes a slot first. In an unattended
+  agent run it waits for one, naming the holders, and gives up after 45
+  minutes. There, `bin/check-ios` takes one build slot through the wrapper
+  after resolving its packages, which needs none, and holds it until it exits
+  ([#625](https://github.com/jubishop/screenr/issues/625)). A wait the
+  wrapper gives up on fails the check before it builds. It waits holding its
+  check slot and the package cache's shared lock. Nothing waits for that
+  lock, and nothing that holds a build slot waits for a check slot, so they
+  cannot deadlock. Its builds, Simulator boot, and tests run under that
+  slot, so none waits for one within its time limit. Before, each of the
+  three heavy steps took its own slot, so a check could wait three times,
+  and fail as if a step hung, with its Simulator booted while its tests
+  waited. `bin/_build_slot.py` hands the slot from the wrapper to the check.
+  Where `xcodebuild` is the real tool, as in CI, the check takes no build
+  slot. The check slots stay, since an interactive run never waits for a
+  build slot and a Mac without the wrappers has none.
+  `tests/test_check_ios.py` covers this with a simulated wrapper.
 - **Hook location:** Git runs the hooks in `core.hooksPath`. `bin/setup`
   sets it to the relative `bin/hooks`, so each checkout runs its own copy.
   On the user's Mac it is the primary checkout's absolute `bin/hooks`, so Git

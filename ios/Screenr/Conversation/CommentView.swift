@@ -4,8 +4,8 @@ import SwiftUI
 // One comment in a discussion: its author, time, the person it answers, and
 // its text, behind a reveal when it is a spoiler. A removed comment keeps its
 // place as "Comment removed", and an unavailable one, such as a blocked
-// member's, shows no author or text. Live comments have Reply, Delete or
-// Remove, and reactions.
+// member's, shows no author or text. Live comments have Reply, Report for
+// another member's, Delete or Remove, and reactions.
 struct CommentView: View {
   let feed: FeedModel
   let comment: Comment
@@ -112,6 +112,13 @@ struct CommentView: View {
         feed.open(.reply(entry: entry.id, comment: comment.id))
       } label: {
         Label("Reply", systemImage: "arrowshape.turn.up.left")
+      }
+      if let report = ReportSubject(reply: comment, in: entry.item, viewer: viewer) {
+        Button {
+          feed.reports.open(report)
+        } label: {
+          Label("Report", systemImage: "flag")
+        }
       }
       if let removal = feed.removal(of: comment, in: entry.item, viewer: viewer) {
         Button(role: .destructive) {

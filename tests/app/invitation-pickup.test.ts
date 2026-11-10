@@ -4,6 +4,7 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { NextRequest } from "next/server";
 import { useDatabase, db, cookieFor, pending, person } from "./social-fixture";
+import { hang } from "./process-waits";
 const { createInvitation, invitationHash } =
   await import("../../src/server/invitations");
 const join = await import("../../src/app/join/[token]/route");
@@ -207,7 +208,7 @@ test("deployment rejects an iPhone install link that is not an https URL", async
     promisify(execFile)(
       process.execPath,
       ["--import", "tsx", "scripts/validate-config.ts"],
-      { env: { ...env, SCREENR_IPHONE_INSTALL_URL: link }, timeout: 15_000 },
+      { env: { ...env, SCREENR_IPHONE_INSTALL_URL: link }, timeout: hang },
     );
   await Promise.all([
     ...["", install].map(check),

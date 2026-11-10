@@ -11,6 +11,7 @@ import { promisify } from "node:util";
 import { NextRequest } from "next/server";
 import config from "../../next.config";
 import { proxy } from "../../src/proxy";
+import { hang } from "./process-waits";
 
 const execute = promisify(execFile);
 
@@ -172,25 +173,26 @@ ${configuration}`,
           );
         },
       );
-      req.setTimeout(1000, () =>
+      req.setTimeout(hang, () =>
         req.destroy(new Error("Proxy request timed out")),
       );
       req.on("error", reject);
       req.end();
     });
   }
-  let ready = false;
-  for (let attempt = 0; attempt < 50; attempt++) {
+  // Load can hold Caddy's start for many seconds, so only a hang or its exit
+  // ends the wait for it to answer.
+  const deadline = Date.now() + hang;
+  for (;;) {
     if (caddy.exitCode !== null) assert.fail(logs);
     try {
       await get("screenr.jubishop.com", "/api/health");
-      ready = true;
       break;
     } catch {
+      assert.ok(Date.now() < deadline, `Caddy did not start: ${logs}`);
       await new Promise((resolve) => setTimeout(resolve, 100));
     }
   }
-  assert.ok(ready, `Caddy did not start: ${logs}`);
 
   await t.test(
     "new host reaches the app with each security header once and client IP headers",

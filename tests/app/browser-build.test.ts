@@ -7,6 +7,7 @@ import { join, resolve } from "node:path";
 import { promisify } from "node:util";
 import { test } from "node:test";
 import { Client } from "pg";
+import { hang } from "./process-waits";
 
 const execute = promisify(execFile);
 const loader = resolve("node_modules/tsx/dist/loader.mjs");
@@ -14,8 +15,7 @@ const harness = resolve("scripts/browser-server.ts");
 // Each harness start usually takes under a second, but in a parallel run one
 // stalled for over 10 seconds while test-database setup waited for PostgreSQL
 // checkpoints (#427). The test waits for the harness's own signals instead of
-// a deadline, and this bound only ends a run that hangs.
-const patience = 180_000;
+// a deadline, and the hang bound only ends a run that hangs.
 
 test("the browser command builds current checkout sources before serving and stops on build failure", async (t) => {
   const root = await mkdtemp(join(tmpdir(), "screenr-browser-build-"));
@@ -115,10 +115,8 @@ if (mode === 'build') {
       new Promise<boolean>((settle, reject) => {
         const timer = setTimeout(
           () =>
-            reject(
-              new Error(`Browser fixture hung for ${patience} ms: ${logs}`),
-            ),
-          patience,
+            reject(new Error(`Browser fixture hung for ${hang} ms: ${logs}`)),
+          hang,
         );
         const finish = (matched: boolean) => {
           clearTimeout(timer);
@@ -147,7 +145,7 @@ if (mode === 'build') {
       if (!(await signaled(announced, /^Fake Next ready$/m)))
         throw new Error(`Browser fixture stopped before it was ready: ${logs}`);
       const response = await fetch(config.baseURL + "/login", {
-        signal: AbortSignal.timeout(patience),
+        signal: AbortSignal.timeout(hang),
       });
       assert.ok(response.ok, `/login answered ${response.status}: ${logs}`);
       return await response.text();

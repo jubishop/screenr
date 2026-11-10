@@ -86,9 +86,9 @@ extension XCUIApplication {
   // bars or the keyboard or past the screen's edges, and Dynamic Type for
   // scrolling content, which larger text moves past the screen's ends. Launch
   // with `FixtureLaunch(textSize:)` to audit a screen at the largest text size
-  // instead.
-  func performShellAudit() throws {
-    try performSettledAudit {
+  // instead. `types` narrows the checks, as for a screen where one hangs.
+  func performShellAudit(for types: XCUIAccessibilityAuditType = .screenr) throws {
+    try performSettledAudit(for: types) {
       let screen = windows.firstMatch.frame
       // Content also scrolls beneath the tab bar.
       var covers = glassCovers()

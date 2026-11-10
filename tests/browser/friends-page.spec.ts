@@ -154,19 +154,25 @@ test("the profile More actions menu works by keyboard and pointer and confirms U
   const menu = viewer.getByRole("menu", { name: "More actions for Maya Chen" });
   const unfriend = menu.getByRole("menuitem", { name: "Unfriend" });
   const block = menu.getByRole("menuitem", { name: "Block" });
+  const report = menu.getByRole("menuitem", { name: "Report" });
 
   // Enter opens on the first item; arrows wrap, Home and End jump.
   await more.focus();
   await viewer.keyboard.press("Enter");
   await expect(more).toHaveAttribute("aria-expanded", "true");
-  await expect(menu.getByRole("menuitem")).toHaveText(["Unfriend", "Block"]);
+  await expect(menu.getByRole("menuitem")).toHaveText([
+    "Unfriend",
+    "Block",
+    "Report",
+  ]);
   await expect(unfriend).toBeFocused();
   for (const [key, item] of [
     ["ArrowDown", block],
+    ["ArrowDown", report],
     ["ArrowDown", unfriend],
-    ["ArrowUp", block],
+    ["ArrowUp", report],
     ["Home", unfriend],
-    ["End", block],
+    ["End", report],
   ] as const) {
     await viewer.keyboard.press(key);
     await expect(item).toBeFocused();
@@ -178,7 +184,7 @@ test("the profile More actions menu works by keyboard and pointer and confirms U
   await expect(more).toHaveAttribute("aria-expanded", "false");
   // ArrowUp opens on the last item; moving focus away closes the menu.
   await viewer.keyboard.press("ArrowUp");
-  await expect(block).toBeFocused();
+  await expect(report).toBeFocused();
   await viewer.keyboard.press("Tab");
   await expect(menu).toHaveCount(0);
   await expect(more).toHaveAttribute("aria-expanded", "false");
@@ -242,9 +248,10 @@ test("the profile More actions menu works by keyboard and pointer and confirms U
   await expect(confirmUnfriend).toHaveCount(0);
   await expect(more).toBeFocused();
 
-  // Without a friendship the menu offers only Block, which still confirms.
+  // Without a friendship the menu offers Block, which still confirms, and
+  // Report.
   await more.click();
-  await expect(menu.getByRole("menuitem")).toHaveText(["Block"]);
+  await expect(menu.getByRole("menuitem")).toHaveText(["Block", "Report"]);
   await block.click();
   await expect(confirmBlock).toContainText(
     "Block Maya Chen? You won’t see each other’s profiles",
@@ -286,12 +293,14 @@ test("a confirmed Block opens the Friends page with a dismissible notice", async
     await prepareFriendship(viewer, other);
     await viewer.setViewportSize({ width, height: 844 });
     await viewer.goto(`/people/${username}`);
-    // Keyboard: More actions, End reaches Block, Shift+Tab reaches its action.
+    // Keyboard: More actions, End and ArrowUp reach Block, Shift+Tab
+    // reaches its action.
     await viewer
       .getByRole("button", { name: `More actions for ${name}`, exact: true })
       .focus();
     await viewer.keyboard.press("Enter");
     await viewer.keyboard.press("End");
+    await viewer.keyboard.press("ArrowUp");
     await viewer.keyboard.press("Enter");
     await expect(
       viewer.getByRole("group", { name: new RegExp(`^Block ${name}\\?`) }),

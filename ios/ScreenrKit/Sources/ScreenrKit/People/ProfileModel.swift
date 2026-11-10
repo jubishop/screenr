@@ -198,10 +198,24 @@ public final class ProfileModel {
     case .unfriend(let person):
       await send(.remove, to: person)
     case .block(let person, _):
-      guard await send(.block, to: person, readAgain: false) else { return }
-      activity = .leaving
-      leave(blocked: person)
+      await block(person)
     }
+  }
+
+  // Block from the offer after the viewer reports the person or their
+  // content on their profile, at `username`, runs a confirmed Block and says
+  // so. Anyone else, such as another member's reply there, is the report's
+  // to block.
+  public func block(_ person: Person, onProfileOf username: String) async -> Bool {
+    guard person.username.lowercased() == username.lowercased() else { return false }
+    await block(person)
+    return true
+  }
+
+  private func block(_ person: Person) async {
+    guard await send(.block, to: person, readAgain: false) else { return }
+    activity = .leaving
+    leave(blocked: person)
   }
 
   @discardableResult

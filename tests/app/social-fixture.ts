@@ -36,6 +36,9 @@ for (const name of [
   "APNS_PRIVATE_KEY",
   "SENTRY_DSN",
   "SCREENR_IPHONE_INSTALL_URL",
+  "SCREENR_OWNER_EMAIL",
+  "PUSHOVER_API_KEY",
+  "PUSHOVER_USER_KEY",
 ])
   delete process.env[name];
 

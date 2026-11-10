@@ -102,11 +102,11 @@ in Cloudflare R2. See the [application stack](docs/application-stack.md) and
 | --- | --- |
 | `src/app/` | Next.js routes: sign-in, profile setup, invitation links, credits, member screens, API handlers, app icons, the web manifest, and stylesheets |
 | `src/components/` | React views and controls for feeds, titles, people, invitations, notifications, and account settings |
-| `src/server/` | Server-only domain code: authentication, access rules, social reads and writes, profile photos, invitations, catalog and availability, suggestions, notifications, email, and usage telemetry |
+| `src/server/` | Server-only domain code: authentication, access rules, social reads and writes, profile photos, invitations, catalog and availability, suggestions, notifications, email, reports and the owner's alerts, and usage telemetry |
 | `src/shared.ts`, `src/viewing.ts`, `src/member-routes.ts` | Types, helpers, and the member route parser shared by browser and server code |
 | `public/` | Static files: the TMDB logo, manifest icons, and the offline-page service worker |
 | `db/` | Numbered SQL migrations |
-| `scripts/` | Migration, bootstrap invitation, email and push worker, usage report, release packaging, icon generation, and browser-test harness commands |
+| `scripts/` | Migration, bootstrap invitation, email, push, and report alert worker, usage report, release packaging, icon generation, and browser-test harness commands |
 | `tests/` | Application and PostgreSQL tests in `app/`, Playwright suites in `browser/`, and Python tests for operations and check scripts |
 | `ops/` | VPS provisioning, release activation, systemd units, Caddy and PostgreSQL configuration, backups, restore checks, and failure alerts |
 | `bin/` | Repository setup, checks, knowledge search, deployment helpers, and Git hooks |
@@ -116,7 +116,9 @@ Member screens share one catch-all route in `src/app/(member)/`. It loads
 screen data through `src/server/` and renders views from `src/components/`;
 background reads and member actions go to the handler in
 `src/app/api/screenr/`, which serves the actions declared in
-`src/server/actions.ts`. `src/app/api/photos/` serves profile photos. The page, the
+`src/server/actions.ts`. `src/app/api/photos/` serves profile photos, and
+`src/app/(member)/reports/` with `src/app/api/reports/` is the owner's
+[review page](docs/data-and-access.md#content-reports). The page, the
 screen loader, and the browser shell all read paths through
 `src/member-routes.ts`, which names each screen and the query parameters it
 keeps. Sign-in accepts only these paths as

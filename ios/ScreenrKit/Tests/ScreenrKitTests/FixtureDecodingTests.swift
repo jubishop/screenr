@@ -42,6 +42,7 @@ struct FixtureDecodingTests {
       model(.comment(conversation: "", body: "", spoiler: false)),
       model(.removeComment(id: "")),
       model(.reaction(item: "", kind: nil)),
+      model(.report(.profile(""), reason: .other)),
       model(.setup(name: "", username: "")),
       model(.setupDetails),
       model(.invitation(token: "")),

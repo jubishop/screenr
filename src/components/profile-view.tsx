@@ -12,9 +12,11 @@ import { ConfirmAction } from "./confirmation";
 import { useActionError } from "./action-error";
 import { ActionButton } from "./action-button";
 import { TopTenSection, type ChangeTopTen } from "./top-ten";
+import { ReportFollowUp, ReportForm } from "./report";
 
 type Profile = Extract<ScreenData, { kind: "profile" }>["profile"];
-type Guarded = "remove" | "block";
+// More actions' choices, and the offer to block after a sent report.
+type Guarded = "remove" | "block" | "report" | "reported";
 
 export function ProfileView({
   data,
@@ -135,10 +137,11 @@ export function ProfileView({
   );
 }
 
-// Watch together and friend-request actions stay visible. Unfriend and Block
-// sit in More actions, and each needs an in-page confirmation. A confirmed
+// Watch together and friend-request actions stay visible. Unfriend, Block,
+// and Report sit in More actions. Unfriend and Block each need an in-page
+// confirmation, and Report opens its form, then offers to block. A confirmed
 // Block opens the Friends page. While the profile is not `available`, only an
-// open confirmation shows.
+// open confirmation or report form shows.
 function ProfileActions({
   profile,
   user,
@@ -235,6 +238,7 @@ function ProfileActions({
                 ? [{ label: "Unfriend", value: "remove" as const }]
                 : []),
               { label: "Block", value: "block" as const },
+              { label: "Report", value: "report" as const },
             ]}
             onSelect={setChoice}
           />
@@ -250,6 +254,26 @@ function ProfileActions({
           unavailable={!available}
           run={() => relationship(profile.user_id, "remove")}
           onDone={close}
+          onCancel={close}
+        />
+      )}
+      {confirming === "report" && (
+        <ReportForm
+          kind="profile"
+          name={name}
+          target={{ person: profile.user_id }}
+          onCancel={close}
+          onReported={() => setChoice("reported")}
+        />
+      )}
+      {/* Block from the offer, like Block, stays open until the Friends page
+          replaces the profile. */}
+      {confirming === "reported" && (
+        <ReportFollowUp
+          author={profile}
+          unavailable={!available}
+          block={() => block(profile)}
+          onBlocked={() => {}}
           onCancel={close}
         />
       )}

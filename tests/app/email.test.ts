@@ -11,6 +11,7 @@ import {
   assertNotLogged,
   testDatabaseURL,
 } from "./social-fixture";
+import { hang } from "./process-waits";
 
 process.env.EMAIL_TRANSPORT = "resend";
 process.env.RESEND_API_KEY = "test-key-never-used-on-the-network";
@@ -275,8 +276,8 @@ test("permanent Resend rejections are not retried; timeouts, conflicts, limits, 
   assert.match(sent[0], /975310/);
 });
 
-async function until(condition: () => boolean, limit = 2_000) {
-  const deadline = Date.now() + limit;
+async function until(condition: () => boolean) {
+  const deadline = Date.now() + hang;
   while (!condition() && Date.now() < deadline) await setTimeout(5);
   assert.ok(condition(), "Timed out");
 }
@@ -382,7 +383,7 @@ test("the worker refuses to start without the Resend transport, key, and sender"
     ["EMAIL_TRANSPORT", "RESEND_API_KEY", "EMAIL_FROM"].map(async (name) => {
       const { stderr } = await promisify(execFile)(process.execPath, worker, {
         env: { ...process.env, [name]: "" },
-        timeout: 15_000,
+        timeout: hang,
       }).then(
         () => assert.fail(`The worker must not start without ${name}.`),
         (error: Error & { stderr: string }) => error,
@@ -410,7 +411,7 @@ test("the worker deletes expired jobs on its first pass and exits cleanly on SIG
   try {
     // The worker handles SIGTERM before its first pass, which deletes
     // expired jobs.
-    const deadline = Date.now() + 15_000;
+    const deadline = Date.now() + hang;
     while ((await db.query("SELECT 1 FROM email_job")).rowCount) {
       assert.equal(child.exitCode, null, output);
       assert.ok(Date.now() < deadline, `No expired job cleanup. ${output}`);
@@ -418,19 +419,26 @@ test("the worker deletes expired jobs on its first pass and exits cleanly on SIG
     }
     child.kill("SIGTERM");
     // A stopping worker finishes its pass, ends its pause early, then closes
-    // the database pool and exits.
+    // the database pool and exits. Its pause is only a second, so this bound
+    // only ends a hang. Ending the bound's timer lets the file finish.
+    const timer = new AbortController();
     const [code, signal] = await Promise.race([
       exited,
-      setTimeout(5_000).then(() => assert.fail("The worker did not stop.")),
-    ]);
-    // Push delivery, without APNs settings, says once that it is off.
-    // Nothing else is printed.
+      setTimeout(hang, undefined, { signal: timer.signal }).then(() =>
+        assert.fail("The worker did not stop."),
+      ),
+    ]).finally(() => timer.abort());
+    // Push delivery, without APNs settings, and Pushover alerts, without
+    // Pushover settings, each say once that they are off. Nothing else is
+    // printed.
     assert.deepEqual(
       { code, signal, output },
       {
         code: 0,
         signal: null,
-        output: '{"event":"push delivery off","reason":"no APNs settings"}\n',
+        output:
+          '{"event":"push delivery off","reason":"no APNs settings"}\n' +
+          '{"event":"pushover delivery off","reason":"no Pushover settings"}\n',
       },
     );
   } finally {
@@ -438,7 +446,7 @@ test("the worker deletes expired jobs on its first pass and exits cleanly on SIG
   }
 });
 
-test("the worker keeps running while PostgreSQL is unreachable, logs the email loop's failure and the push loop's cleanup failure once, and stops during its backoff", async () => {
+test("the worker keeps running while PostgreSQL is unreachable, logs the email loop's failure and the push and alert loops' cleanup failures once, and stops during its backoff", async () => {
   // A loopback port that nothing listens on.
   const closed = createServer();
   await new Promise<void>((resolve) => closed.listen(0, "127.0.0.1", resolve));
@@ -462,20 +470,23 @@ test("the worker keeps running while PostgreSQL is unreachable, logs the email l
   try {
     // The email loop's first pass fails at once and waits two seconds; its
     // second fails again without a line, and it then waits four seconds.
-    // Without APNs settings, the push loop's first pass only runs its
-    // cleanup, whose failure never fails the pass, and the passes after it
-    // need no database. Stopping half a second into the email loop's
-    // four-second pause shows that SIGTERM ends it early.
+    // Without APNs or Pushover settings, the push and alert loops' first
+    // passes only run their cleanups, whose failures never fail the pass,
+    // and the passes after them need no database. Stopping half a second
+    // into the email loop's four-second pause shows that SIGTERM ends it
+    // early.
     const logged = (event: string) =>
-      lines().some((line) => line.event === event);
+      lines().filter((line) => line.event === event).length;
     await until(
-      () => logged("worker failed") && logged("worker cleanup failed"),
-      10_000,
+      () =>
+        logged("worker failed") === 1 && logged("worker cleanup failed") === 2,
     );
     await setTimeout(2_500);
     assert.equal(child.exitCode, null, output);
     child.kill("SIGTERM");
-    // A stopping worker ends its pause early.
+    // A stopping worker ends its pause early. This bound is what the test
+    // checks, so it stays tight: a worker that slept out its pause would stop
+    // about 3.5 seconds later.
     const [code, signal] = await Promise.race([
       exited,
       setTimeout(2_000).then(() => assert.fail("The worker did not stop.")),
@@ -488,10 +499,16 @@ test("the worker keeps running while PostgreSQL is unreachable, logs the email l
     assert.deepEqual(
       lines()
         .map(({ stack, ...fields }) => fields)
-        .sort((a, b) => a.event.localeCompare(b.event)),
+        .sort(
+          (a, b) =>
+            a.event.localeCompare(b.event) ||
+            String(a.step).localeCompare(String(b.step)),
+        ),
       [
         { event: "push delivery off", reason: "no APNs settings" },
+        { event: "pushover delivery off", reason: "no Pushover settings" },
         { event: "worker cleanup failed", step: "push jobs", ...failed },
+        { event: "worker cleanup failed", step: "pushover jobs", ...failed },
         { event: "worker failed", failures: 1, ...failed },
       ],
     );

@@ -1,0 +1,29 @@
+{
+  "description": "The reasons a member can give when reporting a post, review, comment, or profile, in the order and with the labels the report form shows.",
+  "reasons": [
+    {
+      "reason": "harassment",
+      "label": "Harassment or bullying"
+    },
+    {
+      "reason": "hate",
+      "label": "Hate or discrimination"
+    },
+    {
+      "reason": "sexual",
+      "label": "Sexual content"
+    },
+    {
+      "reason": "violence",
+      "label": "Violence or threats"
+    },
+    {
+      "reason": "spam",
+      "label": "Spam"
+    },
+    {
+      "reason": "other",
+      "label": "Something else"
+    }
+  ]
+}

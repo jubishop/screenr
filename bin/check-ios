@@ -25,6 +25,13 @@ At most SLOTS checks run at once on the Mac. Before its first step, a check
 waits for a free slot, saying so, and holds it until it exits. The slots are
 lock files in /tmp, or in SCREENR_CHECK_IOS_SLOT_DIR, which tests set.
 
+Where xcodebuild on PATH is a build-slot wrapper, which limits heavy Xcode and
+Swift jobs Mac-wide, a check takes one build slot through it after resolving
+its packages and holds it until it exits. The wrapper says so while it waits,
+and a wait it gives up on fails the check. The check's builds, Simulator boot, and
+tests run under that slot, so no step waits for one within its time limit
+(bin/_build_slot.py).
+
 A failing test reports at once, without collecting a sysdiagnose. Each step
 runs in its own process group, and a step that outlasts its time limit, such
 as --test-timeout for the Simulator tests, or an interrupted check, stops that
@@ -58,12 +65,14 @@ import re
 import shlex
 import shutil
 import signal
+import socket
 import subprocess
 import sys
 import threading
 import time
 
 sys.dont_write_bytecode = True
+import _build_slot as build_slot  # noqa: E402
 import _ios_check_records as records  # noqa: E402
 import _ios_packages as packages  # noqa: E402
 
@@ -100,7 +109,8 @@ TOOL_TIMEOUT_SECONDS = float(os.environ.get("SCREENR_CHECK_IOS_TOOL_TIMEOUT", 30
 # With five or more checks at once, the Mac's load average passed 200, and the
 # UI tests' accessibility audits timed out or measured contrast wrongly. Three
 # kept it below 30 on 2026-10-14. Building loads the Mac too, so a slot covers
-# the whole check.
+# the whole check. Build slots don't replace these: an interactive run never
+# waits for a build slot, and a Mac without the wrappers has none.
 SLOTS = 3
 SLOT_DIRECTORY = Path(os.environ.get("SCREENR_CHECK_IOS_SLOT_DIR", "/tmp"))
 SLOT_POLL_SECONDS = 2
@@ -138,6 +148,8 @@ ENVIRONMENT = {key: value for key, value in records.outside_git().items() if key
 XCODEBUILD = ["xcodebuild", "-hideShellScriptEnvironment", "-project", "ios/Screenr.xcodeproj",
               "-scheme", "Screenr", "-derivedDataPath", str(BUILD / "DerivedData"),
               *packages.xcodebuild_options(ROOT)]
+# The descriptor of the Mac build slot that the check holds, once take_build_slot() has one.
+held_build_slot = None
 
 
 class CheckFailure(Exception):
@@ -192,10 +204,13 @@ def run(label, command, timeout_minutes=None, environment=None):
     log = OUTPUT / (label.lower().replace(" ", "-") + ".log")
     warnings = []
     expired = threading.Event()
+    # A build-slot wrapper runs a call that inherits the check's slot at once.
+    slot = {} if held_build_slot is None else {build_slot.DESCRIPTOR: str(held_build_slot)}
     with log.open("w") as stream:
         # Its own process group, so stopping the step reaches every process it started.
-        process = subprocess.Popen(command, cwd=ROOT, env=ENVIRONMENT | (environment or {}), text=True,
-                                   start_new_session=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        process = subprocess.Popen(command, cwd=ROOT, env=ENVIRONMENT | slot | (environment or {}), text=True,
+                                   start_new_session=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                   pass_fds=() if held_build_slot is None else (held_build_slot,))
         watchdog = None
         if timeout_minutes:
             def expire():
@@ -327,6 +342,50 @@ def take_slot():
                   "on this Mac.", flush=True)
             waiting = True
         time.sleep(SLOT_POLL_SECONDS)
+
+
+def take_build_slot():
+    """Hold a Mac build slot for the rest of the check, where xcodebuild on PATH is a build-slot wrapper.
+
+    The wrapper takes it as for any heavy call, waiting as long as it would,
+    and then runs the next xcodebuild on PATH, here bin/_build_slot.py, which
+    sends the check the slot's descriptor and stays until the check exits. A
+    wait the wrapper gives up on, after saying why, fails the check. When the
+    wrapper could not take a slot, it says so, and each step's call tries
+    again. Without the wrappers, as in CI, the check takes none.
+    """
+    global held_build_slot
+    wrapper = shutil.which("xcodebuild", path=ENVIRONMENT.get("PATH"))
+    if not wrapper or Path(wrapper).resolve().name != build_slot.WRAPPER:
+        return
+    handoff = OUTPUT / "build-slot"
+    handoff.mkdir()
+    (handoff / "xcodebuild").symlink_to(Path(build_slot.__file__).resolve())
+    # The slot's record names the hand-off's process, with these arguments, in this checkout.
+    command = [wrapper, "bin/check-ios"]
+    ours, theirs = socket.socketpair()
+    # A slot descriptor named by the check's caller doesn't reach the wrapper, so it takes its own.
+    environment = {key: value for key, value in ENVIRONMENT.items() if key != build_slot.DESCRIPTOR}
+    environment.update(PATH=f"{handoff}{os.pathsep}{ENVIRONMENT.get('PATH', '')}",
+                       **{build_slot.CHANNEL: str(theirs.fileno())})
+    with theirs:
+        process = subprocess.Popen(command, cwd=ROOT, env=environment, stdin=subprocess.DEVNULL,
+                                   stdout=subprocess.DEVNULL, pass_fds=(theirs.fileno(),), start_new_session=True)
+    try:
+        message, descriptors, _, _ = socket.recv_fds(ours, 16, 1)
+    except BaseException:
+        stop(process)
+        raise
+    if not message:
+        raise CheckFailure(f"bin/check-ios got no Mac build slot: {shlex.join(command)} exited with status "
+                           f"{process.wait()}.")
+    if not descriptors:
+        ours.close()
+        return
+    held_build_slot = descriptors[0]
+    # The hand-off stays until this end closes, when the check exits.
+    ours.detach()
+    print("Took a Mac build slot for the rest of the check.", flush=True)
 
 
 def clear_stale_package_builds():
@@ -471,6 +530,7 @@ def main():
     shutil.rmtree(OUTPUT, ignore_errors=True)
     OUTPUT.mkdir(parents=True)
     packages.use(ROOT, lambda command: run("Package resolution", command, packages.RESOLVE_TIMEOUT_MINUTES))
+    take_build_slot()
     run("ScreenrKit tests", ["swift", "test", "--package-path", "ios/ScreenrKit",
                              "--scratch-path", str(BUILD / "ScreenrKit"), *packages.swift_options()],
         BUILD_TIMEOUT_MINUTES)
