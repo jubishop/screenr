@@ -81,6 +81,9 @@ public struct FixtureScenario: Hashable, Sendable {
     case declined
   }
 
+  // What the age check finds; see `FixtureAgeAssurance`.
+  public var age: Age
+
   public init(
     viewer: String = "alice",
     session: Session = .signedIn,
@@ -94,7 +97,8 @@ public struct FixtureScenario: Hashable, Sendable {
     outageSignal: URL? = nil,
     holds: URL? = nil,
     posters: Posters = .placeholders,
-    pickup: Pickup? = nil
+    pickup: Pickup? = nil,
+    age: Age = .notRequired
   ) {
     self.viewer = viewer
     self.session = session
@@ -109,6 +113,7 @@ public struct FixtureScenario: Hashable, Sendable {
     self.holds = holds
     self.posters = posters
     self.pickup = pickup
+    self.age = age
   }
 }
 
@@ -294,6 +299,12 @@ public struct FixtureTransport: HTTPTransport {
   // `SHARE completed` or `SHARE cancelled`. See `ShareEndings`.
   func recordShareEnding(_ ending: ShareEnding) throws {
     try log?.record("SHARE " + ending.rawValue)
+  }
+
+  // Logs what the age check asked the fixture's stand-in for Apple's
+  // service, as `AGE required` or `AGE range 18`. See `FixtureAgeAssurance`.
+  func recordAgeCheck(_ question: String) throws {
+    try log?.record("AGE " + question)
   }
 
   public func send(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {

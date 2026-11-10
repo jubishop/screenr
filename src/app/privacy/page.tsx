@@ -15,7 +15,7 @@ export default function Privacy() {
       <article className="auth-card policy">
         <h1>Privacy policy</h1>
         <p className="muted">
-          Effective <time dateTime="2026-11-01">November 1, 2026</time>
+          Effective <time dateTime="2026-11-09">November 9, 2026</time>
         </p>
         <p>
           Screenr is a private, invite-only social app for TV and movies. Justin
@@ -252,6 +252,12 @@ export default function Privacy() {
 
         <h2>Children</h2>
         <p>Screenr is not meant for children under 13.</p>
+        <p>
+          Where the law requires it, the iPhone app asks Apple for your age
+          category when it opens and doesn&rsquo;t let you in unless it shows
+          you&rsquo;re 18 or older. The app checks it on your iPhone; Screenr
+          never receives or keeps it.
+        </p>
 
         <h2>Changes</h2>
         <p>
