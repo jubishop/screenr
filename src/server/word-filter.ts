@@ -13,22 +13,25 @@ export function hasBlockedWord(text: string): boolean {
   return fold(text).split(phraseBreak).some(clauseHasBlockedWord);
 }
 
-// Whether a stretch of folded text with no phrase break holds an entry.
+// Whether a stretch of folded text with no phrase break holds an entry. Each
+// word of a phrase reads every way a single word does, so digits around a
+// phrase, as in a username such as "porch_monkey99", don't hide it.
 function clauseHasBlockedWord(clause: string) {
-  const tokens = [...clause.matchAll(word)].map(([token]) => token);
-  const readings = tokens.map(readingsOf);
-  for (let start = 0; start < tokens.length; start++) {
+  const readings = [...clause.matchAll(word)].map(([token]) =>
+    readingsOf(token),
+  );
+  for (let start = 0; start < readings.length; start++) {
     if (readings[start].some((reading) => listed(words, reading))) return true;
-    for (const map of lookAlikes) {
-      let phrase = read(trim(tokens[start]), map);
-      for (
-        let end = start + 1;
-        end < tokens.length && end - start < longestPhrase;
-        end++
-      ) {
-        phrase += ` ${read(trim(tokens[end]), map)}`;
-        if (listed(phrases, phrase)) return true;
-      }
+    let phrasings = readings[start];
+    for (
+      let end = start + 1;
+      end < readings.length && end - start < longestPhrase;
+      end++
+    ) {
+      phrasings = phrasings.flatMap((phrase) =>
+        readings[end].map((reading) => `${phrase} ${reading}`),
+      );
+      if (phrasings.some((phrase) => listed(phrases, phrase))) return true;
     }
   }
   return false;

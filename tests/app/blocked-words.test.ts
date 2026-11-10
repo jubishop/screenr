@@ -50,9 +50,12 @@ test("the filter matches whole words and phrases, ignoring case, accents, and hi
     "Gang-Bang",
     "rim job",
     "cum shots",
-    // Digits around a word don't join it, as in a username.
+    // Digits around a word don't join it, as in a username, including the
+    // words of a phrase.
     "nigger99",
     "2nigger",
+    "porch_monkey99",
+    "69blow_job",
     "One long gangbang of a finale.",
   ])
     assert.equal(hasBlockedWord(text), true, text);
@@ -90,7 +93,7 @@ test("the filter matches whole words and phrases, ignoring case, accents, and hi
     assert.equal(hasBlockedWord(text), false, text);
 });
 
-test("every list entry is blocked, with a phrase's words spaced, hyphenated, or joined, and the list holds each entry once in lowercase", () => {
+test("every list entry is blocked, with a phrase's words spaced, hyphenated, or joined, also in a username with digits around it, and the list holds each entry once in lowercase", () => {
   assert.ok(blockedWords.length > 0);
   assert.equal(new Set(blockedWords).size, blockedWords.length);
   for (const entry of blockedWords) {
@@ -102,6 +105,8 @@ test("every list entry is blocked, with a phrase's words spaced, hyphenated, or 
         true,
         entry,
       );
+    const username = `99${entry.replaceAll(" ", "_")}99`;
+    assert.equal(hasBlockedWord(username), true, username);
   }
 });
 
