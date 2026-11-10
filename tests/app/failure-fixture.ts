@@ -2,6 +2,7 @@ import { mock } from "node:test";
 import assert from "node:assert/strict";
 import { setTimeout } from "node:timers/promises";
 import { db, setup, cookieFor } from "./social-fixture";
+import { hang } from "./process-waits";
 
 // What failure-logs.test.ts and sentry-reports.test.ts share: reading a
 // failure line, failing a comment request for real, running the email worker
@@ -23,18 +24,25 @@ export function logged(printed: string[]) {
   return { fields, stack: stack as string[] };
 }
 
+// Polls until the condition holds. What it waits for, such as a failed
+// query's line, can be held up for seconds, so only a hang ends the wait.
 export async function until(condition: () => boolean) {
-  for (let wait = 0; wait < 400 && !condition(); wait++) await setTimeout(5);
+  const deadline = Date.now() + hang;
+  while (!condition() && Date.now() < deadline) await setTimeout(5);
   assert.ok(condition(), "Timed out");
 }
 
 // Runs screenr-worker's email loop until its first pass fails and is logged.
+// The loop stops even when the wait fails, so the file can finish.
 export async function failWorkerPass(printed: string[]) {
   const stop = new AbortController();
   const loop = runWorkerLoop(runWorkerPass, stop.signal);
-  await until(() => printed.length > 0);
-  stop.abort();
-  await loop;
+  try {
+    await until(() => printed.length > 0);
+  } finally {
+    stop.abort();
+    await loop;
+  }
 }
 
 // Posts a comment that only a probe check constraint rejects, so the request

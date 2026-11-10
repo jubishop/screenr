@@ -541,6 +541,11 @@ finished date beside the card's time is clutter.
 - Keeping the last-finished date beside "finished", in combined cards or
   in single entries.
 
+**Updated — 2026-11-09:** A
+[top 10 entry](profile-top-ten.md#feed-entries-for-top-10-changes--2026-11-09)
+is also a structured action that combines, such as "Theo Park recommends
+and added it to their top 10 at #3".
+
 ## Existing rules that continue to apply
 
 These rules come from the [product brief](product-brief.md). The feed

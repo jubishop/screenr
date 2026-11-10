@@ -83,6 +83,7 @@ public final class AccountLinkModel {
     case .failure(let error):
       appleNonce = nil
       if let error = error as? ASAuthorizationError, error.code == .canceled { return }
+      providers.log.warning("Sign in with Apple failed", .error(error))
       failure = Self.appleUnfinished
     }
   }

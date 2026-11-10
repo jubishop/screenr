@@ -9,6 +9,8 @@ import {
   captureFailures,
   failureEvents,
 } from "./social-fixture";
+// This file's own hang() makes Resend hang.
+import { hang as hangBound } from "./process-waits";
 import { changeRelationship } from "../../src/server/relationships";
 import { addComment, removeComment } from "../../src/server/comments";
 import {
@@ -279,6 +281,9 @@ test("a slow sign-in email does not delay an unrelated friendship request", asyn
   await sending;
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
+    // A friend request that waited for the delivery would wait until the
+    // provider answers, which happens only after this race, so the bound only
+    // ends a hang.
     await Promise.race([
       changeRelationship(ben, alice, "request"),
       new Promise((_, reject) => {
@@ -287,7 +292,7 @@ test("a slow sign-in email does not delay an unrelated friendship request", asyn
             reject(
               new Error("Friend request waited for unrelated sign-in delivery"),
             ),
-          1000,
+          hangBound,
         );
       }),
     ]);
@@ -334,15 +339,22 @@ test("a worker pass with no email due doesn't take the write lock", async () => 
   await addComment(ben, conversation, "Not due for ten minutes", false);
   const writer = await db.connect();
   let pass: Promise<boolean> | undefined;
+  // A pass that took the lock would wait until the writer commits, after this
+  // race, so the bound only ends a hang. Ending its timer lets the file finish.
+  const timer = new AbortController();
   try {
     await writer.query("BEGIN");
     await writer.query("SELECT pg_advisory_xact_lock($1)", [domainLock]);
     pass = deliverOne();
     assert.equal(
-      await Promise.race([pass, sleep(1000, "waited for the lock")]),
+      await Promise.race([
+        pass,
+        sleep(hangBound, "waited for the lock", { signal: timer.signal }),
+      ]),
       false,
     );
   } finally {
+    timer.abort();
     await writer.query("COMMIT");
     writer.release();
     await pass;

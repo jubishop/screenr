@@ -6,6 +6,8 @@ import XCTest
 final class SignInTests: XCTestCase {
   private static let codeLimit =
     "Too many codes requested. Try again later, or continue with Google."
+  private static let suspended =
+    "Your Screenr account is suspended. To ask about it, email screenr@jubishop.com."
 
   override func setUp() {
     continueAfterFailure = false
@@ -53,6 +55,35 @@ final class SignInTests: XCTestCase {
     XCTAssertFalse(app.staticTexts["Too many attempts"].exists)
   }
 
+  // The server refuses a member the owner suspended by every method, in its
+  // own plain words, which the screen shows, and the member stays signed out.
+  @MainActor
+  func testShowsTheSuspensionRefusalForEachMethod() throws {
+    let log = RequestLog.temporary()
+    let app = launchSignedOut(
+      overrides: ["auth/sign-in/email-otp/suspended", "auth/sign-in/social/suspended"],
+      log: log
+    )
+    let refusal = app.staticTexts[Self.suspended]
+
+    requestCode(app)
+    enterCode(app, "123456")
+    XCTAssertTrue(refusal.waitForExistence(timeout: 5))
+    try app.performScreenrAudit()
+    app.buttons["Use another email or request a new code"].tap()
+    XCTAssertTrue(app.textFields["Email address"].waitForExistence(timeout: 5))
+    XCTAssertFalse(refusal.exists)
+
+    // The email field now has focus, and the keyboard covers text the audit
+    // would read through it, so only the code step above is audited.
+    for (count, method) in ["Sign in with Apple", "Continue with Google"].enumerated() {
+      app.buttons[method].tap()
+      wait(for: [socialSignIns(count + 1, in: log)], timeout: 10)
+      XCTAssertTrue(refusal.waitForExistence(timeout: 5), method)
+    }
+    XCTAssertFalse(app.navigationBars["Your circle"].exists)
+  }
+
   @MainActor
   func testSignsInWithApple() throws {
     let app = launchSignedOut()
@@ -97,11 +128,31 @@ final class SignInTests: XCTestCase {
   }
 
   @MainActor
-  private func launchSignedOut(overrides: [String] = []) -> XCUIApplication {
+  private func launchSignedOut(
+    overrides: [String] = [],
+    log: RequestLog? = nil
+  ) -> XCUIApplication {
     let app = XCUIApplication()
-    app.launch(with: FixtureLaunch(session: .signedOut, overrides: overrides))
+    app.launch(
+      with: FixtureLaunch(session: .signedOut, overrides: overrides, requestLog: log?.file)
+    )
     XCTAssertTrue(app.textFields["Email address"].waitForExistence(timeout: 10))
     return app
+  }
+
+  // Fulfilled once the app has posted `count` Apple or Google sign-ins.
+  private func socialSignIns(_ count: Int, in log: RequestLog) -> XCTestExpectation {
+    XCTNSPredicateExpectation(
+      predicate: NSPredicate { _, _ in
+        do {
+          return try log.loggedLines()
+            .filter { $0.hasPrefix("POST /api/auth/sign-in/social") }.count == count
+        } catch {
+          return false
+        }
+      },
+      object: nil
+    )
   }
 
   @MainActor

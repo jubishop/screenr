@@ -50,6 +50,8 @@ const { createAuth } = await import("../../src/server/auth");
 const { completeSignup } = await import("../../src/server/invitations");
 const { uploadPhoto } = await import("../../src/server/photos");
 const { seal } = await import("../../src/server/sealing");
+const { transaction } = await import("../../src/server/db");
+const { suspend } = await import("../../src/server/suspensions");
 
 type Query = Record<string, string | string[]>;
 type Body = Record<string, unknown>;
@@ -1441,6 +1443,10 @@ type AuthCase = {
 };
 type Google = ReturnType<typeof fakeGoogle>;
 const signInCode = { email: "alice@example.test", type: "sign-in" };
+// The owner suspends Alice, which ends her sessions
+// (docs/data-and-access.md#member-suspension). Each case restores them.
+const suspendAlice = () =>
+  transaction((client) => suspend(client, world.users.alice));
 const requestCodes = async (post: AuthPost, emails: string[], ip?: number) => {
   for (const [index, email] of emails.entries())
     assert.equal(
@@ -1533,6 +1539,16 @@ const authPosts: Record<string, Record<string, AuthCase>> = {
           );
       },
     },
+    suspended: {
+      description:
+        "The right code for a member the owner suspended, which is refused with Screenr's message, as every sign-in method is.",
+      status: 403,
+      body: (codes) => ({ email: "alice@example.test", otp: codes.at(-1)! }),
+      before: async (post) => {
+        await requestCodes(post, [signInCode.email]);
+        await suspendAlice();
+      },
+    },
   },
   "sign-in/social": {
     google: {
@@ -1547,6 +1563,13 @@ const authPosts: Record<string, Record<string, AuthCase>> = {
       status: 401,
       body: (_, google) => googleToken(google, { aud: "other-client" }),
       printed: ["WARN [Better Auth]: Invalid id token"],
+    },
+    suspended: {
+      description:
+        "A Google or Apple sign-in for a member the owner suspended, which is refused with Screenr's message, as every sign-in method is.",
+      status: 403,
+      body: (_, google) => googleToken(google),
+      before: () => suspendAlice(),
     },
   },
   "link-social": {

@@ -9,7 +9,7 @@ import {
   isAPIError,
 } from "better-auth/api";
 import { bearer, emailOTP } from "better-auth/plugins";
-import { codeLimitMessage } from "../shared";
+import { codeLimitMessage, suspendedCode, suspendedMessage } from "../shared";
 import { freshSignInSeconds } from "./account-deletion";
 import {
   appleBundleIds,
@@ -22,6 +22,7 @@ import { queueCode } from "./email";
 import { googleClientRejections } from "./google-client";
 import { logFailure } from "./log";
 import { copyGooglePhoto } from "./photos";
+import { isSuspended } from "./suspensions";
 
 // Every invitation token is 32 random bytes in base64url.
 const invitationFormat = /^[a-zA-Z0-9_-]{43}$/;
@@ -631,6 +632,23 @@ export function createAuth(
       }),
     ],
     databaseHooks: {
+      session: {
+        create: {
+          // Every sign-in method creates its session here: email codes,
+          // Google and Apple ID tokens, and the web's Google callback, which
+          // returns to the sign-in page with the code as `error`. A
+          // suspended member gets the plain message instead
+          // (docs/data-and-access.md#member-suspension).
+          before: (session) =>
+            logCallbackFailure("session.create.before", async () => {
+              if (await isSuspended(session.userId))
+                throw new APIError("FORBIDDEN", {
+                  message: suspendedMessage,
+                  code: suspendedCode,
+                });
+            }),
+        },
+      },
       user: {
         create: {
           before: (user, context) =>

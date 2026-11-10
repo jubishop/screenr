@@ -1,3 +1,4 @@
+import AuthenticationServices
 import Foundation
 import Testing
 
@@ -25,9 +26,11 @@ struct AccountLinkModelTests {
 
   // Google's stand-in redeems its code at the fixture API's token endpoint,
   // and `test` answers the link.
-  private func model(_ test: TestClient, onLink: @escaping @MainActor () -> Void = {}) throws
-    -> AccountLinkModel
-  {
+  private func model(
+    _ test: TestClient,
+    log: Log = Log(.session, router: LogRouter()),
+    onLink: @escaping @MainActor () -> Void = {}
+  ) throws -> AccountLinkModel {
     AccountLinkModel(
       api: test.client,
       providers: IdentityProviders(
@@ -35,7 +38,8 @@ struct AccountLinkModelTests {
         google: GoogleSignIn(
           clientID: GoogleSignInTests.clientID,
           transport: try FixtureTransport(directory: TestFixtures.directory)
-        )
+        ),
+        log: log
       ),
       onLink: onLink
     )
@@ -138,5 +142,31 @@ struct AccountLinkModelTests {
 
     #expect(model.failure == "Sign in with Apple did not finish. Try again.")
     #expect(test.transport.requests.isEmpty)
+  }
+
+  // Apple's sheet failing logs a warning with the error's domain and code, which name its case.
+  // Cancelling it logs nothing.
+  @Test func logsAFailedAppleSheetButNotACancelledOne() async throws {
+    let router = LogRouter()
+    let sink = CapturingSink()
+    router.add(sink)
+    let test = try TestClient(token: "signed-token", replies: [])
+    let model = try model(test, log: Log(.session, router: router))
+
+    _ = model.startApple()
+    await model.completeApple(.failure(ASAuthorizationError(.canceled)))
+    #expect(model.failure == nil)
+    _ = model.startApple()
+    await model.completeApple(.failure(ASAuthorizationError(.failed)))
+
+    #expect(model.failure == "Sign in with Apple did not finish. Try again.")
+    let line = try #require(sink.entries.only)
+    #expect(line.level == .warning)
+    #expect(line.category == .session)
+    #expect(
+      line.text
+        == "Sign in with Apple failed"
+        + " error=com.apple.AuthenticationServices.AuthorizationError 1004"
+    )
   }
 }

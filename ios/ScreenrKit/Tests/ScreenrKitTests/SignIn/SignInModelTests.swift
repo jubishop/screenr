@@ -12,14 +12,16 @@ struct SignInModelTests {
   private func model(
     _ test: TestClient,
     invitation: String? = nil,
-    google: RecordingTransport = RecordingTransport([])
+    google: RecordingTransport = RecordingTransport([]),
+    log: Log = Log(.session, router: LogRouter())
   ) -> SignInModel {
     SignInModel(
       api: test.client,
       invitation: PendingInvitation(token: invitation),
       providers: IdentityProviders(
         authorization: .system,
-        google: GoogleSignIn(clientID: GoogleSignInTests.clientID, transport: google)
+        google: GoogleSignIn(clientID: GoogleSignInTests.clientID, transport: google),
+        log: log
       ),
       browser: FailingAuthenticator(error: URLError(.badURL))
     )
@@ -289,6 +291,45 @@ struct SignInModelTests {
     #expect(model.failure == "Invalid OTP")
   }
 
+  static let suspended =
+    "Your Screenr account is suspended. To ask about it, email screenr@jubishop.com."
+
+  // The server refuses every sign-in method for a suspended member, with its
+  // own words, which the screen shows as they are.
+  @Test func showsTheSuspensionRefusalForEachMethod() async throws {
+    let refusal = { (fixture: String) in
+      RecordingTransport.Reply.response(status: 403, body: try TestFixtures.body(fixture))
+    }
+    let test = try TestClient(
+      replies: [
+        try .json(200, ["success": true]),
+        try refusal("auth/sign-in/email-otp/suspended"),
+        try refusal("auth/sign-in/social/suspended"),
+        try refusal("auth/sign-in/social/suspended"),
+      ]
+    )
+    let google = RecordingTransport([try .json(200, ["id_token": "google-id-token"])])
+    let model = model(test, google: google)
+    model.email = "alice@example.test"
+
+    await model.sendCode()
+    model.enterCode("123456")
+    await model.checkCode()
+    #expect(model.failure == Self.suspended)
+    model.useAnotherEmail()
+
+    _ = model.startApple()
+    await model.signInWithApple(
+      AppleCredential(identityToken: "identity", authorizationCode: "code", name: nil)
+    )
+    #expect(model.failure == Self.suspended)
+
+    await model.signInWithGoogle(using: RedirectingAuthenticator())
+    #expect(model.failure == Self.suspended)
+    #expect(test.session.phase == .signedOut)
+    #expect(try test.keychain.read() == nil)
+  }
+
   @Test func explainsAFailureWithoutAServerMessage() async throws {
     let test = try TestClient(replies: [.failure(URLError(.notConnectedToInternet))])
     let model = model(test)
@@ -362,6 +403,30 @@ struct SignInModelTests {
 
     #expect(model.failure == nil)
     #expect(test.transport.requests.isEmpty)
+  }
+
+  // Apple's sheet failing logs a warning with the error's domain and code, which name its case.
+  // Cancelling it logs nothing.
+  @Test func logsAFailedAppleSheetButNotACancelledOne() async throws {
+    let router = LogRouter()
+    let sink = CapturingSink()
+    router.add(sink)
+    let test = try TestClient(replies: [])
+    let model = model(test, log: Log(.session, router: router))
+
+    _ = model.startApple()
+    await model.completeApple(.failure(ASAuthorizationError(.canceled)))
+    _ = model.startApple()
+    await model.completeApple(.failure(ASAuthorizationError(.failed)))
+
+    let line = try #require(sink.entries.only)
+    #expect(line.level == .warning)
+    #expect(line.category == .session)
+    #expect(
+      line.text
+        == "Sign in with Apple failed"
+        + " error=com.apple.AuthenticationServices.AuthorizationError 1004"
+    )
   }
 
   @Test(

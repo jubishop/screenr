@@ -1,0 +1,23 @@
+{
+  "description": "A Google or Apple sign-in for a member the owner suspended, which is refused with Screenr's message, as every sign-in method is.",
+  "viewer": null,
+  "request": {
+    "method": "POST",
+    "action": "sign-in/social",
+    "path": "/api/auth/sign-in/social",
+    "body": {
+      "provider": "google",
+      "idToken": {
+        "token": "fixture-google-id-token",
+        "nonce": "fixture-nonce"
+      }
+    }
+  },
+  "response": {
+    "status": 403,
+    "body": {
+      "message": "Your Screenr account is suspended. To ask about it, email screenr@jubishop.com.",
+      "code": "ACCOUNT_SUSPENDED"
+    }
+  }
+}

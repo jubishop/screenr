@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import { SignIn } from "../../components/sign-in";
 import { returnPath } from "../../member-routes";
+import { suspendedCode, suspendedMessage } from "../../shared";
 import { activeInvitation, invitationHash } from "../../server/invitations";
 export const dynamic = "force-dynamic";
 // Invite links redirect here. Keep previews public and independent of cookies,
@@ -24,11 +25,15 @@ export default async function Login({
   const token = (await cookies()).get("screenr-invite")?.value;
   const query = await searchParams;
   const invited = !!token && !!(await activeInvitation(invitationHash(token)));
-  const initialError = query.error
-    ? "To connect Google to an existing account, sign in with an email code first, then connect Google in Account."
-    : query.invitation
-      ? "That invitation is no longer available. Existing members can still sign in."
-      : "";
+  // A refused web Google sign-in returns here with Better Auth's code.
+  const initialError =
+    query.error === suspendedCode
+      ? suspendedMessage
+      : query.error
+        ? "To connect Google to an existing account, sign in with an email code first, then connect Google in Account."
+        : query.invitation
+          ? "That invitation is no longer available. Existing members can still sign in."
+          : "";
   return (
     <SignIn
       invited={invited}

@@ -265,7 +265,7 @@ public final class ScreenrClient: ScreenrAPI {
         user = try ScreenrJSON.decoder().decode(SignedInUser.self, from: data).user.id
       } catch {
         await discard(token)
-        throw APIError(kind: .invalidResponse, requestID: context.requestID)
+        throw APIError(undecodable: error, requestID: context.requestID)
       }
       guard user == userId else {
         await discard(token)
@@ -377,7 +377,7 @@ public final class ScreenrClient: ScreenrAPI {
     do {
       return try ScreenrJSON.decoder().decode(Response.self, from: data)
     } catch {
-      throw APIError(kind: .invalidResponse, requestID: requestID)
+      throw APIError(undecodable: error, requestID: requestID)
     }
   }
 
