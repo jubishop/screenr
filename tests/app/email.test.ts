@@ -349,9 +349,11 @@ test("a new code requested while the last one is being sent does not wait for Re
   const timer = new AbortController();
   try {
     await arrived;
+    // A new code that waited for the send would wait until Resend answers,
+    // which happens only after this race, so the bound only ends a hang.
     await Promise.race([
       queueCode({ email: "again@example.test", otp: "222222" }),
-      setTimeout(1000, undefined, { signal: timer.signal }).then(
+      setTimeout(hang, undefined, { signal: timer.signal }).then(
         () => assert.fail("The new code waited for the last send."),
         () => {},
       ),
@@ -487,9 +489,10 @@ test("the worker keeps running while PostgreSQL is unreachable, logs the email l
     // A stopping worker ends its pause early. This bound is what the test
     // checks, so it stays tight: a worker that slept out its pause would stop
     // about 3.5 seconds later.
+    const stopBound = 2_000;
     const [code, signal] = await Promise.race([
       exited,
-      setTimeout(2_000).then(() => assert.fail("The worker did not stop.")),
+      setTimeout(stopBound).then(() => assert.fail("The worker did not stop.")),
     ]);
     assert.deepEqual({ code, signal }, { code: 0, signal: null }, output);
     const failed = {

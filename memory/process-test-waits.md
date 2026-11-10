@@ -1,6 +1,6 @@
 ---
 name: process-test-waits
-description: Tests that start a process wait for its own ready line or exit, and browser expects wait for a page's poll, with a bound only a hang reaches, because test-database setup and load from parallel checks stalled them for many seconds.
+description: Tests that start a process wait for its own ready line or exit, browser expects wait for a page's poll, and application tests wait for the database and their own work, with a bound only a hang reaches, because test-database setup, checkpoints, and load from parallel checks stalled them for many seconds.
 type: reference
 ---
 
@@ -9,7 +9,9 @@ type: reference
 When a test starts a process, such as the browser harness, wait for a signal
 from the process: a line on its output that says it is ready, or its exit.
 Bound the wait only to end a hang, with a few minutes. Never poll against a
-deadline sized for an idle machine.
+deadline sized for an idle machine. The same holds for a wait on the
+database, its connection pool, or work in the test's own process, such as a
+printed line or a request to its own server.
 
 **Why:** A process that set up a test database stalled for many seconds in
 parallel agent runs. `prepareTestDatabase` in `scripts/checkout.ts` dropped
@@ -59,6 +61,15 @@ line and the fake Next's ready line, then fetches `/login` once. It passed
 with every start held for 20 seconds, in 25 separate runs at load averages
 from 28 to 411, and in 18 runs six at a time at load averages from 5 to 7.
 
+The application tests' waits on the database and their own work used bounds
+of 1 to 10 seconds until
+[#637](https://github.com/jubishop/screenr/issues/637). On 2026-11-09,
+holding what each waited for just past its bound, for 2 to 12 seconds,
+failed it in all 12 cases tried: statements such as a leftover query, the
+unread count, or a migration run's first one; a broken connection's error
+event; the pool's `remove` event; and replies from the test's own servers.
+Each passes under the shared bound below with the same hold.
+
 **How to apply:**
 
 - Have the process, or the fake it starts, print a line when it is ready.
@@ -94,5 +105,21 @@ from 28 to 411, and in 18 runs six at a time at load averages from 5 to 7.
   test in `tests/app/email.test.ts` does: a pending timer of that length held
   the file open for three minutes after its tests passed. Keep a bound tight
   only when the test checks it on purpose, and say why beside it. List such a
-  `timeout` in that check's `deliberate` set, as the 1-second bound on the
-  stalled health check in `tests/app/operations.test.ts` is.
+  bound in that check's `deliberate` set, as the 1-second bound on the
+  stalled health check in `tests/app/operations.test.ts` and the 2-second
+  bound on a stopping worker in `tests/app/email.test.ts` are.
+- Bound the application tests' waits on the database and their own work
+  with `hang` too: a poll of the pool or of printed lines, as `idle()` in
+  `tests/app/social-fixture.ts` and `until()` in
+  `tests/app/failure-fixture.ts` do, a timer raced against work, a
+  `node:test` `timeout`, and a request's timeout, such as
+  `request.setTimeout`, `AbortSignal.timeout`, or Playwright's request
+  context. `tests/app/process-waits.test.ts` refuses any other bound on a
+  raced timer, a test, or a request. It can't tell a poll's deadline from a
+  timestamp, so give each poll `hang` by hand.
+- To show that one operation doesn't wait for another, hold what it would
+  wait for, such as the write lock or a provider's reply, until the race ends,
+  and race the operation against `hang`. One that wrongly waited would not
+  finish before the release, as `whileLocked()` in
+  `tests/app/invitations.test.ts` shows. Stop what a helper starts, such as a
+  worker loop, in a `finally`, so a failed wait still lets its file finish.

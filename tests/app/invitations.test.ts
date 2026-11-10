@@ -12,6 +12,7 @@ import {
   setup,
   cookieFor,
 } from "./social-fixture";
+import { hang } from "./process-waits";
 const {
   createInvitation,
   completeSignup,
@@ -30,7 +31,10 @@ const { GET, POST } = await import("../../src/app/api/screenr/[action]/route");
 useDatabase();
 
 // Holds the shared write lock from another connection, as an activity email
-// send does, while `work` runs. Blocked work finishes after the release.
+// send does, while `work` runs. Work that waits for the lock without a limit
+// finishes only after the release, so it ends "still waiting" at the bound.
+// The bound only ends a hang: load can hold work that doesn't wait for the
+// lock for many seconds.
 async function whileLocked<T>(work: () => Promise<T>) {
   const holder = await db.connect();
   await holder.query("BEGIN");
@@ -44,7 +48,7 @@ async function whileLocked<T>(work: () => Promise<T>) {
   try {
     return await Promise.race([
       settled,
-      setTimeout(5000, "still waiting" as const, { signal: limit.signal }),
+      setTimeout(hang, "still waiting" as const, { signal: limit.signal }),
     ]);
   } finally {
     limit.abort();

@@ -7,6 +7,7 @@ import { setImmediate, setTimeout } from "node:timers/promises";
 import { promisify } from "node:util";
 import type { PoolClient } from "pg";
 import { useDatabase, db, captureFailures, person } from "./social-fixture";
+import { hang } from "./process-waits";
 
 const { transaction } = await import("../../src/server/db");
 const { initialScreen } = await import("../../src/server/screens");
@@ -31,8 +32,11 @@ const backend = async (client: PoolClient) =>
 const removal = () =>
   new Promise<void>((resolve) => db.once("remove", () => resolve()));
 
+// Polls until the condition holds, such as a broken connection's line being
+// printed. Load can hold that up for seconds, so only a hang ends the wait.
 async function until(condition: () => boolean) {
-  for (let wait = 0; wait < 400 && !condition(); wait++) await setTimeout(5);
+  const deadline = Date.now() + hang;
+  while (!condition() && Date.now() < deadline) await setTimeout(5);
   assert.ok(condition(), "Timed out");
 }
 
@@ -132,7 +136,9 @@ test("a screen read that fails answers only after the unread count beside it fin
           [pid],
         )
       ).rowCount;
-    const deadline = performance.now() + 10_000;
+    // Load or a checkpoint can hold the count up for many seconds, so only a
+    // hang ends the wait for the lock to hold it.
+    const deadline = performance.now() + hang;
     while (!(await held())) {
       assert.ok(performance.now() < deadline, "The lock never held the count");
       await setTimeout(5);
