@@ -33,6 +33,26 @@ public struct APIError: Error, Hashable, Sendable {
     // A sign-in meant to confirm the signed-in member reached a different
     // account. The client kept the member's session and ended the other one.
     case otherAccount
+
+    // The case's name, for logs, without its associated values.
+    var name: StaticString {
+      switch self {
+      case .signedOut: "signedOut"
+      case .forbidden: "forbidden"
+      case .notFound: "notFound"
+      case .timedOut: "timedOut"
+      case .rateLimited: "rateLimited"
+      case .updateRequired: "updateRequired"
+      case .server: "server"
+      case .rejected: "rejected"
+      case .offline: "offline"
+      case .cancelled: "cancelled"
+      case .invalidResponse: "invalidResponse"
+      case .invalidRequest: "invalidRequest"
+      case .keychain: "keychain"
+      case .otherAccount: "otherAccount"
+      }
+    }
   }
 
   public let kind: Kind
@@ -40,12 +60,24 @@ public struct APIError: Error, Hashable, Sendable {
   // Better Auth's code for the error, such as `INVALID_OTP`, when it sent one.
   public let code: String?
   public let requestID: String
+  // Why the body of an invalid response did not decode.
+  public let decodingFailure: DecodingFailure?
 
   public init(kind: Kind, message: String? = nil, code: String? = nil, requestID: String) {
     self.kind = kind
     self.message = message
     self.code = code
     self.requestID = requestID
+    decodingFailure = nil
+  }
+
+  // An invalid response whose body did not decode, as the decoder's `error` explains.
+  init(undecodable error: any Error, requestID: String) {
+    kind = .invalidResponse
+    message = nil
+    code = nil
+    self.requestID = requestID
+    decodingFailure = DecodingFailure(error)
   }
 
   // Repeating the request cannot help, so background reads stop until the

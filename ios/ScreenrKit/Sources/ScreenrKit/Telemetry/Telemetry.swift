@@ -1,5 +1,6 @@
 import Foundation
 import Sentry
+import Synchronization
 
 // Crash, error, hang, and performance reporting through Sentry, which runs only in Release
 // builds. Dev builds never start Sentry, so they send nothing. What Release builds send is
@@ -23,6 +24,8 @@ public final class Telemetry: APIRequestObserver {
   public let state: State
   private let reporter: (any SentryReporter)?
   private let api: Log
+  // The route patterns whose unreadable responses this launch has reported.
+  private let reportedRoutes = Mutex<Set<String>>([])
 
   public convenience init(configuration: AppConfiguration, router: LogRouter = .shared) {
     self.init(
@@ -92,9 +95,9 @@ public final class Telemetry: APIRequestObserver {
   }
 
   // Logs a finished API call and adds it to Sentry as a breadcrumb and, in traced sessions, a
-  // transaction, each tagged with its request ID, unless it is a successful poll. The API client
-  // reports every call here. Its route is already a pattern; reducing it again keeps a raw path
-  // from reaching Sentry.
+  // transaction, each tagged with its request ID, unless it is a successful poll. A response the
+  // app cannot read also opens a Sentry issue. The API client reports every call here. Its route
+  // is already a pattern; reducing it again keeps a raw path from reaching Sentry.
   public func requestFinished(_ record: APIRequestRecord) {
     let route = RoutePattern(path: record.route)
     var fields: [LogField] = [
@@ -102,26 +105,14 @@ public final class Telemetry: APIRequestObserver {
       .route(route),
       .identifier("request_id", record.requestID),
     ]
-    let level: LogLevel
-    let breadcrumbLevel: SentryLevel
-    let spanStatus: SentrySpanStatus
-    switch (record.status, record.error?.kind) {
-    case (let status?, _):
-      fields.append(.int("status", status))
-      level = status >= 500 ? .warning : .info
-      breadcrumbLevel = status >= 500 ? .error : status >= 400 ? .warning : .info
-      spanStatus = Self.spanStatus(forHTTPStatus: status)
-    case (nil, .cancelled?):
-      fields.append(.constant("outcome", "cancelled"))
-      level = .info
-      breadcrumbLevel = .info
-      spanStatus = .cancelled
-    case (nil, _):
-      fields.append(.constant("outcome", "failed"))
-      level = .warning
-      breadcrumbLevel = .error
-      spanStatus = .unavailable
+    if let status = record.status { fields.append(.int("status", status)) }
+    if let error = record.error {
+      fields += Self.outcome(of: error)
     }
+    let (level, breadcrumbLevel, spanStatus) = Self.severity(
+      status: record.status,
+      error: record.error?.kind
+    )
     fields.append(.duration("duration_ms", record.duration))
     // An open screen polls every few seconds, usually getting an unchanged 304. A successful poll
     // logs only at debug level, which the log file leaves out, and skips Sentry, so polling cannot
@@ -154,6 +145,45 @@ public final class Telemetry: APIRequestObserver {
       transaction.setTag(value: record.requestID, key: "request_id")
       transaction.setData(value: record.status, key: "http.response.status_code")
       transaction.finish(status: spanStatus)
+    }
+
+    // A response the app cannot read, such as a body that no longer decodes, is a defect in the app
+    // or the server. An open screen polls its route every few seconds, so each route reports once
+    // a launch, within Sentry's error quota.
+    if let error = record.error, error.kind == .invalidResponse,
+      reportedRoutes.withLock({ $0.insert(route.value).inserted })
+    {
+      capture(error, requestID: record.requestID)
+    }
+  }
+
+  // A failed call's outcome and error, and for a body that did not decode, DecodingError's case
+  // and coding path.
+  private static func outcome(of error: APIError) -> [LogField] {
+    guard error.kind != .cancelled else { return [.constant("outcome", "cancelled")] }
+    var fields: [LogField] = [.constant("outcome", "failed"), .constant("error", error.kind.name)]
+    if let failure = error.decodingFailure {
+      fields.append(.label("decoding", failure.reason))
+      if !failure.codingPath.isEmpty { fields.append(.codingPath(failure)) }
+    }
+    return fields
+  }
+
+  // How a finished call logs, adds its breadcrumb, and ends its span. Most 4xx answers are
+  // expected, such as not found or an ended session, so they log at info. A 5xx, no response, or a
+  // response the app cannot use, whatever its status, logs a warning.
+  private static func severity(
+    status: Int?,
+    error: APIError.Kind?
+  ) -> (LogLevel, SentryLevel, SentrySpanStatus) {
+    switch (status, error) {
+    case (_, .cancelled?): (.info, .info, .cancelled)
+    case (let status?, _) where (400..<500).contains(status):
+      (.info, .warning, spanStatus(forHTTPStatus: status))
+    case (let status?, _) where status >= 500: (.warning, .error, spanStatus(forHTTPStatus: status))
+    case (let status?, nil): (.info, .info, spanStatus(forHTTPStatus: status))
+    case (_?, _?): (.warning, .error, .internalError)
+    case (nil, _): (.warning, .error, .unavailable)
     }
   }
 

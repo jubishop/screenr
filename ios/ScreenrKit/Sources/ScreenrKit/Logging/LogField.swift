@@ -1,8 +1,9 @@
 import Foundation
 
 // A named value on a log line. The factories accept only values that cannot hold member content:
-// numbers, flags, durations, string literals, enum cases, opaque IDs, route patterns, and an
-// error's type and code. There is deliberately no factory for an arbitrary string.
+// numbers, flags, durations, string literals, enum cases, opaque IDs, route patterns, an error's
+// type and code, and a decoding failure's coding path. There is deliberately no factory for an
+// arbitrary string.
 public struct LogField: Sendable, Equatable {
   public enum Value: Sendable, Equatable, CustomStringConvertible, Encodable {
     case int(Int)
@@ -70,6 +71,12 @@ public struct LogField: Sendable, Equatable {
 
   public static func route(_ pattern: RoutePattern) -> LogField {
     LogField(name: "route", value: .string(pattern.value))
+  }
+
+  // Where a response body did not decode, as the keys and array indexes that `DecodingFailure`
+  // names, never a value.
+  public static func codingPath(_ failure: DecodingFailure) -> LogField {
+    LogField(name: "coding_path", value: .string(failure.codingPath))
   }
 
   // The error's domain and code, which for a Swift error are its type and case number. Its

@@ -205,6 +205,36 @@ struct GoogleSignInTests {
     }
     #expect(transport.requests.isEmpty)
   }
+
+  // A sign-in that Google refuses logs a warning with the error's case and the token endpoint's
+  // status, but not Google's OAuth error, the authorization code, or a token. Cancelling logs
+  // nothing.
+  @Test func logsARefusedSignInWithoutItsCodesOrTokens() async throws {
+    let router = LogRouter()
+    let sink = CapturingSink()
+    router.add(sink)
+    let google = GoogleSignIn(
+      clientID: Self.clientID,
+      transport: RecordingTransport([
+        try .json(400, ["error": "invalid_grant", "error_description": "Bad Request"])
+      ]),
+      log: Log(.session, router: router)
+    )
+
+    await #expect(throws: GoogleSignInError.tokenRejected(status: 400, error: "invalid_grant")) {
+      try await google.signIn(with: RedirectingAuthenticator())
+    }
+    await #expect(throws: GoogleSignInError.cancelled) {
+      try await google.signIn(
+        with: FailingAuthenticator(error: ASWebAuthenticationSessionError(.canceledLogin))
+      )
+    }
+
+    let line = try #require(sink.entries.only)
+    #expect(line.level == .warning)
+    #expect(line.category == .session)
+    #expect(line.text == "Google sign-in failed error=tokenRejected status=400")
+  }
 }
 
 // Redirects at once with the attempt's state and a fixed code, and records the
