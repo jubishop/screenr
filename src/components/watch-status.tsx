@@ -42,8 +42,14 @@ export function localToday() {
     .join("-");
 }
 
-// The title page's status button. It shows the current status, or
-// "+ Want to watch", and opens a menu of statuses with Clear status. Enter,
+// A feed entry's status icon names its action and the reader's current
+// status, such as "Watch status: Watching".
+export const statusName = (status: WatchStatus | null) =>
+  status ? `Watch status: ${statusLabels[status]}` : "Watch status";
+
+// The status button. On the title page it shows the current status, or
+// "+ Want to watch"; a feed entry's `icon` shows it as an icon with the
+// status's name. It opens a menu of statuses with Clear status. Enter,
 // Space, or the arrow keys open it and focus a choice; arrow keys, Home, and
 // End move between choices. Escape returns to the button; moving focus
 // elsewhere or pressing outside closes it. The last-finished date sits
@@ -54,6 +60,7 @@ export function WatchStatusMenu({
   finishedOn,
   disabled,
   unavailable,
+  icon = false,
   buttonRef,
   onStatus,
   onDate,
@@ -65,6 +72,7 @@ export function WatchStatusMenu({
   // when the button keeps focus but does not open.
   disabled: boolean;
   unavailable: boolean;
+  icon?: boolean;
   // Lets the page return focus to the button, such as after a confirmation.
   buttonRef?: RefObject<HTMLButtonElement | null>;
   onStatus: (status: WatchStatus | null) => void;
@@ -105,15 +113,32 @@ export function WatchStatusMenu({
     return () => document.removeEventListener("pointerdown", outside);
   }, [open]);
   // Shift the panel left when it would pass the viewport's right edge, as
-  // the button can sit anywhere on a phone's wrapped action line.
+  // the button can sit anywhere on a phone's wrapped action line. A feed
+  // entry's button can sit low on the screen too, so the panel opens upward
+  // when it would pass the bottom, above a phone's navigation bar, and fits
+  // above the button, and otherwise scrolls into view. Its scroll margins
+  // hold the phone's header and bar heights.
   useLayoutEffect(() => {
     const element = panel.current;
-    if (!open || !element) return;
-    element.style.left = "0px";
-    const { left, right } = element.getBoundingClientRect();
+    if (!open || !element || !container.current) return;
+    Object.assign(element.style, { left: "0px", top: "", bottom: "" });
+    const { left, right, bottom, height } = element.getBoundingClientRect();
     const limit = document.documentElement.clientWidth - 16;
     if (right > limit)
       element.style.left = `${Math.max(limit - right, 16 - left)}px`;
+    const margins = getComputedStyle(element);
+    const floor =
+      document.documentElement.clientHeight -
+      parseFloat(margins.scrollMarginBottom);
+    const room =
+      container.current.getBoundingClientRect().top -
+      parseFloat(margins.scrollMarginTop);
+    if (bottom > floor && room >= height + 6)
+      Object.assign(element.style, {
+        top: "auto",
+        bottom: "calc(100% + 6px)",
+      });
+    else element.scrollIntoView({ block: "nearest" });
   }, [open]);
   if (open && (disabled || unavailable)) setOpen(false);
   function show(index: number) {
@@ -155,7 +180,13 @@ export function WatchStatusMenu({
         ref={button}
         id={buttonId}
         type="button"
-        className="secondary status-button"
+        className={
+          icon
+            ? `icon-button status-icon${status ? " chosen" : ""}`
+            : "secondary status-button"
+        }
+        aria-label={icon ? statusName(status) : undefined}
+        title={icon ? statusName(status) : undefined}
         aria-haspopup="menu"
         aria-expanded={open}
         aria-controls={open ? menuId : undefined}
@@ -172,7 +203,16 @@ export function WatchStatusMenu({
           if (!unavailable) show(event.key === "ArrowDown" ? 0 : -1);
         }}
       >
-        {status ? `✓ ${statusLabels[status]}` : "+ Want to watch"}
+        {icon ? (
+          <Icon
+            name={status ?? "no-status"}
+            filled={status === "want_to_watch"}
+          />
+        ) : status ? (
+          `✓ ${statusLabels[status]}`
+        ) : (
+          "+ Want to watch"
+        )}
         <Icon name="expand" />
       </ActionButton>
       {open && (

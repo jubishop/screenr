@@ -1,7 +1,7 @@
 "use client";
 import { Link } from "./pending-navigation";
 import { useEffect, useRef, useState } from "react";
-import type { FeedItem, Person, SaveSurface } from "../shared";
+import type { FeedItem, Person } from "../shared";
 import { api, useInteractive } from "./client";
 import { Poster } from "./poster";
 import { live, removable, reportableComment, ThreadView } from "./thread";
@@ -9,16 +9,20 @@ import { preservePosition } from "./position";
 import { Reactions } from "./reactions";
 import { Icon } from "./icons";
 import { Avatar } from "./avatar";
-import { useActionError } from "./action-error";
 import { ActivityTime } from "./activity-time";
 import { titleDetails } from "./title-card";
 import { ActionButton } from "./action-button";
-import { progressPhrase, statusLabels } from "./watch-status";
+import { progressPhrase } from "./watch-status";
 import { ConfirmAction } from "./confirmation";
 import { around, useRemovalFocus, type FocusTarget } from "./removal-focus";
 import { ReviewStars, reviewPhrase } from "./review";
 import { entryPath, memberPath } from "../member-routes";
-import { leavingTopTen } from "./top-ten";
+import {
+  useEntryTitleActions,
+  type ChangeFinishedDate,
+  type ChangeWatchStatus,
+  type TitleActivity,
+} from "./entry-title-actions";
 import {
   ReportFollowUp,
   ReportForm,
@@ -77,6 +81,8 @@ export function FeedView({
   user,
   refresh,
   activity,
+  watchStatus,
+  finishedDate,
   busy,
   target,
   targetUnavailable,
@@ -93,12 +99,9 @@ export function FeedView({
   snapshot: FeedItem[] | null;
   user: Person;
   refresh: () => Promise<void>;
-  activity: (
-    title: string,
-    field: string,
-    value: boolean,
-    surface?: SaveSurface,
-  ) => Promise<unknown>;
+  activity: TitleActivity;
+  watchStatus: ChangeWatchStatus;
+  finishedDate: ChangeFinishedDate;
   busy: boolean;
   target: { item: string; reply?: string } | null;
   targetUnavailable: boolean;
@@ -213,6 +216,8 @@ export function FeedView({
               user={user}
               refresh={refresh}
               activity={activity}
+              watchStatus={watchStatus}
+              finishedDate={finishedDate}
               busy={busy}
               target={target?.item === id ? target : null}
               compact={compact}
@@ -250,6 +255,8 @@ function FeedEntry({
   user,
   refresh,
   activity,
+  watchStatus,
+  finishedDate,
   busy,
   target,
   compact,
@@ -259,12 +266,9 @@ function FeedEntry({
   available: boolean;
   user: Person;
   refresh: () => Promise<void>;
-  activity: (
-    title: string,
-    field: string,
-    value: boolean,
-    surface?: SaveSurface,
-  ) => Promise<unknown>;
+  activity: TitleActivity;
+  watchStatus: ChangeWatchStatus;
+  finishedDate: ChangeFinishedDate;
   busy: boolean;
   target: { item: string; reply?: string } | null;
   compact: boolean;
@@ -273,11 +277,10 @@ function FeedEntry({
   const interactive = useInteractive();
   const [revealed, setRevealed] = useState(false);
   // Delete waits for its confirmation beneath the entry's action line, and so
-  // does a title action that would take the title out of the reader's top 10.
-  // A comment's Delete or Remove waits beneath the comment.
-  const [confirming, setConfirming] = useState<
-    "delete" | "recommended" | "want_to_watch" | null
-  >(null);
+  // does a title action that would take the title out of the reader's top 10
+  // (see entry-title-actions.tsx). A comment's Delete or Remove waits beneath
+  // the comment.
+  const [confirming, setConfirming] = useState(false);
   const [confirmingComment, setConfirmingComment] = useState<string | null>(
     null,
   );
@@ -287,16 +290,12 @@ function FeedEntry({
   const [reporting, setReporting] = useState(false);
   const [reportingComment, setReportingComment] = useState<string | null>(null);
   const [followUp, setFollowUp] = useState<ReportedAuthor | null>(null);
+  // The entry's Comment button opens the composer beneath its discussion.
+  const [commenting, setCommenting] = useState(false);
   // A failed read hides the entry. While a confirmation or report form is
   // open, the entry keeps the item from the last read, so it stays, alone,
   // with its action waiting for the next read.
   const [lastItem, setLastItem] = useState(item);
-  if (
-    available &&
-    item !== lastItem &&
-    (confirming || confirmingComment || reporting || reportingComment)
-  )
-    setLastItem(item);
   const held = available ? item : lastItem;
   const hiddenSpoiler = !!held?.spoiler && !revealed;
   const navigated = useRef("");
@@ -328,9 +327,6 @@ function FeedEntry({
   const [copying, setCopying] = useState(false);
   const [copyMessage, setCopyMessage] = useState("");
   const deleteButton = useRef<HTMLButtonElement>(null);
-  const wantButton = useRef<HTMLButtonElement>(null);
-  const recommendButton = useRef<HTMLButtonElement>(null);
-  const ranked = !!held?.viewer_recommended && !!held.viewer_top_ten_rank;
   const entry = useRef<HTMLElement>(null);
   const removal = useRemovalFocus();
   // Where focus goes when this entry's content leaves with its control: the
@@ -340,8 +336,6 @@ function FeedEntry({
     ...around(entry.current, entry.current?.parentElement, ".feed-entry"),
     entry.current?.closest(".interactive-feed"),
   ];
-  // The title actions share one message beneath the entry's action line.
-  const failure = useActionError();
   // Every entry but a post without a title belongs to a movie or show.
   const title =
     held?.title_id && held.title_name !== null && held.kind
@@ -355,6 +349,29 @@ function FeedEntry({
   const titleURL = title ? memberPath({ kind: "title", id: title.id }) : "";
   // Comments and posts can be deleted, keeping their replies.
   const deletable = held?.item_type === "comment" || held?.item_type === "post";
+  const titleActions = useEntryTitleActions({
+    held,
+    title,
+    own: held?.owner_id === user.user_id,
+    shown: !compact,
+    available,
+    busy,
+    refresh,
+    activity,
+    watchStatus,
+    finishedDate,
+    entryFocus,
+  });
+  if (
+    available &&
+    item !== lastItem &&
+    (confirming ||
+      confirmingComment ||
+      reporting ||
+      reportingComment ||
+      titleActions.holding)
+  )
+    setLastItem(item);
 
   async function copyDiscussion() {
     if (!item || copying) return;
@@ -395,13 +412,9 @@ function FeedEntry({
   const canDelete =
     deletable && !!held?.active && held.owner_id === user.user_id;
   // A confirmation closes for good once its action no longer applies, such
-  // as after the title leaves the top 10 elsewhere, so it never reopens
-  // unasked.
-  const confirmable =
-    confirming === "delete"
-      ? canDelete
-      : confirming !== null && ranked && !!title;
-  if (confirming && !confirmable) setConfirming(null);
+  // as after the entry is deleted elsewhere, so it never reopens unasked.
+  const confirmable = confirming && canDelete;
+  if (confirming && !confirmable) setConfirming(false);
   // The same holds for a comment's confirmation once the comment is gone.
   const thread = held && !hiddenSpoiler ? held : null;
   const commentConfirmable =
@@ -468,20 +481,9 @@ function FeedEntry({
     setFollowUp(null);
     removal.done();
   };
-  // Saving to Want to watch, or removing it, from a friend's entry. A card
-  // with an active Recommend counts as one, whichever entry holds it.
-  const saveWantToWatch = async () => {
-    if (held && title)
-      await activity(
-        title.id,
-        "want_to_watch",
-        !held.viewer_want_to_watch,
-        held.recommended ? "friend_recommendation" : "friend_entry",
-      );
-  };
-  // Compact title page entries leave the title actions to the page header
-  // and move the copy link to the author line.
-  const titleActions = item && (!compact || canDelete) && (
+  // Delete and the title actions lead the entry's action line. Compact title
+  // page entries leave the title actions to the page header.
+  const leading = item && (canDelete || titleActions.buttons) && (
     <div className="title-actions">
       {canDelete && (
         <button
@@ -489,59 +491,43 @@ function FeedEntry({
           className="text-button muted"
           ref={deleteButton}
           disabled={!interactive}
-          onClick={() => setConfirming("delete")}
+          onClick={() => setConfirming(true)}
         >
           Delete
         </button>
       )}
-      {!compact && title && item.owner_id !== user.user_id && (
-        <>
-          {/* One tap saves to Want to watch. A reader with another status
-              sees it instead, linked to the title page's status menu. */}
-          {item.viewer_status && item.viewer_status !== "want_to_watch" ? (
-            <Link className="text-button" href={titleURL} prefetch={false}>
-              ✓ {statusLabels[item.viewer_status]}
-            </Link>
-          ) : (
-            <ActionButton
-              ref={wantButton}
-              className="text-button"
-              disabled={!interactive}
-              unavailable={busy}
-              onClick={() => {
-                if (ranked && !item.viewer_want_to_watch) {
-                  failure.clear();
-                  setConfirming("want_to_watch");
-                } else void failure.run(saveWantToWatch);
-              }}
-            >
-              {item.viewer_want_to_watch
-                ? "✓ Want to watch"
-                : "+ Want to watch"}
-            </ActionButton>
-          )}
-          <ActionButton
-            ref={recommendButton}
-            className="text-button"
-            disabled={!interactive}
-            unavailable={busy}
-            onClick={() => {
-              if (ranked) {
-                failure.clear();
-                setConfirming("recommended");
-              } else
-                void failure.run(() =>
-                  activity(title.id, "recommended", !item.viewer_recommended),
-                );
-            }}
-          >
-            {item.viewer_recommended ? "✓ Recommended" : "+ Recommend"}
-          </ActionButton>
-        </>
-      )}
+      {titleActions.buttons}
+    </div>
+  );
+  // Comment opens the composer beneath the discussion, which a spoiler
+  // cover hides with it.
+  const commentButton = thread && (
+    <button
+      type="button"
+      id={`comment-action-${thread.id}`}
+      className="icon-button"
+      aria-label="Comment"
+      title="Comment"
+      disabled={!interactive}
+      aria-expanded={commenting}
+      aria-controls={`reply-${thread.id}-direct-form`}
+      onClick={() => {
+        setCommenting(true);
+        if (commenting)
+          document.getElementById(`reply-${thread.id}-direct`)?.focus();
+      }}
+    >
+      <Icon name="comment" />
+    </button>
+  );
+  // Comment, then the copy link and Report, follow React. Compact entries
+  // move the copy link and Report to the author line.
+  const trailing = (
+    <>
+      {commentButton}
       {!compact && copyLink}
       {!compact && reportButton}
-    </div>
+    </>
   );
   const byline = item && (
     <p className="activity-by" id={`by-${item.id}`}>
@@ -599,6 +585,7 @@ function FeedEntry({
       hidden={
         !item &&
         !confirmable &&
+        !titleActions.holding &&
         !commentConfirmable &&
         !reporting &&
         !reportingComment &&
@@ -619,7 +606,7 @@ function FeedEntry({
       }
       tabIndex={-1}
     >
-      {held && (item || confirmable || reporting) && (
+      {held && (item || confirmable || titleActions.holding || reporting) && (
         <header className="activity-card" data-item-heading={held.id}>
           {item && (
             <>
@@ -696,17 +683,22 @@ function FeedEntry({
                   item={item.id}
                   summary={item.reactions}
                   refresh={refresh}
+                  after={trailing}
                 >
-                  {titleActions}
+                  {leading}
                 </Reactions>
               ) : (
-                titleActions && (
-                  <div className="item-actions">{titleActions}</div>
+                (leading || commentButton || !compact) && (
+                  <div className="item-actions">
+                    {leading}
+                    {trailing}
+                  </div>
                 )
               )}
-              {failure.alert}
+              {titleActions.alert}
             </>
           )}
+          {titleActions.prompts}
           {reporting && reportable && (
             <ReportForm
               kind={reportable.kind}
@@ -723,7 +715,7 @@ function FeedEntry({
               }
             />
           )}
-          {canDelete && confirming === "delete" && (
+          {confirmable && (
             <ConfirmAction
               message={`Delete this ${held.item_type === "post" ? "post" : "comment"}? Its text will be erased.`}
               action="Delete"
@@ -739,50 +731,15 @@ function FeedEntry({
                 await refresh();
               }}
               onDone={() => {
-                setConfirming(null);
+                setConfirming(false);
                 removal.done();
               }}
               onCancel={() => {
-                setConfirming(null);
+                setConfirming(false);
                 deleteButton.current?.focus();
               }}
             />
           )}
-          {/* Closes on its own once the title leaves the reader's top 10
-              elsewhere. Either way, focus returns to the action. */}
-          {(confirming === "recommended" || confirming === "want_to_watch") &&
-            ranked &&
-            title && (
-              <ConfirmAction
-                key={confirming}
-                {...leavingTopTen(
-                  confirming === "recommended" ? "withdraw" : "switch",
-                  title.name,
-                  held.viewer_top_ten_rank!,
-                )}
-                busy={busy}
-                unavailable={!available}
-                run={async () => {
-                  if (confirming === "recommended")
-                    await activity(title.id, "recommended", false);
-                  else await saveWantToWatch();
-                }}
-                onDone={() => {
-                  setConfirming(null);
-                  (confirming === "recommended"
-                    ? recommendButton
-                    : wantButton
-                  ).current?.focus();
-                }}
-                onCancel={() => {
-                  setConfirming(null);
-                  (confirming === "recommended"
-                    ? recommendButton
-                    : wantButton
-                  ).current?.focus();
-                }}
-              />
-            )}
         </header>
       )}
       <ThreadView
@@ -800,6 +757,8 @@ function FeedEntry({
         refresh={refresh}
         targetReply={target?.reply}
         entryFocus={entryFocus}
+        commenting={commenting}
+        setCommenting={setCommenting}
       />
       {followUp && (
         <ReportFollowUp

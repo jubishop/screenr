@@ -13,7 +13,7 @@ import { TitleTrailer } from "./title-trailer";
 import { useActionError } from "./action-error";
 import { ActionButton } from "./action-button";
 import { localToday, WatchStatusMenu } from "./watch-status";
-import { useReviewEditor } from "./review";
+import { reviewDraft, useReviewEditor } from "./review";
 import { ConfirmAction } from "./confirmation";
 import { leavingTopTen, TopTenReplace, type ChangeTopTen } from "./top-ten";
 
@@ -71,13 +71,7 @@ export function TitleView({
     .find((c) => c.item_type === "review");
   const review = useReviewEditor({
     titleId: shown?.title.id ?? null,
-    saved: ownReview
-      ? {
-          rating: ownReview.rating,
-          body: ownReview.body ?? "",
-          spoiler: ownReview.spoiler,
-        }
-      : null,
+    saved: ownReview ? reviewDraft(ownReview) : null,
     available: !!data,
     refresh,
   });

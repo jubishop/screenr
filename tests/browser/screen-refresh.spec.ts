@@ -4,7 +4,7 @@ import { test } from "./monitored-test";
 import { db } from "./database-fixture";
 import { prepareFriendship } from "./member-fixture";
 import { commits, countCommits, nextPoll } from "./refresh-helpers";
-import { chooseStatus, statusButton } from "./watch-status";
+import { chooseStatus, entryStatusName, statusButton } from "./watch-status";
 
 const isScreenRead = (response: Response) =>
   new URL(response.url()).pathname === "/api/screenr/screen";
@@ -110,8 +110,8 @@ test("Back and Forward read the screen at once instead of showing the copy cache
   const entry = viewer.locator(
     `[data-item-id="${(await recommended.json()).id}"]`,
   );
-  const want = (label: string) =>
-    entry.getByRole("button", { name: label, exact: true });
+  const status = (label?: string) =>
+    entry.getByRole("button", { name: entryStatusName(label), exact: true });
   const ownEntry = viewer
     .locator(".activity-by")
     .filter({ hasText: "historyviewer wants to watch" });
@@ -120,7 +120,7 @@ test("Back and Forward read the screen at once instead of showing the copy cache
   await viewer.clock.install();
   await viewer.clock.pauseAt(Date.now() + 1000);
   await viewer.goto("/");
-  await expect(want("+ Want to watch")).toBeVisible();
+  await expect(status()).toBeVisible();
   await entry.getByRole("heading", { level: 2 }).getByRole("link").click();
   await expect(
     viewer.getByRole("heading", { level: 1, name: "The Lantern Room" }),
@@ -128,7 +128,7 @@ test("Back and Forward read the screen at once instead of showing the copy cache
   await chooseStatus(viewer, "Want to watch");
 
   await viewer.goBack();
-  await expect(want("✓ Want to watch")).toBeVisible();
+  await expect(status("Want to watch")).toBeVisible();
   await expect(ownEntry).toBeVisible();
   await viewer.goForward();
   await expect(statusButton(viewer)).toHaveText("✓ Want to watch");
