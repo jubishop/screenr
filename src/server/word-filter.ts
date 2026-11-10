@@ -6,10 +6,16 @@ import { blockedWords } from "./blocked-words";
 // as the letters they stand for, such as "@" or "4" for "a", and accepts a
 // plural ending. It matches whole words only, so an ordinary word that
 // contains a blocked word, such as "snigger", passes; digits around a word,
-// as in a username such as "name99", don't join it. A phrase also matches
-// with hyphens between its words, or none.
+// as in a username such as "name99", don't join it. A phrase matches with
+// spaces, hyphens, or underscores between its words, or none, but not across
+// other punctuation, so "On the other hand, job hunting" passes.
 export function hasBlockedWord(text: string): boolean {
-  const tokens = [...fold(text).matchAll(word)].map(([token]) => token);
+  return fold(text).split(phraseBreak).some(clauseHasBlockedWord);
+}
+
+// Whether a stretch of folded text with no phrase break holds an entry.
+function clauseHasBlockedWord(clause: string) {
+  const tokens = [...clause.matchAll(word)].map(([token]) => token);
   const readings = tokens.map(readingsOf);
   for (let start = 0; start < tokens.length; start++) {
     if (readings[start].some((reading) => listed(words, reading))) return true;
@@ -42,6 +48,9 @@ const lookAlikes = [
 })) as Record<string, string>[];
 // A word's letters and digits, with any look-alike symbols in or around it.
 const word = /[\p{L}\p{N}@$!|]+/gu;
+// Anything else but spaces, hyphens, and underscores, such as a comma,
+// period, slash, or line break, ends a phrase.
+const phraseBreak = /[^\p{L}\p{N}@$!|\p{Zs}\t_‐-]+/u;
 
 // Lowercase, without accents or hidden format characters, and with
 // compatibility forms such as full-width letters made plain.

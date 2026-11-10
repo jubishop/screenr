@@ -43,6 +43,8 @@ test("the filter matches whole words and phrases, ignoring case, accents, and hi
     "b10wj0b",
     "b1ow job",
     "b|ow-job",
+    "blow_job",
+    "Blow ‐ job",
     // Digits around a word don't join it, as in a username.
     "nigger99",
     "2nigger",
@@ -66,6 +68,11 @@ test("the filter matches whole words and phrases, ignoring case, accents, and hi
     "The Dick Van Dyke Show",
     "Queer Eye",
     "a job to blow off",
+    // Other punctuation, such as a comma, period, or line break, ends a
+    // phrase.
+    "On the other hand, job hunting is brutal.",
+    "It was a low blow. Job done, though.",
+    "Give him a hand\nJob well done",
     "porch",
     "monkey",
     "Fuck this shit, it's a shitty finale.",

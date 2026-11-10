@@ -4,8 +4,9 @@
 // It lists slurs and hateful terms and the most explicit sexual terms, not
 // ordinary swearing (docs/data-and-access.md#blocked-words). Each entry is a
 // lowercase word or a phrase of words separated by spaces. word-filter.ts
-// matches them as whole words, so leave out entries that are also ordinary
-// words or familiar names, such as "dyke" in "Dick Van Dyke".
+// matches them as whole words, so leave out entries whose ordinary sense or
+// familiar name members are likely to write, such as "dyke" in "Dick Van
+// Dyke"; a slur whose other uses are rare, such as "spic", stays.
 export const blockedWords: readonly string[] = [
   // Racial, ethnic, and religious slurs.
   "beaner",

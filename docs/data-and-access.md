@@ -972,9 +972,12 @@ and `tests/browser/blocked-words.spec.ts` cover both.
   a, `5` and `$` as s, `7` as t, `8` as b, `!` as i, and `|` as l or i. A
   plural ending, `s`, `es` after s, z, x, ch, or sh, or `ies` for `y`, also
   matches. A phrase such as "porch monkey" matches with spaces, hyphens, or
-  nothing between its words. An entry that is also an ordinary word or a
-  familiar name, such as "dyke" in "Dick Van Dyke" or "queer" in "Queer Eye",
-  stays off the list, since it would refuse ordinary text.
+  underscores between its words, or nothing, but not across other
+  punctuation, so "On the other hand, job hunting" passes. An entry whose
+  ordinary sense or familiar name members are likely to write, such as
+  "dyke" in "Dick Van Dyke" or "queer" in "Queer Eye", stays off the list,
+  since it would refuse ordinary text. A slur whose other uses are rare stays
+  listed and refuses those too, such as "spic" in "spic and span".
 - **Where it applies:** every write that saves the text, through the shared
   text check in `src/server/db.ts`: `discussion-post`, `title-comment`,
   `comment`, `review`, both when saving and when editing, and the names in
