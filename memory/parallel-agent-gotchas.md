@@ -69,6 +69,16 @@ push from a scratch repository with its own `core.hooksPath`, as
 worktree: worktrees share the clone's configuration, so it would change the
 hooks of every agent's pushes.
 
+`bin/doctor` and `bin/setup` accept this path in every checkout, and
+`bin/setup` leaves it unchanged
+([#580](https://github.com/jubishop/screenr/issues/580)). If `bin/doctor`
+says the primary checkout's `bin/hooks` differs from the worktree's for an
+event, fast-forward the primary checkout to `main` or merge `origin/main`
+into the worktree, whichever is behind. A worktree whose branch predates
+Project Starter 3.9.4 still reports "Bundled hooks are not active" there, and
+its `bin/setup` advises `knowledge.hooks external`, a clone-wide change:
+merge `origin/main` into it instead of following either.
+
 ## Shared processes and files
 
 - **Process kills:** never use broad kills such as `pkill -f xcodebuild` or
