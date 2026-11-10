@@ -170,6 +170,45 @@ feed item type.
 **Rejected alternatives:** A feed entry for additions, and a rank badge on
 the existing Recommend entry.
 
+**Superseded — 2026-11-09:** Top 10 changes now create feed entries, under
+[feed entries for top 10 changes](#feed-entries-for-top-10-changes--2026-11-09).
+
+### Feed entries for top 10 changes — 2026-11-09
+
+**Decision:** Adding a title to the top 10 and moving one to a new rank
+create feed entries. Removing a title alone creates none. Like every new feed
+entry, these notify members who turned on
+[friend activity notifications](notifications.md#friend-activity-notifications--2026-11-09)
+for the owner.
+
+Each person has one top 10 entry per title, reused across changes as a
+[progress entry](title-feed.md#one-progress-entry-per-person-and-title--2026-10-12)
+is. It is a structured action that joins the title's
+[combined card](title-feed.md#combine-one-persons-close-together-title-actions--2026-11-08),
+so it shows in the friends feed, on the profile, and on the title page.
+Adding a title that wasn't recommended makes one card, such as "Theo Park
+recommends and added it to their top 10 at #3", not two entries. Only the
+title the owner moves gets an entry; titles that shift to make room, or
+move up after a removal, don't. The entry shows the rank its latest action
+gave the title, so "at #3" stays after another move shifts it to #4; the
+profile's poster row shows the current list.
+
+**Why:** The user wants friends to see and hear about top 10 changes. The
+user accepted leaving removals out, matching friend activity notifications,
+where withdrawals notify no one. The user accepted per-title entries, which
+reuse the combined cards and title feeds and avoid a second entry beside
+the Recommend that an addition creates, and accepted showing the rank as it
+was when the owner acted.
+
+**Rejected:** Entries for additions only, and entries for every change,
+removals included. One list-wide "updated their top 10" entry with the
+poster row, which would sit beside a separate Recommend entry for each new
+title and stay off title pages. Showing the current rank, which would stop
+describing what the owner did.
+
+[Issue #649](https://github.com/jubishop/screenr/issues/649) tracks the
+work.
+
 ### Show ranks where friends are named — 2026-10-12
 
 **Decision:** Wherever a direct friend is named as a recommender, show

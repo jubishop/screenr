@@ -64,7 +64,9 @@ applies to every feature.
   and ordering by recent visible activity.
 - Notifications cover friend requests and acceptances, comments on the
   user's posts or reviews, and replies to their comments. Watch updates,
-  ratings, and recommendations appear in the feed without alerts.
+  ratings, and recommendations appear in the feed without alerts, except
+  from friends the member chose to
+  [follow closely](notifications.md#friend-activity-notifications--2026-11-09).
 - Deliver activity notifications through an in-app inbox and opt-in email
   alerts. Browser push is outside the initial release.
 - Judge initial success through usage telemetry: repeat use, choosing titles
