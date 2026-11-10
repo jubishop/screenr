@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { db } from "./database-fixture";
 import { test } from "./monitored-test";
 import { prepareFriendship, userId } from "./member-fixture";
+import { chooseStatus } from "./watch-status";
 
 const { saveReview } = await import("../../src/server/reviews");
 const { setReaction } = await import("../../src/server/reactions");
@@ -81,9 +82,7 @@ test("a card names its actions in one author line with one date, shows its revie
   ).toEqual([{ review_id: review }]);
   // A save from the card is one from a friend's Recommend, though the review
   // holds it (docs/usage-telemetry.md#save-attribution).
-  await card
-    .getByRole("button", { name: "+ Want to watch", exact: true })
-    .click();
+  await chooseStatus(reader, "Want to watch", card);
   await expect
     .poll(
       async () =>

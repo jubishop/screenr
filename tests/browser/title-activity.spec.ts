@@ -2,7 +2,11 @@ import { expect, type Locator } from "@playwright/test";
 import { db } from "./database-fixture";
 import { test } from "./monitored-test";
 import { friend, userId } from "./member-fixture";
-import { chooseStatus } from "./watch-status";
+import {
+  chooseStatus,
+  entryStatusButton,
+  entryStatusName,
+} from "./watch-status";
 
 const { updateTitleActivity } = await import("../../src/server/title-actions");
 const { addComment } = await import("../../src/server/comments");
@@ -53,34 +57,30 @@ test("title and feed actions switch exclusively and restore each original discus
 
   const button = (scope: Locator, name: string) =>
     scope.getByRole("button", { name, exact: true });
-  async function states(
-    scope: Locator,
+  // A full feed entry's Recommend and status icons.
+  async function entryStates(
+    entry: Locator,
     recommended: boolean,
     want: boolean,
-    title = false,
   ) {
+    await expect(button(entry, "Recommend")).toHaveAttribute(
+      "aria-pressed",
+      String(recommended),
+    );
+    await expect(entryStatusButton(entry)).toHaveAccessibleName(
+      entryStatusName(want ? "Want to watch" : undefined),
+    );
+  }
+  // The title page header's buttons.
+  async function states(scope: Locator, recommended: boolean, want: boolean) {
     await expect(
-      button(
-        scope,
-        recommended
-          ? "✓ Recommended"
-          : title
-            ? "Recommend to friends"
-            : "+ Recommend",
-      ),
+      button(scope, recommended ? "✓ Recommended" : "Recommend to friends"),
     ).toBeVisible();
     await expect(
       button(scope, want ? "✓ Want to watch" : "+ Want to watch"),
     ).toBeVisible();
     await expect(
-      button(
-        scope,
-        recommended
-          ? title
-            ? "Recommend to friends"
-            : "+ Recommend"
-          : "✓ Recommended",
-      ),
+      button(scope, recommended ? "Recommend to friends" : "✓ Recommended"),
     ).toHaveCount(0);
     await expect(
       button(scope, want ? "+ Want to watch" : "✓ Want to watch"),
@@ -90,31 +90,31 @@ test("title and feed actions switch exclusively and restore each original discus
   for (const path of ["/people/exclusiveowner", "/"]) {
     await page.goto(path);
     const entry = page.locator(`[data-item-id="${friendItem}"]`);
-    await states(entry, true, false);
-    await button(entry, "+ Want to watch").click();
-    await states(entry, false, true);
+    await entryStates(entry, true, false);
+    await chooseStatus(page, "Want to watch", entry);
+    await entryStates(entry, false, true);
     await page.reload();
-    await states(entry, false, true);
-    await button(entry, "+ Recommend").click();
-    await states(entry, true, false);
-    await button(entry, "✓ Recommended").click();
-    await states(entry, false, false);
-    await button(entry, "+ Recommend").click();
-    await states(entry, true, false);
+    await entryStates(entry, false, true);
+    await button(entry, "Recommend").click();
+    await entryStates(entry, true, false);
+    await button(entry, "Recommend").click();
+    await entryStates(entry, false, false);
+    await button(entry, "Recommend").click();
+    await entryStates(entry, true, false);
     await page.reload();
-    await states(entry, true, false);
+    await entryStates(entry, true, false);
   }
 
   await page.goto("/titles/movie/987654");
-  for (const name of ["+ Want to watch", "+ Recommend", "✓ Recommended"])
+  for (const name of ["Recommend", entryStatusName()])
     await expect(
       button(page.locator(`[data-item-id="${friendItem}"]`), name),
     ).toHaveCount(0);
   // The title header's status menu chooses Want to watch.
   const header = page.locator(".title-hero .inline-actions");
-  await states(header, true, false, true);
+  await states(header, true, false);
   await chooseStatus(page, "Want to watch");
-  await states(header, false, true, true);
+  await states(header, false, true);
   const recEntry = page.locator(`[data-item-id="${recommendation}"]`);
   const watchEntry = page.locator(`[data-item-id="${wanted}"]`);
   await expect(recEntry).toContainText("removed their recommendation");
@@ -125,50 +125,26 @@ test("title and feed actions switch exclusively and restore each original discus
     watchEntry.locator(`[data-comment-id="${wantedReply}"]`),
   ).toContainText("Watch discussion");
   await chooseStatus(page, "Clear status");
-  await states(header, false, false, true);
+  await states(header, false, false);
   await chooseStatus(page, "Want to watch");
-  await states(header, false, true, true);
+  await states(header, false, true);
   await expect(watchEntry).toContainText("wants to watch");
   await button(header, "Recommend to friends").click();
-  await states(header, true, false, true);
+  await states(header, true, false);
   await expect(recEntry).toContainText("recommends");
   await expect(
     recEntry.locator(`[data-comment-id="${recommendationReply}"]`),
   ).toContainText("Recommendation discussion");
   await expect(watchEntry).toContainText("removed Want to watch");
   await page.reload();
-  await states(header, true, false, true);
+  await states(header, true, false);
   await expect(
     watchEntry.locator(`[data-comment-id="${wantedReply}"]`),
   ).toContainText("Watch discussion");
 
-  await page.goto("/");
-  const friendEntry = page.locator(`[data-item-id="${friendItem}"]`);
-  for (const width of [390, 1440]) {
-    await page.setViewportSize({ width, height: 900 });
-    await friendEntry.scrollIntoViewIfNeeded();
-    const watchBounds = await button(
-      friendEntry,
-      "+ Want to watch",
-    ).boundingBox();
-    const recommendBounds = await button(
-      friendEntry,
-      "✓ Recommended",
-    ).boundingBox();
-    expect(recommendBounds!.y).toBeGreaterThanOrEqual(watchBounds!.y);
-    if (recommendBounds!.y === watchBounds!.y)
-      expect(recommendBounds!.x).toBeGreaterThan(watchBounds!.x);
-    expect(recommendBounds!.x + recommendBounds!.width).toBeLessThanOrEqual(
-      width,
-    );
-    await page.screenshot({
-      path: `.cache/exclusive-actions-${width}.png`,
-      fullPage: true,
-    });
-  }
   // The friend's own choice is unaffected by the viewer's changes.
   await ownerPage.goto("/people/exclusiveviewer");
-  await states(
+  await entryStates(
     ownerPage.locator(`[data-item-id="${recommendation}"]`),
     true,
     false,

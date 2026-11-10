@@ -11,7 +11,7 @@
   },
   "response": {
     "status": 200,
-    "etag": "W/\"Wwt7KFiQfhJnVWGwYlUUqLjPucRq-Eu-RGtnpart4t4\"",
+    "etag": "W/\"nQjlr6ccLS22eCTeZL5bYbGTEOAelCl_fk3PMhrn6XM\"",
     "body": {
       "kind": "title",
       "title": {
@@ -107,6 +107,8 @@
           "viewer_recommended": false,
           "viewer_status": null,
           "viewer_top_ten_rank": null,
+          "viewer_finished_on": null,
+          "viewer_review": null,
           "visible_activity": "2026-10-13T12:00:00.000Z",
           "comments": [],
           "reactions": []

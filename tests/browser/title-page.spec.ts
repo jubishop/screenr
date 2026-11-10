@@ -94,14 +94,12 @@ test("title pages show compact entries, a friend line that moves to each entry, 
   await expect(entries.getByRole("heading")).toHaveCount(0);
   await expect(entries.getByText("Movie", { exact: true })).toHaveCount(0);
   for (const name of [
-    "+ Want to watch",
-    "✓ Want to watch",
-    "+ Recommend",
-    "✓ Recommended",
+    /^Recommend$/,
+    /^Watch status/,
+    /^Rate or review$/,
+    /^Edit your review$/,
   ])
-    await expect(
-      entries.getByRole("button", { name, exact: true }),
-    ).toHaveCount(0);
+    await expect(entries.getByRole("button", { name })).toHaveCount(0);
   const mayaItem = page.locator(`[data-item-id="${mayaComment}"]`);
   await expect(mayaItem.locator(".activity-by")).toContainText(
     "Maya Chen commented",
@@ -237,7 +235,7 @@ test("title pages show compact entries, a friend line that moves to each entry, 
     full.getByRole("heading", { name: "Friend Line Movie" }),
   ).toBeVisible();
   await expect(
-    full.getByRole("button", { name: "+ Want to watch", exact: true }),
+    full.getByRole("button", { name: "Watch status", exact: true }),
   ).toBeVisible();
   await expect(full.locator(".activity-by")).toContainText(
     "Lee Wong recommends",

@@ -630,9 +630,10 @@ nested replies each retain timestamp and comment-ID order; nested activity
 does not move the direct parent within the discussion.
 
 Selecting **Reply** opens and focuses a composer immediately below that
-comment. **Replying to @name** identifies its destination. The bottom
-**Comment** button opens the **Add your reply** composer, which always posts
-directly to the feed item. Both start closed. **Cancel** closes the form and
+comment. **Replying to @name** identifies its destination. The entry's
+**Comment** icon, on its action line, opens the **Add your reply** composer
+beneath the discussion, which always posts directly to the feed item. Both
+start closed. **Cancel** closes the form and
 returns focus to its opening button. Each destination keeps its own local
 draft and spoiler flag. Cancel or switching targets retains that
 destination's draft for later use on the same page. A target that becomes
@@ -855,7 +856,9 @@ Native emoji represent the seven named reactions.
 
 The implementation uses one reaction per person per entry or reply. Choosing
 another reaction replaces it; choosing the selected reaction removes it.
-Counts and React follow the entry's or reply's other actions on one line.
+Counts and React follow the entry's or reply's other actions on one line,
+and an entry's Comment, copy link, and Report follow them
+([icon actions](interface-design.md#icon-actions-on-feed-entries--2026-11-09)).
 The React button opens a labeled picker beneath that line that supports
 touch and keyboard input. Count buttons show the reader's selected reaction
 and also permit changing or removing it. A failed save shows an error and
@@ -906,8 +909,9 @@ transaction:
 
 `setFinishedDate` changes or clears the date without moving the entry. Dates
 are calendar dates from 1900 through today in the earliest time zone. The
-one-tap Want to watch action also replaces a progress status; turning it off
-leaves a progress status alone.
+`activity` action's Want to watch, which one-tap buttons such as Friends
+recommend's send, also replaces a progress status; turning it off leaves a
+progress status alone.
 
 Entries read "is watching", "is caught up", "finished", or "stopped
 watching", followed only by the entry's own time. The last-finished date
@@ -916,7 +920,8 @@ person's status control. A cleared entry kept for its replies reads
 "removed their watch status". Replies and reactions use their
 `watch_progress_id` columns, and comment notifications link to the entry.
 Status changes create no notifications. Each entry's `viewer_status` is the
-reader's own status for its title.
+reader's own status for its title, and `viewer_finished_on` the reader's own
+stored last-finished date, which the entry's status menu starts from.
 
 ### Reviews
 
@@ -960,7 +965,10 @@ title page entries. The spoiler flag hides the text, reactions, and discussion
 behind the spoiler control, but not the stars. Reviews and their edits create
 no notifications. Comments on a review notify its author like comments on
 other entries and open the review. Replies and reactions use their
-`review_id` columns.
+`review_id` columns. Each entry's `viewer_review` holds the reader's own
+current rating, text, and spoiler flag for its title, or null, so a full
+entry's Rate or review opens the same form, starting from the saved review
+([icon actions](interface-design.md#icon-actions-on-feed-entries--2026-11-09)).
 
 ### Discussion posts without a title
 
@@ -984,7 +992,7 @@ spoiler rules as other entries. Deleting it erases the text, shows
 disappears, like a deleted standalone comment.
 
 A post entry shows the author line ("Theo Park posted") and its text, without
-a poster, title, or Want to watch and Recommend buttons. Its copy link copies
+a poster, title, or title actions. Its copy link copies
 `/?item=<item-id>`. That link, and comment notifications and emails about the
 post, open the friends feed: the screen checks the item and reply against the
 reader's feed, scrolls to an eligible target, expands a targeted reply's

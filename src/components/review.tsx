@@ -1,9 +1,11 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
-import type { FeedItem } from "../shared";
+import { useEffect, useId, useRef, useState } from "react";
+import type { FeedItem, ViewerReview } from "../shared";
 import { api, useInteractive } from "./client";
 import { ActionButton } from "./action-button";
 import { ConfirmAction } from "./confirmation";
+import { Icon } from "./icons";
+import { useRemovalFocus, type FocusTarget } from "./removal-focus";
 
 export type ReviewDraft = {
   rating: number | null;
@@ -11,6 +13,12 @@ export type ReviewDraft = {
   spoiler: boolean;
 };
 const emptyDraft: ReviewDraft = { rating: null, body: "", spoiler: false };
+// The review editor's starting draft for a saved review.
+export const reviewDraft = ({
+  rating,
+  body,
+  spoiler,
+}: ViewerReview): ReviewDraft => ({ rating, body: body ?? "", spoiler });
 const stars = [1, 2, 3, 4, 5];
 const starLabel = (rating: number) =>
   `${rating} star${rating === 1 ? "" : "s"}`;
@@ -35,25 +43,40 @@ export function ReviewStars({ rating }: { rating: number }) {
   );
 }
 
-// The title page's review editor: the header button and the form it opens
-// beneath the header. The form starts from the saved review, Cancel discards
-// changes, and the draft survives refresh failures because the title view
-// stays mounted. `saved` is the viewer's current review, if any. While the
-// page is not `available`, such as while a failed read hides it, the form
-// shows only an open Remove confirmation, whose action waits for the next
-// read.
+// The review editor of a title page or a full feed entry: the button and the
+// form it opens beneath the header or the entry's actions. A feed entry's
+// `icon` button names its action, "Rate or review", or "Edit your review"
+// with a filled star once a review exists. The form starts from the saved
+// review, Cancel discards changes, and the draft survives refresh failures
+// because the view stays mounted. `saved` is the viewer's current review, if
+// any. While the page is not `available`, such as while a failed read hides
+// it, the form shows only an open Remove confirmation, whose action waits for
+// the next read; `holding` says one is open. When removing the review can
+// take the button out of the page, as with the reader's own review entry,
+// `leaving` gives where focus goes instead.
 export function useReviewEditor({
   titleId,
   saved,
   available,
   refresh,
+  icon = false,
+  leaving,
 }: {
   titleId: string | null;
   saved: ReviewDraft | null;
   available: boolean;
   refresh: () => Promise<void>;
+  icon?: boolean;
+  leaving?: () => FocusTarget[];
 }) {
   const interactive = useInteractive();
+  const removal = useRemovalFocus();
+  const id = useId();
+  const ids = {
+    action: `${id}-action`,
+    form: `${id}-form`,
+    body: `${id}-body`,
+  };
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState(emptyDraft);
   const [busy, setBusy] = useState(false);
@@ -79,7 +102,7 @@ export function useReviewEditor({
     setOpen(false);
     setConfirming(false);
     setError("");
-    document.getElementById("review-action")?.focus();
+    document.getElementById(ids.action)?.focus();
   }
   async function save(event: React.SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -101,14 +124,17 @@ export function useReviewEditor({
   const ignoreWhileSaving = (event: React.MouseEvent) => {
     if (busy) event.preventDefault();
   };
+  const name = saved ? "Edit your review" : "Rate or review";
   const button = (
     <button
       type="button"
-      id="review-action"
-      className="secondary"
+      id={ids.action}
+      className={icon ? `icon-button${saved ? " chosen" : ""}` : "secondary"}
+      aria-label={icon ? name : undefined}
+      title={icon ? name : undefined}
       disabled={!interactive}
       aria-expanded={open}
-      aria-controls="review-form"
+      aria-controls={ids.form}
       onClick={() => {
         if (open) {
           form.current?.querySelector<HTMLInputElement>("input")?.focus();
@@ -119,14 +145,14 @@ export function useReviewEditor({
         setOpen(true);
       }}
     >
-      {saved ? "Edit your review" : "Rate or review"}
+      {icon ? <Icon name="review" filled={!!saved} /> : name}
     </button>
   );
   const confirmingRemove = !!saved && confirming;
   const panel = open && titleId && (available || confirmingRemove) && (
     <form
       ref={form}
-      id="review-form"
+      id={ids.form}
       className="review-form"
       aria-label="Your review"
       onSubmit={save}
@@ -172,11 +198,11 @@ export function useReviewEditor({
               )}
             </div>
           </fieldset>
-          <label htmlFor="review-body">
+          <label htmlFor={ids.body}>
             Your review <span className="muted">(optional)</span>
           </label>
           <textarea
-            id="review-body"
+            id={ids.body}
             rows={4}
             maxLength={2000}
             readOnly={busy}
@@ -238,10 +264,15 @@ export function useReviewEditor({
           busy={busy}
           unavailable={!available}
           run={async () => {
+            if (leaving)
+              removal.start(document.getElementById(ids.action), leaving());
             await api("remove-review", { title: titleId });
             await refresh();
           }}
-          onDone={close}
+          onDone={() => {
+            close();
+            removal.done();
+          }}
           onCancel={() => {
             setConfirming(false);
             removeButton.current?.focus();
@@ -250,5 +281,5 @@ export function useReviewEditor({
       )}
     </form>
   );
-  return { button, panel };
+  return { button, panel, holding: confirmingRemove };
 }

@@ -3,7 +3,11 @@ import { db } from "./database-fixture";
 import { expectTextContrast, expectThemedPage } from "./contrast";
 import { test } from "./monitored-test";
 import { friend, person, userId } from "./member-fixture";
-import { statusButton } from "./watch-status";
+import {
+  entryStatusButton,
+  entryStatusName,
+  statusButton,
+} from "./watch-status";
 import { expectErrorBeside, failAction } from "./action-errors";
 import { keepThroughFailedRead, openWithoutPolling } from "./refresh-helpers";
 
@@ -358,24 +362,42 @@ for (const width of [390, 1366])
     const entry = page.locator(`[data-item-id="${mayaEntry}"]`);
     const action = (name: string) =>
       entry.getByRole("button", { name, exact: true });
-    await action("✓ Recommended").click();
+    await expect(action("Recommend")).toHaveAttribute("aria-pressed", "true");
+    await action("Recommend").click();
     const feedWithdraw = entry.getByRole("group", {
       name: "Remove your recommendation? Add Pick 4 also leaves your top 10 at #1.",
       exact: true,
     });
     await feedWithdraw.getByRole("button", { name: "Cancel" }).click();
-    await expect(action("✓ Recommended")).toBeFocused();
-    await action("+ Want to watch").click();
+    await expect(action("Recommend")).toBeFocused();
+    await entryStatusButton(entry).click();
+    await entry
+      .getByRole("menu", { name: "Watch status" })
+      .getByRole("menuitemradio", { name: "Want to watch", exact: true })
+      .click();
     const feedSwitch = entry.getByRole("group", {
       name: "Switch to Want to watch? This removes your recommendation, and Add Pick 4 leaves your top 10 at #1.",
       exact: true,
     });
     await feedSwitch
+      .getByRole("button", { name: "Cancel", exact: true })
+      .click();
+    await expect(feedSwitch).toHaveCount(0);
+    await expect(entryStatusButton(entry)).toBeFocused();
+    await entryStatusButton(entry).click();
+    await entry
+      .getByRole("menu", { name: "Watch status" })
+      .getByRole("menuitemradio", { name: "Want to watch", exact: true })
+      .click();
+    await feedSwitch
       .getByRole("button", { name: "Switch to Want to watch", exact: true })
       .click();
     await expect(feedSwitch).toHaveCount(0);
-    await expect(action("✓ Want to watch")).toBeFocused();
-    await expect(action("+ Recommend")).toBeVisible();
+    await expect(entryStatusButton(entry)).toBeFocused();
+    await expect(entryStatusButton(entry)).toHaveAccessibleName(
+      entryStatusName("Want to watch"),
+    );
+    await expect(action("Recommend")).toHaveAttribute("aria-pressed", "false");
     // Feed entries offer no top 10 control.
     await expect(entry.getByRole("button", { name: /top 10/ })).toHaveCount(0);
 
@@ -650,9 +672,7 @@ test("a feed entry's top 10 confirmation closes for good once the title leaves t
   );
   await page.goto("/");
   const entry = page.locator(`[data-item-id="${mayaEntry}"]`);
-  await entry
-    .getByRole("button", { name: "✓ Recommended", exact: true })
-    .click();
+  await entry.getByRole("button", { name: "Recommend", exact: true }).click();
   const withdraw = entry.getByRole("group", {
     name: /^Remove your recommendation\? Feed Latch Pick 1 also leaves/,
   });
@@ -716,7 +736,7 @@ test("a failed read keeps an open top 10 confirmation open on the title page and
   await openWithoutPolling(page, "/");
   const entry = page.locator(`[data-item-id="${mayaEntry}"]`);
   confirm = await keepThroughFailedRead(page, {
-    open: entry.getByRole("button", { name: "✓ Recommended", exact: true }),
+    open: entry.getByRole("button", { name: "Recommend", exact: true }),
     question:
       "Remove your recommendation? Keep Pick 2 also leaves your top 10 at #1.",
     action: "Remove recommendation",
@@ -724,6 +744,6 @@ test("a failed read keeps an open top 10 confirmation open on the title page and
   });
   await confirm.click();
   await expect(
-    entry.getByRole("button", { name: "+ Recommend", exact: true }),
-  ).toBeVisible();
+    entry.getByRole("button", { name: "Recommend", exact: true }),
+  ).toHaveAttribute("aria-pressed", "false");
 });
