@@ -45,6 +45,11 @@ test("the filter matches whole words and phrases, ignoring case, accents, and hi
     "b|ow-job",
     "blow_job",
     "Blow ‐ job",
+    // A compound's spaced and hyphenated spellings, as in the dictionary.
+    "gang bang",
+    "Gang-Bang",
+    "rim job",
+    "cum shots",
     // Digits around a word don't join it, as in a username.
     "nigger99",
     "2nigger",
@@ -85,13 +90,18 @@ test("the filter matches whole words and phrases, ignoring case, accents, and hi
     assert.equal(hasBlockedWord(text), false, text);
 });
 
-test("every list entry is blocked, and the list holds each entry once in lowercase", () => {
+test("every list entry is blocked, with a phrase's words spaced, hyphenated, or joined, and the list holds each entry once in lowercase", () => {
   assert.ok(blockedWords.length > 0);
   assert.equal(new Set(blockedWords).size, blockedWords.length);
   for (const entry of blockedWords) {
     assert.equal(entry, entry.toLowerCase().trim(), entry);
-    assert.equal(hasBlockedWord(entry), true, entry);
     assert.equal(hasBlockedWord(`Some ${entry.toUpperCase()}.`), true, entry);
+    for (const spelling of [" ", "-", ""])
+      assert.equal(
+        hasBlockedWord(entry.replaceAll(" ", spelling)),
+        true,
+        entry,
+      );
   }
 });
 

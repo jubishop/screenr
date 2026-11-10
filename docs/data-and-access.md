@@ -973,7 +973,10 @@ and `tests/browser/blocked-words.spec.ts` cover both.
   plural ending, `s`, `es` after s, z, x, ch, or sh, or `ies` for `y`, also
   matches. A phrase such as "porch monkey" matches with spaces, hyphens, or
   underscores between its words, or nothing, but not across other
-  punctuation, so "On the other hand, job hunting" passes. An entry whose
+  punctuation, so "On the other hand, job hunting" passes. A term that
+  dictionaries spell with a space, such as "gang bang", is listed as a
+  phrase so that each spelling matches, while one whose spaced form is
+  ordinary text, such as "creampie", is listed joined. An entry whose
   ordinary sense or familiar name members are likely to write, such as
   "dyke" in "Dick Van Dyke" or "queer" in "Queer Eye", stays off the list,
   since it would refuse ordinary text. A slur whose other uses are rare stays

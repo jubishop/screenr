@@ -6,7 +6,10 @@
 // lowercase word or a phrase of words separated by spaces. word-filter.ts
 // matches them as whole words, so leave out entries whose ordinary sense or
 // familiar name members are likely to write, such as "dyke" in "Dick Van
-// Dyke"; a slur whose other uses are rare, such as "spic", stays.
+// Dyke"; a slur whose other uses are rare, such as "spic", stays. A phrase
+// also matches its words hyphenated or joined, so write a term that
+// dictionaries spell with a space, such as "gang bang", as a phrase; keep a
+// joined word, such as "creampie", when its spaced form is ordinary text.
 export const blockedWords: readonly string[] = [
   // Racial, ethnic, and religious slurs.
   "beaner",
@@ -69,15 +72,15 @@ export const blockedWords: readonly string[] = [
   "blow job",
   "bukkake",
   "creampie",
-  "cumshot",
-  "cumslut",
+  "cum shot",
+  "cum slut",
   "deepthroat",
   "felching",
   "fisting",
-  "footjob",
-  "gangbang",
+  "foot job",
+  "gang bang",
   "hand job",
   "jizz",
-  "rimjob",
-  "titfuck",
+  "rim job",
+  "tit fuck",
 ];
