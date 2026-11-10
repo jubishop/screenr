@@ -5,10 +5,13 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+  addTester,
   appStoreConnect,
   credentialsFrom,
   distribute,
+  groupTesters,
   prepareReview,
+  removeTester,
   testedBuild,
 } from "../../scripts/app-store-connect";
 import {
@@ -85,6 +88,8 @@ async function connected(options: FakeOptions = {}) {
         expireWaiting,
         log: waiting.log,
       }),
+    add: (email: string) => addTester(api, "app-1", email, waiting.log),
+    remove: (email: string) => removeTester(api, "app-1", email, waiting.log),
   };
 }
 
@@ -445,4 +450,254 @@ test("distribution stops when external testing needs attention", async () => {
       'The build is in "Public testers", but external testing needs attention: it is BETA_REJECTED. Check TestFlight in App Store Connect.',
   });
   assert.ok(!connect.writes().includes("POST /v1/betaAppReviewSubmissions"));
+});
+
+test("adding a tester creates them in the external group, which invites them, and adding them again changes nothing", async () => {
+  const { connect, add, lines } = await connected();
+  assert.deepEqual(await add("friend@example.com"), {
+    added: true,
+    invited: false,
+    state: "INVITED",
+  });
+  // One request creates the tester in "Public testers"; Apple's invitation
+  // comes with it, so none is sent separately.
+  assert.deepEqual(connect.writes(), ["POST /v1/betaTesters"]);
+  const created = connect.requests.find(
+    ({ method, path }) => method === "POST" && path === "/v1/betaTesters",
+  );
+  assert.deepEqual(created?.body, {
+    data: {
+      type: "betaTesters",
+      attributes: { email: "friend@example.com" },
+      relationships: {
+        betaGroups: { data: [{ type: "betaGroups", id: "group-public" }] },
+      },
+    },
+  });
+  assert.deepEqual(connect.inGroup("group-public"), [
+    "friend@example.com INVITED",
+  ]);
+  assert.match(
+    lines.join("\n"),
+    /friend@example\.com is in "Public testers"; TestFlight lists them as INVITED\./,
+  );
+  // Apple matches emails without regard to case.
+  assert.deepEqual(await add("Friend@Example.com"), {
+    added: false,
+    invited: false,
+    state: "INVITED",
+  });
+  assert.deepEqual(connect.writes(), ["POST /v1/betaTesters"]);
+  assert.equal(
+    lines.at(-1),
+    '==> Friend@Example.com is already in "Public testers" as INVITED; nothing changed.',
+  );
+});
+
+test("a tester of another app joins through the group's relationship, and anyone Apple has not invited gets an invitation", async () => {
+  const { connect, add } = await connected({
+    joinedState: "NOT_INVITED",
+    testers: [
+      // A PodHaven tester on the same team, and one who left Screenr.
+      { email: "podhaven@example.com", groups: ["group-podhaven"] },
+      { email: "left@example.com", groups: ["group-public"], state: "REVOKED" },
+    ],
+  });
+  assert.deepEqual(await add("podhaven@example.com"), {
+    added: true,
+    invited: true,
+    state: "NOT_INVITED",
+  });
+  assert.deepEqual(connect.writes(), [
+    "POST /v1/betaGroups/group-public/relationships/betaTesters",
+    "POST /v1/betaTesterInvitations",
+  ]);
+  const [joined, invitation] = connect.requests.filter(
+    ({ method }) => method === "POST",
+  );
+  assert.deepEqual(joined?.body, {
+    data: [{ type: "betaTesters", id: "tester-1" }],
+  });
+  assert.deepEqual(invitation?.body, {
+    data: {
+      type: "betaTesterInvitations",
+      relationships: {
+        app: { data: { type: "apps", id: "app-1" } },
+        betaTester: { data: { type: "betaTesters", id: "tester-1" } },
+      },
+    },
+  });
+  assert.deepEqual(connect.invitations, [{ app: "app-1", tester: "tester-1" }]);
+
+  // A tester who left counts as gone, so adding them joins and invites
+  // them again; so does a new tester Apple did not invite.
+  connect.requests.length = 0;
+  assert.equal((await add("left@example.com")).added, true);
+  assert.equal((await add("new@example.com")).invited, true);
+  assert.deepEqual(connect.writes(), [
+    "POST /v1/betaGroups/group-public/relationships/betaTesters",
+    "POST /v1/betaTesterInvitations",
+    "POST /v1/betaTesters",
+    "POST /v1/betaTesterInvitations",
+  ]);
+  assert.deepEqual(connect.inGroup("group-public"), [
+    "left@example.com INVITED",
+    "new@example.com INVITED",
+    "podhaven@example.com INVITED",
+  ]);
+
+  // A tester still in the group whom Apple has not invited gets one too.
+  const waiting = await connected({
+    testers: [
+      {
+        email: "waiting@example.com",
+        groups: ["group-public"],
+        state: "NOT_INVITED",
+      },
+    ],
+  });
+  assert.deepEqual(await waiting.add("waiting@example.com"), {
+    added: false,
+    invited: true,
+    state: "NOT_INVITED",
+  });
+  assert.deepEqual(waiting.connect.writes(), [
+    "POST /v1/betaTesterInvitations",
+  ]);
+});
+
+test("removing a tester takes them out of the external group, and removing someone not in it changes nothing", async () => {
+  const { connect, remove, lines } = await connected({
+    testers: [
+      { email: "friend@example.com", groups: ["group-public", "group-team"] },
+      { email: "pal@example.com", groups: ["group-public"] },
+      { email: "podhaven@example.com", groups: ["group-podhaven"] },
+    ],
+  });
+  assert.equal(await remove("FRIEND@example.com"), true);
+  // Only the group membership goes; the tester stays on the team.
+  assert.deepEqual(connect.writes(), [
+    "DELETE /v1/betaGroups/group-public/relationships/betaTesters",
+  ]);
+  assert.deepEqual(connect.requests.at(-2)?.body, {
+    data: [{ type: "betaTesters", id: "tester-1" }],
+  });
+  assert.deepEqual(connect.inGroup("group-public"), [
+    "pal@example.com INSTALLED",
+  ]);
+  assert.deepEqual(connect.inGroup("group-team"), [
+    "friend@example.com INSTALLED",
+  ]);
+  assert.equal(
+    lines.at(-1),
+    '==> FRIEND@example.com is no longer in "Public testers".',
+  );
+  for (const email of ["friend@example.com", "podhaven@example.com"]) {
+    assert.equal(await remove(email), false);
+    assert.equal(
+      lines.at(-1),
+      `==> ${email} is not in "Public testers"; nothing changed.`,
+    );
+  }
+  assert.equal(connect.writes().length, 1);
+
+  // Apple may keep listing a removed tester as REVOKED.
+  const revoking = await connected({
+    revokeOnRemoval: true,
+    testers: [{ email: "friend@example.com", groups: ["group-public"] }],
+  });
+  assert.equal(await revoking.remove("friend@example.com"), true);
+  assert.equal(await revoking.remove("friend@example.com"), false);
+  assert.equal(revoking.connect.writes().length, 1);
+});
+
+test("the external group's testers are listed across pages", async () => {
+  const { connect, api } = await connected({
+    pageSize: 2,
+    testers: [
+      { email: "zed@example.com", groups: ["group-public"], state: "INVITED" },
+      { firstName: "Anonymous", groups: ["group-public"] },
+      {
+        email: "amy@example.com",
+        firstName: "Amy",
+        lastName: "Lee",
+        groups: ["group-public"],
+      },
+      { email: "podhaven@example.com", groups: ["group-podhaven"] },
+    ],
+  });
+  assert.deepEqual(await groupTesters(api, "app-1"), [
+    {
+      id: "tester-3",
+      email: "amy@example.com",
+      name: "Amy Lee",
+      inviteType: "EMAIL",
+      state: "INSTALLED",
+    },
+    {
+      id: "tester-1",
+      email: "zed@example.com",
+      name: "",
+      inviteType: "EMAIL",
+      state: "INVITED",
+    },
+    {
+      id: "tester-2",
+      email: undefined,
+      name: "Anonymous",
+      inviteType: "PUBLIC_LINK",
+      state: "INSTALLED",
+    },
+  ]);
+  const pages = connect.requests.filter(({ path }) =>
+    path.endsWith("/betaTesters"),
+  );
+  assert.deepEqual(
+    pages.map(({ path, search }) => [path, search.get("cursor")]),
+    [
+      ["/v1/betaGroups/group-public/betaTesters", null],
+      ["/v1/betaGroups/group-public/betaTesters", "2"],
+    ],
+  );
+  assert.equal(
+    pages[0]!.search.get("fields[betaTesters]"),
+    "email,firstName,lastName,inviteType,state",
+  );
+});
+
+test("tester changes stop without the external group or when App Store Connect does not confirm them", async () => {
+  const groupless = await connected({ groups: [internalTeam] });
+  for (const change of [groupless.add, groupless.remove])
+    await assert.rejects(change("friend@example.com"), {
+      message:
+        'App Store Connect has no external group "Public testers". A bin/testflight release creates it.',
+    });
+  await assert.rejects(groupTesters(groupless.api, "app-1"), {
+    message: /has no external group "Public testers"/,
+  });
+  assert.deepEqual(groupless.connect.writes(), []);
+
+  const unconfirmed = await connected({
+    createTester: () =>
+      json(201, { data: { type: "betaTesters", id: "tester-9" } }),
+  });
+  await assert.rejects(unconfirmed.add("friend@example.com"), {
+    message:
+      'App Store Connect does not list friend@example.com in "Public testers". Run bin/testflight --add-tester friend@example.com again.',
+  });
+  const refused = await connected({
+    createTester: () => refusal(422, "Unprocessable", "Invalid email."),
+  });
+  await assert.rejects(refused.add("friend@example.com"), {
+    message:
+      "App Store Connect POST /v1/betaTesters failed with 422: Unprocessable: Invalid email.",
+  });
+  const kept = await connected({
+    removeTester: () => json(204),
+    testers: [{ email: "friend@example.com", groups: ["group-public"] }],
+  });
+  await assert.rejects(kept.remove("friend@example.com"), {
+    message:
+      'App Store Connect still lists friend@example.com in "Public testers". Run bin/testflight --remove-tester friend@example.com again.',
+  });
 });

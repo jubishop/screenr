@@ -761,6 +761,11 @@ script.
   email.
 - Entering the first submission's details on the App Store Connect website.
 
+**Implemented for testers — 2026-11-09:** `bin/testflight --add-tester`,
+`--remove-tester`, and `--testers` add, remove, and list the external group's
+testers by email ([issue #562](https://github.com/jubishop/screenr/issues/562));
+[testers by email](development-workflow.md#testers-by-email) describes them.
+
 ### App identity — 2026-10-13
 
 **Decision:** The app's App Store identity is:
@@ -1090,7 +1095,11 @@ them. Where they still differ from PodHaven's command:
 
 - **Flags:** the issue kept Screenr's `--distribute-only`, which PodHaven
   calls `--reuse`. Screenr has no `--force` for other branches and no
-  API-key flags, since it reads the key from the environment only.
+  API-key flags, since it reads the key from the environment only. Screenr's
+  tester flags, `--add-tester`, `--remove-tester`, and `--testers`
+  ([issue #562](https://github.com/jubishop/screenr/issues/562)), reach
+  PodHaven through
+  [PodHaven's matching issue](https://github.com/jubishop/podhaven/issues/980).
 - **Notes:** a retry reuses the confirmed notes from the tag message, where
   PodHaven drafts them again. Screenr's notes also read server API commits,
   and they drop emoji, which App Store Connect rejects.

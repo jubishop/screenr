@@ -5,7 +5,8 @@ import { applePrivateKey, signAppleJWT } from "../src/server/apple-jwt";
 // The App Store Connect API calls behind bin/testflight: find the build the
 // external group already tests, clear the way for Beta App Review, wait for
 // an uploaded build to finish processing, set its What to Test notes, add it
-// to the tester groups, and submit it for Beta App Review.
+// to the tester groups, and submit it for Beta App Review. Its tester flags
+// add, remove, and list the external group's testers by email.
 
 const origin = "https://api.appstoreconnect.apple.com";
 // Apple refuses tokens that expire more than 20 minutes after they are issued.
@@ -107,6 +108,8 @@ export async function appStoreConnect(
     get: <T>(path: string) => request<T>("GET", path),
     post: <T>(path: string, body: unknown) => request<T>("POST", path, body),
     patch: <T>(path: string, body: unknown) => request<T>("PATCH", path, body),
+    delete: <T>(path: string, body: unknown) =>
+      request<T>("DELETE", path, body),
   };
 }
 
@@ -553,4 +556,181 @@ export async function distribute(
       `The build is in "${externalGroupName}", but external testing needs attention: it is ${state}. Check TestFlight in App Store Connect.`,
     );
   return { nextVersion: false, build, groups, externalState: state };
+}
+
+// The external group's testers, whom the owner adds and removes by email
+// after the App Store launch turns its public link off
+// (docs/ios-app.md#app-store-listing--2026-11-09).
+export type Tester = {
+  id: string;
+  // Testers who joined through the public link may have no email.
+  email: string | undefined;
+  name: string;
+  inviteType: string | undefined;
+  state: string | undefined;
+};
+
+type TesterAttributes = {
+  email?: string | null;
+  firstName?: string | null;
+  lastName?: string | null;
+  inviteType?: string;
+  state?: string;
+};
+
+const testerFields = {
+  "fields[betaTesters]": "email,firstName,lastName,inviteType,state",
+};
+
+const tester = ({ id, attributes }: Resource<TesterAttributes>): Tester => ({
+  id,
+  email: attributes.email || undefined,
+  name: [attributes.firstName, attributes.lastName].filter(Boolean).join(" "),
+  inviteType: attributes.inviteType,
+  state: attributes.state,
+});
+
+// Apple lists a tester who left, or was removed from the app, as REVOKED.
+const member = (found: Tester | undefined): found is Tester =>
+  found !== undefined && found.state !== "REVOKED";
+
+async function externalGroup(api: AppStoreConnect, app: string) {
+  const group = (await betaGroups(api, app)).find(isExternal);
+  if (!group)
+    throw new Error(
+      `App Store Connect has no external group "${externalGroupName}". A bin/testflight release creates it.`,
+    );
+  return group.id;
+}
+
+// The team's tester with this email, or the group's when a group is given.
+// Apple matches emails without regard to case.
+async function testerWithEmail(
+  api: AppStoreConnect,
+  email: string,
+  group?: string,
+) {
+  const { data } = await api.get<Many<TesterAttributes>>(
+    query("/v1/betaTesters", {
+      "filter[email]": email,
+      ...(group ? { "filter[betaGroups]": group } : {}),
+      ...testerFields,
+    }),
+  );
+  return data
+    .map(tester)
+    .find((found) => found.email?.toLowerCase() === email.toLowerCase());
+}
+
+// Every tester in the external group, those with an email first.
+export async function groupTesters(api: AppStoreConnect, app: string) {
+  const group = await externalGroup(api, app);
+  const testers: Tester[] = [];
+  let path: string | undefined = query(`/v1/betaGroups/${group}/betaTesters`, {
+    ...testerFields,
+    limit: "200",
+  });
+  while (path) {
+    const page: Many<TesterAttributes> = await api.get(path);
+    testers.push(...page.data.map(tester));
+    path = page.links?.next;
+  }
+  return testers.sort(
+    (a, b) =>
+      Number(!a.email) - Number(!b.email) ||
+      (a.email ?? a.name).localeCompare(b.email ?? b.name),
+  );
+}
+
+// Adds the email to the external group: a new tester is created in it, and
+// one the team already has, such as a PodHaven tester, joins it. Apple emails
+// TestFlight's invitation to a tester who joins an external group; when it
+// still lists the tester as uninvited, this sends the invitation itself.
+export async function addTester(
+  api: AppStoreConnect,
+  app: string,
+  email: string,
+  log: (line: string) => void,
+) {
+  const group = await externalGroup(api, app);
+  let found = await testerWithEmail(api, email, group);
+  const added = !member(found);
+  if (added) {
+    const existing = await testerWithEmail(api, email);
+    if (existing) {
+      log(
+        `==> Adding ${email}, already a TestFlight tester on the team, to "${externalGroupName}"`,
+      );
+      await api.post(`/v1/betaGroups/${group}/relationships/betaTesters`, {
+        data: [{ type: "betaTesters", id: existing.id }],
+      });
+    } else {
+      log(`==> Adding ${email} to "${externalGroupName}"`);
+      await api.post("/v1/betaTesters", {
+        data: {
+          type: "betaTesters",
+          attributes: { email },
+          relationships: {
+            betaGroups: { data: [{ type: "betaGroups", id: group }] },
+          },
+        },
+      });
+    }
+    found = await testerWithEmail(api, email, group);
+    if (!found)
+      throw new Error(
+        `App Store Connect does not list ${email} in "${externalGroupName}". Run bin/testflight --add-tester ${email} again.`,
+      );
+  }
+  const { id, state } = found!;
+  const invited = state === "NOT_INVITED" || state === "REVOKED";
+  if (invited) {
+    log(
+      `==> App Store Connect lists ${email} as ${state}, so sending TestFlight's invitation`,
+    );
+    await api.post("/v1/betaTesterInvitations", {
+      data: {
+        type: "betaTesterInvitations",
+        relationships: {
+          app: { data: { type: "apps", id: app } },
+          betaTester: { data: { type: "betaTesters", id } },
+        },
+      },
+    });
+    log(`==> ${email} is in "${externalGroupName}" and invited to TestFlight.`);
+  } else if (added)
+    log(
+      `==> ${email} is in "${externalGroupName}"; TestFlight lists them as ${state}.`,
+    );
+  else
+    log(
+      `==> ${email} is already in "${externalGroupName}" as ${state}; nothing changed.`,
+    );
+  return { added, invited, state };
+}
+
+// Takes the email out of the external group. The tester stays on the team,
+// in any other group and app.
+export async function removeTester(
+  api: AppStoreConnect,
+  app: string,
+  email: string,
+  log: (line: string) => void,
+) {
+  const group = await externalGroup(api, app);
+  const found = await testerWithEmail(api, email, group);
+  if (!member(found)) {
+    log(`==> ${email} is not in "${externalGroupName}"; nothing changed.`);
+    return false;
+  }
+  log(`==> Removing ${email} from "${externalGroupName}"`);
+  await api.delete(`/v1/betaGroups/${group}/relationships/betaTesters`, {
+    data: [{ type: "betaTesters", id: found.id }],
+  });
+  if (member(await testerWithEmail(api, email, group)))
+    throw new Error(
+      `App Store Connect still lists ${email} in "${externalGroupName}". Run bin/testflight --remove-tester ${email} again.`,
+    );
+  log(`==> ${email} is no longer in "${externalGroupName}".`);
+  return true;
 }

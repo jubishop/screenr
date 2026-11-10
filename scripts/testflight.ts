@@ -14,12 +14,15 @@ import { createInterface } from "node:readline/promises";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import {
+  addTester,
   appStoreConnect,
   credentialsFrom,
   distribute,
   externalGroupName,
   findApp,
+  groupTesters,
   prepareReview,
+  removeTester,
   testedBuild,
   type Environment,
 } from "./app-store-connect";
@@ -31,7 +34,8 @@ import {
 // with llm, requires a clean origin/main that passes bin/check-ios, archives
 // and uploads the Release app with xcodebuild, tags the commit
 // ios-v<version>b<build> with the notes, and then brings the build to testers
-// and Beta App Review through the App Store Connect API. See
+// and Beta App Review through the App Store Connect API. Its tester flags
+// instead add, remove, or list the external group's testers by email. See
 // docs/development-workflow.md#testflight-releases.
 
 const bundleId = "com.artisanalsoftware.Screenr";
@@ -781,7 +785,45 @@ async function pruneReleases(releases: string, log: (line: string) => void) {
   }
 }
 
+export type TesterOptions = { add: string[]; remove: string[]; list: boolean };
+
+// The tester flags: friends test by email in the external group, which keeps
+// every build after the App Store launch turns its public link off. They
+// need only the API key, and take no release lock, since they never pick a
+// build number.
+export async function manageTesters(
+  { add, remove, list }: TesterOptions,
+  { env, fetch, log }: Pick<IO, "env" | "fetch" | "log">,
+) {
+  const api = await appStoreConnect(credentialsFrom(env), fetch);
+  const app = (await findApp(api, bundleId)).id;
+  for (const email of remove) await removeTester(api, app, email, log);
+  for (const email of add) await addTester(api, app, email, log);
+  if (!list) return;
+  const testers = await groupTesters(api, app);
+  if (!testers.length) {
+    log(`==> "${externalGroupName}" has no testers.`);
+    return;
+  }
+  log(
+    `==> "${externalGroupName}" has ${testers.length} ${testers.length === 1 ? "tester" : "testers"}:`,
+  );
+  for (const { email, name, state, inviteType } of testers) {
+    const who = email
+      ? name
+        ? `${name} <${email}>`
+        : email
+      : `${name || "No name"} (no email)`;
+    const joined =
+      inviteType === "PUBLIC_LINK"
+        ? "joined through the public link"
+        : "invited by email";
+    log(`${who}: ${state ?? "no state"}, ${joined}`);
+  }
+}
+
 const usage = `Usage: bin/testflight [--notes TEXT] [--distribute-only]
+       bin/testflight [--add-tester EMAIL] [--remove-tester EMAIL] [--testers]
 bin/shipit is the same command.
 
 Releases the next TestFlight build of Screenr from a clean origin/main and
@@ -803,46 +845,103 @@ Running it again on a tagged commit resumes that build's distribution.
   --distribute-only  Skip the build; retry the newest tag's processing wait,
                      notes, groups, and Beta App Review submission.
 
+The tester flags change or list "Public testers" without a release, and may
+repeat:
+
+  --add-tester EMAIL     Add EMAIL to "Public testers"; TestFlight emails
+                         them an invitation.
+  --remove-tester EMAIL  Take EMAIL out of "Public testers".
+  --testers              List the testers in "Public testers".
+
+Adding someone already in the group, or removing someone who isn't, changes
+nothing.
+
 Needs ASC_KEY_PATH, ASC_KEY_ID, and ASC_ISSUER_ID for the App Store Connect
-API key, sentry-cli with an auth token, llm unless --notes is given, and Git
-access to push to origin. ${timeoutVariable} sets the processing
-wait in seconds; the default is ${defaultTimeoutSeconds}.`;
+API key. A release also needs sentry-cli with an auth token, llm unless
+--notes is given, and Git access to push to origin.
+${timeoutVariable} sets the processing wait in seconds; the default
+is ${defaultTimeoutSeconds}.`;
+
+export type Command =
+  | { kind: "help" }
+  | { kind: "release"; options: Options }
+  | { kind: "testers"; options: TesterOptions };
+
+export function parseCommand(args: string[]): Command {
+  const { values } = parseArgs({
+    args,
+    options: {
+      "distribute-only": { type: "boolean", default: false },
+      notes: { type: "string" },
+      "add-tester": { type: "string", multiple: true, default: [] },
+      "remove-tester": { type: "string", multiple: true, default: [] },
+      testers: { type: "boolean", default: false },
+      help: { type: "boolean", short: "h", default: false },
+    },
+  });
+  if (values.help) return { kind: "help" };
+  // Apple matches tester emails without regard to case.
+  const emails = (flag: "add-tester" | "remove-tester") => [
+    ...new Set(
+      values[flag].map((value) => {
+        const email = value.trim().toLowerCase();
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
+          throw new Error(
+            `--${flag} needs an email address, such as friend@example.com, not "${value}".`,
+          );
+        return email;
+      }),
+    ),
+  ];
+  const add = emails("add-tester");
+  const remove = emails("remove-tester");
+  if (!add.length && !remove.length && !values.testers)
+    return {
+      kind: "release",
+      options: {
+        distributeOnly: values["distribute-only"],
+        notes: values.notes,
+      },
+    };
+  if (values.notes !== undefined || values["distribute-only"])
+    throw new Error(
+      "--add-tester, --remove-tester, and --testers change or list testers without a release; leave out --notes and --distribute-only.",
+    );
+  const both = add.find((email) => remove.includes(email));
+  if (both)
+    throw new Error(`Both --add-tester and --remove-tester name ${both}.`);
+  return { kind: "testers", options: { add, remove, list: values.testers } };
+}
 
 if (process.argv[1]?.endsWith("scripts/testflight.ts")) {
   try {
-    const { values } = parseArgs({
-      options: {
-        "distribute-only": { type: "boolean", default: false },
-        notes: { type: "string" },
-        help: { type: "boolean", short: "h", default: false },
-      },
-    });
-    if (values.help) console.log(usage);
+    const command = parseCommand(process.argv.slice(2));
+    const log = (line: string) => console.log(line);
+    if (command.kind === "help") console.log(usage);
+    else if (command.kind === "testers")
+      await manageTesters(command.options, { env: process.env, log });
     else {
       const root = fileURLToPath(new URL("..", import.meta.url));
-      await release(
-        { distributeOnly: values["distribute-only"], notes: values.notes },
-        {
-          root,
-          env: process.env,
-          exec: commands(root),
-          sleep: (milliseconds) =>
-            new Promise((resolve) => setTimeout(resolve, milliseconds)),
-          log: (line) => console.log(line),
-          ask: async (question) => {
-            if (!process.stdin.isTTY || !process.stdout.isTTY) return undefined;
-            const prompt = createInterface({
-              input: process.stdin,
-              output: process.stdout,
-            });
-            try {
-              return await prompt.question(question);
-            } finally {
-              prompt.close();
-            }
-          },
+      await release(command.options, {
+        root,
+        env: process.env,
+        exec: commands(root),
+        sleep: (milliseconds) =>
+          new Promise((resolve) => setTimeout(resolve, milliseconds)),
+        log,
+        ask: async (question) => {
+          if (!process.stdin.isTTY || !process.stdout.isTTY) return undefined;
+          const prompt = createInterface({
+            input: process.stdin,
+            output: process.stdout,
+          });
+          try {
+            return await prompt.question(question);
+          } finally {
+            prompt.close();
+          }
         },
-      );
+      });
     }
   } catch (error) {
     console.error(`error: ${(error as Error).message}`);

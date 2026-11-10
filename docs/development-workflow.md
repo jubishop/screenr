@@ -358,7 +358,8 @@ otherwise runs in full.
 
 `bin/testflight`, or its alias `bin/shipit`, builds the iPhone app on the
 owner's Mac, brings it to TestFlight testers, and submits it for Beta App
-Review. It follows the
+Review. Its tester flags manage [testers by email](#testers-by-email)
+instead. It follows the
 [release decision](ios-app.md#ci-checks-and-local-testflight-releases--2026-10-13),
 the [local iOS checks decision](ios-app.md#local-ios-checks-instead-of-ios-ci--2026-10-14),
 the [tooling decision](ios-app.md#in-house-release-tooling-without-fastlane--2026-10-13),
@@ -479,6 +480,40 @@ never enables the group's public link.
 external build and turned the link on through the API on 2026-11-04;
 [App Store Connect records](running-screenr.md#app-store-connect) say where
 the link lives.
+
+#### Testers by email
+
+After the App Store launch turns the public link off, friends keep getting
+every build as testers in "Public testers", added by email under the
+[App Store listing decision](ios-app.md#app-store-listing--2026-11-09);
+internal testers would need App Store Connect team accounts
+([#562](https://github.com/jubishop/screenr/issues/562)). The tester flags
+change or list that group without a release. They need only the API key,
+take no release lock, and may repeat:
+
+```sh
+bin/testflight --add-tester friend@example.com
+bin/testflight --remove-tester friend@example.com
+bin/testflight --testers
+```
+
+- **Add:** a new tester is created in the group, and Apple emails them
+  TestFlight's invitation. A tester the team already has, such as a PodHaven
+  tester, joins the group instead. When App Store Connect then lists the
+  tester as `NOT_INVITED` or `REVOKED`, the command sends the invitation
+  itself.
+- **Remove:** the tester leaves the group but stays on the team, in any other
+  app's groups. Apple may keep listing a removed tester as `REVOKED`.
+- **List:** each tester's name, email, TestFlight state, and whether they
+  joined by email or through the public link, which leaves some without an
+  email.
+
+Emails match without regard to case. Adding someone already in the group, or
+removing someone who isn't, changes nothing, except that an add sends a
+missing invitation; a tester listed as `REVOKED` counts as gone. The command
+reads each change back from App Store Connect and stops when the group
+disagrees. Without the external group it stops too; a release creates the
+group.
 
 #### Recovery
 

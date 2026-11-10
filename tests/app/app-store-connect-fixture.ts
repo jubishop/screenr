@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 
 // An in-memory App Store Connect with one app, app-1, for the release tests.
 // It answers only the requests scripts/app-store-connect.ts makes, records
-// every request, and keeps the builds, groups, and notes they change.
+// every request, and keeps the builds, groups, notes, and testers they
+// change.
 
 export type Recorded = {
   method: string;
@@ -45,6 +46,18 @@ export const publicTesters: FakeGroup = {
   hasAccessToAllBuilds: false,
 };
 
+// A TestFlight tester of the team, in the groups it lists by ID. Testers who
+// joined through a public link may have no email.
+export type FakeTester = {
+  id: string;
+  email?: string;
+  firstName?: string;
+  lastName?: string;
+  inviteType: string;
+  state: string;
+  groups: Set<string>;
+};
+
 export const json = (status: number, body?: unknown) =>
   new Response(body === undefined ? null : JSON.stringify(body), { status });
 export const refusal = (status: number, title: string, detail: string) =>
@@ -57,11 +70,19 @@ export type FakeOptions = {
   // The builds each group holds, by group ID.
   members?: Record<string, number[]>;
   localizations?: { build: number; whatsNew: string }[];
+  testers?: (Partial<Omit<FakeTester, "groups">> & { groups?: string[] })[];
+  // The state a tester takes on joining a group. Apple invites a tester it
+  // adds to an external group with a build in testing.
+  joinedState?: string;
+  // Removed testers stay in the group's list as REVOKED.
+  revokeOnRemoval?: boolean;
   pageSize?: number;
   // Each hook may answer instead of the fake, such as with a refusal.
   createGroup?: () => Response | undefined;
   expire?: (build: FakeBuild) => Response | undefined;
   submit?: (build: FakeBuild) => Response | undefined;
+  createTester?: () => Response | undefined;
+  removeTester?: () => Response | undefined;
 };
 
 export function fakeConnect(options: FakeOptions = {}) {
@@ -102,6 +123,25 @@ export function fakeConnect(options: FakeOptions = {}) {
       whatsNew,
     }),
   );
+  const testers: FakeTester[] = (options.testers ?? []).map(
+    ({ groups = [], ...tester }, index) => ({
+      id: `tester-${index + 1}`,
+      inviteType: tester.email ? "EMAIL" : "PUBLIC_LINK",
+      state: "INSTALLED",
+      ...tester,
+      groups: new Set(groups),
+    }),
+  );
+  const joined = (tester: FakeTester, group: string) => {
+    tester.groups.add(group);
+    tester.state = options.joinedState ?? "INVITED";
+  };
+  const testerResource = ({ id, groups, ...attributes }: FakeTester) => ({
+    type: "betaTesters",
+    id,
+    attributes,
+  });
+  const invitations: { app: string; tester: string }[] = [];
   const byId = (id: string) => builds.find((build) => build.id === id);
   const detail = (build: FakeBuild) => ({
     type: "buildBetaDetails",
@@ -329,6 +369,94 @@ export function fakeConnect(options: FakeOptions = {}) {
         data: { type: "betaAppReviewSubmissions", id: `review-${build.build}` },
       });
     }
+    const listing = url.pathname.match(
+      /^\/v1\/betaGroups\/([^/]+)\/betaTesters$/,
+    );
+    if (method === "GET" && listing) {
+      const found = testers.filter(({ groups }) => groups.has(listing[1]!));
+      const size = Math.min(
+        Number(url.searchParams.get("limit") ?? 50),
+        options.pageSize ?? Infinity,
+      );
+      const offset = Number(url.searchParams.get("cursor") ?? 0);
+      const next = new URL(url);
+      next.searchParams.set("cursor", String(offset + size));
+      return json(200, {
+        data: found.slice(offset, offset + size).map(testerResource),
+        links: offset + size < found.length ? { next: next.href } : {},
+      });
+    }
+    if (route === "GET /v1/betaTesters") {
+      // The release tooling looks testers up by email, never the whole team.
+      const email = filter("email");
+      assert.ok(email);
+      const group = filter("betaGroups");
+      return json(200, {
+        data: testers
+          .filter(
+            (tester) =>
+              tester.email?.toLowerCase() === email.toLowerCase() &&
+              (!group || tester.groups.has(group)),
+          )
+          .map(testerResource),
+      });
+    }
+    if (route === "POST /v1/betaTesters") {
+      const refused = options.createTester?.();
+      if (refused) return refused;
+      const { email } = body.data.attributes;
+      if (testers.some((tester) => tester.email === email))
+        return refusal(
+          409,
+          "The provided entity includes an attribute with a value that has already been used.",
+          "A tester with this email already exists.",
+        );
+      const groups = body.data.relationships.betaGroups.data.map(
+        ({ type, id }: { type: string; id: string }) => {
+          assert.equal(type, "betaGroups");
+          return id;
+        },
+      );
+      const tester: FakeTester = {
+        id: `tester-${testers.length + 1}`,
+        email,
+        inviteType: "EMAIL",
+        state: "NOT_INVITED",
+        groups: new Set(),
+      };
+      testers.push(tester);
+      for (const group of groups) joined(tester, group);
+      return json(201, { data: testerResource(tester) });
+    }
+    const membership = url.pathname.match(
+      /^\/v1\/betaGroups\/([^/]+)\/relationships\/betaTesters$/,
+    );
+    if (membership && (method === "POST" || method === "DELETE")) {
+      const refused =
+        method === "DELETE" ? options.removeTester?.() : undefined;
+      if (refused) return refused;
+      for (const { type, id } of body.data) {
+        assert.equal(type, "betaTesters");
+        const tester = testers.find((found) => found.id === id);
+        if (!tester) return notFound();
+        if (method === "POST") joined(tester, membership[1]!);
+        else if (options.revokeOnRemoval) tester.state = "REVOKED";
+        else tester.groups.delete(membership[1]!);
+      }
+      return json(204);
+    }
+    if (route === "POST /v1/betaTesterInvitations") {
+      const app = body.data.relationships.app.data;
+      const invited = body.data.relationships.betaTester.data;
+      assert.deepEqual([app.type, invited.type], ["apps", "betaTesters"]);
+      const tester = testers.find(({ id }) => id === invited.id);
+      if (app.id !== "app-1" || !tester) return notFound();
+      tester.state = "INVITED";
+      invitations.push({ app: app.id, tester: tester.id });
+      return json(201, {
+        data: { type: "betaTesterInvitations", id: `invitation-${tester.id}` },
+      });
+    }
     return notFound();
   };
 
@@ -345,9 +473,17 @@ export function fakeConnect(options: FakeOptions = {}) {
     groups,
     members,
     localizations,
+    testers,
+    invitations,
     upload,
     writes,
     holding,
+    // The emails of a group's testers, with each one's state.
+    inGroup: (group: string) =>
+      testers
+        .filter(({ groups }) => groups.has(group))
+        .map(({ email, state }) => `${email ?? "no email"} ${state}`)
+        .sort(),
     build: (number: number) => builds.find(({ build }) => build === number),
   };
 }
