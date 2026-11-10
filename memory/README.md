@@ -102,7 +102,8 @@ to ordinary memory pages. Create these records only when a review needs them.
   loads.
 - [Process test waits](process-test-waits.md): wait for a started process's
   ready line or exit, for a page's poll in browser expects, and for the
-  database and a test's own work, with a bound only a hang reaches, since
+  database and a test's own work, with a bound only a hang reaches, and
+  check production deadlines and fresh timestamps without timing them, since
   test-database drops, checkpoints, and load from parallel checks stalled
   them for many seconds.
 - [Parallel agent gotchas](parallel-agent-gotchas.md): cap concurrent iOS

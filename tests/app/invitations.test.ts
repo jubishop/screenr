@@ -25,7 +25,8 @@ const { profileFor } = await import("../../src/server/profiles");
 const { changeRelationship, people } =
   await import("../../src/server/relationships");
 const { thread } = await import("../../src/server/feed");
-const { AppError, domainLock } = await import("../../src/server/db");
+const { AppError, domainLock, transaction } =
+  await import("../../src/server/db");
 const { GET, POST } = await import("../../src/app/api/screenr/[action]/route");
 
 useDatabase();
@@ -104,10 +105,27 @@ test("shared write lock waits end with a retryable error that changes nothing", 
   assert.deepEqual(await outcome.value.json(), {
     error: "Screenr is busy. Please try again.",
   });
-  // The wait ends near two seconds, before the pool's five-second limit.
+  // Only a lock wait that outlasts the lock_timeout each transaction sets
+  // ends with this error, so the request waited out that limit. Read the
+  // limit instead of timing the request, which load can hold for many
+  // seconds after the wait ends (#646). It ends a queued write before the
+  // pool's connection timeout, which session lookups also wait under.
+  const lockTimeout = await transaction(async (client) =>
+    Number(
+      (
+        await client.query(
+          "SELECT setting FROM pg_settings WHERE name='lock_timeout'",
+        )
+      ).rows[0].setting,
+    ),
+  );
   assert.ok(
-    outcome.elapsed > 1500 && outcome.elapsed < 4000,
-    `${outcome.elapsed}`,
+    outcome.elapsed > lockTimeout * 0.75,
+    `${outcome.elapsed} ms for a ${lockTimeout} ms limit`,
+  );
+  assert.ok(
+    lockTimeout > 0 && lockTimeout < db.options.connectionTimeoutMillis!,
+    `${lockTimeout} ms`,
   );
   assert.deepEqual(
     (await listInvitations(owner)).map((item) => item.id),
