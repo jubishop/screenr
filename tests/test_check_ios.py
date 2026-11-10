@@ -156,6 +156,57 @@ build_into('--scratch-path')
 hang_with_child('SWIFT')
 finish('SWIFT')
 """
+# The build-slot wrappers of the owner's Mac, which xcodebuild and swift link
+# to. A heavy call, such as a build or a test run, takes a build slot, a flock
+# lock in FAKE_BUILD_SLOTS with its holder's process ID, and then runs the next
+# tool of its name on PATH, which inherits the slot's descriptor, named in
+# BUILD_SLOT_FD. With FAKE_SLOT_WAIT it first waits that many seconds, saying
+# so; with FAKE_SLOT_GIVES_UP it then gives up with status 75 instead. A heavy
+# call that inherited a slot's descriptor reuses that slot at once. With
+# FAKE_SLOT_FAILS, taking a slot fails, and the call runs its tool without one.
+BUILD_SLOTS = RECORD + """
+import fcntl, time
+name, arguments = os.path.basename(sys.argv[0]), sys.argv[1:]
+slots = Path(os.environ['FAKE_BUILD_SLOTS'])
+def inherited():
+    try:
+        held = os.fstat(int(os.environ['BUILD_SLOT_FD']))
+    except (KeyError, ValueError, OSError):
+        return False
+    return any((path.stat().st_dev, path.stat().st_ino) == (held.st_dev, held.st_ino)
+               for path in slots.glob('slot-*.lock'))
+if name == 'xcodebuild':
+    heavy = not {'-version', '-resolvePackageDependencies'}.intersection(arguments)
+else:
+    heavy = arguments[:1] in (['build'], ['test'])
+holders = '\\n  pid 1 since 2026-11-09 16:00:00 PST, unattended: xcodebuild test in /elsewhere'
+if heavy and os.environ.get('FAKE_SLOT_FAILS'):
+    print(name + ': running without a build slot, since taking one failed: [Errno 13] Permission denied',
+          file=sys.stderr, flush=True)
+elif heavy and inherited():
+    record('build-slots', 'reused', name)
+elif heavy:
+    if os.environ.get('FAKE_SLOT_WAIT'):
+        print(name + ': waiting for one of 2 build slots, held by:' + holders, file=sys.stderr, flush=True)
+        time.sleep(float(os.environ['FAKE_SLOT_WAIT']))
+    if os.environ.get('FAKE_SLOT_GIVES_UP'):
+        print(name + ': gave up after waiting 45m00s for one of 2 build slots, held by:' + holders,
+              file=sys.stderr, flush=True)
+        sys.exit(75)
+    slot = os.open(slots / 'slot-1.lock', os.O_RDWR | os.O_CREAT)
+    fcntl.flock(slot, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    os.ftruncate(slot, 0)
+    os.write(slot, str(os.getpid()).encode())
+    os.set_inheritable(slot, True)
+    os.environ['BUILD_SLOT_FD'] = str(slot)
+    record('build-slots', 'took', name, *arguments)
+for directory in os.environ['PATH'].split(os.pathsep):
+    tool = os.path.join(directory, name)
+    if (os.path.isfile(tool) and os.access(tool, os.X_OK)
+            and os.path.basename(os.path.realpath(tool)) != 'build-slots'):
+        os.execv(tool, [tool, *arguments])
+sys.exit('no ' + name + ' on PATH besides the wrapper')
+"""
 # The check loads this sitecustomize when PYTHONPATH names its folder. It holds
 # the check's thread for a quarter second after each file the check opens,
 # renames, or removes in the push relay folder, so the fake test runner, which
@@ -202,7 +253,7 @@ class CheckIOSTests(unittest.TestCase):
         base = Path(temporary.name).resolve()
         self.repo = base / "checkout"
         (self.repo / "bin").mkdir(parents=True)
-        for name in ("bin/check-ios", "bin/_ios_check_records.py", "bin/_ios_packages.py"):
+        for name in ("bin/check-ios", "bin/_build_slot.py", "bin/_ios_check_records.py", "bin/_ios_packages.py"):
             shutil.copy2(SOURCE / name, self.repo / name)
         self.events = base / "events.jsonl"
         # The check's machine-wide slots, kept apart from real checks on this Mac.
@@ -694,6 +745,101 @@ class CheckIOSTests(unittest.TestCase):
         self.assertRegex(lines[0], r"^Took iOS check slot 2 of 3 after waiting \d+\.\d minutes\.$")
         self.assertEqual(lines[1], "==> Package resolution")
         self.assertIn("iOS checks passed with no warnings", output)
+
+    def with_build_slot_wrappers(self):
+        """Put build-slot wrappers of xcodebuild and swift ahead of the simulated tools on PATH, as on the owner's Mac."""
+        wrappers = self.events.parent / "wrappers"
+        wrappers.mkdir()
+        (wrappers / "build-slots").write_text("#!" + sys.executable + "\n" + BUILD_SLOTS)
+        (wrappers / "build-slots").chmod(0o755)
+        for name in ("xcodebuild", "swift"):
+            (wrappers / name).symlink_to("build-slots")
+        self.build_slots = self.events.parent / "build-slots"
+        self.build_slots.mkdir()
+        self.env.update(PATH=f"{wrappers}{os.pathsep}{self.tools}", FAKE_BUILD_SLOTS=str(self.build_slots))
+
+    def test_takes_one_build_slot_before_its_first_build_and_runs_every_build_and_test_under_it(self):
+        self.with_build_slot_wrappers()
+        waiting = "xcodebuild: waiting for one of 2 build slots, held by:\n  pid 1 since"
+        # An unattended run can wait for a slot; an interactive one never does.
+        for case, extra in (("after a wait", {"FAKE_SLOT_WAIT": "1"}), ("at once", {})):
+            with self.subTest(case=case):
+                self.events.unlink(missing_ok=True)
+                result = self.check(**extra)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                # It takes one slot after resolving packages, which needs none,
+                # and before its first build. Its builds and tests reuse it, and
+                # it creates and boots its Simulator while it holds it.
+                self.assertEqual(self.steps(), ["xcodebuild", "build-slots", "build-slots", "swift", "build-slots",
+                                                "xcodebuild", "simctl create", "simctl bootstatus", "simctl spawn",
+                                                "build-slots", "xcodebuild", "simctl shutdown", "simctl delete"])
+                self.assertEqual([event for event in self.recorded() if event[0] == "build-slots"],
+                                 [["build-slots", "took", "xcodebuild", "bin/check-ios"],
+                                  ["build-slots", "reused", "swift"], ["build-slots", "reused", "xcodebuild"],
+                                  ["build-slots", "reused", "xcodebuild"]])
+                lines = result.stdout.splitlines()
+                self.assertLess(lines.index("==> Package resolution"),
+                                lines.index("Took a Mac build slot for the rest of the check."))
+                self.assertLess(lines.index("Took a Mac build slot for the rest of the check."),
+                                lines.index("==> ScreenrKit tests"))
+                # The wrapper said it was waiting to the check itself, before any
+                # step and its time limit started, and no step waited.
+                self.assertEqual(result.stderr.count(waiting), 1 if extra else 0)
+                logs = list((self.repo / "ios/build/check").glob("*.log"))
+                self.assertEqual(len(logs), 5)
+                for log in logs:
+                    self.assertNotIn("build slot", log.read_text(), log.name)
+
+    def test_a_check_that_gets_no_build_slot_fails_with_the_wrappers_reason_before_building(self):
+        self.with_build_slot_wrappers()
+        result = self.check(FAKE_SLOT_WAIT="0.1", FAKE_SLOT_GIVES_UP="1")
+        self.assertNotEqual(result.returncode, 0)
+        # The wrapper names the slots' holders.
+        self.assertIn("xcodebuild: gave up after waiting 45m00s for one of 2 build slots, held by:\n  pid 1 since",
+                      result.stderr)
+        wrapper = shlex.quote(str(self.events.parent / "wrappers/xcodebuild"))
+        self.assertIn(f"bin/check-ios got no Mac build slot: {wrapper} bin/check-ios exited with status 75.",
+                      result.stderr)
+        # It resolved its packages, but never built or made a Simulator.
+        self.assertEqual(self.steps(), ["xcodebuild"])
+
+    def test_runs_without_a_build_slot_when_the_wrapper_cannot_take_one(self):
+        self.with_build_slot_wrappers()
+        result = self.check(FAKE_SLOT_FAILS="1")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("xcodebuild: running without a build slot, since taking one failed", result.stderr)
+        self.assertNotIn("Took a Mac build slot", result.stdout)
+        self.assertEqual(self.steps(), ["xcodebuild", "swift", "xcodebuild", "simctl create", "simctl bootstatus",
+                                        "simctl spawn", "xcodebuild", "simctl shutdown", "simctl delete"])
+
+    def test_holds_its_build_slot_until_it_exits(self):
+        self.with_build_slot_wrappers()
+        pids = self.events.parent / "hung.pids"
+        check = self.start(FAKE_HANG_TEST=str(pids))
+        deadline = time.monotonic() + 30
+        while not (pids.exists() and pids.read_text()):
+            self.assertLess(time.monotonic(), deadline, "the test run never started")
+            time.sleep(0.05)
+        slot = self.build_slots / "slot-1.lock"
+
+        def held():
+            with slot.open("a") as stream:
+                try:
+                    fcntl.flock(stream, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    return False
+                except BlockingIOError:
+                    return True
+        # While its Simulator tests run, it holds the slot, and the holder that
+        # the slot's record names is one of its own processes.
+        self.assertTrue(held())
+        parent = subprocess.run(["ps", "-o", "ppid=", "-p", slot.read_text()], capture_output=True, text=True,
+                                timeout=HANG_SECONDS)
+        self.assertEqual(parent.stdout.strip(), str(check.pid))
+        check.send_signal(signal.SIGTERM)
+        check.communicate(timeout=HANG_SECONDS)
+        # The holder ends with the check, and the slot is free.
+        self.assert_stopped(slot)
+        self.assertFalse(held())
 
     def test_requires_xcode_27_and_an_ios_27_runtime(self):
         result = self.check(FAKE_XCODE_VERSION="Xcode 26.4\nBuild version 17E192")
