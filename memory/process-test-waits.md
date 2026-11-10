@@ -1,6 +1,6 @@
 ---
 name: process-test-waits
-description: Tests that start a process wait for its own ready line or exit, with a bound only a hang reaches, because test-database setup and load from parallel checks stalled processes for many seconds.
+description: Tests that start a process wait for its own ready line or exit, and browser expects wait for a page's poll, with a bound only a hang reaches, because test-database setup and load from parallel checks stalled them for many seconds.
 type: reference
 ---
 
@@ -39,7 +39,16 @@ average near 80 ran past its 20-second bound at one near 100
 of 130 to 170, a cold title page's third catalog request reached the fake
 TMDB server only after the server had answered one of the others 100 ms
 after it arrived, so a test that counted open requests saw 2 of 3
-([#624](https://github.com/jubishop/screenr/issues/624)).
+([#624](https://github.com/jubishop/screenr/issues/624)). That evening, at
+load averages of 200 to 585, a reader's page in
+`tests/browser/standalone-comments.spec.ts` had not shown another member's
+deletion within the suite's 10-second `expect` timeout
+([#626](https://github.com/jubishop/screenr/issues/626)). An open page learns
+of such a change only through its 3-second poll, which skips while a read is
+pending. Holding each of the reader's screen reads for 8 seconds after
+fetching it reproduced the failure. Stretching the poll past any test's
+length showed 23 more tests in 18 browser spec files that waited on it under
+the same bound.
 
 **Evidence:** Dropping an empty database at 17:10 PST waited 6.0 seconds for
 a checkpoint that synced 73,941 files. Holding each harness start for 11
@@ -61,6 +70,11 @@ from 28 to 411, and in 18 runs six at a time at load averages from 5 to 7.
 - A nested test runner's per-test timeout is a wait too. Size it to end a
   hang, and check promptness by asserting that no test timed out, as
   `tests/app/browser-script-guard.test.ts` does.
+- A browser `expect` is a wait too. `playwright.config.ts` sets its timeout
+  to 60 seconds, which ends only a hang. The deletion test passes under it
+  with its reader's reads held as above. Don't give an `expect` a shorter
+  `timeout` when what it waits for depends on the machine's speed, such as
+  another page's poll.
 - To show that requests run together, have the fake server hold every reply
   until all of them are open at once, rather than counting overlap against
   reply delays. Turn off client timeouts that would drop a held request, and
