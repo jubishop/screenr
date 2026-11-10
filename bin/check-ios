@@ -107,8 +107,9 @@ SLOT_POLL_SECONDS = 2
 # How long a stopped step's processes get to exit before SIGKILL.
 STOP_GRACE_SECONDS = 5
 # UI tests ask for a push by writing its payload to <name>.json here, which the
-# check sends to Screenr Dev with xcrun simctl push and then renames to
-# <name>.sent, or to <name>.failed with simctl's output or why it stopped simctl.
+# check sends to Screenr Dev with xcrun simctl push, then removes and answers
+# with <name>.sent, or <name>.failed with simctl's output or why it stopped
+# simctl. The answer appears whole, and only once the request is gone.
 # xcodebuild passes the directory to the tests in SCREENR_PUSH_RELAY. It is
 # inside OUTPUT, which each run removes.
 PUSH_RELAY = OUTPUT / "push-relay"
@@ -280,8 +281,12 @@ class PushRelay:
         except subprocess.TimeoutExpired:
             outcome = ".failed"
             output = f"it did not finish within {PUSH_TIMEOUT_SECONDS:g} seconds, so bin/check-ios stopped it\n"
-        request.with_suffix(outcome).write_text(output)
+        # A waiting test reads the outcome as soon as it exists, so the request
+        # goes first and the outcome is renamed into place once it is written.
         request.unlink()
+        draft = request.with_suffix(outcome + ".part")
+        draft.write_text(output)
+        draft.replace(request.with_suffix(outcome))
 
 
 def lock_slot(path):

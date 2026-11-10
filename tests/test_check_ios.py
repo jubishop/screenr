@@ -96,16 +96,25 @@ if step == 'TEST' and os.environ.get('FAKE_PUSH'):
     # gives up, and fail with the check's reason, as PushRelay.swift does.
     import time
     relay = Path(os.environ['TEST_RUNNER_SCREENR_PUSH_RELAY'])
+    request = relay / 'friend-request.json'
     (relay / 'friend-request.json.tmp').write_text(os.environ['FAKE_PUSH'])
-    (relay / 'friend-request.json.tmp').rename(relay / 'friend-request.json')
-    sent, failed = relay / 'friend-request.sent', relay / 'friend-request.failed'
+    (relay / 'friend-request.json.tmp').rename(request)
+    def outcome():
+        for suffix in ('.sent', '.failed'):
+            try:
+                return suffix, request.with_suffix(suffix).read_text()
+            except FileNotFoundError:
+                pass
+    # Read the outcome and look for the request the moment the outcome
+    # appears, polling often, as a waiting test may.
     deadline = time.monotonic() + 20
-    while not (sent.exists() or failed.exists()) and time.monotonic() < deadline:
-        time.sleep(0.1)
-    record('delivered', sent.exists(), (relay / 'friend-request.json').exists())
-    if failed.exists():
+    while not (seen := outcome()) and time.monotonic() < deadline:
+        time.sleep(0.01)
+    suffix, text = seen or (None, None)
+    record('delivered', suffix, request.exists(), text)
+    if suffix == '.failed':
         print('PushTests.swift:70: error: -[PushTests testAcceptsAFriendRequestFromItsPush] : failed: '
-              'xcrun simctl push failed: ' + failed.read_text())
+              'xcrun simctl push failed: ' + text)
         sys.exit(65)
 hang_with_child(step)
 finish(step)
@@ -146,6 +155,29 @@ record('swift', *sys.argv[1:])
 build_into('--scratch-path')
 hang_with_child('SWIFT')
 finish('SWIFT')
+"""
+# The check loads this sitecustomize when PYTHONPATH names its folder. It holds
+# the check's thread for a quarter second after each file the check opens,
+# renames, or removes in the push relay folder, so the fake test runner, which
+# looks every hundredth of a second, sees each state the folder passes through.
+# A look the runner misses can only hide a race, never fail a correct check.
+PAUSE_RELAY = """import io, os, sys, time
+from pathlib import Path
+if Path(sys.argv[0]).name == 'check-ios':
+    relay = os.environ['PAUSE_PUSH_RELAY']
+    def in_relay(argument):
+        return (isinstance(argument, (str, os.PathLike))
+                and os.path.dirname(os.path.abspath(argument)) == relay)
+    def pausing(change):
+        def change_then_pause(*arguments, **keywords):
+            result = change(*arguments, **keywords)
+            if any(in_relay(argument) for argument in arguments):
+                time.sleep(0.25)
+            return result
+        return change_then_pause
+    io.open = pausing(io.open)
+    for name in ('open', 'rename', 'replace', 'remove', 'unlink'):
+        setattr(os, name, pausing(getattr(os, name)))
 """
 PINS = """{
   "pins" : [
@@ -199,11 +231,22 @@ class CheckIOSTests(unittest.TestCase):
         return subprocess.run([str(self.repo / "bin/check-ios"), *args], cwd=self.repo, env=self.env | extra,
                               text=True, capture_output=True, timeout=HANG_SECONDS)
 
+    def pausing_the_relay(self):
+        """Return the environment that holds the check's push relay after each change it makes to the folder."""
+        site = self.events.parent / "site"
+        site.mkdir()
+        (site / "sitecustomize.py").write_text(PAUSE_RELAY)
+        return {"PYTHONPATH": str(site), "PAUSE_PUSH_RELAY": str(self.repo / "ios/build/check/push-relay")}
+
     def recorded(self):
         events = [json.loads(line) for line in self.events.read_text().splitlines()] if self.events.exists() else []
         leaked = [event for event in events if UNWANTED.intersection(event[-1])]
         self.assertEqual(leaked, [], "tools must not inherit SDKROOT or Git's repository variables")
         return [event[:-1] for event in events]
+
+    def deliveries(self):
+        """Return what the fake test runner saw the moment each push's outcome appeared."""
+        return [event[1:] for event in self.recorded() if event[0] == "delivered"]
 
     def steps(self):
         return [event[0] if event[0] != "xcrun" else " ".join(event[1:3]) for event in self.recorded()]
@@ -257,7 +300,7 @@ class CheckIOSTests(unittest.TestCase):
 
     def test_delivers_the_pushes_ui_tests_ask_for_to_its_simulator(self):
         payload = json.dumps({"aps": {"alert": {"body": "New activity on Screenr"}}, "notificationId": "14"})
-        result = self.check(FAKE_PUSH=payload)
+        result = self.check(FAKE_PUSH=payload, **self.pausing_the_relay())
         self.assertEqual(result.returncode, 0, result.stderr)
         relay = str(self.repo / "ios/build/check/push-relay")
         test_run = next(event for event in self.recorded() if event[-1] == "test")
@@ -265,23 +308,27 @@ class CheckIOSTests(unittest.TestCase):
         pushes = [event for event in self.recorded() if event[:3] == ["xcrun", "simctl", "push"]]
         self.assertEqual(pushes, [["xcrun", "simctl", "push", "NEW-UDID", "com.artisanalsoftware.Screenr.dev",
                                    relay + "/friend-request.json", payload]])
-        # The test saw the delivery: the request became .sent with simctl's output.
-        self.assertIn(["delivered", True, False], self.recorded())
-        self.assertEqual((self.repo / "ios/build/check/push-relay/friend-request.sent").read_text(),
-                         "Notification sent to 'com.artisanalsoftware.Screenr.dev'\n")
+        # The test saw the delivery: the request became .sent with simctl's
+        # output, which was whole, and the request was gone, the moment .sent
+        # appeared.
+        self.assertEqual(self.deliveries(),
+                         [[".sent", False, "Notification sent to 'com.artisanalsoftware.Screenr.dev'\n"]])
+        self.assertEqual(sorted(path.name for path in Path(relay).iterdir()), ["friend-request.sent"])
 
     def test_a_push_simctl_never_sends_fails_its_test_with_the_reason_and_the_check_still_ends(self):
         pid = self.events.parent / "push.pid"
         started = time.monotonic()
         result = self.check(FAKE_PUSH=json.dumps({"aps": {"badge": 3}}), FAKE_HANG_PUSH=str(pid),
-                            SCREENR_CHECK_IOS_PUSH_TIMEOUT="0.5")
+                            SCREENR_CHECK_IOS_PUSH_TIMEOUT="0.5", **self.pausing_the_relay())
         self.assertLess(time.monotonic() - started, 30)
         self.assertNotEqual(result.returncode, 0)
-        # The test that asked for the push failed with the check's reason for it.
-        self.assertIn("xcrun simctl push failed: it did not finish within 0.5 seconds, so bin/check-ios "
-                      "stopped it", result.stderr)
+        # The test that asked for the push failed with the check's reason for
+        # it, which was whole, and the request was gone, the moment .failed
+        # appeared.
+        reason = "it did not finish within 0.5 seconds, so bin/check-ios stopped it\n"
+        self.assertEqual(self.deliveries(), [[".failed", False, reason]])
+        self.assertIn("xcrun simctl push failed: " + reason.strip(), result.stderr)
         self.assertIn("Simulator tests failed with status 65", result.stderr)
-        self.assertIn(["delivered", False, False], self.recorded())
         self.assert_stopped(pid)
         self.assertEqual(self.steps()[-2:], ["simctl shutdown", "simctl delete"])
 
