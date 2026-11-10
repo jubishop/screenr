@@ -2,10 +2,11 @@ import Foundation
 import XCTest
 
 // Title pages against the fixture API: the watch status and finished date,
-// Recommend with the friend line, adding to a full top 10, the review, the
-// trailer, and every title fixture. Writes are checked in the fixture API's
-// request log, which records each write's body, and trailer loads, which the
-// fixture API records as `WEB <url>` and never loads.
+// the status button's chevron, Recommend with the friend line, adding to a
+// full top 10, the review, the trailer, and every title fixture. Writes are
+// checked in the fixture API's request log, which records each write's body,
+// and trailer loads, which the fixture API records as `WEB <url>` and never
+// loads.
 final class TitleTests: XCTestCase {
   override func setUp() {
     continueAfterFailure = false
@@ -55,6 +56,56 @@ final class TitleTests: XCTestCase {
       for: [log.wrote("watch-status", #"{"status":"watching","title":"movie:102"}"#)],
       timeout: 10
     )
+  }
+
+  // The status button ends in a down chevron after its label, with no status
+  // and with one, so it reads as a menu of statuses rather than a one-tap
+  // action like Recommend. At the largest text size the label wraps beside
+  // it without clipping.
+  @MainActor
+  func testShowsAMenuChevronOnTheStatusButton() throws {
+    // Alice has no status for Winter Garden and finished Paper Lanterns.
+    let titles = [
+      (path: "titles/movie/105", label: "Want to watch", icon: "plus"),
+      (path: "titles/movie/102", label: "Finished", icon: "checkmark"),
+    ]
+    for title in titles {
+      for textSize in [nil, "UICTContentSizeCategoryAccessibilityXXXL"] {
+        let context = "\(title.path) at \(textSize ?? "the default text size")"
+        let app = XCUIApplication()
+        app.launch(with: FixtureLaunch(link: "screenr-dev://\(title.path)", textSize: textSize))
+        let status = app.buttons["watch-status"]
+        XCTAssertTrue(status.waitForExistence(timeout: 10), context)
+        app.scrollTo(status)
+        // Dragging and holding moves the page without a fling, so the button
+        // rests below the navigation bar, clear of the tab bar, where the
+        // audit measures it.
+        let bar = app.navigationBars.firstMatch.frame.maxY
+        let start = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.8))
+        start.press(
+          forDuration: 0.1,
+          thenDragTo: start.withOffset(CGVector(dx: 0, dy: bar + 40 - status.frame.minY)),
+          withVelocity: .slow,
+          thenHoldForDuration: 0.5
+        )
+        XCTAssertGreaterThan(status.frame.minY, bar, context)
+
+        XCTAssertEqual(status.label, title.label, context)
+        let chevron = status.images["menu-chevron"]
+        XCTAssertTrue(chevron.exists, context)
+        // After the label, inside the button, and larger than the label's
+        // own icon.
+        XCTAssertGreaterThan(
+          chevron.frame.minX,
+          status.staticTexts[title.label].frame.maxX,
+          context
+        )
+        XCTAssertTrue(status.frame.contains(chevron.frame), context)
+        XCTAssertGreaterThan(chevron.frame.width, status.images[title.icon].frame.width, context)
+        try app.performShellAudit()
+        app.terminate()
+      }
+    }
   }
 
   @MainActor

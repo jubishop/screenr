@@ -33,6 +33,17 @@ none of 10 runs alone. UI tests now audit one check at a time through
 `performScreenrAudit()`, which passed 80 of 80 Find runs, 20 of them with
 three Simulators at once.
 
+Check order matters too. On 2026-11-09, on a title page that a UI test had
+dragged down, the clipped-text check scrolled the page, and a contrast check
+right after it timed out in all seven runs, while contrast alone or before
+the clipped-text check finished in under a second
+([#571](https://github.com/jubishop/screenr/issues/571)). That Simulator's
+`testmanagerd` then kept using about 450% CPU after the test ended, until
+the Simulator shut down, and the Mac's load average rose past 200 while it
+ran. `performScreenrAudit()` now runs contrast before clipped text. If an
+audit times out, check that Simulator's `testmanagerd` and shut the
+Simulator down if it is still busy, rather than rerunning beside it.
+
 ## Hooks start in the primary checkout
 
 `core.hooksPath` points at the primary checkout's `bin/hooks`, so Git runs

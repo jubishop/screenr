@@ -870,7 +870,13 @@ marks the visit for `ShellTests`.
    `performScreenrAudit()`. Both audit one check at a time: in the iOS 27
    Simulator, while another Simulator ran UI tests, an audit of all four
    sometimes never finished ("Audit failed to complete in time"), even at a
-   modest load, and its retry then failed the same way.
+   modest load, and its retry then failed the same way. Hit regions and
+   contrast go first, then clipped text, which can scroll a scroll view to
+   bring cut-off text into view, then Dynamic Type, which can scroll a list.
+   On a title page scrolled by hand, a contrast check right after the
+   clipped-text check's scroll never finished, at any load, and the
+   Simulator's `testmanagerd` kept using several cores until the Simulator
+   shut down.
    `performShellAudit()` passes over
    what the audit cannot measure in a scrolling screen, as
    [Conversations](#conversations) describes. While a list row or control
@@ -1628,7 +1634,7 @@ ScreenrKit's `TitlePage/`:
 | `FriendActivity.lineParts`, `lineGroups`, `sentence` | ScreenrKit | The friend line in the web's words, such as "Recommended by Ben Ortiz (#1) · Cam Rivera wants to watch", as pieces that wrap between words. On a phone, each group starts its own line in place of " · ". |
 | `WatchAvailability.notice`, `emptyMessage`, `checkedLabel()` | ScreenrKit | Where to watch's messages, in the web's words. |
 | `CalendarDay` | ScreenrKit | `YYYY-MM-DD` days, such as today for Finished: Gregorian days in the reader's time zone, whatever calendar the phone uses. |
-| `TitleHeaderView`, `WatchStatusSheet`, `ReviewSheet`, `TopTenReplaceSheet`, `AvailabilitySection`, `TrailerSection` | `Screenr/TitlePage/` | The views. The status button opens a sheet of choices with Last finished, since a SwiftUI `Menu` holds no date field. |
+| `TitleHeaderView`, `WatchStatusSheet`, `ReviewSheet`, `TopTenReplaceSheet`, `AvailabilitySection`, `TrailerSection` | `Screenr/TitlePage/` | The views. The status button opens a sheet of choices with Last finished, since a SwiftUI `Menu` holds no date field. It ends in `MenuChevron`, from `Screenr/Shared/`, the down chevron that marks a control as opening a menu of choices. |
 
 - **Surface:** `Destination.title(id:item:reply:from:)` carries the list that
   opened a title, as the web's `?from=` does; `destination.saveSurface` is
@@ -1674,11 +1680,12 @@ page reads again. Nothing loads before Play trailer.
   loads nothing, so `TitleTests` checks that the embed is asked for only
   after Play trailer, without the network.
 
-`TitleTests` also covers the watch status and finished date, Recommend and
-its confirmation, the friend line, adding to a full top 10, the review and
-the Recommend confirmation with a failed read beneath each, which
-`FixtureOutage` causes, the largest text size, and every `screen/title`
-fixture. The status and
+`TitleTests` also covers the watch status and finished date, the status
+button's chevron with and without a status at the default and largest text
+sizes, Recommend and its confirmation, the friend line, adding to a full top
+10, the review and the Recommend confirmation with a failed read beneath
+each, which `FixtureOutage` causes, the largest text size, and every
+`screen/title` fixture. The status and
 replacement sheets are system lists, so their audit is
 `performSettingsAudit()`, and the largest text size test reaches each of
 their controls instead.

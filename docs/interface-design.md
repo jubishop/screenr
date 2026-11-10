@@ -422,6 +422,13 @@ The button's chevron is the `expand` icon at 24px with a 2.5px stroke in the
 label's color, larger and heavier than the app's other icons, and it flips
 while the menu is open
 ([issue #570](https://github.com/jubishop/screenr/issues/570)).
+In the iPhone app, `ios/Screenr/TitlePage/TitleHeaderView.swift` ends the
+status button with `MenuChevron` from `ios/Screenr/Shared/MenuChevron.swift`:
+the `chevron.down` symbol at the large image scale and bold weight, in the
+label's color, so it is larger and heavier than the label's plus or check.
+It grows with Dynamic Type; at accessibility sizes the label wraps beside
+it. It does not flip, since the status sheet covers the button while open
+([issue #571](https://github.com/jubishop/screenr/issues/571)).
 
 ### Icon actions on feed entries — 2026-11-09
 

@@ -60,10 +60,14 @@ private struct TitleActions: View {
           Label(header.topTenLabel, systemImage: header.rank == nil ? "plus" : "checkmark")
         }
         .buttonStyle(.feedAction(chosen: header.rank != nil))
+        // The chevron marks it as a menu of statuses, unlike its neighbors.
         Button {
           model.sheet = .status
         } label: {
-          Label(header.statusLabel, systemImage: header.status == nil ? "plus" : "checkmark")
+          HStack(spacing: 6) {
+            Label(header.statusLabel, systemImage: header.status == nil ? "plus" : "checkmark")
+            MenuChevron()
+          }
         }
         .buttonStyle(.feedAction(chosen: header.status != nil))
         .accessibilityIdentifier("watch-status")
