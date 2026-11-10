@@ -382,7 +382,8 @@ final class TitleTests: XCTestCase {
     XCTAssertEqual(
       names,
       [
-        "earlier", "finished-review", "full-top-ten", "in-theaters", "linked-reply", "movie",
+        "demo", "earlier", "finished-review", "full-top-ten", "in-theaters", "linked-reply",
+        "movie",
         "not-found", "premiere", "stale-availability", "stopped", "theatrical-release", "tv",
         "unknown-availability",
       ]

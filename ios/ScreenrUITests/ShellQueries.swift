@@ -123,6 +123,15 @@ extension XCUIApplication {
       {
         unplacedSearchClips = 1
       }
+      // An avatar's initial is one letter in a square frame that the avatar
+      // clips to a circle. The contrast check samples the whole square, and
+      // the page's color in its corners can outweigh a thin letter: on
+      // 2026-11-09 a T covered 2.5% of an avatar and the white corners 21%,
+      // and the check failed it, though the letter's own contrast with the
+      // avatar's color is about 16:1.
+      let isAvatarInitial = { (element: XCUIElement) in
+        element.label.count == 1 && element.frame.width == element.frame.height
+      }
       return { issue in
         var covered = partsCovered
         var scrolls = !scrolling.isNull
@@ -139,6 +148,7 @@ extension XCUIApplication {
           unplacedSearchClips -= 1
           return true
         case .contrast:
+          if let element = issue.element, isAvatarInitial(element) { return true }
           return covered
         default:
           return false

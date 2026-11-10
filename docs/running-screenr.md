@@ -471,7 +471,7 @@ in base64.
 | App "Screenr", Apple ID `6822501070`, SKU `screenr-ios` | The app record for TestFlight and, later, the App Store | App Store Connect |
 | TestFlight internal group "Screenr team" | Internal testing; the owner is a member, and it has access to every build | App Store Connect |
 | TestFlight external group "Public testers" | External testing through a public link ([#250](https://github.com/jubishop/screenr/issues/250)) and by email ([#562](https://github.com/jubishop/screenr/issues/562)) | App Store Connect |
-| API key "Agents", key ID `A9CMX47R79`, Admin role | Signing, upload, and TestFlight distribution in the release script ([#246](https://github.com/jubishop/screenr/issues/246)) | The owner's Mac |
+| API key "Agents", key ID `A9CMX47R79`, Admin role | Signing, upload, and TestFlight distribution in the release script ([#246](https://github.com/jubishop/screenr/issues/246)), and the [App Store listing](#app-store-listing) upload | The owner's Mac |
 
 Releases reuse the team's existing "Agents" key, which PodHaven also uses.
 Its `.p8` file stays on the owner's Mac at the path in `ASC_KEY_PATH`, and
@@ -571,6 +571,11 @@ deployment guide. It creates:
   titles, mark watch statuses, keep a top 10, and talk in a conversation. The
   reviewer has one Want to watch with a friend's reply, which shows as a
   notification.
+- **The demo invitation:** Maya's link, good for 12 signups over 90 days,
+  which the [App Store review notes](#app-store-listing) give so a reviewer
+  can try Sign in with Apple on a new account. That account joins the circle
+  as Maya's friend. The invitation's ID is fixed, so every run issues the
+  same link afresh, and notes uploaded before a reset still work.
 
 The command first resolves the titles through the catalog, so it needs
 `TMDB_READ_TOKEN`; a catalog failure changes nothing. It refuses, also
@@ -587,8 +592,10 @@ same services, so if a run fails partway, run it again.
 
 **Sign-in code.** `REVIEW_SIGN_IN_CODE` holds the reviewer's fixed six-digit
 code. Set it only in the production environment, and put the code in App
-Store Connect's review notes, never in an issue, PR, or log. Screenr never
-prints it. One way to generate a code:
+Store Connect's review notes, never in an issue, PR, or log. Screenr prints
+it only to a pipe: the [App Store listing upload](#app-store-listing) reads it
+over SSH from `scripts/review-details.ts`, which refuses to print to a
+terminal. One way to generate a code:
 
 ```sh
 node -e 'console.log(String(require("node:crypto").randomInt(1e6)).padStart(6, "0"))'
@@ -618,4 +625,85 @@ notifications, or photos, even across a friendship. Someone who joins through
 a demo member's invitation joins the demo circle. The
 [usage report](usage-telemetry.md#owner-report) leaves out demo accounts and
 everything they post. `tests/app/review-demo.test.ts` covers the command and
-reset, the fixed code and its limits, and isolation.
+reset, the demo invitation, the fixed code and its limits, isolation, and
+`scripts/review-details.ts`.
+
+## App Store listing
+
+The App Store listing lives in the repository, under the
+[App Store listing decision](ios-app.md#app-store-listing--2026-11-09)
+([issue #563](https://github.com/jubishop/screenr/issues/563)), and
+`bin/app-store-listing` uploads it through the App Store Connect API:
+
+- **`app-store/listing.json`:** the name, subtitle, promotional text,
+  description, keywords, support, marketing, and privacy policy URLs,
+  copyright, categories, content rights declaration, availability, the age
+  rating questionnaire's answers, the demo account, and the review notes.
+  The notes name `{signInCode}` and `{invitation}`, which the upload fills
+  in from production. The owner approves changes to the listing's text in
+  their pull request. The command checks the text against App Store
+  Connect's limits before it changes anything.
+- **`app-store/screenshots/APP_IPHONE_61/`:** the screenshots, in the order
+  `listing.json` names them, for iPhone with Dynamic Island (medium
+  display), the one iPhone size Apple requires. App Store Connect scales
+  them for other iPhones.
+
+**Screenshots.** `AppStoreScreenshotTests` in the UI tests takes them from
+the demo circle's fixtures, never a real member's data: the reviewer's feed,
+a title page, Maya's profile, and Find a title. Server tests record those
+fixtures from the seeded demo circle
+([iPhone API fixtures](testing.md#iphone-api-fixtures)). Every
+`bin/check-ios` run writes them to `ios/build/check/screenshots/` as PNGs
+without an alpha channel, at the size of its iPhone 18 Pro Simulator, and
+removes them at its next run. To refresh the listing's screenshots after the
+app's look changes, run `bin/check-ios`, then copy them in, review them, and
+commit them:
+
+```sh
+bin/app-store-listing --screenshots
+```
+
+It refuses screenshots of a size or format App Store Connect would refuse.
+
+**Upload.** The command needs the App Store Connect API key in
+`ASC_KEY_PATH`, `ASC_KEY_ID`, and `ASC_ISSUER_ID`, and SSH access to
+production as the owner:
+
+```sh
+bin/app-store-listing --dry-run
+bin/app-store-listing --host root@YOUR_SSH_HOST
+```
+
+It goes to the one App Store version that App Store Connect lets you edit,
+or the one `--version` names, and changes each part only where it differs,
+so a rerun changes nothing and resumes an interrupted one:
+
+- **The version:** its copyright, its description, keywords, promotional
+  text, support URL, and marketing URL, and the screenshots. It keeps a
+  finished screenshot whose file the listing still has, uploads the rest,
+  deletes the others, and puts them in order.
+- **The app:** its name, subtitle, privacy policy URL, primary and secondary
+  categories, age rating, and content rights declaration.
+- **Availability:** the territories the listing names, the United States,
+  and no other, without new territories. App Store Connect's API cannot
+  change whether the app joins new territories once availability exists, so
+  the command stops and points to Pricing and Availability if that differs.
+- **Review information:** the contact from TestFlight's Test Information,
+  `review@screenr.club` with the fixed code as the demo account, and the
+  notes. It reads `REVIEW_SIGN_IN_CODE` and the
+  [demo invitation](#demo-circle-for-apple-review) over SSH by running
+  `scripts/review-details.ts` with the release's one-off script runner, and
+  stops when the invitation has fewer than 30 days or no signups left, until
+  the demo circle is reseeded. Its output names changed fields, never the
+  code or the contact.
+
+`--dry-run` reports what would change and sends App Store Connect nothing
+but reads; without `--host`, it leaves the review information out. The API
+has no setting for the app's availability on Apple silicon Macs and Apple
+Vision Pro, which the decision turns off, or for App Privacy, so those are
+set on the App Store Connect website
+([issue #564](https://github.com/jubishop/screenr/issues/564)).
+`tests/app/app-store-listing.test.ts` runs the command against a stand-in
+for App Store Connect. `scripts/app-store-listing-sync.ts` holds the
+upload, which `bin/appstore`
+([issue #548](https://github.com/jubishop/screenr/issues/548)) reuses.

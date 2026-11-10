@@ -1,0 +1,351 @@
+{
+  "description": "Find a title for the demo reviewer, with the demo friends' recommendations.",
+  "viewer": "demo_reviewer",
+  "request": {
+    "method": "GET",
+    "action": "screen",
+    "path": "/api/screenr/screen?path=%2Fsearch",
+    "query": {
+      "path": "/search"
+    }
+  },
+  "response": {
+    "status": 200,
+    "etag": "W/\"-yELfMOP6QVG9N1h-gjnYgCK_7OIgdpnIKulINxoCok\"",
+    "body": {
+      "kind": "search",
+      "suggestions": [
+        {
+          "id": "movie:346648",
+          "kind": "movie",
+          "name": "Paddington 2",
+          "tmdb_id": 346648,
+          "overview": "Paddington takes on odd jobs to buy the perfect birthday present for his aunt.",
+          "wanted_by": [],
+          "poster_path": "/paddington-2.jpg",
+          "watching_by": [],
+          "release_date": "2018-01-12",
+          "recommended_by": [
+            {
+              "rank": 1,
+              "username": "demo_maya",
+              "display_name": "Maya"
+            }
+          ],
+          "second_degree_wanted": 0,
+          "second_degree_watching": 0,
+          "second_degree_recommended": 0,
+          "viewing": {
+            "status": "ok",
+            "checked_at": "2026-10-13T12:00:00.000Z",
+            "sections": []
+          },
+          "release": {
+            "status": "ok",
+            "in_theaters": false,
+            "upcoming": []
+          },
+          "tmdb_score": null,
+          "access": "unmatched",
+          "matchingServiceIds": []
+        },
+        {
+          "id": "movie:381284",
+          "kind": "movie",
+          "name": "Hidden Figures",
+          "tmdb_id": 381284,
+          "overview": "Three mathematicians help NASA send an astronaut into orbit.",
+          "wanted_by": [],
+          "poster_path": "/hidden-figures.jpg",
+          "watching_by": [],
+          "release_date": "2016-12-25",
+          "recommended_by": [
+            {
+              "rank": null,
+              "username": "demo_priya",
+              "display_name": "Priya"
+            }
+          ],
+          "second_degree_wanted": 0,
+          "second_degree_watching": 0,
+          "second_degree_recommended": 0,
+          "viewing": {
+            "status": "ok",
+            "checked_at": "2026-10-13T12:00:00.000Z",
+            "sections": [
+              {
+                "key": "subs",
+                "label": "Subs",
+                "services": [
+                  {
+                    "id": "service:disney-plus",
+                    "name": "Disney Plus",
+                    "logo_path": "/5eZ872CghnHFLB1j8grszbrx0dx.png"
+                  }
+                ]
+              }
+            ]
+          },
+          "release": {
+            "status": "ok",
+            "in_theaters": false,
+            "upcoming": []
+          },
+          "tmdb_score": null,
+          "access": "unmatched",
+          "matchingServiceIds": []
+        },
+        {
+          "id": "movie:129",
+          "kind": "movie",
+          "name": "Spirited Away",
+          "tmdb_id": 129,
+          "overview": "A girl wanders into a world of spirits and must find a way to free her parents.",
+          "wanted_by": [],
+          "poster_path": "/spirited-away.jpg",
+          "watching_by": [],
+          "release_date": "2002-09-20",
+          "recommended_by": [
+            {
+              "rank": null,
+              "username": "demo_theo",
+              "display_name": "Theo"
+            }
+          ],
+          "second_degree_wanted": 0,
+          "second_degree_watching": 0,
+          "second_degree_recommended": 0,
+          "viewing": {
+            "status": "ok",
+            "checked_at": "2026-10-13T12:00:00.000Z",
+            "sections": [
+              {
+                "key": "subs",
+                "label": "Subs",
+                "services": [
+                  {
+                    "id": "service:hbo-max",
+                    "name": "HBO Max",
+                    "logo_path": "/skypuy7SXuugIQeYg0IglmzoKaS.png"
+                  }
+                ]
+              }
+            ]
+          },
+          "release": {
+            "status": "ok",
+            "in_theaters": false,
+            "upcoming": []
+          },
+          "tmdb_score": null,
+          "access": "unmatched",
+          "matchingServiceIds": []
+        },
+        {
+          "id": "tv:68595",
+          "kind": "tv",
+          "name": "Planet Earth II",
+          "tmdb_id": 68595,
+          "overview": "Wildlife on islands, mountains, jungles, deserts, grasslands, and in cities.",
+          "wanted_by": [
+            {
+              "username": "demo_maya",
+              "display_name": "Maya"
+            }
+          ],
+          "poster_path": "/planet-earth-ii.jpg",
+          "watching_by": [],
+          "release_date": "2016-11-06",
+          "recommended_by": [],
+          "second_degree_wanted": 0,
+          "second_degree_watching": 0,
+          "second_degree_recommended": 0,
+          "viewing": {
+            "status": "ok",
+            "checked_at": "2026-10-13T12:00:00.000Z",
+            "sections": []
+          },
+          "release": {
+            "status": "ok",
+            "in_theaters": false,
+            "upcoming": []
+          },
+          "tmdb_score": null,
+          "access": "unmatched",
+          "matchingServiceIds": []
+        }
+      ],
+      "recommendations": [
+        {
+          "id": "movie:346648",
+          "kind": "movie",
+          "name": "Paddington 2",
+          "tmdb_id": 346648,
+          "overview": "Paddington takes on odd jobs to buy the perfect birthday present for his aunt.",
+          "poster_path": "/paddington-2.jpg",
+          "release_date": "2018-01-12",
+          "viewer_status": null,
+          "recommended_by": [
+            {
+              "rank": 1,
+              "username": "demo_maya",
+              "display_name": "Maya"
+            }
+          ],
+          "viewer_recommended": false,
+          "viewing": {
+            "status": "ok",
+            "checked_at": "2026-10-13T12:00:00.000Z",
+            "sections": []
+          },
+          "release": {
+            "status": "ok",
+            "in_theaters": false,
+            "upcoming": []
+          },
+          "tmdb_score": null,
+          "access": "unmatched",
+          "matchingServiceIds": []
+        },
+        {
+          "id": "movie:381284",
+          "kind": "movie",
+          "name": "Hidden Figures",
+          "tmdb_id": 381284,
+          "overview": "Three mathematicians help NASA send an astronaut into orbit.",
+          "poster_path": "/hidden-figures.jpg",
+          "release_date": "2016-12-25",
+          "viewer_status": null,
+          "recommended_by": [
+            {
+              "rank": null,
+              "username": "demo_priya",
+              "display_name": "Priya"
+            }
+          ],
+          "viewer_recommended": false,
+          "viewing": {
+            "status": "ok",
+            "checked_at": "2026-10-13T12:00:00.000Z",
+            "sections": [
+              {
+                "key": "subs",
+                "label": "Subs",
+                "services": [
+                  {
+                    "id": "service:disney-plus",
+                    "name": "Disney Plus",
+                    "logo_path": "/5eZ872CghnHFLB1j8grszbrx0dx.png"
+                  }
+                ]
+              }
+            ]
+          },
+          "release": {
+            "status": "ok",
+            "in_theaters": false,
+            "upcoming": []
+          },
+          "tmdb_score": null,
+          "access": "unmatched",
+          "matchingServiceIds": []
+        },
+        {
+          "id": "tv:97546",
+          "kind": "tv",
+          "name": "Ted Lasso",
+          "tmdb_id": 97546,
+          "overview": "An American football coach takes over a struggling English soccer club.",
+          "poster_path": "/ted-lasso.jpg",
+          "release_date": "2020-08-14",
+          "viewer_status": "want_to_watch",
+          "recommended_by": [
+            {
+              "rank": null,
+              "username": "demo_priya",
+              "display_name": "Priya"
+            }
+          ],
+          "viewer_recommended": false,
+          "viewing": {
+            "status": "ok",
+            "checked_at": "2026-10-13T12:00:00.000Z",
+            "sections": [
+              {
+                "key": "subs",
+                "label": "Subs",
+                "services": [
+                  {
+                    "id": "service:apple-tv",
+                    "name": "Apple TV",
+                    "logo_path": "/9icYBfYFcwgCbky5VdGUIKJ4C5i.png"
+                  }
+                ]
+              }
+            ]
+          },
+          "release": {
+            "status": "ok",
+            "in_theaters": false,
+            "upcoming": []
+          },
+          "tmdb_score": null,
+          "access": "unmatched",
+          "matchingServiceIds": []
+        },
+        {
+          "id": "movie:129",
+          "kind": "movie",
+          "name": "Spirited Away",
+          "tmdb_id": 129,
+          "overview": "A girl wanders into a world of spirits and must find a way to free her parents.",
+          "poster_path": "/spirited-away.jpg",
+          "release_date": "2002-09-20",
+          "viewer_status": null,
+          "recommended_by": [
+            {
+              "rank": null,
+              "username": "demo_theo",
+              "display_name": "Theo"
+            }
+          ],
+          "viewer_recommended": false,
+          "viewing": {
+            "status": "ok",
+            "checked_at": "2026-10-13T12:00:00.000Z",
+            "sections": [
+              {
+                "key": "subs",
+                "label": "Subs",
+                "services": [
+                  {
+                    "id": "service:hbo-max",
+                    "name": "HBO Max",
+                    "logo_path": "/skypuy7SXuugIQeYg0IglmzoKaS.png"
+                  }
+                ]
+              }
+            ]
+          },
+          "release": {
+            "status": "ok",
+            "in_theaters": false,
+            "upcoming": []
+          },
+          "tmdb_score": null,
+          "access": "unmatched",
+          "matchingServiceIds": []
+        }
+      ],
+      "serviceIds": [],
+      "recommendationCount": 4,
+      "unreadNotifications": 1,
+      "user": {
+        "user_id": "user-demo_reviewer",
+        "username": "demo_reviewer",
+        "display_name": "App Reviewer",
+        "photo": null
+      }
+    }
+  }
+}

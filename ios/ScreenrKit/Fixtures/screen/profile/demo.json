@@ -1,0 +1,204 @@
+{
+  "description": "Maya's profile for the demo reviewer, her friend: her top 10 and activity.",
+  "viewer": "demo_reviewer",
+  "request": {
+    "method": "GET",
+    "action": "screen",
+    "path": "/api/screenr/screen?path=%2Fpeople%2Fdemo_maya",
+    "query": {
+      "path": "/people/demo_maya"
+    }
+  },
+  "response": {
+    "status": 200,
+    "etag": "W/\"Yips5Hiy3h11GyCv-KPpUNGZphOlaG9-4TfPCp6ccBk\"",
+    "body": {
+      "kind": "profile",
+      "profile": {
+        "user_id": "user-demo_maya",
+        "username": "demo_maya",
+        "display_name": "Maya",
+        "photo": null,
+        "can_read": true,
+        "requested_by": "user-demo_reviewer",
+        "accepted_at": "2026-10-13T12:00:00.000Z",
+        "friends": [
+          {
+            "photo": null,
+            "user_id": "user-demo_priya",
+            "username": "demo_priya",
+            "display_name": "Priya"
+          },
+          {
+            "photo": null,
+            "user_id": "user-demo_reviewer",
+            "username": "demo_reviewer",
+            "display_name": "App Reviewer"
+          },
+          {
+            "photo": null,
+            "user_id": "user-demo_theo",
+            "username": "demo_theo",
+            "display_name": "Theo"
+          }
+        ]
+      },
+      "topTen": [
+        {
+          "id": "movie:346648",
+          "name": "Paddington 2",
+          "poster_path": "/paddington-2.jpg",
+          "rank": 1
+        }
+      ],
+      "conversations": [
+        {
+          "id": "e117cbde-2c5a-44c5-8208-aad20e72d3a6",
+          "owner_id": "user-demo_maya",
+          "title_id": "movie:346648",
+          "item_type": "review",
+          "active": true,
+          "activity_at": "2026-10-13T12:00:00.000Z",
+          "body": "Warm, funny, and kind from start to finish. A perfect movie night.",
+          "spoiler": false,
+          "status": null,
+          "finished_on": null,
+          "rating": 5,
+          "edited": false,
+          "season": null,
+          "episode": null,
+          "combined": [
+            {
+              "id": "347bc592-9ed6-456e-8fb5-fdffd2fb99ab",
+              "body": null,
+              "edited": false,
+              "rating": null,
+              "status": null,
+              "spoiler": false,
+              "item_type": "recommended"
+            }
+          ],
+          "username": "demo_maya",
+          "display_name": "Maya",
+          "photo": null,
+          "title_name": "Paddington 2",
+          "poster_path": "/paddington-2.jpg",
+          "kind": "movie",
+          "release_date": "2018-01-12",
+          "recommended": true,
+          "want_to_watch": false,
+          "viewer_want_to_watch": false,
+          "viewer_recommended": false,
+          "viewer_status": null,
+          "viewer_top_ten_rank": null,
+          "visible_activity": "2026-10-13T12:00:00.000Z",
+          "comments": [
+            {
+              "id": "10",
+              "body": "Watched it last weekend because of you. The barbershop scene had me laughing out loud.",
+              "photo": null,
+              "removed": false,
+              "root_id": null,
+              "spoiler": false,
+              "username": "demo_theo",
+              "author_id": "user-demo_theo",
+              "reactions": [],
+              "created_at": "2026-10-13T12:00:00.000000+00:00",
+              "unavailable": false,
+              "display_name": "Theo",
+              "addressed_username": null
+            },
+            {
+              "id": "11",
+              "body": "Right? I could watch that scene on repeat.",
+              "photo": null,
+              "removed": false,
+              "root_id": "10",
+              "spoiler": false,
+              "username": "demo_maya",
+              "author_id": "user-demo_maya",
+              "reactions": [],
+              "created_at": "2026-10-13T12:00:00.000000+00:00",
+              "unavailable": false,
+              "display_name": "Maya",
+              "addressed_username": "demo_theo"
+            },
+            {
+              "id": "12",
+              "body": "Adding it to my list. Do I need to see the first one?",
+              "photo": null,
+              "removed": false,
+              "root_id": null,
+              "spoiler": false,
+              "username": "demo_priya",
+              "author_id": "user-demo_priya",
+              "reactions": [],
+              "created_at": "2026-10-13T12:00:00.000000+00:00",
+              "unavailable": false,
+              "display_name": "Priya",
+              "addressed_username": null
+            },
+            {
+              "id": "13",
+              "body": "It helps, but this one stands on its own.",
+              "photo": null,
+              "removed": false,
+              "root_id": "12",
+              "spoiler": false,
+              "username": "demo_maya",
+              "author_id": "user-demo_maya",
+              "reactions": [],
+              "created_at": "2026-10-13T12:00:00.000000+00:00",
+              "unavailable": false,
+              "display_name": "Maya",
+              "addressed_username": "demo_priya"
+            }
+          ],
+          "reactions": []
+        },
+        {
+          "id": "ee1824a0-6c83-47ca-8b39-c745c57711c7",
+          "owner_id": "user-demo_maya",
+          "title_id": "tv:68595",
+          "item_type": "want_to_watch",
+          "active": true,
+          "activity_at": "2026-10-13T12:00:00.000Z",
+          "body": null,
+          "spoiler": false,
+          "status": null,
+          "finished_on": null,
+          "rating": null,
+          "edited": false,
+          "season": null,
+          "episode": null,
+          "combined": [],
+          "username": "demo_maya",
+          "display_name": "Maya",
+          "photo": null,
+          "title_name": "Planet Earth II",
+          "poster_path": "/planet-earth-ii.jpg",
+          "kind": "tv",
+          "release_date": "2016-11-06",
+          "recommended": false,
+          "want_to_watch": true,
+          "viewer_want_to_watch": false,
+          "viewer_recommended": false,
+          "viewer_status": null,
+          "viewer_top_ten_rank": null,
+          "visible_activity": "2026-10-13T12:00:00.000Z",
+          "comments": [],
+          "reactions": []
+        }
+      ],
+      "since": "2026-10-13T12:00:00.000Z",
+      "older": false,
+      "unreadNotifications": 1,
+      "user": {
+        "user_id": "user-demo_reviewer",
+        "username": "demo_reviewer",
+        "display_name": "App Reviewer",
+        "photo": null
+      }
+    }
+  }
+}

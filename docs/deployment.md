@@ -1257,6 +1257,11 @@ does the command that seeds or resets the
 sh /usr/local/lib/screenr-deploy/run-release-script.sh /opt/screenr/current scripts/seed-review.ts
 ```
 
+`bin/app-store-listing` runs `scripts/review-details.ts` the same way over
+SSH, to read the code and the demo invitation for the
+[App Store listing](running-screenr.md#app-store-listing)'s review notes; it
+prints them only to that pipe.
+
 Its fixed code, `REVIEW_SIGN_IN_CODE`, lives in `/etc/screenr/app.env` with
 the other production secrets, so update their
 [off-server copies](#encrypted-backups-and-restore-check) with it, and restart

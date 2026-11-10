@@ -1,0 +1,79 @@
+{
+  "locale": "en-US",
+  "name": "Screenr",
+  "subtitle": "TV and movies with friends",
+  "promotionalText": "See what your friends are watching and recommending, keep your own top 10, and talk about every show and movie with the people you know.",
+  "description": [
+    "Screenr is a social app for TV and movies, built around the people you actually know.",
+    "See what your friends are watching, what they recommend, and what they thought. Their recommendations, reviews, and watch progress come together in one feed, and you can reply right where they posted.",
+    "• Recommend titles, rate them, and write reviews.\n• Track each show and movie as Want to watch, Watching, Finished, or Stopped watching, and mark a show Caught up.\n• Keep a top 10 on your profile.\n• Talk about a title or a single episode, with spoiler warnings that keep surprises hidden until you tap.\n• Find a title and see where to stream it in the US, with your own streaming services marked.\n• Open Watch together with a friend to compare what you both want to watch.\n• Get notified when friends reply to you or answer your friend request.",
+    "Screenr is invite-only, and members must be 18 or older. Your activity is visible to your friends, not to strangers, and Screenr has no ads.",
+    "Report any post, comment, review, or profile, and block anyone. Screenr's owner reviews every report within 24 hours.",
+    "Movie and TV information comes from TMDB, and streaming availability from JustWatch. This product uses the TMDB API but is not endorsed or certified by TMDB."
+  ],
+  "keywords": [
+    "friends",
+    "watchlist",
+    "recommendations",
+    "reviews",
+    "shows",
+    "films",
+    "streaming",
+    "social",
+    "watch together",
+    "top 10"
+  ],
+  "supportUrl": "https://screenr.club/support",
+  "marketingUrl": "https://screenr.club",
+  "privacyPolicyUrl": "https://screenr.club/privacy",
+  "copyright": "2026 Justin Bishop",
+  "primaryCategory": "ENTERTAINMENT",
+  "secondaryCategory": "SOCIAL_NETWORKING",
+  "contentRightsDeclaration": "USES_THIRD_PARTY_CONTENT",
+  "availability": {
+    "territories": ["USA"],
+    "availableInNewTerritories": false
+  },
+  "ageRating": {
+    "ageRatingOverrideV2": "EIGHTEEN_PLUS",
+    "userGeneratedContent": true,
+    "messagingAndChat": true,
+    "socialMedia": true,
+    "socialMediaAgeRestricted": true,
+    "ageAssurance": true,
+    "advertising": false,
+    "unrestrictedWebAccess": false,
+    "parentalControls": false,
+    "healthOrWellnessTopics": false,
+    "gambling": false,
+    "lootBox": false,
+    "contests": "NONE",
+    "gamblingSimulated": "NONE",
+    "medicalOrTreatmentInformation": "NONE",
+    "alcoholTobaccoOrDrugUseOrReferences": "INFREQUENT",
+    "gunsOrOtherWeapons": "INFREQUENT",
+    "horrorOrFearThemes": "INFREQUENT",
+    "matureOrSuggestiveThemes": "INFREQUENT",
+    "profanityOrCrudeHumor": "INFREQUENT",
+    "sexualContentOrNudity": "INFREQUENT",
+    "sexualContentGraphicAndNudity": "NONE",
+    "violenceCartoonOrFantasy": "INFREQUENT",
+    "violenceRealistic": "INFREQUENT",
+    "violenceRealisticProlongedGraphicOrSadistic": "NONE"
+  },
+  "review": {
+    "demoAccountName": "review@screenr.club",
+    "notes": [
+      "Screenr is invite-only, so please sign in with the demo account above. It belongs to a closed demo circle with three demo friends, Maya, Theo, and Priya, who recommend and review titles, keep a top 10, track what they watch, and talk in conversations. The demo circle and real members never see each other.",
+      "How to sign in:\n1. On the sign-in screen, below \"or use an email code\", enter review@screenr.club in Email address.\n2. Tap \"Send sign-in code\". No email is sent to this address.\n3. Enter the six-digit code {signInCode} and tap \"Sign in\".",
+      "The code is the same every time. It works only after tapping \"Send sign-in code\", for 10 minutes and five attempts. If it stops working, tap \"Use another email or request a new code\" and send a new request.",
+      "To try Sign in with Apple on a new account: sign out in You > Settings, then open this invitation link on the iPhone: {invitation}\nIt opens Screenr with the invitation. Sign in with Apple, then finish setup with a name and username. The new account joins the demo circle as Maya's friend.",
+      "To report and block: in the Circle feed, each demo friend's post, comment, or review has a flag at the end of its actions, named Report post, Report comment, or Report review. A reply has Report after Reply, and a profile has Report and Block in its More actions menu. Choose a reason and tap Report. The reported content disappears for you, and Screenr offers to block its author.",
+      "How reports are handled: each report emails and alerts Screenr's owner, who reviews every report within 24 hours on an owner-only review page and can remove the content, dismiss the report, or suspend the author. Suspension ends the member's sessions, hides their content, and keeps them from signing in or signing up again.",
+      "Account deletion is in You > Settings > Delete account."
+    ]
+  },
+  "screenshots": {
+    "APP_IPHONE_61": ["1-feed.png", "2-title.png", "3-profile.png", "4-find.png"]
+  }
+}

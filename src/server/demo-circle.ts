@@ -4,7 +4,8 @@ import { eraseAccounts } from "./account-deletion";
 import { demoFriendDomain, reviewerEmail } from "./auth";
 import { ensureTitle } from "./catalog";
 import { addComment } from "./comments";
-import { transaction } from "./db";
+import { db, transaction } from "./db";
+import { invitationHash, invitationUrl, shareToken } from "./invitations";
 import { saveReview } from "./reviews";
 import {
   updateTitleActivity,
@@ -41,6 +42,16 @@ const members = {
 };
 export const demoFriendCount = Object.keys(members).length - 1;
 
+// The invitation that the App Store review notes link to, so a reviewer can
+// try Sign in with Apple on a new account, which joins the circle as Maya's
+// friend. Its ID is fixed, so every seed issues the same link, and it lasts
+// longer than a member's invitation to outlast a review.
+const demoInvitation = {
+  id: "e9815162-91f9-429a-9fac-3430b8cf0c31",
+  uses: 12,
+  days: 90,
+};
+
 // Real TMDB titles that the catalog resolves, all suitable for any audience.
 const titles = {
   paddington2: "movie:346648",
@@ -51,15 +62,47 @@ const titles = {
   planetEarth2: "tv:68595",
 };
 
-export async function seedDemoCircle() {
+// `pace` runs after each step of the activity. The iPhone fixtures pass a
+// pause, so each step gets its own millisecond and the feed's order never
+// rests on a tie.
+export async function seedDemoCircle(
+  pace: () => Promise<void> = async () => {},
+) {
   // Resolve every title first, so a catalog failure changes nothing.
   for (const title of Object.values(titles)) await ensureTitle(title);
   const ids = await transaction(async (client) => {
     await refuseOutsiders(client);
     await removeDemoCircle(client);
-    return createMembers(client);
+    const ids = await createMembers(client);
+    await issueInvitation(client, ids.maya);
+    return ids;
   });
-  await addActivity(ids);
+  await addActivity(ids, pace);
+}
+
+// The demo invitation's link, when it expires, and how many signups it has
+// left, or undefined when no seed has issued it.
+export async function demoInvitationStatus() {
+  const { rows } = await db.query<{ expires_at: Date; remaining: number }>(
+    `SELECT expires_at,max_uses-uses AS remaining FROM invitation
+    WHERE id=$1 AND revoked_at IS NULL`,
+    [demoInvitation.id],
+  );
+  if (!rows[0]) return undefined;
+  return {
+    url: invitationUrl(shareToken(demoInvitation.id)),
+    expiresAt: rows[0].expires_at.toISOString(),
+    remaining: rows[0].remaining,
+  };
+}
+
+async function issueInvitation(client: PoolClient, creator: string) {
+  const { id, uses, days } = demoInvitation;
+  await client.query(
+    `INSERT INTO invitation(id,token_hash,creator_id,max_uses,expires_at)
+    VALUES($1,$2,$3,$4,now()+make_interval(days=>$5))`,
+    [id, invitationHash(shareToken(id)), creator, uses, days],
+  );
 }
 
 // A real member's account or username is never replaced.
@@ -124,87 +167,106 @@ async function createMembers(client: PoolClient) {
 
 // Recommendations, reviews, watch statuses, and conversations, made through
 // the same services as members' own actions.
-async function addActivity({
-  reviewer,
-  maya,
-  theo,
-  priya,
-}: Record<keyof typeof members, string>) {
-  const paddington = await updateTitleActivity(
-    maya,
-    titles.paddington2,
-    "recommended",
-    true,
+async function addActivity(
+  { reviewer, maya, theo, priya }: Record<keyof typeof members, string>,
+  pace: () => Promise<void>,
+) {
+  const step = async <T>(work: Promise<T>) => {
+    const result = await work;
+    await pace();
+    return result;
+  };
+  const paddington = await step(
+    updateTitleActivity(maya, titles.paddington2, "recommended", true),
   );
-  await updateTopTen(maya, titles.paddington2, "add");
-  await saveReview(
-    maya,
-    titles.paddington2,
-    5,
-    "Warm, funny, and kind from start to finish. A perfect movie night.",
-    false,
+  await step(updateTopTen(maya, titles.paddington2, "add"));
+  await step(
+    saveReview(
+      maya,
+      titles.paddington2,
+      5,
+      "Warm, funny, and kind from start to finish. A perfect movie night.",
+      false,
+    ),
   );
-  await updateTitleActivity(maya, titles.planetEarth2, "want_to_watch", true);
-
-  await updateTitleActivity(theo, titles.spiritedAway, "recommended", true);
-  await saveReview(
-    theo,
-    titles.spiritedAway,
-    5,
-    "Beautiful and imaginative. I notice something new every time I watch it.",
-    false,
-  );
-  await updateWatchStatus(theo, titles.tedLasso, "watching");
-
-  await updateTitleActivity(priya, titles.tedLasso, "recommended", true);
-  await updateTitleActivity(priya, titles.hiddenFigures, "recommended", true);
-  await updateWatchStatus(priya, titles.princessBride, "finished");
-  const princessBride = await saveReview(
-    priya,
-    titles.princessBride,
-    4,
-    "Still charming, and still quotable after all these years.",
-    false,
+  await step(
+    updateTitleActivity(maya, titles.planetEarth2, "want_to_watch", true),
   );
 
-  const saved = await updateTitleActivity(
-    reviewer,
-    titles.tedLasso,
-    "want_to_watch",
-    true,
+  await step(
+    updateTitleActivity(theo, titles.spiritedAway, "recommended", true),
+  );
+  await step(
+    saveReview(
+      theo,
+      titles.spiritedAway,
+      5,
+      "Beautiful and imaginative. I notice something new every time I watch it.",
+      false,
+    ),
+  );
+  await step(updateWatchStatus(theo, titles.tedLasso, "watching"));
+
+  await step(updateTitleActivity(priya, titles.tedLasso, "recommended", true));
+  await step(
+    updateTitleActivity(priya, titles.hiddenFigures, "recommended", true),
+  );
+  await step(updateWatchStatus(priya, titles.princessBride, "finished"));
+  const princessBride = await step(
+    saveReview(
+      priya,
+      titles.princessBride,
+      4,
+      "Still charming, and still quotable after all these years.",
+      false,
+    ),
   );
 
-  const watched = await addComment(
-    theo,
-    paddington,
-    "Watched it last weekend because of you. The barbershop scene had me laughing out loud.",
-    false,
+  const saved = await step(
+    updateTitleActivity(reviewer, titles.tedLasso, "want_to_watch", true),
   );
-  await addComment(
-    maya,
-    paddington,
-    "Right? I could watch that scene on repeat.",
-    false,
-    watched,
+
+  const watched = await step(
+    addComment(
+      theo,
+      paddington,
+      "Watched it last weekend because of you. The barbershop scene had me laughing out loud.",
+      false,
+    ),
   );
-  const question = await addComment(
-    priya,
-    paddington,
-    "Adding it to my list. Do I need to see the first one?",
-    false,
+  await step(
+    addComment(
+      maya,
+      paddington,
+      "Right? I could watch that scene on repeat.",
+      false,
+      watched,
+    ),
   );
-  await addComment(
-    maya,
-    paddington,
-    "It helps, but this one stands on its own.",
-    false,
-    question,
+  const question = await step(
+    addComment(
+      priya,
+      paddington,
+      "Adding it to my list. Do I need to see the first one?",
+      false,
+    ),
   );
-  await addComment(theo, princessBride, "As you wish!", false);
-  await addComment(
-    priya,
-    saved,
-    "You're going to love it. Give it two episodes.",
-    false,
+  await step(
+    addComment(
+      maya,
+      paddington,
+      "It helps, but this one stands on its own.",
+      false,
+      question,
+    ),
+  );
+  await step(addComment(theo, princessBride, "As you wish!", false));
+  await step(
+    addComment(
+      priya,
+      saved,
+      "You're going to love it. Give it two episodes.",
+      false,
+    ),
   );
 }

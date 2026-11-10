@@ -39,6 +39,7 @@ const maintenanceScripts = [
   "scripts/bootstrap.ts",
   "scripts/report-usage.ts",
   "scripts/seed-review.ts",
+  "scripts/review-details.ts",
   "scripts/delete-accounts.ts",
 ];
 

@@ -27,7 +27,7 @@ struct FeedFixtureTests {
   @Test func findsTheFeedFixtures() {
     #expect(
       Self.fixtures == [
-        "screen/feed/default", "screen/feed/empty", "screen/feed/incoming",
+        "screen/feed/default", "screen/feed/demo", "screen/feed/empty", "screen/feed/incoming",
         "screen/feed/joined", "screen/feed/linked-reply", "screen/feed/newest-page",
         "screen/feed/older-page", "screen/feed/page", "screen/feed/unavailable-link",
       ]

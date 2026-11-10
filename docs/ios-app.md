@@ -761,6 +761,26 @@ script.
   email.
 - Entering the first submission's details on the App Store Connect website.
 
+**Implemented for the listing — 2026-11-09:** `app-store/listing.json` holds
+the listing's text, declarations, and review notes, UI tests take its
+screenshots from the demo circle, and `bin/app-store-listing` uploads them
+([issue #563](https://github.com/jubishop/screenr/issues/563));
+[App Store listing](running-screenr.md#app-store-listing) describes them.
+Where they differ from the decision:
+
+- **Mac and Vision Pro:** the App Store Connect API has no setting for an
+  iPhone app's availability on Apple silicon Macs or Apple Vision Pro, so
+  they are turned off on the website with the App Privacy label
+  ([issue #564](https://github.com/jubishop/screenr/issues/564)).
+- **Age rating:** the answers declare user-generated content, chat, social
+  features, age assurance, and occasional mature themes in trailers and
+  posters, and override the rating to 18+, the minimum age the terms set.
+- **Review details:** the contact comes from TestFlight's Test Information,
+  so no phone number or address sits in the public repository. The demo
+  invitation is Maya's fixed link, which every reseed renews.
+- **Screenshots:** the title posters show their initials, as in every UI
+  test, so the screenshots carry no studio artwork.
+
 **Implemented for testers — 2026-11-09:** `bin/testflight --add-tester`,
 `--remove-tester`, and `--testers` add, remove, and list the external group's
 testers by email ([issue #562](https://github.com/jubishop/screenr/issues/562));
