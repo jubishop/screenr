@@ -45,8 +45,9 @@ KIND_KEYS = (("exceptionType", "crash"), ("signal", "crash"), ("hangDuration", "
              ("launchDuration", "app launch"))
 MACH_O = {b"\xca\xfe\xba\xbe", b"\xfe\xed\xfa\xce", b"\xfe\xed\xfa\xcf", b"\xce\xfa\xed\xfe", b"\xcf\xfa\xed\xfe"}
 SAFE_ID = re.compile(r"[A-Za-z0-9_-]+", re.ASCII)
-# atos repeats an offset outside the binary, and answers one inside it that no function covers with its address.
-UNPLACED = re.compile(rf"0x[0-9A-Fa-f]+(?: \(in {APP_BINARY}\))?", re.ASCII)
+# atos repeats an offset outside the binary, and answers one inside it that no named function covers with its
+# address, which an executable that marks where a nameless function starts follows with the distance from it.
+UNPLACED = re.compile(rf"0x[0-9A-Fa-f]+(?: \(in {APP_BINARY}\)(?: \+ [0-9]+)?)?", re.ASCII)
 # Terminal control characters, which an untrusted attachment could use to rewrite the output.
 CONTROL = re.compile(r"[\x00-\x1f\x7f-\x9f]")
 LONGEST_VALUE = 200

@@ -846,14 +846,22 @@ class MetricKitDiagnosticTests(SentryHelperTests):
         self.assertIn(MAIN_SUMMARY.format(**SYMBOLS), result.stdout)
 
     def test_an_offset_that_atos_answers_with_its_address_stays_unplaced(self) -> None:
-        # atos answers an offset inside the binary that no function covers with its address alone.
-        functions = {**FUNCTIONS, "0x6000": "0x0000000100006000 (in Screenr)"}
-        result = self.summarize(mx_diagnostic(MAIN_THREAD), FAKE_ATOS_FUNCTIONS=json.dumps(functions))
+        # atos answers an offset that no named function covers with its address: alone, or, from an executable
+        # that marks where a nameless function starts, with its distance from that start.
+        executable = [{"id": "exe-1", "data": {"type": "exe", "features": ["symtab"]}}]
+        for answer, debug_files, source in (
+                ("0x0000000100006000 (in Screenr)", DEBUG_FILES, "dsym-1, a dSYM"),
+                ("0x0000000100006000 (in Screenr) + 24", executable,
+                 "exe-1, an executable with only its symbol table")):
+            with self.subTest(answer=answer):
+                functions = {**FUNCTIONS, "0x6000": answer}
+                result = self.summarize(mx_diagnostic(MAIN_THREAD), FAKE_SENTRY_DSYMS=json.dumps(debug_files),
+                                        FAKE_ATOS_FUNCTIONS=json.dumps(functions))
 
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("Sentry's debug file dsym-1, a dSYM; atos placed 2 of 3 offsets\n", result.stdout)
-        self.assertIn(MAIN_SUMMARY.format(**SYMBOLS), result.stdout)
-        self.assertNotIn("0x0000000100006000", result.stdout)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn(f"Sentry's debug file {source}; atos placed 2 of 3 offsets\n", result.stdout)
+                self.assertIn(MAIN_SUMMARY.format(**SYMBOLS), result.stdout)
+                self.assertNotIn("0x0000000100006000", result.stdout)
 
     def test_absent_symbols_show_offsets_and_say_why(self) -> None:
         no_atos = self.root / "no-atos"
