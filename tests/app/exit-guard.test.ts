@@ -35,7 +35,13 @@ async function runGuarded(
     `export const hang = ${bound};\n`,
   );
   const file = join(directory, "sample.test.ts");
-  await writeFile(file, source);
+  // When the timeout below ends the nested runner, node:test leaves the
+  // sample's process running, so a sample that the guard failed to end, as in
+  // a red run, would run on its own forever. This timer ends it after hang.
+  await writeFile(
+    file,
+    `${source}setTimeout(() => process.exit(2), ${hang}).unref();\n`,
+  );
   try {
     const { stdout, stderr } = await execute(
       process.execPath,

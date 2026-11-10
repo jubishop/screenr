@@ -1171,5 +1171,5 @@ failed wait in `tests/app/failure-logs.test.ts` left its worker loop running,
 and the file ran until it was killed.
 
 **Tradeoff:** a file whose test failed ends without waiting for what its
-tests left closing, so `npm run test:coverage` drops that file's coverage
-when it ends this way.
+tests left closing, and without naming what held it open, so a leak in a
+failing file shows only once its tests pass.
