@@ -20,7 +20,7 @@ DEPLOY_SCRIPTS = (RECEIVER, 'deploy-release.sh', 'activate.sh', 'run-release-scr
 # Screenr's units run these as screenr-db or with the backup secrets, so they
 # never come from the release that the deploy key uploads.
 SERVICE_SCRIPTS = ('backup.sh', 'restore-check.sh', 'failure-alert.py', 'check-backup-age.py',
-                   'check-backup-size.py', 'check-postgresql-updates.py', 'check-memory.py')
+                   'check-backup-size.py', 'check-postgresql-updates.py', 'check-memory.py', 'check-crashes.py')
 SCRIPTS = DEPLOY_SCRIPTS + SERVICE_SCRIPTS
 # Deployment compares these with the shared host configuration but never installs them.
 SHARED = ('Caddyfile', 'postgresql.conf')

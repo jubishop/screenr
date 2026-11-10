@@ -49,6 +49,13 @@ JOBS = {
         'killer, or it could not read the journal. Its journal names the service and when. For '
         'the worker, follow https://github.com/jubishop/screenr/blob/main/docs/deployment.md'
         '#worker-memory-headroom'),
+    'screenr-crash-check.service': (
+        'service crashed',
+        'The crash check found a run of the Screenr web application, email worker, or database that '
+        'ended unexpectedly, such as a crash, and systemd restarted it, or it could not read the '
+        'journal. Its journal names the service, how its runs ended, and when. A crash loop sends one '
+        'email: the check reports a service again only after an hour without a crash. A crashing '
+        'worker delays sign-in codes, activity emails, and pushes.'),
 }
 SERVICES = {
     'screenr-web.service': 'web application',

@@ -1,7 +1,10 @@
 import { test, afterEach, mock } from "node:test";
 import assert from "node:assert/strict";
+import { spawn, type ChildProcess } from "node:child_process";
+import { once } from "node:events";
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
+import { setTimeout } from "node:timers/promises";
 import {
   useDatabase,
   db,
@@ -70,7 +73,93 @@ async function fakeSentry() {
       await until(() => arrived.length > 0);
       return arrived.shift()!;
     },
+    // A report from a process, which load can hold up for seconds: only a
+    // hang reaches the bound. A process that exits first never sent one.
+    async fromProcess(child: ChildProcess, output: () => string) {
+      for (let waited = 0; !arrived.length; waited += 20) {
+        assert.ok(
+          waited < hang && child.exitCode === null,
+          `No Sentry report.\n${output()}`,
+        );
+        await setTimeout(20);
+      }
+      return arrived.shift()!;
+    },
     close: () => new Promise((resolve) => server.close(resolve)),
+  };
+}
+
+// The bound on a wait for another process, which only a hang reaches:
+// memory/process-test-waits.md
+const hang = 180_000;
+
+// Runs screenr-worker as its own process with the suite's database. Its
+// data: import lets fetch reach only the loopback Sentry endpoint, and makes
+// SIGUSR2 run `crash` in a signal listener, outside the worker's loops, as
+// a crash in a timer or event listener would. Its error message is
+// CRASH_DETAIL, which nothing may print or send.
+function crashingWorker(crash: string, env: Record<string, string>) {
+  const probe = `
+    const fetch = globalThis.fetch;
+    globalThis.fetch = (url, init) => String(url).startsWith("http://127.0.0.1:")
+      ? fetch(url, init) : Promise.reject(new Error("No network in worker tests"));
+    process.on("SIGUSR2", () => { ${crash}; });`;
+  const child = spawn(
+    process.execPath,
+    [
+      "--import",
+      "tsx",
+      "--import",
+      `data:text/javascript,${encodeURIComponent(probe)}`,
+      "scripts/worker.ts",
+    ],
+    {
+      env: {
+        ...process.env,
+        EMAIL_TRANSPORT: "resend",
+        RESEND_API_KEY: "test-key-never-used-on-the-network",
+        EMAIL_FROM: "Screenr <screenr@example.test>",
+        CRASH_DETAIL: "Private crash detail 271828",
+        ...env,
+      },
+      stdio: ["ignore", "pipe", "pipe"],
+    },
+  );
+  let stdout = "";
+  let stderr = "";
+  child.stdout.on("data", (data) => (stdout += data));
+  child.stderr.on("data", (data) => (stderr += data));
+  const closed = once(child, "close");
+  const output = () => `${stdout}${stderr}`;
+  return {
+    child,
+    output,
+    stderr: () => stderr,
+    // The worker says push delivery is off after it starts handling crashes.
+    async ready() {
+      for (
+        let waited = 0;
+        !stdout.includes('"push delivery off"');
+        waited += 20
+      ) {
+        assert.ok(
+          waited < hang && child.exitCode === null,
+          `The worker did not start.\n${output()}`,
+        );
+        await setTimeout(20);
+      }
+    },
+    async exit() {
+      const timer = new AbortController();
+      const [code, signal] = await Promise.race([
+        closed,
+        setTimeout(hang, undefined, { signal: timer.signal }).then(() =>
+          assert.fail(`The worker did not exit.\n${output()}`),
+        ),
+      ]);
+      timer.abort();
+      return { code, signal };
+    },
   };
 }
 
@@ -340,4 +429,95 @@ test("after a kind's first report, Sentry gets the failures folded in the next h
     [...printed, ...sent().map((event) => JSON.stringify(event))],
     ["Private detail"],
   );
+});
+
+test("an uncaught exception or unhandled rejection in the worker logs `worker crashed`, reaches Sentry, and only then exits with a failure, so systemd restarts it", async () => {
+  for (const [origin, error, crash] of [
+    [
+      "uncaughtException",
+      "TypeError",
+      "throw new TypeError(process.env.CRASH_DETAIL)",
+    ],
+    [
+      "unhandledRejection",
+      "RangeError",
+      "Promise.reject(new RangeError(process.env.CRASH_DETAIL))",
+    ],
+  ]) {
+    const sentry = await fakeSentry();
+    const worker = crashingWorker(crash, {
+      SENTRY_DSN: process.env.SENTRY_DSN!,
+    });
+    try {
+      await worker.ready();
+      worker.child.kill("SIGUSR2");
+      const report = await sentry.fromProcess(worker.child, worker.output);
+      // The worker waits for Sentry's reply before it exits.
+      assert.equal(worker.child.exitCode, null, worker.output());
+      report.reply(200);
+      assert.deepEqual(
+        await worker.exit(),
+        { code: 1, signal: null },
+        worker.output(),
+      );
+      const failure = { event: "worker crashed", origin, error };
+      const lines = worker
+        .stderr()
+        .split("\n")
+        .filter(Boolean)
+        .map((line) => JSON.parse(line));
+      assert.deepEqual(
+        lines.map(({ stack, ...fields }) => fields),
+        [failure],
+        worker.output(),
+      );
+      assert.ok(lines[0].stack.length > 0);
+      const event = envelope(report.body);
+      assert.deepEqual(event.contexts.failure, failure);
+      assert.equal(event.exception.values[0].type, error);
+      assert.equal(event.exception.values[0].value, "worker crashed");
+      assert.equal(event.tags.event, "worker crashed");
+      assertNotLogged([worker.output(), report.body], ["271828"]);
+    } finally {
+      worker.child.kill("SIGKILL");
+      await sentry.close();
+      delete process.env.SENTRY_DSN;
+    }
+  }
+});
+
+test("without a Sentry DSN, a worker crash only logs `worker crashed` and exits with a failure", async () => {
+  const worker = crashingWorker(
+    "throw new TypeError(process.env.CRASH_DETAIL)",
+    { SENTRY_DSN: "" },
+  );
+  try {
+    await worker.ready();
+    worker.child.kill("SIGUSR2");
+    assert.deepEqual(
+      await worker.exit(),
+      { code: 1, signal: null },
+      worker.output(),
+    );
+    const [{ stack, ...fields }, ...rest] = worker
+      .stderr()
+      .split("\n")
+      .filter(Boolean)
+      .map((line) => JSON.parse(line));
+    assert.deepEqual(
+      { fields, rest },
+      {
+        fields: {
+          event: "worker crashed",
+          origin: "uncaughtException",
+          error: "TypeError",
+        },
+        rest: [],
+      },
+    );
+    assert.ok(stack.length > 0);
+    assertNotLogged([worker.output()], ["271828"]);
+  } finally {
+    worker.child.kill("SIGKILL");
+  }
 });

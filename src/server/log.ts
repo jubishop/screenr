@@ -125,8 +125,13 @@ type Fold = { count: number; latest?: Record<string, unknown> };
 // The production build copies this module into several server bundles, such
 // as the route handlers', the pages', and instrumentation's, so the process
 // keeps one map for them all.
-const shared = globalThis as unknown as { screenrFolds?: Map<string, Fold> };
+const shared = globalThis as unknown as {
+  screenrFolds?: Map<string, Fold>;
+  screenrSends?: Set<Promise<void>>;
+};
 const folds = (shared.screenrFolds ??= new Map<string, Fold>());
+// Reports still on their way to Sentry.
+const sends = (shared.screenrSends ??= new Set<Promise<void>>());
 
 // Folds the record into its kind's open hour and returns true, or opens an
 // hour for the kind and returns false.
@@ -184,9 +189,19 @@ function report(
   ]
     .map((part) => JSON.stringify(part))
     .join("\n");
-  send(target, envelope).catch((error) =>
-    print({ event: "sentry report failed", ...describe(error, true) }),
-  );
+  const sending = send(target, envelope)
+    .catch((error) =>
+      print({ event: "sentry report failed", ...describe(error, true) }),
+    )
+    .finally(() => sends.delete(sending));
+  sends.add(sending);
+}
+
+// Waits for the reports still on their way to Sentry, each of which ends
+// within 10 seconds, so a process can send them before it exits, as the
+// worker does after a crash.
+export async function reportsSent() {
+  await Promise.all(sends);
 }
 
 async function send(target: { url: string; key: string }, envelope: string) {
