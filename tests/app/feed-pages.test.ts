@@ -216,6 +216,22 @@ test("access changes and removals leave a page through the same rules as the who
   assert.ok(page.conversations.length <= pageSize);
 });
 
+test("a reply from someone the reader blocked leaves an old entry out of newer pages and polls", async () => {
+  const { alice, ben, cam } = await setup();
+  await friend(alice, ben);
+  await friend(ben, cam);
+  const old = await posts(ben, pageSize + 10);
+  const first = await read(alice, "/?before=now");
+  assert.ok(!ids(first).includes(old[0]));
+  await changeRelationship(alice, cam, "block");
+  await addComment(cam, old[0], "Alice cannot see this", false);
+  const page = await read(alice, "/?before=now");
+  assert.deepEqual(ids(page), ids(first));
+  assert.equal(page.since, first.since);
+  const polled = await read(alice, `/?${window(first.since!)}`);
+  assert.deepEqual(ids(polled), ids(first));
+});
+
 test("removing replies never moves an entry out of the window that holds it", async () => {
   const { alice, ben, conversation } = await setup();
   await friend(alice, ben);

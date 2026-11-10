@@ -6,10 +6,12 @@ import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import {
   cleanNotes,
+  manageTesters,
   marketingVersion,
   nextBuild,
   nextPatch,
   notesPrompt,
+  parseCommand,
   processingTimeout,
   releaseTags,
   tagNotes,
@@ -882,4 +884,123 @@ test("a release stops before distribution when GitHub refuses the tag", async ()
       assert.deepEqual(fixture.connect.localizations, []);
     },
   );
+});
+
+test("tester flags take email addresses and never mix with a release's flags", () => {
+  assert.deepEqual(parseCommand([]), {
+    kind: "release",
+    options: { distributeOnly: false, notes: undefined },
+  });
+  assert.deepEqual(parseCommand(["--distribute-only", "--notes", "Try it."]), {
+    kind: "release",
+    options: { distributeOnly: true, notes: "Try it." },
+  });
+  assert.deepEqual(parseCommand(["-h"]), { kind: "help" });
+  assert.deepEqual(
+    parseCommand([
+      "--add-tester",
+      " Friend@Example.com ",
+      "--remove-tester",
+      "old@example.com",
+      "--add-tester",
+      "pal@example.com",
+      "--add-tester",
+      "friend@example.com",
+      "--testers",
+    ]),
+    {
+      kind: "testers",
+      options: {
+        add: ["friend@example.com", "pal@example.com"],
+        remove: ["old@example.com"],
+        list: true,
+      },
+    },
+  );
+  assert.deepEqual(parseCommand(["--testers"]), {
+    kind: "testers",
+    options: { add: [], remove: [], list: true },
+  });
+  for (const [args, message] of [
+    [
+      ["--add-tester", "friend"],
+      '--add-tester needs an email address, such as friend@example.com, not "friend".',
+    ],
+    [
+      ["--remove-tester", "a b@example.com"],
+      '--remove-tester needs an email address, such as friend@example.com, not "a b@example.com".',
+    ],
+    [
+      ["--testers", "--notes", "Try it."],
+      "--add-tester, --remove-tester, and --testers change or list testers without a release; leave out --notes and --distribute-only.",
+    ],
+    [
+      ["--add-tester", "friend@example.com", "--distribute-only"],
+      "--add-tester, --remove-tester, and --testers change or list testers without a release; leave out --notes and --distribute-only.",
+    ],
+    [
+      [
+        "--add-tester",
+        "friend@example.com",
+        "--remove-tester",
+        "FRIEND@example.com",
+      ],
+      "Both --add-tester and --remove-tester name friend@example.com.",
+    ],
+  ] as const)
+    assert.throws(() => parseCommand([...args]), { message });
+  assert.throws(() => parseCommand(["--tester", "friend@example.com"]), {
+    code: "ERR_PARSE_ARGS_UNKNOWN_OPTION",
+  });
+});
+
+test("tester flags add, remove, and list testers without a release's checks or lock", async () => {
+  await withFixture(
+    {
+      connect: {
+        testers: [
+          { email: "old@example.com", groups: ["group-public"] },
+          { firstName: "Anonymous", groups: ["group-public"] },
+          {
+            email: "amy@example.com",
+            firstName: "Amy",
+            lastName: "Lee",
+            groups: ["group-public"],
+          },
+        ],
+      },
+    },
+    async (fixture) => {
+      await manageTesters(
+        {
+          add: ["friend@example.com"],
+          remove: ["old@example.com"],
+          list: true,
+        },
+        fixture.io,
+      );
+      assert.deepEqual(fixture.connect.writes(), [
+        "DELETE /v1/betaGroups/group-public/relationships/betaTesters",
+        "POST /v1/betaTesters",
+      ]);
+      // No Git, sentry-cli, llm, or Xcode, and no release lock.
+      assert.deepEqual(fixture.shell.calls, []);
+      assert.ok(!existsSync(fixture.lockPath));
+      assert.deepEqual(fixture.lines, [
+        '==> Removing old@example.com from "Public testers"',
+        '==> old@example.com is no longer in "Public testers".',
+        '==> Adding friend@example.com to "Public testers"',
+        '==> friend@example.com is in "Public testers"; TestFlight lists them as INVITED.',
+        '==> "Public testers" has 3 testers:',
+        "Amy Lee <amy@example.com>: INSTALLED, invited by email",
+        "friend@example.com: INVITED, invited by email",
+        "Anonymous (no email): INSTALLED, joined through the public link",
+      ]);
+    },
+  );
+  await withFixture({}, async (fixture) => {
+    await manageTesters({ add: [], remove: [], list: true }, fixture.io);
+    assert.deepEqual(fixture.lines, ['==> "Public testers" has no testers.']);
+    assert.deepEqual(fixture.connect.writes(), []);
+  });
 });

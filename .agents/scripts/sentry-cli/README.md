@@ -96,9 +96,12 @@ content by design, but their user and request IDs stay out of GitHub.
 `<!-- sentry-issue:<numeric-id> -->` marker or a Sentry link to the issue, or
 for feedback the `<!-- sentry-feedback:screenr-ios:<numeric-id> -->` marker or
 a feedback link, and trusts a match only when the intake's `github-actions`
-bot or the repository's owner opened the issue, as the intake does. It lists
-untrusted matches separately. Each issue shows whether its body holds the
-skill's complete findings block.
+bot or the repository's owner opened the issue. It lists untrusted matches
+separately. Each issue shows whether its body holds the skill's complete
+findings block. The
+[daily Sentry intake](../../../docs/development-workflow.md#daily-sentry-intake),
+`bin/sentry-intake`, imports its matching, so the intake, the skills, and the
+pickers agree on which issue tracks an item.
 
 With `--states`, it prints one line per ID instead, the ID, a tab, and the
 state of its canonical issue: `#<n> intake`, `#<n> analyzed`, `#<n> closed`,

@@ -358,7 +358,8 @@ otherwise runs in full.
 
 `bin/testflight`, or its alias `bin/shipit`, builds the iPhone app on the
 owner's Mac, brings it to TestFlight testers, and submits it for Beta App
-Review. It follows the
+Review. Its tester flags manage [testers by email](#testers-by-email)
+instead. It follows the
 [release decision](ios-app.md#ci-checks-and-local-testflight-releases--2026-10-13),
 the [local iOS checks decision](ios-app.md#local-ios-checks-instead-of-ios-ci--2026-10-14),
 the [tooling decision](ios-app.md#in-house-release-tooling-without-fastlane--2026-10-13),
@@ -479,6 +480,40 @@ never enables the group's public link.
 external build and turned the link on through the API on 2026-11-04;
 [App Store Connect records](running-screenr.md#app-store-connect) say where
 the link lives.
+
+#### Testers by email
+
+After the App Store launch turns the public link off, friends keep getting
+every build as testers in "Public testers", added by email under the
+[App Store listing decision](ios-app.md#app-store-listing--2026-11-09);
+internal testers would need App Store Connect team accounts
+([#562](https://github.com/jubishop/screenr/issues/562)). The tester flags
+change or list that group without a release. They need only the API key,
+take no release lock, and may repeat:
+
+```sh
+bin/testflight --add-tester friend@example.com
+bin/testflight --remove-tester friend@example.com
+bin/testflight --testers
+```
+
+- **Add:** a new tester is created in the group, and Apple emails them
+  TestFlight's invitation. A tester the team already has, such as a PodHaven
+  tester, joins the group instead. When App Store Connect then lists the
+  tester as `NOT_INVITED` or `REVOKED`, the command sends the invitation
+  itself.
+- **Remove:** the tester leaves the group but stays on the team, in any other
+  app's groups. Apple may keep listing a removed tester as `REVOKED`.
+- **List:** each tester's name, email, TestFlight state, and whether they
+  joined by email or through the public link, which leaves some without an
+  email.
+
+Emails match without regard to case. Adding someone already in the group, or
+removing someone who isn't, changes nothing, except that an add sends a
+missing invitation; a tester listed as `REVOKED` counts as gone. The command
+reads each change back from App Store Connect and stops when the group
+disagrees. Without the external group it stops too; a release creates the
+group.
 
 #### Recovery
 
@@ -1154,7 +1189,7 @@ sanitized findings, a Sentry record, a proposed resolution, and closeout steps
 between `<!-- analyze-sentry-feedback-findings:start -->` and
 `<!-- analyze-sentry-feedback-findings:end -->` in the tracking issue, which
 it finds by the `<!-- sentry-feedback:screenr-ios:<numeric-id> -->` marker or
-the feedback link that `bin/sentry-feedback-issues` writes, creating one with
+the feedback link that `bin/sentry-intake` writes, creating one with
 `create-issue` when none exists. It sets the issue's priority from the
 findings, and labels a request for something new, or a report of intended
 behavior, `needs decision`. It changes no code and no Sentry status; the
@@ -1195,6 +1230,66 @@ intake. A next-release resolution depends on Sentry ordering builds such as
 
 **Tradeoff:** an event from an app build that predates the fix reopens the
 issue, and the next analysis closes its recurrence issue as a stale build.
+
+### Daily Sentry intake
+
+`.github/workflows/sentry-intake.yml` runs `bin/sentry-intake` daily at 14:00
+UTC, and on demand with `gh workflow run sentry-intake.yml`, so every
+unresolved Sentry item has a tracking issue
+([#569](https://github.com/jubishop/screenr/issues/569)). It adapts PodHaven's
+`bin/check-sentry-feedback` and `bin/check-sentry-issues` as one Python
+script that calls Sentry's REST API directly, so CI installs no Sentry CLI.
+It reads Sentry with the read-only `SENTRY_AUTH_TOKEN` repository secret, and
+the job needs only `contents: read` and `issues: write`.
+
+It reads the unresolved feedback in `screenr-ios` and the unresolved error
+issues, `is:unresolved !issue.category:feedback` as the skills list them, in
+`screenr-ios` and `screenr-server`, with activity in the last 90 days. It
+reads every page of all three lists before it writes anything, and fails on
+any Sentry error or unexpected response, so it never acts on a partial list.
+An archived error is not unresolved, so one accepted as expected behavior
+stays out. For each item it finds the tracking issues with the skills'
+[`find_tracking_issues.py`](../.agents/scripts/sentry-cli/README.md#tracking-issues),
+which trusts only issues that the intake's `github-actions` bot or the owner
+opened:
+
+- **New feedback:** `Triage Sentry feedback <short ID>`, with the contents
+  that the
+  [feedback decision](ios-app.md#public-repository-with-feedback-issues-that-link-to-sentry--2026-10-13)
+  sets. Feedback never recurs: its issue, open or closed, stays its record.
+- **New error:** `Triage Sentry issue <short ID>`, whose body holds only the
+  `<!-- sentry-issue:<numeric-id> -->` marker, the short ID linked to Sentry,
+  and a note that event details stay in Sentry, as in PodHaven.
+- **Recurring error:** when every trusted issue that tracked an unresolved
+  error is closed, `Triage recurrence of Sentry issue <short ID>`, which also
+  names the earlier issues. It never reopens them.
+- **Labels:** a new issue gets `investigation`, `area: ios` or
+  `area: server` by project, `sentry-feedback` or `sentry-issue`, and `p2`.
+  An issue that already tracks the item gains a missing `sentry-feedback` or
+  `sentry-issue` label and keeps its priority, which the analysis sets.
+- **Instructions:** a new issue, and an open tracking issue without the
+  skill's findings block, gets one comment with a
+  `<!-- snissue:<numeric-id> -->` or
+  `<!-- sfeedback:screenr-ios:<numeric-id> -->` marker, the
+  `fix-issue-prerequisite` marker for
+  `analyze-sentry-issue <numeric-id>` or
+  `analyze-sentry-feedback screenr-ios:<numeric-id>`, and how to run
+  `bin/snissue` or `bin/snfeedback` for the item. The first marker keeps a
+  rerun from adding it twice, and only a copy from the bot or the owner
+  counts. An analyzed issue gets none, including an older error issue whose
+  `## Sentry closeout` predates the marker. Neither does a closed issue,
+  although PodHaven comments on a closed feedback issue.
+
+A rerun files nothing and adds nothing for items already tracked. A run that
+fails partway keeps what it wrote, and the next run adds the comment that a
+filed issue is missing. `bin/sentry-intake --dry-run` reads the same lists,
+issues, and comments, prints what it would file, label, and comment on, and
+writes nothing to GitHub. Locally it needs an authenticated `gh` and a
+`SENTRY_AUTH_TOKEN`, such as `sentry auth token` prints.
+`tests/test_sentry_intake.py` runs it against fake Sentry and GitHub
+boundaries: both kinds of issue and their comments, recurrence, labels,
+trust, reruns, partial lists, and that no member or error text reaches
+GitHub or the log.
 
 ### Sentry triage commands
 

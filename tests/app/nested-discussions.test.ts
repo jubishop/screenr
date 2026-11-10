@@ -202,6 +202,11 @@ test("nested groups retain only safe parent context through blocking, removal, a
   );
   await changeRelationship(alice, cam, "remove");
   assert.equal((await thread(ben, conversation)).comments[0].unavailable, true);
+  // A parent whose author the host unfriended is no target either.
+  await assert.rejects(
+    addComment(ben, conversation, "No unfriended targets", false, parent),
+    denied.replyTarget,
+  );
   await friend(alice, cam);
   assert.equal(
     (await thread(ben, conversation)).comments[0].unavailable,

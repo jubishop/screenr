@@ -84,6 +84,17 @@ const justWatchPage = (...imdbIds: string[]) => ({
     .join(",")}]</script></body></html>`,
 });
 
+// Another site, serving a title page, that a redirect names. Nothing may
+// reach it.
+let offSiteRequests: string[] = [];
+let offSiteURL = "";
+const offSite = createServer((request, response) => {
+  offSiteRequests.push(request.url!);
+  const page = justWatchPage("tt0000042");
+  response.writeHead(page.status, { "Content-Type": "text/html" });
+  response.end(page.body);
+});
+
 const listen = async (server: typeof catalog) => {
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   return `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
@@ -93,11 +104,13 @@ before(async () => {
   await migrate();
   process.env.SCREENR_TEST_TMDB_URL = await listen(catalog);
   process.env.SCREENR_TEST_PAGES_URL = await listen(sitePages);
+  offSiteURL = await listen(offSite);
   process.env.TMDB_READ_TOKEN = "shared-links-test-token";
 });
 beforeEach(async () => {
   catalogRequests = [];
   pageRequests = [];
+  offSiteRequests = [];
   detailsStatus = 200;
   findResults = {
     tt0000042: { movie_results: [{ id: 42, title: "Shared Movie" }] },
@@ -112,7 +125,7 @@ beforeEach(async () => {
   );
 });
 after(async () => {
-  for (const server of [catalog, sitePages]) {
+  for (const server of [catalog, sitePages, offSite]) {
     server.closeAllConnections();
     await new Promise<void>((resolve) => server.close(() => resolve()));
   }
@@ -228,7 +241,7 @@ test("a JustWatch page without one IMDb ID leaves a search of the link's name", 
   pages["/us/movie/elsewhere"] = {
     status: 302,
     body: "",
-    location: "http://127.0.0.1:9/us/movie/elsewhere",
+    location: `${offSiteURL}/us/movie/elsewhere`,
   };
   assert.deepEqual(
     await resolveSharedTitle(
@@ -251,6 +264,7 @@ test("a JustWatch page without one IMDb ID leaves a search of the link's name", 
     ),
     { title: null, query: "elsewhere" },
   );
+  assert.deepEqual(offSiteRequests, []);
   pages["/us/movie/unreachable"] = { status: 200, body: "", drop: true };
   assert.deepEqual(
     await resolveSharedTitle(

@@ -1,8 +1,10 @@
-name: Sentry feedback
+name: Sentry intake
 
-# Files one GitHub issue per new Sentry feedback item from the iPhone app.
-# Issues hold only the Sentry link, the date, and the app build; see
-# docs/ios-app.md#public-repository-with-feedback-issues-that-link-to-sentry--2026-10-13.
+# Tracks each unresolved Sentry feedback item from the iPhone app and each
+# unresolved Sentry error issue in screenr-ios and screenr-server in a GitHub
+# issue, with a comment that has agents analyze it first. Issues hold only
+# Sentry IDs and links, and a feedback item's date and build; see
+# docs/development-workflow.md#daily-sentry-intake.
 
 on:
   schedule:
@@ -15,12 +17,12 @@ permissions:
   issues: write
 
 concurrency:
-  group: sentry-feedback
+  group: sentry-intake
   cancel-in-progress: false
 
 jobs:
-  file:
-    name: File new feedback
+  intake:
+    name: Track unresolved feedback and errors
     if: github.repository == 'jubishop/screenr'
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -28,9 +30,9 @@ jobs:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
-      - name: File an issue for each new feedback item
+      - name: File, label, and comment on tracking issues
         env:
           GH_REPO: ${{ github.repository }}
           GH_TOKEN: ${{ github.token }}
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
-        run: bin/sentry-feedback-issues
+        run: bin/sentry-intake

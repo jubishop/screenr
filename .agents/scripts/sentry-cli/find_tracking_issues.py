@@ -11,7 +11,8 @@ An issue tracks the item through its hidden marker or a Sentry link in its
 body, but only when the intake's github-actions bot or the repository's owner
 opened it: in a public repository anyone can open an issue that holds a
 marker or a link. Matches from other authors are listed as untrusted. The
-repository is GH_REPO, or jubishop/screenr.
+repository is GH_REPO, or jubishop/screenr. The daily intake, bin/sentry-intake,
+imports its matching, so the intake, the skills, and the pickers agree.
 
 With --states, it prints one line per ID instead: the ID, a tab, and the
 state that bin/snissue and bin/snfeedback show, `#<n> intake`,
@@ -33,7 +34,7 @@ FILER = {"__typename": "Bot", "login": "github-actions"}  # The intake workflow'
 ISSUES_QUERY = """query($owner: String!, $name: String!, $endCursor: String) {
   repository(owner: $owner, name: $name) {
     issues(first: 100, after: $endCursor) {
-      nodes { number title state stateReason body author { __typename login } }
+      nodes { number title state stateReason body author { __typename login } labels(first: 100) { nodes { name } } }
       pageInfo { hasNextPage endCursor }
     }
   }
@@ -92,6 +93,12 @@ def matches(kind, numeric_id, found, owner):
     return tracking, untrusted
 
 
+def canonical(tracking):
+    """Return the canonical issue among trusted matches: open before closed, then with the marker, then the newest."""
+    issue, _ = min(tracking, key=lambda match: (match[0]["state"] != "OPEN", not match[1], -match[0]["number"]))
+    return issue
+
+
 def issues(repository):
     owner, _, name = repository.partition("/")
     output = subprocess.run(
@@ -137,7 +144,7 @@ def picker_state(kind, numeric_id, found, repository):
     if not tracking:
         print(f"{numeric_id}\tuntracked")
         return
-    issue, _ = min(tracking, key=lambda match: (match[0]["state"] != "OPEN", not match[1], -match[0]["number"]))
+    issue = canonical(tracking)
     if issue["state"] != "OPEN":
         shown = "closed"
     elif analysis(kind, issue.get("body") or "", patterns(kind, numeric_id)[2]) == "not analyzed":

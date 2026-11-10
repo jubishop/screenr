@@ -206,12 +206,13 @@ Release code also runs outside the two units, and the same sandbox covers it
   ```
 
 - The backup, restore check, stale-backup check, backup storage check,
-  PostgreSQL update check, memory check, and failure alert units run kit
-  scripts and system programs as `screenr-db` or a dynamic user, never
-  release code. They have the worker's sandbox too, which leaves them restic
-  and its cache, the database socket, systemd's D-Bus API, the journal, and
-  HTTPS to R2 and Resend. Only the memory check joins the `systemd-journal`
-  group, without which `screenr-db` opens no journal files. Only
+  PostgreSQL update check, memory check, crash check, and failure alert units
+  run kit scripts and system programs as `screenr-db` or a dynamic user,
+  never release code. They have the worker's sandbox too, which leaves them
+  restic and its cache, the database socket, systemd's D-Bus API, the
+  journal, and HTTPS to R2 and Resend. Only the memory and crash checks join
+  the `systemd-journal` group, without which `screenr-db` opens no journal
+  files. Only
   `screenr-db.service`, the PostgreSQL server itself, keeps its own settings.
 
 systemd units cannot include shared settings, so each of these units and the
@@ -527,7 +528,8 @@ restored release, until a fix deploys or the
   passed its first check.
 
 [Issue #113](https://github.com/jubishop/screenr/issues/113) tracks the
-work.
+work. The [crash check](#crash-check), decided 2026-11-09, also emails when
+one of those services ends unexpectedly without reaching its restart limit.
 
 **Why:** The user already runs UptimeRobot for other projects and asked to
 reuse it for the health endpoint. Backup checks stay on the server because
@@ -537,8 +539,8 @@ UptimeRobot's free plan has no heartbeat monitors.
 backups.
 
 The backup, restore check, stale-backup check, backup storage check,
-PostgreSQL update check, memory check, web, worker, and database units each
-set `OnFailure=screenr-alert@%n.service`.
+PostgreSQL update check, memory check, crash check, web, worker, and database
+units each set `OnFailure=screenr-alert@%n.service`.
 That template runs `ops/failure-alert.py` with the failed unit's name. It
 sends through the Resend settings in `/etc/screenr/backup.env` described
 under [backup storage warning](#backup-storage-warning). It runs as the backup
@@ -587,6 +589,9 @@ days, and its failure starts the alert.
 `screenr-memory-check.timer` runs the [daily memory check](#daily-memory-check)
 around 10:00 PDT / 09:00 PST, and its failure starts the alert.
 
+`screenr-crash-check.timer` runs the [crash check](#crash-check) every five
+minutes, and its failure starts the alert.
+
 Deployment installs changed and new units, and enables new timers, as
 described under [host configuration drift](#host-configuration-drift).
 
@@ -604,6 +609,8 @@ Verify the alert path without sending email:
 - `systemctl start screenr-memory-check.service` passes while no service is
   near its limit, and its journal lists each service's current run and
   logged peaks.
+- `systemctl start screenr-crash-check.service` passes while no service has
+  ended unexpectedly since its last run, and its journal says so.
 - For a deliberately failed transient unit, `failure-alert.py --dry-run`
   prints the email instead of sending it:
 
@@ -752,6 +759,123 @@ On a local Ubuntu 24.04 machine with systemd 255.4, a service whose unit file
 gained the read during its run, followed by `systemctl daemon-reload`, logged
 that run's real peak of 99.2 MiB when it stopped. Without the read, the same
 probe logged 3.0 MiB, the value an outside read had found.
+
+#### Crash check
+
+**Decision — 2026-11-09:** A check on its own timer, at least every 15
+minutes, emails the owner through the failure alert when a run of
+`screenr-web`, `screenr-worker`, or `screenr-db` ends unexpectedly, other
+than by a deploy restart. One crash loop sends one email. The worker also
+logs a crash of its own process before it exits, which reaches
+[Sentry](#failure-reports-in-sentry).
+[Issue #576](https://github.com/jubishop/screenr/issues/576) tracks the work.
+
+**Why:** The failure alert waits for a service's restart limit of five starts
+in 60 seconds, so a service that runs about 7 seconds or more before each
+crash restarts forever without an email. A crash-looping worker silently
+delays or drops sign-in codes, activity emails, and pushes, and the uptime
+monitor never sees the worker. It runs on its own timer rather than in the
+[daily memory check](#daily-memory-check) because stopped sign-in codes need
+an alert within minutes.
+
+`screenr-crash-check.timer` starts `screenr-crash-check.service` every five
+minutes, and on boot when a run was missed. With systemd's default timer
+accuracy of a minute, a crash alerts within about six minutes. The service
+runs `ops/check-crashes.py` with the three services' names, as `screenr-db` in
+the `systemd-journal` group, like the memory check, whose journal reading it
+loads from the deploy kit. It reads systemd's message for each run that ended
+with a result other than success, such as `exit-code`, `signal`, `timeout`, or
+`oom-kill`: `MESSAGE_ID=d9b373ed55a64feb8242e02dbe79a49c`, from PID 1, whose
+`UNIT_RESULT` field holds the result. systemd logs it when the run ends,
+before any automatic restart. A deploy or manual restart stops the services
+cleanly, which logs `Deactivated successfully` instead, so it never alerts. A
+stop that runs past its time limit ends with `timeout`, which does.
+`systemctl show` adds each service's state and `NRestarts`, the automatic
+restarts since it last started by hand, which a deploy restart resets.
+
+The check fails, which starts the alert, when a service has a run that ended
+unexpectedly since the previous check. Its journal names the service, how
+many runs ended, their results, when, its restart count, and its state. Two
+cases send no email:
+
+- **The same loop:** a service's unexpected ends less than an hour apart are
+  one crash loop. The check emails at the loop's first end, and the next
+  only after an hour without one. A loop that crashes every few seconds for a
+  day sends one email.
+- **The restart limit:** a service that is `failed` when the check runs has
+  reached its restart limit, and its own failure alert emails the owner. The
+  check records its ends as a loop without a second email. A slow loop that
+  speeds up and reaches the limit later sends both emails: one that the
+  service keeps crashing, and one that systemd stopped it.
+
+Each run counts once: at the restart limit, systemd 255 logs the last run's
+message a second time with the same `INVOCATION_ID`. An OOM kill alerts here
+within minutes and again in the next daily memory check, which reports its
+memory.
+
+Like the memory check, it reads the journal from where the previous check
+stopped, the last hour on its first run, and counts only PID 1's entries.
+`/var/lib/screenr-crash-check/state.json` records where it stopped and when
+each service last ended unexpectedly within the hour. A failed read alerts
+without saving, and the next check covers the same time again. A damaged
+state file also fails the check; delete it to start again from the last hour.
+Each run adds a few lines to the journal, which the host bounds at 512 MB and
+14 days.
+
+Show the findings without saving state:
+
+```sh
+systemd-run --quiet --wait --pipe --collect -p User=screenr-db -p Group=screenr-db \
+    -p SupplementaryGroups=systemd-journal -p StateDirectory=screenr-crash-check \
+    /usr/bin/python3 /usr/local/lib/screenr-deploy/check-crashes.py --dry-run \
+    screenr-web.service screenr-worker.service screenr-db.service
+```
+
+On 2026-11-09 PST, the host's journal, read-only, showed these entries from
+systemd 255.4:
+
+- Crashed probe units on 2026-11-05 logged `Main process exited` and then
+  `Failed with result 'signal'` with that message ID and `UNIT_RESULT=signal`,
+  then `Scheduled restart job` with `N_RESTARTS`. At the restart limit, one
+  logged `Start request repeated too quickly.`, the last run's failure again,
+  and `Failed to start`.
+- A deploy restart of `screenr-worker` at 01:47 UTC on 2026-11-10 logged
+  `Stopping`, `Deactivated successfully`, `Stopped`, its resource line, and
+  `Started`, with no failure message, and left `NRestarts=0`.
+- No Screenr service had logged a failure since the journal began on
+  2026-10-27.
+- The check, run in memory as root with `--dry-run`, found nothing in the last
+  hour or around that deploy restart. Over the probes' times, it counted the
+  probe at its restart limit as 2 runs, not 3.
+
+The same day, in a local Ubuntu 24.04 container with systemd 255.4, the
+check's units and the alert unit, with `--dry-run` added, ran against fake
+services with the real units' restart settings. A worker that exited with
+status 1 ten seconds after each start restarted 5 times in 80 seconds without
+reaching its restart limit. Its failure alert ran after each of its 7 crashes
+in the trial and logged `no alert` each time. The check then failed, naming
+5 runs that ended with `exit-code`, and its alert printed the email with the
+subject `Screenr alert: service crashed`. Twenty seconds later, after
+restarts of the web and database like a deploy's, the next check passed: it
+folded 2 more worker crashes into the loop and reported neither restart.
+
+The [worker](running-screenr.md#email-worker) logs a crash of its own
+process: an exception that nothing catches, such as one thrown in a timer or
+event listener, or a rejected promise that nothing handles, which Node raises
+as one. It prints `worker crashed`, with `origin` `uncaughtException` or
+`unhandledRejection` and the error's class, code, and stack but not its
+message, like other [failure lines](#failure-logs). It stops taking jobs,
+waits up to 10 seconds for the line's Sentry report, and exits with status 1,
+which systemd restarts and the check reports. Before, Node printed the error
+with its message and exited, and nothing reached Sentry.
+
+Each crash ends its process, and the next run's folds start empty, so every
+crash reports. A loop fast enough to reach the restart limit sends five or six
+reports. A slower one, which the check emails about, sends one for each crash
+until it is fixed: at most about 300 an hour, at the limit's four or five
+starts a minute, against the 5,000 errors a month of Sentry's free plan.
+[Issue #632](https://github.com/jubishop/screenr/issues/632) tracks bounding
+them across restarts.
 
 ## Build and activate a release
 
@@ -945,9 +1069,9 @@ every `ops/screenr-*.service` and `.timer`, and the
 also holds the scripts that the units run as `screenr-db` or with
 `/etc/screenr/backup.env`: `ops/backup.sh`, `ops/restore-check.sh`,
 `ops/failure-alert.py`, `ops/check-backup-age.py`, `ops/check-backup-size.py`,
-`ops/check-postgresql-updates.py`, and `ops/check-memory.py`. Those units run
-them from `/usr/local/lib/screenr-deploy`, and the release archive leaves out
-`ops/`.
+`ops/check-postgresql-updates.py`, `ops/check-memory.py`, and
+`ops/check-crashes.py`. Those units run them from
+`/usr/local/lib/screenr-deploy`, and the release archive leaves out `ops/`.
 [`bin/_deploy_kit.py`](../bin/_deploy_kit.py) lists the kit. The receiver
 goes to `/usr/local/sbin`, and the rest to `/usr/local/lib/screenr-deploy`,
 all root-owned. Nothing that arrives over the deploy key is run or installed
@@ -1497,6 +1621,8 @@ These lines still report every time:
 - Lines with a field that changes each time, such as `job` and `attempt` in
   the worker's delivery failures or `user` in `google photo copy failed`:
   each line is its own kind. Their retries and backoff bound them.
+- `worker crashed`: each crash ends its process, which drops the fold, so
+  every crash reports, as the [crash check](#crash-check) describes.
 
 The hour comes from these numbers, checked on 2026-11-01:
 

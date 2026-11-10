@@ -38,4 +38,8 @@ hold. Load itself did not slow the journey much: it took 17 to 23 seconds in
 **How to apply:** Assert the saved element with `expect(...).toBeVisible()`,
 as `tests/browser/invited-friends.spec.ts` does after each post, before
 another page loads and expects the write. Waiting on a later poll with
-`expect` is fine: it retries within its own 10-second timeout.
+`expect` is fine: it retries within the suite's `expect` timeout, which only
+ends a hang. Don't pass a shorter `timeout` to such a wait. A 10-second bound
+once ran out on a loaded Mac before a reader's poll showed another member's
+deletion ([#626](https://github.com/jubishop/screenr/issues/626),
+[process test waits](process-test-waits.md)).
