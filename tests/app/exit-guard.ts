@@ -20,7 +20,7 @@ import { hang } from "./process-waits";
 // --test-force-exit would end every file at once, but it would also hide a
 // passing file's leak. docs/testing.md#hung-tests-and-open-files
 
-let failed = false;
+const tests: TestContext[] = [];
 let bound: NodeJS.Timeout | undefined;
 let prompt: NodeJS.Timeout | undefined;
 
@@ -30,12 +30,12 @@ process.on("beforeExit", () => {
   clearTimeout(prompt);
 });
 
-// afterEach hooks run only for tests, so the context is a test's.
+// afterEach hooks run only for tests, so the context is a test's. Whether it
+// passed is read only after the file's tests finish: node:test skips a test's
+// later after hooks once one throws, as the failure guard's check does, so a
+// hook added here could miss that failure.
 afterEach((context) => {
-  const test = context as TestContext;
-  test.after(() => {
-    if (!test.passed) failed = true;
-  });
+  tests.push(context as TestContext);
 });
 
 // node:test runs a file's root after hooks once its last test finishes, in
@@ -52,7 +52,7 @@ after((context) => {
   // node:test skips the rest of the root after hooks once one fails, this one
   // included, and then the bound above ends the file.
   (context as TestContext).after(() => {
-    if (failed)
+    if (tests.some((test) => !test.passed))
       prompt = setTimeout(() => {
         // Let the runner's report of the failure reach its parent first.
         process.stdout.write("", () => process.exit(1));

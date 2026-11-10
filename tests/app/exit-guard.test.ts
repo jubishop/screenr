@@ -116,6 +116,28 @@ after(() => console.log("cleanup ran"));
   assert.doesNotMatch(output, /was still running/);
 });
 
+test("a file whose test failed only in its own cleanup ends once its after hooks finish, without waiting out the bound", async (t) => {
+  // node:test skips a test's later after hooks once one throws, as the failure
+  // guard's check does for a line nothing captured, and a cleanup that fails
+  // often leaves what it would have closed running.
+  const { code, output } = await runGuarded(
+    t,
+    `import { test } from "node:test";
+test("fails in its cleanup and leaves an interval", (t) => {
+  setInterval(() => {}, 1000);
+  t.after(() => { throw new Error("cleanup failed"); });
+});
+`,
+  );
+  assert.equal(code, 1, output);
+  assert.match(
+    output,
+    /^not ok 1 - fails in its cleanup and leaves an interval$/m,
+  );
+  assert.match(output, /cleanup failed/);
+  assert.doesNotMatch(output, /was still running/);
+});
+
 test("a test that awaits a promise that never settles fails by name at the test timeout, and its file ends with it", async (t) => {
   // The sample's wait never settles, so a 1-second test timeout ends it
   // however long the machine takes, as npm test's timeout would. Its finally
