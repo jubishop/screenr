@@ -5,6 +5,7 @@ import { createServer } from "node:http";
 import { resolve } from "node:path";
 import { test } from "node:test";
 import { promisify } from "node:util";
+import { hang } from "./process-waits";
 
 const execute = promisify(execFile);
 
@@ -49,7 +50,7 @@ test("production catalog fixtures require an explicit isolated browser environme
        import {db} from ${JSON.stringify(resolve("src/server/db.ts"))};
        try { console.log(JSON.stringify(await searchTitles("local"))); } finally { await db.end(); }`,
       ],
-      { env: { ...env, ...overrides }, timeout: 5000 },
+      { env: { ...env, ...overrides }, timeout: hang },
     );
   }
   const result = await search();
@@ -99,7 +100,7 @@ test("the browser catalog opt-in does not enable production email capture", asyn
           BETTER_AUTH_URL: "http://127.0.0.1:32100",
           EMAIL_TRANSPORT: "file",
         },
-        timeout: 5000,
+        timeout: hang,
       },
     ),
     /File email capture is disabled in production/,

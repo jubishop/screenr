@@ -15,6 +15,7 @@ import {
   bearerFor,
   signIn,
 } from "./social-fixture";
+import { hang } from "./process-waits";
 
 const { POST, GET } = await import("../../src/app/api/screenr/[action]/route");
 const { auth } = await import("../../src/server/auth");
@@ -549,7 +550,7 @@ test("deployment rejects a minimum iPhone build that is not a whole number", asy
     promisify(execFile)(
       process.execPath,
       ["--import", "tsx", "scripts/validate-config.ts"],
-      { env: { ...env, SCREENR_IOS_MINIMUM_BUILD: minimum }, timeout: 15_000 },
+      { env: { ...env, SCREENR_IOS_MINIMUM_BUILD: minimum }, timeout: hang },
     );
   await Promise.all([
     ...["", "42"].map(check),

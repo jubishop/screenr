@@ -11,6 +11,7 @@ import {
   assertNotLogged,
   testDatabaseURL,
 } from "./social-fixture";
+import { hang } from "./process-waits";
 
 process.env.EMAIL_TRANSPORT = "resend";
 process.env.RESEND_API_KEY = "test-key-never-used-on-the-network";
@@ -275,8 +276,8 @@ test("permanent Resend rejections are not retried; timeouts, conflicts, limits, 
   assert.match(sent[0], /975310/);
 });
 
-async function until(condition: () => boolean, limit = 2_000) {
-  const deadline = Date.now() + limit;
+async function until(condition: () => boolean) {
+  const deadline = Date.now() + hang;
   while (!condition() && Date.now() < deadline) await setTimeout(5);
   assert.ok(condition(), "Timed out");
 }
@@ -382,7 +383,7 @@ test("the worker refuses to start without the Resend transport, key, and sender"
     ["EMAIL_TRANSPORT", "RESEND_API_KEY", "EMAIL_FROM"].map(async (name) => {
       const { stderr } = await promisify(execFile)(process.execPath, worker, {
         env: { ...process.env, [name]: "" },
-        timeout: 15_000,
+        timeout: hang,
       }).then(
         () => assert.fail(`The worker must not start without ${name}.`),
         (error: Error & { stderr: string }) => error,
@@ -410,7 +411,7 @@ test("the worker deletes expired jobs on its first pass and exits cleanly on SIG
   try {
     // The worker handles SIGTERM before its first pass, which deletes
     // expired jobs.
-    const deadline = Date.now() + 15_000;
+    const deadline = Date.now() + hang;
     while ((await db.query("SELECT 1 FROM email_job")).rowCount) {
       assert.equal(child.exitCode, null, output);
       assert.ok(Date.now() < deadline, `No expired job cleanup. ${output}`);
@@ -418,11 +419,15 @@ test("the worker deletes expired jobs on its first pass and exits cleanly on SIG
     }
     child.kill("SIGTERM");
     // A stopping worker finishes its pass, ends its pause early, then closes
-    // the database pool and exits.
+    // the database pool and exits. Its pause is only a second, so this bound
+    // only ends a hang. Ending the bound's timer lets the file finish.
+    const timer = new AbortController();
     const [code, signal] = await Promise.race([
       exited,
-      setTimeout(5_000).then(() => assert.fail("The worker did not stop.")),
-    ]);
+      setTimeout(hang, undefined, { signal: timer.signal }).then(() =>
+        assert.fail("The worker did not stop."),
+      ),
+    ]).finally(() => timer.abort());
     // Push delivery, without APNs settings, and Pushover alerts, without
     // Pushover settings, each say once that they are off. Nothing else is
     // printed.
@@ -475,12 +480,13 @@ test("the worker keeps running while PostgreSQL is unreachable, logs the email l
     await until(
       () =>
         logged("worker failed") === 1 && logged("worker cleanup failed") === 2,
-      10_000,
     );
     await setTimeout(2_500);
     assert.equal(child.exitCode, null, output);
     child.kill("SIGTERM");
-    // A stopping worker ends its pause early.
+    // A stopping worker ends its pause early. This bound is what the test
+    // checks, so it stays tight: a worker that slept out its pause would stop
+    // about 3.5 seconds later.
     const [code, signal] = await Promise.race([
       exited,
       setTimeout(2_000).then(() => assert.fail("The worker did not stop.")),

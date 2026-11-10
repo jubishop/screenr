@@ -14,6 +14,7 @@ import {
   setup,
 } from "./social-fixture";
 import type { FeedItem } from "../../src/shared";
+import { hang } from "./process-waits";
 
 const { POST: action } =
   await import("../../src/app/api/screenr/[action]/route");
@@ -650,7 +651,7 @@ test("deployment accepts the owner and Pushover settings only when well formed a
     promisify(execFile)(
       process.execPath,
       ["--import", "tsx", "scripts/validate-config.ts"],
-      { env: { ...env, ...settings }, timeout: 15_000 },
+      { env: { ...env, ...settings }, timeout: hang },
     );
   const rejects = (settings: Record<string, string>, message: RegExp) =>
     assert.rejects(check(settings), (error: { stderr: string }) => {

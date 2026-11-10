@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { promisify } from "node:util";
 import { useDatabase, setup, db, testDatabaseURL } from "./social-fixture";
+import { hang } from "./process-waits";
 useDatabase();
 
 // A real backup and restore check against the test server
@@ -135,7 +136,7 @@ test("a backup restores through the weekly restore check", async () => {
       },
       // Dropping a database waits for a checkpoint, which can take many
       // seconds on a busy machine. Only a hang reaches this bound.
-      timeout: 180_000,
+      timeout: hang,
     });
     return { result, pid: result.child.pid };
   };

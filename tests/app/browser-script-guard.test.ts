@@ -7,19 +7,15 @@ import { join, resolve } from "node:path";
 import { format, promisify } from "node:util";
 import { test } from "node:test";
 import { createBrowserProxy } from "../../scripts/browser-proxy";
+import { hang } from "./process-waits";
 
 const execute = promisify(execFile);
-
-// A nested Playwright run takes a few seconds idle, but load from parallel
-// checks once stretched one past a 20-second bound (#615). Its bound only ends
-// a hang. See memory/process-test-waits.md.
-const hang = 180_000;
 
 // A nested test's timeout only ends a test that its guard failed to stop. The
 // runs that check promptness assert that no test timed out, so a guarded
 // failure must still come at once, and the two tests that would time out
 // without the guard still finish within the hang bound.
-const nestedTimeout = 60_000;
+const nestedTimeout = hang / 3;
 
 test("a failed script in a manually created context fails promptly and keeps the browser error and trace", async (t) => {
   await mkdir(resolve(".cache"), { recursive: true });

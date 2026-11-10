@@ -8,6 +8,7 @@ import {
   captureFailures,
   assertNotLogged,
 } from "./social-fixture";
+import { hang } from "./process-waits";
 
 const { migrate } = await import("../../scripts/migrate");
 const { initialScreen, loadScreen } = await import("../../src/server/screens");
@@ -890,16 +891,13 @@ test("the search API returns catalog errors with their statuses", async (t) => {
   );
 });
 
-// The bound on the hold below only ends a hang: on a loaded machine, one
-// catalog request has reached the server well after another started (#624).
-// See memory/process-test-waits.md.
-const hang = 180_000;
-
 // Holds every catalog reply until `count` requests are open at once, and
 // resolves whether they were. Requests made one after another never are:
 // each waits for a reply that only the next one's arrival would send. Then
 // the bound sends the replies so the page can finish, and the test fails on
-// the result. The hold ends with the test.
+// the result. The hold ends with the test. The bound only ends a hang: on a
+// loaded machine, one catalog request has reached the server well after
+// another started (#624).
 function holdReplies(t: TestContext, count: number) {
   const open = new Set<ServerResponse>();
   const { promise, resolve } = Promise.withResolvers<boolean>();

@@ -10,6 +10,7 @@ import type {
   TestResult,
 } from "@playwright/test/reporter";
 import FailureLineReporter from "../browser/failure-line-reporter";
+import { hang } from "./process-waits";
 
 // Test runs flag the failure lines no test expects:
 // docs/testing.md#failure-lines
@@ -42,7 +43,7 @@ async function runGuarded(t: TestContext, source: string) {
         file,
       ],
       {
-        timeout: 30_000,
+        timeout: hang,
         // Without this, the nested runner reports to this runner instead of stdout.
         env: { ...process.env, NODE_TEST_CONTEXT: undefined },
       },
@@ -145,11 +146,12 @@ test("a test the guard fails still runs its file's afterEach hooks and its own c
     t,
     `import { afterEach, test } from "node:test";
 import { createServer, type Server } from "node:net";
-// An open server keeps the file running, so end it if a cleanup never ran.
+// An open server keeps the file running, so end it if a cleanup never ran,
+// before the run's own bound would.
 setTimeout(() => {
   console.log("a server stayed open");
   process.exit(2);
-}, 20_000).unref();
+}, ${hang / 2}).unref();
 let server: Server | undefined;
 afterEach((t) => {
   server?.close();

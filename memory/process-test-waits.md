@@ -85,3 +85,14 @@ from 28 to 411, and in 18 runs six at a time at load averages from 5 to 7.
 - In the Python tests, pass `HANG_SECONDS` from `tests/_process_waits.py` as
   the `timeout` of every process wait, such as `subprocess.run` or
   `communicate`. `tests/test_process_waits.py` refuses any other bound.
+- In the application tests, pass `hang` from `tests/app/process-waits.ts`,
+  the same 180 seconds in milliseconds, as the `timeout` of every process
+  call, such as `execFile` or `spawnSync`, and bound every other wait on a
+  process with it, such as a deadline for its output or a request to its
+  server. `tests/app/process-waits.test.ts` refuses any other `timeout` on a
+  process call. End a bound's timer once its race settles, as the worker stop
+  test in `tests/app/email.test.ts` does: a pending timer of that length held
+  the file open for three minutes after its tests passed. Keep a bound tight
+  only when the test checks it on purpose, and say why beside it. List such a
+  `timeout` in that check's `deliberate` set, as the 1-second bound on the
+  stalled health check in `tests/app/operations.test.ts` is.

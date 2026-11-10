@@ -4,6 +4,7 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { test } from "node:test";
 import { promisify, stripVTControlCharacters } from "node:util";
+import { hang } from "./process-waits";
 
 const execute = promisify(execFile);
 
@@ -34,7 +35,7 @@ test("failing", () => { throw new Error("expected failure"); });
 
   const run = (file: string) =>
     execute("npm", ["run", "test:coverage", "--", join(directory, file)], {
-      timeout: 60000,
+      timeout: hang,
       // Without this, the nested runner reports to this runner instead of stdout.
       env: { ...process.env, NODE_TEST_CONTEXT: undefined },
     });

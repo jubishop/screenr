@@ -6,8 +6,16 @@ import { cp, mkdtemp, mkdir, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import "./social-fixture";
+import { hang } from "./process-waits";
 
 const execute = promisify(execFile);
+
+// This bound is what the test checks, so it stays tight. A fake health
+// request without a deadline stalls for 3 seconds, and activation would still
+// fail its checks and roll back, only minutes later. Ending the run after a
+// second shows that activation gives each request its own deadline. The run
+// takes about 15 ms idle.
+const activationBound = 1000;
 
 test("activation reaches rollback when its health request stalls", async () => {
   // System administration is the boundary: no real host paths or services change.
@@ -42,7 +50,7 @@ test("activation reaches rollback when its health request stalls", async () => {
       resolve("ops/activate.sh"),
       "/opt/screenr/releases/candidate",
     ],
-    { timeout: 1000 },
+    { timeout: activationBound },
   ).then(
     () => assert.fail("A stalled health check must fail activation."),
     (
@@ -91,7 +99,7 @@ test("migration rejects an invalid SQL filename before applying domain changes",
       ["--import", "tsx", "scripts/migrate.ts"],
       {
         cwd: directory,
-        timeout: 15000,
+        timeout: hang,
       },
     ).then(
       () => assert.fail("Invalid migration filenames must reject the release."),
@@ -106,7 +114,7 @@ test("migration rejects an invalid SQL filename before applying domain changes",
       ["--import", "tsx", "scripts/migrate.ts"],
       {
         cwd: directory,
-        timeout: 15000,
+        timeout: hang,
       },
     );
     assert.match(recovered.stdout, /Database migrations applied/);

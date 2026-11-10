@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { promisify } from "node:util";
+import { hang } from "./process-waits";
 
 const execute = promisify(execFile);
 
@@ -34,7 +35,7 @@ Object.defineProperty(process.versions, "node", { value: process.env.TEST_NODE_V
     for (const version of [...accepted, "22.18.0", "23.11.1"]) {
       const result = await execute("npm", ["run", "dev"], {
         cwd: directory,
-        timeout: 10000,
+        timeout: hang,
         env: {
           ...process.env,
           NODE_OPTIONS: `--require=${JSON.stringify(preload)}`,

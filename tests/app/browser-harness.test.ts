@@ -14,6 +14,7 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { promisify } from "node:util";
+import { hang } from "./process-waits";
 
 const execute = promisify(execFile);
 const root = process.cwd();
@@ -198,7 +199,7 @@ test("an occupied fixture port fails before contacting PostgreSQL", async (t) =>
             TEST_DATABASE_URL: "postgresql://127.0.0.1:1/unreachable_test",
             SCREENR_BROWSER_PORT: String(address.port - offset),
           },
-          timeout: 5000,
+          timeout: hang,
         },
       ),
       (error: Error) => {
@@ -236,7 +237,7 @@ test("standard and diagnostic browser commands select their mode despite inherit
     const { stdout } = await execute("npm", ["run", command], {
       cwd: directory,
       env: { ...process.env, SCREENR_BROWSER_MODE: inherited },
-      timeout: 10000,
+      timeout: hang,
     });
     assert.ok(stdout.includes(`selected-mode=${expected}`), stdout);
   }
@@ -269,7 +270,7 @@ test("the browser command rejects focused tests", async (t) => {
         SCREENR_BROWSER_PORT: undefined,
         SCREENR_BROWSER_DATABASE: undefined,
       },
-      timeout: 30_000,
+      timeout: hang,
     });
   const header = 'import { test } from "@playwright/test";\n';
   await writeFile(spec, `${header}test("ordinary", async () => {});\n`);
