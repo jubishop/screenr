@@ -441,7 +441,8 @@ final class FeedTests: XCTestCase {
     XCTAssertEqual(
       names,
       [
-        "default", "empty", "incoming", "joined", "linked-reply", "newest-page", "older-page",
+        "default", "demo", "empty", "incoming", "joined", "linked-reply", "newest-page",
+        "older-page",
         "page", "unavailable-link",
       ]
     )
