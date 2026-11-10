@@ -122,10 +122,18 @@ public struct IdentityProviders: Sendable {
   // Picks up an invitation from Safari before a new person's first sign-in,
   // or nil where the app cannot ask, as in Screenr Dev against a server.
   public let pickup: InvitationPickup?
+  // Where the sign-in screens log Sign in with Apple failing before the server.
+  public let log: Log
 
-  public init(authorization: Authorization, google: GoogleSignIn, pickup: InvitationPickup? = nil) {
+  public init(
+    authorization: Authorization,
+    google: GoogleSignIn,
+    pickup: InvitationPickup? = nil,
+    log: Log = .session
+  ) {
     self.authorization = authorization
     self.google = google
     self.pickup = pickup
+    self.log = log
   }
 }
