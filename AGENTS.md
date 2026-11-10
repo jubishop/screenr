@@ -50,6 +50,9 @@ Label every issue when you create it, and relabel it when its scope changes:
   central to the issue.
 - `needs decision` while the issue waits on the user's product or policy
   choice. Remove it once the user decides.
+- `sentry-feedback` or `sentry-issue` when the issue tracks a Sentry feedback
+  item or error issue. The daily Sentry intake and the analysis skills add
+  them; see [Sentry triage](docs/development-workflow.md#sentry-triage).
 
 Label descriptions in the repository define each label. Use only existing
 labels, and change the label set only with the user's approval.

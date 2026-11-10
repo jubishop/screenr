@@ -1266,23 +1266,22 @@ what members write:
    the app build, with no member text or screenshots. Agents read the content
    through Sentry while working the issue.
 
-**Implementation:** `.github/workflows/sentry-feedback.yml` runs
-`bin/sentry-feedback-issues` daily at 14:00 UTC, and on demand with
-`gh workflow run sentry-feedback.yml`. It reads unresolved feedback from the
-`screenr-ios` Sentry project with the read-only `SENTRY_AUTH_TOKEN`
-repository secret, and needs only `contents: read` and `issues: write`. As
-in PodHaven, it skips feedback that is resolved or that Sentry marked as
-spam; Sentry flagged the #249 test feedback as spam until it was marked not
-spam. It files each item as `investigation` and `area: ios`, with a hidden
-`sentry-feedback:screenr-ios:<id>` marker. It skips any feedback whose marker
-or link already appears in an open or closed issue that the workflow's
-`github-actions` bot or the repository owner opened. Anyone can open an issue
-in this public repository, so an issue from anyone else could otherwise stop
-feedback from being filed. The issue copies a
-Sentry value only when it matches a strict pattern for an ID or a build, so
-member text cannot reach it. `tests/test_sentry_feedback_issues.py` covers
-the body, deduplication, and failures. Run the script with `--dry-run` to
-list what it would file.
+**Implementation:** the daily Sentry intake,
+`.github/workflows/sentry-intake.yml` running `bin/sentry-intake`, files the
+feedback issues, and since
+[issue #569](https://github.com/jubishop/screenr/issues/569) the error issues
+of the [Sentry triage decision](#sentry-triage-as-in-podhaven--2026-11-09)
+too; [daily Sentry intake](development-workflow.md#daily-sentry-intake)
+describes it. As in PodHaven, it skips feedback that is resolved or that
+Sentry marked as spam; Sentry flagged the #249 test feedback as spam until it
+was marked not spam. Each feedback issue has a hidden
+`sentry-feedback:screenr-ios:<id>` marker, and the intake skips any feedback
+whose marker or link already appears in an open or closed issue that the
+workflow's `github-actions` bot or the repository owner opened. Anyone can
+open an issue in this public repository, so an issue from anyone else could
+otherwise stop feedback from being filed. The issue copies a Sentry value
+only when it matches a strict pattern for an ID or a build, so member text
+cannot reach it.
 
 The app's form is in Settings
 ([issue #248](https://github.com/jubishop/screenr/issues/248)), as
@@ -1373,6 +1372,17 @@ replaced that CI.
 - No priority until analysis, or priority by error level at intake.
 - Copying the date and release into error intake issues.
 - Analysis from Sentry alone, without the journal.
+
+**Implementation note:** [Issue #569](https://github.com/jubishop/screenr/issues/569)
+extends the daily intake to error issues, the two labels, and the
+instruction comments, as
+[daily Sentry intake](development-workflow.md#daily-sentry-intake)
+describes. It created the labels with PodHaven's colors and descriptions on
+2026-11-09, and added them by hand to the closed tracking issues whose Sentry
+items were no longer unresolved, which the intake never reaches:
+[#273](https://github.com/jubishop/screenr/issues/273),
+[#613](https://github.com/jubishop/screenr/issues/613), and
+[#618](https://github.com/jubishop/screenr/issues/618).
 
 ### An `area: ios` label — 2026-10-13
 

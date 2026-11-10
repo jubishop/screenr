@@ -151,7 +151,7 @@ Sentry evidence; without a terminal, `--comments` alone prints only the
 comments.
 
 - The canonical issue is an open match, preferring one with the marker. The
-  daily intake workflow, `bin/sentry-feedback-issues`, may already have
+  daily intake workflow, `bin/sentry-intake`, may already have
   created an intake placeholder titled `Triage Sentry feedback <shortId>`.
   Its body holds only the marker, the linked short ID, the Pacific date, the
   build, and a privacy note, and it may carry an instruction comment. Its

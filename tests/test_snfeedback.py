@@ -15,7 +15,7 @@ from _process_waits import HANG_SECONDS
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "bin/snfeedback"
 FISH = shutil.which("fish")
-# The link that bin/sentry-feedback-issues writes, which is also Sentry's permalink.
+# The link that bin/sentry-intake writes, which is also Sentry's permalink.
 LINK = "https://artisanal-software.sentry.io/feedback/?feedbackSlug=screenr-ios%3A{}&project=4512251383513088"
 FINDINGS = "<!-- analyze-sentry-feedback-findings:start -->\n<!-- analyze-sentry-feedback-findings:end -->"
 BOT = {"__typename": "Bot", "login": "github-actions"}
