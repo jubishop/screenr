@@ -1,3 +1,4 @@
+import assert from "node:assert/strict";
 import { generateKeyPairSync } from "node:crypto";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
@@ -35,6 +36,8 @@ const { uploadPhoto } = await import("../../src/server/photos");
 const { saveServices } = await import("../../src/server/streaming-services");
 const { readNotification } = await import("../../src/server/notifications");
 const { releaseCalendar } = await import("../../src/server/title-release");
+const { seedDemoCircle } = await import("../../src/server/demo-circle");
+const { createAuth, reviewerEmail } = await import("../../src/server/auth");
 import type { StoredRelease } from "../../src/server/title-release";
 
 // Release status is derived on the fixtures' own date, so it never drifts.
@@ -73,6 +76,8 @@ const providerNames: Record<number, string> = {
   15: "Hulu",
   73: "Tubi TV",
   196: "Acorn TV Amazon Channel",
+  337: "Disney Plus",
+  350: "Apple TV",
   300: "Pluto TV",
   1899: "HBO Max",
   9999: "Harbor Cinema Club",
@@ -95,6 +100,75 @@ export const topTenTitles = [
   overview: "",
   poster: `/${name.toLowerCase().replaceAll(" ", "-")}.jpg`,
   providers: {},
+}));
+// The real titles of the demo circle for Apple's review, which the App Store
+// screenshots show, with overviews written for the fixtures and services
+// that offered them in the US. Only the cases that seed the circle store them.
+const demoTitles = (
+  [
+    [
+      "movie:346648",
+      "Paddington 2",
+      "2018-01-12",
+      "Paddington takes on odd jobs to buy the perfect birthday present for his aunt.",
+      { rent: [2] },
+    ],
+    [
+      "movie:129",
+      "Spirited Away",
+      "2002-09-20",
+      "A girl wanders into a world of spirits and must find a way to free her parents.",
+      { flatrate: [1899] },
+    ],
+    [
+      "movie:2493",
+      "The Princess Bride",
+      "1987-09-25",
+      "A grandfather reads his grandson a tale of true love and high adventure.",
+      { flatrate: [337] },
+    ],
+    [
+      "movie:381284",
+      "Hidden Figures",
+      "2016-12-25",
+      "Three mathematicians help NASA send an astronaut into orbit.",
+      { flatrate: [337] },
+    ],
+    [
+      "tv:97546",
+      "Ted Lasso",
+      "2020-08-14",
+      "An American football coach takes over a struggling English soccer club.",
+      { flatrate: [350] },
+      "Apple TV",
+    ],
+    [
+      "tv:68595",
+      "Planet Earth II",
+      "2016-11-06",
+      "Wildlife on islands, mountains, jungles, deserts, grasslands, and in cities.",
+      { rent: [2] },
+      "BBC One",
+    ],
+  ] satisfies [
+    id: string,
+    name: string,
+    released: string,
+    overview: string,
+    providers: CatalogTitle["providers"],
+    network?: string,
+  ][]
+).map(([id, name, released, overview, providers, network]): CatalogTitle => ({
+  id,
+  name,
+  released,
+  overview,
+  poster: `/${name.toLowerCase().replaceAll(" ", "-")}.jpg`,
+  providers,
+  ...(network && {
+    release: { premiere: released, network, seasons: [] },
+  }),
+  stored: false,
 }));
 const catalog: CatalogTitle[] = [
   {
@@ -198,6 +272,7 @@ const catalog: CatalogTitle[] = [
     },
   },
   ...topTenTitles,
+  ...demoTitles,
 ];
 
 function catalogReply(url: URL): [number, unknown] {
@@ -354,16 +429,50 @@ const names = {
   hana: "Hana Ito",
   nora: "Nora Quinn",
 } as const;
-// Pat is invited and verified but has not set up a profile.
-export type Viewer = keyof typeof names | "pat";
+// Pat is invited and verified but has not set up a profile. The demo
+// circle's reviewer joins the world only in the cases that seed the circle.
+type Member = keyof typeof names | "pat";
+export type Viewer = Member | "demo_reviewer";
 
 // Feed order compares times to the millisecond, so each entry or reply that
 // moves an entry waits for the next one.
-const tick = () => new Promise((resolve) => setTimeout(resolve, 2));
+const tick = () => new Promise<void>((resolve) => setTimeout(resolve, 2));
 async function step<T>(work: Promise<T>) {
   const result = await work;
   await tick();
   return result;
+}
+
+// Stores a catalog title as the catalog would, so reads find it current.
+async function storeTitle(title: CatalogTitle) {
+  const [kind, id] = title.id.split(":");
+  await db.query(
+    `INSERT INTO title(id,kind,tmdb_id,name,overview,poster_path,release_date,release,vote_average,vote_count)
+    VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+    [
+      title.id,
+      kind,
+      id,
+      title.name,
+      title.overview,
+      title.poster,
+      title.released,
+      title.release === null
+        ? null
+        : JSON.stringify(
+            title.release ??
+              (kind === "movie"
+                ? { theatrical: [title.released], digital: [] }
+                : {
+                    premiere: title.released,
+                    network: "Netflix",
+                    seasons: [],
+                  }),
+          ),
+      title.votes?.[0] ?? null,
+      title.votes?.[1] ?? null,
+    ],
+  );
 }
 
 // The members, relationships, and activity every case reads. Alice is the
@@ -375,39 +484,11 @@ export async function buildWorld() {
   await db.query(
     'TRUNCATE "user", verification, title RESTART IDENTITY CASCADE',
   );
-  for (const title of catalog.filter((item) => item.stored !== false)) {
-    const [kind, id] = title.id.split(":");
-    await db.query(
-      `INSERT INTO title(id,kind,tmdb_id,name,overview,poster_path,release_date,release,vote_average,vote_count)
-      VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
-      [
-        title.id,
-        kind,
-        id,
-        title.name,
-        title.overview,
-        title.poster,
-        title.released,
-        title.release === null
-          ? null
-          : JSON.stringify(
-              title.release ??
-                (kind === "movie"
-                  ? { theatrical: [title.released], digital: [] }
-                  : {
-                      premiere: title.released,
-                      network: "Netflix",
-                      seasons: [],
-                    }),
-            ),
-        title.votes?.[0] ?? null,
-        title.votes?.[1] ?? null,
-      ],
-    );
-  }
+  for (const title of catalog.filter((item) => item.stored !== false))
+    await storeTitle(title);
   const placeholders = new Placeholders();
   const users = {} as Record<Viewer, string>;
-  async function join(username: Viewer, token: string) {
+  async function join(username: Member, token: string) {
     users[username] = await pending(username, token);
     placeholders.add(users[username], `user-${username}`);
     if (username !== "pat")
@@ -625,7 +706,22 @@ export async function buildWorld() {
   };
   await readNotification(u.alice, notification("friend_accepted", u.ben));
 
-  // Each stored record keeps one placeholder across fixtures.
+  await labelRecords(placeholders);
+
+  // Sessions are part of the saved world, so restoring it keeps them valid.
+  // Each viewer signs in as the app does and keeps a bearer token.
+  const tokens = {} as Record<Viewer, string>;
+  for (const viewer of Object.keys(users) as Member[])
+    tokens[viewer] = await bearerFor(users[viewer]);
+  // Alice's unused one-signup link, which a setup case sends.
+  const invitations = { spare: spare.token };
+  return { users, ids, placeholders, tokens, invitations };
+}
+export type World = Awaited<ReturnType<typeof buildWorld>>;
+
+// Each stored record keeps one placeholder across fixtures, named for its
+// owner's username and title.
+async function labelRecords(placeholders: Placeholders) {
   const { rows } = await db.query<{ id: string; label: string }>(
     `SELECT c.id::text,'conversation/'||p.username||'/'||c.title_id AS label
       FROM conversation c JOIN profile p ON p.user_id=c.owner_id
@@ -646,17 +742,55 @@ export async function buildWorld() {
       FROM invitation i JOIN profile p ON p.user_id=i.creator_id`,
   );
   for (const { id, label } of rows) placeholders.add(id, labelUuid(label));
-
-  // Sessions are part of the saved world, so restoring it keeps them valid.
-  // Each viewer signs in as the app does and keeps a bearer token.
-  const tokens = {} as Record<Viewer, string>;
-  for (const viewer of Object.keys(users) as Viewer[])
-    tokens[viewer] = await bearerFor(users[viewer]);
-  // Alice's unused one-signup link, which a setup case sends.
-  const invitations = { spare: spare.token };
-  return { users, ids, placeholders, tokens, invitations };
 }
-export type World = Awaited<ReturnType<typeof buildWorld>>;
+
+// Seeds the demo circle for Apple's review into the world, as the App Store
+// screenshots' fixtures read it: every demo account keeps its username as its
+// placeholder, and the reviewer signs in.
+export async function seedDemo(world: World) {
+  for (const title of demoTitles) await storeTitle(title);
+  await seedDemoCircle(tick);
+  const { rows } = await db.query<{ user_id: string; username: string }>(
+    "SELECT user_id,username FROM profile WHERE demo",
+  );
+  for (const { user_id, username } of rows)
+    world.placeholders.add(user_id, `user-${username}`);
+  await labelRecords(world.placeholders);
+  const reviewer = rows.find(({ username }) => username === "demo_reviewer");
+  world.users.demo_reviewer = reviewer!.user_id;
+  world.tokens.demo_reviewer = await reviewerBearer();
+}
+
+// The reviewer signs in with the fixed code, as App Review does, since the
+// server sends no code to a seeded address.
+async function reviewerBearer() {
+  const code = "246810";
+  process.env.REVIEW_SIGN_IN_CODE = code;
+  try {
+    const auth = createAuth({ rateLimit: false, sendCode: async () => {} });
+    const post = (path: string, body: unknown) =>
+      auth.handler(
+        new Request(`http://localhost:3000/api/auth/${path}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        }),
+      );
+    const email = reviewerEmail;
+    const requested = await post("email-otp/send-verification-otp", {
+      email,
+      type: "sign-in",
+    });
+    assert.equal(requested.status, 200);
+    const response = await post("sign-in/email-otp", { email, otp: code });
+    assert.equal(response.status, 200);
+    const token = response.headers.get("set-auth-token");
+    assert.ok(token);
+    return token;
+  } finally {
+    delete process.env.REVIEW_SIGN_IN_CODE;
+  }
+}
 
 // Serves the catalog and Netflix's pages on a loopback port until the
 // returned function closes it.

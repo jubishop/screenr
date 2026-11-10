@@ -1,0 +1,14 @@
+#!/bin/sh
+# Bring the App Store listing in App Store Connect in line with
+# app-store/listing.json and app-store/screenshots, or copy the screenshots
+# that the last bin/check-ios run took into the listing. scripts/app-store-listing.ts
+# does the work; see docs/running-screenr.md#app-store-listing. Run with
+# --help for options.
+set -eu
+root=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
+cd "$root"
+if [ ! -x node_modules/.bin/tsx ]; then
+  echo "error: run npm ci first." >&2
+  exit 1
+fi
+exec node_modules/.bin/tsx scripts/app-store-listing.ts "$@"

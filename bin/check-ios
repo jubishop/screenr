@@ -123,6 +123,10 @@ STOP_GRACE_SECONDS = 5
 # xcodebuild passes the directory to the tests in SCREENR_PUSH_RELAY. It is
 # inside OUTPUT, which each run removes.
 PUSH_RELAY = OUTPUT / "push-relay"
+# The App Store listing's screenshots, which AppStoreScreenshotTests writes
+# here as SCREENR_SCREENSHOTS names, and bin/app-store-listing --screenshots
+# copies into app-store/screenshots. Each run removes them with OUTPUT.
+SCREENSHOTS = OUTPUT / "screenshots"
 PUSH_TOPIC = "com.artisanalsoftware.Screenr.dev"
 PUSH_POLL_SECONDS = 0.5
 # How long simctl gets to send a push, since Simulator tools can hang under
@@ -560,7 +564,8 @@ def main():
                                     f"platform=iOS Simulator,id={udid}", "-parallel-testing-enabled", "NO",
                                     "-collect-test-diagnostics", "never",
                                     "-resultBundlePath", str(tests), "test"], args.test_timeout,
-                {"TEST_RUNNER_SCREENR_PUSH_RELAY": str(PUSH_RELAY)})
+                {"TEST_RUNNER_SCREENR_PUSH_RELAY": str(PUSH_RELAY),
+                 "TEST_RUNNER_SCREENR_SCREENSHOTS": str(SCREENSHOTS)})
         check_results("Simulator tests", tests, tests=True)
     finally:
         if not args.simulator:

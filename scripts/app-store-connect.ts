@@ -6,7 +6,8 @@ import { applePrivateKey, signAppleJWT } from "../src/server/apple-jwt";
 // external group already tests, clear the way for Beta App Review, wait for
 // an uploaded build to finish processing, set its What to Test notes, add it
 // to the tester groups, and submit it for Beta App Review. Its tester flags
-// add, remove, and list the external group's testers by email.
+// add, remove, and list the external group's testers by email. The App Store
+// listing upload in scripts/app-store-listing.ts uses the same client.
 
 const origin = "https://api.appstoreconnect.apple.com";
 // Apple refuses tokens that expire more than 20 minutes after they are issued.
@@ -32,18 +33,18 @@ export function credentialsFrom(env: Environment): Credentials {
   };
 }
 
-type Link = { data?: { type: string; id: string } };
-type Resource<Attributes> = {
+type Link = { data?: { type: string; id: string } | null };
+export type Resource<Attributes> = {
   type?: string;
   id: string;
   attributes: Attributes;
   relationships?: Record<string, Link>;
 };
-type One<Attributes> = {
+export type One<Attributes> = {
   data: Resource<Attributes>;
   included?: Resource<Record<string, unknown>>[];
 };
-type Many<Attributes> = {
+export type Many<Attributes> = {
   data: Resource<Attributes>[];
   included?: Resource<Record<string, unknown>>[];
   links?: { next?: string };
@@ -65,8 +66,29 @@ function problem(text: string) {
   return text.slice(0, 500) || "no details";
 }
 
+// A refused request, with the status Apple answered.
+export class AppStoreConnectError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+  ) {
+    super(message);
+  }
+}
+
+// A part of a file that App Store Connect asks to have sent, such as a
+// screenshot's, to one of Apple's asset upload URLs.
+export type UploadOperation = {
+  method: string;
+  url: string;
+  offset: number;
+  length: number;
+  requestHeaders?: { name: string; value: string }[];
+};
+
 // Each request signs a new token, so a long wait never outlives one. A path
-// may also be a full API URL, such as a list's link to its next page.
+// may also be a full API URL, such as a list's link to its next page. An
+// upload sends its part of a file where Apple said, without the token.
 export async function appStoreConnect(
   credentials: Credentials,
   fetcher: typeof fetch = fetch,
@@ -99,18 +121,60 @@ export async function appStoreConnect(
     });
     const text = await response.text();
     if (!response.ok)
-      throw new Error(
+      throw new AppStoreConnectError(
         `App Store Connect ${method} ${url.pathname} failed with ${response.status}: ${problem(text)}`,
+        response.status,
       );
     return (text ? JSON.parse(text) : undefined) as T;
+  }
+  async function upload(operation: UploadOperation, file: Uint8Array) {
+    const url = new URL(operation.url);
+    if (url.protocol !== "https:")
+      throw new Error(
+        `Refusing to upload to ${url.origin}, which is not HTTPS.`,
+      );
+    const response = await fetcher(url.href, {
+      method: operation.method,
+      headers: Object.fromEntries(
+        (operation.requestHeaders ?? []).map(({ name, value }) => [
+          name,
+          value,
+        ]),
+      ),
+      // A copy of the part, in its own buffer, as fetch takes.
+      body: new Uint8Array(
+        file.subarray(operation.offset, operation.offset + operation.length),
+      ),
+    });
+    if (!response.ok)
+      throw new AppStoreConnectError(
+        `App Store Connect's upload to ${url.host} failed with ${response.status}: ${problem(await response.text())}`,
+        response.status,
+      );
   }
   return {
     get: <T>(path: string) => request<T>("GET", path),
     post: <T>(path: string, body: unknown) => request<T>("POST", path, body),
     patch: <T>(path: string, body: unknown) => request<T>("PATCH", path, body),
-    delete: <T>(path: string, body: unknown) =>
+    delete: <T>(path: string, body?: unknown) =>
       request<T>("DELETE", path, body),
+    upload,
   };
+}
+
+// Every resource of a list, following Apple's links to the next page.
+export async function every<Attributes>(
+  api: AppStoreConnect,
+  path: string,
+): Promise<Resource<Attributes>[]> {
+  const found: Resource<Attributes>[] = [];
+  let next: string | undefined = path;
+  while (next) {
+    const page: Many<Attributes> = await api.get(next);
+    found.push(...page.data);
+    next = page.links?.next;
+  }
+  return found;
 }
 
 export type AppStoreConnect = Awaited<ReturnType<typeof appStoreConnect>>;
@@ -124,7 +188,7 @@ export type Waiting = {
   interval?: number;
 };
 
-const query = (path: string, parameters: Record<string, string>) =>
+export const query = (path: string, parameters: Record<string, string>) =>
   `${path}?${new URLSearchParams(parameters)}`;
 
 export async function findApp(

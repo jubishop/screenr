@@ -13,8 +13,10 @@ import {
   pending,
   person,
 } from "./social-fixture";
+import { hang } from "./process-waits";
 const { createAuth } = await import("../../src/server/auth");
-const { seedDemoCircle } = await import("../../src/server/demo-circle");
+const { demoInvitationStatus, seedDemoCircle } =
+  await import("../../src/server/demo-circle");
 const { createInvitation, completeSignup } =
   await import("../../src/server/invitations");
 const { profileFor } = await import("../../src/server/profiles");
@@ -470,6 +472,64 @@ test("joining through a demo invitation joins the demo circle", async () => {
     (await db.query('SELECT 1 FROM "user" WHERE id=$1', [newcomer])).rowCount,
     0,
   );
+});
+
+test("the seed issues the review notes' demo invitation, which joins the circle as Maya's friend and keeps its link across reseeds", async () => {
+  assert.equal(await demoInvitationStatus(), undefined);
+  const alice = await person("alice");
+  await seedDemoCircle();
+  const first = await demoInvitationStatus();
+  assert.ok(first);
+  const token = /\/join\/([A-Za-z0-9_-]{43})$/.exec(first.url)?.[1];
+  assert.ok(token, first.url);
+  assert.equal(first.remaining, 12);
+  const days = (Date.parse(first.expiresAt) - Date.now()) / 86_400_000;
+  assert.ok(days > 89 && days <= 90, `expires in ${days} days`);
+
+  const newcomer = await pending("newcomer", token);
+  await completeSignup(newcomer, "Newcomer", "newcomer");
+  assert.ok((await profileFor(newcomer, "demo_maya")).accepted_at);
+  await assert.rejects(profileFor(alice, "newcomer"), denied.person);
+  assert.equal((await demoInvitationStatus())?.remaining, 11);
+
+  // Reseeding removes the newcomer and issues the same link afresh.
+  await seedDemoCircle();
+  assert.deepEqual(
+    { ...(await demoInvitationStatus()), expiresAt: undefined },
+    { ...first, expiresAt: undefined },
+  );
+  assert.equal(
+    (await db.query('SELECT 1 FROM "user" WHERE id=$1', [newcomer])).rowCount,
+    0,
+  );
+});
+
+test("the review details script prints the sign-in code and demo invitation to a pipe", async () => {
+  const details = (code: string) =>
+    execute(
+      resolve(root, "node_modules/.bin/tsx"),
+      ["scripts/review-details.ts"],
+      {
+        cwd: root,
+        env: { ...process.env, REVIEW_SIGN_IN_CODE: code },
+        timeout: hang,
+      },
+    );
+  await assert.rejects(details(fixedCode), {
+    stderr:
+      "The demo circle has no demo invitation. Seed it with scripts/seed-review.ts first.\n",
+  });
+  await seedDemoCircle();
+  const { stdout } = await details(fixedCode);
+  assert.deepEqual(JSON.parse(stdout), {
+    reviewer,
+    signInCode: fixedCode,
+    invitation: await demoInvitationStatus(),
+  });
+  await assert.rejects(details("12345"), {
+    stderr:
+      "REVIEW_SIGN_IN_CODE is not six digits, so the reviewer cannot sign in.\n",
+  });
 });
 
 test("seeding never replaces an account outside the demo circle", async () => {

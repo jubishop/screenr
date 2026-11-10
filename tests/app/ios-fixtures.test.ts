@@ -19,6 +19,7 @@ import { fakeGoogle, serve } from "./identity-providers";
 import {
   buildWorld,
   jpeg,
+  seedDemo,
   startCatalog,
   topTenTitles,
   type Viewer,
@@ -184,6 +185,12 @@ const afterAliceFinishesMovies = (item: Case): Case => ({
   },
 });
 
+// A read by the demo circle's reviewer after the circle for Apple's review is
+// seeded, which the App Store screenshots show
+// (docs/running-screenr.md#app-store-listing).
+const demo = (path: string, description: string) =>
+  changed(screen("demo_reviewer", path, description), seedDemo);
+
 // Nora and Ben become friends, and Ben posts 51 times, so Nora's feed holds
 // more than a page (docs/title-feed.md#paged-histories): the newest page is
 // Ben's 50 latest posts, and the page before it his first post and the
@@ -267,6 +274,10 @@ async function manyNotifications(world: World) {
 
 const screens: Record<MemberRoute["kind"], Record<string, Case>> = {
   feed: {
+    demo: demo(
+      "/",
+      "The demo reviewer's feed: the demo friends' recommendations, reviews, watch statuses, and conversation.",
+    ),
     default: screen(
       "alice",
       "/",
@@ -368,6 +379,10 @@ const screens: Record<MemberRoute["kind"], Record<string, Case>> = {
     },
   },
   search: {
+    demo: demo(
+      "/search",
+      "Find a title for the demo reviewer, with the demo friends' recommendations.",
+    ),
     default: screen(
       "alice",
       "/search",
@@ -520,6 +535,10 @@ const screens: Record<MemberRoute["kind"], Record<string, Case>> = {
     ),
   },
   title: {
+    demo: demo(
+      "/titles/tv/97546",
+      "Ted Lasso for the demo reviewer, who wants to watch it: Priya recommends it, Theo is watching it, and Priya replied to the reviewer.",
+    ),
     movie: screen(
       "alice",
       "/titles/movie/101",
@@ -641,6 +660,10 @@ const screens: Record<MemberRoute["kind"], Record<string, Case>> = {
     ),
   },
   profile: {
+    demo: demo(
+      "/people/demo_maya",
+      "Maya's profile for the demo reviewer, her friend: her top 10 and activity.",
+    ),
     own: screen(
       "alice",
       "/people/alice",

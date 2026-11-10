@@ -12,7 +12,7 @@ import { photoSetup } from "./photos";
 export const invitationHash = (token: string) =>
   createHash("sha256").update(token).digest("hex");
 
-function shareToken(id: string) {
+export function shareToken(id: string) {
   const secret = process.env.BETTER_AUTH_SECRET;
   if (!secret || secret.length < 32)
     throw new Error("Set BETTER_AUTH_SECRET to at least 32 random characters.");
@@ -21,6 +21,9 @@ function shareToken(id: string) {
     .update(`screenr-invitation:${id}`)
     .digest("base64url");
 }
+
+export const invitationUrl = (token: string) =>
+  new URL(`/join/${token}`, process.env.BETTER_AUTH_URL!).href;
 
 export async function activeInvitation(hash: string) {
   const { rows } = await db.query(
@@ -155,10 +158,7 @@ export async function listInvitations(userId: string) {
       // preserving the original URL, pending signups, usage, and expiry.
       if (hash !== token_hash && hash !== share_token_hash)
         missing.push({ id: invitation.id, hash });
-      return {
-        ...invitation,
-        url: new URL(`/join/${token}`, process.env.BETTER_AUTH_URL!).href,
-      };
+      return { ...invitation, url: invitationUrl(token) };
     },
   );
   // Only old links and links after a secret rotation take the lock, once.

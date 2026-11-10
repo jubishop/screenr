@@ -116,6 +116,11 @@ if step == 'TEST' and os.environ.get('FAKE_PUSH'):
         print('PushTests.swift:70: error: -[PushTests testAcceptsAFriendRequestFromItsPush] : failed: '
               'xcrun simctl push failed: ' + text)
         sys.exit(65)
+if step == 'TEST' and os.environ.get('FAKE_SCREENSHOT'):
+    # Take a screenshot as AppStoreScreenshotTests does, where the check says.
+    shots = Path(os.environ['TEST_RUNNER_SCREENR_SCREENSHOTS'])
+    shots.mkdir(parents=True, exist_ok=True)
+    (shots / '1-feed.png').write_text(os.environ['FAKE_SCREENSHOT'])
 hang_with_child(step)
 finish(step)
 """
@@ -348,6 +353,15 @@ class CheckIOSTests(unittest.TestCase):
                                      "-resultBundlePath", build + "/check/Tests.xcresult", "test"])
         self.assertEqual(events[7:], [["xcrun", "simctl", "shutdown", "NEW-UDID"],
                                       ["xcrun", "simctl", "delete", "NEW-UDID"]])
+
+    def test_keeps_the_app_store_screenshots_the_ui_tests_take_until_its_next_run(self):
+        result = self.check(FAKE_SCREENSHOT="feed")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        shots = self.repo / "ios/build/check/screenshots"
+        self.assertEqual((shots / "1-feed.png").read_text(), "feed")
+        result = self.check()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertFalse(shots.exists())
 
     def test_delivers_the_pushes_ui_tests_ask_for_to_its_simulator(self):
         payload = json.dumps({"aps": {"alert": {"body": "New activity on Screenr"}}, "notificationId": "14"})

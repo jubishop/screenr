@@ -368,7 +368,10 @@ Each file holds one case, named for the state it shows, such as `default`,
 `empty`, `full-top-ten`, or `not-found`:
 
 - `screen/<route kind>/<case>.json`: the `screen` action for each route kind
-  in `src/member-routes.ts`.
+  in `src/member-routes.ts`. The `demo` cases read the
+  [demo circle for Apple review](running-screenr.md#demo-circle-for-apple-review),
+  seeded with its real titles, as its reviewer, `demo_reviewer`; the
+  [App Store screenshots](running-screenr.md#app-store-listing) show them.
 - `actions/<action>/<case>.json`: every other action in
   `src/server/actions.ts`, under its API name.
 - `errors/<case>.json`: errors that any action can return, such as a missing

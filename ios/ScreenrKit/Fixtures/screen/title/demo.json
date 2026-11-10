@@ -1,0 +1,195 @@
+{
+  "description": "Ted Lasso for the demo reviewer, who wants to watch it: Priya recommends it, Theo is watching it, and Priya replied to the reviewer.",
+  "viewer": "demo_reviewer",
+  "request": {
+    "method": "GET",
+    "action": "screen",
+    "path": "/api/screenr/screen?path=%2Ftitles%2Ftv%2F97546",
+    "query": {
+      "path": "/titles/tv/97546"
+    }
+  },
+  "response": {
+    "status": 200,
+    "etag": "W/\"z0PxntkPmlxUWoo-5ycqACO3r7bjx_8HVjqAvKy_wxQ\"",
+    "body": {
+      "kind": "title",
+      "title": {
+        "id": "tv:97546",
+        "kind": "tv",
+        "tmdb_id": 97546,
+        "name": "Ted Lasso",
+        "overview": "An American football coach takes over a struggling English soccer club.",
+        "poster_path": "/ted-lasso.jpg",
+        "release_date": "2020-08-14"
+      },
+      "trailer": null,
+      "availability": {
+        "status": "ok",
+        "checked_at": "2026-10-13T12:00:00.000Z",
+        "link": "https://www.themoviedb.org/tv/97546-ted-lasso/watch",
+        "sections": [
+          {
+            "key": "subs",
+            "label": "Subs",
+            "services": [
+              {
+                "id": "service:apple-tv",
+                "name": "Apple TV",
+                "logo_path": "/9icYBfYFcwgCbky5VdGUIKJ4C5i.png"
+              }
+            ]
+          }
+        ]
+      },
+      "release": {
+        "status": "ok",
+        "in_theaters": false,
+        "upcoming": []
+      },
+      "tmdb_score": null,
+      "watch": {
+        "status": "want_to_watch",
+        "finished_on": null
+      },
+      "topTen": [],
+      "conversations": [
+        {
+          "id": "6206f34a-2cf9-41a6-8ed2-364d81453bf7",
+          "owner_id": "user-demo_reviewer",
+          "title_id": "tv:97546",
+          "item_type": "want_to_watch",
+          "active": true,
+          "activity_at": "2026-10-13T12:00:00.000Z",
+          "body": null,
+          "spoiler": false,
+          "status": null,
+          "finished_on": null,
+          "rating": null,
+          "edited": false,
+          "season": null,
+          "episode": null,
+          "combined": [],
+          "username": "demo_reviewer",
+          "display_name": "App Reviewer",
+          "photo": null,
+          "title_name": "Ted Lasso",
+          "poster_path": "/ted-lasso.jpg",
+          "kind": "tv",
+          "release_date": "2020-08-14",
+          "recommended": false,
+          "want_to_watch": true,
+          "viewer_want_to_watch": true,
+          "viewer_recommended": false,
+          "viewer_status": "want_to_watch",
+          "viewer_top_ten_rank": null,
+          "visible_activity": "2026-10-13T12:00:00.000Z",
+          "comments": [
+            {
+              "id": "15",
+              "body": "You're going to love it. Give it two episodes.",
+              "photo": null,
+              "removed": false,
+              "root_id": null,
+              "spoiler": false,
+              "username": "demo_priya",
+              "author_id": "user-demo_priya",
+              "reactions": [],
+              "created_at": "2026-10-13T12:00:00.000000+00:00",
+              "unavailable": false,
+              "display_name": "Priya",
+              "addressed_username": null
+            }
+          ],
+          "reactions": []
+        },
+        {
+          "id": "f2845b27-94ce-4fab-80d7-e383c476402a",
+          "owner_id": "user-demo_priya",
+          "title_id": "tv:97546",
+          "item_type": "recommended",
+          "active": true,
+          "activity_at": "2026-10-13T12:00:00.000Z",
+          "body": null,
+          "spoiler": false,
+          "status": null,
+          "finished_on": null,
+          "rating": null,
+          "edited": false,
+          "season": null,
+          "episode": null,
+          "combined": [],
+          "username": "demo_priya",
+          "display_name": "Priya",
+          "photo": null,
+          "title_name": "Ted Lasso",
+          "poster_path": "/ted-lasso.jpg",
+          "kind": "tv",
+          "release_date": "2020-08-14",
+          "recommended": true,
+          "want_to_watch": false,
+          "viewer_want_to_watch": true,
+          "viewer_recommended": false,
+          "viewer_status": "want_to_watch",
+          "viewer_top_ten_rank": null,
+          "visible_activity": "2026-10-13T12:00:00.000Z",
+          "comments": [],
+          "reactions": []
+        },
+        {
+          "id": "4b8cd530-aec7-469f-8e9b-c6ab7dda9518",
+          "owner_id": "user-demo_theo",
+          "title_id": "tv:97546",
+          "item_type": "progress",
+          "active": true,
+          "activity_at": "2026-10-13T12:00:00.000Z",
+          "body": null,
+          "spoiler": false,
+          "status": "watching",
+          "finished_on": null,
+          "rating": null,
+          "edited": false,
+          "season": null,
+          "episode": null,
+          "combined": [],
+          "username": "demo_theo",
+          "display_name": "Theo",
+          "photo": null,
+          "title_name": "Ted Lasso",
+          "poster_path": "/ted-lasso.jpg",
+          "kind": "tv",
+          "release_date": "2020-08-14",
+          "recommended": false,
+          "want_to_watch": false,
+          "viewer_want_to_watch": true,
+          "viewer_recommended": false,
+          "viewer_status": "want_to_watch",
+          "viewer_top_ten_rank": null,
+          "visible_activity": "2026-10-13T12:00:00.000Z",
+          "comments": [],
+          "reactions": []
+        }
+      ],
+      "friends": {
+        "recommended": [
+          {
+            "item": "f2845b27-94ce-4fab-80d7-e383c476402a",
+            "user_id": "user-demo_priya",
+            "display_name": "Priya",
+            "rank": null
+          }
+        ],
+        "want_to_watch": []
+      },
+      "target": null,
+      "targetUnavailable": false,
+      "unreadNotifications": 1,
+      "user": {
+        "user_id": "user-demo_reviewer",
+        "username": "demo_reviewer",
+        "display_name": "App Reviewer",
+        "photo": null
+      }
+    }
+  }
+}

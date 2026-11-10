@@ -88,7 +88,9 @@ the compiler, linker, or tools. It resolves the app's packages into the
    Post button of a push's reply field in `PushTests`; see
    [run one test](#run-one-test) for a Simulator of your own. Meanwhile
    it delivers the pushes the UI tests ask for; see
-   [push tests](#push-tests).
+   [push tests](#push-tests). `AppStoreScreenshotTests` writes the
+   [App Store listing's screenshots](../docs/running-screenr.md#app-store-listing)
+   to `ios/build/check/screenshots/`, which `SCREENR_SCREENSHOTS` names.
 
 Without `--simulator`, it creates a Simulator on the newest iOS runtime and
 deletes it afterward, so several checkouts can check at once. With
@@ -596,7 +598,7 @@ uses it when launched with these arguments; Release builds ignore them:
 | Argument | Value |
 | --- | --- |
 | `-ScreenrFixtures` | The fixtures directory. |
-| `-ScreenrFixtureViewer` | The member whose fixtures answer first: `alice` (default), or `nora` for empty screens. |
+| `-ScreenrFixtureViewer` | The member whose fixtures answer first: `alice` (default), `nora` for empty screens, or `demo_reviewer` for the demo circle's `demo` screens. |
 | `-ScreenrFixtureSession` | `signedIn` (default), `signedOut`, or `expired`: a saved session that gets `errors/signed-out` until the next sign-in. |
 | `-ScreenrFixtureProfile` | `complete` (default), or `pending` for a viewer without a profile, such as `pat`: every action but those `rules/before-profile` lists, such as setup, gets `errors/incomplete-profile`, as on the server, until a setup request succeeds. |
 | `-ScreenrFixtureOverride` | A fixture that answers first, such as `screen/feed/empty`. Repeatable. |
