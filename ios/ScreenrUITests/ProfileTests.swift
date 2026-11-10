@@ -164,8 +164,8 @@ final class ProfileTests: XCTestCase {
     XCTAssertEqual(
       names,
       [
-        "empty-top-ten", "friend", "full-top-ten", "joined", "not-found", "own", "page",
-        "pending-request", "sent-request",
+        "demo", "empty-top-ten", "friend", "full-top-ten", "joined", "not-found", "own",
+        "page", "pending-request", "sent-request",
       ]
     )
     let fixtures = try names.map { try ScreenFixtureFile("screen/profile/\($0)") }
