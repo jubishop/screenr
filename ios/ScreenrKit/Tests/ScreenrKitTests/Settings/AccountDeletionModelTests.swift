@@ -127,6 +127,28 @@ struct AccountDeletionModelTests {
     )
   }
 
+  // A member the owner suspended meanwhile gets the server's refusal, not
+  // the words for an account that isn't this one.
+  @Test func showsTheSuspensionRefusalWhileConfirming() async throws {
+    let test = try TestClient(
+      token: "earlier-token",
+      replies: [
+        .response(status: 403, body: try TestFixtures.body("auth/sign-in/social/suspended"))
+      ]
+    )
+    let google = RecordingTransport([try .json(200, ["id_token": "google-id-token"])])
+    let deletion = AccountDeletionModel(
+      api: test.client,
+      member: Self.alice,
+      providers: providers(google: google)
+    )
+
+    await deletion.signIn.signInWithGoogle(using: RedirectingAuthenticator())
+
+    #expect(deletion.step == .verify)
+    #expect(deletion.signIn.failure == SignInModelTests.suspended)
+  }
+
   // Better Auth rejects a Google account that matches the member's address
   // but isn't connected, and an ID token it cannot verify, with 401. The
   // member's session is still good, so they stay signed in and can confirm

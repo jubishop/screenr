@@ -56,15 +56,17 @@ export const erasable = (itemType: string) =>
 // screenr_can_read and screenr_blocked for each row (issue #373). `audience`
 // has a row for each owner whose entries the reader can read, the reader and
 // their friends, with `readers`, everyone who can read that owner's entries.
-// `hidden` lists everyone the reader has blocked or been blocked by, and the
-// entries and replies the reader reported
-// (docs/data-and-access.md#content-reports).
+// `hidden` lists everyone the reader has blocked or been blocked by and every
+// suspended member, as screenr_blocked does
+// (docs/data-and-access.md#member-suspension), and the entries and replies
+// the reader reported (docs/data-and-access.md#content-reports).
 const access = `audience AS MATERIALIZED (
     SELECT r.owner_id,ARRAY(SELECT user_id FROM screenr_friends(r.owner_id)) || r.owner_id AS readers
     FROM (SELECT $1::text AS owner_id UNION ALL SELECT user_id FROM screenr_friends($1)) r
   ), hidden AS MATERIALIZED (
     SELECT ARRAY(SELECT CASE WHEN blocker_id=$1 THEN blocked_id ELSE blocker_id END
-      FROM block WHERE $1 IN (blocker_id,blocked_id)) AS users,
+      FROM block WHERE $1 IN (blocker_id,blocked_id)
+      UNION ALL SELECT user_id FROM member_suspension) AS users,
       ARRAY(SELECT entry_id FROM content_report WHERE reporter_id=$1 AND entry_id IS NOT NULL) AS entries,
       ARRAY(SELECT comment_id FROM content_report WHERE reporter_id=$1 AND comment_id IS NOT NULL) AS replies
   )`;

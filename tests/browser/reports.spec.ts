@@ -4,9 +4,12 @@ import { test } from "./monitored-test";
 import { prepareFriendship, userId } from "./member-fixture";
 import { expectThemedPage } from "./contrast";
 import { failOneRead, openWithoutPolling, readAgain } from "./refresh-helpers";
+import { signInWithCode } from "./journey-helpers";
+import { suspendedCode, suspendedMessage } from "../../src/shared";
 
-// Members' reports and the owner's review page
-// (docs/data-and-access.md#content-reports). The browser server names
+// Members' reports and the owner's review page, with suspension
+// (docs/data-and-access.md#content-reports,
+// docs/data-and-access.md#member-suspension). The browser server names
 // reviewowner.browser@example.test as the owner.
 
 async function post(page: Page, action: string, data: unknown) {
@@ -248,7 +251,7 @@ test("members report a profile from More actions and can block from the offer", 
   ]);
 });
 
-test("only the owner reaches the review page, where Remove and Dismiss resolve reports", async ({
+test("only the owner reaches the review page, where Remove and Dismiss resolve reports and Suspend and Lift act on their author", async ({
   member,
   page: visitor,
 }) => {
@@ -333,4 +336,87 @@ test("only the owner reaches the review page, where Remove and Dismiss resolve r
   await author.goto("/");
   await expect(author.getByText("Keep me")).toBeVisible();
   await expect(author.getByText("Remove me")).toHaveCount(0);
+
+  // Suspend signs the author out everywhere and hides them from everyone,
+  // and their report stays open. The owner's one session runs this too,
+  // since only one address is the owner. The reporter no longer sees what
+  // they reported, so another post shows what suspension hides.
+  const reported = await post(author, "discussion-post", {
+    body: "Report this one too",
+    spoiler: false,
+  });
+  await post(author, "discussion-post", {
+    body: "Al's movie night",
+    spoiler: false,
+  });
+  await post(reporter, "report", { item: reported, reason: "hate" });
+  await reporter.goto("/");
+  await expect(reporter.getByText("Al's movie night")).toBeVisible();
+  await owner.reload();
+  const card = cards.filter({ hasText: "Report this one too" });
+  await card.getByRole("button", { name: "Suspend", exact: true }).click();
+  const suspension = card.getByRole("group", {
+    name: "Suspend Al Author? They’ll be signed out everywhere and can’t sign in, and their profile and everything they wrote will be hidden from everyone until you lift it. This report stays open.",
+  });
+  await suspension.getByRole("button", { name: "Cancel", exact: true }).click();
+  const suspend = card.getByRole("button", { name: "Suspend", exact: true });
+  await expect(suspend).toBeFocused();
+  await suspend.click();
+  await suspension
+    .getByRole("button", { name: "Suspend", exact: true })
+    .click();
+  await expect(card.getByText("Al Author is suspended.")).toBeFocused();
+  await expect(suspend).toHaveCount(0);
+  await expect(card.getByRole("link")).toHaveCount(0);
+  await expect(
+    card.getByRole("button", { name: "Dismiss", exact: true }),
+  ).toBeVisible();
+  const suspendedList = owner.getByRole("region", {
+    name: "Suspended members",
+  });
+  const row = suspendedList
+    .getByRole("article")
+    .filter({ hasText: "Al Author @reviewauthor" });
+  await expect(row).toContainText("Suspended");
+  for (const colorScheme of ["light", "dark"] as const) {
+    await owner.emulateMedia({ colorScheme });
+    await expectThemedPage(owner, `suspensions ${colorScheme}`);
+  }
+  await owner.emulateMedia({ colorScheme: "light" });
+
+  // Their open page ends at sign-in, which refuses them in plain words, as
+  // does a web Google sign-in, which returns with Better Auth's code.
+  const refusal = author.getByRole("main").locator(".error");
+  await author.goto("/");
+  await expect(author).toHaveURL(/\/login/);
+  await signInWithCode(author, "reviewauthor.browser@example.test");
+  await expect(refusal).toHaveText(suspendedMessage);
+  await author.goto(`/login?error=${suspendedCode}`);
+  await expect(refusal).toHaveText(suspendedMessage);
+  await reporter.goto("/");
+  await expect(
+    reporter.getByRole("heading", { name: "Your circle", exact: true }),
+  ).toBeVisible();
+  await expect(reporter.getByText("Al's movie night")).toHaveCount(0);
+  await reporter.goto("/people/reviewauthor");
+  await expect(
+    reporter.locator(".error").filter({ hasText: "Person not found." }),
+  ).toBeVisible();
+
+  // Lift restores everything, and the author signs in again.
+  await row.getByRole("button", { name: "Lift", exact: true }).click();
+  await expect(
+    suspendedList.getByRole("heading", { name: "Suspended members" }),
+  ).toBeFocused();
+  await expect(row).toHaveCount(0);
+  await expect(suspend).toBeVisible();
+  await reporter.goto("/");
+  await expect(reporter.getByText("Al's movie night")).toBeVisible();
+  await author.goto("/login");
+  await signInWithCode(author, "reviewauthor.browser@example.test");
+  await expect(
+    author.getByRole("heading", { name: "Your circle", exact: true }),
+  ).toBeVisible();
+  await card.getByRole("button", { name: "Dismiss", exact: true }).click();
+  await expect(cards).toHaveCount(0);
 });

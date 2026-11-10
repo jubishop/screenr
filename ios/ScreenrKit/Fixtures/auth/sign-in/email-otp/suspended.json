@@ -1,0 +1,20 @@
+{
+  "description": "The right code for a member the owner suspended, which is refused with Screenr's message, as every sign-in method is.",
+  "viewer": null,
+  "request": {
+    "method": "POST",
+    "action": "sign-in/email-otp",
+    "path": "/api/auth/sign-in/email-otp",
+    "body": {
+      "email": "alice@example.test",
+      "otp": "123456"
+    }
+  },
+  "response": {
+    "status": 403,
+    "body": {
+      "message": "Your Screenr account is suspended. To ask about it, email screenr@jubishop.com.",
+      "code": "ACCOUNT_SUSPENDED"
+    }
+  }
+}

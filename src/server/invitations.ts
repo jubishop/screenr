@@ -22,12 +22,17 @@ function shareToken(id: string) {
     .digest("base64url");
 }
 
+// An invitation can be used while it is unrevoked, unexpired, and not used up,
+// and its creator, if any, is not suspended
+// (docs/data-and-access.md#member-suspension).
+const usable = `(token_hash=$1 OR share_token_hash=$1) AND revoked_at IS NULL
+  AND expires_at>now() AND uses<max_uses
+  AND NOT EXISTS (SELECT 1 FROM member_suspension s WHERE s.user_id=invitation.creator_id)`;
+
 export async function activeInvitation(hash: string) {
-  const { rows } = await db.query(
-    `SELECT id FROM invitation WHERE (token_hash = $1 OR share_token_hash = $1) AND revoked_at IS NULL
-     AND expires_at > now() AND uses < max_uses`,
-    [hash],
-  );
+  const { rows } = await db.query(`SELECT id FROM invitation WHERE ${usable}`, [
+    hash,
+  ]);
   return rows[0] as { id: string } | undefined;
 }
 
@@ -83,8 +88,7 @@ export async function completeSignup(
       : user.invitationHash;
     const invite = (
       await client.query(
-        `UPDATE invitation SET uses=uses+1 WHERE (token_hash=$1 OR share_token_hash=$1) AND revoked_at IS NULL
-       AND expires_at>now() AND uses<max_uses RETURNING id,creator_id`,
+        `UPDATE invitation SET uses=uses+1 WHERE ${usable} RETURNING id,creator_id`,
         [hash],
       )
     ).rows[0];

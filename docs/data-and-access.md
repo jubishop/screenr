@@ -31,7 +31,8 @@ other, for profiles, People suggestions, Friends recommend, and Find a title
 suggestions; each caller adds its own checks between the viewer and those
 friends. `screenr_blocked` also keeps the
 [demo circle for Apple review](running-screenr.md#demo-circle-for-apple-review)
-and real members apart. The title page friend line comes
+and real members apart, and hides a
+[suspended member](#member-suspension) from everyone. The title page friend line comes
 from the viewer's title feed read, so it names only friends whose entries
 that feed shows. Friendship pairs are ordered by
 PostgreSQL, including mixed-case auth IDs. No private feed or permission
@@ -337,6 +338,7 @@ Rejections answer with a JSON body naming a `code` from Better Auth or a
 | ------ | ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
 | 401    | `code` `INVALID_TOKEN`                                                    | The signature, issuer, audience, expiry, age, or nonce check failed.                                         |
 | 403    | `message` "A valid invitation is required to join Screenr."               | A new person had no valid invitation.                                                                        |
+| 403    | `code` `ACCOUNT_SUSPENDED` and Screenr's `message`                        | The owner [suspended](#member-suspension) the account.                                                       |
 | 401    | `code` `OAUTH_LINK_ERROR`                                                 | The address belongs to an account without this provider ID linked.                                           |
 | 400    | `message` "Sign in with Apple needs its authorization code."              | No `additionalData.authorizationCode`.                                                                       |
 | 401    | `message` "Apple did not confirm this sign-in. Try again."                | Apple rejected the code, which expires after five minutes and works once, or it belongs to another Apple ID. |
@@ -378,7 +380,8 @@ the header falls back to the cookie, because Google's web sign-in callback
 also arrives without an `Origin`.
 
 The header follows the cookie's rules: the invitation must have uses
-remaining and must be neither expired nor revoked.
+remaining, must be neither expired nor revoked, and its creator must not be
+[suspended](#member-suspension).
 
 - **Code request:** an address without an account gets a code only with a
   valid invitation. Otherwise nothing is sent, and the response is the same
@@ -868,14 +871,15 @@ report covers the display name and photo.
   removal does: a post or comment shows "Post removed" or "Comment removed"
   for any replies, a review loses its rating and text, and a profile loses its
   photo and shows its username as its display name. Removal resolves every
-  open report of the item. **Dismiss** resolves only that report. Resolved
+  open report of the item. **Dismiss** resolves only that report.
+  **Suspend** [suspends the author](#member-suspension) and leaves the
+  report open, marked "… is suspended.", for Remove or Dismiss. Resolved
   reports keep their copy. The page's actions post
-  `{"report": id, "action": "remove" | "dismiss"}` to `/api/reports`, which
-  takes only the website's origin and the owner's session and answers 404 to
-  anyone else; the kept photo comes from `/api/reports/photo/<report>`. A new
-  action, such as suspending the author
-  ([issue #556](https://github.com/jubishop/screenr/issues/556)), adds an
-  entry to `reviewActions` in `src/server/reports.ts` and to `actionsFor` in
+  `{"report": id, "action": "remove" | "suspend" | "dismiss"}` to
+  `/api/reports`, which takes only the website's origin and the owner's
+  session and answers 404 to anyone else; the kept photo comes from
+  `/api/reports/photo/<report>`. A new action adds an entry to
+  `reviewActions` in `src/server/reports.ts` and to `actionsFor` in
   `src/components/report-review.tsx`.
 - **Alerts:** each new report queues one email to `SCREENR_OWNER_EMAIL` and,
   with `PUSHOVER_API_KEY` and `PUSHOVER_USER_KEY`, one Pushover alert, in the
@@ -891,6 +895,61 @@ report covers the display name and photo.
   once and the web queues no Pushover jobs; without `SCREENR_OWNER_EMAIL`
   nobody can open the review page and no email is queued. See
   [production settings](deployment.md#provisioning).
+
+## Member suspension
+
+The owner suspends a reported member from the review page and lifts the
+suspension there later
+([decision](product-brief.md#reports-review-and-suspension--2026-11-09),
+[issue #556](https://github.com/jubishop/screenr/issues/556)).
+`src/server/suspensions.ts` holds the rules, migration
+`043-member-suspension.sql` the table and the access rule, and
+`tests/app/suspensions.test.ts` and `tests/browser/reports.spec.ts` cover
+them. A suspension is a `member_suspension` row with its start. Apart from
+ending the member's sessions, it deletes nothing, so lifting it restores
+everything else.
+
+- **Suspend:** Suspend on a report, after an
+  [in-page confirmation](interface-design.md#confirm-other-destructive-actions--2026-10-12)
+  that says what it does, suspends the report's author. It ends all their
+  sessions, on the web and in the iPhone app, with the push devices those
+  sessions registered, and queues badge updates for members whose unread
+  notifications it hides. The owner can't suspend their own account. The
+  report stays open, and every open report of the author shows "… is
+  suspended." with Remove and Dismiss, and their name without a link to the
+  profile, which the owner can't open either.
+- **Sign-in:** every method refuses a suspended member after it confirms
+  who they are: the email code, Google, and Sign in with Apple, on the web and
+  in the app. Better Auth's session hook in `src/server/auth.ts` answers 403
+  with `{"code": "ACCOUNT_SUSPENDED", "message": "Your Screenr account is
+  suspended. To ask about it, email screenr@jubishop.com."}`, which both
+  clients show as it is. The web's Google sign-in returns to `/login` with
+  `?error=ACCOUNT_SUSPENDED`, and the page shows the same message. A code
+  request answers as for anyone, so it never reveals a suspension. Suspending
+  holds the account's row while it deletes the sessions, and a trigger on
+  `session` waits for it and refuses a suspended member's new session, so a
+  sign-in already past the hook's check can't keep one.
+- **Signing up again:** the address still belongs to the suspended account,
+  so an invitation to it, on either client, reaches only that account and is
+  refused. A suspended member's own invitation links can't be used by anyone
+  while the suspension lasts.
+- **Hidden from everyone:** `screenr_blocked` treats a suspended member as
+  blocked by everyone, and everyone by them, so every read and write that
+  checks blocks hides them: their profile and photo, feed entries of every
+  kind, including Recommend, Want to watch, and statuses, their replies and
+  reactions, notifications they caused, friend lists and requests,
+  suggestions, and their part in Find's counts. The feed's own `hidden` set
+  includes every suspended member too, and blocked lists leave them out.
+  Nobody can reply to, react to, or befriend them meanwhile. Their
+  friendships, blocks, and content stay, and show again once lifted.
+- **Lift:** the review page lists suspended members, most recently
+  suspended first, with when each began and **Lift**, which posts
+  `{"member": userId, "action": "lift"}` to `/api/reports` under the same
+  owner-only rules and restores the member and their content for everyone.
+  The member then signs in again.
+- **Records:** a suspension goes with its member's
+  [account](#account-deletion). The member can still email the owner, which
+  the refusal says.
 
 ## Account deletion
 

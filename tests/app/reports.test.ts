@@ -507,6 +507,7 @@ test("only the owner reviews reports, and removal hides each kind from everyone"
     user_id: ben,
     username: "ben",
     display_name: "ben",
+    suspended: false,
   });
   assert.deepEqual(profileReport.reporter, {
     username: "alice",

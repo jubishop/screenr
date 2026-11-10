@@ -291,6 +291,45 @@ struct SignInModelTests {
     #expect(model.failure == "Invalid OTP")
   }
 
+  static let suspended =
+    "Your Screenr account is suspended. To ask about it, email screenr@jubishop.com."
+
+  // The server refuses every sign-in method for a suspended member, with its
+  // own words, which the screen shows as they are.
+  @Test func showsTheSuspensionRefusalForEachMethod() async throws {
+    let refusal = { (fixture: String) in
+      RecordingTransport.Reply.response(status: 403, body: try TestFixtures.body(fixture))
+    }
+    let test = try TestClient(
+      replies: [
+        try .json(200, ["success": true]),
+        try refusal("auth/sign-in/email-otp/suspended"),
+        try refusal("auth/sign-in/social/suspended"),
+        try refusal("auth/sign-in/social/suspended"),
+      ]
+    )
+    let google = RecordingTransport([try .json(200, ["id_token": "google-id-token"])])
+    let model = model(test, google: google)
+    model.email = "alice@example.test"
+
+    await model.sendCode()
+    model.enterCode("123456")
+    await model.checkCode()
+    #expect(model.failure == Self.suspended)
+    model.useAnotherEmail()
+
+    _ = model.startApple()
+    await model.signInWithApple(
+      AppleCredential(identityToken: "identity", authorizationCode: "code", name: nil)
+    )
+    #expect(model.failure == Self.suspended)
+
+    await model.signInWithGoogle(using: RedirectingAuthenticator())
+    #expect(model.failure == Self.suspended)
+    #expect(test.session.phase == .signedOut)
+    #expect(try test.keychain.read() == nil)
+  }
+
   @Test func explainsAFailureWithoutAServerMessage() async throws {
     let test = try TestClient(replies: [.failure(URLError(.notConnectedToInternet))])
     let model = model(test)
