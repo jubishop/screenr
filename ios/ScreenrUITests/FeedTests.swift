@@ -385,6 +385,63 @@ final class FeedTests: XCTestCase {
     XCTAssertEqual(field.value as? String, "Saw it twice.")
   }
 
+  // A composer that opens near the bottom of the screen shows whole above
+  // the keyboard, as the keyboard rises or, for a reply opened while another
+  // composer has the keyboard, as focus moves. The caret stays above the
+  // keyboard as the field grows, and New activity keeps the composer still.
+  @MainActor
+  func testOpensComposersAboveTheKeyboard() throws {
+    let update = FixtureUpdate("screen/feed/incoming")
+    let app = XCUIApplication()
+    app.launch(with: FixtureLaunch(update: update))
+    let ben = app.entry(FeedFixture.benRecommend)
+    XCTAssertTrue(ben.waitForExistence(timeout: 10))
+    ben.buttons["View 1 reply"].tap()
+
+    let entry = app.entry(FeedFixture.aliceOrchard)
+    let comment = entry.buttons["Comment"]
+    app.scrollTo(comment)
+    app.drag(comment, toY: app.tabBars.firstMatch.frame.minY - 60)
+    comment.tap()
+    let field = app.composerField("Add your reply")
+    app.expectAboveTheKeyboard(field, entry.buttons["Post reply"])
+
+    field.typeText("One\nTwo\nThree\nFour\nFive\nSix")
+    app.expectAboveTheKeyboard(field)
+
+    update.send()
+    let newActivity = app.buttons["New activity"]
+    XCTAssertTrue(newActivity.waitForExistence(timeout: 10))
+    let place = field.frame
+    newActivity.tap()
+    XCTAssertTrue(newActivity.waitForNonExistence(timeout: 5))
+    XCTAssertEqual(field.frame.minY, place.minY, accuracy: 1)
+
+    let reply = app.comment("2").buttons["Reply"]
+    app.drag(reply, toY: app.otherElements["inputView"].frame.minY - 40)
+    XCTAssertTrue(app.keyboards.firstMatch.exists)
+    reply.tap()
+    app.expectAboveTheKeyboard(app.composerField("Your nested reply"), ben.buttons["Post reply"])
+  }
+
+  // Start a conversation's composer on a title page, beneath the page's
+  // details, shows whole above the keyboard, its explanation included.
+  @MainActor
+  func testOpensATitleCommentAboveTheKeyboard() throws {
+    let app = XCUIApplication()
+    app.launch(with: FixtureLaunch(link: "screenr-dev://titles/movie/101"))
+    XCTAssertTrue(app.navigationBars["Night Crossing"].waitForExistence(timeout: 10))
+    let start = app.buttons["Start a conversation"]
+    app.scrollTo(start)
+    app.drag(start, toY: app.tabBars.firstMatch.frame.minY - 60)
+    start.tap()
+    app.expectAboveTheKeyboard(
+      app.staticTexts["Post a comment about this title. Only you and your friends can see it."],
+      app.composerField("Your comment"),
+      app.buttons["Post comment"]
+    )
+  }
+
   // Ben posts while the reader is a little way down the feed, reading the
   // second entry. The post waits behind New activity, and showing it puts the
   // post above that entry without moving the entry.
