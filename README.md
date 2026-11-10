@@ -118,7 +118,8 @@ background reads and member actions go to the handler in
 `src/app/api/screenr/`, which serves the actions declared in
 `src/server/actions.ts`. `src/app/api/photos/` serves profile photos, and
 `src/app/(member)/reports/` with `src/app/api/reports/` is the owner's
-[review page](docs/data-and-access.md#content-reports). The page, the
+[review page](docs/data-and-access.md#content-reports), which also
+[suspends members](docs/data-and-access.md#member-suspension). The page, the
 screen loader, and the browser shell all read paths through
 `src/member-routes.ts`, which names each screen and the query parameters it
 keeps. Sign-in accepts only these paths as

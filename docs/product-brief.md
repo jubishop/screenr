@@ -1149,8 +1149,9 @@ in the iPhone app, under
 added reports, the owner's review page with Remove and Dismiss, and the
 email and Pushover alerts; see
 [content reports](data-and-access.md#content-reports).
-[Issue #556](https://github.com/jubishop/screenr/issues/556) adds
-suspension, and [#557](https://github.com/jubishop/screenr/issues/557) the
+[Issue #556](https://github.com/jubishop/screenr/issues/556) added Suspend
+and Lift; see [member suspension](data-and-access.md#member-suspension).
+[Issue #557](https://github.com/jubishop/screenr/issues/557) adds the
 blocked-word filter.
 
 **Why:** The user wants Screenr on the App Store ("first we have to get it

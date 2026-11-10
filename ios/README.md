@@ -730,7 +730,7 @@ Their behavior lives in ScreenrKit's `SignIn/` folder:
 
 | Piece | What it does |
 | --- | --- |
-| `SignInModel` | The screen's `@Observable` model. The email code takes two steps, and the second offers a new code. It shows the server's messages, such as the code limits, as the server words them. |
+| `SignInModel` | The screen's `@Observable` model. The email code takes two steps, and the second offers a new code. It shows the server's messages, such as the code limits and a [suspended member's](../docs/data-and-access.md#member-suspension) refusal, as the server words them, even while confirming the member. |
 | `PendingInvitation` | The token of the invitation link a new member opened, which every sign-in request sends as `Screenr-Invitation`. See [invitations and setup](#invitations-and-setup). |
 | `InvitationPickup` | Before a person without an invitation first signs in, asks Safari for the one an invitation link saved there before the app was installed. See [invitations and setup](#invitations-and-setup). |
 | `AppleNonce`, `AppleCredential` | Sign in with Apple's request gets the SHA-256 hex digest of a new nonce. The server gets the raw nonce, the identity token, the authorization code, and on the first sign-in the person's name. |

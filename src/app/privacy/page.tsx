@@ -63,6 +63,11 @@ export default function Privacy() {
             their account.
           </li>
           <li>
+            <strong>Suspensions:</strong> if Screenr&rsquo;s operator suspends
+            your account, Screenr records when the suspension began and keeps
+            that record until the operator lifts it or your account is deleted.
+          </li>
+          <li>
             <strong>Usage records:</strong> described under Usage measurement
             below.
           </li>
@@ -107,7 +112,11 @@ export default function Privacy() {
             reported, who wrote it, who reported it, and why. Screenr never
             tells the reported member who reported them. The operator may remove
             reported content for everyone, including its author, or remove a
-            reported profile&rsquo;s photo and display name.
+            reported profile&rsquo;s photo and display name. The operator may
+            also suspend the member who wrote it: a suspended member is signed
+            out and can&rsquo;t sign in, and their profile and everything they
+            wrote are hidden from everyone until the operator lifts the
+            suspension. Suspension deletes nothing.
           </li>
           <li>
             <strong>Unfriending</strong> immediately ends access to each

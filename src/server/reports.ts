@@ -356,11 +356,6 @@ async function removeItem(client: PoolClient, report: ReportRow) {
 // still waits for Remove or Dismiss, for when the suspension is lifted. Each
 // action runs in the domain write transaction with the report locked.
 export const reviewActions = {
-  suspend: async (client: PoolClient, report: ReportRow) => {
-    if (await isOwner(report.author_id, client))
-      throw new AppError("You can’t suspend your own account.");
-    await suspend(client, report.author_id);
-  },
   remove: async (client: PoolClient, report: ReportRow) => {
     await removeItem(client, report);
     await client.query(
@@ -376,6 +371,11 @@ export const reviewActions = {
         report.comment_id,
       ],
     );
+  },
+  suspend: async (client: PoolClient, report: ReportRow) => {
+    if (await isOwner(report.author_id, client))
+      throw new AppError("You can’t suspend your own account.");
+    await suspend(client, report.author_id);
   },
   dismiss: async (client: PoolClient, report: ReportRow) => {
     await client.query(

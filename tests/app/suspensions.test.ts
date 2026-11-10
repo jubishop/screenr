@@ -216,7 +216,8 @@ test("a suspended member's email code sign-in is refused on the web and in the a
   const codes = new Map<string, string>();
   const { request } = authClient(codes);
 
-  for (const headers of [{ Origin: origin }, {}]) {
+  const clients: Record<string, string>[] = [{ Origin: origin }, {}];
+  for (const headers of clients) {
     const response = await signInWithCode(
       request,
       codes,
@@ -304,7 +305,6 @@ test("a suspended member's Google and Apple sign-ins are refused in the app and 
   });
   provider.getUserInfo = async () => ({
     user: {
-      id: "ben-google",
       email: "ben@example.test",
       name: "Ben",
       emailVerified: true,
@@ -389,10 +389,11 @@ test("a suspended member's email can't sign up again through an invitation, and 
 
   // With a valid invitation, from the web and from the app, the address
   // still reaches only Ben's account, which is refused.
-  for (const headers of [
+  const invited: Record<string, string>[] = [
     { Origin: origin, Cookie: `screenr-invite=${alices}` },
     { "Screenr-Invitation": alices },
-  ])
+  ];
+  for (const headers of invited)
     await assertAuthError(
       await signInWithCode(request, codes, "ben@example.test", headers),
       403,
