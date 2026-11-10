@@ -2233,6 +2233,16 @@ Sentry organization `artisanal-software`, under these
   diagnostics, Sentry logs at warning and above, and user feedback from the
   [feedback form](#feedback). Traces cover app launch and API calls, for one
   launch in five.
+- **MetricKit attachment:** each MetricKit event also attaches iOS's raw
+  diagnostic as JSON, `MXDiagnosticPayload.json` in sentry-cocoa 9.32.0,
+  through `enableMetricKitRawPayload`. Sentry keeps 250 frames of the call
+  tree that sentry-cocoa flattens into the event's stack trace, and a hang's
+  tree can run to thousands
+  ([#631](https://github.com/jubishop/screenr/issues/631)); the attachment
+  keeps every frame's binary, offset, and sample count. Besides stack
+  addresses, it holds metadata much like the event's contexts, such as the
+  app and OS versions, the device type, and the region, and no member
+  content.
 - **Build:** every report names its build with the release
   `com.artisanalsoftware.Screenr@<version>+<build>`, Sentry's default form,
   set from `AppConfiguration`, and with the build as its dist.

@@ -205,6 +205,10 @@ public final class Telemetry: APIRequestObserver {
     options.tracePropagationTargets = []
     options.enableAppHangTracking = true
     options.enableMetricKit = true
+    // Sentry keeps 250 frames of a stack trace, and the one that sentry-cocoa flattens from a
+    // MetricKit hang's call tree can run to thousands. So each MetricKit event also carries iOS's
+    // raw diagnostic, with the whole tree: stack addresses and device metadata, but no content.
+    options.enableMetricKitRawPayload = true
     options.enableLogs = true
     // Traces cover app launch and API calls, in one session of five.
     options.enableAutoPerformanceTracing = true

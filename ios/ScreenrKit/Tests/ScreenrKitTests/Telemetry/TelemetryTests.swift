@@ -462,6 +462,8 @@ struct TelemetryTests {
     #expect(!options.enableCaptureFailedRequests)
     #expect(options.enableAppHangTracking)
     #expect(options.enableMetricKit)
+    // MetricKit events carry iOS's raw diagnostic, whose call tree Sentry doesn't trim.
+    #expect(options.enableMetricKitRawPayload)
     #expect(options.enableLogs)
     #if canImport(UIKit)
     #expect(!options.attachScreenshot)
