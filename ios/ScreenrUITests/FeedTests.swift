@@ -203,7 +203,7 @@ final class FeedTests: XCTestCase {
     )
     XCTAssertEqual(field.value as? String, text)
     XCTAssertTrue(app.buttons["Post"].isEnabled)
-    try app.performScreenrAudit()
+    try app.performShellAudit()
   }
 
   // A permalink opens the feed at its reply, which shows highlighted, and
