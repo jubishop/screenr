@@ -110,7 +110,12 @@ export function useReviewEditor({
     setBusy(true);
     setError("");
     try {
-      await api("review", { title: titleId, ...draft });
+      await api("review", {
+        title: titleId,
+        rating: draft.rating,
+        body: draft.body,
+        spoiler: draft.spoiler,
+      });
       await refresh();
       close();
     } catch (error) {

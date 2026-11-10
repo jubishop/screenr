@@ -6,7 +6,7 @@ import {
 } from "./pending-navigation";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { ActionResult, WriteAction } from "../server/actions";
+import type { ActionInput, ActionResult, WriteAction } from "../server/actions";
 import type { ScreenData } from "../server/screens";
 import type { Person, SaveSurface, TopTenChange, WatchStatus } from "../shared";
 import {
@@ -264,7 +264,7 @@ export function Screen({
   // A failed write rejects, so its caller shows the error beside the control.
   async function mutate<Name extends WriteAction>(
     action: Name,
-    body: unknown,
+    body: ActionInput<Name>,
   ): Promise<ActionResult<Name>> {
     pending.current?.abort();
     setBusy(true);
@@ -378,7 +378,12 @@ export function Screen({
     change: TopTenChange,
     options?: { replace?: string; rank?: number },
   ) {
-    return mutate("top-ten", { title, change, ...options });
+    return mutate("top-ten", {
+      title,
+      change,
+      replace: options?.replace,
+      rank: options?.rank,
+    });
   }
   const shell = (
     <div className="app-shell">

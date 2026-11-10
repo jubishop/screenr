@@ -148,7 +148,8 @@ export function ThreadView({
     try {
       await api("comment", {
         conversation: currentSnapshot.conversation.id,
-        ...draft,
+        body: draft.body,
+        spoiler: draft.spoiler,
         replyTo: destination === "direct" ? undefined : destination,
       });
       if (destination !== "direct" && activeReply)
