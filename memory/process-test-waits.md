@@ -35,7 +35,11 @@ start for 6 seconds reproduced the error; the case passes that way under the
 shared Python bound below. The same day, a nested Playwright run in
 `tests/app/browser-script-guard.test.ts` that took 1.25 seconds at a load
 average near 80 ran past its 20-second bound at one near 100
-([#615](https://github.com/jubishop/screenr/issues/615)).
+([#615](https://github.com/jubishop/screenr/issues/615)). At a load average
+of 130 to 170, a cold title page's third catalog request reached the fake
+TMDB server only after the server had answered one of the others 100 ms
+after it arrived, so a test that counted open requests saw 2 of 3
+([#624](https://github.com/jubishop/screenr/issues/624)).
 
 **Evidence:** Dropping an empty database at 17:10 PST waited 6.0 seconds for
 a checkpoint that synced 73,941 files. Holding each harness start for 11
@@ -57,6 +61,11 @@ from 28 to 411, and in 18 runs six at a time at load averages from 5 to 7.
 - A nested test runner's per-test timeout is a wait too. Size it to end a
   hang, and check promptness by asserting that no test timed out, as
   `tests/app/browser-script-guard.test.ts` does.
+- To show that requests run together, have the fake server hold every reply
+  until all of them are open at once, rather than counting overlap against
+  reply delays. Turn off client timeouts that would drop a held request, and
+  bound the hold only to end a hang, as the cold title page test in
+  `tests/app/catalog.test.ts` does.
 - Wait for the `close` event, not `exit`, before you assert on a process's
   output. `exit` can come before the output streams end.
 - In the Python tests, pass `HANG_SECONDS` from `tests/_process_waits.py` as

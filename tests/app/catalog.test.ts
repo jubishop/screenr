@@ -1,6 +1,6 @@
-import { test, before, beforeEach, after } from "node:test";
+import { test, before, beforeEach, after, type TestContext } from "node:test";
 import assert from "node:assert/strict";
-import { createServer } from "node:http";
+import { createServer, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
 import {
   db,
@@ -42,26 +42,27 @@ type Reply = {
 };
 let details: Reply;
 let search: Reply;
-let delay = 0;
-let active = 0;
-let maximum = 0;
 let providerRequests = 0;
 let requests: { path: string; authorization?: string }[] = [];
+// While a test holds replies, each response waits for what `held` returns.
+let held: ((response: ServerResponse) => Promise<unknown>) | undefined;
 const catalog = createServer((request, response) => {
-  active++;
-  maximum = Math.max(maximum, active);
-  response.on("close", () => active--);
+  const release = held?.(response);
   const path = request.url!;
   const reply = (
     code: number,
     body: unknown,
-    wait = delay,
+    wait = 0,
     text = JSON.stringify(body),
-  ) =>
-    setTimeout(() => {
-      response.writeHead(code, { "Content-Type": "application/json" });
-      response.end(text);
-    }, wait);
+  ) => {
+    const answer = () =>
+      setTimeout(() => {
+        response.writeHead(code, { "Content-Type": "application/json" });
+        response.end(text);
+      }, wait);
+    if (release) void release.then(answer);
+    else answer();
+  };
   const send = ({ status, slow, body, delay, text, reset }: Reply) => {
     if (reset) response.destroy();
     else if (!slow) reply(status, body, delay, text);
@@ -126,7 +127,7 @@ beforeEach(async () => {
     delay: 0,
   };
   search = { status: 200, slow: false, body: { results: [] }, delay: 0 };
-  delay = active = maximum = providerRequests = 0;
+  providerRequests = 0;
   requests = [];
   await db.query(
     'TRUNCATE "user", verification, title RESTART IDENTITY CASCADE',
@@ -889,14 +890,51 @@ test("the search API returns catalog errors with their statuses", async (t) => {
   );
 });
 
-test("a cold title page requests details, trailer, and availability together", async () => {
-  delay = 100;
+// The bound on the hold below only ends a hang: on a loaded machine, one
+// catalog request has reached the server well after another started (#624).
+// See memory/process-test-waits.md.
+const hang = 180_000;
+
+// Holds every catalog reply until `count` requests are open at once, and
+// resolves whether they were. Requests made one after another never are:
+// each waits for a reply that only the next one's arrival would send. Then
+// the bound sends the replies so the page can finish, and the test fails on
+// the result. The hold ends with the test.
+function holdReplies(t: TestContext, count: number) {
+  const open = new Set<ServerResponse>();
+  const { promise, resolve } = Promise.withResolvers<boolean>();
+  const bound = setTimeout(() => resolve(false), hang);
+  held = (response) => {
+    open.add(response);
+    response.on("close", () => open.delete(response));
+    if (open.size === count) resolve(true);
+    return promise;
+  };
+  void promise.then(() => {
+    held = undefined;
+    clearTimeout(bound);
+  });
+  t.after(() => resolve(false));
+  return promise;
+}
+
+test("a cold title page requests details, trailer, and availability together", async (t) => {
+  // The catalog client's own timeouts would drop a held request when the
+  // machine is slow, so only the hold's bound ends the wait.
+  t.mock.method(AbortSignal, "timeout", () => new AbortController().signal);
+  const together = holdReplies(t, 3);
   details.delay = 300; // Optional metadata arrives before the title is stored.
   details.body = { id: 43, title: "Cold Movie", release_dates: releaseDates };
-  const result = await loadScreen("viewer", "/titles/movie/43");
+  const [result, met] = await Promise.all([
+    loadScreen("viewer", "/titles/movie/43"),
+    together,
+  ]);
+  assert.ok(
+    met,
+    "Expected the details, trailer, and availability requests to be open at once",
+  );
   if (result.kind !== "title") throw new Error("Expected a title screen");
   assert.equal(result.title.name, "Cold Movie");
-  assert.equal(maximum, 3, "Expected parallel catalog requests");
   assert.equal(result.trailer?.key, official.key);
   assert.equal(result.availability.status, "ok");
   const count = requests.length + providerRequests;
