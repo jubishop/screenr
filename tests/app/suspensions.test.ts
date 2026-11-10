@@ -36,7 +36,8 @@ const { createDiscussionPost, createTitleComment, addComment } =
   await import("../../src/server/comments");
 const { saveReview } = await import("../../src/server/reviews");
 const { setReaction } = await import("../../src/server/reactions");
-const { updateTitleActivity } = await import("../../src/server/title-actions");
+const { updateTitleActivity, updateWatchStatus } =
+  await import("../../src/server/title-actions");
 const { uploadPhoto, viewablePhoto } = await import("../../src/server/photos");
 const { changeRelationship } = await import("../../src/server/relationships");
 const { changePushDevice } = await import("../../src/server/push");
@@ -107,7 +108,8 @@ const devices = (userId: string) =>
   ]);
 const users = () => count('SELECT count(*)::int AS n FROM "user"');
 
-async function registerDevice(userId: string, token: string, tag: string) {
+// Registers a phone on the member's newest session.
+async function registerDevice(userId: string, tag: string) {
   const session = (
     await db.query<{ id: string }>(
       'SELECT id FROM session WHERE "userId"=$1 ORDER BY "createdAt" DESC LIMIT 1',
@@ -121,7 +123,6 @@ async function registerDevice(userId: string, token: string, tag: string) {
     topic: "com.artisanalsoftware.Screenr.dev",
     build: 1,
   });
-  return token;
 }
 
 // An auth instance that emails codes to `codes`, as the app and the web
@@ -168,7 +169,7 @@ test("suspending a member ends every session, on the web and in the app, with it
   const ownerId = await owner(t);
   const cookie = await cookieFor(ben);
   const token = await bearerFor(ben);
-  await registerDevice(ben, token, "cd");
+  await registerDevice(ben, "cd");
   const aliceCookie = await cookieFor(alice);
   assert.equal(await sessions(ben), 2);
   assert.equal(await devices(ben), 1);
@@ -473,6 +474,13 @@ test("suspension hides everything a member wrote and their profile from everyone
   await createTitleComment(ben, "movie:1", "Ben's title comment", false);
   await saveReview(ben, "movie:1", 4, "Ben's review", false);
   await updateTitleActivity(ben, "movie:1", "recommended", true);
+  for (const id of ["movie:2", "tv:3"])
+    await db.query(
+      "INSERT INTO title(id,kind,tmdb_id,name) VALUES($1,$2,$3,$1)",
+      [id, id.split(":")[0], Number(id.split(":")[1])],
+    );
+  await updateWatchStatus(ben, "movie:2", "want_to_watch");
+  await updateWatchStatus(ben, "tv:3", "watching");
   // Ben's replies and reactions on Alice's and Cam's posts.
   const alicesPost = await createDiscussionPost(alice, "Alice's post", false);
   await addComment(ben, alicesPost, "Ben's reply to Alice", false);
@@ -480,7 +488,8 @@ test("suspension hides everything a member wrote and their profile from everyone
   const camsPost = await createDiscussionPost(cam, "Cam's post", false);
   await addComment(ben, camsPost, "Ben's reply to Cam", false);
   // Alice's phone shows her unread count.
-  await registerDevice(alice, await bearerFor(alice), "ab");
+  await bearerFor(alice);
+  await registerDevice(alice, "ab");
   await db.query("DELETE FROM push_job");
 
   const shown = {
@@ -490,6 +499,29 @@ test("suspension hides everything a member wrote and their profile from everyone
   const text = JSON.stringify(shown.alice);
   for (const value of [ben, "Ben's post", "Ben's review", "Ben's reply"])
     assert.ok(text.includes(value), value);
+  // Every kind of Ben's entries shows in Alice's feed; the Recommend joins
+  // the review's card.
+  type Card = {
+    owner_id: string;
+    item_type: string;
+    combined: { item_type: string }[];
+  };
+  const kinds = (screen: unknown) =>
+    (screen as { conversations: Card[] }).conversations
+      .filter((item) => item.owner_id === ben)
+      .flatMap((item) => [
+        item.item_type,
+        ...item.combined.map((entry) => entry.item_type),
+      ])
+      .sort();
+  assert.deepEqual(kinds(shown.alice.screens["/"]), [
+    "comment",
+    "post",
+    "progress",
+    "recommended",
+    "review",
+    "want_to_watch",
+  ]);
   assert.equal(shown.alice.photo, true);
   assert.ok(shown.alice.notifications.unread > 0);
 
