@@ -131,7 +131,9 @@ For each thread it prints the samples by binary, the heaviest path, and every
 frame in Screenr's binary, with the function that the build's dSYM in Sentry
 names for its offset
 ([contract](../../../scripts/sentry-cli/README.md#metrickit-diagnostics)).
-Read the attributed thread first, the main thread for a hang. When the
-helper says the symbols are unavailable, it shows offsets alone; record why,
-and never guess a function from an offset. When a MetricKit event from such a
-build lists no raw diagnostic, record that the diagnostic failed to arrive.
+For a hang, read the main thread first: the one whose heaviest path starts
+in `dyld`, Thread 0 in every hang seen so far. MetricKit's `attributed` mark
+need not fall on it. When the helper says the symbols are unavailable, it
+shows offsets alone; record why, and never guess a function from an offset.
+When a MetricKit event from such a build lists no raw diagnostic, record that
+the diagnostic failed to arrive.

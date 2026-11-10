@@ -103,9 +103,13 @@ its metadata's measurement, such as `hangDuration`, without printing it.
 
 Each call stack is one thread, numbered as in the event's threads, when
 `callStackPerThread` is true, and all threads together otherwise.
-`attributed` marks the stack that MetricKit blames, the main thread for a
-hang. Root frames are the outermost callers, and a frame's samples include
-its callees', as sentry-cocoa reads the tree. For each stack it prints:
+`attributed` marks a stack whose `threadAttributed` MetricKit sets, which
+need not be the main thread: in a real PodHaven hang, whose attachment
+sentry-cocoa builds the same way, MetricKit flagged two worker threads and
+not the main thread. The main thread is the stack whose root frame is in
+`dyld`, Thread 0 in every hang seen so far. Root frames are the outermost
+callers, and a frame's samples include its callees', as sentry-cocoa reads
+the tree. For each stack it prints:
 
 - its samples and frames;
 - each binary's samples in its own frames, where the thread was, which add up
@@ -130,16 +134,15 @@ holds no dSYM, with `?id=<id>`, and runs `atos -o <file> -offset` on every
 offset. It prints which file it used and how many offsets atos placed, and
 shows each placed offset's function beside it. atos answers an offset that no
 function covers with its address alone, which counts as unplaced. The
-`sentry` CLI's token can
-list and download debug files: on 2026-11-10 it fetched the dSYM of build
-`1.0+5`, and atos named the functions that Sentry showed for the Screenr
-frames of `SCREENR-IOS-3`, except a thunk that the linker had merged with
-identical code, which atos calls `<deduplicated_symbol>`.
-The download lives in a temporary directory that the helper deletes before it
-exits. With `--offline`, without the `sentry` CLI or `atos`, which comes with
-Xcode, or when Sentry has no debug file or a request fails, it says why and
-shows the offsets alone. Only an unreadable file stops it, with exit status 1.
-`bin/upload-ios-symbols` uploads each archive's dSYMs
+`sentry` CLI's token can list and download debug files: on 2026-11-10 it
+fetched the dSYM of build `1.0+5`, and atos named the functions that Sentry
+showed for the Screenr frames of `SCREENR-IOS-3`, except a thunk that the
+linker had merged with identical code, which atos calls
+`<deduplicated_symbol>`. The download lives in a temporary directory that the
+helper deletes before it exits. With `--offline`, without the `sentry` CLI or
+`atos`, which comes with Xcode, or when Sentry has no debug file or a request
+fails, it says why and shows the offsets alone. Only an unreadable file stops
+it, with exit status 1. `bin/upload-ios-symbols` uploads each archive's dSYMs
 ([symbols](../../../ios/README.md#symbols)).
 
 ## Tracking issues
