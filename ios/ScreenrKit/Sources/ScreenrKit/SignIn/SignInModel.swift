@@ -344,10 +344,14 @@ public final class SignInModel {
 
   private static let appleUnfinished = "Sign in with Apple did not finish. Try again."
 
+  // The code of the server's refusal for a suspended member, whose message
+  // every sign-in shows as the server words it.
+  static let suspendedCode = "ACCOUNT_SUSPENDED"
+
   // While confirming the member, an Apple or Google account that belongs to
   // no Screenr account, or is not connected to one, is not this one.
   private func message(for error: APIError, method: Method) -> String? {
-    guard case .confirm = purpose, method != .emailCode,
+    guard case .confirm = purpose, method != .emailCode, error.code != Self.suspendedCode,
       error.kind == .forbidden || error.code == "OAUTH_LINK_ERROR"
     else { return Self.message(for: error, method: method) }
     return

@@ -477,3 +477,17 @@
 .report-note {
   overflow-wrap: anywhere;
 }
+.report-suspended {
+  font-weight: 600;
+}
+.suspended-list {
+  padding-top: 20px;
+  border-top: 1px solid var(--line);
+}
+.suspended-member {
+  padding: 12px 0;
+  overflow-wrap: anywhere;
+}
+.suspended-member p {
+  margin-bottom: 4px;
+}

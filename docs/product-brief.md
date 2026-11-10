@@ -123,9 +123,11 @@ applies to every feature.
   comment is removed.
 - Members can report posts, reviews, comments, and profiles. The owner
   reviews reports on a private page on the website, alerted by email and
-  Pushover, and can remove the content or dismiss the report, following the
+  Pushover, and can remove the content, suspend its author, or dismiss the
+  report, following the
   [moderation decision](#reports-review-and-suspension--2026-11-09) and its
-  [implementation](data-and-access.md#content-reports).
+  implementation: [content reports](data-and-access.md#content-reports) and
+  [member suspension](data-and-access.md#member-suspension).
 - Ratings use whole stars from 1 to 5. Ratings and written review text are
   independently optional: users can provide either or both.
 - Each person has one editable review and rating per movie or show. Separate
@@ -1151,8 +1153,9 @@ in the iPhone app, under
 added reports, the owner's review page with Remove and Dismiss, and the
 email and Pushover alerts; see
 [content reports](data-and-access.md#content-reports).
-[Issue #556](https://github.com/jubishop/screenr/issues/556) adds
-suspension, and [#557](https://github.com/jubishop/screenr/issues/557) the
+[Issue #556](https://github.com/jubishop/screenr/issues/556) added Suspend
+and Lift; see [member suspension](data-and-access.md#member-suspension).
+[Issue #557](https://github.com/jubishop/screenr/issues/557) adds the
 blocked-word filter.
 
 **Why:** The user wants Screenr on the App Store ("first we have to get it

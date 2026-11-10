@@ -12,11 +12,15 @@ export async function people(viewer: string) {
       [viewer],
     )
   ).rows;
-  // Blocking hides the profile, and with it the photo.
+  // Blocking hides the profile, and with it the photo. A suspended member is
+  // hidden from everyone, so they leave this list until the suspension is
+  // lifted.
   const blocked = (
     await db.query<Person>(
       `SELECT p.user_id,p.username,p.display_name,NULL AS photo FROM block b
-    JOIN profile p ON p.user_id=b.blocked_id WHERE b.blocker_id=$1 ORDER BY p.username`,
+    JOIN profile p ON p.user_id=b.blocked_id WHERE b.blocker_id=$1
+      AND NOT EXISTS (SELECT 1 FROM member_suspension s WHERE s.user_id=p.user_id)
+    ORDER BY p.username`,
       [viewer],
     )
   ).rows;

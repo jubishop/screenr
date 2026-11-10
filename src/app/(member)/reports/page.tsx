@@ -3,6 +3,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { currentMember } from "../../../server/session";
 import { isOwner, pendingReports } from "../../../server/reports";
+import { suspendedMembers } from "../../../server/suspensions";
+import { settleAll } from "../../../server/db";
 import { ReportReview } from "../../../components/report-review";
 
 export const dynamic = "force-dynamic";
@@ -17,7 +19,10 @@ export const metadata: Metadata = { title: null };
 export default async function Reports() {
   const user = await currentMember("/reports");
   if (!(await isOwner(user.user_id))) notFound();
-  const reports = await pendingReports();
+  const [reports, suspended] = await settleAll([
+    pendingReports(),
+    suspendedMembers(),
+  ] as const);
   return (
     <main className="auth-page review-page">
       <title>Reports · Screenr</title>
@@ -29,7 +34,11 @@ export default async function Reports() {
         <p className="muted">
           Open reports, newest first. Act on each within 24 hours.
         </p>
-        <ReportReview reports={reports} />
+        <ReportReview
+          reports={reports}
+          suspended={suspended}
+          owner={user.user_id}
+        />
       </div>
     </main>
   );

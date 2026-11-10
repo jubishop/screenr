@@ -29,6 +29,12 @@ export const topTenChanges = ["add", "remove", "up", "down", "move"] as const;
 export type TopTenChange = (typeof topTenChanges)[number];
 export const codeLimitMessage =
   "Too many codes requested. Try again later, or continue with Google.";
+// Every sign-in method refuses a suspended member with this message and
+// code (docs/data-and-access.md#member-suspension). A refused web Google
+// sign-in returns to the sign-in page with the code as `error`.
+export const suspendedMessage =
+  "Your Screenr account is suspended. To ask about it, email screenr@jubishop.com.";
+export const suspendedCode = "ACCOUNT_SUSPENDED";
 export const watchCategories = [
   "flatrate",
   "free",

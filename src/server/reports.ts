@@ -5,6 +5,7 @@ import { itemQuery } from "./feed";
 import { eraseReply } from "./comments";
 import { trackBadges } from "./push";
 import { queueOwnerAlerts } from "./owner-alerts";
+import { lift, suspend } from "./suspensions";
 import {
   reportNoteLimit,
   reportReasons,
@@ -15,7 +16,9 @@ import {
 // Members' reports of posts, reviews, comments, and profiles, and the owner's
 // review of them (docs/data-and-access.md#content-reports). A report hides
 // its item from the reporter, keeps what they saw for the review page, and
-// alerts the owner by email and Pushover.
+// alerts the owner by email and Pushover. From the review page the owner can
+// also suspend a reported author and lift a suspension
+// (docs/data-and-access.md#member-suspension).
 
 // A member's reports a day, which bounds the owner's alerts.
 export const dailyReportLimit = 10;
@@ -223,11 +226,14 @@ export function ownerEmail() {
   return process.env.SCREENR_OWNER_EMAIL?.trim() || null;
 }
 
-export async function isOwner(userId: string) {
+export async function isOwner(
+  userId: string,
+  client: Pick<PoolClient, "query"> = db,
+) {
   const email = ownerEmail();
   if (!email) return false;
   return !!(
-    await db.query(
+    await client.query(
       'SELECT 1 FROM "user" WHERE id=$1 AND lower(email)=lower($2)',
       [userId, email],
     )
@@ -250,7 +256,14 @@ export type PendingReport = {
   photo: boolean;
   // Whether the item is already gone, deleted by its author or removed.
   gone: boolean;
-  author: { user_id: string; username: string; display_name: string };
+  // Whether the owner has suspended the author, which hides their profile
+  // and content but leaves the report open for Remove or Dismiss.
+  author: {
+    user_id: string;
+    username: string;
+    display_name: string;
+    suspended: boolean;
+  };
   reporter: { username: string; display_name: string };
 };
 
@@ -265,7 +278,8 @@ export async function pendingReports(): Promise<PendingReport[]> {
           (SELECT removed_at IS NOT NULL FROM discussion_post WHERE id=r.discussion_post_id),
           (SELECT NOT active FROM review WHERE id=r.review_id),
           (SELECT removed_at IS NOT NULL FROM comment WHERE id=r.comment_id),false) AS gone,
-        jsonb_build_object('user_id',a.user_id,'username',a.username,'display_name',a.display_name) AS author,
+        jsonb_build_object('user_id',a.user_id,'username',a.username,'display_name',a.display_name,
+          'suspended',EXISTS (SELECT 1 FROM member_suspension s WHERE s.user_id=a.user_id)) AS author,
         jsonb_build_object('username',rp.username,'display_name',rp.display_name) AS reporter
       FROM content_report r JOIN profile a ON a.user_id=r.author_id
       JOIN profile rp ON rp.user_id=r.reporter_id
@@ -337,8 +351,10 @@ async function removeItem(client: PoolClient, report: ReportRow) {
 }
 
 // What the owner can do with an open report. Removing the item resolves every
-// open report of it; dismissing resolves only this one. Each action runs in
-// the domain write transaction with the report locked.
+// open report of it; dismissing resolves only this one. Suspending its author
+// resolves none: their content is hidden while suspended, and each report
+// still waits for Remove or Dismiss, for when the suspension is lifted. Each
+// action runs in the domain write transaction with the report locked.
 export const reviewActions = {
   remove: async (client: PoolClient, report: ReportRow) => {
     await removeItem(client, report);
@@ -355,6 +371,11 @@ export const reviewActions = {
         report.comment_id,
       ],
     );
+  },
+  suspend: async (client: PoolClient, report: ReportRow) => {
+    if (await isOwner(report.author_id, client))
+      throw new AppError("You can’t suspend your own account.");
+    await suspend(client, report.author_id);
   },
   dismiss: async (client: PoolClient, report: ReportRow) => {
     await client.query(
@@ -391,4 +412,13 @@ export async function reviewReport(
     if (!report) throw new AppError("Report not found.", 404);
     await reviewActions[action as ReviewAction](client, report);
   });
+}
+
+// Lifts a member's suspension from the review page's list of suspended
+// members. Only the owner reaches this, as for review actions.
+export async function liftSuspension(userId: string, member: unknown) {
+  if (!(await isOwner(userId))) throw new AppError("Page not found.", 404);
+  if (typeof member !== "string" || member.length > 255)
+    throw new AppError("Suspension not found.", 404);
+  await transaction((client) => lift(client, member));
 }
