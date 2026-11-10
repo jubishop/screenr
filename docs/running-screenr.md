@@ -195,7 +195,10 @@ hour, with `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` set, it also
 [checks that Google accepts the web client](deployment.md#google-client-check).
 Each of these cleanup steps runs on its own: one that fails logs
 `worker cleanup failed` and the rest still run
-([worker outages](deployment.md#worker-outages)).
+([worker outages](deployment.md#worker-outages)). An exception that nothing
+catches ends the worker after it logs `worker crashed` and sends that line to
+Sentry; systemd restarts it, and the
+[crash check](deployment.md#crash-check) emails the owner.
 Local development does not need it.
 With `EMAIL_TRANSPORT=file`, Next writes sign-in codes directly to
 `.cache/mail` without queueing them, and `npm run worker` refuses to start
