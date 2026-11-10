@@ -217,6 +217,11 @@ const items = (
     AND own.item_type='recommended' AND own.active) AS viewer_recommended,
   ${viewerStatus("c.title_id")} AS viewer_status,
   (SELECT own.rank FROM top_ten own WHERE own.owner_id=$1 AND own.title_id=c.title_id) AS viewer_top_ten_rank,
+  -- The reader's stored date outlasts later and cleared statuses, as the
+  -- title page's status menu shows it.
+  (SELECT own.finished_on::text FROM watch_progress own WHERE own.owner_id=$1 AND own.title_id=c.title_id) AS viewer_finished_on,
+  (SELECT jsonb_build_object('rating',own.rating,'body',own.body,'spoiler',own.spoiler) FROM review own
+    WHERE own.owner_id=$1 AND own.title_id=c.title_id AND own.active) AS viewer_review,
   date_trunc('milliseconds', CASE WHEN c.item_type='earlier' THEN coalesce(replies.activity,replies.placeholder_activity,c.created_at)
     ELSE greatest(c.activity_at,card.activity,replies.activity) END) AS visible_activity,
   coalesce(replies.comments,'[]') AS comments,

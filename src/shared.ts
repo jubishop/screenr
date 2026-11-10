@@ -178,6 +178,12 @@ export const progressStatuses = [
 ] as const;
 export type ProgressStatus = (typeof progressStatuses)[number];
 export type WatchStatus = "want_to_watch" | ProgressStatus;
+// A member's current review of a title: a whole-star rating, text, or both.
+export type ViewerReview = {
+  rating: number | null;
+  body: string | null;
+  spoiler: boolean;
+};
 export type ReactionSummary = {
   kind: ReactionKind;
   count: number;
@@ -220,6 +226,11 @@ export type Conversation = {
   viewer_status: WatchStatus | null;
   // The entry's title's rank in the reader's own top 10.
   viewer_top_ten_rank: number | null;
+  // The reader's own stored last-finished date (YYYY-MM-DD) and current
+  // review for the entry's title, which its status menu and review editor
+  // start from.
+  viewer_finished_on: string | null;
+  viewer_review: ViewerReview | null;
   username: string;
   display_name: string;
   photo: string | null;
