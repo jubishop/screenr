@@ -605,7 +605,8 @@ uses it when launched with these arguments; Release builds ignore them:
 | `-ScreenrFixtureFailure` | A fixture that answers every `/api/screenr` request, such as `errors/update-required`. |
 | `-ScreenrFixtureOutageSignal` | A file whose existence fails every `/api/screenr` request with a 502 and no body, as from the proxy during a deploy, so the app's next reads, such as a poll, fail until the file is removed. |
 | `-ScreenrFixtureHolds` | A directory where a file at a request's path holds the app's requests to that path, such as `api/screenr/photo` for a photo upload or `api/auth/link-social` for a link, until the file is removed, so a change stays in flight, such as through a failed read. A request the file releases then answers as any other. |
-| `-ScreenrFixtureLog` | A file that gets a line per `/api/screenr` and `/api/auth` request, such as `GET /api/screenr/screen?path=%2F`, with ` visit` after the app's [visit](#visits) and a write's JSON body, keys sorted, after the write: `POST /api/screenr/read-notification {"id":"18"}`. An upload has its type and size instead: `POST /api/screenr/photo image/jpeg 41250 bytes`. Sent [feedback](#feedback) adds a `FEEDBACK` line. A [trailer](#trailers)'s player adds `WEB <url>` for each page it asks for. The [share extension](#share-extension) adds `SHARE completed` or `SHARE cancelled` as it ends each request. The app's launch starts the file empty; the share and [notification](#push-content) extensions add their requests to it. |
+| `-ScreenrFixtureLog` | A file that gets a line per `/api/screenr` and `/api/auth` request, such as `GET /api/screenr/screen?path=%2F`, with ` visit` after the app's [visit](#visits) and a write's JSON body, keys sorted, after the write: `POST /api/screenr/read-notification {"id":"18"}`. An upload has its type and size instead: `POST /api/screenr/photo image/jpeg 41250 bytes`. Sent [feedback](#feedback) adds a `FEEDBACK` line. A [trailer](#trailers)'s player adds `WEB <url>` for each page it asks for. The [share extension](#share-extension) adds `SHARE completed` or `SHARE cancelled` as it ends each request. The [age check](#age-check) adds `AGE required` and, where the scenario's law requires it, `AGE range 18`. The app's launch starts the file empty; the share and [notification](#push-content) extensions add their requests to it. |
+| `-ScreenrFixtureAge` | What the [age check](#age-check) finds: `notRequired` (default), where the law doesn't require it, or where it does, `adult`, `minor`, `declined`, or `failing`. |
 | `-ScreenrFixturePush` | The notification permission the app finds: `undecided` (default), `allowed`, or `denied`; or `system` for iOS's own permission and APNs registration. See [push notifications](#push-notifications). |
 | `-ScreenrOpenURL` | A link the app opens at launch, as if the system delivered it, such as `screenr-dev://titles/tv/201`. |
 | `-ScreenrAppearance` | `dark` or `light`, in place of the system's appearance, which a Simulator changes for its apps only after it restarts. |
@@ -646,6 +647,76 @@ the route, such as `auth/email-otp/send-verification-otp/rate-limited`,
 sign-in and linking accept only the stub credentials described in
 [Sign-in](#sign-in), and answer others with the route's `invalid-token`
 fixture. Photos are not served, so avatars show initials.
+
+## Age check
+
+Screenr is for people 18 or older
+([terms decision](../docs/product-brief.md#terms-of-use-and-adults-only--2026-11-09)).
+Where the law requires apps to check the age category that Apple shares, as
+in Texas, Utah, and Louisiana, the app checks it with Apple's
+[Declared Age Range](https://developer.apple.com/documentation/declaredagerange)
+API at each launch, before sign-in, and refuses anyone the category doesn't
+show to be an adult. Elsewhere it never asks. The website has no such check,
+since the laws cover App Store apps and the API is Apple's.
+
+| Piece | Where | What it does |
+| --- | --- | --- |
+| `AgeCheck` | ScreenrKit `AgeCheck/` | `@Observable`, in the environment through `.screenrServices(_:)`. Its `phase` is `checking`, `allowed`, or `refused` with `minor`, `declined`, or `failed`. `check(using:)` checks once while the phase is `checking`, and `retry()` returns a refusal to `checking`. |
+| `AgeAssurance`, `DeclaredAge` | ScreenrKit `AgeCheck/` | The service's two questions: whether the law requires the check, and the person's age range around a gate, `declined` or `shared(lowerBound:)`. |
+| `SystemAgeAssurance` | `Screenr/Shell/` | Apple's service: `isEligibleForAgeFeatures`, then `requestAgeRange(ageGates: 18, in:)`, which shows Apple's sheet from the window's top view controller. SwiftUI's `requestAgeRange` action isn't `Sendable`, so Swift 6 can't call it from the main actor. |
+| `AgeCheckView`, `AdultsOnlyView` | `Screenr/Shell/` | A spinner while the check runs, from when the app is first active, and the refusal, "Screenr is for adults". |
+| `FixtureAgeAssurance` | ScreenrKit `FakeAPI/` | Fixture launches' stand-in, from `-ScreenrFixtureAge`, which writes each question to the request log. |
+
+- **Whether to ask:** `isEligibleForAgeFeatures` alone decides, as Apple's
+  [guide](https://developer.apple.com/documentation/declaredagerange/requesting-people-share-their-age-range-with-your-app)
+  directs before requesting a range. The app doesn't read
+  `requiredRegulatoryFeatures`, since refusing minors answers each feature it
+  lists. In the iOS 27 Simulator on 2026-11-09, `isEligibleForAgeFeatures`
+  was false, yet `requiredRegulatoryFeatures` listed all three features and
+  `requestAgeRange` threw `notAvailable`, so taking that list as the law's
+  requirement would refuse everyone there.
+- **An adult:** a shared range whose lower bound is 18 or more, as Apple says
+  to enforce a minimum age. Where the law requires the check, the system
+  bounds the range by the law's categories, such as Texas's under 13, 13 to
+  15, 16 to 17, and 18 or older, rather than by the app's gate.
+- **Refused:** a range that starts below 18 or has no lower bound, a
+  decline, and any error from either call, including from
+  `isEligibleForAgeFeatures`, since then the app can't tell that the law
+  doesn't apply. A minor gets no way in. A decline or a failure offers Try
+  again, which checks again; the decline's message points to Settings → your
+  name → Personal Information → Age Range for Apps, where a person changes
+  what they share.
+- **First:** a refused app sends the server nothing. Links that arrive during
+  the check wait in the router, and an invitation link is checked with the
+  server once the age check passes.
+- **Each launch:** the check runs at every launch and on Try again, never on
+  a return to the foreground. Apple caches each person's answer, so its sheet
+  doesn't show every time.
+- **Privacy:** the age stays in the check. The app never sends it to the
+  server, stores it, or logs it; a failed check logs only the error's type
+  and code, at notice level, which stays in the app's log file. The privacy
+  policy says the app checks the age category on the iPhone.
+
+`AgeCheckTests` in ScreenrKit cover the rules against a fake service, and the
+UI tests' `AgeCheckTests` cover each screen against `FixtureAgeAssurance`:
+the request log shows the app never asks for a range where the law doesn't
+require it, and a refused app sends no request.
+
+What the tests can't reach:
+
+- **Apple's service where the law applies:** Apple's
+  [age assurance sandbox](https://developer.apple.com/documentation/storekit/testing-age-assurance-in-sandbox)
+  runs only on a device, and the Simulator's service never requires the
+  check, so no test shows Apple's sheet or gets a real age range. What
+  `SystemAgeAssurance` gets there rests on Apple's documentation.
+  `LaunchTests.testLaunchShowsTheWordmark`, which launches without fixtures,
+  does run it in the Simulator, where it lets the person in without asking.
+- **Sessions from before a refusal:** the check gates the app's screens. The
+  share extension, notification actions, and Siri and Shortcuts use the
+  session the app saved and run no check, so one saved before a refusal,
+  such as by a build without the check, still works there. A refused person
+  never reaches sign-in, so they can't save a new one
+  ([#623](https://github.com/jubishop/screenr/issues/623)).
 
 ## Sign-in
 
@@ -712,17 +783,20 @@ screen current, and provides the shared controls.
 
 ```text
 ScreenrApp            builds AppServices and ShellModel, opens -ScreenrOpenURL
-└─ AppRootView        follows SessionStore.phase, handles onOpenURL
-   ├─ RequiredUpdateView        .updateRequired (a 426)
-   ├─ SignInView                .signedOut (SignIn/)
-   └─ signed in, by ShellModel.account
-      ├─ SetupView              .needsSetup (a 403 on the feed; Screens/)
-      └─ MainTabView            .ready
-         ├─ Circle, Friends, You, Find a title (the search-role tab)
-         │  └─ NavigationStack(path: $router[stack: tab])
-         │     ├─ root DestinationView, with the bell (and You's gear)
-         │     └─ pushed DestinationViews
-         └─ sheets: NotificationsSheet, SettingsSheet (the /account screen)
+└─ AppRootView        follows AgeCheck.phase, handles onOpenURL
+   ├─ AgeCheckView              .checking (the age check)
+   ├─ AdultsOnlyView            .refused
+   └─ allowed, by SessionStore.phase
+      ├─ RequiredUpdateView     .updateRequired (a 426)
+      ├─ SignInView             .signedOut (SignIn/)
+      └─ signed in, by ShellModel.account
+         ├─ SetupView           .needsSetup (a 403 on the feed; Screens/)
+         └─ MainTabView         .ready
+            ├─ Circle, Friends, You, Find a title (the search-role tab)
+            │  └─ NavigationStack(path: $router[stack: tab])
+            │     ├─ root DestinationView, with the bell (and You's gear)
+            │     └─ pushed DestinationViews
+            └─ sheets: NotificationsSheet, SettingsSheet (the /account screen)
 ```
 
 The account check reads the friends feed once after sign-in. A 403, which the
