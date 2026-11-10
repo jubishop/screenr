@@ -115,8 +115,10 @@ Each passes under the shared bound below with the same hold.
   `node:test` `timeout`, and a request's timeout, such as
   `request.setTimeout`, `AbortSignal.timeout`, or Playwright's request
   context. `tests/app/process-waits.test.ts` refuses any other bound on a
-  raced timer, a test, or a request. It can't tell a poll's deadline from a
-  timestamp, so give each poll `hang` by hand.
+  timer raced in `Promise.race`, the `timeout` of `test()`, `t.test()`, or a
+  hook, and those three request timeouts. It can't tell a poll's deadline
+  from a timestamp, and it doesn't read a request's own options, such as
+  `http.get`'s `timeout`, so give those `hang` by hand.
 - To show that one operation doesn't wait for another, hold what it would
   wait for, such as the write lock or a provider's reply, until the race ends,
   and race the operation against `hang`. One that wrongly waited would not

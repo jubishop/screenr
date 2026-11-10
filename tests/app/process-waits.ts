@@ -7,5 +7,6 @@
 // 1.25 seconds past a 20-second bound (#615), and PostgreSQL checkpoints held
 // single statements for up to 18 seconds. The Python tests' HANG_SECONDS in
 // tests/_process_waits.py is the same 180 seconds, and process-waits.test.ts
-// refuses other bounds. See memory/process-test-waits.md.
+// refuses other bounds on the waits it can find, though not on polls. See
+// memory/process-test-waits.md.
 export const hang = 180_000;
