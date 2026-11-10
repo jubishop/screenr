@@ -11,12 +11,11 @@
   },
   "response": {
     "status": 200,
-    "etag": "W/\"Sgq4IGeZk4BC44kWQH_Z2HI6xSApKRnxWMt-jkFf6JA\"",
+    "etag": "W/\"DRKs4oIA3-kPoHmAO_n4tcQDHOju1azY9Od5UAtydZo\"",
     "body": [
       {
         "id": "movie:101",
         "kind": "movie",
-        "tmdb_id": 101,
         "name": "Night Crossing",
         "overview": "Two strangers share the last ferry across a frozen strait.",
         "poster_path": "/night-crossing.jpg",
@@ -52,7 +51,6 @@
       {
         "id": "tv:203",
         "kind": "tv",
-        "tmdb_id": 203,
         "name": "Night Harbor",
         "overview": "Dockworkers uncover a smuggling ring.",
         "poster_path": "/night-harbor.jpg",

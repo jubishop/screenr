@@ -11,13 +11,12 @@
   },
   "response": {
     "status": 200,
-    "etag": "W/\"IqlbbuqaBIbuZQoefTRhRrP0CBbrvUu1d_WGioPB6QE\"",
+    "etag": "W/\"YJ-VhC0WbTDPXCrL3arP5ksjl54hWd2eXwomTWYvr1g\"",
     "body": {
       "kind": "title",
       "title": {
         "id": "tv:202",
         "kind": "tv",
-        "tmdb_id": 202,
         "name": "The Long Winter",
         "overview": "A mountain village waits out a winter that will not end.",
         "poster_path": "/long-winter.jpg",

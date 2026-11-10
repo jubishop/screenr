@@ -128,6 +128,14 @@ when its deadline grows or its timestamp is left stale.
   hook, and those three request timeouts. It can't tell a poll's deadline
   from a timestamp, and it doesn't read a request's own options, such as
   `http.get`'s `timeout`, so give those `hang` by hand.
+- `npm test` and `test:coverage` give each application test and hook
+  `testTimeout` from `tests/app/process-waits.ts`, 30 seconds above `hang`,
+  so a wait with no bound still fails its test by name, and
+  `tests/app/exit-guard.ts` ends a file that its tests leave open
+  ([#647](https://github.com/jubishop/screenr/issues/647),
+  [hung tests and open files](../docs/testing.md#hung-tests-and-open-files)).
+  Still bound each wait with `hang`: its failure says what hung, where the
+  timeout says only which test did.
 - A wait that a hook repeats before every test would wait out `hang` again
   for each remaining test once what it waits for hangs, such as a client a
   test never released. After one such wait fails, fail the later ones at once

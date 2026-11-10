@@ -73,22 +73,12 @@ struct DecodingTests {
 
   @Test func ignoresFieldsTheServerAdds() throws {
     let json = #"""
-      {"id": "movie:101", "kind": "movie", "tmdb_id": 101, "name": "Night Crossing",
-      "overview": "", "poster_path": null, "release_date": "2024-03-08", "runtime": 118}
-      """#
-    let title = try ScreenrJSON.decoder().decode(Title.self, from: Data(json.utf8))
-    #expect(title.tmdbId == 101)
-    #expect(title.posterPath == nil)
-  }
-
-  @Test func decodesATitleWithoutATMDBID() throws {
-    let json = #"""
       {"id": "movie:101", "kind": "movie", "name": "Night Crossing", "overview": "",
-      "poster_path": null, "release_date": "2024-03-08"}
+      "poster_path": null, "release_date": "2024-03-08", "runtime": 118}
       """#
     let title = try ScreenrJSON.decoder().decode(Title.self, from: Data(json.utf8))
     #expect(title.id == "movie:101")
-    #expect(title.tmdbId == nil)
+    #expect(title.posterPath == nil)
   }
 
   @Test func roundTripsJSONValues() throws {

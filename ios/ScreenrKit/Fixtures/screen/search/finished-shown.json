@@ -11,7 +11,7 @@
   },
   "response": {
     "status": 200,
-    "etag": "W/\"7t-_KEYcWsU_d7FE58s0W_2RmxkYX-oFChub5BCvMec\"",
+    "etag": "W/\"koU-XIdgW5-udtoDhwzfMjmGu2w8u7AX6HoJoNHH278\"",
     "body": {
       "kind": "search",
       "suggestions": [
@@ -19,7 +19,6 @@
           "id": "tv:204",
           "kind": "tv",
           "name": "Signal Fire",
-          "tmdb_id": 204,
           "overview": "Radio operators on a remote island hear a distress call.",
           "wanted_by": [],
           "poster_path": "/signal-fire.jpg",
@@ -74,7 +73,6 @@
           "id": "movie:101",
           "kind": "movie",
           "name": "Night Crossing",
-          "tmdb_id": 101,
           "overview": "Two strangers share the last ferry across a frozen strait.",
           "poster_path": "/night-crossing.jpg",
           "release_date": "2024-03-08",
@@ -119,7 +117,6 @@
           "id": "movie:105",
           "kind": "movie",
           "name": "Winter Garden",
-          "tmdb_id": 105,
           "overview": "A botanist tends a greenhouse through the polar night.",
           "poster_path": "/winter-garden.jpg",
           "release_date": "2019-12-06",

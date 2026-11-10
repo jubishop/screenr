@@ -10,3 +10,12 @@
 // refuses other bounds on the waits it can find, though not on polls. See
 // memory/process-test-waits.md.
 export const hang = 180_000;
+
+// node:test's timeout, in milliseconds, for each application test and hook,
+// which npm test and test:coverage pass as --test-timeout. node:test sets none
+// by default, so a test that awaited something with no bound, such as a pool
+// event that never comes, ran until someone stopped the run, and named nothing
+// (#647). It sits above hang so that a wait bounded by hang fails first, with
+// its own message; only a hang reaches it. process-waits.test.ts checks that
+// both commands pass it and that a hung test fails within CI's app job limit.
+export const testTimeout = hang + 30_000;

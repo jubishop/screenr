@@ -11,13 +11,12 @@
   },
   "response": {
     "status": 200,
-    "etag": "W/\"le9jJme1ZJlgMHGTn--iQhvgeWQrtlyx-kyz-a1IYGI\"",
+    "etag": "W/\"aV1XlppExAjs6MyNITPBa6ivxQTbasQbZdBR_opdrh4\"",
     "body": {
       "kind": "title",
       "title": {
         "id": "movie:103",
         "kind": "movie",
-        "tmdb_id": 103,
         "name": "The Quiet Orchard",
         "overview": "An orchard keeper hears the trees whispering.",
         "poster_path": "/quiet-orchard.jpg",

@@ -126,6 +126,15 @@ test("search enriches movie and TV summaries and caches availability without rep
     result.map((t) => t.id),
     ["movie:93901", "tv:93901"],
   );
+  // Results carry no TMDB number, and the summary-only show stores it.
+  assert.ok(result.every((t) => !("tmdb_id" in t)));
+  assert.deepEqual(
+    (await db.query("SELECT id,tmdb_id FROM title ORDER BY id")).rows,
+    [
+      { id: "movie:93901", tmdb_id: 93901 },
+      { id: "tv:93901", tmdb_id: 93901 },
+    ],
+  );
   assert.ok(result.every((t) => t.viewing.status === "ok"));
   assert.equal(result[0].viewing.sections[0].services[0].name, "AMC+");
   assert.equal(result[0].viewing.sections[1].services[0].name, "Tubi TV");

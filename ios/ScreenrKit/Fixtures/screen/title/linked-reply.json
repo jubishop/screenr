@@ -11,13 +11,12 @@
   },
   "response": {
     "status": 200,
-    "etag": "W/\"8Ee7DRkm0DWdujcXeK5aT8DBz1rrY5Vu81jIjLtobj4\"",
+    "etag": "W/\"i5O3-ljGuy7KpUndcjMOpLlCb0tUwG5rO1hLcM62HSQ\"",
     "body": {
       "kind": "title",
       "title": {
         "id": "tv:201",
         "kind": "tv",
-        "tmdb_id": 201,
         "name": "Harbor Lights",
         "overview": "A lighthouse town keeps its secrets through the fog.",
         "poster_path": "/harbor-lights.jpg",

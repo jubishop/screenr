@@ -11,13 +11,12 @@
   },
   "response": {
     "status": 200,
-    "etag": "W/\"naDh3nXsDxFwjKf6a3aJVhEKEkN1WDcAYocxuG_MJ2s\"",
+    "etag": "W/\"nQjlr6ccLS22eCTeZL5bYbGTEOAelCl_fk3PMhrn6XM\"",
     "body": {
       "kind": "title",
       "title": {
         "id": "tv:204",
         "kind": "tv",
-        "tmdb_id": 204,
         "name": "Signal Fire",
         "overview": "Radio operators on a remote island hear a distress call.",
         "poster_path": "/signal-fire.jpg",

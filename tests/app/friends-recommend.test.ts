@@ -104,7 +104,6 @@ test("Friends recommend sorts by recommending friends, then the most recent reco
     {
       id: "tv:3",
       kind: "tv",
-      tmdb_id: 3,
       name: "Show 3",
       overview: "",
       poster_path: null,

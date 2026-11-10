@@ -52,12 +52,13 @@ With the latest Node LTS release selected, run one suite by its filename:
 
 ```sh
 npx tsx scripts/test-database.ts
-npx tsx --import ./tests/app/failure-guard.ts --test tests/app/reactions.test.ts
+npx tsx --import ./tests/app/failure-guard.ts --import ./tests/app/exit-guard.ts --test --test-timeout=210000 tests/app/reactions.test.ts
 npm run test:browser -- tests/browser/reactions.spec.ts
 ```
 
-The `--import` loads the [failure line](#failure-lines) guard, as `npm test`
-does.
+The `--import` options load the [failure line](#failure-lines) and
+[exit](#hung-tests-and-open-files) guards, and `--test-timeout` sets the
+[test timeout](#hung-tests-and-open-files), as `npm test` does.
 
 `npm test` discovers all application `*.test.ts` files and keeps file
 execution serial; `npm run test:browser` discovers all browser `*.spec.ts`
@@ -929,10 +930,11 @@ certificate and a fixture upstream that sends the app's security headers from
 `next.config.ts` and `src/proxy.ts`. It verifies the `screenr.club` site,
 client IP forwarding, that each security header reaches the client exactly
 once, and old invitation/title redirects with their paths and queries intact.
-Run it alone with `node --import tsx --test tests/app/proxy.test.ts`. It does not verify public DNS,
-Cloudflare certificates, or real provider configuration. Locally it uses any
-installed Caddy. In CI it also requires `caddy version` to report the release
-pinned to match production; see [CI Caddy](development-workflow.md#ci-caddy).
+Run it alone as [one suite](#running-one-suite) shows. It does not verify
+public DNS, Cloudflare certificates, or real provider configuration. Locally it
+uses any installed Caddy. In CI it also requires `caddy version` to report the
+release pinned to match production; see
+[CI Caddy](development-workflow.md#ci-caddy).
 The browser test writes mobile and desktop screenshots to `.cache/` and
 keeps failure traces in `test-results/`.
 
@@ -1125,3 +1127,58 @@ each line where it is caused is enough.
 
 **Rejected alternatives:** having the guard flag every `console.log` JSON
 record or every proxy line.
+
+## Hung tests and open files
+
+`npm test` and `npm run test:coverage` give every application test and hook
+node:test's `--test-timeout` of `testTimeout` from
+`tests/app/process-waits.ts`: 210 seconds, 30 above the shared `hang` bound
+that [process test waits](../memory/process-test-waits.md) describes. A wait
+bounded by `hang` fails first, with its own message, so the timeout ends only
+a test that awaits something with no bound, such as a pool event that never
+comes. node:test reports that test by name as it fails, with
+`test timed out after 210000ms` in the run's summary.
+
+Both commands also load `tests/app/exit-guard.ts` into every test file's
+process. node:test ends a file only once nothing holds its process open, so
+a timer, server, socket, or worker loop that a test left running kept the
+file, and the run, open with nothing failed. Once a file's tests finish, the
+guard ends a process that still runs:
+
+- If every test passed, it waits `hang`, then fails the file and lists what
+  held it open, as `process.getActiveResourcesInfo()` names it, such as
+  `Timeout` or `TCPSocketWrap`.
+- If a test failed, it ends the file as soon as the file's after hooks
+  finish, as `--test-force-exit` would. A test that times out never runs the
+  rest of its body, its `finally` included, so what it started still runs.
+
+The `hang` bound counts from the end of the file's last test, so it also
+ends a file whose root `after` hooks hang. When one of those hooks fails,
+node:test skips the rest, and the bound ends that file too.
+`tests/app/exit-guard.test.ts` covers each case.
+
+In CI, an app job takes under 4 minutes, setup included, so a hung test
+fails, naming itself, within the job's 8-minute limit, as
+`tests/app/process-waits.test.ts` checks. Later waits on what the hung test
+still holds, such as the next table reset's wait for the pool or a root
+`after` hook's `db.end()` waiting for a client the test never released, can
+each add up to `hang`, which can outlast the job. The log names the test
+before then, and a local run finishes with the whole summary.
+
+**Decision — 2026-11-10:** fail a file that its passing tests leave open,
+after `hang`, rather than end every file at once with `--test-force-exit`,
+and end a file at once only after one of its tests failed. Settled by the
+agent as routine in [#647](https://github.com/jubishop/screenr/issues/647);
+the user may override it.
+
+**Why:** `--test-force-exit` would also end a passing file that leaks a
+timer, server, or worker loop, which hides the leak. A file whose test failed
+already fails, and its test may have left a wait running that never ends;
+waiting `hang` for it after a test timeout would make one hang outlast the
+app job. Before [#637](https://github.com/jubishop/screenr/issues/637), a
+failed wait in `tests/app/failure-logs.test.ts` left its worker loop running,
+and the file ran until it was killed.
+
+**Tradeoff:** a file whose test failed ends without waiting for what its
+tests left closing, and without naming what held it open, so a leak in a
+failing file shows only once its tests pass.

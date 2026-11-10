@@ -5,10 +5,11 @@ export type Person = {
   // The profile photo's version for its avatar URL, or null for the initial.
   photo: string | null;
 };
+// A movie or show. `id` is `<kind>:<TMDB ID>`, so clients get no separate
+// TMDB number; the server keeps one in the stored row.
 export type Title = {
   id: string;
   kind: "movie" | "tv";
-  tmdb_id: number;
   name: string;
   overview: string;
   poster_path: string | null;

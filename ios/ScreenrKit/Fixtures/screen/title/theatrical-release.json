@@ -11,13 +11,12 @@
   },
   "response": {
     "status": 200,
-    "etag": "W/\"yxCQDtQ_tg0SdsWKaaRmXUIwzRo_8p_5XKsblKouNTY\"",
+    "etag": "W/\"8McJ9h2pKP9APgQBrPYF2K3vDHz9HSTomxcFZk3jPO4\"",
     "body": {
       "kind": "title",
       "title": {
         "id": "movie:105",
         "kind": "movie",
-        "tmdb_id": 105,
         "name": "Winter Garden",
         "overview": "A botanist tends a greenhouse through the polar night.",
         "poster_path": "/winter-garden.jpg",
