@@ -116,7 +116,7 @@ export default function Privacy() {
             also suspend the member who wrote it: a suspended member is signed
             out and can&rsquo;t sign in, and their profile and everything they
             wrote are hidden from everyone until the operator lifts the
-            suspension. Suspension deletes nothing.
+            suspension. Apart from signing them out, suspension deletes nothing.
           </li>
           <li>
             <strong>Unfriending</strong> immediately ends access to each

@@ -904,8 +904,9 @@ suspension there later
 `src/server/suspensions.ts` holds the rules, migration
 `043-member-suspension.sql` the table and the access rule, and
 `tests/app/suspensions.test.ts` and `tests/browser/reports.spec.ts` cover
-them. A suspension is a `member_suspension` row with its start; it deletes
-nothing else, so lifting it restores everything.
+them. A suspension is a `member_suspension` row with its start. Apart from
+ending the member's sessions, it deletes nothing, so lifting it restores
+everything else.
 
 - **Suspend:** Suspend on a report, after an
   [in-page confirmation](interface-design.md#confirm-other-destructive-actions--2026-10-12)
