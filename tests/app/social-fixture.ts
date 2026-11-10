@@ -73,14 +73,20 @@ export function useDatabase() {
 // failed assertion can. A table reset beside that query could deadlock with
 // its locks, so the reset first waits for the pool to go idle (#469). Load or
 // a checkpoint can hold that query up for many seconds, so only a hang ends
-// the wait.
+// the wait. Once a reset has waited out that bound, later resets that find the
+// pool still busy fail at once: a query that never finishes, or a client a
+// test never released, would otherwise cost each remaining test another hang.
+let hung = false;
 async function idle() {
-  const deadline = performance.now() + hang;
+  const deadline = performance.now() + (hung ? 0 : hang);
   while (db.idleCount < db.totalCount || db.waitingCount) {
-    if (performance.now() > deadline)
+    if (performance.now() >= deadline) {
+      hung = true;
       throw new Error("An earlier test's query never finished.");
+    }
     await setTimeout(5);
   }
+  hung = false;
 }
 
 // Replaces console.error and console.warn until mock.restoreAll(), or until

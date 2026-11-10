@@ -256,7 +256,9 @@ import these helpers instead of defining their own copies.
   title, or row that depends on one reaches the next test or file, and each
   test inserts the titles it names. The reset first
   waits for the pool to go idle, so a query that an earlier test left running
-  cannot deadlock with it; after 10 seconds it fails the test instead. A
+  cannot deadlock with it. Only a hang ends that wait: after the shared hang
+  bound in `tests/app/process-waits.ts` it fails the test, and later resets
+  fail at once while the pool stays busy. A
   suite that resets other tables imports `db` and registers its own hooks
   instead. Node isolates files in separate processes; keep
   `--test-concurrency=1` when running them together against one database.

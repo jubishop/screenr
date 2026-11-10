@@ -119,6 +119,11 @@ Each passes under the shared bound below with the same hold.
   hook, and those three request timeouts. It can't tell a poll's deadline
   from a timestamp, and it doesn't read a request's own options, such as
   `http.get`'s `timeout`, so give those `hang` by hand.
+- A wait that a hook repeats before every test would wait out `hang` again
+  for each remaining test once what it waits for hangs, such as a client a
+  test never released. After one such wait fails, fail the later ones at once
+  while the hang lasts, as `idle()` does, so one hang costs its file one
+  bound, not one per test.
 - To show that one operation doesn't wait for another, hold what it would
   wait for, such as the write lock or a provider's reply, until the race ends,
   and race the operation against `hang`. One that wrongly waited would not
