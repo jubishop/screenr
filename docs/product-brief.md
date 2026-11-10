@@ -1150,8 +1150,9 @@ added reports, the owner's review page with Remove and Dismiss, and the
 email and Pushover alerts; see
 [content reports](data-and-access.md#content-reports).
 [Issue #556](https://github.com/jubishop/screenr/issues/556) adds
-suspension, and [#557](https://github.com/jubishop/screenr/issues/557) the
-blocked-word filter.
+suspension. [Issue #557](https://github.com/jubishop/screenr/issues/557)
+added the blocked-word filter; see
+[blocked words](data-and-access.md#blocked-words).
 
 **Why:** The user wants Screenr on the App Store ("first we have to get it
 released in the app store", 2026-11-08), and guideline 1.2 requires

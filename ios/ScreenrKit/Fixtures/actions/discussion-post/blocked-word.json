@@ -1,0 +1,19 @@
+{
+  "description": "A post with a blocked word, which the server refuses in its own words.",
+  "viewer": "alice",
+  "request": {
+    "method": "POST",
+    "action": "discussion-post",
+    "path": "/api/screenr/discussion-post",
+    "body": {
+      "body": "Skip the hand job scene in episode two.",
+      "spoiler": false
+    }
+  },
+  "response": {
+    "status": 400,
+    "body": {
+      "error": "Post contains a word Screenr doesn’t allow."
+    }
+  }
+}

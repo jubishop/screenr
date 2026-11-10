@@ -891,6 +891,46 @@ report covers the display name and photo.
   nobody can open the review page and no email is queued. See
   [production settings](deployment.md#provisioning).
 
+## Blocked words
+
+The server refuses a post, title comment, reply, review, display name, or
+username that contains a word from the blocked-word list
+([decision](product-brief.md#reports-review-and-suspension--2026-11-09),
+[issue #557](https://github.com/jubishop/screenr/issues/557)). The list is
+`blockedWords` in `src/server/blocked-words.ts`: slurs and hateful terms,
+such as racial, ethnic, religious, homophobic, transphobic, and ableist ones,
+and the most explicit sexual terms. Ordinary swearing, such as "fuck" and
+"shit", passes, since members are adults who talk that way about shows.
+`src/server/word-filter.ts` matches it, and `tests/app/blocked-words.test.ts`
+and `tests/browser/blocked-words.spec.ts` cover both.
+
+- **Matching:** whole words only, so "snigger", "spicy", and "Scunthorpe"
+  pass, though digits around a word don't join it, as in a username such as
+  "name99". It ignores case, accents, and hidden format characters such as
+  zero-width spaces, reads full-width letters as plain ones, and reads common
+  look-alikes as letters: `0` as o, `1` as i or l, `3` as e, `4` and `@` as
+  a, `5` and `$` as s, `7` as t, `8` as b, `!` as i, and `|` as l or i. A
+  plural ending, `s`, `es` after s, z, x, ch, or sh, or `ies` for `y`, also
+  matches. A phrase such as "porch monkey" matches with spaces, hyphens, or
+  nothing between its words. An entry that is also an ordinary word or a
+  familiar name, such as "dyke" in "Dick Van Dyke" or "queer" in "Queer Eye",
+  stays off the list, since it would refuse ordinary text.
+- **Where it applies:** every write that saves the text, through the shared
+  text check in `src/server/db.ts`: `discussion-post`, `title-comment`,
+  `comment`, `review`, both when saving and when editing, and the names in
+  `setup`, `display-name`, and `profile`. A refused signup creates no
+  profile and leaves its invitation unused, and a refused edit changes
+  nothing. Report notes, which only the owner reads, and profile photos,
+  which rely on [reports](#content-reports), aren't filtered. Text saved
+  before the list changes stays as it is until its author edits it.
+- **Message:** a 400 with "Post contains a word Screenr doesn’t allow.",
+  naming the field: Post, Comment, Reply, Review, Display name, or Username.
+  It doesn't repeat the word. Both clients show the server's message beneath
+  the form, as for any refused write, and keep what the member typed; the
+  iPhone app's `ScreenrUITests` cover it with the
+  `actions/discussion-post/blocked-word` and `actions/profile/blocked-word`
+  fixtures.
+
 ## Account deletion
 
 Members delete their own account from Account on the web, and the iPhone

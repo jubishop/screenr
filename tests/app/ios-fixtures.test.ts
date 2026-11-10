@@ -1016,6 +1016,13 @@ const actions: Record<Exclude<ActionName, "screen">, Record<string, Case>> = {
       { name: "Alice Park", username: "alicep" },
       "Changing the display name and username returns the profile.",
     ),
+    "blocked-word": write(
+      "profile",
+      "alice",
+      { name: "Alice Park", username: "alice_gangbang" },
+      "A username with a blocked word, which the server refuses in its own words.",
+      400,
+    ),
   },
   photo: {
     upload: {
@@ -1212,6 +1219,13 @@ const actions: Record<Exclude<ActionName, "screen">, Record<string, Case>> = {
       "alice",
       { body: "Movie night at my place on Friday?", spoiler: false },
       "Posting without a title returns the entry.",
+    ),
+    "blocked-word": write(
+      "discussion-post",
+      "alice",
+      { body: "Skip the hand job scene in episode two.", spoiler: false },
+      "A post with a blocked word, which the server refuses in its own words.",
+      400,
     ),
   },
   comment: {

@@ -1,0 +1,19 @@
+{
+  "description": "A username with a blocked word, which the server refuses in its own words.",
+  "viewer": "alice",
+  "request": {
+    "method": "POST",
+    "action": "profile",
+    "path": "/api/screenr/profile",
+    "body": {
+      "name": "Alice Park",
+      "username": "alice_gangbang"
+    }
+  },
+  "response": {
+    "status": 400,
+    "body": {
+      "error": "Username contains a word Screenr doesn’t allow."
+    }
+  }
+}

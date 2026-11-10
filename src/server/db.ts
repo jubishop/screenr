@@ -1,5 +1,6 @@
 import { Pool, types, type PoolClient } from "pg";
 import { logFailure } from "./log";
+import { hasBlockedWord } from "./word-filter";
 
 // The production build copies this module into each server bundle that
 // imports it, such as the pages' and the route handlers', and runs every copy
@@ -149,11 +150,17 @@ export const isBigintId = (value: unknown): value is string =>
   /^[1-9][0-9]{0,18}$/.test(value) &&
   BigInt(value) <= 9223372036854775807n;
 
+// Text a member writes for others to read, trimmed: a post, comment, reply,
+// review, display name, or username. Text with a blocked word is refused
+// (docs/data-and-access.md#blocked-words).
 export function text(value: unknown, label: string, max = 2000): string {
   if (typeof value !== "string" || !value.trim() || value.trim().length > max) {
     throw new AppError(`${label} must contain 1–${max} characters.`);
   }
-  return value.trim();
+  const content = value.trim();
+  if (hasBlockedWord(content))
+    throw new AppError(`${label} contains a word Screenr doesn’t allow.`);
+  return content;
 }
 
 // Control characters, Unicode line and paragraph separators, and bidirectional
