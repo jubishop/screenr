@@ -56,13 +56,17 @@ export const erasable = (itemType: string) =>
 // screenr_can_read and screenr_blocked for each row (issue #373). `audience`
 // has a row for each owner whose entries the reader can read, the reader and
 // their friends, with `readers`, everyone who can read that owner's entries.
-// `hidden` lists everyone the reader has blocked or been blocked by.
+// `hidden` lists everyone the reader has blocked or been blocked by, and the
+// entries and replies the reader reported
+// (docs/data-and-access.md#content-reports).
 const access = `audience AS MATERIALIZED (
     SELECT r.owner_id,ARRAY(SELECT user_id FROM screenr_friends(r.owner_id)) || r.owner_id AS readers
     FROM (SELECT $1::text AS owner_id UNION ALL SELECT user_id FROM screenr_friends($1)) r
   ), hidden AS MATERIALIZED (
     SELECT ARRAY(SELECT CASE WHEN blocker_id=$1 THEN blocked_id ELSE blocker_id END
-      FROM block WHERE $1 IN (blocker_id,blocked_id)) AS users
+      FROM block WHERE $1 IN (blocker_id,blocked_id)) AS users,
+      ARRAY(SELECT entry_id FROM content_report WHERE reporter_id=$1 AND entry_id IS NOT NULL) AS entries,
+      ARRAY(SELECT comment_id FROM content_report WHERE reporter_id=$1 AND comment_id IS NOT NULL) AS replies
   )`;
 // One person's active status, review, and Recommend or Want to watch for a
 // title combine into one card when their actions fall within 24 hours
@@ -223,14 +227,17 @@ const items = (
         'rating',m.rating,'body',m.body,'spoiler',m.spoiler,'edited',m.edited)
         ORDER BY CASE m.item_type WHEN 'progress' THEN 0 WHEN 'review' THEN 1 ELSE 2 END) AS entries,
       bool_or(m.spoiler) AS spoiler,max(m.activity_at) AS activity,
-      bool_or(m.item_type='recommended') AS recommended,bool_or(m.item_type='want_to_watch') AS want_to_watch
+      bool_or(m.item_type='recommended') AS recommended,bool_or(m.item_type='want_to_watch') AS want_to_watch,
+      bool_or(m.id=ANY(h.entries)) AS reported
     FROM cards k JOIN ${feedEntries} m ON m.id=k.id WHERE k.holder=c.id AND k.id<>c.id
   ) card ON true
   LEFT JOIN LATERAL (
     WITH candidates AS (
       -- A removed comment whose author deleted their account has no author;
-      -- it shows as removed, without one, while its replies remain.
-      SELECT cm.*,cm.author_id IS NULL OR ${takesPart("cm.author_id")} AS accessible
+      -- it shows as removed, without one, while its replies remain. A reply
+      -- the reader reported is unavailable to them, as a blocked author's is.
+      SELECT cm.*,(cm.author_id IS NULL OR ${takesPart("cm.author_id")})
+        AND NOT cm.id=ANY(h.replies) AS accessible
       FROM comment cm WHERE ${belongsTo("cm", "c.id")}
     ), retained AS (
       SELECT cm.* FROM candidates cm
@@ -258,7 +265,9 @@ const items = (
   ) replies ON true
   WHERE (c.active OR replies.activity IS NOT NULL
       OR (c.item_type='earlier' AND replies.placeholder_activity IS NOT NULL))
-    AND NOT EXISTS (SELECT 1 FROM cards k WHERE k.id=c.id AND k.holder<>c.id)`;
+    AND NOT EXISTS (SELECT 1 FROM cards k WHERE k.id=c.id AND k.holder<>c.id)
+    -- An entry the reader reported leaves their feeds, with the card it is in.
+    AND NOT c.id=ANY(h.entries) AND NOT coalesce(card.reported,false)`;
 // The cards of every entry the reader ($1) can see that meets `scope`, a
 // condition on c such as `c.id=$2::uuid`. An entry in a card reads as the
 // card, so a link, reply, or reaction to any of its entries reaches the

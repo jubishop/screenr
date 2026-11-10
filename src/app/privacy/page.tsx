@@ -55,6 +55,14 @@ export default function Privacy() {
             unread notifications stay until you read them.
           </li>
           <li>
+            <strong>Reports:</strong> when you report a post, comment, review,
+            or profile, Screenr keeps your reason, any note you add, and a copy
+            of what you reported as you saw it, such as its text or the
+            profile&rsquo;s name and photo, with who you are and who wrote it.
+            Screenr keeps a report until you or the member you reported deletes
+            their account.
+          </li>
+          <li>
             <strong>Usage records:</strong> described under Usage measurement
             below.
           </li>
@@ -95,6 +103,13 @@ export default function Privacy() {
             name and username on it.
           </li>
           <li>
+            <strong>Screenr&rsquo;s operator</strong> sees each report: what was
+            reported, who wrote it, who reported it, and why. Screenr never
+            tells the reported member who reported them. The operator may remove
+            reported content for everyone, including its author, or remove a
+            reported profile&rsquo;s photo and display name.
+          </li>
+          <li>
             <strong>Unfriending</strong> immediately ends access to each
             other&rsquo;s posts, reviews, and threads, and hides your comments
             on each other&rsquo;s content. <strong>Blocking</strong> also hides
@@ -117,7 +132,13 @@ export default function Privacy() {
             <strong>Resend</strong> delivers sign-in codes and, if you turn them
             on, activity emails. It receives your email address and the message.
             Activity emails name the person and title involved and contain no
-            comment text.
+            comment text. Resend also emails Screenr&rsquo;s operator about each
+            new report, saying only what kind of item was reported.
+          </li>
+          <li>
+            <strong>Pushover</strong> sends Screenr&rsquo;s operator a phone
+            alert about each new report. Like the email, it says only what kind
+            of item was reported, with no names and nothing anyone wrote.
           </li>
           <li>
             <strong>TMDB</strong> (The Movie Database) supplies movie and TV
@@ -216,6 +237,11 @@ export default function Privacy() {
             unfriend someone, or block them.
           </li>
           <li>
+            Report a post, comment, review, or profile to Screenr&rsquo;s
+            operator. A reported post, comment, or review no longer shows for
+            you.
+          </li>
+          <li>
             Turn activity emails on or off in Account. In the iPhone app, choose
             which kinds of push notifications you receive.
           </li>
@@ -236,13 +262,13 @@ export default function Privacy() {
           Deleting an account is permanent. It erases your sessions and push
           devices, profile and photo, friendships, invitations, blocks,
           recommendations, watch statuses, reviews, top 10, reactions,
-          notifications, and usage records. Your posts, reviews, and comments
-          about titles are removed along with their conversations, as are the
-          conversations on your recommendations and watch statuses. Your
-          comments in other members&rsquo; conversations are erased; one that
-          has replies becomes &ldquo;Comment removed&rdquo; so the replies
-          remain. If you used Sign in with Apple, Screenr also revokes its
-          access with Apple.
+          notifications, usage records, the reports you made, and reports about
+          you or what you wrote. Your posts, reviews, and comments about titles
+          are removed along with their conversations, as are the conversations
+          on your recommendations and watch statuses. Your comments in other
+          members&rsquo; conversations are erased; one that has replies becomes
+          &ldquo;Comment removed&rdquo; so the replies remain. If you used Sign
+          in with Apple, Screenr also revokes its access with Apple.
         </p>
         <p>
           Deleted information stays in Screenr&rsquo;s encrypted backups until

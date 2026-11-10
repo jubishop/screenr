@@ -93,6 +93,7 @@ private struct TitleScreen: View {
     }
     .leavingConfirmation(page)
     .feedConfirmation(feed)
+    .reporting(feed.reports)
     // The header names the title, so the bar's title stays small.
     .toolbarTitleDisplayMode(.inline)
   }

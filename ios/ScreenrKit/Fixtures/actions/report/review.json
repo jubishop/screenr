@@ -1,0 +1,19 @@
+{
+  "description": "Reporting a review without a note. The review then leaves the reporter's feeds.",
+  "viewer": "alice",
+  "request": {
+    "method": "POST",
+    "action": "report",
+    "path": "/api/screenr/report",
+    "body": {
+      "item": "f0a222c0-d2f9-45e6-8f45-53413b726eed",
+      "reason": "harassment"
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "ok": true
+    }
+  }
+}

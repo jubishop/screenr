@@ -1,0 +1,19 @@
+{
+  "description": "A member can't report their own post, comment, review, or profile.",
+  "viewer": "alice",
+  "request": {
+    "method": "POST",
+    "action": "report",
+    "path": "/api/screenr/report",
+    "body": {
+      "item": "872a205a-bab2-48f8-8c27-b737397eb469",
+      "reason": "spam"
+    }
+  },
+  "response": {
+    "status": 400,
+    "body": {
+      "error": "You can’t report your own content."
+    }
+  }
+}

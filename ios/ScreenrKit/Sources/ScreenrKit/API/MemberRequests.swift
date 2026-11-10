@@ -226,6 +226,27 @@ extension APIRequest where Response == Acknowledgement {
       ]
     )
   }
+
+  // Reports another member's content for the owner to review, with an
+  // optional note of up to 500 characters.
+  public static func report(
+    _ content: ReportedContent,
+    reason: ReportReason,
+    note: String? = nil
+  ) -> Self {
+    let target: [String: JSONValue?] =
+      switch content {
+      case .entry(let item): ["item": .string(item)]
+      case .reply(let entry, let comment): ["item": .string(entry), "reply": .string(comment)]
+      case .profile(let person): ["person": .string(person)]
+      }
+    return .write(
+      "report",
+      target.merging(["reason": .string(reason.rawValue), "note": .optional(note)]) { field, _ in
+        field
+      }
+    )
+  }
 }
 
 extension APIRequest where Response == Acknowledgement {

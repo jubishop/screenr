@@ -806,6 +806,91 @@ title, friends, and author-profile feeds, including open-page refreshes.
 A member who [deletes their account](#account-deletion) leaves the same
 placeholder, without an author, for each of their comments that has replies.
 
+## Content reports
+
+Members report another member's post, comment, review, or profile for the
+owner to review, on the web and in the iPhone app
+([decision](product-brief.md#reports-review-and-suspension--2026-11-09),
+[issue #555](https://github.com/jubishop/screenr/issues/555)).
+`src/server/reports.ts` holds the rules and `src/server/owner-alerts.ts` the
+alerts; `tests/app/reports.test.ts` and `tests/browser/reports.spec.ts` cover
+them. A comment is a standalone title comment or a reply, and a profile
+report covers the display name and photo.
+
+- **Action:** `POST /api/screenr/report` names an entry as `item`, a reply as
+  `item` and `reply`, or a profile as `person`, a user ID, with a `reason`
+  and an optional `note` of at most 500 characters. The reasons are
+  `reportReasons` in `src/shared.ts`, which migration
+  `042-content-reports.sql` also enforces; the iPhone app checks its list
+  against `rules/report-reasons.json`
+  ([fixture layout](testing.md#fixture-layout)). The reporter must see the
+  item as their feeds show it, and can't report their own, a deleted or
+  removed item, or another kind of entry, such as a Recommend or a status. A
+  review in a [combined card](title-feed.md#combined-title-actions) is
+  reported by its own ID. A second open report of the same item changes
+  nothing and sends no alert. Each member can send 10 reports a day; the
+  next answers 429.
+- **What a report keeps:** the reporter, the author, the reason, the note,
+  and what the reporter saw: an entry's or reply's text, a review's rating,
+  the title it is about, or a profile's display name and photo. The review
+  page shows that copy even after the author edits or deletes the item. A
+  report goes with either member's [account](#account-deletion), and with its
+  item when erasure deletes the item.
+- **Hidden from the reporter:** feeds read the reader's reports with their
+  blocks, once per statement. They leave out an entry the reader reported,
+  with the card it is in, and show a reported reply as unavailable, as they
+  do a blocked author's; replies beneath it remain. The bell leaves out
+  notifications about the reply or about replies on the entry, and the
+  reporter's badge updates. A reported profile stays visible; blocking is how
+  a member hides a person.
+- **Clients:** on the web, another member's post, standalone comment, or
+  review, or a card holding a review, shows a flag button, "Report post",
+  "Report comment", or "Report review", at the end of its actions, beside the
+  copy link on compact entries. Another member's reply shows Report after
+  Reply, and a profile's More actions adds Report after Block. Report opens a
+  form beneath the action, with the six reasons, "Add details (optional)",
+  and "Screenr’s owner reviews every report within 24 hours." A failure keeps
+  it open with the server's message. Once sent, it offers to block the
+  author, "Thanks for reporting. Screenr’s owner will review it. Block … too?",
+  with Block and Not now; the offer stays after the report hides the item.
+  Block from a profile opens Friends as [Block](interface-design.md#profile-actions-menu-with-confirmation--2026-10-12)
+  does. The iPhone app offers the same actions, with the form in a sheet and
+  the offer in a confirmation ([iPhone app](../ios/README.md)).
+- **Owner review:** the website's `/reports` page serves only the account
+  that `SCREENR_OWNER_EMAIL` names. Signed-out visitors go to sign-in, as for
+  an unknown member path, and every other member gets the member pages'
+  "Page not found." with HTTP 404. It lists open reports, newest first, with
+  the item's kind, author, reporter, reason, note, what the reporter saw, and
+  whether its author has since deleted it. **Remove** asks for an
+  [in-page confirmation](interface-design.md#confirm-other-destructive-actions--2026-10-12),
+  then hides the item from everyone, its author included, as the author's own
+  removal does: a post or comment shows "Post removed" or "Comment removed"
+  for any replies, a review loses its rating and text, and a profile loses its
+  photo and shows its username as its display name. Removal resolves every
+  open report of the item. **Dismiss** resolves only that report. Resolved
+  reports keep their copy. The page's actions post
+  `{"report": id, "action": "remove" | "dismiss"}` to `/api/reports`, which
+  takes only the website's origin and the owner's session and answers 404 to
+  anyone else; the kept photo comes from `/api/reports/photo/<report>`. A new
+  action, such as suspending the author
+  ([issue #556](https://github.com/jubishop/screenr/issues/556)), adds an
+  entry to `reviewActions` in `src/server/reports.ts` and to `actionsFor` in
+  `src/components/report-review.tsx`.
+- **Alerts:** each new report queues one email to `SCREENR_OWNER_EMAIL` and,
+  with `PUSHOVER_API_KEY` and `PUSHOVER_USER_KEY`, one Pushover alert, in the
+  report's transaction. Both link to the review page and say only that a
+  member reported a post, comment, review, or profile, with no names or
+  member content. The email is an encrypted `email_job`, which the worker
+  sends with Resend before activity email, as it does codes, retrying until
+  it expires after a day. The worker's alert loop sends the Pushover job
+  through Pushover's [message API](https://pushover.net/api), retrying
+  failures with backoff until it expires after 24 hours; a 4xx answer other
+  than 429 is final, and each failure logs `pushover delivery failed`.
+  Without either Pushover setting the worker prints `pushover delivery off`
+  once and the web queues no Pushover jobs; without `SCREENR_OWNER_EMAIL`
+  nobody can open the review page and no email is queued. See
+  [production settings](deployment.md#provisioning).
+
 ## Account deletion
 
 Members delete their own account from Account on the web, and the iPhone
@@ -886,7 +971,8 @@ then erases the person with `eraseAccounts`:
 - **The account:** deleting the `user` row cascades to the profile with its
   settings, push settings, and demo flag, and to the photo, sessions, push
   devices, sign-in accounts, saved services, notifications, reactions, usage
-  rows, and activity emails. Other members whose unread count drops get a
+  rows, activity emails, and [reports](#content-reports) they made or that
+  name them as the author, with any pending Pushover alerts. Other members whose unread count drops get a
   [badge-only update](notifications.md#badge-only-updates).
 
 Rows that limit code requests hold only a hash of the address and expire

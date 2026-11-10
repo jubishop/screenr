@@ -1412,10 +1412,11 @@ whose behavior is ScreenrKit's `FeedbackModel`, in `Feedback/`. It follows the
   live `X / 4096` count. Over 4,096 it also shows "Shorten your message to
   4,096 characters or fewer." and Send stays off. The form never cuts or
   blocks what the member types or pastes, so they choose what to shorten.
-  The count and the error sit in a strip below the form, through
-  `safeAreaInset`, above the keyboard while it's up: a section footer would
-  fall below a long message, out of view. Capping the field's lines instead
-  left a tall blank row beneath it once the member edited a long message.
+  The count and the error sit in a strip below the form, a `FormNoteBar`
+  through `safeAreaInset`, above the keyboard while it's up: a section
+  footer would fall below a long message, out of view. Capping the field's
+  lines instead left a tall blank row beneath it once the member edited a
+  long message.
   Relay also trims the feedback context to 8,192 bytes, but it measures the
   message, the context's first field, in code points against that budget,
   so it never trims a message within the limit. A long message of
@@ -1535,7 +1536,7 @@ ScreenContent(model: model) { screen in
 | `ReactionControls`, `ReactionPicker`, `FeedActionStyle`, `WriteFailure` | `Screenr/Conversation/` | Reaction counts and React, which opens the seven reactions beneath its line, as on the web (a SwiftUI `Menu` label does not follow Dynamic Type); the compact actions with 44-point hit areas; and a failed write's message beneath its control. |
 | `Avatar`, `PosterImage`, `FlowLayout`, `.muted`, `.danger`, `.onAccent` | `Screenr/Shared/` | A member's photo, decoded at the avatar's size, or initial on the web's colors; a TMDB poster, or the title's initial only while no poster shows, so an audit never measures an initial beneath a poster; a row that wraps; and text colors that keep 4.5:1 contrast, which the system's secondary label and red miss at small sizes, and the system's white misses on the dark theme's lime accent. |
 | `.buttonStyle(.accent)` | `Screenr/Shared/AccentButtonStyle.swift` | The prominent accent-filled button, such as Accept, Send sign-in code, or Join Screenr, with its label in `.onAccent`. Use it in place of `.borderedProminent`. |
-| `FeedModel` | ScreenrKit `Conversation/` | `@Observable` page state: accepted activity (`layout(_:viewer:)`, `receive`, `showIncoming`, and `show(entry:in:viewer:)` for a title page's friend line), Show older (`showOlder(_:)`, through its `showOlder` closure), revealed spoilers, each discussion's preview and groups, composers and their drafts, with replies a notification's Reply did not post (`restoreReplies(from:in:viewer:)`), reactions, removals through `confirmation`, and Want to watch and Recommend with the top 10 confirmations. Every write reads the screen again through its `refresh` closure. |
+| `FeedModel` | ScreenrKit `Conversation/` | `@Observable` page state: accepted activity (`layout(_:viewer:)`, `receive`, `showIncoming`, and `show(entry:in:viewer:)` for a title page's friend line), Show older (`showOlder(_:)`, through its `showOlder` closure), revealed spoilers, each discussion's preview and groups, composers and their drafts, with replies a notification's Reply did not post (`restoreReplies(from:in:viewer:)`), reactions, removals through `confirmation`, and Want to watch and Recommend with the top 10 confirmations. Every write reads the screen again through its `refresh` closure. Its `reports` is the screen's [`ReportModel`](#reports). |
 | `HistoryWindow`, `HistoryPage` | ScreenrKit `Conversation/` | A paged friends feed's or profile's window in its screen path (`before=now`, `since=<time>`, or `before=<time>`), and what a paged read sent besides its entries: `since` and `older`, as `screen.historyPage`. |
 | `FeedLayout`, `ThreadLayout` | ScreenrKit `Conversation/` | The web's rules as values: which entries and replies show, their order, the New activity count, the three-comment preview, Show earlier comments, and nested groups. `SharedFeedLayoutTests` runs `FeedLayout` on the [shared cases](#shared-cases) that the web's layout runs too. |
 | `ConversationStarter` | ScreenrKit `Conversation/` | Start a conversation: `.post` on the friends feed, or `.title(id:kind:)`, which loads a TV show's seasons and each chosen season's episodes. |
@@ -1599,6 +1600,45 @@ ScreenContent(model: model) { screen in
   keyboard has settled. ScreenrKit's `Support/FeedSupport.swift` has
   `FeedFixtures.entry(_:changing:)` for entries with changed fields and
   `RecordingAPI` for scripted writes.
+
+### Reports
+
+Members report another member's post, standalone title comment, review,
+reply, or profile for Screenr's owner to review, as on the web
+([decision](../docs/product-brief.md#reports-review-and-suspension--2026-11-09)).
+The friends feed, title pages, and profiles present the form, and the offer
+that follows it, with `.reporting(feed.reports)` outside their content, as
+they do the feed's confirmation, so a failed read beneath leaves them open.
+
+| Piece | Where | What it does |
+| --- | --- | --- |
+| `ReportSubject`, `ReportReason`, `ReportedContent` | ScreenrKit `Reports/` | What a place offers to report, and whose it is: `ReportSubject(entry:viewer:)` for another member's active post, standalone title comment, or review, or the review in their card, by the review's own ID; `ReportSubject(reply:in:viewer:)` for another member's live reply; and `ReportSubject(profile:_:)` for anyone else's profile. Recommendations, Want to watch, statuses, earlier discussions, and the viewer's own content offer none. `ReportReason` lists the six reasons in the server's order and words. |
+| `ReportModel` | ScreenrKit `Reports/` | `@Observable`: the open `form`, its `reason` and note, which stops at 500 UTF-16 code units, its `phase` (`editing`, `sending`, `failed`, or `sent`), and the `prompt` that follows a report. `.report(_:reason:note:)` sends the report. |
+| `ReportSheet`, `.reporting(_:)` | `Screenr/Shared/ReportSheet.swift` | The form, through `.keyboardSafeSheet(item:content:)`, and the alert that follows it. The notice sits below the form in a `FormNoteBar`, as the feedback form's length does, since the accessibility audit failed it as a grouped list's footer for Dynamic Type. |
+
+- **Where:** a flag at the end of an entry's actions, after Share, named
+  "Report post", "Report comment", or "Report review"; Report after a live
+  reply's Reply; and Report after Block in a profile's More actions.
+- **Form:** "Why are you reporting it?" with the six reasons and none chosen,
+  "Add details (optional)", and "Screenr’s owner reviews every report within
+  24 hours.", which adds "You won’t see this post anymore." for a post,
+  comment, or review. Report needs a reason, and the form can't close while
+  the report sends. A failure keeps the form open with the server's words.
+  A blank note sends none.
+- **After a report:** the form closes and the screen reads again. The server
+  then hides a reported entry, with its card, from the reporter, and sends a
+  reported reply as unavailable; a reported profile stays. Once the sheet has
+  closed, `formClosed()` shows "Thanks for reporting", which offers to block
+  the author. Block sends `relationship`'s block and reads the screen again;
+  on the author's own profile, it runs the profile's Block instead, through
+  `ProfileModel.block(_:onProfileOf:)`, which leaves for Friends.
+- **Tests:** `ReportModelTests` cover the subjects each place offers, the
+  form, the requests, and the offer, and check `ReportReason` against
+  `rules/report-reasons`. `ReportTests` report a reply with a note, a review
+  on a title page, and a profile against the `actions/report` fixtures, check
+  that the viewer's own entries and replies offer no Report, decline and
+  accept the offer, keep the form through the `actions/report/not-reportable`
+  override, and audit the form.
 
 ## Find a title
 
@@ -1780,7 +1820,7 @@ parts in `Screenr/People/`, and their behavior is in ScreenrKit's `People/`.
 | Piece | Where | What it does |
 | --- | --- | --- |
 | `FriendsSections`, `FriendsModel` | ScreenrKit `People/` | Friends in the web's order: Requests, Friends, Sent requests, People you may know with their mutual friends, and Blocked people. Accept, Decline after a confirmation, Cancel, Send friend request, and Unblock go through `relationship`, one at a time, and the page reads again after each. `reconcile(with:)` closes Decline's confirmation once a read no longer has the request. A failed action's message stays with its person. `searchDestination` opens an exact username's profile. |
-| `Relationship`, `ProfileModel` | ScreenrKit `People/` | `Relationship(profile, viewer:)` is `own`, `friend`, `requestSent`, `requestReceived`, or `none`, and gives the visible `action`, such as Watch together or Accept friend request, and the More actions `menu`. Unfriend and Block confirm in the web's words, and `reconcile(with:)` closes Unfriend's confirmation once a read shows the friendship ended. |
+| `Relationship`, `ProfileModel` | ScreenrKit `People/` | `Relationship(profile, viewer:)` is `own`, `friend`, `requestSent`, `requestReceived`, or `none`, and gives the visible `action`, such as Watch together or Accept friend request, and the More actions `menu`. Unfriend and Block confirm in the web's words, and `reconcile(with:)` closes Unfriend's confirmation once a read shows the friendship ended. Report follows them in More actions; see [Reports](#reports). |
 | `WatchTogetherSection` | ScreenrKit `People/` | Ready to watch, Not on your services, and Availability unknown, filtered by [`TitleKindFilter`](#title-lists); and the count and empty states. Each shared title is a [`TitleRow`](#title-lists) that marks the services either person saved. |
 | `WantToWatchSection`, `WantToWatchEmpty` | ScreenrKit `People/` | A Want to watch page's Ready to watch and Availability unknown, filtered by `TitleKindFilter`; the count of titles to watch now; and why nothing is ready, worded for the viewer's own page or a friend's. Each title is a `TitleRow` that marks the viewer's saved services. |
 | `ListModePicker`, `Destination.ListMode` | `Screenr/Shared/Titles/`, ScreenrKit `Navigation/` | The At home and In theaters switch between the introduction and the filter on Want to watch pages and Watch together. Each mode is its own destination, `mode=theaters` in its path, and choosing one replaces the screen on top of the tab with `Router.replace(_:with:)`, so Back leaves the page. |
@@ -1804,7 +1844,9 @@ parts in `Screenr/People/`, and their behavior is in ScreenrKit's `People/`.
   on every tab with
   `Router.close(where:)`, leaves "You blocked …" for Friends with
   `ShellModel.leaveNotice(_:on:)`, and opens Friends. Friends shows the
-  notice until it is dismissed or Friends is left.
+  notice until it is dismissed or Friends is left. Block from the offer after
+  [reporting](#reports) the person or their content on their profile does the
+  same.
 - **The member's own profile:** the You tab's root is `ProfileView` with
   `Relationship.own`: no relationship action or More actions, and the top
   10's empty state. Its `editTopTen` closure adds Edit to the Top 10 heading
@@ -2085,8 +2127,9 @@ Auth's recorded answers: a sign-in's `set-auth-token` and the `user.id` that
 a confirming sign-in checks. Two folders hold the server's other
 recordings, which `Fixture.all(in:)` leaves out: `push/`, the pushes the
 worker sent (see [push tests](#push-tests)), and `rules/`, the server's
-rules that the fixture API applies, such as `before-profile`, the actions a
-member can use before setup.
+rules, such as `before-profile`, the actions a member can use before setup,
+which the fixture API applies, and `report-reasons`, the report form's
+reasons, which `ReportModelTests` checks the app's against.
 
 ## Hosted tests
 

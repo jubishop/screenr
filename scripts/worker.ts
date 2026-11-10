@@ -2,6 +2,10 @@ import { runWorkerPass } from "../src/server/email";
 import { apnsFromEnvironment } from "../src/server/apns";
 import { db } from "../src/server/db";
 import { logFailure, reportsSent } from "../src/server/log";
+import {
+  pushoverFromEnvironment,
+  runAlertPass,
+} from "../src/server/owner-alerts";
 import { runPushPass } from "../src/server/push";
 import { runWorkerLoop } from "../src/server/worker-loop";
 if (
@@ -40,6 +44,14 @@ async function pushLoop() {
   apns?.close();
 }
 const pushes = pushLoop();
+// The owner's Pushover alerts for reports have their own loop too. Without
+// Pushover settings it sends nothing and only deletes expired alert jobs.
+const pushover = pushoverFromEnvironment();
+const alerts = runWorkerLoop(
+  (pass) => runAlertPass(pushover, pass),
+  stop.signal,
+);
 await runWorkerLoop(runWorkerPass, stop.signal);
 await pushes;
+await alerts;
 await db.end();

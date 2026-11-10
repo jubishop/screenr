@@ -218,6 +218,17 @@ Leave them empty locally: the worker then prints `push delivery off` and
 sends no pushes. `tests/app/push-delivery.test.ts` covers delivery against
 fake APNs servers on loopback.
 
+It also sends the owner's alerts about members'
+[reports](data-and-access.md#content-reports): the email, whatever
+`EMAIL_TRANSPORT` is, since Next always queues it for the worker, and the
+Pushover alert when `PUSHOVER_API_KEY` and `PUSHOVER_USER_KEY` are set.
+Leave those empty locally: the worker then prints `pushover delivery off`.
+Locally, set `SCREENR_OWNER_EMAIL` to your own account's address to open
+`/reports`; without a worker, its alert emails stay unsent in `email_job`
+until a worker runs, which deletes them once they expire after a day.
+`tests/app/reports.test.ts` covers both alerts with Resend and Pushover
+replaced.
+
 ### Production build
 
 There is no `npm start` script. `next start` does not support the

@@ -52,10 +52,11 @@ export type PushFixture = {
 
 // A rule of the server's that the app's fixture API applies, taken from the
 // server's own definition.
-export type RuleFixture = {
-  description: string;
-  actions: string[];
-};
+// A server rule: the actions it allows, or the report reasons it accepts.
+export type RuleFixture = { description: string } & (
+  | { actions: string[] }
+  | { reasons: readonly { reason: string; label: string }[] }
+);
 
 // Every timestamp becomes this instant. The API sends two formats, and each
 // keeps its form: JavaScript dates (`2026-10-13T12:00:00.000Z`) and
@@ -234,6 +235,17 @@ export async function saveDatabase() {
     coalesce(last_value,start_value)::text AS value,last_value IS NOT NULL AS called
     FROM pg_sequences WHERE schemaname='public'`,
   );
+  // Generated columns, such as content_report.entry_id, take no values.
+  const { rows: columns } = await db.query<{ table: string; names: string[] }>(
+    `SELECT table_name AS table,array_agg(column_name::text ORDER BY ordinal_position) AS names
+    FROM information_schema.columns
+    WHERE table_schema='public' AND is_generated='NEVER' GROUP BY table_name`,
+  );
+  const stored = (table: string) =>
+    columns
+      .find((row) => row.table === table)!
+      .names.map(quote)
+      .join(",");
   const saved = (table: string) => `${copy}.${quote(table)}`;
   const live = (table: string) => `public.${quote(table)}`;
   await db.query(
@@ -251,7 +263,7 @@ export async function saveDatabase() {
     `TRUNCATE ${order.map(live).join(",")}`,
     ...order.map(
       (table) =>
-        `INSERT INTO ${live(table)} OVERRIDING SYSTEM VALUE SELECT * FROM ${saved(table)}`,
+        `INSERT INTO ${live(table)}(${stored(table)}) OVERRIDING SYSTEM VALUE SELECT ${stored(table)} FROM ${saved(table)}`,
     ),
     ...sequences.map(
       ({ name, value, called }) =>

@@ -10,6 +10,7 @@ import { Reactions } from "./reactions";
 import { Avatar } from "./avatar";
 import { ConfirmAction } from "./confirmation";
 import { around, useRemovalFocus, type FocusTarget } from "./removal-focus";
+import { ReportForm, type ReportedAuthor } from "./report";
 import {
   CommentComposer,
   type CommentDraft as Draft,
@@ -18,6 +19,9 @@ import {
 const emptyDraft: Draft = { body: "", spoiler: false };
 export const live = (comment: Comment) =>
   !comment.removed && !comment.unavailable;
+// Another member's live comment can be reported.
+export const reportableComment = (comment: Comment, user: Person) =>
+  live(comment) && !!comment.author_id && comment.author_id !== user.user_id;
 // A reader can Delete their own comment and Remove any comment under their
 // entry.
 export const removable = (
@@ -30,12 +34,17 @@ export const removable = (
 // While a failed read hides the conversation, `available` is false and the
 // thread shows only an open Delete or Remove confirmation, from the last
 // snapshot, whose action waits for the next read. The entry owns which
-// comment is `confirming`, so it can show that confirmation alone.
+// comment is `confirming`, so it can show that confirmation alone, and which
+// comment's report form is open, so it can offer to block the author once
+// the report hides the comment.
 export function ThreadView({
   snapshot,
   available,
   confirming,
   setConfirming,
+  reporting,
+  setReporting,
+  onReported,
   user,
   refresh,
   targetReply,
@@ -46,6 +55,10 @@ export function ThreadView({
   // The comment whose Delete or Remove waits for confirmation.
   confirming: string | null;
   setConfirming: (comment: string | null) => void;
+  // The comment whose report form is open, and what a sent report calls.
+  reporting: string | null;
+  setReporting: (comment: string | null) => void;
+  onReported: (author: ReportedAuthor) => void;
   user: Person;
   refresh: () => Promise<void>;
   targetReply?: string;
@@ -78,7 +91,7 @@ export function ThreadView({
   }, [directOpen]);
   // Keep local composition state through failed refreshes. Only the current
   // authorized snapshot supplies rendered conversation content.
-  if (!snapshot || (!available && !confirming)) return null;
+  if (!snapshot || (!available && !confirming && !reporting)) return null;
   const currentSnapshot = snapshot;
   const comments = currentSnapshot.comments;
   const children = new Map<string, Comment[]>();
@@ -111,6 +124,7 @@ export function ThreadView({
   const target = comments.find((c) => c.id === targetReply);
   const targetRoot = target?.root_id ?? target?.id;
   const activeReply = comments.find((c) => c.id === replyTo && live(c));
+  const reportable = (comment: Comment) => reportableComment(comment, user);
   const replyCount = comments.filter(live).length;
 
   async function post(
@@ -218,6 +232,17 @@ export function ThreadView({
         >
           Reply
         </button>
+        {reportable(comment) && (
+          <button
+            className="text-button muted"
+            id={`report-action-${comment.id}`}
+            aria-expanded={reporting === comment.id}
+            disabled={!interactive}
+            onClick={() => setReporting(comment.id)}
+          >
+            Report
+          </button>
+        )}
         {canRemove(comment) && (
           <button
             className="text-button muted"
@@ -232,7 +257,8 @@ export function ThreadView({
     );
   }
   function renderComment(comment: Comment) {
-    if (!available && comment.id !== confirming) return null;
+    if (!available && comment.id !== confirming && comment.id !== reporting)
+      return null;
     // Comments without an available author show a neutral placeholder. A
     // removed comment whose author deleted their account has no author but
     // is not unavailable; its heading alone says it was removed.
@@ -353,6 +379,25 @@ export function ThreadView({
             }}
           />
         )}
+        {reporting === comment.id && reportable(comment) && (
+          <ReportForm
+            kind="comment"
+            target={{
+              item: currentSnapshot.conversation.id,
+              reply: comment.id,
+            }}
+            onCancel={() => {
+              setReporting(null);
+              document.getElementById(`report-action-${comment.id}`)?.focus();
+            }}
+            onReported={() =>
+              onReported({
+                user_id: comment.author_id!,
+                display_name: comment.display_name ?? "",
+              })
+            }
+          />
+        )}
       </article>
     );
   }
@@ -382,7 +427,8 @@ export function ThreadView({
               const open =
                 (groups.get(parent.id) ?? targetRoot === parent.id) ||
                 replies.some((c) => c.id === replyTo);
-              const holds = (c: Comment) => available || c.id === confirming;
+              const holds = (c: Comment) =>
+                available || c.id === confirming || c.id === reporting;
               if (!holds(parent) && !(open && replies.some(holds))) return null;
               return (
                 <div className="comment-group" key={parent.id}>

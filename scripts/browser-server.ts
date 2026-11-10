@@ -115,6 +115,11 @@ try {
   process.env.GOOGLE_CLIENT_SECRET = "screenr-browser-test";
   process.env.SCREENR_TEST_TMDB_URL = browserConfig.catalogURL;
   process.env.SCREENR_BROWSER_TEST = "1";
+  // The owner who reviews reports (tests/browser/reports.spec.ts). Pushover
+  // stays off, and no worker sends the owner's queued email alerts.
+  process.env.SCREENR_OWNER_EMAIL = "reviewowner.browser@example.test";
+  process.env.PUSHOVER_API_KEY = "";
+  process.env.PUSHOVER_USER_KEY = "";
   // Never send an inherited provider credential to a fixture. Explicit empty
   // values also prevent Next's dotenv loading from filling these settings.
   process.env.TMDB_READ_TOKEN = "";

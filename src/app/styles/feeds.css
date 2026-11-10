@@ -408,3 +408,72 @@
     flex-wrap: wrap;
   }
 }
+
+/* The report form for an entry, comment, or profile, beneath its action like
+   a confirmation, and the owner's review page. */
+.report-form {
+  max-width: 520px;
+  margin-top: 16px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+}
+.report-form h3 {
+  font-size: 16px;
+  margin-bottom: 8px;
+}
+.report-form fieldset {
+  border: 0;
+  padding: 0;
+  margin: 0 0 12px;
+  min-width: 0;
+}
+.report-form legend {
+  padding: 0;
+  margin-bottom: 6px;
+  font-size: 14px;
+  font-weight: 600;
+}
+.report-form .checkbox {
+  min-height: 32px;
+  font-size: 15px;
+  font-weight: 400;
+}
+.report-form textarea {
+  min-height: 0;
+  margin-bottom: 8px;
+}
+.report-form label[for] {
+  margin-bottom: 0;
+}
+.report-form .error {
+  margin: 12px 0 0;
+}
+.review-page {
+  max-width: 760px;
+}
+.report-card {
+  padding: 20px 0;
+  border-top: 1px solid var(--line);
+}
+.report-card h2 {
+  overflow-wrap: anywhere;
+}
+.report-content {
+  margin-bottom: 16px;
+  padding: 12px 16px;
+  border-left: 3px solid var(--line);
+}
+.report-content > :last-child {
+  margin-bottom: 0;
+}
+.report-photo {
+  display: block;
+  border-radius: 50%;
+  margin-bottom: 12px;
+  object-fit: cover;
+}
+.report-note {
+  overflow-wrap: anywhere;
+}

@@ -92,6 +92,19 @@ export async function removeComment(viewer: string, id: string) {
   });
 }
 
+// Erases reply `id` as the owner's removal of a reported reply does
+// (docs/data-and-access.md#content-reports), keeping a "Comment removed"
+// placeholder for any replies beneath it.
+export async function eraseReply(client: PoolClient, id: string) {
+  const unread = await unreadRecipients(client, id);
+  await client.query(
+    "UPDATE comment SET removed_at=coalesce(removed_at,now()),body='[removed]' WHERE id=$1::bigint",
+    [id],
+  );
+  for (const { recipient_id } of unread)
+    await queueBadgePush(recipient_id, client);
+}
+
 // Removing a reply hides its notifications, lowering the count of each member
 // who has one unread. One already hidden by a block or lost access sends an
 // update with the same count: telling it apart takes the visibility view,

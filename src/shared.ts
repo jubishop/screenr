@@ -131,6 +131,22 @@ export const reactionOptions = [
   { kind: "angry", label: "Angry", emoji: "😡" },
 ] as const;
 export type ReactionKind = (typeof reactionOptions)[number]["kind"];
+// Why a member reports a post, review, comment, or profile
+// (docs/data-and-access.md#content-reports). db/042-content-reports.sql
+// enforces the same reasons, and the iPhone app checks its list against
+// ios/ScreenrKit/Fixtures/rules/report-reasons.json.
+export const reportReasons = [
+  { reason: "harassment", label: "Harassment or bullying" },
+  { reason: "hate", label: "Hate or discrimination" },
+  { reason: "sexual", label: "Sexual content" },
+  { reason: "violence", label: "Violence or threats" },
+  { reason: "spam", label: "Spam" },
+  { reason: "other", label: "Something else" },
+] as const;
+export type ReportReason = (typeof reportReasons)[number]["reason"];
+// What a report covers. A comment is a standalone title comment or a reply.
+export type ReportKind = "post" | "comment" | "review" | "profile";
+export const reportNoteLimit = 500;
 // Where a member saved a title to Want to watch, for usage telemetry.
 // db/015-usage-telemetry.sql and db/032-shortcut-save-surface.sql enforce the
 // same list.

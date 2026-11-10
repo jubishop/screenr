@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import type { FeedItem, Person, SaveSurface } from "../shared";
 import { api, useInteractive } from "./client";
 import { Poster } from "./poster";
-import { live, removable, ThreadView } from "./thread";
+import { live, removable, reportableComment, ThreadView } from "./thread";
 import { preservePosition } from "./position";
 import { Reactions } from "./reactions";
 import { Icon } from "./icons";
@@ -19,6 +19,12 @@ import { around, useRemovalFocus, type FocusTarget } from "./removal-focus";
 import { ReviewStars, reviewPhrase } from "./review";
 import { entryPath, memberPath } from "../member-routes";
 import { leavingTopTen } from "./top-ten";
+import {
+  ReportFollowUp,
+  ReportForm,
+  reportLabel,
+  type ReportedAuthor,
+} from "./report";
 import {
   acceptActivity,
   feedLayout,
@@ -275,11 +281,21 @@ function FeedEntry({
   const [confirmingComment, setConfirmingComment] = useState<string | null>(
     null,
   );
-  // A failed read hides the entry. While a confirmation is open, the entry
-  // keeps the item from the last read, so the confirmation stays, alone,
+  // An open report form, for the entry beneath its action line or for a
+  // comment beneath that comment, and the offer to block once a report is
+  // sent. The offer stays after the report hides the entry from the reader.
+  const [reporting, setReporting] = useState(false);
+  const [reportingComment, setReportingComment] = useState<string | null>(null);
+  const [followUp, setFollowUp] = useState<ReportedAuthor | null>(null);
+  // A failed read hides the entry. While a confirmation or report form is
+  // open, the entry keeps the item from the last read, so it stays, alone,
   // with its action waiting for the next read.
   const [lastItem, setLastItem] = useState(item);
-  if (available && item !== lastItem && (confirming || confirmingComment))
+  if (
+    available &&
+    item !== lastItem &&
+    (confirming || confirmingComment || reporting || reportingComment)
+  )
     setLastItem(item);
   const held = available ? item : lastItem;
   const hiddenSpoiler = !!held?.spoiler && !revealed;
@@ -398,6 +414,60 @@ function FeedEntry({
         removable(comment, thread, user),
     );
   if (confirmingComment && !commentConfirmable) setConfirmingComment(null);
+  // A comment's report form closes for good once the comment leaves.
+  if (
+    reportingComment &&
+    !thread?.comments.some(
+      (comment) =>
+        comment.id === reportingComment && reportableComment(comment, user),
+    )
+  )
+    setReportingComment(null);
+  // Another member's post, standalone comment, or review can be reported; a
+  // card's report names the review in it.
+  const reportable = (() => {
+    if (!held || held.owner_id === user.user_id || !held.active) return null;
+    const content = reviewOf(held);
+    return content.item_type === "post" ||
+      content.item_type === "comment" ||
+      content.item_type === "review"
+      ? { id: content.id, kind: content.item_type }
+      : null;
+  })();
+  if (reporting && !reportable) setReporting(false);
+  const reportButton = reportable && held && (
+    <ActionButton
+      type="button"
+      id={`report-action-${held.id}`}
+      className="icon-button"
+      aria-label={reportLabel(reportable.kind)}
+      aria-expanded={reporting}
+      title={reportLabel(reportable.kind)}
+      disabled={!interactive}
+      unavailable={reporting}
+      onClick={() => {
+        setReportingComment(null);
+        setReporting(true);
+      }}
+    >
+      <Icon name="flag" />
+    </ActionButton>
+  );
+  // A sent report closes its form and offers to block the author. The reader
+  // no longer sees what they reported, so the offer stands alone.
+  const reported = (author: ReportedAuthor) => {
+    setReporting(false);
+    setReportingComment(null);
+    setFollowUp(author);
+    void refresh();
+  };
+  const finishFollowUp = () => {
+    removal.start(entry.current?.querySelector(".confirmation") ?? null, [
+      ...entryFocus(),
+    ]);
+    setFollowUp(null);
+    removal.done();
+  };
   // Saving to Want to watch, or removing it, from a friend's entry. A card
   // with an active Recommend counts as one, whichever entry holds it.
   const saveWantToWatch = async () => {
@@ -470,6 +540,7 @@ function FeedEntry({
         </>
       )}
       {!compact && copyLink}
+      {!compact && reportButton}
     </div>
   );
   const byline = item && (
@@ -522,8 +593,17 @@ function FeedEntry({
   return (
     <article
       ref={entry}
-      // While a failed read hides the entry, an open confirmation still shows.
-      hidden={!item && !confirmable && !commentConfirmable}
+      // While a failed read hides the entry, an open confirmation or report
+      // form still shows, and so does the offer to block after a report
+      // hides it.
+      hidden={
+        !item &&
+        !confirmable &&
+        !commentConfirmable &&
+        !reporting &&
+        !reportingComment &&
+        !followUp
+      }
       className={`feed-entry${compact ? " compact" : ""}`}
       data-item-id={item?.id}
       id={item ? `item-${item.id}` : undefined}
@@ -539,7 +619,7 @@ function FeedEntry({
       }
       tabIndex={-1}
     >
-      {held && (item || confirmable) && (
+      {held && (item || confirmable || reporting) && (
         <header className="activity-card" data-item-heading={held.id}>
           {item && (
             <>
@@ -558,6 +638,7 @@ function FeedEntry({
                     <div className="compact-byline">
                       {byline}
                       {copyLink}
+                      {reportButton}
                     </div>
                   ) : (
                     <>
@@ -626,6 +707,22 @@ function FeedEntry({
               {failure.alert}
             </>
           )}
+          {reporting && reportable && (
+            <ReportForm
+              kind={reportable.kind}
+              target={{ item: reportable.id }}
+              onCancel={() => {
+                setReporting(false);
+                document.getElementById(`report-action-${held.id}`)?.focus();
+              }}
+              onReported={() =>
+                reported({
+                  user_id: held.owner_id,
+                  display_name: held.display_name,
+                })
+              }
+            />
+          )}
           {canDelete && confirming === "delete" && (
             <ConfirmAction
               message={`Delete this ${held.item_type === "post" ? "post" : "comment"}? Its text will be erased.`}
@@ -693,11 +790,31 @@ function FeedEntry({
         available={available}
         confirming={confirmingComment}
         setConfirming={setConfirmingComment}
+        reporting={reportingComment}
+        setReporting={(comment) => {
+          if (comment) setReporting(false);
+          setReportingComment(comment);
+        }}
+        onReported={reported}
         user={user}
         refresh={refresh}
         targetReply={target?.reply}
         entryFocus={entryFocus}
       />
+      {followUp && (
+        <ReportFollowUp
+          author={followUp}
+          block={async () => {
+            await api("relationship", {
+              target: followUp.user_id,
+              action: "block",
+            });
+            await refresh();
+          }}
+          onBlocked={finishFollowUp}
+          onCancel={finishFollowUp}
+        />
+      )}
     </article>
   );
 }

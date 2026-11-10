@@ -27,6 +27,7 @@ import {
 import type { ActionName } from "../../src/server/actions";
 import type { Apns, ApnsPush } from "../../src/server/apns";
 import type { MemberRoute } from "../../src/member-routes";
+import { reportReasons } from "../../src/shared";
 
 // Checks the iPhone app's API fixtures (docs/testing.md#iphone-api-fixtures)
 // against real API responses, or writes them with `npm run fixtures:ios`:
@@ -1246,6 +1247,45 @@ const actions: Record<Exclude<ActionName, "screen">, Record<string, Case>> = {
       "Reacting to a reply.",
     ),
   },
+  report: {
+    reply: write(
+      "report",
+      "alice",
+      (world) => ({
+        item: world.ids.alicePost,
+        reply: world.ids.benSuggestion,
+        reason: "spam",
+        note: "He posts this link everywhere.",
+      }),
+      "Reporting a reply with a reason and a note. The reply is then unavailable to the reporter.",
+    ),
+    review: write(
+      "report",
+      "alice",
+      (world) => ({ item: world.ids.benReview, reason: "harassment" }),
+      "Reporting a review without a note. The review then leaves the reporter's feeds.",
+    ),
+    profile: write(
+      "report",
+      "alice",
+      (world) => ({ person: world.users.erin, reason: "sexual" }),
+      "Reporting a profile's display name and photo.",
+    ),
+    own: write(
+      "report",
+      "alice",
+      (world) => ({ item: world.ids.alicePost, reason: "spam" }),
+      "A member can't report their own post, comment, review, or profile.",
+      400,
+    ),
+    "not-reportable": write(
+      "report",
+      "alice",
+      (world) => ({ item: world.ids.benNight, reason: "other" }),
+      "Only posts, reviews, comments, and profiles can be reported, not a recommendation or status.",
+      400,
+    ),
+  },
   "delete-account": {
     default: {
       ...write(
@@ -1918,6 +1958,17 @@ for (const [file, item] of pushCases)
   });
 test(ruleFile, recordRules);
 
+// The reasons a member can give for a report, which the app offers in this
+// order with these labels.
+const reasonsFile = "rules/report-reasons.json";
+test(reasonsFile, () =>
+  verifyFixture(reasonsFile, {
+    description:
+      "The reasons a member can give when reporting a post, review, comment, or profile, in the order and with the labels the report form shows.",
+    reasons: reportReasons,
+  }),
+);
+
 // The case tables' types require an entry for each route kind and action.
 test("every screen route and action has a fixture case", () => {
   for (const [group, variants] of [
@@ -1934,5 +1985,6 @@ test("every iPhone fixture has a case", () =>
         ([file]) => file,
       ),
       ruleFile,
+      reasonsFile,
     ]),
   ));
