@@ -1875,7 +1875,15 @@ const cases: [string, Case][] = [
         request: async (world) => {
           const request = await item.request(world);
           assert.equal(request.action, action);
-          assert.ok(findAction(action, item.method));
+          const declared = findAction(action, item.method);
+          assert.ok(declared);
+          // The app names only the fields that the action declares, as the
+          // web's type check requires of the web.
+          const fields = declared.fields.map((field) =>
+            field.replace(/\?$/, ""),
+          );
+          for (const name of Object.keys(request.query ?? request.body ?? {}))
+            assert.ok(fields.includes(name), `${action} reads no ${name}`);
           return request;
         },
       },

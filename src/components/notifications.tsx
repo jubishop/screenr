@@ -80,15 +80,14 @@ export function Notifications({
     const controller = new AbortController();
     const timeout = AbortSignal.timeout(10_000);
     pending.current = controller;
-    const query = new URLSearchParams({ unread: String(unreadOnly) });
-    if (cursor) {
-      query.set("before", cursor.before);
-      query.set("through", cursor.through);
-    }
     try {
       const result = await readChanged(
         "notifications",
-        query,
+        {
+          unread: String(unreadOnly),
+          before: cursor?.before,
+          through: cursor?.through,
+        },
         version.current,
         anySignal([controller.signal, timeout]),
       );

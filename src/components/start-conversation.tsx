@@ -48,12 +48,15 @@ export function StartConversation({
     setError("");
     try {
       const { body, spoiler, season, episode } = draft;
-      await api(
-        title ? "title-comment" : "discussion-post",
-        title
-          ? { title: title.id, body, spoiler, season, episode }
-          : { body, spoiler },
-      );
+      if (title)
+        await api("title-comment", {
+          title: title.id,
+          body,
+          spoiler,
+          season,
+          episode,
+        });
+      else await api("discussion-post", { body, spoiler });
       setDraft((current) => (current === draft ? emptyDraft : current));
       await refresh();
     } catch (error) {
