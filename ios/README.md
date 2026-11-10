@@ -686,9 +686,10 @@ since the laws cover App Store apps and the API is Apple's.
   again, which checks again; the decline's message points to Settings → your
   name → Personal Information → Age Range for Apps, where a person changes
   what they share.
-- **First:** a refused app sends the server nothing. Links that arrive during
-  the check wait in the router, and an invitation link is checked with the
-  server once the age check passes.
+- **First:** the check comes before every screen that reads from the
+  server, so a refused app reads nothing. Links that arrive during the check
+  wait in the router, and an invitation link is checked with the server once
+  the age check passes.
 - **Each launch:** the check runs at every launch and on Try again, never on
   a return to the foreground. Apple caches each person's answer, so its sheet
   doesn't show every time.
