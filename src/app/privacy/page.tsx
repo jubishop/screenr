@@ -15,7 +15,7 @@ export default function Privacy() {
       <article className="auth-card policy">
         <h1>Privacy policy</h1>
         <p className="muted">
-          Effective <time dateTime="2026-11-09">November 9, 2026</time>
+          Effective <time dateTime="2026-11-10">November 10, 2026</time>
         </p>
         <p>
           Screenr is a private, invite-only social app for TV and movies. Justin
