@@ -505,8 +505,9 @@ sends none. The review form opens beneath the action line. When a change
 takes the reader's own entry out of the feed, such as withdrawing its
 Recommend, focus moves to the nearest entry. Each feed entry carries the
 reader's own `viewer_finished_on` and `viewer_review` for its title, so the
-menu and the form start from the saved date and review; the iPhone app
-reads the same fields.
+menu and the form start from the saved date and review;
+[#573](https://github.com/jubishop/screenr/issues/573) tracks reading them
+in the iPhone app.
 
 ### Trailer collapsed until played — 2026-10-12
 
