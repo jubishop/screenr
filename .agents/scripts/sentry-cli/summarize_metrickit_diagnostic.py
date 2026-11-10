@@ -45,6 +45,8 @@ KIND_KEYS = (("exceptionType", "crash"), ("signal", "crash"), ("hangDuration", "
              ("launchDuration", "app launch"))
 MACH_O = {b"\xca\xfe\xba\xbe", b"\xfe\xed\xfa\xce", b"\xfe\xed\xfa\xcf", b"\xce\xfa\xed\xfe", b"\xcf\xfa\xed\xfe"}
 SAFE_ID = re.compile(r"[A-Za-z0-9_-]+", re.ASCII)
+# atos repeats an offset outside the binary, and answers one inside it that no function covers with its address.
+UNPLACED = re.compile(rf"0x[0-9A-Fa-f]+(?: \(in {APP_BINARY}\))?", re.ASCII)
 # Terminal control characters, which an untrusted attachment could use to rewrite the output.
 CONTROL = re.compile(r"[\x00-\x1f\x7f-\x9f]")
 LONGEST_VALUE = 200
@@ -266,10 +268,9 @@ def symbolicate(atos, path, offsets):
     if len(lines) != len(asked):
         raise Unreadable(f"atos answered {len(lines)} lines for {plural(len(asked), 'offset')}")
     functions = {}
-    for offset, question, answer in zip(ordered, asked, lines):
+    for offset, answer in zip(ordered, lines):
         answer = answer.strip()
-        # atos repeats an offset that it cannot place.
-        if answer and answer != question:
+        if answer and not UNPLACED.fullmatch(answer):
             functions[offset] = text(re.sub(rf" \(in {APP_BINARY}\)", "", answer, count=1))
     return functions
 

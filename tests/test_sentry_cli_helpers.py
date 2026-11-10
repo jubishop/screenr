@@ -159,7 +159,7 @@ raise SystemExit(int(os.environ.get("FAKE_SSH_EXIT", "0")))
 '''
 
 # Records its arguments and the offsets it reads, checks that -o names the downloaded Mach-O file, then
-# answers each offset with its function in FAKE_ATOS_FUNCTIONS, or repeats it, as atos does with one it can't place.
+# answers each offset with its answer in FAKE_ATOS_FUNCTIONS, or repeats it, as atos does with one outside the binary.
 FAKE_ATOS = r'''
 import json
 import os
@@ -844,6 +844,16 @@ class MetricKitDiagnosticTests(SentryHelperTests):
         self.assertIn("Sentry's debug file 7, an executable with only its symbol table; atos placed 2 of 3 offsets\n",
                       result.stdout)
         self.assertIn(MAIN_SUMMARY.format(**SYMBOLS), result.stdout)
+
+    def test_an_offset_that_atos_answers_with_its_address_stays_unplaced(self) -> None:
+        # atos answers an offset inside the binary that no function covers with its address alone.
+        functions = {**FUNCTIONS, "0x6000": "0x0000000100006000 (in Screenr)"}
+        result = self.summarize(mx_diagnostic(MAIN_THREAD), FAKE_ATOS_FUNCTIONS=json.dumps(functions))
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("Sentry's debug file dsym-1, a dSYM; atos placed 2 of 3 offsets\n", result.stdout)
+        self.assertIn(MAIN_SUMMARY.format(**SYMBOLS), result.stdout)
+        self.assertNotIn("0x0000000100006000", result.stdout)
 
     def test_absent_symbols_show_offsets_and_say_why(self) -> None:
         no_atos = self.root / "no-atos"

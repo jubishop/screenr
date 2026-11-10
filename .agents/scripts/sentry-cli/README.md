@@ -128,7 +128,9 @@ For each UUID of Screenr's binary, it lists `screenr-ios`'s debug files with
 downloads the dSYM, or an executable with only its symbol table when Sentry
 holds no dSYM, with `?id=<id>`, and runs `atos -o <file> -offset` on every
 offset. It prints which file it used and how many offsets atos placed, and
-shows each placed offset's function beside it. The `sentry` CLI's token can
+shows each placed offset's function beside it. atos answers an offset that no
+function covers with its address alone, which counts as unplaced. The
+`sentry` CLI's token can
 list and download debug files: on 2026-11-10 it fetched the dSYM of build
 `1.0+5`, and atos named the functions that Sentry showed for the Screenr
 frames of `SCREENR-IOS-3`, except a thunk that the linker had merged with
