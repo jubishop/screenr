@@ -17,14 +17,16 @@ test("every application test file runs under the exit guard", () => {
   );
 });
 
-// Runs a test file under a copy of the exit guard with the given bound, and
-// with the given test timeout, if any. Cases that wait out the bound shorten
-// it to 2 seconds on purpose: their sample leaves an interval running, so it
-// stays open until the guard ends it, however long the machine takes.
+// Runs a test file under a copy of the exit guard with the given bound, hang
+// by default, and with the given test timeout, if any. Cases that wait out the
+// bound shorten it to 2 seconds on purpose: their sample leaves an interval
+// running, so it stays open until the guard ends it, however long the machine
+// takes. Every other case keeps hang, so only a hang reaches the bound, and a
+// loaded machine can't make the bound end a file before the guard would.
 async function runGuarded(
   t: TestContext,
   source: string,
-  { bound = 2_000, timeout }: { bound?: number; timeout?: number } = {},
+  { bound = hang, timeout }: { bound?: number; timeout?: number } = {},
 ) {
   await mkdir(resolve(".cache"), { recursive: true });
   const directory = await mkdtemp(resolve(".cache/exit-guard-test-"));
@@ -81,6 +83,7 @@ test("a file that its passing tests leave open fails once the bound passes, nami
     `import { test } from "node:test";
 test("leaves an interval", () => { setInterval(() => {}, 1000); });
 `,
+    { bound: 2_000 },
   );
   assert.equal(code, 1, output);
   assert.match(output, /^ok 1 - leaves an interval$/m);
@@ -94,6 +97,7 @@ test("a file still ends once the bound passes when its after hook fails", async 
 test("leaves an interval", () => { setInterval(() => {}, 1000); });
 after(() => { throw new Error("cleanup failed"); });
 `,
+    { bound: 2_000 },
   );
   assert.equal(code, 1, output);
   assert.match(output, /cleanup failed/);
@@ -176,8 +180,6 @@ test("a file that closes what its tests started exits on its own", async (t) => 
     `import { test } from "node:test";
 test("clears its interval", () => { clearInterval(setInterval(() => {}, 1000)); });
 `,
-    // Only a hang may end a file that would exit on its own.
-    { bound: hang },
   );
   assert.equal(code, 0, output);
   assert.doesNotMatch(output, /was still running/);
