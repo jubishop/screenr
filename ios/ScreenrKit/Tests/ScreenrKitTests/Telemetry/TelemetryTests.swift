@@ -7,6 +7,7 @@ import Testing
 struct TelemetryTests {
   private enum Failure: Error {
     case noResults(query: String)
+    case fixtureChanged
   }
 
   private let capture = SentryEnvelopeCapture()
@@ -198,6 +199,102 @@ struct TelemetryTests {
     )
   }
 
+  // Most 4xx answers are expected, such as not found or an ended session, so they log at info. A
+  // 5xx, no response, or a response the app cannot use logs a warning, whatever its status. Each
+  // failure names its error, and a cancelled call logs at info.
+  @Test func logsA4xxAtInfoAndAnyOtherFailureAsAWarningWithItsError() throws {
+    let sink = CapturingSink()
+    router.add(sink)
+    let telemetry = telemetry(.dev)
+    let calls: [(Int?, APIError.Kind)] = [
+      (404, .notFound), (401, .signedOut), (503, .server(status: 503)), (nil, .offline),
+      (200, .invalidResponse), (304, .invalidResponse), (200, .keychain), (200, .cancelled),
+    ]
+
+    for (status, error) in calls {
+      telemetry.requestFinished(Self.screenRequest(status: status, error: error))
+    }
+
+    let lines = sink.entries.filter { $0.category == .api }
+    #expect(
+      lines.map(\.level)
+        == [.info, .info, .warning, .warning, .warning, .warning, .warning, .info]
+    )
+    #expect(
+      lines.map { $0.fields.first { $0.name == "outcome" }?.value }
+        == Array(repeating: .string("failed"), count: 7) + [.string("cancelled")]
+    )
+    #expect(
+      lines.map { $0.fields.first { $0.name == "error" }?.value }
+        == [
+          .string("notFound"), .string("signedOut"), .string("server"), .string("offline"),
+          .string("invalidResponse"), .string("invalidResponse"), .string("keychain"), nil,
+        ]
+    )
+    #expect(
+      lines.map { $0.fields.first { $0.name == "status" }?.value }
+        == [.int(404), .int(401), .int(503), nil, .int(200), .int(304), .int(200), .int(200)]
+    )
+  }
+
+  // A 200 whose body no longer decodes, as when the server's payload drifts, is a failure. It logs
+  // a warning with DecodingError's case and coding path but no value from the body, marks its
+  // breadcrumb and trace as errors, and opens a Sentry issue, once per route in a launch.
+  @MainActor
+  @Test func reportsAnUndecodableResponseWithItsCauseButNoValue() async throws {
+    defer { capture.close() }
+    let sink = CapturingSink()
+    router.add(sink)
+    let telemetry = telemetry(.release, roll: 0)
+    let reply = try Self.undecodableFeed()
+    let client = ScreenrClient(
+      serverURL: try #require(URL(string: "http://localhost:3000")),
+      clientHeader: "ios/1.0/7",
+      session: try SessionStore(keychain: InMemoryKeychain(token: "signed-token")),
+      transport: RecordingTransport([reply, reply]),
+      observer: telemetry
+    )
+
+    for _ in 1...2 {
+      let error = await #expect(throws: APIError.self) {
+        try await client.send(.screen(path: "/"))
+      }
+      #expect(error?.kind == .invalidResponse)
+    }
+
+    let lines = sink.entries.filter { $0.category == .api }
+    #expect(lines.map(\.level) == [.warning, .warning])
+    let line = try #require(lines.first)
+    #expect(
+      line.fields.filter { !["request_id", "duration_ms"].contains($0.name) } == [
+        LogField(name: "method", value: .string("GET")),
+        LogField(name: "route", value: .string("/api/screenr/screen?path=/")),
+        LogField(name: "status", value: .int(200)),
+        LogField(name: "outcome", value: .string("failed")),
+        LogField(name: "error", value: .string("invalidResponse")),
+        LogField(name: "decoding", value: .string("dataCorrupted")),
+        LogField(name: "coding_path", value: .string("conversations[1].activityAt")),
+      ]
+    )
+    #expect(!line.text.contains("Alice"), "The line repeats the body: \(line.text)")
+    let requestID = try #require(line.fields.first { $0.name == "request_id" }?.value)
+    let items = try await capture.items { items in
+      items.contains { $0.type == "event" } && items.count { $0.type == "transaction" } >= 2
+    }
+    let event = try #require(items.filter { $0.type == "event" }.only)
+    let json = try event.json
+    #expect((json["tags"] as? [String: String])?["request_id"] == requestID.description)
+    let crumbs = try #require(json["breadcrumbs"] as? [[String: Any]])
+    let crumb = try #require(crumbs.filter { $0["category"] as? String == "http" }.only)
+    #expect(crumb["level"] as? String == "error")
+    #expect(!event.text.contains("Alice"))
+    let traces = try items.filter { $0.type == "transaction" }
+      .map { item in ((try item.json["contexts"] as? [String: Any])?["trace"] as? [String: Any]) }
+    #expect(traces.map { $0?["status"] as? String } == ["internal_error", "internal_error"])
+    // The same route failing again in this launch logs and traces, but opens no second report.
+    #expect(try capture.items(ofType: "event").count == 1)
+  }
+
   // A live read's successful poll, changed or not, logs only at debug level, which the log file
   // leaves out, and adds nothing to Sentry. A poll that fails is recorded in full.
   @Test func recordsAPollInFullOnlyWhenItFails() async throws {
@@ -375,6 +472,22 @@ struct TelemetryTests {
     #expect(options.sessionReplay.sessionSampleRate == 0)
     #expect(options.sessionReplay.onErrorSampleRate == 0)
     #endif
+  }
+
+  // Alice's feed, with a timestamp that holds her name, which DecodingError's description repeats.
+  private static func undecodableFeed() throws -> RecordingTransport.Reply {
+    let feed = try JSONDecoder()
+      .decode(
+        JSONValue.self,
+        from: try TestFixtures.body("screen/feed/default")
+      )
+    guard case .object(var body) = feed, case .array(var conversations)? = body["conversations"],
+      conversations.count > 1, case .object(var conversation) = conversations[1]
+    else { throw Failure.fixtureChanged }
+    conversation["activity_at"] = "Alice Park's birthday"
+    conversations[1] = .object(conversation)
+    body["conversations"] = .array(conversations)
+    return .response(status: 200, body: try JSONEncoder().encode(JSONValue.object(body)))
   }
 
   private static func lineCount(of file: LogFile) throws -> Int {

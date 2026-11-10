@@ -13,11 +13,13 @@ public struct GoogleSignIn: Sendable {
 
   public let clientID: String
   private let transport: any HTTPTransport
+  private let log: Log
 
-  // `transport` reaches Google's token endpoint.
-  public init(clientID: String, transport: any HTTPTransport) {
+  // `transport` reaches Google's token endpoint, and `log` records sign-ins that fail.
+  public init(clientID: String, transport: any HTTPTransport, log: Log = .session) {
     self.clientID = clientID
     self.transport = transport
+    self.log = log
   }
 
   // The reversed client ID, the only redirect scheme Google allows an iOS
@@ -58,8 +60,22 @@ public struct GoogleSignIn: Sendable {
   }
 
   // Signs in with Google and returns the ID token for the server, with the
-  // nonce that it carries.
+  // nonce that it carries. A sign-in that fails, other than by the person
+  // cancelling, logs a warning.
   public func signIn(with authenticator: any WebAuthenticator) async throws(GoogleSignInError)
+    -> GoogleCredential
+  {
+    do {
+      return try await authorize(with: authenticator)
+    } catch .cancelled {
+      throw .cancelled
+    } catch {
+      log.write(.warning, "Google sign-in failed", error.logFields)
+      throw error
+    }
+  }
+
+  private func authorize(with authenticator: any WebAuthenticator) async throws(GoogleSignInError)
     -> GoogleCredential
   {
     let attempt = Attempt()
@@ -212,6 +228,21 @@ public enum GoogleSignInError: Error, Hashable, Sendable {
   // Google's token endpoint did not answer.
   case unreachable
   case invalidRequest
+
+  // The case, and the status of a refused code, for logs. Google's OAuth error
+  // stays out, and no case holds an authorization code or a token.
+  var logFields: [LogField] {
+    switch self {
+    case .cancelled: [.constant("error", "cancelled")]
+    case .sessionFailed: [.constant("error", "sessionFailed")]
+    case .unexpectedRedirect: [.constant("error", "unexpectedRedirect")]
+    case .tokenRejected(let status, _):
+      [.constant("error", "tokenRejected"), .int("status", status)]
+    case .invalidTokenResponse: [.constant("error", "invalidTokenResponse")]
+    case .unreachable: [.constant("error", "unreachable")]
+    case .invalidRequest: [.constant("error", "invalidRequest")]
+    }
+  }
 }
 
 // `application/x-www-form-urlencoded`, with every character but the unreserved

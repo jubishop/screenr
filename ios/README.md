@@ -2184,8 +2184,9 @@ field is one of these:
   case.
 - **Opaque IDs:** `.identifier` for a request ID or a Screenr user ID. Never
   pass a username, email address, display name, or anything a member typed.
-- **Routes and errors:** `.route` for a `RoutePattern`, and `.error` for an
-  error's domain and code, without its message.
+- **Routes and errors:** `.route` for a `RoutePattern`, `.error` for an
+  error's domain and code, without its message, and `.codingPath` for where
+  a response body didn't decode, as keys and array indexes.
 
 Each line goes to the unified log under subsystem
 `com.artisanalsoftware.Screenr`. Lines at info and above also go to the log
@@ -2228,9 +2229,10 @@ Sentry organization `artisanal-software`, under these
   Release variant, with the project's public DSN in ScreenrKit. Screenr Dev
   never starts it, so Dev builds send nothing.
 - **Reports:** crashes, errors that `telemetry.capture(_:requestID:)`
-  reports, app hangs, MetricKit diagnostics, Sentry logs at warning and
-  above, and user feedback from the [feedback form](#feedback). Traces cover
-  app launch and API calls, for one launch in five.
+  reports, such as a response the app can't read, app hangs, MetricKit
+  diagnostics, Sentry logs at warning and above, and user feedback from the
+  [feedback form](#feedback). Traces cover app launch and API calls, for one
+  launch in five.
 - **MetricKit attachment:** each MetricKit event also attaches iOS's raw
   diagnostic as JSON, `MXDiagnosticPayload.json` in sentry-cocoa 9.32.0,
   through `enableMetricKitRawPayload`. Sentry keeps 250 frames of the call
@@ -2259,12 +2261,32 @@ Sentry organization `artisanal-software`, under these
   records an `http.client` transaction named by its route, such as
   `GET /api/screenr/screen?path=/people/:username`. Both carry a `request_id`
   tag, the tag the server's failure reports use, as does an error captured
-  with its request ID. A failed call logs a warning, and a cancelled one logs
-  at info. A successful [poll](#polling), usually an unchanged 304 every
+  with its request ID.
+- **Failed calls:** a failed call's line adds `outcome=failed` and its
+  `error`, the `APIError` kind, such as `notFound`. A 4xx logs at info,
+  since most are expected answers, such as not found or an ended session,
+  and a cancelled call logs at info with `outcome=cancelled`. Any other
+  failure, such as a 5xx, a transport failure, or a response the app can't
+  read, logs a warning, whatever its status, and marks its breadcrumb and
+  trace as errors. A body that doesn't decode, such as a 200 after the
+  server's payload changed, also logs `decoding`, `DecodingError`'s case,
+  and `coding_path`, the keys and array indexes to the value, such as
+  `conversations[1].activityAt`, but never a value. A response the app
+  can't read also opens a Sentry issue through
+  `telemetry.capture(_:requestID:)`, once per route in a launch, since an
+  open screen polls the same route every three seconds.
+- **Polls:** a successful [poll](#polling), usually an unchanged 304 every
   three seconds, logs only at debug level, which the log file leaves out,
   and adds no breadcrumb or transaction, so polling cannot crowd the log
   tail that feedback attaches or the breadcrumbs before a crash. Writes,
   failures, and first reads are recorded in full.
+- **Sign-in failures:** Google's token endpoint is called on the transport
+  directly, so Telemetry never sees it. A Google or Sign in with Apple
+  attempt that fails before it reaches the server, other than by the person
+  cancelling, logs a `Log.session` warning. Google's names the
+  `GoogleSignInError` case, with the token endpoint's status when it refuses
+  the code, and Apple's names the error's domain and code. Neither holds
+  Google's OAuth error, an authorization code, or a token.
 - **Scrubbing:** `SentryPrivacy` runs as Sentry's `beforeSend`,
   `beforeBreadcrumb`, `beforeSendSpan`, and `beforeSendLog`. It keeps only the
   user ID, and reduces every URL to its `RoutePattern`, such as

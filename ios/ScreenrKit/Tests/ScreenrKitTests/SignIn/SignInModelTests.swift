@@ -12,14 +12,16 @@ struct SignInModelTests {
   private func model(
     _ test: TestClient,
     invitation: String? = nil,
-    google: RecordingTransport = RecordingTransport([])
+    google: RecordingTransport = RecordingTransport([]),
+    log: Log = Log(.session, router: LogRouter())
   ) -> SignInModel {
     SignInModel(
       api: test.client,
       invitation: PendingInvitation(token: invitation),
       providers: IdentityProviders(
         authorization: .system,
-        google: GoogleSignIn(clientID: GoogleSignInTests.clientID, transport: google)
+        google: GoogleSignIn(clientID: GoogleSignInTests.clientID, transport: google),
+        log: log
       ),
       browser: FailingAuthenticator(error: URLError(.badURL))
     )
@@ -362,6 +364,30 @@ struct SignInModelTests {
 
     #expect(model.failure == nil)
     #expect(test.transport.requests.isEmpty)
+  }
+
+  // Apple's sheet failing logs a warning with the error's domain and code, which name its case.
+  // Cancelling it logs nothing.
+  @Test func logsAFailedAppleSheetButNotACancelledOne() async throws {
+    let router = LogRouter()
+    let sink = CapturingSink()
+    router.add(sink)
+    let test = try TestClient(replies: [])
+    let model = model(test, log: Log(.session, router: router))
+
+    _ = model.startApple()
+    await model.completeApple(.failure(ASAuthorizationError(.canceled)))
+    _ = model.startApple()
+    await model.completeApple(.failure(ASAuthorizationError(.failed)))
+
+    let line = try #require(sink.entries.only)
+    #expect(line.level == .warning)
+    #expect(line.category == .session)
+    #expect(
+      line.text
+        == "Sign in with Apple failed"
+        + " error=com.apple.AuthenticationServices.AuthorizationError 1004"
+    )
   }
 
   @Test(
