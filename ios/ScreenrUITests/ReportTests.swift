@@ -87,8 +87,13 @@ final class ReportTests: XCTestCase {
     XCTAssertFalse(ownReply.buttons["Report"].exists)
     XCTAssertTrue(app.comment("3").buttons["Report"].exists)
 
+    // The full audit, contrast included, covers an entry's Report and a
+    // reply's Report on one screen.
     let review = app.entry(FeedFixture.benCard)
-    app.scrollTo(review)
+    app.scrollTo(review.buttons["Report review"])
+    let replyReports = app.buttons.matching(identifier: "Report").allElementsBoundByIndex
+    XCTAssertTrue(replyReports.contains(where: \.isHittable))
+    try app.performShellAudit()
     review.buttons["Report review"].tap()
     let form = app.navigationBars["Report this review"]
     XCTAssertTrue(form.waitForExistence(timeout: 10))
