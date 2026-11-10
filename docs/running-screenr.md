@@ -374,7 +374,15 @@ Every record belongs to Apple developer team `34TKMKM889`.
 | Private email relay source `screenr@jubishop.com` | Lets Hide My Email addresses receive sign-in codes and activity email | Apple Developer account |
 
 Both app App IDs have the App Groups, Associated Domains, Push Notifications,
-Sign in with Apple, and Communication Notifications capabilities. Keychain
+Sign in with Apple, and Communication Notifications capabilities, and the
+Release app's also has Declared Age Range, for the
+[age check](../ios/README.md#age-check). The App Store Connect API key can't
+enable that one: on 2026-11-09 the API's `bundleIdCapabilities` refused
+`DECLARED_AGE_RANGE` as a capability type, though it lists the capability
+once enabled. An archive signed through the Mac's Xcode account enabled it,
+and an archive signed with the key then signed the entitlement; neither was
+exported or uploaded. Screenr Dev runs only in the Simulator, so its App ID
+lacks it. Keychain
 sharing is not an App ID capability; the app group doubles as the Keychain
 access group. Automatic signing registers an extension's App ID when the
 extension is added. On 2026-10-14 the App Store Connect API key's archive

@@ -2254,7 +2254,9 @@ there.
   extension's App ID. One archive signed through the Mac's Xcode account,
   `bin/ios-packages xcodebuild archive … -allowProvisioningUpdates` without
   the key flags, registers it, and the release script's key signs it from
-  then on. Neither archive needs uploading.
+  then on. Neither archive needs uploading. The same goes for a capability
+  the key's API can't enable, such as Declared Age Range; see
+  [Apple Developer](../docs/running-screenr.md#apple-developer).
 - **Keychain:** the app group is also the Keychain access group. Pass it as
   `kSecAttrAccessGroup`; there is no `keychain-access-groups` entitlement. In
   the Simulator, the Dev app can store and read items in its group, and
