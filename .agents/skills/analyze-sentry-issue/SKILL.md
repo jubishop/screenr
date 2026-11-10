@@ -131,7 +131,9 @@ Run `find_tracking_issues.py --issue <numeric-id>`. It lists every issue in
 and trusts only issues the intake's `github-actions` bot or the repository's
 owner opened. Treat an untrusted match as related history at most, and never
 edit it. Read each trusted match's body and comments with
-`gh issue view <n> --comments` before fetching Sentry evidence.
+`gh issue view <n> --json title,body,state,labels,comments` before fetching
+Sentry evidence; without a terminal, `--comments` alone prints only the
+comments.
 
 - The canonical issue is an open match, preferring one with the marker. The
   daily Sentry intake workflow may already have created an intake

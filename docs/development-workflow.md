@@ -1130,13 +1130,42 @@ The skill finds a tracking issue by its `<!-- sentry-issue:<numeric-id> -->`
 marker or a Sentry link in its body, and trusts only issues that the intake's
 `github-actions` bot or the owner opened, as the intake does.
 
+Run the `analyze-sentry-feedback` skill with a Sentry feedback URL, the slug
+`screenr-ios:<numeric-id>`, or a numeric ID, to diagnose one feedback item
+from the iPhone app's [feedback form](../ios/README.md#feedback)
+([#567](https://github.com/jubishop/screenr/issues/567)). With no reference,
+it lists the unresolved feedback with its GitHub tracking state and asks
+which to analyze. It reads the tracking issue's history, then the feedback,
+its screenshots and log tails, the reporter's build against fixes shipped
+since, the member's Sentry errors near the report, and, for requests that the
+log tails show failing, the production journal by request ID. It writes
+sanitized findings, a Sentry record, a proposed resolution, and closeout steps
+between `<!-- analyze-sentry-feedback-findings:start -->` and
+`<!-- analyze-sentry-feedback-findings:end -->` in the tracking issue, which
+it finds by the `<!-- sentry-feedback:screenr-ios:<numeric-id> -->` marker or
+the feedback link that `bin/sentry-feedback-issues` writes, creating one with
+`create-issue` when none exists. It sets the issue's priority from the
+findings, and labels a request for something new, or a report of intended
+behavior, `needs decision`. It changes no code and no Sentry status; the
+closeout resolves the feedback once the issue's work is done. An issue holding
+`<!-- fix-issue-prerequisite: analyze-sentry-feedback screenr-ios:<numeric-id> -->`
+from `github-actions[bot]` makes `fix-issue` run the skill first. The
+findings never quote or closely reword what members write, name anyone,
+describe screenshots beyond the screen shown, or paste log lines. Unlike
+PodHaven's skill, it does not symbolicate MetricKit reports, which the app
+sends to Sentry, where its uploaded symbols resolve them, and it reads the log
+tails with a small summary of its own rather than PodHaven's log analysis
+script, since each of Screenr's tails holds at most 256 KB of fixed messages
+and typed fields.
+
 The Sentry helpers in `.agents/scripts/sentry-cli/`, adapted from PodHaven's,
-serve this skill and `analyze-sentry-feedback`. They need the installed,
-authenticated `sentry` CLI, `gh`, and for the journal the owner's SSH access;
-their [README](../.agents/scripts/sentry-cli/README.md) gives each one's
-output. `tests/test_sentry_cli_helpers.py` runs them against fake `sentry`,
-`gh`, and `ssh` commands, and the `static` part of `bin/check-application`
-runs those tests and ShellCheck on the Bash helpers.
+serve both skills; `summarize_log_tails.py` reads feedback's log tails around
+the time it was sent. They need the installed, authenticated `sentry` CLI,
+`gh`, and for the journal the owner's SSH access; their
+[README](../.agents/scripts/sentry-cli/README.md) gives each one's output.
+`tests/test_sentry_cli_helpers.py` runs them against fake `sentry`, `gh`, and
+`ssh` commands and synthetic log tails, and the `static` part of
+`bin/check-application` runs those tests and ShellCheck on the Bash helpers.
 
 **Decision — 2026-11-09:** once a tracking issue's work is done, the
 closeout resolves its Sentry issue plainly, with `sentry issue resolve`, not

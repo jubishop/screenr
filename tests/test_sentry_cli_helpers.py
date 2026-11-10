@@ -1,4 +1,4 @@
-"""Verify the Sentry analysis skills' helpers against fake sentry, gh, and ssh commands."""
+"""Verify the Sentry analysis skills' helpers against fake sentry, gh, and ssh commands and synthetic log tails."""
 
 import json
 import os
@@ -608,6 +608,103 @@ class ServerJournalTests(SentryHelperTests):
                 self.assertIn(diagnostic, result.stderr)
                 self.assertNotIn("Traceback", result.stderr)
                 self.assertFalse(output.exists())
+
+
+def log_line(time: str, message: str, level: str = "info", category: str = "app", launch: str = "launch-2",
+             **fields: object) -> str:
+    """One synthetic line of the app's log file, as ios/README.md#logging describes it."""
+    return json.dumps({"time": time, "level": level, "category": category, "message": message,
+                       "launch": launch, "fields": fields}, sort_keys=True) + "\n"
+
+
+def request_line(time: str, request_id: str, level: str = "info", **outcome: object) -> str:
+    return log_line(time, "Request finished", level, "api", method="GET", route="/api/screenr/screen",
+                    request_id=request_id, duration_ms=120, **outcome)
+
+
+class LogTailSummaryTests(SentryHelperTests):
+    def summarize(self, files: dict[str, str], *arguments: str) -> subprocess.CompletedProcess[str]:
+        paths = []
+        for name, body in files.items():
+            path = self.root / name
+            path.write_text(body)
+            paths.append(str(path))
+        return self.run_helper("summarize_log_tails.py", *arguments, *paths)
+
+    def test_summary_marks_the_feedback_launch_and_lists_the_window_and_its_failed_calls(self) -> None:
+        tail = (log_line("2026-11-09T22:00:00.000Z", "Registered for pushes", launch="launch-1")
+                + request_line("2026-11-09T23:40:30.000Z", "request-1", status=200)
+                + request_line("2026-11-09T23:45:00.250Z", "request-2", "warning", status=503)
+                + request_line("2026-11-09T23:46:00.000Z", "request-3", "warning", outcome="failed")
+                + request_line("2026-11-09T23:47:00.000Z", "request-4", status=404)
+                + log_line("2026-11-09T23:49:59.500Z", "Sending feedback", screenshots=1)
+                + log_line("2026-11-09T23:52:00.000Z", "Registered for pushes"))
+
+        result = self.summarize({"app.ndjson": tail}, "--at", "2026-11-09T23:50:00Z")
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("app.ndjson: 7 lines, 0 unreadable\n", result.stdout)
+        self.assertIn("its last line is 2 min after the feedback", result.stdout)
+        self.assertIn("    launch-1  2026-11-09T22:00:00.000Z to 2026-11-09T22:00:00.000Z  1 lines\n", result.stdout)
+        self.assertIn("    launch-2  2026-11-09T23:40:30.000Z to 2026-11-09T23:52:00.000Z  6 lines"
+                      "  <- the feedback's launch\n", result.stdout)
+        self.assertIn("Sending feedback: 2026-11-09T23:49:59.500Z, 0.5 s before the feedback", result.stdout)
+        self.assertIn("Window 2026-11-09T23:40:00.000Z to 2026-11-09T23:51:00.000Z: 5 lines (info 3, warning 2)",
+                      result.stdout)
+        self.assertIn("    2026-11-09T23:45:00.250Z  warning  api  Request finished  duration_ms=120 method=GET "
+                      "request_id=request-2 route=/api/screenr/screen status=503\n", result.stdout)
+        window = result.stdout.split("  Window ", 1)[1]
+        self.assertNotIn("22:00:00", window)
+        self.assertNotIn("23:52:00", window)
+        failures = window.split("Failed API calls in the window: 3\n", 1)[1]
+        self.assertEqual(failures, (
+            "    2026-11-09T23:45:00.250Z  GET /api/screenr/screen  status 503  request_id=request-2\n"
+            "    2026-11-09T23:46:00.000Z  GET /api/screenr/screen  no answer  request_id=request-3\n"
+            "    2026-11-09T23:47:00.000Z  GET /api/screenr/screen  status 404  request_id=request-4\n"))
+
+    def test_summary_counts_unreadable_lines_and_neutralizes_control_characters(self) -> None:
+        tail = ("not json\n[]\n" + json.dumps({"time": "yesterday", "message": "skipped line"}) + "\n\n"
+                + log_line("2026-11-09T23:49:00.000Z", "Shown \x1b[2J", detail="x" * 300))
+
+        result = self.summarize({"app.ndjson": tail}, "--at", "2026-11-09T23:50:00Z")
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("app.ndjson: 1 lines, 3 unreadable", result.stdout)
+        self.assertNotIn("\x1b", result.stdout)
+        self.assertIn("Shown ?[2J", result.stdout)
+        self.assertIn(f"detail={'x' * 200}…", result.stdout)
+        self.assertNotIn("x" * 201, result.stdout)
+        self.assertNotIn("not json", result.stdout)
+        self.assertNotIn("skipped line", result.stdout)
+
+    def test_summary_shows_each_file_and_how_far_an_old_tail_is_from_the_feedback(self) -> None:
+        files = {"app.ndjson": log_line("2026-11-09T20:50:00.000Z", "Registered for pushes"),
+                 "notifications.ndjson": ""}
+
+        result = self.summarize(files, "--at", "2026-11-09T23:50:00Z")
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("its last line is 3.0 h before the feedback", result.stdout)
+        self.assertIn("Sending feedback: not in this log", result.stdout)
+        self.assertIn("0 lines\n  Failed API calls in the window: 0\nnotifications.ndjson: 0 lines, 0 unreadable\n",
+                      result.stdout)
+
+        widened = self.summarize(files, "--at", "2026-11-09T23:50:00Z", "--before", "240")
+        self.assertIn(": 1 lines (info 1)", widened.stdout)
+
+    def test_summary_rejects_bad_times_and_missing_files(self) -> None:
+        existing = self.root / "app.ndjson"
+        existing.write_text("")
+        for arguments, diagnostic in (
+                (("--at", "2026-11-09 23:50:00", str(existing)), "expected a time with a zone"),
+                (("--at", "2026-13-09T23:50:00Z", str(existing)), "expected a time with a zone"),
+                (("--at", "2026-11-09T23:50:00Z", "--before", "-5", str(existing)), "expected minutes"),
+                (("--at", "2026-11-09T23:50:00Z", str(self.root / "missing.ndjson")), "no such log tail")):
+            with self.subTest(arguments=arguments):
+                result = self.run_helper("summarize_log_tails.py", *arguments)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn(diagnostic, result.stderr)
+                self.assertNotIn("Traceback", result.stderr)
 
 
 class TrackingIssueTests(SentryHelperTests):

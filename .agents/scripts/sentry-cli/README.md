@@ -13,6 +13,7 @@ verified with version 0.45.0, and accept only Screenr's projects,
 | `download_event_attachments.sh` | An event's attachment list, and the attachments named |
 | `search_related_errors.sh` | Error events in both projects that match a query in a time window |
 | `fetch_server_journal.py` | The `screenr-web` and `screenr-worker` journal for a time window, over SSH |
+| `summarize_log_tails.py` | The log tails that feedback attaches, around the time it was sent |
 | `find_tracking_issues.py` | The GitHub issues that track one Sentry issue or feedback item |
 
 Each helper that saves evidence writes it to a fresh path that the caller
@@ -74,6 +75,20 @@ earlier lines, so an empty result there is not evidence of no failures. The
 Public files write the host as `root@YOUR_SSH_HOST`; the owner's home
 instructions say where to find it.
 
+## Log tails
+
+`summarize_log_tails.py` reads downloaded log tails, such as `app.ndjson`
+and `notifications.ndjson`, whose lines the
+[logging section](../../../ios/README.md#logging) describes, and the
+feedback's submission time in UTC. For each file it prints its time span and
+how far its last line is from that time, its launches with the one the
+feedback came from marked, when the app logged `Sending feedback`, every line
+in a window around the submission, 10 minutes before to 1 minute after by
+default, and the window's failed API calls: a 4xx or 5xx answer, or none,
+with their request IDs. It counts lines it cannot read without printing them,
+and replaces control characters in what it prints. The lines hold no member
+content by design, but their user and request IDs stay out of GitHub.
+
 ## Tracking issues
 
 `find_tracking_issues.py` reads every issue in `GH_REPO`, or
@@ -88,5 +103,6 @@ skill's complete findings block.
 ## Tests
 
 `tests/test_sentry_cli_helpers.py` runs every helper against fake `sentry`,
-`gh`, and `ssh` commands, and `bin/check --full` runs it. Never copy real
-issue fields, feedback, journal lines, or attachment bytes into test fixtures.
+`gh`, and `ssh` commands and synthetic log tails, and `bin/check --full` runs
+it. Never copy real issue fields, feedback, journal lines, log tails, or
+attachment bytes into test fixtures.
