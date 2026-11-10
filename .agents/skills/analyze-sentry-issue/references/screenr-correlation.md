@@ -97,9 +97,30 @@ the times of the checks, and close it as the skill's Step 6 says.
 ## Attachments
 
 Screenr's error events normally carry no attachments, since screenshots and
-the view hierarchy are off; feedback carries the log tails. When an event
+the view hierarchy are off; feedback carries the log tails, and
+[MetricKit events](#metrickit-diagnostics) iOS's raw diagnostic. When an event
 does list attachments, list them with `download_event_attachments.sh` before
 downloading any, and download only those that can affect the diagnosis, each
 selection into a fresh, nonexistent directory. The helper leaves an
 `.incomplete` marker after a failed or interrupted download; analyze only a
 destination without one.
+
+## MetricKit diagnostics
+
+A MetricKit event has the mechanism `mx_hang_diagnostic`,
+`mx_cpu_exception`, or `mx_disk_write_exception`. For a hang, sentry-cocoa
+flattens MetricKit's call tree into one frame list per thread, each frame
+with a `parentIndex` and a `sampleCount`. Sentry trims a list over 250
+frames: of a hang's 2,123 main-thread frames it kept the first 50 and the
+last 200, and a `parentIndex` beyond the list shows the cut. Rebuild the
+tree from the `rawStacktrace` frames, whose `parentIndex` values still
+match, since symbolication can add inlined frames to `stacktrace`.
+
+Every build that contains the change from
+[#631](https://github.com/jubishop/screenr/issues/631), as
+[builds and known fixes](#builds-and-known-fixes) tests, also attaches iOS's
+raw diagnostic, `MXDiagnosticPayload.json` in sentry-cocoa 9.32.0, with the
+whole tree. Download it as above and read the main thread's samples by
+binary, its heaviest path, and any frames in Screenr's binary, whose offsets
+the build's dSYM turns into functions. When a MetricKit event from such a
+build lists no raw diagnostic, record that the diagnostic failed to arrive.
