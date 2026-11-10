@@ -215,6 +215,53 @@ test("a feed entry's status menu sets and clears every status and the last-finis
   await expectThemedPage(page, "feed status menu");
   await page.keyboard.press("Escape");
   await expect(button).toBeFocused();
+
+  // Low on a phone screen, the panel opens upward when it fits above the
+  // button and otherwise scrolls into view, clear of the header and the
+  // navigation bar either way.
+  const nav = page.getByRole("navigation", { name: "Main navigation" });
+  const bounds = async (locator: Locator) => (await locator.boundingBox())!;
+  const headerHeight = (await bounds(page.locator(".sidebar"))).height;
+  async function openClear(scope: Locator) {
+    await entryStatusButton(scope).click();
+    const panel = await bounds(scope.locator(".status-panel"));
+    // A pixel allows for rounding.
+    expect(panel.y).toBeGreaterThanOrEqual(headerHeight - 1);
+    expect(panel.y + panel.height).toBeLessThanOrEqual(
+      (await bounds(nav)).y + 1,
+    );
+    const opener = await bounds(entryStatusButton(scope));
+    await page.keyboard.press("Escape");
+    return { panel, opener };
+  }
+  // With the page at its top, the button sits just above the bar.
+  await page.evaluate(() => window.scrollTo(0, 0));
+  const low = await bounds(button);
+  await page.setViewportSize({
+    width: 390,
+    height: Math.ceil(low.y + low.height + (await bounds(nav)).height + 4),
+  });
+  const upward = await openClear(entry);
+  expect(upward.panel.y + upward.panel.height).toBeLessThanOrEqual(
+    upward.opener.y,
+  );
+  // Just beneath the header, on a screen too short for the panel beneath the
+  // button, it has no room above either.
+  const first = page.locator(`[data-item-id="${own}"]`);
+  const { panel } = await openClear(first);
+  await page.setViewportSize({
+    width: 390,
+    height: Math.ceil(panel.height + 150),
+  });
+  await entryStatusButton(first).evaluate((element) =>
+    element.scrollIntoView({ block: "start" }),
+  );
+  expect((await bounds(entryStatusButton(first))).y).toBeLessThan(
+    headerHeight + 2,
+  );
+  await openClear(first);
+  await page.setViewportSize({ width: 390, height: 844 });
+
   for (const status of ["Want to watch", "Watching", "Caught up"]) {
     await chooseStatus(page, status, entry);
     await expectIcon(button, entryStatusName(status));

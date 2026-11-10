@@ -750,7 +750,9 @@ recipients. A full run checks:
   and Report; compact entries keep React, Comment, and Reply as icons. From
   a feed, the status menu sets and clears every status and the
   last-finished date, saves Want to watch with its surface, and moves focus
-  on when the reader's own entry leaves; the review editor saves, edits, and
+  on when the reader's own entry leaves. Its panel stays between a phone's
+  header and bar, opening upward low on the screen and scrolling into view
+  when there is no room above. The review editor saves, edits, and
   removes a review, a failed read keeps its Remove question, and removing it
   from the reader's own review entry moves focus on too
   (`tests/browser/feed-entry-actions.spec.ts`).
