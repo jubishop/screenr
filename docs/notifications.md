@@ -23,6 +23,57 @@ blocking, and spoiler rules.
 **Why:** The user accepted notifications focused on these interactions,
 with routine viewing activity left in the feed.
 
+**Updated — 2026-11-09:** A member can now turn on alerts for every feed
+entry of a friend they choose, under
+[friend activity notifications](#friend-activity-notifications--2026-11-09).
+Watch updates, ratings, and recommendations from other friends still notify
+no one.
+
+## Friend activity notifications — 2026-11-09
+
+**Decision:** On an accepted friend's profile, a bell toggle in the header
+beside Watch together turns on notifications for all of that friend's
+activity, on the web and in the iPhone app. The bell shows whether it is on.
+One tap toggles it and shows a short confirmation, such as "You'll be
+notified about Maya Chen's activity." It starts off for every friend.
+
+While it is on, each new feed entry the friend creates that the member can
+see notifies them: watch status changes, ratings and reviews, Recommend,
+Want to watch, title comments, and posts without a title. The friend's
+replies in other people's discussions don't notify through it. Neither do
+review or rating edits or withdrawals, though they still move the entry in
+the feed.
+
+Close-together actions follow the feed's
+[combined cards](title-feed.md#combine-one-persons-close-together-title-actions--2026-11-08):
+an action that joins a card whose notification is still unread updates that
+notification, for example to "finished and reviewed", instead of adding
+another. Pushes of this kind wait about two minutes so actions in the same
+minute arrive as one alert.
+
+These notifications reach the bell, iPhone push under a new Friend activity
+push setting, and activity email for members who turned it on. The push
+setting is on by default, since the member already chose each friend. They
+follow the existing access, blocking, and spoiler rules.
+
+The setting is private; the friend is never told. Ending the friendship,
+by unfriending or by a block from either person, deletes it, and becoming
+friends again starts with it off.
+
+**Why:** The user wants to follow chosen friends' activity, not only
+activity that touches their own posts. The user accepted each
+recommendation offered during the interview.
+
+**Rejected:** Notifying for the friend's replies in any discussion;
+notifying only for reviews, Recommend, and posts; one notification and an
+immediate push per action; leaving friend activity out of activity email,
+or out of push and email both; a checked item in the profile's More actions
+menu; pausing the setting while not friends and resuming it on refriending;
+and notifying for review or rating edits.
+
+[Issue #648](https://github.com/jubishop/screenr/issues/648) tracks the
+work.
+
 ## Notification delivery — 2026-09-04
 
 **Decision:** Provide an in-app notification inbox and opt-in email alerts
