@@ -1,5 +1,9 @@
 import { expect } from "@playwright/test";
+import { db } from "./database-fixture";
 import { test } from "./monitored-test";
+import { friend, person, userId } from "./member-fixture";
+import { openWithoutPolling } from "./refresh-helpers";
+const { updateTitleActivity } = await import("../../src/server/title-actions");
 
 // The server refuses text with a blocked word
 // (docs/data-and-access.md#blocked-words). Each form shows the server's
@@ -65,4 +69,42 @@ test("a refused post, profile edit, or signup shows the server's message and kee
   await expect(setupName).toHaveValue("Blocked Joiner");
   await expect(setupUsername).toHaveValue("joiner_gangbang");
   await expect(joiner).toHaveURL(/\/setup/);
+});
+
+test("a refused review in a feed entry's review editor shows the server's message and keeps the draft", async ({
+  member,
+}) => {
+  const page = await member("blockedreviewer");
+  const viewer = await userId(page);
+  const maya = await person("blockedreviewmaya", "Maya Review");
+  await friend(viewer, maya);
+  await db.query(
+    `INSERT INTO title(id,kind,tmdb_id,name,release_date)
+    VALUES('movie:998571','movie',998571,'Harbor Glass','2024-01-01') ON CONFLICT DO NOTHING`,
+  );
+  const recommendation = await updateTitleActivity(
+    maya,
+    "movie:998571",
+    "recommended",
+    true,
+  );
+  await openWithoutPolling(page, "/");
+  const entry = page.locator(`[data-item-id="${recommendation}"]`);
+  await entry
+    .getByRole("button", { name: "Rate or review", exact: true })
+    .click();
+  const form = entry.getByRole("form", { name: "Your review" });
+  const text = form.getByRole("textbox", { name: "Your review (optional)" });
+  await form.getByRole("radio", { name: "4 stars", exact: true }).check();
+  await text.fill("One long gangbang of a finale.");
+  await form.getByRole("button", { name: "Save review", exact: true }).click();
+  await expect(form.locator(".error")).toHaveText(refusal("Review"));
+  await expect(text).toHaveValue("One long gangbang of a finale.");
+  await expect(
+    form.getByRole("radio", { name: "4 stars", exact: true }),
+  ).toBeChecked();
+  expect(
+    (await db.query("SELECT 1 FROM review WHERE owner_id=$1", [viewer]))
+      .rowCount,
+  ).toBe(0);
 });
