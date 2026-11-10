@@ -6,6 +6,7 @@ import { test, type TestContext } from "node:test";
 import { format } from "node:util";
 import { request } from "@playwright/test";
 import { createBrowserProxy } from "../../scripts/browser-proxy";
+import { hang } from "./process-waits";
 
 async function listen(t: TestContext, server: Server) {
   t.after(() => {
@@ -30,10 +31,13 @@ function captureErrors(t: TestContext) {
   return printed;
 }
 
+// A request context for the proxy. Load can hold the in-process proxy and its
+// upstreams up, so only a hang ends a request. A failure that must come
+// promptly, such as an interrupted response, has its own error.
 async function client(t: TestContext, port: number) {
   const api = await request.newContext({
     baseURL: `http://127.0.0.1:${port}`,
-    timeout: 10_000,
+    timeout: hang,
   });
   t.after(() => api.dispose());
   return api;

@@ -17,6 +17,7 @@ import { pathToFileURL } from "node:url";
 import { format } from "node:util";
 import type { PoolClient } from "pg";
 import { useDatabase, db } from "./social-fixture";
+import { hang } from "./process-waits";
 const { migrate, migrateFrom } = await import("../../scripts/migrate");
 
 useDatabase();
@@ -148,9 +149,13 @@ test("migrations applied before checksums existed get checksums without running 
     );
 });
 
+// The migration's own 200 ms limits end these runs, so each test's timeout
+// only ends a hang. A run that ignored its lock limit would wait until the
+// test timed out, and one that ignored its statement limit would finish its
+// five-second sleep and be applied.
 test(
   "a migration run stops with a clear error while another run holds the migration lock",
-  { timeout: 10_000 },
+  { timeout: hang },
   async () => {
     const pending = `${number(1)}-pending.sql`;
     const directory = await migrations({ [pending]: fails });
@@ -187,7 +192,7 @@ test(
 
 test(
   "a migration statement that runs too long is canceled and rolled back",
-  { timeout: 10_000 },
+  { timeout: hang },
   async () => {
     const slow = `${number(1)}-slow.sql`;
     const directory = await migrations({
@@ -228,11 +233,16 @@ test("a migration run whose connection breaks fails with that error and releases
       (error: Error & { code?: string }) => error,
     );
     assert.equal(error.code, "57P01", String(error));
-    // The run released its client, and the pool closed it.
+    // The run released its client, and the pool closed it. Load can hold the
+    // close up, so only a hang ends the wait. Ending the bound's timer lets
+    // the file finish.
+    const timer = new AbortController();
     await Promise.race([
       closed,
-      setTimeout(2_000).then(() => assert.fail("The client was not released.")),
-    ]);
+      setTimeout(hang, undefined, { signal: timer.signal }).then(() =>
+        assert.fail("The client was not released."),
+      ),
+    ]).finally(() => timer.abort());
     assert.equal(
       (await db.query("SELECT 1 FROM screenr_migration WHERE name=$1", [name]))
         .rowCount,

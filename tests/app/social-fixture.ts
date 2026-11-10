@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import { format } from "node:util";
 import { testDatabaseURL } from "../../scripts/checkout";
 import { failureRecord } from "../../scripts/failure-lines";
+import { hang } from "./process-waits";
 
 // Every application suite that uses the test database or server modules
 // imports this module first, so this setup runs before any server module loads.
@@ -70,14 +71,22 @@ export function useDatabase() {
 
 // A test can end while a query it started still runs, as one that stops at a
 // failed assertion can. A table reset beside that query could deadlock with
-// its locks, so the reset first waits for the pool to go idle (#469).
+// its locks, so the reset first waits for the pool to go idle (#469). Load or
+// a checkpoint can hold that query up for many seconds, so only a hang ends
+// the wait. Once a reset has waited out that bound, later resets that find the
+// pool still busy fail at once: a query that never finishes, or a client a
+// test never released, would otherwise cost each remaining test another hang.
+let hung = false;
 async function idle() {
-  const deadline = performance.now() + 10_000;
+  const deadline = performance.now() + (hung ? 0 : hang);
   while (db.idleCount < db.totalCount || db.waitingCount) {
-    if (performance.now() > deadline)
-      throw new Error("An earlier test's query still runs after 10 seconds.");
+    if (performance.now() >= deadline) {
+      hung = true;
+      throw new Error("An earlier test's query never finished.");
+    }
     await setTimeout(5);
   }
+  hung = false;
 }
 
 // Replaces console.error and console.warn until mock.restoreAll(), or until

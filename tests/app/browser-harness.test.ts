@@ -134,7 +134,8 @@ test("the advertised browser URL reaches its IPv4 listener without IPv6 fallback
         response.on("error", reject);
       },
     );
-    request.setTimeout(2000, () => request.destroy(new Error("No response")));
+    // Load can hold the test's own server up, so only a hang ends the wait.
+    request.setTimeout(hang, () => request.destroy(new Error("No response")));
     request.on("error", reject);
   });
   assert.equal(body, "ready");
