@@ -1364,7 +1364,7 @@ replaced that CI.
   the number of intake issues.
 - **Labels:** the user chose PodHaven's two labels; no further reason was
   given.
-- **Priority:** `fix-all-issues` with a priority level skips issues that have
+- **Priority:** `ship-issues` with a priority level skips issues that have
   no priority label. The user asked for `p2` at intake to become PodHaven's
   standard too
   ([jubishop/podhaven#983](https://github.com/jubishop/podhaven/issues/983)).
