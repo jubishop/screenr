@@ -1529,10 +1529,11 @@ ScreenContent(model: model) { screen in
 
 | Piece | Where | What it does |
 | --- | --- | --- |
-| `FeedList` | `Screenr/Conversation/` | The scrolling feed beneath a header: entries in visible-activity order, New activity, the permalink's scroll and highlight, "This activity is unavailable.", and the empty message. Its screen attaches the feed's confirmation dialog, `feedConfirmation(_:)`, outside `ScreenContent`. `style: .compact` drops the poster, title, Want to watch, and Recommend for title pages. Changing `headerRequests` scrolls back to the header, such as when Start a conversation opens. Its `ScrollPosition` keeps the reader's place; see Reading place below. |
+| `FeedList` | `Screenr/Conversation/` | The scrolling feed beneath a header: entries in visible-activity order, New activity, the permalink's scroll and highlight, "This activity is unavailable.", and the empty message. Its screen attaches the feed's confirmation dialog, `feedConfirmation(_:)`, outside `ScreenContent`. `style: .compact` drops the poster, title, Want to watch, and Recommend for title pages. Changing `headerRequests` scrolls back to the header, such as when Start a conversation opens. Its `ScrollPosition` keeps the reader's place; see Reading place below. It shows a composer that takes focus whole above the keyboard; see Composers and the keyboard below. |
+| `ComposerReveal` | ScreenrKit `Conversation/` | What the feed scrolls into view as a composer takes focus or the keyboard rises: the whole composer when it fits above the keyboard, its text field when only that fits, or nothing when even the field is taller, so the system's own scroll keeps the caret in view. |
 | `FeedAnchor` | ScreenrKit `Conversation/` | What the feed's scroll position names just before New activity shows: what it already names, the first entry before the reader scrolls, or nothing beneath a header that fills the screen. |
 | `EntryView`, `ThreadView`, `CommentView` | `Screenr/Conversation/` | An entry, its discussion, and one comment, following the web's `feed.tsx` and `thread.tsx`. Each entry and comment carries the accessibility identifier `entry-<id>` or `comment-<id>`. |
-| `CommentComposer`, `DiscussionComposer`, `StartConversationComposer` | `Screenr/Conversation/` | The one composer form, bound to a reply or comment target, or to a `ConversationStarter` with Season and Episode pickers on a TV title. Its field takes focus as it opens, and not again when its screen reappears; see the [keyboard deadlock](#toolchain-notes). |
+| `CommentComposer`, `DiscussionComposer`, `StartConversationComposer` | `Screenr/Conversation/` | The one composer form, bound to a reply or comment target, or to a `ConversationStarter` with Season and Episode pickers on a TV title. Its field takes focus as it opens, and not again when its screen reappears; see the [keyboard deadlock](#toolchain-notes). In a `FeedList`, it reports its focus, IDs, and heights through `\.composerFocus`. |
 | `ReactionControls`, `ReactionPicker`, `FeedActionStyle`, `WriteFailure` | `Screenr/Conversation/` | Reaction counts and React, which opens the seven reactions beneath its line, as on the web (a SwiftUI `Menu` label does not follow Dynamic Type); the compact actions with 44-point hit areas; and a failed write's message beneath its control. |
 | `Avatar`, `PosterImage`, `FlowLayout`, `.muted`, `.danger`, `.onAccent` | `Screenr/Shared/` | A member's photo, decoded at the avatar's size, or initial on the web's colors; a TMDB poster, or the title's initial only while no poster shows, so an audit never measures an initial beneath a poster; a row that wraps; and text colors that keep 4.5:1 contrast, which the system's secondary label and red miss at small sizes, and the system's white misses on the dark theme's lime accent. |
 | `.buttonStyle(.accent)` | `Screenr/Shared/AccentButtonStyle.swift` | The prominent accent-filled button, such as Accept, Send sign-in code, or Join Screenr, with its label in `.onAccent`. Use it in place of `.borderedProminent`. |
@@ -1558,6 +1559,22 @@ ScreenContent(model: model) { screen in
   the top, such as an open composer or a title page's details, stays put on
   its own, with new entries beneath it. `FeedTests` checks the second entry
   stays put, against `screen/feed/incoming`, which `FixtureUpdate` sends.
+- **Composers and the keyboard:** as a composer's field takes focus, the
+  system scrolls only the caret's line into view, which left the rest of
+  the field, Contains spoilers, and Post beneath the keyboard for a
+  composer low on the screen. So `FeedList` scrolls the composer with focus
+  into view as the keyboard rises or grows, read from its scroll geometry's
+  bottom inset, and when a composer takes focus with the keyboard already
+  up. It scrolls the least that shows the composer, or its field when the
+  whole composer does not fit (`ComposerReveal`), with animations disabled,
+  since SwiftUI animating while the keyboard lays out can deadlock the app
+  (see the [keyboard deadlock](#toolchain-notes)). While the feed scrolls,
+  such as to the header or a permalink, the reveal waits for it to stop;
+  the reader's own drag cancels it. As the field grows, the system keeps
+  the caret above the keyboard. `FeedTests` checks a comment opened near
+  the bottom of the screen, a growing field, New activity with the composer
+  open, a nested reply opened while that composer has the keyboard, and a
+  title page's Start a conversation composer.
 - **Paged histories:** the friends feed and profiles read a page of their
   history at a time, as on the web
   ([paged histories](../docs/title-feed.md#paged-histories)).
@@ -1587,13 +1604,16 @@ ScreenContent(model: model) { screen in
 - **Times:** `FeedList` keeps one minute timeline, `\.feedNow`, for every
   "2h" in the list.
 - **Tests:** `ScreenrUITests/FeedQueries.swift` adds `app.entry(_:)`,
-  `app.comment(_:)`, `app.composerField(_:)`, `app.scrollTo(_:)`, and
-  `RequestLog.wrote(_:_:)`, which waits for a write's logged JSON body and a
-  read after it. `performShellAudit()` passes over what the audit cannot
-  measure in a scrolling screen: text beneath the glass bars, the floating
-  New activity control, or the keyboard, or past the screen's edges, and
-  Dynamic Type for scrolling content, which larger text moves past the
-  screen's ends. To check large
+  `app.comment(_:)`, `app.composerField(_:)`, `app.scrollTo(_:)`,
+  `app.drag(_:toY:)`, which moves the feed without a fling,
+  `app.expectAboveTheKeyboard(_:)`, which waits for elements to settle
+  between the navigation bar and the top of the keyboard's view, typing
+  predictions included, and `RequestLog.wrote(_:_:)`, which waits for a
+  write's logged JSON body and a read after it. `performShellAudit()`
+  passes over what the audit cannot measure in a scrolling screen: text
+  beneath the glass bars, the floating New activity control, or the
+  keyboard, or past the screen's edges, and Dynamic Type for scrolling
+  content, which larger text moves past the screen's ends. To check large
   text, launch with
   `FixtureLaunch(textSize: "UICTContentSizeCategoryAccessibilityXXXL")` and
   audit there, as `FeedTests` does. Audit a composer after typing, once the
@@ -2389,6 +2409,8 @@ accent.
     goes, and UIKit brings the keyboard back as the pop animates.
   - A composer takes focus only as it opens, not each time its screen
     appears again, such as after a pop or a tab switch.
+  - `FeedList` scrolls a composer above the rising keyboard without an
+    animation.
 
   Samples on 2026-11-05 found the renderer animating during navigation
   transitions, sheets, and presses of toolbar glass buttons, and not during

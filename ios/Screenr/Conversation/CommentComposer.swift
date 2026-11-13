@@ -4,7 +4,8 @@ import SwiftUI
 // The one form for a reply, a comment on an entry, and a new conversation:
 // the text field, Contains spoilers, Cancel, and the posting button. It opens
 // focused, and Cancel keeps the draft, which its model holds. A failure shows
-// beneath the form until the next post.
+// beneath the form until the next post. In a feed, it tells the feed when it
+// has focus, so the feed can show it above the keyboard.
 struct CommentComposer<Context: View>: View {
   // The text field's name, such as "Add your reply".
   let fieldLabel: String
@@ -24,6 +25,8 @@ struct CommentComposer<Context: View>: View {
   // could under a closing sheet (see `keyboardSafeSheet(item:content:)`).
   // The reader taps the field to go on.
   @State private var opening = Opening.pending
+  @State private var place = ComposerPlace()
+  @Environment(\.composerFocus) private var composerFocus
 
   var body: some View {
     VStack(alignment: .leading, spacing: 10) {
@@ -37,6 +40,8 @@ struct CommentComposer<Context: View>: View {
           in: RoundedRectangle(cornerRadius: 8)
         )
         .accessibilityLabel(fieldLabel)
+        .onGeometryChange(for: CGFloat.self, of: \.size.height) { place.fieldHeight = $0 }
+        .id(place.field)
       Toggle("Contains spoilers", isOn: $spoiler)
       HStack {
         Button("Cancel", action: cancel)
@@ -56,12 +61,40 @@ struct CommentComposer<Context: View>: View {
     }
     .padding(12)
     .background(RoundedRectangle(cornerRadius: 12).strokeBorder(.separator))
+    .onGeometryChange(for: CGFloat.self, of: \.size.height) { place.height = $0 }
+    .id(place.composer)
     .onAppear {
       guard opening == .pending else { return }
       opening = .focused
       focused = true
     }
+    .onChange(of: focused) { _, focused in
+      if focused { composerFocus?.took(place) } else { composerFocus?.lost(place) }
+    }
+    .onDisappear { composerFocus?.lost(place) }
   }
+}
+
+// Where a composer is, for a feed to scroll it into view: the IDs of the
+// composer and its text field, and their heights. Measuring changes no state,
+// so the composer does not render again.
+final class ComposerPlace {
+  private let id = UUID()
+  var height = 0.0
+  var fieldHeight = 0.0
+
+  var composer: ComposerScrollID { ComposerScrollID(composer: id, part: .composer) }
+  var field: ComposerScrollID { ComposerScrollID(composer: id, part: .field) }
+}
+
+struct ComposerScrollID: Hashable {
+  enum Part {
+    case composer
+    case field
+  }
+
+  let composer: UUID
+  let part: Part
 }
 
 // Whether a composer's field has taken its opening focus.
