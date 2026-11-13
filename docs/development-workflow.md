@@ -1403,11 +1403,13 @@ and failure handling. Screenr's `memoryAudit` settings in
 - **Index:** archiving a note removes its entry from the README's
   "Active memory index" list.
 
-Audits bill Screenr's own Anthropic API key, set as
-`MEMORY_AUDIT_ANTHROPIC_API_KEY` in the primary checkout's `.env` (mode 600),
-and fall back to the Claude subscription when the API refuses it, as the
-feature's [API key](foundation/memory-audit.md#api-key) section describes. The
-key is separate from PodHaven's and stays out of production's `app.env`.
+Audits bill the Anthropic API key that every Project Starter memory audit on
+this Mac shares, set as `ANTHROPIC_MEMORY_AUDIT_API_KEY` in `~/.env`, and fall
+back to the Claude subscription when the API refuses it, as the feature's
+[API key](foundation/memory-audit.md#api-key) section describes. The same line
+in the primary checkout's `.env`, even with an empty value, would override the
+shared key for Screenr, so `.env.example`, which setup copies to `.env`, leaves
+it out. The key stays out of production's `app.env`.
 
 Run `bin/memory-audit install` in the primary checkout to register or update
 the LaunchAgent, and
@@ -1433,12 +1435,15 @@ The owner settled the two choices #309 left open
 
 ### Audit billing and model — 2026-10-28
 
-- **Billing:** audits bill Screenr's own Anthropic API key, with an automatic
-  fallback to the subscription when the key runs out of credit, reaches its
-  spend limit, or is rejected. Reason: the owner's Max plan includes $200 of
+- **Billing:** audits bill an Anthropic API key, with an automatic fallback
+  to the subscription when the key runs out of credit, reaches its spend
+  limit, or is rejected. Reason: the owner's Max plan includes $200 of
   Anthropic API credit each month, which expires if unused, so scheduled
-  `claude -p` jobs move onto it. Each project has its own key. This
-  supersedes subscription-only billing.
+  `claude -p` jobs move onto it. This supersedes subscription-only billing.
+  Each project had its own key until 2026-11-13, when the owner moved every
+  Project Starter memory audit, Screenr's included, onto one shared key in
+  `~/.env`, so there is one key to rotate
+  ([jubishop/project-starter#52](https://github.com/jubishop/project-starter/issues/52)).
 - **Model:** `claude-sonnet-5-5` at high effort replaces `claude-haiku-5-5`.
   Reason: the owner chose Sonnet for better audits.
 
