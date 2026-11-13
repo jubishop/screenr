@@ -1379,21 +1379,25 @@ them, as [CI dependency sources](#ci-dependency-sources) describes.
 ## Scheduled memory audit
 
 A weekly local job checks every active [memory](../memory/README.md) note
-against the code and GitHub evidence, archives or updates stale notes, and
-commits validated changes to `main`
-([#309](https://github.com/jubishop/screenr/issues/309)). It is Project
-Starter's shared [memory audit](foundation/memory-audit.md) feature, whose
-page covers installing, running, inspecting, and stopping it, and its model,
-validation, and failure handling. Screenr's `memoryAudit` settings in
+against the code and GitHub evidence
+([#309](https://github.com/jubishop/screenr/issues/309)), and proposes
+validated archives and updates of stale notes in a pull request for the user
+to merge, with an unassigned issue that the pull request closes. It never
+pushes to `main`. It is Project Starter's shared
+[memory audit](foundation/memory-audit.md) feature, whose page covers
+installing, running, inspecting, and stopping it, and its model, validation,
+and failure handling. Screenr's `memoryAudit` settings in
 `.config/knowledge.json` add:
 
 - **Schedule:** Saturday at 08:00 in the Mac's local time zone, two hours
   after PodHaven's audit. Audits on the same Mac also take turns through the
   feature's shared lock.
 - **Deployment:** each audit commit carries `Screenr-Deploy: skip` trailers,
-  so a memory-only commit never forces a
-  [deployment](#main-branch-delivery). CI still runs its checks on each audit
-  push, as on every push ([CI jobs](#ci-jobs)).
+  so merging a memory-only audit pull request never forces a
+  [deployment](#main-branch-delivery). A squash or rebase merge keeps the
+  trailers; a merge commit does not carry them, so its push deploys. CI runs
+  its checks on the audit's pull request and again on its merge, as on every
+  pull request and push ([CI jobs](#ci-jobs)).
 - **Failure issue:** a new `Memory audit failing` issue gets the `bug` and
   `area: tooling` labels.
 - **Index:** archiving a note removes its entry from the README's
