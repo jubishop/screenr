@@ -29,6 +29,11 @@ entry of a friend they choose, under
 Watch updates, ratings, and recommendations from other friends still notify
 no one.
 
+**Updated — 2026-11-12:** Mentioning a friend with `@` notifies them, with
+its own Mentions push setting, under the
+[mentions decision](product-brief.md#mentions--2026-11-12).
+[Issue #666](https://github.com/jubishop/screenr/issues/666) tracks it.
+
 ## Friend activity notifications — 2026-11-09
 
 **Decision:** On an accepted friend's profile, a bell toggle in the header

@@ -1221,6 +1221,48 @@ over free text, for consistent labels.
 describes the shipped behavior. The pickers leave out TMDB's Specials
 (season 0), which has no "Season N" label.
 
+### Mentions — 2026-11-12
+
+**Decision:** Members can mention friends with `@` and titles with `#`
+everywhere they write: title comments, replies, posts without a title, and
+reviews, on the web and in the iPhone app. Typing either symbol opens
+suggestions that narrow as the member types. Text becomes a mention only
+when picked from the suggestions, so "my #1 show" stays plain.
+
+- **Friends:** `@` suggests the writer's friends who can read the
+  conversation. On the writer's own content that is all their friends; in a
+  friend's conversation it is only those who are also that friend's friends.
+  A mention shows the friend's display name and opens their profile. It
+  notifies them through the bell, activity email, and iPhone push under a
+  new Mentions push setting that starts on. A comment or reply that already
+  notifies that person sends one notification, not two.
+- **Titles:** `#` suggests only titles the writer has interacted with:
+  given any watch status, including Want to watch, rated or reviewed,
+  recommended, put in their top 10, or commented or posted about. They are
+  listed most recent first, with no catalog search while typing. A mention
+  shows the title's name and opens its page. The mentioned title's page also
+  shows a compact mentioned-in card, such as "Maya mentioned Severance in a
+  post", with a short excerpt, which opens the original where it lives, so
+  each discussion stays in one place.
+
+**Why:** The user wants to mention friends and the titles they've interacted
+with while writing. The user accepted each recommendation offered during the
+interview, except that a title mention also appears on the mentioned title's
+page instead of being only a link; no further reason was given for that
+choice.
+
+**Rejected:** mentions only in comments and replies, or everywhere except
+reviews; suggesting all friends, or also people in the thread who aren't the
+writer's friends; mentions that notify no one, or push under the existing
+comment and reply settings; `+` or `!` for titles; catalog titles after the
+writer's own; title mentions that are only links; and showing the whole
+entry on the mentioned title's page with one shared discussion, whether for
+every mention or only top-level ones.
+
+[Issue #666](https://github.com/jubishop/screenr/issues/666) tracks friend
+mentions, and [issue #667](https://github.com/jubishop/screenr/issues/667)
+tracks title mentions and their cards.
+
 ### Finding and adding friends — 2026-09-04
 
 **Decision:** At launch, support shareable profile links, exact-username

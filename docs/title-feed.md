@@ -36,6 +36,12 @@ This replaces the separate-conversation presentation in the product brief.
 The decisions below define the existing action types and update behavior;
 future entry types remain separate work.
 
+**Updated — 2026-11-12:** A title page will also show a compact
+mentioned-in card for each post, comment, reply, or review elsewhere that
+mentions the title with `#`, under the
+[mentions decision](product-brief.md#mentions--2026-11-12).
+[Issue #667](https://github.com/jubishop/screenr/issues/667) tracks it.
+
 ### The top-level author determines the audience — 2026-09-06
 
 **Decision:** Each top-level item and its replies are accessible only to
