@@ -1,0 +1,74 @@
+name: PostgreSQL updates
+
+# ops/update-postgresql.py installs PostgreSQL repository updates on the
+# production server daily around 10:00 UTC and records each run. This reads
+# that status through the deploy key and opens one issue when the updater is
+# blocked or stalled. When an update leaves Screenr unhealthy, the server
+# emails the owner instead. See docs/restore-and-patching.md#postgresql.
+on:
+  schedule:
+    # 11:30 UTC, after the updater's run, random delay, and deploy lock wait;
+    # GitHub cron uses UTC only.
+    - cron: "30 11 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: postgresql-updates
+  cancel-in-progress: false
+
+jobs:
+  report:
+    name: Report a blocked or stalled PostgreSQL updater
+    if: github.repository == 'jubishop/screenr'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # The SSH and tailnet credentials are production secrets. This job deploys
+    # nothing, so it records no deployment.
+    environment:
+      name: production
+      deployment: false
+    permissions:
+      contents: read
+      issues: write
+      id-token: write # Join the tailnet through Tailscale workload identity federation.
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      # A failure here leaves no status, which the report turns into an issue.
+      - name: Reach the production server
+        id: reach
+        continue-on-error: true
+        uses: ./.github/actions/production-ssh
+        with:
+          deploy-host: ${{ secrets.SCREENR_DEPLOY_HOST }}
+          deploy-key: ${{ secrets.SCREENR_DEPLOY_KEY }}
+          known-hosts: ${{ secrets.SCREENR_DEPLOY_KNOWN_HOSTS }}
+          tailscale-oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          tailscale-audience: ${{ secrets.TS_AUDIENCE }}
+      - name: Read the updater's status
+        if: steps.reach.outcome == 'success'
+        env:
+          SCREENR_DEPLOY_HOST: ${{ secrets.SCREENR_DEPLOY_HOST }}
+        run: |
+          status="$RUNNER_TEMP/postgresql-status.json"
+          for attempt in 1 2 3; do
+            if ssh -i "$RUNNER_TEMP/screenr-ssh/key" -o "UserKnownHostsFile=$RUNNER_TEMP/screenr-ssh/known_hosts" \
+                -o StrictHostKeyChecking=yes -o IdentitiesOnly=yes -o BatchMode=yes -o ConnectTimeout=10 \
+                "$SCREENR_DEPLOY_HOST" postgresql-status > "$status"; then
+              exit 0
+            fi
+            [ "$attempt" = 3 ] || sleep 30
+          done
+          rm -f "$status"
+      - name: Open or update the issue
+        env:
+          GH_REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ github.token }}
+        run: bin/postgresql-update-report "$RUNNER_TEMP/postgresql-status.json"
+      - name: Remove deployment SSH files
+        if: always()
+        run: rm -rf "$RUNNER_TEMP/screenr-ssh"

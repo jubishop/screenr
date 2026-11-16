@@ -143,8 +143,9 @@ class ReceiverTests(unittest.TestCase):
             (self.kit / name).write_text(f'# {name}\n')
         self.upload = self.base / 'var/lib/screenr-deploy/release.tar.gz'
         self.upload.parent.parent.mkdir(parents=True)
+        self.postgresql_status = self.base / 'var/lib/screenr-postgresql-updates/status.json'
         for name, value in (('SCREENR', self.screenr), ('KIT', self.kit), ('UPLOAD', self.upload),
-                            ('PYTHON', Path(sys.executable))):
+                            ('PYTHON', Path(sys.executable)), ('POSTGRESQL_STATUS', self.postgresql_status)):
             patcher = mock.patch.object(self.receiver, name, value)
             patcher.start()
             self.addCleanup(patcher.stop)
@@ -190,7 +191,8 @@ class ProtocolTests(ReceiverTests):
                         f'finalize {REVISION[:39]}', f'finalize ../../../etc/{REVISION}',
                         f'finalize {REVISION}\n', 'scp -t /tmp', 'rsync --server . /tmp',
                         'cat /opt/screenr/current/REVISION', 'python3 -c "print(1)"',
-                        f'deploy $(id) {checksum} {checksum}', 'internal-sftp',
+                        f'deploy $(id) {checksum} {checksum}', 'internal-sftp', 'postgresql-status now',
+                        'postgresql-status ', 'postgresql-status; id', 'postgresql',
                         f'extract {self.upload} /opt/screenr/releases/{REVISION} {REVISION}'):
             with self.subTest(command=command):
                 status, stdout, stderr = self.receive(command, b'payload')
@@ -257,6 +259,34 @@ class StatusTests(ReceiverTests):
                 self.assertEqual(status, 1)
                 self.assertIn('Could not read the active production revision', stderr)
                 self.assertEqual(stdout, '')
+
+
+class PostgresqlStatusTests(ReceiverTests):
+    """.github/workflows/postgresql-updates.yml reads ops/update-postgresql.py's last status."""
+
+    def test_prints_the_updaters_status(self):
+        status = {'result': 'blocked', 'message': 'Upgrading would remove postgresql-contrib.',
+                  'checked': '2026-11-22T10:05:00+00:00', 'last_success': '2026-11-18T10:05:00+00:00',
+                  'trouble_since': '2026-11-19', 'pending': {}}
+        self.postgresql_status.parent.mkdir(parents=True)
+        self.postgresql_status.write_text(json.dumps(status, indent=2))
+        code, stdout, stderr = self.receive('postgresql-status')
+        self.assertEqual(code, 0, stderr)
+        self.assertEqual(json.loads(stdout), status)
+        self.assertEqual(self.recorded(), [])
+
+    def test_missing_or_invalid_status_fails(self):
+        cases = ((None, 'has recorded no status yet'), ('not json', 'not valid JSON'),
+                 ('[1]', 'not a JSON object'))
+        for content, message in cases:
+            with self.subTest(content=content):
+                if content is not None:
+                    self.postgresql_status.parent.mkdir(parents=True, exist_ok=True)
+                    self.postgresql_status.write_text(content)
+                code, stdout, stderr = self.receive('postgresql-status')
+                self.assertEqual(code, 1)
+                self.assertEqual(stdout, '')
+                self.assertIn(message, stderr)
 
 
 class UploadTests(ReceiverTests):

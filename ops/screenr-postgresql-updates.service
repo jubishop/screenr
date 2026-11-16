@@ -1,44 +1,18 @@
 [Unit]
-Description=Screenr pending PostgreSQL update check
+Description=Install Screenr's pending PostgreSQL repository updates
 After=network-online.target
 Wants=network-online.target
 OnFailure=screenr-alert@%n.service
 
 [Service]
 Type=oneshot
-# Reads only apt package lists and its own state, so it needs no Screenr user.
-DynamicUser=yes
-EnvironmentFile=/etc/screenr/backup.env
-ExecStart=/usr/bin/python3 /usr/local/lib/screenr-deploy/check-postgresql-updates.py
+# apt and dpkg run as root and write system directories, so unlike Screenr's
+# other jobs this unit has no sandbox. It runs only the root-installed kit
+# script and system programs, never release code.
+ExecStart=/usr/bin/python3 -I /usr/local/lib/screenr-deploy/update-postgresql.py
+# The deploy key's postgresql-status command reads status.json here.
 StateDirectory=screenr-postgresql-updates
-StateDirectoryMode=0700
-MemoryMax=256M
-CPUQuota=25%
+# Above the sum of the script's own step limits, so systemd never stops dpkg
+# before the script does.
+TimeoutStartSec=3h
 Nice=10
-# The worker's sandbox; tests/test_app_sandbox.py keeps every copy the same.
-NoNewPrivileges=true
-PrivateTmp=true
-PrivateDevices=true
-ProtectSystem=strict
-ProtectHome=true
-ProtectKernelTunables=true
-ProtectKernelModules=true
-ProtectKernelLogs=true
-ProtectControlGroups=true
-ProtectClock=true
-ProtectHostname=true
-ProtectProc=invisible
-ProcSubset=pid
-# HTTPS to Resend needs only these families.
-RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
-RestrictNamespaces=true
-RestrictRealtime=true
-RestrictSUIDSGID=true
-LockPersonality=true
-SystemCallFilter=@system-service
-SystemCallArchitectures=native
-SystemCallErrorNumber=EPERM
-CapabilityBoundingSet=
-# Other applications on the shared host. '-' ignores a path that is missing.
-InaccessiblePaths=-/etc/caddy -/var/log/caddy -/opt/health -/opt/health-site -/opt/kidsbank -/opt/news -/opt/trading
-UMask=0077

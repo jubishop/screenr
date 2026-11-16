@@ -1,8 +1,9 @@
 [Unit]
-Description=Daily Screenr pending PostgreSQL update check
+Description=Daily Screenr PostgreSQL repository update
 
 [Timer]
-OnCalendar=*-*-* 16:00:00 UTC
+# 02:00 PST / 03:00 PDT, before the 12:00 UTC backup and when Screenr is quietest.
+OnCalendar=*-*-* 10:00:00 UTC
 RandomizedDelaySec=10m
 Persistent=true
 

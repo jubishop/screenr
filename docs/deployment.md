@@ -206,14 +206,17 @@ Release code also runs outside the two units, and the same sandbox covers it
   ```
 
 - The backup, restore check, stale-backup check, backup storage check,
-  PostgreSQL update check, memory check, crash check, and failure alert units
+  memory check, crash check, and failure alert units
   run kit scripts and system programs as `screenr-db` or a dynamic user,
   never release code. They have the worker's sandbox too, which leaves them
   restic and its cache, the database socket, systemd's D-Bus API, the
   journal, and HTTPS to R2 and Resend. Only the memory and crash checks join
   the `systemd-journal` group, without which `screenr-db` opens no journal
   files. Only
-  `screenr-db.service`, the PostgreSQL server itself, keeps its own settings.
+  `screenr-db.service`, the PostgreSQL server itself, keeps its own settings,
+  and `screenr-postgresql-updates.service` has no sandbox: its apt and dpkg
+  run as root and write system directories, so it runs only its kit script
+  and system programs.
 
 systemd units cannot include shared settings, so each of these units and the
 runner carries a copy of the sandbox. `tests/test_app_sandbox.py` requires
@@ -539,7 +542,7 @@ UptimeRobot's free plan has no heartbeat monitors.
 backups.
 
 The backup, restore check, stale-backup check, backup storage check,
-PostgreSQL update check, memory check, crash check, web, worker, and database
+PostgreSQL updater, memory check, crash check, web, worker, and database
 units each set `OnFailure=screenr-alert@%n.service`.
 That template runs `ops/failure-alert.py` with the failed unit's name. It
 sends through the Resend settings in `/etc/screenr/backup.env` described
@@ -581,10 +584,10 @@ backup is over 30 hours old at the next check.
 failure starts the alert.
 
 `screenr-postgresql-updates.timer` runs the daily
-[PostgreSQL update check](restore-and-patching.md#pending-update-notice)
-around 09:00 PDT / 08:00 PST. It sends its own one-time notice through
-`failure-alert.py`'s Resend delivery when an update has been pending for three
-days, and its failure starts the alert.
+[PostgreSQL updater](restore-and-patching.md#the-daily-updater) around
+02:00 PST / 03:00 PDT. It fails, starting the alert, only when an update
+leaves Screenr unhealthy or the updater itself crashes; a scheduled workflow
+opens a GitHub issue when it cannot install an update.
 
 `screenr-memory-check.timer` runs the [daily memory check](#daily-memory-check)
 around 10:00 PDT / 09:00 PST, and its failure starts the alert.
@@ -604,8 +607,9 @@ Verify the alert path without sending email:
   current.
 - `systemctl start screenr-backup-size.service` passes and logs the bucket
   size. Below 1 GB it sends nothing.
-- `systemctl start screenr-postgresql-updates.service` passes. Its first run
-  only records pending versions, so it sends nothing.
+- The PostgreSQL updater's dry run, under
+  [run or inspect it by hand](restore-and-patching.md#run-or-inspect-it-by-hand),
+  lists pending versions and installs nothing.
 - `systemctl start screenr-memory-check.service` passes while no service is
   near its limit, and its journal lists each service's current run and
   logged peaks.
@@ -1039,6 +1043,7 @@ including shells, `scp`, and SFTP:
 | `deploy REVISION SHA256 KIT` | Runs the kit's `deploy-release.sh` for the kept archive when `KIT` matches the installed kit |
 | `discard` | Removes the kept archive |
 | `finalize REVISION` | Runs the kit's `prune-releases.py` for that release |
+| `postgresql-status` | Prints the [PostgreSQL updater's](restore-and-patching.md#the-daily-updater) last status as JSON, for its scheduled report |
 
 The upload check accepts only directories, regular files, and relative links
 that resolve inside the release without passing through another link. It
@@ -1066,10 +1071,10 @@ receiver, `ops/deploy-release.sh`, `ops/activate.sh`,
 `ops/run-release-script.sh`, `ops/host-config.py`, `ops/prune-releases.py`,
 every `ops/screenr-*.service` and `.timer`, and the
 `ops/Caddyfile` and `ops/postgresql.conf` copies that deployment compares. It
-also holds the scripts that the units run as `screenr-db` or with
+also holds the scripts that the units run as root, as `screenr-db`, or with
 `/etc/screenr/backup.env`: `ops/backup.sh`, `ops/restore-check.sh`,
 `ops/failure-alert.py`, `ops/check-backup-age.py`, `ops/check-backup-size.py`,
-`ops/check-postgresql-updates.py`, `ops/check-memory.py`, and
+`ops/update-postgresql.py`, `ops/check-memory.py`, and
 `ops/check-crashes.py`. Those units run them from
 `/usr/local/lib/screenr-deploy`, and the release archive leaves out `ops/`.
 [`bin/_deploy_kit.py`](../bin/_deploy_kit.py) lists the kit. The receiver
@@ -1118,8 +1123,11 @@ The `check` job, which passes only when every check job passed, gates
 production deployment.
 
 The shared VPS answers SSH only on its tailnet address, so the deploy job
-first joins the tailnet as an ephemeral `tag:ci` node with
-`tailscale/github-action` and pings the server. A step before it takes the
+and the [PostgreSQL update report](restore-and-patching.md#the-daily-updater)
+first join the tailnet as an ephemeral `tag:ci` node through
+`.github/actions/production-ssh`, which runs `tailscale/github-action` and
+pings the server. The report uses the environment with `deployment: false`,
+so it records no deployment. A step before the join takes the
 address from `SCREENR_DEPLOY_HOST` and masks it, since the log masks only the
 whole secret, so neither this public repository nor its Actions logs name the
 server ([#493](https://github.com/jubishop/screenr/issues/493)).

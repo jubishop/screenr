@@ -341,12 +341,101 @@ These facts were verified on the host on 2026-10-12:
 PostgreSQL 18 and its client libraries come from the PostgreSQL APT
 repository, which unattended upgrades do not cover. Its package scripts
 restart only clusters that `postgresql-common` manages, never `screenr-db`.
-Update them by hand after each minor release. The PostgreSQL project
-publishes one every quarter, on the second Thursday of February, May, August,
-and November, plus out-of-cycle bug fix and security releases
+The PostgreSQL project publishes a minor release every quarter, on the second
+Thursday of February, May, August, and November, plus out-of-cycle bug fix
+and security releases
 ([roadmap](https://www.postgresql.org/developer/roadmap/), checked
-2026-10-12). Read the release notes for extra steps, such as reindexing, then
-run on the VPS:
+2026-10-12). The units and scripts run PostgreSQL 18's binaries by path, so a
+major-version upgrade needs its own plan.
+
+**Decision — 2026-11-16:** Install PostgreSQL repository updates
+automatically. Email the owner only when an update leaves Screenr unhealthy,
+and open a GitHub issue only when the update cannot be done automatically
+([issue #673](https://github.com/jubishop/screenr/issues/673)).
+
+**Why:** The owner does not want to be in the update loop. Installing by hand
+added little: unattended upgrades already restart `screenr-db` whenever
+`needrestart` finds a replaced library, and the release notes' extra steps
+rarely apply to Screenr. For 18.7, installed by hand on 2026-11-16 after
+waiting since 2026-11-13, none did: the database uses only plpgsql and btree
+indexes, and backups are `pg_dump` archives rather than incremental backups.
+
+**Rejected alternative:** The three-day pending-update email from
+[issue #185](https://github.com/jubishop/screenr/issues/185), which left
+every install to the owner.
+
+#### The daily updater
+
+`screenr-postgresql-updates.timer` runs
+[`ops/update-postgresql.py`](../ops/update-postgresql.py) as root daily
+around 10:00 UTC, 02:00 PST / 03:00 PDT. It reads `apt list --upgradable` from
+the package lists that Ubuntu's `apt-daily.timer` refreshes, keeps only the
+`-pgdg` suite, and remembers the date it first saw each pending version. An
+unexpected `apt` output line counts as a failure, so a format change cannot
+pass as "nothing pending". A newer version starts its own wait.
+
+Once a pending version has waited seven days, since PostgreSQL sometimes
+replaces a bad minor release within a week, the updater:
+
+1. Simulates the upgrade of every pending PostgreSQL repository package, and
+   stops if it would remove any package.
+2. Takes `/opt/screenr/deploy.lock`, waiting up to 30 minutes for a
+   deployment, release cleanup, or restore to finish.
+3. Downloads the packages, then runs `screenr-backup.service`.
+4. Upgrades the packages with `--force-confold`, keeping changed
+   configuration files, and with `NEEDRESTART_MODE=l`, so needrestart lists
+   other applications that use replaced libraries instead of restarting them.
+5. When `postgresql-18` changed, restarts `screenr-db`, which restarts the
+   web and worker, with a few seconds of downtime.
+6. Requires activation's health check: the local API answers, a signed-out
+   session request reads the database, and the units stay up 15 seconds
+   without restarting.
+7. When `postgresql-18` changed, confirms the new server version and runs
+   `REINDEX DATABASE screenr`. Reindexing takes seconds at Screenr's size and
+   covers the extra step that release notes most often ask for.
+
+Each run records its result in
+`/var/lib/screenr-postgresql-updates/status.json`:
+
+| Result | Meaning | Who hears |
+| --- | --- | --- |
+| `current` | Nothing is due; pending versions are still waiting | No one |
+| `updated` | The run installed the update | No one |
+| `retrying` | The run could not list, plan, lock, download, or back up, and left Screenr untouched; the next run tries again | No one |
+| `blocked` | It has been retrying for three days, or a step after the upgrade began failed while Screenr stayed healthy | A GitHub issue |
+| `failed` | Screenr was unhealthy after the upgrade began | The unit fails, and its [failure alert](deployment.md#failure-alerts) emails the owner |
+
+`.github/workflows/postgresql-updates.yml` runs at 11:30 UTC. It reads the
+status through the deploy key's [`postgresql-status`](deployment.md#deploy-kit)
+command, and `bin/postgresql-update-report` opens one issue, titled
+"Fix the automatic PostgreSQL update on the server", when the updater is
+blocked, has not run for 50 hours, or cannot be read. While that issue is
+open, the workflow comments on it only when the problem changes. Whoever
+fixes the problem closes it. The repository is public, so the status quotes
+command output only from `apt`; psql errors can include table data and stay
+in the journal.
+
+#### Run or inspect it by hand
+
+Show what is pending or due without installing or saving anything:
+
+```sh
+systemd-run --quiet --wait --pipe --collect \
+  /usr/bin/python3 -I /usr/local/lib/screenr-deploy/update-postgresql.py --dry-run
+```
+
+Run the update now, such as after fixing what blocked it, then read the
+result:
+
+```sh
+systemctl start screenr-postgresql-updates.service
+journalctl -u screenr-postgresql-updates.service -n 200
+cat /var/lib/screenr-postgresql-updates/status.json
+```
+
+The run waits seven days from when the updater first saw a version. To
+install a version sooner, such as an urgent security release, follow the same
+steps by hand:
 
 ```sh
 apt-get update
@@ -356,51 +445,10 @@ flock -n /opt/screenr/deploy.lock sh -c 'systemctl start screenr-backup.service 
     -o Dpkg::Options::=--force-confold \
     postgresql-18 postgresql-client-18 postgresql-common postgresql-client-common libpq5 &&
   systemctl restart screenr-db'
-```
-
-The lock keeps deployments out, and the backup comes first in case the
-upgrade goes wrong. `NEEDRESTART_MODE=l` lists services that use replaced
-libraries instead of restarting other applications. Confirm the new version
-and service health:
-
-```sh
 runuser -u screenr-db -- psql -h /run/screenr-db -p 5439 -d screenr -Atc 'SHOW server_version'
+runuser -u screenr-db -- psql -h /run/screenr-db -p 5439 -d screenr -c 'REINDEX DATABASE screenr'
 systemctl is-active screenr-db screenr-web screenr-worker
 curl --fail https://screenr.club/api/health
-```
-
-The units and scripts run PostgreSQL 18's binaries by path. A major-version
-upgrade needs its own plan.
-
-#### Pending update notice
-
-`screenr-postgresql-updates.timer` checks for pending PostgreSQL repository
-updates daily around 09:00 PDT / 08:00 PST
-([issue #185](https://github.com/jubishop/screenr/issues/185)). Its service
-runs `ops/check-postgresql-updates.py` as an unprivileged dynamic user. The
-script reads `apt list --upgradable` from the package lists that Ubuntu's
-`apt-daily.timer` refreshes each day, keeps only the `-pgdg` suite, and
-installs nothing. It saves the date it first saw each pending package version
-in `/var/lib/screenr-postgresql-updates/pending.json`.
-
-When any version has been pending for three days, the script emails the owner
-once through the [failure alert](deployment.md#failure-alerts) delivery. The
-email lists every pending PostgreSQL package and links this section. The wait
-leaves time to install a release by hand first and gathers packages that
-reach the repository on different days into one email. A newer version
-starts its own wait and sends its own email. Installed updates leave the
-state file. If listing, saving, or delivery fails, the service fails, its
-failure alert emails the owner, and the next day's check retries the notice.
-An unexpected `apt` output line also fails the check, so a format change
-cannot pass as "nothing pending".
-
-Show the pending versions, and the email when one is due, without sending it
-or saving state:
-
-```sh
-systemd-run --quiet --wait --pipe --collect -p DynamicUser=yes \
-  -p StateDirectory=screenr-postgresql-updates \
-  /usr/bin/python3 /usr/local/lib/screenr-deploy/check-postgresql-updates.py --dry-run
 ```
 
 ### Reboots
