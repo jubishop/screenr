@@ -1,0 +1,58 @@
+# The deploy job and the PostgreSQL update report reach the production server
+# through this action. The server answers SSH only on its tailnet address. This
+# public file takes it from the deploy host secret and masks it, since the log
+# masks only the whole secret; tests/test_deploy_tailnet.py runs that step.
+# See docs/deployment.md#production-environment-setup. Each caller removes
+# $RUNNER_TEMP/screenr-ssh in a final always() step.
+name: Reach the production server
+description: Join the tailnet and write the deploy key and known hosts to $RUNNER_TEMP/screenr-ssh.
+inputs:
+  deploy-host:
+    description: The SCREENR_DEPLOY_HOST secret, root@ and the server's tailnet address.
+    required: true
+  deploy-key:
+    description: The SCREENR_DEPLOY_KEY secret.
+    required: true
+  known-hosts:
+    description: The SCREENR_DEPLOY_KNOWN_HOSTS secret.
+    required: true
+  tailscale-oauth-client-id:
+    description: The TS_OAUTH_CLIENT_ID secret.
+    required: true
+  tailscale-audience:
+    description: The TS_AUDIENCE secret.
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: Find the server's tailnet address
+      id: server
+      shell: bash
+      env:
+        SCREENR_DEPLOY_HOST: ${{ inputs.deploy-host }}
+      run: |
+        if [[ ! $SCREENR_DEPLOY_HOST =~ ^root@([A-Za-z0-9][A-Za-z0-9.-]*)$ ]]; then
+          echo "::error::Set SCREENR_DEPLOY_HOST to root@ and the server's tailnet address."
+          exit 1
+        fi
+        echo "::add-mask::${BASH_REMATCH[1]}"
+        echo "address=${BASH_REMATCH[1]}" >> "$GITHUB_OUTPUT"
+    - name: Join the tailnet
+      uses: tailscale/github-action@064b10558093f38325e838ddea35486bdc6b1d5c # Pinned: third-party action in a job holding deploy credentials (v4.2.0)
+      with:
+        oauth-client-id: ${{ inputs.tailscale-oauth-client-id }}
+        audience: ${{ inputs.tailscale-audience }}
+        tags: tag:ci
+        ping: ${{ steps.server.outputs.address }}
+    - name: Configure deployment SSH
+      shell: bash
+      env:
+        DEPLOY_KEY: ${{ inputs.deploy-key }}
+        KNOWN_HOSTS: ${{ inputs.known-hosts }}
+      run: |
+        test -n "$DEPLOY_KEY"
+        test -n "$KNOWN_HOSTS"
+        umask 077
+        mkdir -p "$RUNNER_TEMP/screenr-ssh"
+        printf '%s\n' "$DEPLOY_KEY" > "$RUNNER_TEMP/screenr-ssh/key"
+        printf '%s\n' "$KNOWN_HOSTS" > "$RUNNER_TEMP/screenr-ssh/known_hosts"

@@ -1,0 +1,142 @@
+#!/usr/bin/env python3
+"""Open or update one GitHub issue when the server's PostgreSQL updater needs a person.
+
+.github/workflows/postgresql-updates.yml runs this daily with the status that
+ops/update-postgresql.py recorded, read through the deploy key's postgresql-status
+command; a missing or empty file means the workflow could not read it. A blocked updater,
+a stalled one, or an unreadable status opens an issue, or comments on the open one when the
+problem is new to it. The owner already gets an email from the server when an update leaves
+Screenr unhealthy, so a failed run only warns here. Whoever fixes the problem closes the issue.
+
+The repository is public. The status holds only package versions, dates, and step results,
+and the updater quotes command output only from apt.
+"""
+import argparse
+from datetime import datetime, timedelta, timezone
+import json
+import os
+from pathlib import Path
+import subprocess
+import sys
+
+TITLE = 'Fix the automatic PostgreSQL update on the server'
+LABELS = ('bug', 'area: ops', 'p2')
+# The updater runs daily; two missed runs mean its timer or the server stopped.
+STALE_HOURS = 50
+RUNBOOK = 'https://github.com/jubishop/screenr/blob/main/docs/restore-and-patching.md#postgresql'
+# Issues that this workflow opened; anyone can open an issue in a public repository.
+AUTHOR = 'app/github-actions'
+
+
+def gh(*args, body=None):
+    return subprocess.run(['gh', *args], input=body, stdin=None if body is not None else subprocess.DEVNULL,
+                          check=True, stdout=subprocess.PIPE, text=True, timeout=120).stdout
+
+
+def read(path):
+    """Return the status as a dict, or None when the workflow could not read it."""
+    try:
+        text = Path(path).read_text().strip()
+    except FileNotFoundError:
+        return None
+    if not text:
+        return None
+    try:
+        status = json.loads(text)
+    except ValueError:
+        return {}
+    return status if isinstance(status, dict) else {}
+
+
+def problem(status, now):
+    """Return why the updater needs a person, or None."""
+    if status is None:
+        return ("The workflow could not read the updater's status from the server. The run's log "
+                'shows why; the server may be unreachable, or the updater may never have run.')
+    try:
+        result, checked = status['result'], datetime.fromisoformat(status['checked'])
+        message = str(status['message'])
+    except (KeyError, TypeError, ValueError):
+        return "The updater's status on the server is unreadable."
+    if now - checked > timedelta(hours=STALE_HOURS):
+        return (f'The updater last ran at {checked.isoformat()}, over {STALE_HOURS} hours ago, so '
+                'screenr-postgresql-updates.timer or the server may have stopped.')
+    if result == 'blocked':
+        return message
+    return None
+
+
+def body(reason, status, run_url):
+    details = ''
+    if status:
+        details = f'\n## Status\n\n```json\n{json.dumps(status, indent=2, sort_keys=True)}\n```\n'
+    source = f'[the PostgreSQL updates workflow]({run_url})' if run_url else 'the PostgreSQL updates workflow'
+    return (f"The server's daily PostgreSQL updater can't install updates by itself, so it needs a "
+            f'person.\n\n## Problem\n\n{reason}\n{details}\n## What to do\n\n'
+            '- Read the updater\'s log on the server: '
+            '`journalctl -u screenr-postgresql-updates.service -n 200`.\n'
+            '- Fix the cause, then run `systemctl start screenr-postgresql-updates.service` and '
+            'confirm that `/var/lib/screenr-postgresql-updates/status.json` reports `updated` or '
+            '`current`.\n'
+            f'- See [PostgreSQL updates]({RUNBOOK}).\n'
+            '- Close this issue once the updater reports `updated` or `current`. While it is open, '
+            'the workflow comments here when the problem changes and opens no other issue.\n\n'
+            f'Opened by {source}.\n')
+
+
+def open_issue():
+    """Return the number of this workflow's open issue, or None."""
+    issues = json.loads(gh('issue', 'list', '--state', 'open', '--author', AUTHOR, '--search',
+                           f'in:title "{TITLE}"', '--json', 'number,title', '--limit', '20'))
+    numbers = sorted(issue['number'] for issue in issues if issue['title'] == TITLE)
+    return numbers[0] if numbers else None
+
+
+def report(reason, status, run_url):
+    number = open_issue()
+    if number is None:
+        labels = [argument for label in LABELS for argument in ('--label', label)]
+        url = gh('issue', 'create', '--title', TITLE, *labels, '--body-file', '-',
+                 body=body(reason, status, run_url)).strip()
+        print(f'Opened {url}')
+        return
+    issue = json.loads(gh('issue', 'view', str(number), '--json', 'body,comments'))
+    if reason in issue['body'] or any(reason in comment['body'] for comment in issue['comments']):
+        print(f'Issue #{number} already describes this problem.')
+        return
+    source = f' ([run]({run_url}))' if run_url else ''
+    gh('issue', 'comment', str(number), '--body-file', '-',
+       body=f'The updater still needs a person{source}:\n\n{reason}\n')
+    print(f'Commented on issue #{number}.')
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument('status', help="the updater's status.json as the workflow read it")
+    parser.add_argument('--now', help=argparse.SUPPRESS)  # An ISO time, for tests.
+    arguments = parser.parse_args()
+    now = datetime.fromisoformat(arguments.now) if arguments.now else datetime.now(timezone.utc)
+    status = read(arguments.status)
+    reason = problem(status, now)
+    if reason is None:
+        result, message = status['result'], status['message']
+        if result == 'failed':
+            print(f'::warning::The PostgreSQL update left Screenr unhealthy, and the server emailed the owner: '
+                  f'{message}')
+        else:
+            print(f'PostgreSQL updater {result}: {message}')
+        return 0
+    print(f'::warning::{reason}')
+    server = os.environ.get('GITHUB_SERVER_URL')
+    run = os.environ.get('GITHUB_RUN_ID')
+    run_url = f'{server}/{os.environ["GITHUB_REPOSITORY"]}/actions/runs/{run}' if server and run else None
+    try:
+        report(reason, status, run_url)
+    except (subprocess.SubprocessError, OSError, ValueError, KeyError, TypeError) as error:
+        print(f'Could not open or update the issue: {error}', file=sys.stderr)
+        return 1
+    return 0
+
+
+if __name__ == '__main__':
+    sys.exit(main())

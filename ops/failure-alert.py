@@ -39,9 +39,11 @@ JOBS = {
         'next run within six hours. If the journal says to reconcile, follow the backup '
         'storage warning steps in docs/deployment.md before rerunning it.'),
     'screenr-postgresql-updates.service': (
-        'PostgreSQL update check failed',
-        'The daily PostgreSQL update check could not list pending package updates, save its '
-        'state, or email its notice. A pending PostgreSQL update may go unreported.'),
+        'PostgreSQL update left Screenr unhealthy',
+        'The daily PostgreSQL update upgraded the PostgreSQL packages, and then Screenr\'s database, '
+        'web application, or email worker was not running or failed its health check, or the '
+        'updater itself crashed. Screenr may be down. Its journal names the step that failed; see '
+        'https://github.com/jubishop/screenr/blob/main/docs/restore-and-patching.md#postgresql'),
     'screenr-memory-check.service': (
         'service near its memory limit or OOM-killed',
         'The daily memory check found a run of the Screenr web application, email worker, or '

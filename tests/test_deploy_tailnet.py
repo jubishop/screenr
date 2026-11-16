@@ -1,9 +1,10 @@
 """Keep the production server's tailnet address out of this public repository.
 
-The deploy job joins the tailnet and pings the server before deploying over
-SSH. Anyone can read this repository and its Actions logs, so the job takes
-the address from the SCREENR_DEPLOY_HOST secret and masks it, and no tracked
-file names a tailnet address (#493). Failures name only the file and line.
+The deploy job and the PostgreSQL update report join the tailnet and ping the
+server through .github/actions/production-ssh before using SSH. Anyone can read
+this repository and its Actions logs, so the action takes the address from the
+SCREENR_DEPLOY_HOST secret and masks it, and no tracked file names a tailnet
+address (#493). Failures name only the file and line.
 """
 import ipaddress
 import os
@@ -18,7 +19,12 @@ from _process_waits import HANG_SECONDS
 
 
 ROOT = Path(__file__).resolve().parents[1]
-WORKFLOW = ROOT / ".github/workflows/check.yml"
+ACTION = ROOT / ".github/actions/production-ssh/action.yml"
+# The jobs that reach the server, and the secrets each passes to the action.
+CALLERS = {".github/workflows/check.yml": "deploy", ".github/workflows/postgresql-updates.yml": "report"}
+SECRETS = {"deploy-host": "SCREENR_DEPLOY_HOST", "deploy-key": "SCREENR_DEPLOY_KEY",
+           "known-hosts": "SCREENR_DEPLOY_KNOWN_HOSTS", "tailscale-oauth-client-id": "TS_OAUTH_CLIENT_ID",
+           "tailscale-audience": "TS_AUDIENCE"}
 FIND_STEP = "name: Find the server's tailnet address"
 JOIN_STEP = "name: Join the tailnet"
 # Tailscale gives each node an address in each of these ranges.
@@ -52,10 +58,16 @@ def names_tailnet_address(line):
     return False
 
 
-def deploy_steps():
-    """Return the deploy job's steps, keyed by their first line."""
-    jobs = WORKFLOW.read_text().split("\njobs:\n")[1]
-    job = re.search(r"^  deploy:\n((?:(?:    .*)?\n)*)", jobs, re.M)[1]
+def action_steps():
+    """Return the action's steps, keyed by their first line."""
+    steps = ACTION.read_text().split("\n  steps:\n")[1]
+    return {step.split("\n", 1)[0]: step for step in re.split(r"^    - ", steps, flags=re.M)[1:]}
+
+
+def job_steps(workflow, name):
+    """Return a workflow job's steps, keyed by their first line."""
+    jobs = (ROOT / workflow).read_text().split("\njobs:\n")[1]
+    job = re.search(rf"^  {name}:\n((?:(?:    .*)?\n)*)", jobs, re.M)[1]
     return {step.split("\n", 1)[0]: step for step in re.split(r"^      - ", job, flags=re.M)[1:]}
 
 
@@ -82,12 +94,28 @@ class TrackedFileTests(unittest.TestCase):
                 self.assertFalse(names_tailnet_address(line))
 
 
+class CallerTests(unittest.TestCase):
+    def test_each_job_that_reaches_the_server_passes_the_production_secrets(self):
+        for workflow, job in CALLERS.items():
+            with self.subTest(workflow=workflow):
+                steps = job_steps(workflow, job)
+                step = steps["name: Reach the production server"]
+                self.assertIn("uses: ./.github/actions/production-ssh\n", step)
+                for name, secret in SECRETS.items():
+                    self.assertIn(f"          {name}: ${{{{ secrets.{secret} }}}}\n", step)
+                # Callers remove the key the action wrote, whatever happened.
+                cleanup = steps["name: Remove deployment SSH files"]
+                self.assertIn("if: always()", cleanup)
+                self.assertIn('rm -rf "$RUNNER_TEMP/screenr-ssh"', cleanup)
+
+
 class FindAddressStepTests(unittest.TestCase):
     def setUp(self):
-        steps = deploy_steps()
+        steps = action_steps()
         self.assertIn(FIND_STEP, list(steps))
         self.find, self.join = steps[FIND_STEP], steps[JOIN_STEP]
-        self.script = textwrap.dedent(self.find.split("        run: |\n", 1)[1])
+        self.assertIn("      shell: bash\n", self.find)
+        self.script = textwrap.dedent(self.find.split("      run: |\n", 1)[1])
 
     def find_address(self, host):
         """Run the step with no shell set, as GitHub runs it, and return its
@@ -97,15 +125,16 @@ class FindAddressStepTests(unittest.TestCase):
             output.touch()
             environment = {"PATH": os.environ["PATH"], "GITHUB_OUTPUT": str(output),
                            "SCREENR_DEPLOY_HOST": host}
-            # GitHub runs a step that sets no shell with bash -e.
-            result = subprocess.run(["bash", "-e", "-c", self.script], cwd=ROOT, env=environment,
+            # GitHub runs a step with shell: bash this way.
+            result = subprocess.run(["bash", "--noprofile", "--norc", "-eo", "pipefail", "-c", self.script],
+                                    cwd=ROOT, env=environment,
                                     capture_output=True, text=True, timeout=HANG_SECONDS)
             return result, output.read_text()
 
     def test_join_pings_the_address_in_the_deploy_host_secret(self):
-        step = re.search(r"^        id: (\S+)$", self.find, re.M)[1]
-        self.assertIn("          SCREENR_DEPLOY_HOST: ${{ secrets.SCREENR_DEPLOY_HOST }}\n", self.find)
-        self.assertEqual(re.findall(r"^          ping: (.*)$", self.join, re.M),
+        step = re.search(r"^      id: (\S+)$", self.find, re.M)[1]
+        self.assertIn("        SCREENR_DEPLOY_HOST: ${{ inputs.deploy-host }}\n", self.find)
+        self.assertEqual(re.findall(r"^        ping: (.*)$", self.join, re.M),
                          [f"${{{{ steps.{step}.outputs.address }}}}"])
         for host in HOSTS:
             with self.subTest(host=host):

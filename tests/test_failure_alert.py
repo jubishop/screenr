@@ -108,11 +108,12 @@ class FailureAlertTests(unittest.TestCase):
         self.assertIn('30 hours', message['text'])
         self.assertIn('journalctl -u screenr-backup-age.service', message['text'])
 
-    def test_failed_postgresql_update_check_emails_the_owner(self):
+    def test_postgresql_update_that_left_screenr_unhealthy_emails_the_owner(self):
         code, _, errors = self.execute('screenr-postgresql-updates.service')
         self.assertEqual(code, 0, errors)
         message = self.message()
-        self.assertIn('PostgreSQL update check failed', message['subject'])
+        self.assertIn('PostgreSQL update left Screenr unhealthy', message['subject'])
+        self.assertIn('Screenr may be down', message['text'])
         self.assertIn('journalctl -u screenr-postgresql-updates.service', message['text'])
 
     def test_failed_backup_size_check_emails_the_owner(self):

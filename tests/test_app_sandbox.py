@@ -6,7 +6,7 @@ stops either service therefore takes production down, so these tests keep what
 the services need open: loopback PostgreSQL, HTTPS to Resend and TMDB, the Node
 runtime, the release, the web's Next cache, and its shared poster cache.
 
-Every other Screenr unit except the PostgreSQL server, and
+Every other Screenr unit except the PostgreSQL server and its updater, and
 ops/run-release-script.sh, which runs a release's maintenance scripts outside
 the units, apply the worker's sandbox (#306). The worker's unit is the one
 source of these settings: systemd units cannot include shared settings, so
@@ -27,10 +27,12 @@ APPS = ('screenr-web.service', 'screenr-worker.service')
 SOURCE = 'screenr-worker.service'
 # The PostgreSQL server runs no Screenr scripts and keeps its own settings.
 DATABASE = 'screenr-db.service'
-# The backup, restore check, backup checks, PostgreSQL update check, memory and
-# crash checks, and alerts.
+# apt and dpkg need root and write system directories, so the PostgreSQL
+# updater runs only the root-installed kit script and system programs, unsandboxed.
+UPDATER = 'screenr-postgresql-updates.service'
+# The backup, restore check, backup checks, memory and crash checks, and alerts.
 JOBS = sorted(path.name for path in (ROOT / 'ops').glob('screenr-*.service')
-              if path.name not in APPS + (DATABASE,))
+              if path.name not in APPS + (DATABASE, UPDATER))
 RUNNER = ROOT / 'ops' / 'run-release-script.sh'
 NODE = '/opt/screenr/node/bin/node'
 # The active release's Next cache, which belongs to its build.
@@ -223,7 +225,7 @@ class JobSandboxTests(unittest.TestCase):
     def test_jobs_cover_every_unit_but_the_application_and_database(self):
         self.assertLessEqual({'screenr-alert@.service', 'screenr-backup-age.service', 'screenr-backup-size.service',
                               'screenr-backup.service', 'screenr-memory-check.service', 'screenr-crash-check.service',
-                              'screenr-postgresql-updates.service', 'screenr-restore-check.service'}, set(JOBS))
+                              'screenr-restore-check.service'}, set(JOBS))
 
     def test_jobs_apply_the_worker_sandbox(self):
         expected = sandbox(service(SOURCE))

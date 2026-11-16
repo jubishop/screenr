@@ -13,6 +13,7 @@ The key can then run only these commands, read from SSH_ORIGINAL_COMMAND:
     deploy REVISION SHA256 KIT   Deploy the kept archive with the installed kit.
     discard                      Remove the kept archive.
     finalize REVISION            Run the installed kit's release cleanup after public checks.
+    postgresql-status            Print the PostgreSQL updater's last status as JSON.
 
 Root runs only the deploy kit that bin/install-deploy-kit installed from Git in
 /usr/local/lib/screenr-deploy. Nothing that arrives over the connection is run
@@ -47,6 +48,8 @@ import zlib
 SCREENR = Path('/opt/screenr')
 KIT = Path('/usr/local/lib/screenr-deploy')
 UPLOAD = Path('/var/lib/screenr-deploy/release.tar.gz')
+# ops/update-postgresql.py records each run here for .github/workflows/postgresql-updates.yml.
+POSTGRESQL_STATUS = Path('/var/lib/screenr-postgresql-updates/status.json')
 PYTHON = Path('/usr/bin/python3')
 # Releases are about 110 MB compressed and 420 MB unpacked, in about 15,000 entries.
 ARCHIVE_LIMIT = 512 * 1024 * 1024
@@ -72,6 +75,7 @@ COMMANDS = {
     'deploy': re.compile(r'deploy ([0-9a-f]{40}) ([0-9a-f]{64}) ([0-9a-f]{64})'),
     'discard': re.compile(r'discard'),
     'finalize': re.compile(r'finalize ([0-9a-f]{40})'),
+    'postgresql-status': re.compile(r'postgresql-status'),
 }
 # Deployment and cleanup write these markers; a release cannot supply them.
 RESERVED = {'.deployment-pending', '.deployment-success'}
@@ -313,13 +317,27 @@ def finalize(revision):
                           env=ENVIRONMENT, stdin=subprocess.DEVNULL).returncode
 
 
+def postgresql_status():
+    """Print the updater's status, which holds only package versions, dates, and step results."""
+    try:
+        status = json.loads(POSTGRESQL_STATUS.read_text())
+    except FileNotFoundError:
+        raise ValueError('The PostgreSQL updater has recorded no status yet.') from None
+    except ValueError:
+        raise ValueError('The PostgreSQL updater\'s status is not valid JSON.') from None
+    if not isinstance(status, dict):
+        raise ValueError('The PostgreSQL updater\'s status is not a JSON object.')
+    print(json.dumps(status, sort_keys=True), flush=True)
+    return 0
+
+
 def receive(command, stdin):
     """Run one protocol command and return its exit status."""
     name = command.partition(' ')[0]
     match = COMMANDS[name].fullmatch(command) if name in COMMANDS else None
     if not match:
         raise ValueError('Refused: the deploy key accepts only status, upload REVISION SHA256, '
-                         'deploy REVISION SHA256 KIT, discard, and finalize REVISION.')
+                         'deploy REVISION SHA256 KIT, discard, finalize REVISION, and postgresql-status.')
     if name == 'status':
         print(json.dumps({'active': active_revision(), 'kit': kit_digest()}), flush=True)
         return 0
@@ -329,6 +347,8 @@ def receive(command, stdin):
         return deploy(*match.groups())
     if name == 'discard':
         return discard()
+    if name == 'postgresql-status':
+        return postgresql_status()
     return finalize(*match.groups())
 
 
