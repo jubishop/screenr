@@ -15,9 +15,9 @@ bin/doctor
 bin/check --full
 ```
 
-Setup needs Git, Python 3.9 or later, and the latest Node.js LTS release;
-checks also need ShellCheck and fish.
-QMD and direnv are optional; setup reports skipped features.
+Setup needs Git, Python 3, QMD, and the latest Node.js LTS release, plus
+direnv for the project's `.envrc`; checks also need ShellCheck and fish. See
+[required tools](foundation/knowledge-search.md#required-tools).
 Complete [app setup](running-screenr.md#local-setup) before running
 `bin/check --full`. Review `.envrc` before running `direnv allow`, and add
 project-specific environment settings to it deliberately; search does not
@@ -38,13 +38,6 @@ removes browser versions that no remaining checkout uses. A failure fails
 `bin/setup` and `bin/prep-worktree`. In a new worktree, Git reports it and
 still creates the worktree; rerun `bin/setup-application` there.
 `tests/test_setup_application.py` covers it.
-
-For clones created before the 2026-09-04 knowledge foundation, copy any
-existing local `screenr.homeMemoryPath` value to `knowledge.homeMemoryPath`
-before rerunning setup. Preserve an already configured
-`knowledge.homeMemoryPath`. After verifying search, remove the old key. Review
-the updated `.envrc` and run `direnv allow` again if you use direnv; QMD no
-longer exports shell settings.
 
 ## Node runtime
 
