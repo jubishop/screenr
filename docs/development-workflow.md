@@ -1371,43 +1371,25 @@ them, as [CI dependency sources](#ci-dependency-sources) describes.
 
 ## Scheduled memory audit
 
-A weekly local job checks every active [memory](../memory/README.md) note
-against the code and GitHub evidence
-([#309](https://github.com/jubishop/screenr/issues/309)), and proposes
-validated archives and updates of stale notes in a pull request for the user
-to merge, with an unassigned issue that the pull request closes. It never
-pushes to `main`. It is Project Starter's shared
-[memory audit](foundation/memory-audit.md) feature, whose page covers
-installing, running, inspecting, and stopping it, and its model, validation,
-and failure handling. Screenr's `memoryAudit` settings in
-`.config/knowledge.json` add:
+Home's nightly guidance review, `~/docs/guidance-review.md`, audits Screenr's
+[memory](../memory/README.md) notes against the code and GitHub evidence when
+they come due, in place of Project Starter's weekly memory audit
+([#309](https://github.com/jubishop/screenr/issues/309)), which 4.0.0
+retired. That page covers when it runs, its model and billing, how its
+changes land, and its failures. For Screenr:
 
-- **Schedule:** Saturday at 08:00 in the Mac's local time zone, two hours
-  after PodHaven's audit. Audits on the same Mac also take turns through the
-  feature's shared lock.
-- **Deployment:** each audit commit carries `Screenr-Deploy: skip` trailers,
-  so merging a memory-only audit pull request never forces a
-  [deployment](#main-branch-delivery). A squash or rebase merge keeps the
-  trailers; a merge commit does not carry them, so its push deploys. CI runs
-  its checks on the audit's pull request and again on its merge, as on every
-  pull request and push ([CI jobs](#ci-jobs)).
-- **Failure issue:** a new `Memory audit failing` issue gets the `bug` and
-  `area: tooling` labels.
-- **Index:** archiving a note removes its entry from the README's
-  "Active memory index" list.
+- **Deployment:** the review adds `Screenr-Deploy: skip` trailers to each
+  audit commit, from its `ADOPTER_SETTINGS`, so an audit that changes only
+  memory notes or guidance never forces a
+  [deployment](#main-branch-delivery).
+- **API key:** memory-note audits bill `ANTHROPIC_MEMORY_AUDIT_API_KEY` in
+  `~/.env`, the key every adopter's memory-note audits share. The same line
+  in the primary checkout's `.env`, even with an empty value, would override
+  the shared key for Screenr, so `.env.example`, which setup copies to
+  `.env`, leaves it out. The key stays out of production's `app.env`.
 
-Audits bill the Anthropic API key that every Project Starter memory audit on
-this Mac shares, set as `ANTHROPIC_MEMORY_AUDIT_API_KEY` in `~/.env`, and fall
-back to the Claude subscription when the API refuses it, as the feature's
-[API key](foundation/memory-audit.md#api-key) section describes. The same line
-in the primary checkout's `.env`, even with an empty value, would override the
-shared key for Screenr, so `.env.example`, which setup copies to `.env`, leaves
-it out. The key stays out of production's `app.env`.
-
-Run `bin/memory-audit install` in the primary checkout to register or update
-the LaunchAgent, and
-`launchctl print gui/$(id -u)/com.jubishop.screenr.memory-audit` to inspect
-it.
+The records below predate 4.0.0, which moved the audit from Project
+Starter's memory-audit feature to the guidance review.
 
 ### Audit decisions — 2026-10-25
 
@@ -1442,7 +1424,6 @@ The owner settled the two choices #309 left open
 
 ## Project Starter
 
-`.project-starter.json` records the installed Project Starter release, the
-hashes of its managed files, and the enabled `memory-audit` feature. Update
-them with Project Starter's `bin/sync`, and record any intentional local
-change as an override with its reason.
+`.project-starter.json` records the installed Project Starter release and the
+hashes of its managed files. Update them with Project Starter's `bin/sync`,
+and record any intentional local change as an override with its reason.

@@ -75,11 +75,12 @@ QMD search.
 
 Link every active page from the index below or a linked README index.
 
-A weekly [memory audit](../docs/development-workflow.md#scheduled-memory-audit)
-checks every active page against the code and GitHub, and proposes validated
-updates and archives in a pull request for the user to merge. When it archives
-a page, it removes that page's entry from the index below, so keep each entry
-one list item that links its page.
+Home's nightly guidance review, the
+[memory audit](../docs/development-workflow.md#scheduled-memory-audit),
+checks active pages against the code and GitHub when they come due, and
+updates and archives stale ones. When it archives a page, it removes that
+page's entry from the index below, so keep each entry one list item that
+links its page.
 
 ## PR review records
 
