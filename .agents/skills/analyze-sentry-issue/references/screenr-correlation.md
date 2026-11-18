@@ -1,8 +1,7 @@
 # Screenr Sentry correlation
 
 Load only the sections relevant to the issue being diagnosed. Keep every
-output in the invocation's working directory, and never copy what it shows
-into GitHub; see the skill's privacy rules.
+output in the invocation's working directory and out of GitHub.
 
 ## Builds and known fixes
 
@@ -18,11 +17,8 @@ into GitHub; see the skill's privacy rules.
   `deploy` job logs of the `check` runs on `main` before it: the job also
   succeeds when it skips a deployment.
 
-Search memory, docs, and closed GitHub issues for matching failures and
-concrete fix commits. Use
-`git merge-base --is-ancestor <fix-commit> <build-commit>` to determine whether
-the failing build contains a suspected fix. A recurrence in a containing build
-means the fix is incomplete.
+Test whether a build contains a suspected fix with
+`git merge-base --is-ancestor <fix-commit> <build-commit>`.
 
 ## Request IDs across the app and the server
 
