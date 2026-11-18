@@ -47,7 +47,8 @@ any issue-specific notes. The shared brief covers:
   - Rebase on `origin/main` and open a pull request whose body maps each
     "Done when" item to its evidence. It says `Closes` only when merging meets
     every item, and `Refs` plus the remainder otherwise.
-  - Wait for CI in the foreground with `gh pr checks <pr> --watch`.
+  - Wait for CI in the foreground with `gh pr checks <pr> --watch` or
+    `~/.agents/scripts/github/wait-results`.
   - **Do not merge.** Report the pull request, what's left, and anything the
     next issues need.
 
