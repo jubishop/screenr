@@ -200,7 +200,8 @@ was available without implying that the full trace was analyzed.
 Follow the failure across the app and the server, which share request IDs, and
 into the production journal for a server issue. Read
 [Screenr correlation](references/screenr-correlation.md) and follow the
-sections that apply.
+sections that apply, and for a MetricKit event,
+[MetricKit diagnostics](references/metrickit-diagnostics.md).
 
 ## Step 4: Trace the failure
 

@@ -94,7 +94,7 @@ content by design, but their user and request IDs stay out of GitHub.
 
 `summarize_metrickit_diagnostic.py` reads a downloaded
 `MXDiagnosticPayload.json`, the raw diagnostic that a MetricKit event
-attaches ([MetricKit diagnostics](../../skills/analyze-sentry-issue/references/screenr-correlation.md#metrickit-diagnostics)).
+attaches ([MetricKit diagnostics](../../skills/analyze-sentry-issue/references/metrickit-diagnostics.md)).
 sentry-cocoa 9.32.0 attaches one diagnostic's `jsonRepresentation()`, with
 its `callStackTree` in Apple's `MXCallStackTree` format; the helper also reads
 a whole `MXDiagnosticPayload`, whose lists, such as `hangDiagnostics`, each
