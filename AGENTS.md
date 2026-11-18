@@ -29,10 +29,8 @@ take precedence over this block and the foundation pages wherever they differ.
 
 ## Project
 
-Track TODOs, bugs, and work that needs lifecycle tracking in GitHub issues in
-`jubishop/screenr`.
-
-Label every issue when you create it, and relabel it when its scope changes:
+Track TODOs and bugs in GitHub issues. Label each issue when you create it,
+and relabel it when its scope changes:
 
 - Exactly one type: `bug`, `feature`, `improvement`, `documentation`, or
   `investigation`.
@@ -51,25 +49,6 @@ Label every issue when you create it, and relabel it when its scope changes:
 Label descriptions in the repository define each label. Use only existing
 labels, and change the label set only with the user's approval.
 
-`bin/check --full` runs `bin/check-application`: shell lint for `ops/` and
-`.agents/scripts/`, fish syntax checks for `bin/`, Python tests, formatting,
-typechecking, application and browser tests, and the build. On a Mac it also
-runs `bin/check-ios` when `ios/` changed. CI runs the same checks, except the
-iOS checks, in parallel jobs. Require successful
-full CI before merge and deployment, and
-follow the
-[validation policy](docs/development-workflow.md#local-and-ci-validation).
-
-iOS changes: run `bin/check-ios` locally before every push; a pre-push hook
-enforces it. Never use `--no-verify`. There is no remote iOS CI. See
-[iOS checks before a push](docs/development-workflow.md#ios-checks-before-a-push).
-Checkout isolation also covers required generated types, included deliberately.
-
-Keep remote CI under 10 minutes of wall-clock time, both for pull request
-checks and for checks plus deployment on `main`. A change that pushes a run
-over must cut it back in the same change, or file an issue at once. See
-[CI jobs](docs/development-workflow.md#ci-jobs).
-
 The native iPhone app lives in `ios/`. For work there, also follow
 [`ios/AGENTS.md`](ios/AGENTS.md).
 
@@ -81,17 +60,30 @@ Use the latest Node.js LTS release, with a minimum of Node 24, for
 application commands, CI, and production. See the
 [runtime decision](docs/development-workflow.md#node-runtime).
 
-## Deployment
+## Checks and Deployment
 
-Test changes locally and require successful full CI before production deployment.
-Production code reaches `main` through a pull request; text and checked
-development code may be pushed directly, under the
-[kinds of change](docs/foundation/engineering-policy.md#kinds-of-change). Nonfunctional changes may
-skip deployment after checking the complete change since the last successful
-release. Keep CI enabled and record the skip reason in the commit trailers.
-Follow the [release workflow](docs/development-workflow.md#main-branch-delivery).
-The iPhone release commands may push their own version-file bump to `main`
-directly, under the
+`bin/check --full` runs
+[`bin/check-application`](docs/development-workflow.md#checks), which on a
+Mac also runs `bin/check-ios` when `ios/` changed. CI runs the same checks,
+except iOS, in parallel jobs. Require successful full CI before merge and deployment, and
+follow the
+[validation policy](docs/development-workflow.md#local-and-ci-validation).
+
+Run `bin/check-ios` before every push that changes `ios/`; a pre-push hook
+enforces it, so never use `--no-verify`. See
+[iOS checks before a push](docs/development-workflow.md#ios-checks-before-a-push).
+
+Keep remote CI under 10 minutes of wall-clock time, both for pull request
+checks and for checks plus deployment on `main`. A change that pushes a run
+over must cut it back in the same change, or file an issue at once. See
+[CI jobs](docs/development-workflow.md#ci-jobs).
+
+Each push to `main` deploys after CI unless every commit since the last
+deployment carries the skip trailers of the
+[release workflow](docs/development-workflow.md#main-branch-delivery). Add
+them to a nonfunctional change only after checking every change since the
+last successful release, and keep CI running. The iPhone release commands may push
+their own version-file bump to `main` directly, under the
 [shared release behavior decision](docs/ios-app.md#release-commands-shared-with-podhaven--2026-11-09).
 
 ## Testing
@@ -106,10 +98,8 @@ adds no distinct evidence. Preserve coverage for each moved case and retain
 browser-specific behavior and complete user journeys. Follow the
 [coverage placement decision](docs/development-workflow.md#test-coverage-placement).
 
-Never ask the owner to test by hand, and never make an owner device check a
-done condition or blocker. Test everything possible automatically, rely on
-Apple's and other vendors' documentation for what only a real device shows,
-and note that gap when closing. See
+What only a real device shows rests on Apple's and other vendors'
+documentation, never an owner device check; see
 [no manual testing by the owner](docs/development-workflow.md#no-manual-testing-by-the-owner).
 
 ## Product Context
@@ -119,12 +109,10 @@ Screenr is a social app for TV and movies. Read
 [`docs/application-stack.md`](docs/application-stack.md) for the selected
 core stack. Screenr rolls out continuously with no first-release gate; the
 user invites people when they choose.
-For dependency choices, apply the
-[development preference](memory/development-preferences.md#third-party-dependencies).
-Do not treat an interview recommendation as an accepted decision.
 
-Record each accepted interview decision using the process in
-[`docs/README.md`](docs/README.md#recording-decisions).
+Record each accepted interview decision as
+[recording decisions](docs/README.md#recording-decisions) describes; an
+interview recommendation is not an accepted decision.
 
-This is a public repository. Keep credentials, private records, local
-environment files, and generated caches out of Git.
+This is a public repository: keep credentials, private records, and local
+environment files out of Git.
