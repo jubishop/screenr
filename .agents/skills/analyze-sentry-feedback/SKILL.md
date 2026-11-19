@@ -77,11 +77,10 @@ sentry issue list artisanal-software/screenr-ios \
 Stop and report it if the list fails or says it has more rows; never offer a
 partial list. Pass every numeric ID to one
 `find_tracking_issues.py --states --feedback <id> ...` call for each one's
-GitHub state. Present the entries newest first, one line each:
-`SCREENR-IOS-7  screenr-ios:<id> — "<message, trimmed to one line>" (GitHub:
-#N intake|#N analyzed|#N closed|untracked)`. The message stays in this
-conversation. Let the user choose one, and treat anything typed alongside the
-pick as triage notes. If nothing is unresolved, say so and stop.
+GitHub state. Present them newest first, one line each with the short ID,
+slug, message trimmed to one line, and GitHub state. Let the user choose one,
+and treat anything typed alongside the pick as triage notes. If nothing is
+unresolved, say so and stop.
 
 ## Step 1: Resolve the reference
 
@@ -124,13 +123,9 @@ before fetching Sentry evidence.
 - Feedback never recurs: a closed issue stays the item's record. When only a
   closed issue matches and the feedback is still unresolved, its closeout was
   missed; Step 6 says what to do.
-- Search earlier feedback and error issues for the same symptom too, since
-  members often report one problem separately:
-
-```bash
-gh issue list --repo jubishop/screenr --state all --search '<terms>'
-bin/knowledge search "<terms>"
-```
+- Search earlier feedback and error issues, open and closed, and
+  `bin/knowledge` for the same symptom too, since members often report one
+  problem separately.
 
 Memory and docs hold cross-cutting dispositions, such as behavior the owner
 chose on purpose. Verify old hypotheses against current evidence before
@@ -139,30 +134,24 @@ applying them.
 ## Step 3: Fetch the evidence
 
 Create one unique working directory outside the repository, such as with
-`mktemp -d`, and put every bundle, attachment, search result, and journal
-window inside it.
+`mktemp -d`, and put every file the invocation writes inside it, issue-body
+drafts included.
 
 ### The feedback
 
-Fetch it with `fetch_feedback_bundle.sh screenr-ios:<numeric-id> --out <dir>/bundle`.
-Read from the bundle:
+Fetch it with `fetch_feedback_bundle.sh screenr-ios:<numeric-id> --out <dir>/bundle`,
+whose summary prints the submission time, release, environment, event ID,
+attachments, and message. The message is `metadata.message`, or else the
+event's `contexts.feedback.message`; Sentry's summary, title, and
+`ai_categorization` tags only paraphrase it. From the event, also read
+`user.id`, the member's opaque Screenr user ID, absent when signed out; the
+`dist` tag and the device and OS contexts; and the linked error,
+`contexts.feedback.associated_event_id`, which Screenr's form never sets.
+Read the owner's notes in `notes.json` and Sentry's activity, such as a spam
+flag, in `activities.json`, in time order.
 
-- **Message:** `metadata.message` in `issue.json`, or the event's
-  `contexts.feedback.message`; Sentry's `metadata.summary`, issue title, and
-  `ai_categorization` tags paraphrase it.
-- **Follow-ups:** the owner's notes in `notes.json` and Sentry's activity,
-  such as a spam flag, in `activities.json`, in time order. A missing file is
-  unavailable evidence, not an empty one.
-- **When and who:** the event's `dateCreated`, the submission time in UTC,
-  and `user.id`, the member's opaque Screenr user ID, absent when signed out.
-- **Build and device:** the `release`, `dist`, and `environment` tags, and
-  the device and OS contexts.
-- **Linked error:** `contexts.feedback.associated_event_id`. Screenr's form
-  links none, but check.
-
-Show the user a short private header: the slug and short ID, the submission
-time, the release, signed in or out, the attachments, and the message quoted
-verbatim.
+Show the user a short private header: the submission time, the release,
+signed in or out, the attachments, and the message quoted verbatim.
 
 ### Attachments
 
@@ -174,9 +163,9 @@ bash .agents/scripts/sentry-cli/download_event_attachments.sh \
   --dir <dir>/attachments --all
 ```
 
-Continue only once the helper succeeds and leaves no `.incomplete` marker;
-retry into a fresh directory, never a failed attempt's. No attachments at all
-means the member sent none and the app had no log to attach; say so.
+Analyze them only once the helper succeeds, retrying into a fresh directory
+after a failure. No attachments at all means the member sent none and the app
+had no log to attach; say so.
 
 - **Screenshots:** view each `screenshot-<n>.jpg` for the screen and state the
   member describes.
@@ -184,7 +173,7 @@ means the member sent none and the app had no log to attach; say so.
 
 ```bash
 python3 -I .agents/scripts/sentry-cli/summarize_log_tails.py \
-  --at <dateCreated> <dir>/attachments/*.ndjson
+  --at <submission-time> <dir>/attachments/*.ndjson
 ```
 
 The app logs `Sending feedback` as it gathers the tails; when that line is
@@ -255,11 +244,11 @@ close its issue as [Step 6](#writing-the-issue) says.
 
 Give the user one private report. Lead with what the member experienced and
 quote the message verbatim, then the evidence, the verdict, and the
-recommendation. Weigh the signals roughly in this order: triage notes; prior
-conclusions from Step 2; Sentry notes added after the report; a linked or
-nearby error event and its stack; failed requests and their journal lines;
-the log tail's timeline; the screenshots; and the message itself, which
-frames the experience but is often imprecise about cause. Include:
+recommendation. Weigh the evidence roughly in this order: prior conclusions
+from Step 2; Sentry notes added after the report; a linked or nearby error
+event and its stack; failed requests and their journal lines; the log tails'
+timeline; the screenshots; and the message itself, which frames the
+experience but is often imprecise about cause. Include:
 
 - Direct observations, with a short timeline.
 - Prior analysis from Step 2, and any stale-build or incomplete-fix verdict
@@ -283,8 +272,7 @@ write.
 When no tracking issue exists, file one in `jubishop/screenr` with
 `create-issue`, giving it the public-safe synthesis, settled user
 constraints, the issues from Step 2, and the rules below, never the private
-report. Reuse settled decisions and collected evidence; ask only about
-unresolved material scope.
+report.
 
 If the evidence supports no root cause, make the issue, titled such as
 `Add diagnostics for <symptom>`, about adding diagnostic code so the next
@@ -324,9 +312,8 @@ retrievable, not only that it was generated locally.
 ### Writing the issue
 
 1. If the canonical issue is an intake placeholder, enrich it by editing its
-   title and body, not with another comment. Keep the intake's lines and add
-   the managed block after them. Preserve a meaningful human-written title,
-   and leave any instruction comment alone as history.
+   title and body, not with another comment. Preserve a meaningful
+   human-written title, and leave any instruction comment alone as history.
 2. If the canonical issue already has a complete managed findings block,
    update it only for a material change, such as a new Sentry note that
    changes the conclusion, a corrected root cause or confidence, a changed
@@ -347,9 +334,8 @@ retrievable, not only that it was generated locally.
 6. When writing, add or replace only the section between
    `<!-- analyze-sentry-feedback-findings:start -->` and
    `<!-- analyze-sentry-feedback-findings:end -->`, preserving every line
-   outside it. Keep any temporary issue-body file in the working directory. A
-   new issue uses this body shape; an intake issue keeps its own lines in
-   place of the first two:
+   outside it. A new issue uses this body shape; an intake issue keeps its own
+   lines in place of the first two:
 
 ```markdown
 <!-- sentry-feedback:screenr-ios:<numeric-id> -->
@@ -410,8 +396,7 @@ What the member wrote and showed stays in Sentry.
 The Sentry record lets later triage recognize the report after Sentry purges
 it; fill it from Sentry, the attachments, and the build tag, sanitized for a
 public repository. Replace every placeholder with this feedback's
-identifiers, and omit the related-issue bullet when the work resolves no
-other Sentry issue.
+identifiers.
 
 Read back any issue changes and verify the title, sanitized body, marker,
 complete findings block, Sentry record, closeout section, state, and labels.
