@@ -1380,8 +1380,9 @@ changes land, and its failures. For Screenr:
 
 - **Deployment:** the review adds `Screenr-Deploy: skip` trailers to each
   audit commit, from its `ADOPTER_SETTINGS`, so an audit that changes only
-  memory notes or guidance never forces a
-  [deployment](#main-branch-delivery).
+  memory notes, guidance, or development tooling never forces a
+  [deployment](#main-branch-delivery). The audit files any production code
+  change as an issue instead.
 - **API key:** memory-note audits bill `ANTHROPIC_MEMORY_AUDIT_API_KEY` in
   `~/.env`, the key every adopter's memory-note audits share. The same line
   in the primary checkout's `.env`, even with an empty value, would override
