@@ -68,6 +68,63 @@ extension XCUIApplication {
     }
     XCTAssertTrue(element.isHittable, "Could not scroll to \(element)", file: file, line: line)
   }
+
+  // Drags the feed without a fling until the element rests with its middle
+  // near `y`. Each drag stays between the navigation bar and the keyboard,
+  // or the tab bar while the keyboard is down: a drag into the keyboard
+  // would dismiss it.
+  @MainActor
+  func drag(_ element: XCUIElement, toY y: CGFloat) {
+    let top = navigationBars.firstMatch.frame.maxY + 20
+    let keyboard = otherElements["inputView"]
+    let bottom = (keyboard.exists ? keyboard.frame.minY : tabBars.firstMatch.frame.minY) - 20
+    for _ in 0..<3 {
+      let distance = y - element.frame.midY
+      guard abs(distance) > 20 else { return }
+      let step = max(min(distance, bottom - top), top - bottom)
+      let start = coordinate(withNormalizedOffset: .zero)
+        .withOffset(CGVector(dx: frame.midX, dy: step < 0 ? bottom : top))
+      start.press(
+        forDuration: 0.1,
+        thenDragTo: start.withOffset(CGVector(dx: 0, dy: step)),
+        withVelocity: .slow,
+        thenHoldForDuration: 0.5
+      )
+    }
+  }
+
+  // Waits for the keyboard, and for the elements to settle above it and
+  // beneath the navigation bar. The keyboard's view holds the typing
+  // predictions above its keys, which the Keyboard element leaves out.
+  @MainActor
+  func expectAboveTheKeyboard(
+    _ elements: XCUIElement...,
+    file: StaticString = #filePath,
+    line: UInt = #line
+  ) {
+    let keyboard = otherElements["inputView"]
+    XCTAssertTrue(keyboard.waitForExistence(timeout: 10), file: file, line: line)
+    let bar = navigationBars.firstMatch.frame.maxY
+    let shown = XCTNSPredicateExpectation(
+      predicate: NSPredicate { _, _ in
+        MainActor.assumeIsolated {
+          elements.allSatisfy {
+            $0.exists && $0.frame.minY >= bar && $0.frame.maxY <= keyboard.frame.minY
+          }
+        }
+      },
+      object: nil
+    )
+    let result = XCTWaiter.wait(for: [shown], timeout: 10)
+    XCTAssertEqual(
+      result,
+      .completed,
+      "Not between the bar's bottom, \(bar), and the keyboard's top, "
+        + "\(keyboard.frame.minY): \(elements.map(\.frame))",
+      file: file,
+      line: line
+    )
+  }
 }
 
 extension XCUIElement {

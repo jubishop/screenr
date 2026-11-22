@@ -7,9 +7,9 @@ import SwiftUI
 // which shows it without moving the entry at the top of the screen; a
 // permalink's entry or reply scrolls into view highlighted; a reply that a
 // notification's Reply did not post opens in its composer; and destructive
-// actions ask first, in `feedConfirmation(_:)`. The screen keeps `feed` and
-// presents its confirmation across reads, since a failed read replaces this
-// view.
+// actions ask first, in `feedConfirmation(_:)`; and a composer that takes
+// focus shows whole above the keyboard. The screen keeps `feed` and presents
+// its confirmation across reads, since a failed read replaces this view.
 struct FeedList<Header: View>: View {
   let feed: FeedModel
   let snapshot: [FeedItem]
@@ -112,6 +112,34 @@ struct FeedList<Header: View>: View {
         report.visible = Set($0)
       }
       .scrollDismissesKeyboard(.interactively)
+      .onScrollGeometryChange(for: FeedRoom.self, of: FeedRoom.init) { old, new in
+        report.room = new.height
+        // The keyboard rose, or grew.
+        if new.bottomInset > old.bottomInset { reveal(proxy) }
+      }
+      .onScrollPhaseChange { _, phase in
+        report.phase = phase
+        switch phase {
+        case .idle: if report.reveal == .waiting { reveal(proxy) }
+        // The reader's own scroll goes where they take it.
+        case .tracking, .interacting: report.reveal = .done
+        default: break
+        }
+      }
+      .environment(
+        \.composerFocus,
+        ComposerFocus(
+          took: { composer in
+            report.composer = composer
+            // A composer that takes focus while the keyboard is already up
+            // shows once it has its place.
+            Task { reveal(proxy) }
+          },
+          lost: { composer in
+            if report.composer === composer { report.composer = nil }
+          }
+        )
+      )
       .environment(
         \.pendingReplyScroll,
         PendingReplyScroll(comment: pendingReply) { comment in
@@ -148,6 +176,34 @@ struct FeedList<Header: View>: View {
         }
       }
     }
+  }
+
+  // Scrolls the composer with focus into view above the keyboard, or its
+  // field when the whole composer does not fit, once neither the reader nor
+  // an animation is moving the feed. The scroll has no animation: SwiftUI
+  // animating while the keyboard works for a field in a scroll view can
+  // deadlock the app (see `keyboardSafeSheet(item:content:)`).
+  private func reveal(_ proxy: ScrollViewProxy) {
+    report.reveal = .done
+    guard let composer = report.composer else { return }
+    guard report.phase == .idle else {
+      report.reveal = .waiting
+      return
+    }
+    let target: ComposerScrollID? =
+      switch ComposerReveal(
+        composer: composer.height,
+        field: composer.fieldHeight,
+        room: report.room
+      ) {
+      case .composer: composer.composer
+      case .field: composer.field
+      case .caret: nil
+      }
+    guard let target else { return }
+    var transaction = Transaction()
+    transaction.disablesAnimations = true
+    withTransaction(transaction) { proxy.scrollTo(target) }
   }
 
   // Names the reader's place in `position` just before New activity shows.
@@ -253,10 +309,40 @@ private struct Top: Hashable {}
 private nonisolated struct FeedContent: Hashable, Sendable {}
 
 // What the scroll view reports as the reader scrolls, held outside the view's
-// state so that scrolling does not render the feed again.
+// state so that scrolling does not render the feed again, and the composer
+// with focus.
 private final class ScrollReport {
   var visible: Set<FeedScrollTarget> = []
   var start = FeedStart.entries
+  var phase = ScrollPhase.idle
+  // The height between the bars and the keyboard.
+  var room = 0.0
+  var composer: ComposerPlace?
+  var reveal = Reveal.done
+}
+
+// Whether showing a composer waits for the feed to stop moving.
+private enum Reveal {
+  case done
+  case waiting
+}
+
+// The feed's bottom inset, which includes the keyboard while it's up, and its
+// height inside its insets, between the bars and the keyboard.
+private nonisolated struct FeedRoom: Equatable {
+  let bottomInset: CGFloat
+  let height: CGFloat
+
+  init(_ geometry: ScrollGeometry) {
+    bottomInset = geometry.contentInsets.bottom
+    height = geometry.containerSize.height
+  }
+}
+
+// How a composer in the feed tells it that its field took or lost focus.
+struct ComposerFocus {
+  let took: (ComposerPlace) -> Void
+  let lost: (ComposerPlace) -> Void
 }
 
 // A screen's request to show one entry. Each request scrolls, even to the
@@ -279,6 +365,7 @@ struct PendingReplyScroll {
 
 extension EnvironmentValues {
   @Entry var pendingReplyScroll: PendingReplyScroll?
+  @Entry var composerFocus: ComposerFocus?
   // The current minute, for the feed's relative times.
   @Entry var feedNow = Date.now
 }
