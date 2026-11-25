@@ -1091,25 +1091,22 @@ approves 1.0.
 `bin/shipit` behave this way
 ([issue #561](https://github.com/jubishop/screenr/issues/561));
 [TestFlight releases](development-workflow.md#testflight-releases) describes
-them. Where they still differ from PodHaven's command:
+them. On 2026-11-24,
+[PodHaven's matching issue](https://github.com/jubishop/podhaven/issues/980)
+gave PodHaven `--distribute-only`, keeping `--reuse` as an alias, the tester
+flags `--add-tester`, `--remove-tester`, and `--testers`
+([issue #562](https://github.com/jubishop/screenr/issues/562)), notes reused
+from the tag message on retry, and a lock covering every checkout of the
+clone. Where they still differ from PodHaven's command:
 
-- **Flags:** the issue kept Screenr's `--distribute-only`, which PodHaven
-  calls `--reuse`. Screenr has no `--force` for other branches and no
-  API-key flags, since it reads the key from the environment only. Screenr's
-  tester flags, `--add-tester`, `--remove-tester`, and `--testers`
-  ([issue #562](https://github.com/jubishop/screenr/issues/562)), reach
-  PodHaven through
-  [PodHaven's matching issue](https://github.com/jubishop/podhaven/issues/980).
-- **Notes:** a retry reuses the confirmed notes from the tag message, where
-  PodHaven drafts them again. Screenr's notes also read server API commits,
-  and they drop emoji, which App Store Connect rejects.
+- **Flags:** Screenr has no `--reuse` alias, no `--force` for other branches,
+  and no API-key flags, since it reads the key from the environment only.
+- **Notes:** Screenr's notes also read server API commits, and they drop
+  emoji, which App Store Connect rejects.
 - **Version changes:** Screenr's commit follows its own subject style and
   carries `Screenr-Deploy` trailers. A rerun recognizes an unpushed one from
   the commit itself, where PodHaven's `bin/version` keeps a marker file.
   Screenr has no `bin/version` for setting a version by hand.
-- **Lock:** it covers every checkout of the clone, since two checkouts would
-  pick the same build number. PodHaven's `bin/testflight` holds none; its
-  `bin/appstore` locks one checkout.
 - **Local gate:** Screenr's is `bin/check-ios --reuse` and a recheck of
   `HEAD` and the clean tree before the upload, where PodHaven runs and
   verifies `bin/test-all`.
