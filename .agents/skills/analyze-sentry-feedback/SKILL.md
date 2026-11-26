@@ -14,11 +14,9 @@ argument-hint: "[feedback-url|screenr-ios:<id>|id] [notes]"
 
 # Analyze Sentry Feedback
 
-Diagnose one feedback item and track the actionable result in one GitHub
-issue: what the member ran into, what the evidence around it shows, the most
-likely cause, and the best fix or next step.
-
-Members send feedback from the app's Send feedback form
+Diagnose what a member ran into, its most likely cause, and the best fix or
+next step, and track the result in one GitHub issue. Members send feedback
+from the app's Send feedback form
 ([Feedback](../../../ios/README.md#feedback)) to Sentry organization
 `artisanal-software`, project `screenr-ios`, as a feedback issue whose one
 event carries the message, up to three `screenshot-<n>.jpg` attachments, and
@@ -33,8 +31,6 @@ Beyond those rules:
 - Treat user notes as scope, constraints, or hypotheses to test, not evidence.
 - Read the production host only, never change it: the journal helper runs only
   `journalctl`.
-- Keep what members write and show out of GitHub and committed files, as
-  [privacy](#privacy) details.
 
 ## `fix-issue` prerequisite contract
 
@@ -79,8 +75,7 @@ unresolved, say so and stop.
 
 Take the numeric ID from a feedback URL's `feedbackSlug=` value, an issue
 URL's `/issues/<id>/` part, a slug's part after `screenr-ios:`, or a bare
-number. Read its short ID, project, category, permalink, status, and
-substatus with
+number, and read it with
 `sentry issue view <numeric-id> --fresh --json --fields id,shortId,project,issueCategory,permalink,status,substatus`.
 Stop unless the project is `screenr-ios` and the category is `feedback`; an
 error issue belongs to `analyze-sentry-issue`. Tell the user the slug and
@@ -97,23 +92,18 @@ continue from the GitHub history alone.
 Review the tracking history as `track-sentry-findings` describes, listing the
 tracking issues, open and closed, with
 `find_tracking_issues.py --feedback <numeric-id>`, which marks the untrusted
-ones, and reading each trusted match with
-`gh issue view <n> --json title,body,state,labels,comments`. Its marker is
-`<!-- sentry-feedback:screenr-ios:<numeric-id> -->`. The daily intake,
-`bin/sentry-intake`, titles its placeholder `Triage Sentry feedback <shortId>`.
-Search with `bin/knowledge` too, since members often report one problem
-separately.
+ones. The daily intake, `bin/sentry-intake`, titles its placeholder
+`Triage Sentry feedback <shortId>`.
 
 ## Step 3: Fetch the evidence
 
 ### The feedback
 
 Fetch it into the triage's working directory, `<dir>`, with
-`fetch_feedback_bundle.sh screenr-ios:<numeric-id> --out <dir>/bundle`,
-whose summary prints the submission time, release, environment, event ID,
-attachments, and message. The message is `metadata.message`, or else the
-event's `contexts.feedback.message`; Sentry's summary, title, and
-`ai_categorization` tags only paraphrase it. From the event, also read
+`fetch_feedback_bundle.sh screenr-ios:<numeric-id> --out <dir>/bundle`.
+The message is `metadata.message`, or else the event's
+`contexts.feedback.message`; Sentry's summary, title, and `ai_categorization`
+tags only paraphrase it. From the event, also read
 `user.id`, the member's opaque Screenr user ID, absent when signed out; the
 `dist` tag and the device and OS contexts; and the linked error,
 `contexts.feedback.associated_event_id`, which Screenr's form never sets.
@@ -208,21 +198,18 @@ A test report sent on purpose, such as those that verified
 [#567](https://github.com/jubishop/screenr/issues/567), names an environment
 such as `issue-<n>-verification` and an SDK such as `screenr-issue-<n>`,
 which the app never sends. It is not a member's report: record that, and
-close its issue as [Step 6](#step-6-track-the-findings-in-github) says.
+close its issue as `track-sentry-findings` closes a stale build's.
 
 ## Step 5: Synthesize
 
-Give the user one private report. Lead with what the member experienced and
-quote the message verbatim, then the evidence, the verdict, and the
-recommendation. Weigh the evidence roughly in this order: prior conclusions
-from Step 2; Sentry notes added after the report; a linked or nearby error
-event and its stack; failed requests and their journal lines; the log tails'
-timeline; the screenshots; and the message itself, which frames the
-experience but is often imprecise about cause. Include:
+Give the user one private report. Lead with what the member experienced,
+quoting the message verbatim, then the evidence with a short timeline, the
+verdict, and the recommendation. Weigh the evidence roughly in this order:
+prior conclusions from Step 2; Sentry notes added after the report; a linked
+or nearby error event and its stack; failed requests and their journal lines;
+the log tails' timeline; the screenshots; and the message itself, which frames
+the experience but is often imprecise about cause. Include:
 
-- Direct observations, with a short timeline.
-- Prior analysis from Step 2, and any stale-build or incomplete-fix verdict
-  with its ancestry results.
 - What kind of feedback it is, the inferred root cause, confidence, and what
   would raise confidence.
 - Material alternatives and why the evidence favors or rejects them.
@@ -235,10 +222,10 @@ If evidence sources disagree or correlation fails, say so directly.
 ## Step 6: Track the findings in GitHub
 
 Track the findings as `track-sentry-findings` describes, in `jubishop/screenr`
-with the `sentry-feedback` label. Proposed diagnostics deliver their evidence
-where triage can read it, such as a log line in the tails that feedback
-attaches, or Sentry, within the privacy rules in `ios/README.md#sentry` and
-`ios/README.md#logging`, and say how it reaches the next feedback or error.
+with the `sentry-feedback` label. Proposed diagnostics may deliver their
+evidence as a log line in the tails that feedback attaches, as well as to
+Sentry, within the privacy rules in `ios/README.md#sentry` and
+`ios/README.md#logging`.
 
 Beyond the shared labels:
 
@@ -248,16 +235,11 @@ Beyond the shared labels:
   `improvement`, such as for diagnostics to add, or `feature`.
 - **Product choices:** a request for something new, or a report of behavior
   that works as designed, waits on the owner's product choice. Add
-  `needs decision` and write any proposal as an option, never as a decision.
+  `needs decision`, write any proposal as an option, never as a decision, and
+  close the issue only on the owner's disposition.
 
-Treat a test report sent on purpose as a stale build: record the verdict,
-close the issue as not planned, and perform the Sentry closeout. Close a
-report of behavior that works as designed only on the owner's disposition.
-
-Keep the exact marker `<!-- sentry-feedback:screenr-ios:<numeric-id> -->`, by
-which the daily intake and later runs find the issue. A new issue uses this
-body shape; an intake issue keeps its own lines in place of the first two.
-Fill the Sentry record from Sentry, the attachments, and the build tag.
+A new issue uses this body shape; an intake issue keeps its own lines in
+place of the first two.
 
 ```markdown
 <!-- sentry-feedback:screenr-ios:<numeric-id> -->
@@ -302,27 +284,24 @@ What the member wrote and showed stays in Sentry.
 
 ### Privacy
 
-This repository is public. Never copy into GitHub, or into committed files
-such as tests and fixtures, anything that could identify a member or show what
-they wrote, saw, or did:
+Beyond what `track-sentry-findings` keeps out of GitHub and committed files,
+keep out anything that could identify a member or show what they wrote, saw,
+or did:
 
-- The message, quoted or closely reworded, and Sentry's generated title,
-  summary, or category tags for it. Describe the behavior in your own words.
-- Screenshots, and anything they show beyond the screen and its interface
-  state: names, photos, titles, reviews, comments, and messages.
-- User IDs, request IDs, launch IDs, event and trace IDs, and usernames.
+- The message closely reworded, and Sentry's generated title, summary, or
+  category tags for it.
+- Anything screenshots show beyond the screen and its interface state, such
+  as names, photos, titles, reviews, comments, and messages.
+- Launch IDs and usernames.
 - Titles, people, or pages they acted on, and route values such as a
   username or title ID.
-- Log lines and journal lines as recorded, and error messages, which can
-  quote failing values.
+- Error messages, which can quote failing values.
 - Location, which Sentry may add from the connection, device models, and
   anything else that singles out one of a few members' devices, such as an
   unusual OS build.
 - The production host's address; write `root@YOUR_SSH_HOST`.
 
-Describe the report in paraphrase without names: the screen and action, such
-as "a review would not post from a title page", route patterns such as
-`/people/:username`, function names, log messages and field names, error
-classes and codes, the server's `event` names, counts of events and members,
-builds, OS versions, and Pacific dates. Keep private evidence in Sentry, the
-journal, and the user-facing report.
+Describe the report by its screen and action, such as "a review would not
+post from a title page", and also by route patterns such as
+`/people/:username`, log messages and field names, error codes, and the
+server's `event` names.

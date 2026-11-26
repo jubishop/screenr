@@ -1,7 +1,6 @@
 # Screenr Sentry correlation
 
-Load only the sections relevant to the issue being diagnosed. Keep every
-output in the invocation's working directory and out of GitHub.
+Load only the sections relevant to the issue being diagnosed.
 
 ## Builds and known fixes
 
