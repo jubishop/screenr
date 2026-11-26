@@ -147,9 +147,10 @@ If evidence sources disagree or correlation fails, say so directly.
 ## Step 6: Track the findings in GitHub
 
 Track the findings as `track-sentry-findings` describes, in `jubishop/screenr`
-with the `sentry-issue` label. Proposed diagnostics for the server may deliver
-their evidence to the journal as well as to Sentry, within the privacy rules
-in `ios/README.md#sentry` and `docs/deployment.md#failure-logs`.
+with the `sentry-issue` label. Proposed diagnostics stay within the privacy
+rules in `ios/README.md#sentry` for the app and
+`docs/deployment.md#failure-logs` for the server, whose diagnostics may
+deliver their evidence to the journal as well as to Sentry.
 
 Beyond the shared labels, add `area: ios` for a `screenr-ios` issue and
 `area: server` for a `screenr-server` one, or another area the findings
