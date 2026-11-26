@@ -70,11 +70,11 @@ python3 -I .agents/scripts/sentry-cli/fetch_server_journal.py \
   --request-id <id> --out <dir>/journal-<event-id>.txt
 ```
 
-Take the host from the owner's home instructions; public files keep the
-placeholder. Use a window of 10 minutes on either side of the event, or the
-whole hour before a folded report. The summary counts failure lines by
-`event`, and those of the request; read the output file for the surrounding
-lines, such as Next's `⨯` line or Better Auth's own line beside a failure. The
+Take the host from the owner's home instructions. Use a window of 10 minutes
+on either side of the event, or the whole hour before a folded report. The
+summary counts failure lines by `event`, and those of the request; read the
+output file for the surrounding lines, such as Next's `⨯` line or Better
+Auth's own line beside a failure. The
 [failure logs](../../../../docs/deployment.md#failure-logs) describe each
 event and its fields. A window that starts before the journal's oldest kept
 line has lost its earlier lines: report that the journal no longer reaches

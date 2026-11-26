@@ -14,13 +14,11 @@ argument-hint: "[issue-url|short-id|id] [notes]"
 
 # Analyze Sentry Issue
 
-Diagnose one error issue and track the actionable result in one GitHub issue:
-what failed, who it affects, the most likely cause, and the best fix or
-mitigation.
-
-Screenr reports to Sentry organization `artisanal-software` in two projects:
-`screenr-ios`, the iPhone app, and `screenr-server`, the web and worker
-services. Use `analyze-sentry-feedback` for Sentry feedback.
+Diagnose what failed, who it affects, its most likely cause, and the best fix
+or mitigation, and track the result in one GitHub issue. Screenr reports to
+Sentry organization `artisanal-software` in two projects: `screenr-ios`, the
+iPhone app, and `screenr-server`, the web and worker services. Use
+`analyze-sentry-feedback` for Sentry feedback.
 
 Read the `track-sentry-findings` skill first and follow it throughout: it
 holds the rules this skill shares with the other Sentry analysis skills, the
@@ -30,8 +28,6 @@ Beyond those rules:
 - Treat user notes as scope, constraints, or hypotheses to test, not evidence.
 - Read the production host only, never change it: the journal helper runs only
   `journalctl`.
-- Keep member data out of GitHub and committed files, as [privacy](#privacy)
-  details.
 
 ## `fix-issue` prerequisite contract
 
@@ -93,18 +89,10 @@ continue from the GitHub history alone.
 Review the tracking history as `track-sentry-findings` describes, listing the
 tracking issues, open and closed, with
 `find_tracking_issues.py --issue <numeric-id>`, which marks the untrusted
-ones, and reading each trusted match with
-`gh issue view <n> --json title,body,state,labels,comments`. The daily
-intake's placeholder is titled `Triage Sentry issue <shortId>` or
-`Triage recurrence of Sentry issue <shortId>`. An older issue whose
-`## Sentry closeout` names this Sentry issue also counts as analyzed. Search
-for the same failure under other IDs, by the server's `event` and its fields
-too, with:
-
-```bash
-gh issue list --repo jubishop/screenr --state all --search '<terms>'
-bin/knowledge search "<terms>"
-```
+ones and counts an older issue's `## Sentry closeout` as analysis. The daily
+intake, `bin/sentry-intake`, titles its placeholder
+`Triage Sentry issue <shortId>` or `Triage recurrence of Sentry issue <shortId>`.
+Search for the same failure by the server's `event` and its fields too.
 
 ## Step 3: Fetch the evidence
 
@@ -145,12 +133,9 @@ means the fix is incomplete.
 
 ## Step 5: Synthesize
 
-Lead with what failed and who it affects. Include:
+Lead with what failed and who it affects, then the direct observations from
+representative events, the journal, and the code. Include:
 
-- Direct observations from representative Sentry events, the journal, and code
-  inspection.
-- Prior analysis from Step 2, and for a recurrence, the stale-build or
-  incomplete-fix verdict with its ancestry results.
 - The inferred root cause, confidence, and what would raise confidence.
 - Material alternatives and why the evidence favors or rejects them.
 - A code, operational, or monitor/defer recommendation with the relevant files,
@@ -162,10 +147,9 @@ If evidence sources disagree or correlation fails, say so directly.
 ## Step 6: Track the findings in GitHub
 
 Track the findings as `track-sentry-findings` describes, in `jubishop/screenr`
-with the `sentry-issue` label. Proposed diagnostics deliver their evidence to
-Sentry for the app, and to Sentry or the journal for the server, within the
-privacy rules in `ios/README.md#sentry` and
-`docs/deployment.md#failure-logs`.
+with the `sentry-issue` label. Proposed diagnostics for the server may deliver
+their evidence to the journal as well as to Sentry, within the privacy rules
+in `ios/README.md#sentry` and `docs/deployment.md#failure-logs`.
 
 Beyond the shared labels, add `area: ios` for a `screenr-ios` issue and
 `area: server` for a `screenr-server` one, or another area the findings
@@ -173,12 +157,11 @@ implicate, and `investigation` while the outcome is a finding or decision.
 When the findings define work, relabel it `bug` for a defect to fix, or
 `improvement` for diagnostics to add.
 
-Treat a [reporting check](references/screenr-correlation.md#reporting-checks),
-a failure sent on purpose, as a stale build: record the verdict and its
-evidence, close the issue as not planned, and perform the Sentry closeout.
+Close a [reporting check](references/screenr-correlation.md#reporting-checks),
+a failure sent on purpose, as `track-sentry-findings` closes a stale build's
+issue.
 
-Keep the exact marker `<!-- sentry-issue:<numeric-id> -->`, by which the daily
-intake, `bin/snissue`, and later runs find the issue, and use this body shape:
+Use this body shape:
 
 ```markdown
 <!-- sentry-issue:<numeric-id> -->
@@ -222,21 +205,16 @@ This issue tracks [Sentry issue `<shortId>`](<permalink>) (numeric issue ID `<nu
 
 ### Privacy
 
-This repository is public. Never copy into GitHub, or into committed files
-such as tests and fixtures, anything that could identify a member or show what
-they did:
+Beyond what `track-sentry-findings` keeps out of GitHub and committed files,
+keep out anything that could identify a member or show what they did:
 
-- User IDs, device IDs, request IDs, and usernames.
+- Usernames.
 - Titles, people, or pages they acted on, and route values such as a
   username or title ID.
-- Error messages, Sentry event payloads, breadcrumbs as recorded, and raw
-  journal lines, which can quote failing values.
+- Error messages and breadcrumbs as recorded, which can quote failing values.
 - Device models and anything else that singles out one of a few members'
   devices, such as an unusual model or OS build.
 - The production host's address; write `root@YOUR_SSH_HOST`.
 
-Describe the failure in paraphrase: route patterns such as
-`/people/:username`, function names, error classes and codes, the server's
-`event` names and field names, counts of events, members, and devices,
-builds, OS versions, and Pacific dates. Keep private evidence in Sentry, the
-journal, and the user-facing diagnosis.
+Describe the failure also by route patterns such as `/people/:username`,
+error codes, and the server's `event` names and field names.
