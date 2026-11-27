@@ -12,7 +12,8 @@
 # Without --archive it resolves the issue plainly, never in a commit or
 # release: Screenr's Sentry releases name no commits and server events name no
 # release, so Sentry would never mark a recurrence as a regression. An issue
-# already resolved, or archived with --archive, gets only the readback.
+# already resolved, or with --archive already archived until it escalates,
+# gets only the readback.
 
 set -euo pipefail
 
@@ -37,7 +38,7 @@ while [[ $# -gt 0 ]]; do
       shift
       ;;
     -h | --help)
-      sed -n '2,15p' "$0"
+      sed -n '2,16p' "$0"
       exit 0
       ;;
     -*)
@@ -56,10 +57,10 @@ done
 require_sentry_auth
 ISSUE="${SENTRY_ORG}/${ISSUE_ID}"
 
-# Prints the issue's status and project.
+# Prints the issue's status, its substatus or "-", and its project.
 read_issue() {
   local issue_json
-  issue_json="$(sentry_cmd issue view "$ISSUE" --fresh --json --fields id,status,statusDetails,project.slug)" || {
+  issue_json="$(sentry_cmd issue view "$ISSUE" --fresh --json --fields id,status,substatus,project.slug)" || {
     echo "Error: could not read Sentry issue ${ISSUE_ID}." >&2
     return 1
   }
@@ -67,28 +68,35 @@ read_issue() {
 import json, sys
 try:
     issue = json.loads(sys.argv[1])
-    print(issue["status"], issue["project"]["slug"])
+    print(issue["status"], issue.get("substatus") or "-", issue["project"]["slug"])
 except (ValueError, KeyError, TypeError):
     sys.exit("Error: Sentry returned unreadable data for the issue.")
 ' "$issue_json"
 }
 
 if [[ "$ARCHIVE" == 1 ]]; then
-  EXPECTED=ignored
   DONE="archived until it escalates"
 else
-  EXPECTED=resolved
   DONE=resolved
 fi
 
+# Succeeds when the status and substatus show the closure this run makes.
+closed() {
+  if [[ "$ARCHIVE" == 1 ]]; then
+    [[ "$1" == ignored && "$2" == archived_until_escalating ]]
+  else
+    [[ "$1" == resolved ]]
+  fi
+}
+
 STATE="$(read_issue)"
-read -r STATUS PROJECT <<<"$STATE"
+read -r STATUS SUBSTATUS PROJECT <<<"$STATE"
 screenr_project "$PROJECT" || {
   echo "Error: Sentry issue ${ISSUE_ID} is not a Screenr issue: its project is ${PROJECT}." >&2
   exit 1
 }
 
-if [[ "$STATUS" == "$EXPECTED" ]]; then
+if closed "$STATUS" "$SUBSTATUS"; then
   echo "Sentry issue ${ISSUE_ID} was already ${DONE}."
   exit 0
 fi
@@ -100,9 +108,9 @@ else
 fi
 
 STATE="$(read_issue)"
-read -r STATUS _ <<<"$STATE"
-if [[ "$STATUS" != "$EXPECTED" ]]; then
-  echo "Error: Sentry did not record the closure: issue ${ISSUE_ID} reads status ${STATUS}." >&2
+read -r STATUS SUBSTATUS _ <<<"$STATE"
+if ! closed "$STATUS" "$SUBSTATUS"; then
+  echo "Error: Sentry did not record the closure: issue ${ISSUE_ID} reads status ${STATUS} (${SUBSTATUS})." >&2
   exit 1
 fi
 echo "Sentry issue ${ISSUE_ID} is ${DONE}."

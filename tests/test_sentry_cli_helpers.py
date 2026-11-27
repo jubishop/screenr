@@ -26,27 +26,28 @@ with open(os.environ["FAKE_CALL_LOG"], "a") as stream:
 if args[:2] == ["auth", "status"]:
     raise SystemExit(int(os.environ.get("FAKE_SENTRY_AUTH_EXIT", "0")))
 
-# FAKE_SENTRY_STATUS_FILE holds the issue's status, which resolve and archive set unless FAKE_SENTRY_CLOSE_LOST is 1.
+# FAKE_SENTRY_STATUS_FILE holds the issue's status and any substatus, which resolve and archive set unless
+# FAKE_SENTRY_CLOSE_LOST is 1.
 status_file = os.environ.get("FAKE_SENTRY_STATUS_FILE")
 
 if args[:2] in (["issue", "resolve"], ["issue", "archive"]):
     if status_file and os.environ.get("FAKE_SENTRY_CLOSE_LOST") != "1":
         with open(status_file, "w") as stream:
-            stream.write("resolved" if args[1] == "resolve" else "ignored")
+            stream.write("resolved" if args[1] == "resolve" else "ignored archived_until_escalating")
     raise SystemExit(0)
 
 if args[:2] == ["issue", "view"]:
     project = os.environ.get("FAKE_SENTRY_PROJECT", "screenr-ios")
+    status, substatus = "unresolved", "ongoing"
     if status_file:
         with open(status_file) as stream:
-            status = stream.read()
-    else:
-        status = "unresolved"
+            status, _, substatus = stream.read().partition(" ")
     print(json.dumps({
         "id": "123",
         "shortId": "SCREENR-IOS-ABC",
         "title": "Example failure",
         "status": status,
+        "substatus": substatus or None,
         "statusDetails": {},
         "level": "error",
         "count": "3",
@@ -1156,7 +1157,7 @@ class TrackingIssueTests(SentryHelperTests):
 
 
 class CloseoutTests(SentryHelperTests):
-    def close(self, *arguments: str, status: str = "unresolved",
+    def close(self, *arguments: str, status: str = "unresolved ongoing",
               **environment: str) -> subprocess.CompletedProcess[str]:
         self.status_file = self.root / "status"
         self.status_file.write_text(status)
@@ -1173,7 +1174,7 @@ class CloseoutTests(SentryHelperTests):
         self.assertEqual(self.writes(), [["issue", "resolve", "artisanal-software/123"]])
         self.assertEqual(self.calls("sentry")[-1],
                          ["issue", "view", "artisanal-software/123", "--fresh", "--json",
-                          "--fields", "id,status,statusDetails,project.slug"])
+                          "--fields", "id,status,substatus,project.slug"])
         self.assertEqual(result.stdout, "Sentry issue 123 is resolved.\n")
 
     def test_archive_lasts_until_the_issue_escalates(self) -> None:
@@ -1181,12 +1182,23 @@ class CloseoutTests(SentryHelperTests):
 
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(self.writes(), [["issue", "archive", "artisanal-software/123", "--until", "auto"]])
-        self.assertEqual(self.status_file.read_text(), "ignored")
+        self.assertEqual(self.status_file.read_text(), "ignored archived_until_escalating")
         self.assertEqual(result.stdout, "Sentry issue 123 is archived until it escalates.\n")
+
+    def test_an_issue_archived_another_way_is_archived_until_it_escalates(self) -> None:
+        for substatus in ("archived_forever", "archived_until_condition_met"):
+            with self.subTest(substatus=substatus):
+                self.call_log.unlink(missing_ok=True)
+                result = self.close("123", "--archive", status=f"ignored {substatus}")
+
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(self.writes(), [["issue", "archive", "artisanal-software/123", "--until", "auto"]])
+                self.assertEqual(result.stdout, "Sentry issue 123 is archived until it escalates.\n")
 
     def test_an_issue_already_closed_gets_only_the_readback(self) -> None:
         for arguments, status, message in ((("123",), "resolved", "resolved"),
-                                           (("123", "--archive"), "ignored", "archived until it escalates")):
+                                           (("123", "--archive"), "ignored archived_until_escalating",
+                                            "archived until it escalates")):
             with self.subTest(status=status):
                 self.call_log.unlink(missing_ok=True)
                 result = self.close(*arguments, status=status)
@@ -1201,7 +1213,8 @@ class CloseoutTests(SentryHelperTests):
                 result = self.close(*arguments, FAKE_SENTRY_CLOSE_LOST="1")
 
                 self.assertNotEqual(result.returncode, 0)
-                self.assertIn("Sentry did not record the closure: issue 123 reads status unresolved", result.stderr)
+                self.assertIn("Sentry did not record the closure: issue 123 reads status unresolved (ongoing).",
+                              result.stderr)
                 self.assertEqual(result.stdout, "")
 
     def test_an_issue_outside_screenr_stays_open(self) -> None:
@@ -1225,6 +1238,7 @@ class CloseoutTests(SentryHelperTests):
 
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("--archive", result.stdout)
+        self.assertTrue(result.stdout.endswith("# gets only the readback.\n"), result.stdout)
         self.assertEqual(self.calls(), [])
 
 
