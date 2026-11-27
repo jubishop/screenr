@@ -26,13 +26,28 @@ with open(os.environ["FAKE_CALL_LOG"], "a") as stream:
 if args[:2] == ["auth", "status"]:
     raise SystemExit(int(os.environ.get("FAKE_SENTRY_AUTH_EXIT", "0")))
 
+# FAKE_SENTRY_STATUS_FILE holds the issue's status, which resolve and archive set unless FAKE_SENTRY_CLOSE_LOST is 1.
+status_file = os.environ.get("FAKE_SENTRY_STATUS_FILE")
+
+if args[:2] in (["issue", "resolve"], ["issue", "archive"]):
+    if status_file and os.environ.get("FAKE_SENTRY_CLOSE_LOST") != "1":
+        with open(status_file, "w") as stream:
+            stream.write("resolved" if args[1] == "resolve" else "ignored")
+    raise SystemExit(0)
+
 if args[:2] == ["issue", "view"]:
     project = os.environ.get("FAKE_SENTRY_PROJECT", "screenr-ios")
+    if status_file:
+        with open(status_file) as stream:
+            status = stream.read()
+    else:
+        status = "unresolved"
     print(json.dumps({
         "id": "123",
         "shortId": "SCREENR-IOS-ABC",
         "title": "Example failure",
-        "status": "unresolved",
+        "status": status,
+        "statusDetails": {},
         "level": "error",
         "count": "3",
         "userCount": 2,
@@ -1137,6 +1152,79 @@ class TrackingIssueTests(SentryHelperTests):
         result = self.run_helper("find_tracking_issues.py", "--issue", "SCREENR-IOS-2")
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("numeric Sentry ID", result.stderr)
+        self.assertEqual(self.calls(), [])
+
+
+class CloseoutTests(SentryHelperTests):
+    def close(self, *arguments: str, status: str = "unresolved",
+              **environment: str) -> subprocess.CompletedProcess[str]:
+        self.status_file = self.root / "status"
+        self.status_file.write_text(status)
+        return self.run_helper("close_sentry_issue.sh", *arguments,
+                               extra_environment={"FAKE_SENTRY_STATUS_FILE": str(self.status_file), **environment})
+
+    def writes(self) -> list[list[str]]:
+        return [call for call in self.calls("sentry") if call[:2] in (["issue", "resolve"], ["issue", "archive"])]
+
+    def test_resolves_plainly_and_reads_the_resolution_back(self) -> None:
+        result = self.close("123")
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.writes(), [["issue", "resolve", "artisanal-software/123"]])
+        self.assertEqual(self.calls("sentry")[-1],
+                         ["issue", "view", "artisanal-software/123", "--fresh", "--json",
+                          "--fields", "id,status,statusDetails,project.slug"])
+        self.assertEqual(result.stdout, "Sentry issue 123 is resolved.\n")
+
+    def test_archive_lasts_until_the_issue_escalates(self) -> None:
+        result = self.close("123", "--archive", FAKE_SENTRY_PROJECT="screenr-server")
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.writes(), [["issue", "archive", "artisanal-software/123", "--until", "auto"]])
+        self.assertEqual(self.status_file.read_text(), "ignored")
+        self.assertEqual(result.stdout, "Sentry issue 123 is archived until it escalates.\n")
+
+    def test_an_issue_already_closed_gets_only_the_readback(self) -> None:
+        for arguments, status, message in ((("123",), "resolved", "resolved"),
+                                           (("123", "--archive"), "ignored", "archived until it escalates")):
+            with self.subTest(status=status):
+                self.call_log.unlink(missing_ok=True)
+                result = self.close(*arguments, status=status)
+
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(self.writes(), [])
+                self.assertEqual(result.stdout, f"Sentry issue 123 was already {message}.\n")
+
+    def test_a_closure_that_sentry_did_not_record_fails(self) -> None:
+        for arguments in (("123",), ("123", "--archive")):
+            with self.subTest(arguments=arguments):
+                result = self.close(*arguments, FAKE_SENTRY_CLOSE_LOST="1")
+
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("Sentry did not record the closure: issue 123 reads status unresolved", result.stderr)
+                self.assertEqual(result.stdout, "")
+
+    def test_an_issue_outside_screenr_stays_open(self) -> None:
+        result = self.close("123", FAKE_SENTRY_PROJECT="podhaven")
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("is not a Screenr issue", result.stderr)
+        self.assertEqual(self.writes(), [])
+
+    def test_bad_arguments_stop_before_any_request(self) -> None:
+        for arguments in ((), ("SCREENR-IOS-2",), ("123", "456"), ("123", "--next")):
+            with self.subTest(arguments=arguments):
+                result = self.close(*arguments)
+
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("Usage: close_sentry_issue.sh", result.stderr)
+                self.assertEqual(self.calls(), [])
+
+    def test_help_documents_the_modes(self) -> None:
+        result = self.close("--help")
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("--archive", result.stdout)
         self.assertEqual(self.calls(), [])
 
 

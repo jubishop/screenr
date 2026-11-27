@@ -189,17 +189,11 @@ This issue tracks [Sentry issue `<shortId>`](<permalink>) (numeric issue ID `<nu
 ## Sentry closeout
 
 - When this issue's work is done, or it closes without a fix, such as a
-  stale-build recurrence, resolve [Sentry issue `<shortId>`](<permalink>)
-  (numeric issue ID `<numeric-id>`) with `sentry issue resolve <numeric-id>`.
-  Do not resolve it in a commit or release: Screenr's Sentry releases name no
-  commits and server events name no release, so Sentry would never mark a
-  recurrence as a regression. When the error is accepted as expected
-  behavior, archive it instead with
-  `sentry issue archive <numeric-id> --until auto`, so the daily intake
-  ignores it unless it escalates.
-- Read it back with `sentry issue view <numeric-id> --fresh --json --fields id,status,statusDetails`
-  and verify `status: resolved`, or `status: ignored` after archiving, before
-  reporting completion. An issue already resolved needs only the readback.
+  stale-build recurrence, close [Sentry issue `<shortId>`](<permalink>)
+  (numeric issue ID `<numeric-id>`) with
+  `bash .agents/scripts/sentry-cli/close_sentry_issue.sh <numeric-id>`, which
+  resolves it and reads it back, adding `--archive` when the error is
+  accepted as expected behavior.
 <the shared closeout handoff>
 <!-- analyze-sentry-issue-findings:end -->
 ```

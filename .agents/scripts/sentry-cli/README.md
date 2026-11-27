@@ -17,6 +17,10 @@ verified with version 0.45.0, and accept only Screenr's projects,
 | `summarize_metrickit_diagnostic.py` | The raw MetricKit diagnostic that a MetricKit event attaches, and Screenr's dSYM for it |
 | `find_tracking_issues.py` | The GitHub issues that track one Sentry issue or feedback item |
 
+`close_sentry_issue.sh`, the closeout, is the one helper that changes Sentry:
+it resolves an issue or feedback item, or archives it with `--archive`, then
+reads it back and fails unless Sentry recorded the closure.
+
 Each helper that saves evidence writes it to a fresh path that the caller
 names. Keep those paths outside the repository: they hold Sentry data and
 journal lines, which can identify members.

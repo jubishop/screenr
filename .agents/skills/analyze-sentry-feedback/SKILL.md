@@ -265,17 +265,13 @@ This issue tracks [Sentry feedback `<shortId>`](<permalink>) (`screenr-ios:<nume
 
 - When this issue's work is done, or it closes without a fix, resolve
   [Sentry feedback `<shortId>`](<permalink>) (numeric issue ID `<numeric-id>`)
-  with `sentry issue resolve <numeric-id>`. Never delete it.
+  with `bash .agents/scripts/sentry-cli/close_sentry_issue.sh <numeric-id>`,
+  which reads it back. Never delete it.
 - <one bullet per related Sentry issue that this work fixes and no other open
-  tracking issue covers> Also resolve [Sentry issue `<related shortId>`](https://artisanal-software.sentry.io/issues/<related numeric-id>/)
+  tracking issue covers> Also close [Sentry issue `<related shortId>`](https://artisanal-software.sentry.io/issues/<related numeric-id>/)
   (numeric issue ID `<related numeric-id>`) with
-  `sentry issue resolve <related numeric-id>`, or archive it with
-  `sentry issue archive <related numeric-id> --until auto` when it is accepted
-  as expected behavior. Do not resolve it in a commit or release: Screenr's
-  Sentry releases name no commits and server events name no release.
-- Read each back with `sentry issue view <numeric-id> --fresh --json --fields id,status,statusDetails`
-  and verify `status: resolved`, or `status: ignored` after archiving, before
-  reporting completion. An item already resolved needs only the readback.
+  `bash .agents/scripts/sentry-cli/close_sentry_issue.sh <related numeric-id>`,
+  adding `--archive` when it is accepted as expected behavior.
 <the shared closeout handoff>
 
 What the member wrote and showed stays in Sentry.
