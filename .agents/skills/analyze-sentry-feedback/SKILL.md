@@ -100,18 +100,12 @@ ones. The daily intake, `bin/sentry-intake`, titles its placeholder
 ### The feedback
 
 Fetch it into the triage's working directory, `<dir>`, with
-`fetch_feedback_bundle.sh screenr-ios:<numeric-id> --out <dir>/bundle`.
-The message is `metadata.message`, or else the event's
-`contexts.feedback.message`; Sentry's summary, title, and `ai_categorization`
-tags only paraphrase it. From the event, also read
-`user.id`, the member's opaque Screenr user ID, absent when signed out; the
-`dist` tag and the device and OS contexts; and the linked error,
-`contexts.feedback.associated_event_id`, which Screenr's form never sets.
-Read the owner's notes in `notes.json` and Sentry's activity, such as a spam
-flag, in `activities.json`, in time order.
-
-Show the user a short private header: the submission time, the release,
-signed in or out, the attachments, and the message quoted verbatim.
+`fetch_feedback_bundle.sh screenr-ios:<numeric-id> --out <dir>/bundle`, and
+show the user its summary as a short private header. From the event, also
+read the member's opaque Screenr user ID, `user.id`; the device and OS
+contexts; and the linked error, `contexts.feedback.associated_event_id`,
+which Screenr's form never sets. Read the owner's notes in `notes.json` and
+Sentry's activity, such as a spam flag, in `activities.json`, in time order.
 
 ### Attachments
 

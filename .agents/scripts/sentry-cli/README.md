@@ -54,6 +54,14 @@ An error bundle reads the `environment`, `release`, `device`, `os`, and `user`
 tags of a `screenr-ios` issue, and the `environment`, `event`, and
 `request_id` tags of a `screenr-server` issue, which names no release.
 
+A feedback bundle's summary gives the submission time, release, and
+environment; whether the member was signed in, from whether the event has a
+`user.id`, which it leaves out; the event ID; the attachments; the activity
+and note counts; and the member's message, quoted line by line. The message is
+the issue's `metadata.message`, or else the event's
+`contexts.feedback.message`, or else `unavailable`, never Sentry's title,
+summary, or `ai_categorization` tags, which only paraphrase it.
+
 Tag distributions, activities, and notes are optional evidence. A failed
 request prints its error and an unavailable warning, omits that payload file,
 and labels the evidence unavailable in the summary. Missing files do not mean

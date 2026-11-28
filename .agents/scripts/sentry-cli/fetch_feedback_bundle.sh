@@ -5,6 +5,8 @@
 #   fetch_feedback_bundle.sh <slug-or-url> --out DIR
 #   The slug is screenr-ios:<numeric-id>. DIR must not already exist; use a
 #   fresh path for each fetch.
+#   Prints the submission time, release, sign-in state, event, attachments, and
+#   the member's message, or "Message: unavailable", never Sentry's paraphrase.
 
 set -euo pipefail
 
@@ -28,7 +30,7 @@ while [[ $# -gt 0 ]]; do
       shift 2
       ;;
     -h | --help)
-      sed -n '1,7p' "$0"
+      sed -n '1,9p' "$0"
       exit 0
       ;;
     *)
@@ -175,13 +177,16 @@ out, issue_id, project = sys.argv[1], sys.argv[2], sys.argv[3]
 issue = json.load(open(f"{out}/issue.json"))
 events = json.load(open(f"{out}/events.json")).get("data", [])
 attachments = json.load(open(f"{out}/attachments.json"))
-metadata = issue.get("metadata") or {}
-message = metadata.get("message") or issue.get("title")
 event = events[0] if events else {}
+# Sentry's title, summary, and category tags only paraphrase the member's message.
+message = ((issue.get("metadata") or {}).get("message")
+           or ((event.get("contexts") or {}).get("feedback") or {}).get("message"))
 print(f"Feedback {project}:{issue_id} — {issue.get('shortId')}")
 print(f"  Submitted: {event.get('dateCreated', issue.get('lastSeen'))}")
 tags = {tag["key"]: tag["value"] for tag in event.get("tags", [])}
 print(f"  Release: {tags.get('release', 'unknown')}  Env: {tags.get('environment', 'unknown')}")
+# The app sets the Sentry user only while a member is signed in; the ID stays out of the summary.
+print(f"  Member: {'signed in' if (event.get('user') or {}).get('id') else 'signed out'}")
 print(f"  Event: {event.get('id', 'none')}")
 print(f"  Attachments: {', '.join(row['name'] for row in attachments) or 'none'}")
 for filename, label in (("activities.json", "Activities"), ("notes.json", "Notes")):
@@ -194,6 +199,9 @@ for filename, label in (("activities.json", "Activities"), ("notes.json", "Notes
     print(f"  {label}: {len(rows)}")
 print(f"  Output: {out}")
 print()
-print("Message:")
-print(f"> {message}")
+if message:
+    print("Message:")
+    print("\n".join(f"> {line}" if line else ">" for line in str(message).splitlines()))
+else:
+    print("Message: unavailable")
 PY

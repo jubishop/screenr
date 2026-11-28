@@ -42,10 +42,13 @@ if args[:2] == ["issue", "view"]:
     if status_file:
         with open(status_file) as stream:
             status, _, substatus = stream.read().partition(" ")
+    # FAKE_SENTRY_ISSUE_MESSAGE sets the feedback message that Sentry keeps in the issue's metadata.
+    metadata = {"message": os.environ["FAKE_SENTRY_ISSUE_MESSAGE"]} if "FAKE_SENTRY_ISSUE_MESSAGE" in os.environ else {}
     print(json.dumps({
         "id": "123",
         "shortId": "SCREENR-IOS-ABC",
         "title": "Example failure",
+        "metadata": metadata,
         "status": status,
         "substatus": substatus or None,
         "statusDetails": {},
@@ -63,13 +66,18 @@ if args[:2] == ["issue", "events"]:
     if os.environ.get("FAKE_SENTRY_EMPTY_EVENTS") == "1":
         print('{"data": []}')
     else:
-        print(json.dumps({"data": [{
+        # FAKE_SENTRY_EVENT_MESSAGE sets the event's feedback context, and FAKE_SENTRY_EVENT_USER its signed-in user.
+        event = {
             "id": os.environ.get("FAKE_SENTRY_EVENT_ID", "event-1"),
             "dateCreated": "2025-01-03T03:04:05Z",
             "title": "Example failure",
             "entries": [{"type": "exception", "data": {"values": [{"type": "ExampleError", "value": "failed"}]}}],
             "tags": [{"key": "release", "value": "example-release"}, {"key": "request_id", "value": "request-1"}],
-        }]}))
+            "user": {"id": os.environ["FAKE_SENTRY_EVENT_USER"]} if "FAKE_SENTRY_EVENT_USER" in os.environ else None,
+        }
+        if "FAKE_SENTRY_EVENT_MESSAGE" in os.environ:
+            event["contexts"] = {"feedback": {"message": os.environ["FAKE_SENTRY_EVENT_MESSAGE"]}}
+        print(json.dumps({"data": [event]}))
     raise SystemExit(0)
 
 if args and args[0] == "api":
@@ -388,6 +396,33 @@ class FeedbackAndAttachmentTests(SentryHelperTests):
         for call in attachment_calls:
             self.assertTrue(call[1].startswith("projects/artisanal-software/screenr-ios/events/event-1/"))
 
+    def test_feedback_summary_quotes_the_members_message_never_sentrys_title(self) -> None:
+        for case, environment, expected in (
+            ("metadata", {"FAKE_SENTRY_ISSUE_MESSAGE": "From metadata", "FAKE_SENTRY_EVENT_MESSAGE": "From event"},
+             "Message:\n> From metadata\n"),
+            ("event", {"FAKE_SENTRY_EVENT_MESSAGE": "From event\n\nsecond line"},
+             "Message:\n> From event\n>\n> second line\n"),
+            ("neither", {}, "Message: unavailable\n"),
+        ):
+            with self.subTest(case=case):
+                result = self.run_helper("fetch_feedback_bundle.sh", "123", "--out", str(self.root / case),
+                                         extra_environment=environment)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertTrue(result.stdout.endswith(expected), result.stdout)
+                self.assertNotIn("Example failure", result.stdout)
+
+    def test_feedback_summary_says_whether_the_member_was_signed_in_without_their_id(self) -> None:
+        for case, environment, expected in (
+            ("signed-in", {"FAKE_SENTRY_EVENT_USER": "user-42"}, "  Member: signed in\n"),
+            ("signed-out", {}, "  Member: signed out\n"),
+        ):
+            with self.subTest(case=case):
+                result = self.run_helper("fetch_feedback_bundle.sh", "123", "--out", str(self.root / case),
+                                         extra_environment=environment)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn(expected, result.stdout)
+                self.assertNotIn("user-42", result.stdout)
+
     def test_feedback_reference_forms_resolve_to_the_numeric_id(self) -> None:
         for index, reference in enumerate((
                 "123", "screenr-ios:123",
@@ -517,7 +552,8 @@ class FeedbackAndAttachmentTests(SentryHelperTests):
                 output = self.root / filename
                 result = self.run_helper(script, "123", "--out", str(output),
                                          extra_environment={"FAKE_SENTRY_API_MATCH": f"/{target}/",
-                                                            "FAKE_SENTRY_API_MODE": "empty"})
+                                                            "FAKE_SENTRY_API_MODE": "empty",
+                                                            "FAKE_SENTRY_ISSUE_MESSAGE": "Example feedback"})
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertEqual(json.loads((output / filename).read_text()), expected)
                 self.assertNotIn("unavailable", result.stdout + result.stderr)
